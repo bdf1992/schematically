@@ -1,6 +1,6 @@
 # Post-RC vision: data-driven schematic language
 
-> **Non-authoritative horizon.** This document records product direction after the current RC. It does not widen 0.1 acceptance criteria. See `RC-FINISH-LINE.md` for the release boundary and Issue #4 for the root agenda.
+> **Non-authoritative horizon.** This document records product direction after the current RC. It does not widen 0.1 acceptance criteria. See `RC-FINISH-LINE.md` and `ROADMAP.md` for the release boundary; see Issue #4 for the root agenda.
 
 ## Thesis
 
@@ -51,6 +51,22 @@ It should not need intrinsic code for every domain object such as router, databa
 
 A target heuristic is that a large majority of expressive vocabulary — roughly 75% as a design direction, not a release metric — can be supplied as validated data.
 
+## Post-RC topology direction
+
+The first structural generalization after RC should formalize Point / Path / Surface as a cell/incidence grammar rather than extend the current Beta's default attachment-count templates.
+
+Key direction:
+
+```text
+∂(Point)   = none
+∂(Path)    = endpoint Points
+∂(Surface) = boundary Paths
+```
+
+`Part` becomes an owned addressable subcell/facet; a Point may attach parametrically to a Path at `t ∈ [0,1]`; and `Wire` becomes a carrier/conductive role of a generic `1D Path` rather than a parallel geometric primitive.
+
+This is **after RC merge**. The current RC only needs attachment descriptors and host-independent interactions clean enough that this can be introduced without another renderer/event-system fork.
+
 ## Domain packs
 
 A domain pack may eventually provide:
@@ -61,7 +77,7 @@ pack/
 ├─ grammar/
 │  ├─ component templates
 │  ├─ parts / attachment points
-│  ├─ carriers / wires
+│  ├─ carriers / paths
 │  ├─ marks
 │  ├─ materials
 │  ├─ topology rules
@@ -87,7 +103,7 @@ Candidate common grammar:
 
 ```text
 0D Point     → attachment / terminal / junction / anchor
-1D Path      → carrier / relation / trajectory
+1D Path      → carrier / relation / trajectory / boundary segment
 2D Surface   → body / region / boundary / plane
 future Space → host coordinate volume when real XYZ semantics exist
 
@@ -163,6 +179,19 @@ Possible projections include concise natural language, JSON/JSONL, role-specific
 
 The diagram remains the approachable authoring surface; the compiled projection becomes the operational surface.
 
+## Logic/runtime proof
+
+Issue #6 records a first post-RC runtime proof: a small data-driven logic machine over the same Point / Path / Surface topology.
+
+The important split is:
+
+```text
+signal state     = current value at an attachment/channel
+particle/event   = transition/pulse propagating through topology
+```
+
+The runtime should support deterministic combinational logic first, then delays and small stateful logic, while preserving replayable receipts and editor/API/MCP parity.
+
 ## Proof strategy
 
 Do not prove the architecture by building dozens of domains. Prove that the second and third domains are dramatically cheaper than the first.
@@ -183,13 +212,13 @@ The architecture is succeeding when a useful unfamiliar domain can be added main
 ## Roadmap classification
 
 ### Now
-Current attended commitments: stabilize 0D/attachment parity, finish RC import/QA, keep API/MCP/editor semantics aligned, maintain golden examples, performance/mutation/regression gates, and avoid unearned 3D claims.
+Current RC commitments are defined only by `RC-FINISH-LINE.md` and summarized in `ROADMAP.md`.
 
 ### Next
-Likely candidates after RC stability: technical-shape research, first domain-pack schema, data-backed built-ins, pack/glyph authoring skills, user favorites, constrained Space admission, agent authoring benchmarks, and instruction compilation.
+After RC merge: topology/cell-incidence grammar, `Wire → Path` semantic collapse, technical-shape research, first domain-pack schema, data-backed built-ins, pack/glyph authoring skills, user favorites, the small logic machine, constrained Space admission, agent authoring benchmarks, and instruction compilation.
 
 ### Needed
 Human usability, agent discoverability and constrained agency, topology/hosting/dimensions/materials, attachment and channel semantics, lifecycle/time/rules, migrations, deterministic files, CI/golden corpora, provenance/security, and eventually real 3D spatial semantics.
 
 ### Never
-Do not optimize for tool count; do not add bespoke runtime code when validated data suffices; do not let SVG/color become semantic truth; do not fork root/nested/Wire-hosted implementations; do not expose inert settings; do not fake 3D; do not substitute prompts for enforceable constraints; do not let post-RC ambition widen current RC acceptance.
+Do not optimize for tool count; do not add bespoke runtime code when validated data suffices; do not let SVG/color become semantic truth; do not fork root/nested/Path-hosted implementations; do not expose inert settings; do not fake 3D; do not substitute prompts for enforceable constraints; do not let post-RC ambition widen current RC acceptance.
