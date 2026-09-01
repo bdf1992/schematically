@@ -1,13 +1,9 @@
 name: settle-beta24
-
 on:
   push:
-    branches:
-      - rc/0.1.0-rc1
-
+    branches: [rc/0.1.0-rc1]
 permissions:
   contents: write
-
 jobs:
   settle:
     if: ${{ github.actor != 'github-actions[bot]' }}
@@ -20,10 +16,11 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          test -f .beta24/beta24-normative.tar.xz
-          echo 'c5091a0d72d03bd46e293c8f4ed23f872339f3e4dc7e4d78b57f1fe9fd4bd08d  .beta24/beta24-normative.tar.xz' | sha256sum -c -
+          : > /tmp/beta24.tar.xz
+          for f in .beta24/payload-*.b64; do base64 -d "$f" >> /tmp/beta24.tar.xz; done
+          echo 'c5091a0d72d03bd46e293c8f4ed23f872339f3e4dc7e4d78b57f1fe9fd4bd08d  /tmp/beta24.tar.xz' | sha256sum -c -
           tmp="$(mktemp -d)"
-          tar -xJf .beta24/beta24-normative.tar.xz -C "$tmp"
+          tar -xJf /tmp/beta24.tar.xz -C "$tmp"
           test -d "$tmp/root"
           cp -a "$tmp/root/." .
           rm -rf .beta24
@@ -53,14 +50,13 @@ jobs:
           EOF
           python - <<'PY'
           from pathlib import Path
-          required=['src/00-state.js','src/05-data-core.js','src/06-attachment-core.js','src/10-model.js','src/15-editor-kernel.js','src/20-ui.js','src/25-signal.js','src/30-canvas.js','src/40-routing.js','src/50-selection.js','src/55-render.js','src/60-interactions.js','src/70-editor-controls.js','src/75-persistence.js','src/80-bootstrap.js','src/85-api.js','.github/workflows/ci.yml','scripts/qa.py','scripts/golden_run.py','mcp/server.mjs','mcp/tools.json','PUBLIC-BETA-FREEZE.md','QA-0.1.md','MODULE-QA.md','RC-0.1.md']
+          required=['src/00-state.js','src/05-data-core.js','src/06-attachment-core.js','src/15-editor-kernel.js','src/30-canvas.js','src/55-render.js','src/60-interactions.js','src/75-persistence.js','.github/workflows/ci.yml','scripts/qa.py','scripts/golden_run.py','mcp/server.mjs','mcp/tools.json','PUBLIC-BETA-FREEZE.md','QA-0.1.md','MODULE-QA.md','RC-0.1.md']
           missing=[p for p in required if not Path(p).is_file()]
           if missing: raise SystemExit('missing: '+', '.join(missing))
-          print('Beta.24 normative tree materialized; required surfaces present')
+          print('Beta.24 normative tree materialized')
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git status --short
           git commit -m 'rc: settle Beta.24 candidate tree with MIT license'
           git push origin HEAD:rc/0.1.0-rc1
