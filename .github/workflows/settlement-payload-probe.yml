@@ -13,8 +13,10 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          cat .beta24/payload-*.b64 > /tmp/payload.b64
-          base64 -d /tmp/payload.b64 > /tmp/payload.xz
+          : > /tmp/payload.xz
+          for f in .beta24/payload-*.b64; do
+            base64 -d "$f" >> /tmp/payload.xz
+          done
           xz -t /tmp/payload.xz
           xz -dc /tmp/payload.xz > /tmp/payload.raw
           file /tmp/payload.raw
@@ -24,8 +26,7 @@ jobs:
           p='/tmp/payload.raw'
           if zipfile.is_zipfile(p):
               with zipfile.ZipFile(p) as z:
-                  bad=z.testzip(); print('ZIP',len(z.namelist()),'bad=',bad); print('\n'.join(z.namelist()[:20]))
-                  assert bad is None
+                  bad=z.testzip(); print('ZIP',len(z.namelist()),'bad=',bad); print('\n'.join(z.namelist()[:20])); assert bad is None
           elif tarfile.is_tarfile(p):
               with tarfile.open(p) as t:
                   names=t.getnames(); print('TAR',len(names)); print('\n'.join(names[:20]))
