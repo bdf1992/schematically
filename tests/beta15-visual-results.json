@@ -1,0 +1,29 @@
+{
+  "light": {
+    "grid": "#F1F1ED",
+    "canvas": "#FBFAF7",
+    "canvasInk": "#42423E",
+    "workspaceBg": "rgb(251, 250, 247)",
+    "buttonColor": "rgb(23, 23, 21)",
+    "cardColor": "rgb(23, 23, 21)",
+    "forward": 1,
+    "reverse": 1,
+    "packetTag": "rgb(66, 66, 62)"
+  },
+  "dark": {
+    "grid": "#2B2E31",
+    "canvas": "#17191B",
+    "canvasInk": "#E7E8E3",
+    "workspaceBg": "rgb(23, 25, 27)",
+    "buttonColor": "rgb(238, 239, 234)",
+    "cardColor": "rgb(238, 239, 234)",
+    "forward": 1,
+    "reverse": 1,
+    "packetTag": "rgb(231, 232, 227)"
+  },
+  "darkPalette": {
+    "paletteBg": "rgb(28, 31, 33)",
+    "slotLabel": "rgb(23, 23, 21)",
+    "slotBg": "rgb(243, 243, 240)"
+  }
+}

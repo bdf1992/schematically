@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "soveraeign.schematic/operation@0.1",
+  "title": "SOV Schematic CRUD Operation",
+  "type": "object",
+  "required": ["schema", "op", "resource"],
+  "properties": {
+    "schema": {"const": "soveraeign.schematic/operation@0.1"},
+    "id": {"type": "string"},
+    "op": {"enum": ["list", "read", "create", "update", "delete"]},
+    "resource": {"enum": ["component", "wire", "reference"]},
+    "resourceId": {"type": ["string", "null"]},
+    "value": {"type": ["object", "null"]},
+    "patch": {"type": ["object", "null"]},
+    "query": {"type": "object"}
+  },
+  "additionalProperties": true
+}

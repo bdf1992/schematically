@@ -2,31 +2,26 @@
 // 0.1 Beta concern: browser API adapter over the canonical CRUD/document core.
 
 function normalizeRuntimeAfterCrud(){
-  for(const n of nodes){ensureComponentStructure(n);componentCanvas(n);componentConfig(n)}
-  for(const w of wires){wireCanvas(w);connectionConfig(w)}
+  for(const n of nodes){ensureComponentStructure(n);componentCanvas(n)}
+  // Boundary context must be final before attachment descriptors are projected;
+  // otherwise render() would rewrite descriptor external types and become a
+  // hidden second semantic mutation after the CRUD receipt is issued.
   syncAllNodeBoundaryContext();
+  for(const n of nodes)componentConfig(n);
+  for(const w of wires){wireCanvas(w);connectionConfig(w)}
   routeCache.clear();arrowPoseCache.clear();dragRouteSnapshots.clear();
   persistenceFingerprint=semanticFingerprint();
   updateRevisionReadout();
   render();
 }
-function runtimeMutationTarget(operation){
-  if(!['update','delete'].includes(operation.op))return null;
-  if(operation.resource==='component')return nodes.find(n=>n.id===operation.resourceId)||null;
-  if(operation.resource==='wire')return wires.find(w=>w.id===operation.resourceId)||null;
-  return null;
-}
-function refusedApiReceipt(operation,message){return {schema:SovSchematicData.RECEIPT_SCHEMA,operationId:operation.id||null,ok:false,revisionBefore:diagram.revision,revisionAfter:diagram.revision,result:null,error:{message}}}
 function runtimeCrud(operation){
-  const target=runtimeMutationTarget(operation);
-  if(target&&isEntityLocked(target))return refusedApiReceipt(operation,'Locked entity is immutable');
-  if(operation.op==='create'&&operation.resource==='wire'){
-    const a=nodes.find(n=>n.id===operation.value?.a),b=nodes.find(n=>n.id===operation.value?.b);
-    if((a&&isEntityLocked(a))||(b&&isEntityLocked(b)))return refusedApiReceipt(operation,'Locked Component ports cannot accept new Wires');
-  }
+  const mutates=['create','update','delete'].includes(operation.op);
+  if(mutates)commitHistoryCapture();
   const receipt=SovSchematicData.applyOperation(diagram,operation);
-  if(receipt.ok&&['create','update','delete'].includes(operation.op)){
+  if(receipt.ok&&mutates){
     normalizeRuntimeAfterCrud();
+    const resource=String(operation.resource||'item'),verb=operation.op==='create'?'Create':operation.op==='update'?'Update':'Delete';
+    commitHistoryCapture(`${verb} ${resource[0]?.toUpperCase()||''}${resource.slice(1)}`);
     try{saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false})}catch(_){ }
   }
   return SovSchematicData.clone(receipt);

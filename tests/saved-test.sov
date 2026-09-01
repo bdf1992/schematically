@@ -1,0 +1,20 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "schematic-1",
+  "revision": 1,
+  "meta": {
+    "updatedAt": "2026-09-01T06:02:51.477Z",
+    "checkpoints": [],
+    "title": "Soveraeign Schematic"
+  },
+  "canvas": {
+    "id": "canvas:global",
+    "scope": "global",
+    "dimension": 2,
+    "state": "open"
+  },
+  "components": [],
+  "wires": [],
+  "references": [],
+  "layout": {}
+}

@@ -1,0 +1,607 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "example-read-write-evidence",
+  "revision": 0,
+  "meta": {
+    "title": "Classic 06 \u2014 Read / Write Evidence",
+    "description": "A Write records what happened; a Read represents observation. Access does not imply authority."
+  },
+  "canvas": {
+    "id": "canvas:global",
+    "scope": "global",
+    "dimension": 2,
+    "state": "open"
+  },
+  "components": [
+    {
+      "id": "c1",
+      "type": "act",
+      "symbolId": "act",
+      "x": 220,
+      "y": 300,
+      "canvasId": "canvas:global",
+      "canvas": {
+        "id": "canvas:component:c1",
+        "scope": "local",
+        "dimension": 2,
+        "state": "closed",
+        "ownerKind": "component",
+        "ownerId": "c1"
+      },
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
+        }
+      },
+      "boundary": {
+        "kind": "boundary",
+        "shape": "blank",
+        "inside": {
+          "type": "act"
+        },
+        "outside": {
+          "type": "canvas"
+        }
+      },
+      "parts": {
+        "sides": {
+          "left": {
+            "kind": "side",
+            "id": "left",
+            "owner": "c1"
+          },
+          "right": {
+            "kind": "side",
+            "id": "right",
+            "owner": "c1"
+          },
+          "top": {
+            "kind": "side",
+            "id": "top",
+            "owner": "c1"
+          },
+          "bottom": {
+            "kind": "side",
+            "id": "bottom",
+            "owner": "c1"
+          }
+        },
+        "ports": {}
+      },
+      "config": {
+        "label": "EVENT",
+        "colorSlot": 0,
+        "signalMode": "source",
+        "presentation": {
+          "graphic": {
+            "kind": "symbol",
+            "ref": "sym-act",
+            "svg": ""
+          },
+          "size": {
+            "w": 112,
+            "h": 84
+          },
+          "labelMode": "boundary",
+          "interiorColorSlot": 0,
+          "text": "",
+          "padding": 16,
+          "boundaryShape": "roundRect",
+          "boundaryColorMode": "separate-from-interior",
+          "internalLayout": "glyph-only",
+          "portTopology": "external"
+        },
+        "ports": {
+          "in": {
+            "side": "left",
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "name": "Connection 1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read"
+              }
+            ],
+            "channelCount": 1,
+            "activeChannel": 0,
+            "channel": "Connection 1",
+            "colorSlot": 0,
+            "flow": "in",
+            "access": "read"
+          },
+          "out": {
+            "side": "right",
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "name": "Connection 1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ],
+            "channelCount": 1,
+            "activeChannel": 0,
+            "channel": "Connection 1",
+            "colorSlot": 0,
+            "flow": "out",
+            "access": "read-write"
+          },
+          "control": {
+            "side": "top",
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "name": "Connection 1",
+                "colorSlot": 0,
+                "flow": "control",
+                "access": "read-write"
+              }
+            ],
+            "channelCount": 1,
+            "activeChannel": 0,
+            "channel": "Connection 1",
+            "colorSlot": 0,
+            "flow": "control",
+            "access": "read-write"
+          }
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "parentId": null,
+      "incomplete": false
+    },
+    {
+      "id": "c2",
+      "type": "receipt",
+      "symbolId": "receipt",
+      "x": 610,
+      "y": 190,
+      "canvasId": "canvas:global",
+      "canvas": {
+        "id": "canvas:component:c2",
+        "scope": "local",
+        "dimension": 2,
+        "state": "closed",
+        "ownerKind": "component",
+        "ownerId": "c2"
+      },
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
+        }
+      },
+      "boundary": {
+        "kind": "boundary",
+        "shape": "blank",
+        "inside": {
+          "type": "receipt"
+        },
+        "outside": {
+          "type": "canvas"
+        }
+      },
+      "parts": {
+        "sides": {
+          "left": {
+            "kind": "side",
+            "id": "left",
+            "owner": "c2"
+          },
+          "right": {
+            "kind": "side",
+            "id": "right",
+            "owner": "c2"
+          },
+          "top": {
+            "kind": "side",
+            "id": "top",
+            "owner": "c2"
+          },
+          "bottom": {
+            "kind": "side",
+            "id": "bottom",
+            "owner": "c2"
+          }
+        },
+        "ports": {}
+      },
+      "config": {
+        "label": "RECORD",
+        "colorSlot": 0,
+        "signalMode": "passive",
+        "presentation": {
+          "graphic": {
+            "kind": "symbol",
+            "ref": "sym-receipt",
+            "svg": ""
+          },
+          "size": {
+            "w": 112,
+            "h": 84
+          },
+          "labelMode": "boundary",
+          "interiorColorSlot": 0,
+          "text": "",
+          "padding": 16,
+          "boundaryShape": "roundRect",
+          "boundaryColorMode": "separate-from-interior",
+          "internalLayout": "glyph-only",
+          "portTopology": "external"
+        },
+        "ports": {
+          "in": {
+            "side": "left",
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "name": "Connection 1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "write"
+              }
+            ],
+            "channelCount": 1,
+            "activeChannel": 0,
+            "channel": "Connection 1",
+            "colorSlot": 0,
+            "flow": "in",
+            "access": "write"
+          },
+          "out": {
+            "side": "right",
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "name": "Connection 1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ],
+            "channelCount": 1,
+            "activeChannel": 0,
+            "channel": "Connection 1",
+            "colorSlot": 0,
+            "flow": "out",
+            "access": "read-write"
+          },
+          "control": {
+            "side": "top",
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "name": "Connection 1",
+                "colorSlot": 0,
+                "flow": "control",
+                "access": "read-write"
+              }
+            ],
+            "channelCount": 1,
+            "activeChannel": 0,
+            "channel": "Connection 1",
+            "colorSlot": 0,
+            "flow": "control",
+            "access": "read-write"
+          }
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "parentId": null,
+      "incomplete": false
+    },
+    {
+      "id": "c3",
+      "type": "observe",
+      "symbolId": "observe",
+      "x": 610,
+      "y": 410,
+      "canvasId": "canvas:global",
+      "canvas": {
+        "id": "canvas:component:c3",
+        "scope": "local",
+        "dimension": 2,
+        "state": "closed",
+        "ownerKind": "component",
+        "ownerId": "c3"
+      },
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
+        }
+      },
+      "boundary": {
+        "kind": "boundary",
+        "shape": "blank",
+        "inside": {
+          "type": "observe"
+        },
+        "outside": {
+          "type": "canvas"
+        }
+      },
+      "parts": {
+        "sides": {
+          "left": {
+            "kind": "side",
+            "id": "left",
+            "owner": "c3"
+          },
+          "right": {
+            "kind": "side",
+            "id": "right",
+            "owner": "c3"
+          },
+          "top": {
+            "kind": "side",
+            "id": "top",
+            "owner": "c3"
+          },
+          "bottom": {
+            "kind": "side",
+            "id": "bottom",
+            "owner": "c3"
+          }
+        },
+        "ports": {}
+      },
+      "config": {
+        "label": "WITNESS",
+        "colorSlot": 0,
+        "signalMode": "source",
+        "presentation": {
+          "graphic": {
+            "kind": "symbol",
+            "ref": "sym-observe",
+            "svg": ""
+          },
+          "size": {
+            "w": 112,
+            "h": 84
+          },
+          "labelMode": "boundary",
+          "interiorColorSlot": 0,
+          "text": "",
+          "padding": 16,
+          "boundaryShape": "roundRect",
+          "boundaryColorMode": "separate-from-interior",
+          "internalLayout": "glyph-only",
+          "portTopology": "external"
+        },
+        "ports": {
+          "in": {
+            "side": "left",
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "name": "Connection 1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ],
+            "channelCount": 1,
+            "activeChannel": 0,
+            "channel": "Connection 1",
+            "colorSlot": 0,
+            "flow": "in",
+            "access": "read-write"
+          },
+          "out": {
+            "side": "right",
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "name": "Connection 1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read"
+              }
+            ],
+            "channelCount": 1,
+            "activeChannel": 0,
+            "channel": "Connection 1",
+            "colorSlot": 0,
+            "flow": "out",
+            "access": "read"
+          },
+          "control": {
+            "side": "top",
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "name": "Connection 1",
+                "colorSlot": 0,
+                "flow": "control",
+                "access": "read-write"
+              }
+            ],
+            "channelCount": 1,
+            "activeChannel": 0,
+            "channel": "Connection 1",
+            "colorSlot": 0,
+            "flow": "control",
+            "access": "read-write"
+          }
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "parentId": null,
+      "incomplete": false
+    }
+  ],
+  "wires": [
+    {
+      "id": "k1",
+      "a": "c1",
+      "b": "c2",
+      "aSide": "out",
+      "bSide": "in",
+      "canvasId": "canvas:global",
+      "canvas": {
+        "id": "canvas:wire:k1",
+        "scope": "local",
+        "dimension": 1,
+        "state": "open",
+        "ownerKind": "wire",
+        "ownerId": "k1"
+      },
+      "lane": 0,
+      "net": 0,
+      "config": {
+        "direction": "forward",
+        "reciprocity": "none",
+        "aConnectionIndex": 0,
+        "bConnectionIndex": 0,
+        "aChannelMarker": "event",
+        "bChannelMarker": "record",
+        "label": "record what happened",
+        "forwardOperation": "write",
+        "reverseOperation": "none"
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "attachments": [],
+      "duplex": false
+    },
+    {
+      "id": "k2",
+      "a": "c3",
+      "b": "c1",
+      "aSide": "out",
+      "bSide": "in",
+      "canvasId": "canvas:global",
+      "canvas": {
+        "id": "canvas:wire:k2",
+        "scope": "local",
+        "dimension": 1,
+        "state": "open",
+        "ownerKind": "wire",
+        "ownerId": "k2"
+      },
+      "lane": 1,
+      "net": 1,
+      "config": {
+        "direction": "forward",
+        "reciprocity": "none",
+        "aConnectionIndex": 0,
+        "bConnectionIndex": 0,
+        "aChannelMarker": "witness",
+        "bChannelMarker": "event",
+        "label": "observe what happened",
+        "forwardOperation": "read",
+        "reverseOperation": "none"
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "attachments": [],
+      "duplex": false
+    }
+  ],
+  "references": [],
+  "layout": {}
+}

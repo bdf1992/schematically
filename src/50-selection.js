@@ -36,22 +36,15 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
 function selectPortRef(info,{focus=true}={}){
   if(!info)return;clearComponentSelectionSet();
   if(focus)activateCanvasKeyboard();
-  if(info.ownerKind==='component'){
-    selected=`port:component:${info.owner.id}:${info.portId}`;
-  }else{
-    selected=`port:wire:${info.owner.id}:${info.portId}`;
-  }
+  if(info.ownerKind!=='component')return;
+  const point=Attachment.resolveSpec(info.owner,info.pointId||info.portId);if(point){info.pointId=point.id;info.portId=point.compatId;info.port=componentConfig(info.owner).ports[point.compatId]}
+  selected=`point:component:${info.owner.id}:${info.pointId||info.portId}`;
 
   document.querySelectorAll('.node').forEach(el=>el.classList.remove('selected'));
   document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));
   document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
 
-  let vis=null;
-  if(info.ownerKind==='component'){
-    vis=document.querySelector(`.node[data-id="${info.owner.id}"] .port[data-port="${info.portId}"]`);
-  }else{
-    vis=document.querySelector(`.port[data-owner-kind="wire"][data-owner-id="${info.owner.id}"][data-port="${info.portId}"]`);
-  }
+  const vis=document.querySelector(`.node[data-id="${info.owner.id}"] .port[data-port="${info.portId}"]`);
   if(vis)vis.classList.add('port-selected');
 
   document.getElementById('emptyInspector').hidden=true;
@@ -61,20 +54,21 @@ function selectPortRef(info,{focus=true}={}){
   const ch=portConnection(info.port);
   pOwner.textContent=portDisplayName(info);
   pId.textContent=info.portId;
-  pSide.textContent=info.ownerKind==='component'?info.port.side:`along wire · ${Math.round((info.part?.t??.5)*100)}%`;
+  pSide.textContent=info.point?.side||Attachment.resolveSpec(info.owner,info.pointId)?.side||'point';
   pFace.textContent=info.port.face||'external';
   pLabel.textContent=info.port.label||'—';
   pChannelCount.textContent=portMarkerSummaryText(info);
-  pChannel.textContent=info.ownerKind==='component'?ch.name:`A ${wireEndpointMarker(info.owner,'a')} · B ${wireEndpointMarker(info.owner,'b')}`;
+  pChannel.textContent=ch.name;
   pFlow.textContent=portFlowLabel(ch.flow);
   pAccess.textContent=portAccessLabel(ch.access);
   pColor.textContent=`${slotLabel(ch.colorSlot)} · ${ch.color}`;
   showPortBar(info);
 }
-function selectPort(nodeId,portId){
+function selectPort(nodeId,pointId){
   const node=nodes.find(n=>n.id===nodeId);if(!node)return;
-  const port=componentConfig(node).ports[portId];if(!port)return;
-  selectPortRef({ownerKind:'component',owner:node,node,portId,port});
+  const point=Attachment.resolveSpec(node,pointId);if(!point)return;
+  const port=componentConfig(node).ports[point.compatId];if(!port)return;
+  selectPortRef({ownerKind:'component',owner:node,node,pointId:point.id,portId:point.compatId,port});
 }
 
 function selectWire(i,{focus=true}={}){
@@ -99,7 +93,7 @@ function selectWire(i,{focus=true}={}){
   const inConnection=endpointConnection(w,io.in);
   cChannel.textContent=`ch ${wireEndpointMarker(w,io.out)} → ch ${wireEndpointMarker(w,io.in)}`;
   cColor.textContent=`${slotLabel(outConnection.colorSlot)} → ${slotLabel(inConnection.colorSlot)}`;
-  cWireParts.textContent=String(w.attachments.length);
+  cWireParts.textContent=String((w.attachments?.length||0)+nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&componentForm(n).dimension===0).length);
   cLabel.textContent=cfg.label||'—';
   focusWireEndpoints(w);
   showConnectionBar(w,i);

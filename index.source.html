@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Soveraeign Schematic Lab 0.1 Beta.24</title>
+<link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+<svg class="hidden-symbols" aria-hidden="true"><defs><symbol id="sym-blank" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round">
+    <path d="M48 18v28M34 32h28"/>
+  </g>
+</symbol>
+<symbol id="sym-ground" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M48 8v18"/>
+    <path d="M24 28h48"/>
+    <path d="M31 38h34"/>
+    <path d="M39 48h18"/>
+  </g>
+</symbol>
+<symbol id="sym-port" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
+    <path d="M8 32h28M60 32h28"/>
+    <circle cx="48" cy="32" r="12"/>
+  </g>
+</symbol>
+<symbol id="sym-path" viewBox="0 0 96 64">
+  <path d="M8 32h80" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+</symbol>
+<symbol id="sym-join" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
+    <path d="M8 32h80M48 8v48"/>
+  </g>
+  <circle cx="48" cy="32" r="6" fill="currentColor"/>
+</symbol>
+<symbol id="sym-cross" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
+    <path d="M8 32h30"/>
+    <path d="M58 32h30"/>
+    <path d="M48 8v16"/>
+    <path d="M48 40v16"/>
+    <path d="M38 32c0-8 20-8 20 0"/>
+  </g>
+</symbol>
+<symbol id="sym-hold" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
+    <path d="M8 32h24M64 32h24"/>
+    <path d="M38 16v32M58 16v32"/>
+  </g>
+</symbol>
+<symbol id="sym-buffer" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 32h24M64 32h24"/>
+    <path d="M34 18h28v28H34z"/>
+    <path d="M40 38c6-12 10-12 16 0"/>
+  </g>
+</symbol>
+<symbol id="sym-act" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 32h20M68 32h20"/>
+    <path d="M28 14l40 18-40 18z"/>
+  </g>
+</symbol>
+<symbol id="sym-gate" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 32h22M66 32h22"/>
+    <path d="M48 8v10"/>
+    <path d="M48 18l18 14-18 14-18-14z"/>
+  </g>
+</symbol>
+<symbol id="sym-switch" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
+    <path d="M8 38h24M64 38h24"/>
+    <circle cx="34" cy="38" r="4" fill="currentColor"/>
+    <circle cx="62" cy="38" r="4" fill="currentColor"/>
+    <path d="M36 36l22-18"/>
+    <path d="M48 8v10"/>
+  </g>
+</symbol>
+<symbol id="sym-limit" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 32h18l8-12 10 24 10-24 10 24 8-12h16"/>
+  </g>
+</symbol>
+<symbol id="sym-one-way" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 32h80"/>
+    <path d="M48 22l12 10-12 10"/>
+  </g>
+</symbol>
+<symbol id="sym-return" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 24h60"/>
+    <path d="M66 16l10 8-10 8"/>
+    <path d="M82 40H22"/>
+    <path d="M30 32l-10 8 10 8"/>
+  </g>
+</symbol>
+<symbol id="sym-observe" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
+    <path d="M8 42h80"/>
+    <path d="M48 42V24"/>
+    <circle cx="48" cy="16" r="8"/>
+  </g>
+</symbol>
+<symbol id="sym-receipt" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 24h80"/>
+    <path d="M48 24v12"/>
+    <rect x="38" y="36" width="20" height="18" rx="2"/>
+    <path d="M43 45h10"/>
+  </g>
+</symbol>
+<symbol id="sym-authority" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M48 8v16"/>
+    <circle cx="48" cy="32" r="8"/>
+    <path d="M48 40v16"/>
+    <path d="M40 32h16"/>
+  </g>
+</symbol>
+<symbol id="sym-refuse" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
+    <path d="M8 32h44"/>
+    <path d="M54 12v40"/>
+  </g>
+</symbol></defs></svg>
+<div class="app">
+<header>
+  <div class="brand">SOV SCHEMATIC</div>
+  <div class="tag">0.1 Beta.24 · file surface</div>
+  <div class="status" id="status">Ready</div>
+  <div class="toolbar canvas-toolbar" aria-label="Workspace toolbar">
+    <div class="file-menu-wrap">
+      <button class="btn file-btn" id="fileBtn" title="File" aria-expanded="false">File</button>
+      <div class="file-menu" id="fileMenu" hidden>
+        <div class="file-menu-head">
+          <div class="file-name" id="fileNameReadout">Untitled.sov</div>
+          <div class="file-state" id="fileStateReadout">Unsaved</div>
+        </div>
+        <button class="file-menu-item" id="fileNewBtn" type="button"><span>New</span><kbd>Ctrl N</kbd></button>
+        <button class="file-menu-item" id="fileOpenBtn" type="button"><span>Open…</span><kbd>Ctrl O</kbd></button>
+        <input id="fileOpenInput" type="file" accept=".sov,.sovpak,.json,application/json,application/vnd.soveraeign.schematic+json,application/vnd.soveraeign.schematic-package+json" hidden>
+        <div class="file-menu-separator"></div>
+        <button class="file-menu-item" id="fileSaveBtn" type="button"><span>Save</span><kbd>Ctrl S</kbd></button>
+        <button class="file-menu-item" id="fileSaveAsBtn" type="button"><span>Save As…</span></button>
+        <div class="file-menu-separator"></div>
+        <button class="file-menu-item" id="fileExportSvgBtn" type="button"><span>Export SVG…</span></button>
+        <button class="file-menu-item" id="fileExportPakBtn" type="button"><span>Export Package</span><small>.sovpak</small></button>
+        <div class="file-menu-separator"></div>
+        <button class="file-menu-item" id="fileRestoreRecoveryBtn" type="button"><span>Restore Recovery</span></button>
+        <details class="file-formats mini-disclosure">
+          <summary><span class="info-dot">i</span> Formats</summary>
+          <div><b>.sov</b> editable schematic · <b>.sovpak</b> schematic + workspace + templates/assets · recovery stays browser-local.</div>
+        </details>
+        <div class="file-menu-meta"><span>Revision</span><output id="documentRevisionReadout">0</output></div>
+      </div>
+    </div>
+    <div class="menu-wrap editor-menu-wrap">
+      <button class="btn" id="editBtn" title="Edit" aria-expanded="false">Edit</button>
+      <div class="editor-menu" id="editMenu" hidden>
+        <button class="file-menu-item" id="editUndoBtn" type="button"><span>Undo</span><kbd>Ctrl Z</kbd></button>
+        <button class="file-menu-item" id="editRedoBtn" type="button"><span>Redo</span><kbd>Ctrl Shift Z</kbd></button>
+        <div class="file-menu-separator"></div>
+        <button class="file-menu-item" id="editCutBtn" type="button"><span>Cut</span><kbd>Ctrl X</kbd></button>
+        <button class="file-menu-item" id="editCopyBtn" type="button"><span>Copy</span><kbd>Ctrl C</kbd></button>
+        <button class="file-menu-item" id="editPasteBtn" type="button"><span>Paste</span><kbd>Ctrl V</kbd></button>
+        <button class="file-menu-item" id="editDuplicateBtn" type="button"><span>Duplicate</span><kbd>Ctrl D</kbd></button>
+        <div class="file-menu-separator"></div>
+        <button class="file-menu-item" id="checkpointCreateBtn" type="button"><span>Create checkpoint</span></button>
+        <details class="file-formats mini-disclosure"><summary><span class="info-dot">i</span> History</summary><div id="historyList" class="history-list">No edits yet</div></details>
+        <details class="file-formats mini-disclosure"><summary><span class="info-dot">i</span> Versions</summary><div id="checkpointList" class="checkpoint-list"></div></details>
+      </div>
+    </div>
+    <div class="history-quick-actions" aria-label="History quick actions">
+      <button class="btn quick-action" id="quickUndoBtn" type="button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo">↶</button>
+      <button class="btn quick-action" id="quickRedoBtn" type="button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo">↷</button>
+      <button class="btn quick-action quick-checkpoint" id="quickCheckpointBtn" type="button" title="Create checkpoint" aria-label="Create checkpoint">✓</button>
+    </div>
+    <div class="menu-wrap editor-menu-wrap">
+      <button class="btn" id="viewBtn" title="View" aria-expanded="false">View</button>
+      <div class="editor-menu view-menu" id="viewMenu" hidden>
+        <label class="menu-field"><span>Appearance</span><select id="appearanceMode"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+        <label class="menu-field"><span>Global rate</span><select id="globalRate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        <div class="file-menu-separator"></div>
+        <button class="file-menu-item" id="viewObjectsBtn" type="button"><span>Objects</span></button>
+        <button class="file-menu-item" id="viewFocusBtn" type="button"><span>Focus selection</span><kbd>Enter</kbd></button>
+      </div>
+    </div>
+    <button class="btn help-btn" id="helpBtn" title="Shortcuts and gestures" aria-expanded="false">?</button>
+    <div class="shortcut-help" id="shortcutHelp" hidden>
+      <b>Shortcuts</b><div><kbd>Ctrl Z</kbd> undo · <kbd>Ctrl Shift Z</kbd> redo · <kbd>Ctrl C/V/D</kbd> copy/paste/duplicate</div>
+      <div><kbd>Shift click</kbd> multi-select · <kbd>Shift drag</kbd> marquee · <kbd>double-click</kbd> focus</div>
+      <div><kbd>type</kbd> search when nothing is selected · <kbd>?</kbd> this help · <kbd>Esc</kbd> cancel</div>
+    </div>
+    <div class="toolbar-separator" aria-hidden="true"></div>
+    <button class="btn" id="zoomOutBtn" title="Zoom out (−)">−</button>
+    <button class="btn zoom-readout" id="zoomReadout" title="Current zoom">100%</button>
+    <button class="btn" id="zoomInBtn" title="Zoom in (+)">+</button>
+    <button class="btn" id="fitBtn" title="Fit diagram (Home)">Fit</button>
+    <button class="btn" id="resetZoomBtn" title="Reset zoom (Shift+Home or 0)">Reset</button>
+    <button class="btn" id="paletteBtn" title="Palette and color theme" aria-expanded="false">Palette</button>
+    <div class="palette-settings" id="paletteSettings" hidden>
+      <h3>Color engine</h3>
+      <label class="palette-row"><span>Theme</span>
+        <select id="colorThemeInput">
+          <option value="pastel">Pastel</option>
+          <option value="subtle">Subtle</option>
+          <option value="reading">Reading</option>
+        </select>
+      </label>
+      <label class="palette-row"><span>Palette</span>
+        <select id="colorPaletteInput">
+          <option value="spectrum">Spectrum</option>
+          <option value="cool">Cool</option>
+          <option value="warm">Warm</option>
+          <option value="earth">Earth</option>
+          <option value="mono">Mono</option>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
+      <div class="palette-matrix">
+        <div class="palette-row-label">MONO</div>
+        <div class="palette-preview" id="monoPalettePreview" aria-label="Grayscale palette"></div>
+        <div class="palette-row-label">COLOR</div>
+        <div class="palette-preview" id="palettePreview" aria-label="Current color palette"></div>
+      </div>
+      <label class="palette-row"><span>Diffuse signals</span><input id="diffuseSignalsInput" type="checkbox" checked></label>
+      <div class="custom-palette" id="customPaletteEditor" hidden>
+        <div class="custom-palette-title">Custom color row</div>
+        <div class="custom-palette-swatches" id="customPaletteSwatches"></div>
+      </div>
+      <details class="mini-disclosure"><summary><span class="info-dot">i</span> Palette behavior</summary><div>Mono is shared and default. Color is opt-in. Custom edits the color row only.</div></details>
+    </div>
+    <button class="btn" id="gridBtn" title="Workspace grid settings" aria-expanded="false">Grid</button>
+    <div class="grid-settings" id="gridSettings" hidden>
+      <h3>Workspace grid</h3>
+      <label class="grid-row"><span>Show grid</span><input id="gridVisibleInput" type="checkbox" checked></label>
+      <label class="grid-row"><span>Snap on settle</span><input id="gridSnapInput" type="checkbox" checked></label>
+      <label class="grid-row"><span>Grid size</span>
+        <select id="gridSizeInput">
+          <option value="12">12 px</option>
+          <option value="16">16 px</option>
+          <option value="24" selected>24 px</option>
+          <option value="32">32 px</option>
+          <option value="48">48 px</option>
+        </select>
+      </label>
+      <details class="mini-disclosure"><summary><span class="info-dot">i</span> Drag modifiers</summary><div>Shift = half grid · Ctrl/Cmd = double grid · Alt = free.</div></details>
+    </div>
+    <button class="btn active" id="flowBtn" title="Show circuit direction">Flow</button>
+  </div>
+</header>
+
+<aside class="palette">
+  <div class="section grammar-compact">
+    <div class="grammar-line"><b>Parts</b> compose · <b>Components</b> contain · <b>Wires</b> connect</div>
+  </div>
+  <div id="palette"></div>
+  <div class="section help-stack" aria-label="Schematic help">
+    <details class="help-disclosure">
+      <summary><b>Parts</b><span class="helper-snippet">owned structure</span><span class="info-dot">i</span></summary>
+      <div class="help-body"><b>Boundary</b> separates inside/outside. <b>Side</b> names boundary regions. <b>Port</b> is an addressable crossing or attachment.</div>
+    </details>
+    <details class="help-disclosure">
+      <summary><b>Wires</b><span class="helper-snippet">carry connections</span><span class="info-dot">i</span></summary>
+      <div class="help-body">A Wire connects Port faces. Endpoint markers belong to the Wire; Wire Parts are owned attachments such as taps and junctions.</div>
+    </details>
+    <details class="help-disclosure">
+      <summary><b>Marks</b><span class="helper-snippet">read the drawing</span><span class="info-dot">i</span></summary>
+      <div class="help-body help-marks"><b>→</b> flow · <b>○</b> terminal · <b>●</b> join · <b>◇</b> conditional · <b>┃</b> stop</div>
+    </details>
+  </div>
+</aside>
+
+<main class="workspace-wrap">
+  <svg id="workspace" viewBox="0 0 1200 760" preserveAspectRatio="xMidYMid meet" tabindex="0" aria-label="Schematic canvas">
+    <g id="wires"></g>
+    <g id="ghostLayer" aria-hidden="true"></g>
+    <g id="paletteDropLayer" aria-hidden="true"></g>
+    <g id="nodes"></g>
+  </svg>
+  <div class="quick-search" id="quickSearch" hidden>
+    <input id="quickSearchInput" type="text" autocomplete="off" spellcheck="false" placeholder="Search objects or run a command…" aria-label="Search and commands">
+    <div id="quickSearchResults" class="quick-search-results"></div>
+  </div>
+  <div class="selection-bar" id="selectionBar" hidden>
+        <div class="selection-bar-fields" id="componentBarFields">
+      <div class="icon-select component-template-select" aria-label="Component template">
+        <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3"></rect><path d="M3 12h3M18 12h3M12 3v3M12 18v3"></path></svg></span>
+        <select id="barComponentType" class="bar-select bar-type" aria-label="Component template" title="Component template">
+        <option value="blank">Untyped</option>
+        <option value="act">Act</option>
+        <option value="hold">Hold</option>
+        <option value="buffer">Buffer</option>
+        <option value="gate">Gate</option>
+        <option value="switch">Switch</option>
+        <option value="limit">Limit</option>
+        <option value="receipt">Receipt</option>
+        </select>
+      </div>
+      <input id="barComponentLabel" class="bar-input bar-label" type="text" placeholder="Label" aria-label="Component label" title="Component label">
+      <button id="barComponentColorSlot" class="color-slot-chip" type="button" title="Boundary color" aria-label="Component boundary palette slot"></button>
+    </div>
+
+    <div class="selection-bar-fields" id="connectionBarFields" hidden>
+      <div class="icon-select wire-template-select" aria-label="Wire direction">
+        <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h14"></path><path d="M14 8l4 4-4 4"></path></svg></span>
+        <select id="barConnectionDirection" class="bar-select" aria-label="Wire direction" title="Wire direction">
+        <option value="none">No direction</option>
+        <option value="forward">Forward</option>
+        <option value="reverse">Reverse</option>
+        <option value="duplex">Duplex</option>
+        </select>
+      </div>
+      <input id="barConnectionLabel" class="bar-input bar-label" type="text" placeholder="Label" aria-label="Connection label" title="Wire label">
+    </div>
+
+    <div class="selection-bar-fields" id="portBarFields" hidden>
+      <div class="icon-select port-template-select" aria-label="Port placement">
+        <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h8"></path><circle cx="16" cy="12" r="4"></circle></svg></span>
+        <select id="barPortSide" class="bar-select" aria-label="Port placement" title="Derived attachment position">
+        <option value="left">Left</option>
+        <option value="right">Right</option>
+        <option value="top">Top</option>
+        <option value="bottom">Bottom</option>
+        <option value="along">Along wire</option>
+        </select>
+      </div>
+      <input id="barPortLabel" class="bar-input bar-label" type="text" maxlength="24" placeholder="Port label" aria-label="Port label" title="Port label">
+      <button id="barPortColorSlot" class="color-slot-chip" type="button" title="Port color" aria-label="Port palette slot"></button>
+    </div>
+
+    <button id="barFormState" class="bar-form-state" type="button" title="Form · dimension, body and frame" aria-label="Component form">2D</button>
+    <button id="barSelectionSettings" class="bar-settings" type="button" title="Settings" aria-label="Selection settings" aria-expanded="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7ZM19 12l2-1-2-3-2 .4a7.7 7.7 0 0 0-1.4-.8L15 5h-6l-.6 2.6a7.7 7.7 0 0 0-1.4.8L5 8l-2 3 2 1v1l-2 1 2 3 2-.4c.4.3.9.6 1.4.8L9 20h6l.6-2.6c.5-.2 1-.5 1.4-.8l2 .4 2-3-2-1v-1Z"/></svg>
+    </button>
+    <button id="barDeleteSelection" class="bar-delete" type="button" title="Delete selection (Del)" aria-label="Delete selection"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
+
+    <div class="selection-settings-panel" id="selectionSettingsPanel" hidden>
+      <div id="entityUtilityFields" class="settings-surface utility-settings">
+        <div class="settings-head"><b>Object</b><span>editor state · timing</span></div>
+        <div class="utility-toggle-row">
+          <label><input id="entityPin" type="checkbox"> Pin</label>
+          <label><input id="entityLock" type="checkbox"> Lock</label>
+          <label><input id="entityHidden" type="checkbox"> Hidden</label>
+        </div>
+        <div class="settings-grid settings-grid-compact">
+          <label>Opacity <input id="entityOpacity" type="range" min="0.08" max="1" step="0.04" value="1"></label>
+          <label>Rate <select id="entityRate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        </div>
+      </div>
+      <div id="componentSettingsFields" class="settings-surface">
+        <div class="settings-head"><b>Component settings</b><span>Form first · appearance second</span></div>
+        <details class="form-settings" id="formSettings" open>
+          <summary><b>Form</b><span class="helper-snippet">dimension · body · frame</span></summary>
+          <div class="settings-grid settings-grid-compact">
+            <label>Dimension
+              <select id="formDimension">
+                <option value="0">0D · Point</option>
+                <option value="1">1D · Path</option>
+                <option value="2">2D · Surface</option>
+              </select>
+            </label>
+            <label>Body
+              <select id="formBodyKind">
+                <option value="point">Point</option>
+                <option value="path">Path</option>
+                <option value="surface">Surface</option>
+              </select>
+            </label>
+            <label>Material
+              <select id="formMaterial">
+                <option value="generic">Generic</option>
+                <option value="canvas">Canvas</option>
+                <option value="paper">Paper</option>
+                <option value="panel">Panel</option>
+                <option value="wood">Wood</option>
+                <option value="metal">Metal</option>
+                <option value="glass">Glass</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label>Body thickness <input id="formBodyThickness" type="number" min="0" max="128" step="1"></label>
+            <label>Interior
+              <select id="formInteriorState">
+                <option value="closed">Closed</option>
+                <option value="open">Open · hosts Components</option>
+              </select>
+            </label>
+            <label>Frame
+              <select id="formFrameMode">
+                <option value="none">None</option>
+                <option value="frame">Frame</option>
+                <option value="shell">Shell</option>
+              </select>
+            </label>
+            <label>Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
+            <label>Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
+          </div>
+          <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Form defines dimensional topology. Body defines substrate/material. Frame is boundary structure. Interior openness is structural state, not presentation.</div></details>
+        </details>
+        <details class="form-settings">
+          <summary><b>Appearance</b><span class="helper-snippet">graphic · text · size</span></summary>
+          <div class="settings-grid settings-grid-compact">
+          <label>Signal
+            <select id="barComponentSignalMode" aria-label="Component signal mode" title="Signal behavior">
+              <option value="source">Source</option>
+              <option value="relay">On input</option>
+              <option value="passive">Passive</option>
+            </select>
+          </label>
+          <label>Graphic
+            <select id="visualGraphicMode">
+              <option value="symbol">Symbol</option>
+              <option value="custom">Custom SVG</option>
+              <option value="none">None</option>
+            </select>
+          </label>
+          <label>Label
+            <select id="visualLabelMode">
+              <option value="boundary">Boundary</option>
+              <option value="inside">Inside</option>
+              <option value="outside">Outside</option>
+              <option value="none">Hidden</option>
+            </select>
+          </label>
+          <label>Width <input id="visualWidth" type="number" min="80" max="520" step="8"></label>
+          <label>Height <input id="visualHeight" type="number" min="64" max="420" step="8"></label>
+          <label>Interior <button id="visualInteriorColor" class="color-slot-chip" type="button" aria-label="Interior palette slot"></button></label>
+        </div>
+        <label class="settings-wide">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
+        <label class="settings-wide" id="visualSvgRow">SVG · viewBox 0 0 96 64
+          <textarea id="visualSvgMarkup" spellcheck="false" placeholder="&lt;path d=&quot;...&quot;/&gt;"></textarea>
+        </label>
+        <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> SVG rules</summary><div>Custom SVG is sanitized and kept inside the Component boundary.</div></details>
+        </details>
+      </div>
+
+      <div id="wireSettingsFields" class="settings-surface" hidden>
+        <div class="settings-head"><b>Wire settings</b><span>Endpoint mapping and return semantics</span></div>
+        <div class="settings-grid settings-grid-compact">
+          <label>Return
+            <select id="barConnectionReciprocity" aria-label="Connection reciprocity" title="Return rule">
+              <option value="none">No return rule</option>
+              <option value="expected">Return expected</option>
+              <option value="required">Return required</option>
+            </select>
+          </label>
+          <label><span id="barWirePrimaryOperationLabel">OUT operation</span>
+            <select id="barWirePrimaryOperation" aria-label="Primary packet operation" title="Packet access operation">
+              <option value="none">Signal</option>
+              <option value="read">Read</option>
+              <option value="write">Write</option>
+            </select>
+          </label>
+          <label><span id="barWireReturnOperationLabel">RETURN operation</span>
+            <select id="barWireReturnOperation" aria-label="Return packet operation" title="Return packet access operation">
+              <option value="none">Signal</option>
+              <option value="read">Read</option>
+              <option value="write">Write</option>
+            </select>
+          </label>
+          <label><span id="barWireOutLabel">OUT marker</span><input id="barWireOutMarker" type="text" maxlength="12" placeholder="Ch" aria-label="Wire output channel marker"></label>
+          <label>OUT color <span id="barWireOutColor" class="color-slot-chip readonly-slot" title="Output Port color"></span></label>
+          <label><span id="barWireInLabel">IN marker</span><input id="barWireInMarker" type="text" maxlength="12" placeholder="Ch" aria-label="Wire input channel marker"></label>
+          <label>IN color <span id="barWireInColor" class="color-slot-chip readonly-slot" title="Input Port color"></span></label>
+        </div>
+        <button id="barAddWirePortBtn" class="bar-action settings-action" type="button" title="Add a Port part to this wire">+ Port part</button>
+      </div>
+
+      <div id="portSettingsFields" class="settings-surface" hidden>
+        <div class="settings-head"><b>Attachment settings</b><span>Boundary face and signal behavior</span></div>
+        <div class="settings-grid settings-grid-compact">
+          <label>Face
+            <select id="barPortFace" aria-label="Port face" title="Inside/outside face">
+              <option value="external">Outside</option>
+              <option value="internal">Inside</option>
+              <option value="both">Both</option>
+            </select>
+          </label>
+          <label>Direction
+            <select id="barPortFlow" aria-label="Port direction" title="Input/output behavior">
+              <option value="in">Input</option>
+              <option value="out">Output</option>
+              <option value="duplex">Input + Output</option>
+              <option value="control">Trigger</option>
+            </select>
+          </label>
+          <label>Access
+            <select id="barPortAccess" aria-label="Port access" title="Read/write capability">
+              <option value="none">None</option>
+              <option value="read">Read</option>
+              <option value="write">Write</option>
+              <option value="read-write">Read + Write</option>
+            </select>
+          </label>
+        </div>
+        <div class="settings-readout"><b>Markers</b><span id="barPortMarkers" class="marker-summary" title="Channel markers currently bound to this Port"></span></div>
+      </div>
+    </div>
+
+    <div class="color-slot-panel" id="colorSlotPanel" hidden></div>
+  </div>
+  <div class="hint" id="hint">Drag body: move · corner grip: right / down / diagonal resize · Form: dimensional structure · ⚙ details · Port wins overlap</div>
+</main>
+
+<aside class="inspector">
+  <div class="section">
+    <h2>Inspector</h2>
+    <div id="emptyInspector" class="objects-empty">
+      <div class="objects-head"><b>Objects</b><span id="hiddenObjectCount"></span></div>
+      <div id="objectsList" class="objects-list"></div>
+      <div class="objects-tip">Type on the blank canvas to search · double-click an object to focus.</div>
+    </div>
+    <div id="componentDetail" hidden>
+      <div class="kind-badge">COMPONENT</div>
+      <dl class="kv">
+        <dt>Inside type</dt><dd id="iName"></dd>
+        <dt>Outside type</dt><dd id="iOutside">canvas</dd>
+        <dt>Host</dt><dd id="iParent">—</dd>
+        <dt>Scope</dt><dd id="iScope">canvas</dd>
+        <dt>Boundary</dt><dd id="iBoundary">blank</dd>
+        <dt>Family</dt><dd id="iFamily"></dd>
+        <dt>Signal mode</dt><dd id="iSignalMode"></dd>
+        <dt>Class</dt><dd id="iClass"></dd>
+        <dt>Meaning</dt><dd id="iMeaning"></dd>
+        <dt>Words</dt><dd id="iVerbs"></dd>
+        <dt>Traits</dt><dd id="iProps"></dd>
+        <dt>Form</dt><dd id="iForm">2D · Surface</dd>
+        <dt>Body</dt><dd id="iBody">Generic</dd>
+        <dt>Frame</dt><dd id="iFrame">None</dd>
+        <dt>Interior</dt><dd id="iContains">Closed</dd>
+      </dl>
+    </div>
+    <div id="portDetail" hidden>
+      <div class="kind-badge">PORT PART</div>
+      <dl class="kv">
+        <dt>Owner</dt><dd id="pOwner"></dd>
+        <dt>Port</dt><dd id="pId"></dd>
+        <dt>Placement</dt><dd id="pSide"></dd>
+        <dt>Face</dt><dd id="pFace"></dd>
+        <dt>Label</dt><dd id="pLabel"></dd>
+        <dt>Markers</dt><dd id="pChannelCount"></dd>
+        <dt>Selected</dt><dd id="pChannel"></dd>
+        <dt>Direction</dt><dd id="pFlow"></dd>
+        <dt>Access</dt><dd id="pAccess"></dd>
+        <dt>Port color</dt><dd id="pColor"></dd>
+      </dl>
+      <details class="inline-help"><summary><span class="info-dot">i</span> Port behavior</summary><div>Direction controls input/output. Access controls read/write capability. Face controls inside/outside boundary placement. Access is not authority.</div></details>
+    </div>
+    <div id="connectionDetail" hidden>
+      <div class="kind-badge">WIRE</div>
+      <dl class="kv">
+        <dt>From</dt><dd id="cFrom"></dd>
+        <dt>To</dt><dd id="cTo"></dd>
+        <dt>Direction</dt><dd id="cDirection"></dd>
+        <dt>Reciprocity</dt><dd id="cReciprocity"></dd>
+        <dt>Operations</dt><dd id="cOperations"></dd>
+        <dt>Mapping</dt><dd id="cChannel"></dd>
+        <dt>Endpoint colors</dt><dd id="cColor"></dd>
+        <dt>Parts</dt><dd id="cWireParts"></dd>
+        <dt>Label</dt><dd id="cLabel">—</dd>
+      </dl>
+      <details class="inline-help"><summary><span class="info-dot">i</span> Wire mapping</summary><div>The Wire maps endpoint connections and concrete packet operations. Port access declares capability; packet R/W declares the concrete operation. Access is not authority.</div></details>
+    </div>
+  </div>
+  <div class="section"><details class="help-disclosure"><summary><b>Reading</b><span class="helper-snippet">exists · carries · resolves</span><span class="info-dot">i</span></summary><div class="help-body"><b>Component</b> exists · <b>Connection</b> carries · <b>Reference</b> resolves · <b>Modifier</b> qualifies.</div></details></div>
+</aside>
+</div>
+
+<script src="src/06-attachment-core.js"></script>
+<script src="src/05-data-core.js"></script>
+<script src="src/00-state.js"></script>
+<script src="src/10-model.js"></script>
+<script src="src/15-editor-kernel.js"></script>
+<script src="src/20-ui.js"></script>
+<script src="src/25-signal.js"></script>
+<script src="src/30-canvas.js"></script>
+<script src="src/40-routing.js"></script>
+<script src="src/50-selection.js"></script>
+<script src="src/55-render.js"></script>
+<script src="src/60-interactions.js"></script>
+<script src="src/70-editor-controls.js"></script>
+<script src="src/75-persistence.js"></script>
+<script src="src/80-bootstrap.js"></script>
+<script src="src/85-api.js"></script>
+</body>
+</html>
