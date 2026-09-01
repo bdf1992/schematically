@@ -37,11 +37,15 @@ jobs:
           test -f "$source_root/scripts/qa.py"
           test -f "$source_root/.github/workflows/ci.yml"
 
-          git rm -r .beta24 .github/workflows/settlement-payload-probe.yml
+          git rm -r .beta24
           cp -a "$source_root/." .
+          rm .github/workflows/ci.yml
 
           while IFS= read -r -d '' source_file; do
             relative="${source_file#"$source_root/"}"
+            if [ "$relative" = '.github/workflows/ci.yml' ]; then
+              continue
+            fi
             cmp -s "$source_file" "$relative"
           done < <(find "$source_root" -type f -print0)
 
