@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
 _site/
+dist/
 tests/journey/
 .venv/
