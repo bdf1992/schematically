@@ -5,9 +5,44 @@ on:
     paths:
       - '.github/workflows/settlement-payload-probe.yml'
 permissions:
-  contents: write
+  contents: read
 jobs:
-  staging:
+  diagnose:
     runs-on: ubuntu-24.04
     steps:
-      - run: echo 'Beta.24 authoritative ZIP transport staging'
+      - uses: actions/checkout@v5
+      - name: Salvage and classify current payload
+        shell: bash
+        run: |
+          set -u
+          : > /tmp/beta24.tar.xz
+          for f in .beta24/payload-*.b64; do base64 -d "$f" >> /tmp/beta24.tar.xz; done
+          echo "payload_sha256=$(sha256sum /tmp/beta24.tar.xz | awk '{print $1}')"
+          mkdir -p /tmp/salvage
+          xz -dc /tmp/beta24.tar.xz > /tmp/beta24.tar || true
+          echo "salvaged_tar_bytes=$(stat -c%s /tmp/beta24.tar)"
+          tar --ignore-zeros -xf /tmp/beta24.tar -C /tmp/salvage || true
+          MANIFEST="$GITHUB_WORKSPACE/.beta24/expected.sha256" SALVAGE=/tmp/salvage python - <<'PY'
+          from pathlib import Path
+          import hashlib, os
+          root=Path(os.environ['SALVAGE'])
+          manifest=Path(os.environ['MANIFEST'])
+          ok=[]; missing=[]; mismatch=[]
+          for line in manifest.read_text().splitlines():
+              if not line.strip(): continue
+              want, rel=line.split(None,1)
+              rel=rel.strip()
+              if rel.startswith('./'): rel=rel[2:]
+              p=root/rel
+              if not p.is_file():
+                  missing.append(rel); continue
+              got=hashlib.sha256(p.read_bytes()).hexdigest()
+              (ok if got==want else mismatch).append(rel)
+          print(f'EXACT={len(ok)} MISSING={len(missing)} MISMATCH={len(mismatch)}')
+          print('--- MISSING ---')
+          print('\n'.join(missing))
+          print('--- MISMATCH ---')
+          print('\n'.join(mismatch))
+          print('--- EXACT TAIL ---')
+          print('\n'.join(ok[-20:]))
+          PY
