@@ -76,14 +76,14 @@ rc/<next>
 
 ### First post-RC candidates
 
-1. **Topology grammar**
+1. **Topology grammar — Issue #7**
    - formal Point / Path / Surface cell/incidence model;
    - boundary operator / subcell vocabulary;
    - generic `Part` as owned addressable subcell/facet;
    - `Wire` becomes a carrier role/configuration of `1D Path` rather than a parallel geometric primitive;
    - parametric `stick_to(path[t])` and relative placement.
 
-2. **Data-driven language** — Issue #4
+2. **Data-driven language — Issue #4**
    - data-backed built-in templates;
    - domain-pack schema;
    - technical shape/SVG grammar;
@@ -91,7 +91,7 @@ rc/<next>
    - pack/glyph authoring skills;
    - validators and golden examples.
 
-3. **Logic machine** — Issue #6
+3. **Logic machine — Issue #6**
    - signal state distinct from moving particle/event;
    - deterministic `(logicalTime, sequence)` scheduler;
    - data-defined combinational gates;
@@ -146,5 +146,6 @@ These are needs to account for, not an implementation sequence:
 ### AFTER MERGE / NEXT
 - #4 — data-driven schematic language/domain packs/agent authoring
 - #6 — data-driven logic machine for particle routing
+- #7 — Point / Path / Surface cell grammar and `Wire → Path`
 
 Post-RC issues may refine the horizon now, but implementation begins from `dev` after the accepted RC is merged.
