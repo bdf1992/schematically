@@ -22,13 +22,14 @@ jobs:
           set -euo pipefail
           archive='soveraeign-symbol-lab-beta-0.1.24.zip'
           expected='42af8e6f14b7fa18004fda89a595e7ad6bf0c553af645bc4f3ae93f65e7589a4'
-          actual="$(sha256sum "$archive" | awk '{print $1}')"
-          test "$actual" = "$expected"
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git fetch origin main
           git rebase origin/main
+
+          actual="$(sha256sum "$archive" | awk '{print $1}')"
+          test "$actual" = "$expected"
 
           import_dir="$(mktemp -d)"
           unzip -q "$archive" -d "$import_dir"
