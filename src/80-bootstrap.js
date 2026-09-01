@@ -30,7 +30,8 @@ document.querySelector('.workspace-wrap').addEventListener('pointerdown',e=>{
 const editBtn=document.getElementById('editBtn'),editMenu=document.getElementById('editMenu'),viewBtn=document.getElementById('viewBtn'),viewMenu=document.getElementById('viewMenu'),helpBtn=document.getElementById('helpBtn'),shortcutHelp=document.getElementById('shortcutHelp');
 function setUtilityMenu(which,open){for(const [btn,menu] of [[editBtn,editMenu],[viewBtn,viewMenu]]){const on=menu===which&&open;menu.hidden=!on;btn?.setAttribute('aria-expanded',String(on))}if(open&&shortcutHelp)shortcutHelp.hidden=true}
 editBtn?.addEventListener('click',e=>{e.stopPropagation();setUtilityMenu(editMenu,editMenu.hidden)});viewBtn?.addEventListener('click',e=>{e.stopPropagation();setUtilityMenu(viewMenu,viewMenu.hidden)});editMenu?.addEventListener('click',e=>e.stopPropagation());viewMenu?.addEventListener('click',e=>e.stopPropagation());helpBtn?.addEventListener('click',e=>{e.stopPropagation();shortcutHelp.hidden=!shortcutHelp.hidden;setUtilityMenu(null,false);helpBtn.setAttribute('aria-expanded',String(!shortcutHelp.hidden))});shortcutHelp?.addEventListener('click',e=>e.stopPropagation());
-document.addEventListener('pointerdown',e=>{if(editMenu&&!editMenu.hidden&&!editMenu.contains(e.target)&&e.target!==editBtn)setUtilityMenu(editMenu,false);if(viewMenu&&!viewMenu.hidden&&!viewMenu.contains(e.target)&&e.target!==viewBtn)setUtilityMenu(viewMenu,false);if(shortcutHelp&&!shortcutHelp.hidden&&!shortcutHelp.contains(e.target)&&e.target!==helpBtn){shortcutHelp.hidden=true;helpBtn?.setAttribute('aria-expanded','false')}});
+// Capture phase: canvas/palette gestures stopPropagation on pointerdown, which must not veto menu dismissal.
+document.addEventListener('pointerdown',e=>{if(editMenu&&!editMenu.hidden&&!editMenu.contains(e.target)&&!editBtn?.contains(e.target))setUtilityMenu(editMenu,false);if(viewMenu&&!viewMenu.hidden&&!viewMenu.contains(e.target)&&!viewBtn?.contains(e.target))setUtilityMenu(viewMenu,false);if(shortcutHelp&&!shortcutHelp.hidden&&!shortcutHelp.contains(e.target)&&e.target!==helpBtn){shortcutHelp.hidden=true;helpBtn?.setAttribute('aria-expanded','false')}},true);
 document.getElementById('editUndoBtn')?.addEventListener('click',undoHistory);document.getElementById('editRedoBtn')?.addEventListener('click',redoHistory);document.getElementById('editCutBtn')?.addEventListener('click',cutSelection);document.getElementById('editCopyBtn')?.addEventListener('click',copySelection);document.getElementById('editPasteBtn')?.addEventListener('click',()=>pasteClipboard());document.getElementById('editDuplicateBtn')?.addEventListener('click',duplicateSelection);document.getElementById('checkpointCreateBtn')?.addEventListener('click',()=>createCheckpoint());document.getElementById('viewObjectsBtn')?.addEventListener('click',()=>{selectNode(null);document.querySelector('.inspector')?.scrollTo({top:0,behavior:'smooth'})});document.getElementById('viewFocusBtn')?.addEventListener('click',()=>{const n=nodes.find(n=>n.id===selected);if(n)focusComponent(n)});
 document.getElementById('quickUndoBtn')?.addEventListener('click',undoHistory);document.getElementById('quickRedoBtn')?.addEventListener('click',redoHistory);document.getElementById('quickCheckpointBtn')?.addEventListener('click',()=>createCheckpoint());
 
@@ -94,6 +95,19 @@ workspace.classList.toggle('show-flow',showFlow); flowBtn.classList.toggle('acti
 function handleCanvasKeydown(e){
   if(isEditableTarget(e.target))return;
   const code=shortcutCode(e),mod=e.ctrlKey||e.metaKey;
+
+  // Escape must dismiss open header menus even when focus sits on the menu button, before the canvas-focus guard.
+  if(code==='Escape'){
+    const fileOpen=typeof fileMenu!=='undefined'&&fileMenu&&!fileMenu.hidden;
+    const utilityOpen=(editMenu&&!editMenu.hidden)||(viewMenu&&!viewMenu.hidden)||(shortcutHelp&&!shortcutHelp.hidden);
+    if(fileOpen||utilityOpen){
+      if(fileOpen&&typeof setFileMenu==='function')setFileMenu(false);
+      setUtilityMenu(null,false);
+      if(shortcutHelp){shortcutHelp.hidden=true;helpBtn?.setAttribute('aria-expanded','false')}
+      e.preventDefault();
+      return;
+    }
+  }
 
   // Document-level edit shortcuts must survive selection bars disappearing after a mutation.
   if(mod&&!e.altKey){

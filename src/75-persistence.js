@@ -369,7 +369,8 @@ if(fileRestoreRecoveryBtn)fileRestoreRecoveryBtn.addEventListener('click',()=>{
   setFileMenu(false);
   try{restoreRecovery()}catch(error){statusEl.textContent=error.message}
 });
-document.addEventListener('pointerdown',event=>{if(fileMenu&&!fileMenu.hidden&&!fileMenu.contains(event.target)&&event.target!==fileBtn)setFileMenu(false)});
+// Capture phase: canvas/palette gestures stopPropagation on pointerdown, which must not veto menu dismissal.
+document.addEventListener('pointerdown',event=>{if(fileMenu&&!fileMenu.hidden&&!fileMenu.contains(event.target)&&!fileBtn?.contains(event.target))setFileMenu(false)},true);
 document.addEventListener('keydown',event=>{
   if(!(event.ctrlKey||event.metaKey)||event.altKey)return;
   const key=String(event.key||'').toLowerCase();

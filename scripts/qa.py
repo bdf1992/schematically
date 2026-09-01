@@ -29,6 +29,8 @@ BROWSER=[
     'tests/editor_kernel_qa.py',
     'tests/editor_kernel_extended_qa.py',
     'tests/file_surface_qa.py',
+    'tests/menu_dismissal_qa.py',
+    'tests/appearance_history_qa.py',
     'tests/agent_api_mcp_golden_qa.py',
     'tests/render_idempotence_qa.py',
     'tests/drag_lifecycle_stress_qa.py',

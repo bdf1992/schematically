@@ -57,6 +57,13 @@ function historyDocument(){return SovSchematicData.makeDocument(SovSchematicData
 function historyFingerprintOf(doc){
   const d=SovSchematicData.clone(doc);d.revision=0;
   if(d.meta){delete d.meta.updatedAt;delete d.meta.savedAt}
+  // Realized palette colors are appearance projections of colorSlot, not semantic edits (#13).
+  (function stripRealizedColors(value){
+    if(Array.isArray(value)){value.forEach(stripRealizedColors);return}
+    if(!value||typeof value!=='object')return;
+    if(Number.isInteger(value.colorSlot)&&typeof value.color==='string')delete value.color;
+    for(const key of Object.keys(value))stripRealizedColors(value[key]);
+  })(d);
   return JSON.stringify(d);
 }
 function setHistoryHint(label){if(label)historyState.hint=String(label).slice(0,80)}
