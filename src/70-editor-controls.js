@@ -17,15 +17,16 @@ visualInteriorColor.addEventListener('click',()=>openColorSlotPanel('component-i
 visualText.addEventListener('input',()=>mutateSelectedPresentation(p=>p.text=visualText.value));
 visualSvgMarkup.addEventListener('input',()=>mutateSelectedPresentation(p=>{p.graphic.svg=visualSvgMarkup.value;p.graphic.kind='custom';visualGraphicMode.value='custom'}));
 barPortSide.addEventListener('change',()=>{
-  const info=selectedPortInfo();if(!info||info.ownerKind!=='component'||mutationBlocked(info.owner,'Move Port'))return;setHistoryHint('Move Port');
-  info.port.side=barPortSide.value;
-  componentConfig(info.owner);
-  routeCache.clear();arrowPoseCache.clear();render();selectPortRef(selectedPortInfo()||info);
+  const info=selectedPortInfo();if(!info)return;
+  // Attachment geometry is derived from the host topology; side is not independent authored truth.
+  const side=info.point?.side||Attachment.resolveSpec(info.owner,info.pointId)?.side||'point';
+  barPortSide.value=side;
+  statusEl.textContent='0D attachment position is derived from its host form';
 });
 barPortFace.addEventListener('change',()=>{
   const info=selectedPortInfo();if(!info||mutationBlocked(info.owner,'Change Port face'))return;setHistoryHint('Change Port face');
   info.port.face=barPortFace.value;
-  if(info.ownerKind==='component')componentConfig(info.owner);else wirePartPortConfig(info.owner,info.part);
+  componentConfig(info.owner);
   routeCache.clear();arrowPoseCache.clear();render();selectPortRef(selectedPortInfo()||info);
 });
 barPortFlow.addEventListener('change',()=>{
@@ -33,8 +34,7 @@ barPortFlow.addEventListener('change',()=>{
   normalizePortConnections(info.port);
   const connection=info.port.connections[info.port.activeConnection];
   connection.flow=barPortFlow.value;
-  if(info.ownerKind==='component')componentConfig(info.owner);
-  else wirePartPortConfig(info.owner,info.part);
+  componentConfig(info.owner);
   renderWires();selectPortRef(selectedPortInfo()||info);
 });
 barPortAccess.addEventListener('change',()=>{
@@ -42,37 +42,29 @@ barPortAccess.addEventListener('change',()=>{
   normalizePortConnections(info.port);
   const connection=info.port.connections[info.port.activeConnection];
   connection.access=barPortAccess.value;
-  if(info.ownerKind==='component')componentConfig(info.owner);
-  else wirePartPortConfig(info.owner,info.part);
+  componentConfig(info.owner);
   render();selectPortRef(selectedPortInfo()||info);scheduleHistoryCapture();
 });
 barPortLabel.addEventListener('input',()=>{
   const info=selectedPortInfo();if(!info||mutationBlocked(info.owner,'Edit Port label'))return;setHistoryHint('Edit Port label');
   info.port.label=barPortLabel.value.slice(0,24);
-  if(info.ownerKind==='component')componentConfig(info.owner);
-  else wirePartPortConfig(info.owner,info.part);
+  componentConfig(info.owner);
   render();selectPortRef(selectedPortInfo()||info,{focus:false});
 });
 barPortColorSlot.addEventListener('click',()=>openColorSlotPanel('port'));
 function deleteSelected(){
   cancelWireDrag();
   if(!selected)return;
+  // Flush any pending edit first so deletion always has a distinct pre-delete snapshot.
+  commitHistoryCapture();
 
   if(typeof selected==='string'&&selected.startsWith('wire:')){
     const i=Number(selected.split(':')[1]);
     if(Number.isInteger(i)&&i>=0&&i<wires.length){if(isEntityLocked(wires[i])){statusEl.textContent='Locked · delete refused';return}setHistoryHint('Delete Wire');SovSchematicData.remove(diagram,'wire',wires[i].id)}
-  }else if(typeof selected==='string'&&selected.startsWith('port:wire:')){
-    const info=selectedPortInfo();
-    if(info?.ownerKind==='wire'){
-      if(isEntityLocked(info.owner)){statusEl.textContent='Locked · delete refused';return}
-      setHistoryHint('Delete Wire Part');
-      const i=info.owner.attachments.findIndex(p=>p.id===info.portId);
-      if(i>=0)info.owner.attachments.splice(i,1);
-    }
-  }else if(typeof selected==='string'&&selected.startsWith('port:')){
-    // Boundary Ports are structural Parts of the current base Component.
-    // Delete does not silently remove them yet.
-    statusEl.textContent='Boundary Port is structural';
+  }else if(isAttachmentSelectionValue(selected)){
+    // Canonical attachment points are structural topology of the current host form.
+    // Delete does not silently change dimensional cardinality.
+    statusEl.textContent='Attachment point is structural';
     return;
   }else{
     const ids=selectedComponentIds.size?[...selectedComponentIds]:[selected];
@@ -84,7 +76,7 @@ function deleteSelected(){
   }
 
   routeCache.clear();arrowPoseCache.clear();dragRouteSnapshots.clear();
-  selected=null;hideSelectionBar();refreshCanvasScopeControl();render();selectNode(null);scheduleHistoryCapture();
+  selected=null;hideSelectionBar();refreshCanvasScopeControl();render();selectNode(null);commitHistoryCapture();
 }
 
 barFormState.addEventListener('click',()=>{
@@ -93,12 +85,14 @@ barFormState.addEventListener('click',()=>{
 });
 function updateSelectedComponentForm(mutator){
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Form edit'))return;setHistoryHint('Edit Component Form');
-  const f=componentForm(n),beforeOpen=f.regions.interior.state==='open';mutator(f,n);
+  const f=componentForm(n),beforeOpen=f.regions.interior.state==='open',beforeDimension=f.dimension;mutator(f,n);
   if(f.dimension<2)f.regions.interior.state='closed';componentForm(n);
   if(beforeOpen&&f.regions.interior.state==='closed'){
     const fallback=n.canvasId||GLOBAL_CANVAS_ID;
     for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}
   }
+  if(beforeDimension!==f.dimension)SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
+  componentConfig(n);
   routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 }
 formDimension.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.dimension=Number(formDimension.value);f.body.kind=['point','path','surface'][f.dimension]}));
@@ -147,30 +141,14 @@ barWireReturnOperation.addEventListener('change',()=>{
   const i=Number(selected.split(':')[1]);selectWire(i);scheduleHistoryCapture();
 });
 barAddWirePortBtn.addEventListener('click',()=>{
-  const w=mutableSelectedConnection('Add Wire Part');if(!w)return;
-  const cfg=connectionConfig(w);
-  const count=w.attachments.length;
-  const offsets=[0,.14,-.14,.28,-.28,.38,-.38];
-  const channel=wireOutConnection(w);
-  w.attachments.push({
-    id:'wp'+wirePartSeq++,
-    kind:'port',type:'port',
-    t:Math.max(.08,Math.min(.92,.5+(offsets[count]??0))),
-    placement:{kind:'wire',t:Math.max(.08,Math.min(.92,.5+(offsets[count]??0)))},
-    config:{
-      connectionCount:1,
-      activeConnection:0,
-      connections:[{
-        id:'connection-1',name:'Connection 1',
-        colorSlot:channel.colorSlot,
-        flow:cfg.direction==='duplex'?'duplex':'out',
-        access:'read-write'
-      }],
-      label:''
-    }
-  });
-  renderWires();
-  const i=Number(selected.split(':')[1]);selectWire(i);scheduleHistoryCapture();
+  const w=mutableSelectedConnection('Add attachment point');if(!w)return;
+  const cfg=connectionConfig(w),hosted=nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&componentForm(n).dimension===0);
+  const offsets=[0,.14,-.14,.28,-.28,.38,-.38],t=Math.max(.08,Math.min(.92,.5+(offsets[hosted.length]??0)));
+  const channel=wireOutConnection(w),path=renderedWirePath(w);let x=0,y=0;
+  if(path){const q=path.getPointAtLength(path.getTotalLength()*t);x=q.x;y=q.y}
+  const ports={out:{side:'point',face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',name:'Connection 1',colorSlot:channel.colorSlot,flow:cfg.direction==='duplex'?'duplex':'out',access:'read-write'}]}};
+  const point=SovSchematicData.makeComponent(diagram,{symbolId:'port',x,y,canvasId:wireCanvas(w).id,placement:{kind:'wire',wireId:w.id,t},form:{dimension:0,body:{kind:'point',material:'generic',thickness:0},frame:{mode:'none',thickness:0,depth:0},regions:{interior:{state:'closed'}}},config:{label:'',colorSlot:channel.colorSlot,signalMode:'relay',presentation:{graphic:{kind:'none',ref:'sym-port',svg:''},labelMode:'none',backdrop:'none'},ports}});
+  nodes.push(point);syncNodeBoundaryContext(point);render();selectPort(point.id,'self');scheduleHistoryCapture();statusEl.textContent='Attachment point added';
 });
 barConnectionLabel.addEventListener('input',()=>{
   const w=mutableSelectedConnection('Edit Wire label');if(!w)return;

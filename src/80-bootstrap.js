@@ -32,6 +32,7 @@ function setUtilityMenu(which,open){for(const [btn,menu] of [[editBtn,editMenu],
 editBtn?.addEventListener('click',e=>{e.stopPropagation();setUtilityMenu(editMenu,editMenu.hidden)});viewBtn?.addEventListener('click',e=>{e.stopPropagation();setUtilityMenu(viewMenu,viewMenu.hidden)});editMenu?.addEventListener('click',e=>e.stopPropagation());viewMenu?.addEventListener('click',e=>e.stopPropagation());helpBtn?.addEventListener('click',e=>{e.stopPropagation();shortcutHelp.hidden=!shortcutHelp.hidden;setUtilityMenu(null,false);helpBtn.setAttribute('aria-expanded',String(!shortcutHelp.hidden))});shortcutHelp?.addEventListener('click',e=>e.stopPropagation());
 document.addEventListener('pointerdown',e=>{if(editMenu&&!editMenu.hidden&&!editMenu.contains(e.target)&&e.target!==editBtn)setUtilityMenu(editMenu,false);if(viewMenu&&!viewMenu.hidden&&!viewMenu.contains(e.target)&&e.target!==viewBtn)setUtilityMenu(viewMenu,false);if(shortcutHelp&&!shortcutHelp.hidden&&!shortcutHelp.contains(e.target)&&e.target!==helpBtn){shortcutHelp.hidden=true;helpBtn?.setAttribute('aria-expanded','false')}});
 document.getElementById('editUndoBtn')?.addEventListener('click',undoHistory);document.getElementById('editRedoBtn')?.addEventListener('click',redoHistory);document.getElementById('editCutBtn')?.addEventListener('click',cutSelection);document.getElementById('editCopyBtn')?.addEventListener('click',copySelection);document.getElementById('editPasteBtn')?.addEventListener('click',()=>pasteClipboard());document.getElementById('editDuplicateBtn')?.addEventListener('click',duplicateSelection);document.getElementById('checkpointCreateBtn')?.addEventListener('click',()=>createCheckpoint());document.getElementById('viewObjectsBtn')?.addEventListener('click',()=>{selectNode(null);document.querySelector('.inspector')?.scrollTo({top:0,behavior:'smooth'})});document.getElementById('viewFocusBtn')?.addEventListener('click',()=>{const n=nodes.find(n=>n.id===selected);if(n)focusComponent(n)});
+document.getElementById('quickUndoBtn')?.addEventListener('click',undoHistory);document.getElementById('quickRedoBtn')?.addEventListener('click',redoHistory);document.getElementById('quickCheckpointBtn')?.addEventListener('click',()=>createCheckpoint());
 
 paletteBtn.addEventListener('click',e=>{
   e.stopPropagation();setPalettePanel(paletteSettings.hidden);
@@ -92,12 +93,9 @@ workspace.classList.toggle('show-flow',showFlow); flowBtn.classList.toggle('acti
 
 function handleCanvasKeydown(e){
   if(isEditableTarget(e.target))return;
-  if(!canvasKeyboardActive && document.activeElement!==workspace)return;
+  const code=shortcutCode(e),mod=e.ctrlKey||e.metaKey;
 
-  const code=shortcutCode(e);
-
-  if(quickSearchActive){return}
-  const mod=e.ctrlKey||e.metaKey;
+  // Document-level edit shortcuts must survive selection bars disappearing after a mutation.
   if(mod&&!e.altKey){
     if(code==='KeyZ'){e.preventDefault();e.stopPropagation();if(e.shiftKey)redoHistory();else undoHistory();return}
     if(code==='KeyY'){e.preventDefault();e.stopPropagation();redoHistory();return}
@@ -107,6 +105,8 @@ function handleCanvasKeydown(e){
     if(code==='KeyD'){e.preventDefault();e.stopPropagation();duplicateSelection();return}
     if(code==='KeyA'){e.preventDefault();e.stopPropagation();setComponentSelection(nodes.filter(n=>!isEffectivelyHidden(n)).map(n=>n.id),nodes.at(-1)?.id);if(selected)selectNode(selected,{focus:false,preserveSet:true});return}
   }
+  if(!canvasKeyboardActive && document.activeElement!==workspace)return;
+  if(quickSearchActive){return}
   if(!selected&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&typeof e.key==='string'&&e.key.length===1&&e.key.trim()){e.preventDefault();e.stopPropagation();openQuickSearch(e.key);return}
   if(code==='Slash'&&e.shiftKey){e.preventDefault();shortcutHelp.hidden=!shortcutHelp.hidden;return}
 

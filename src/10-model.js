@@ -2,6 +2,13 @@
 // 0.1 Beta concern: Component, Port, Wire, containment, and normalization model.
 
 const byId=id=>SYMBOLS.find(s=>s.id===id);
+const Attachment=SovSchematicAttachment;
+function componentAttachmentPointIds(n){return Attachment.pointIds(n)}
+function componentAttachmentPoints(n){return Attachment.descriptors(n,componentConfig(n).ports)}
+function componentAttachmentPoint(n,id){const spec=Attachment.resolveSpec(n,id);if(!spec)return null;return {...spec,config:componentConfig(n).ports[spec.compatId]}}
+function componentPortIds(n){return componentAttachmentPointIds(n)} // compatibility alias; values are canonical 0D point ids.
+function componentPortCount(n){return componentAttachmentPointIds(n).length}
+function isAttachmentSelectionValue(value){return typeof value==='string'&&(value.startsWith('point:')||value.startsWith('port:'))}
 function localCanvasId(kind,id){return `canvas:${kind}:${id}`}
 function canvasDimensionForKind(kind,entity=null){if(kind==='wire')return 1;if(kind==='port')return 0;if(kind==='component'){const d=Number(entity?.form?.dimension);return [0,1,2].includes(d)?d:2}return 2}
 function ensureEntityCanvas(entity,kind,{defaultState=null}={}){
@@ -80,7 +87,8 @@ function ensureComponentStructure(n){
       bottom:{kind:'side',id:'bottom',owner:n.id}
     };
   }
-  if(!n.parts.ports)n.parts.ports={};
+  if(!n.parts.points)n.parts.points={};
+  if(!n.parts.ports)n.parts.ports={}; // compatibility projection only
   return n;
 }
 function normalizePortConnections(port,defaultFlow='duplex',defaultSlot=0){
@@ -180,12 +188,12 @@ function portCanEmit(port){
   const flow=portConnection(port).flow;
   return flow==='out' || flow==='duplex';
 }
-function endpointPortConfig(w,end){
-  const nodeId=end==='a'?w.a:w.b;
-  const portId=end==='a'?w.aSide:w.bSide;
-  const node=nodes.find(n=>n.id===nodeId);
-  return node?componentConfig(node).ports[portId]:null;
+function endpointAttachmentPoint(w,end){
+  const ref=Attachment.wireEndpointRef(w,end,nodes);if(!ref)return null;
+  const node=nodes.find(n=>n.id===ref.componentId);if(!node)return null;
+  return {...ref,node,config:componentConfig(node).ports[ref.compatId]};
 }
+function endpointPortConfig(w,end){return endpointAttachmentPoint(w,end)?.config||null}
 function endpointAllowsReceive(w,end){
   const p=endpointPortConfig(w,end);
   return !!p && portCanReceive(p);
@@ -224,15 +232,9 @@ function ensureDuplexEndpointFlows(w){
 
 function wirePartPortConfig(w,part){
   if(!part.config)part.config={};
-  part.kind='port';
-  part.type='port';
-  part.ownerKind='wire';
-  part.ownerId=w.id;
+  Attachment.normalizeOwnedPoint(part,{ownerKind:'wire',ownerId:w.id,t:part.t??.5});
+  part.legacyKind='port';
   part.canvasId=wireCanvas(w).id;
-  if(!part.placement)part.placement={kind:'wire',t:part.t??.5};
-  if(typeof part.placement.t!=='number')part.placement.t=.5;
-  part.placement.t=Math.max(.04,Math.min(.96,part.placement.t));
-  part.t=part.placement.t;
 
   // Determine the inherited default channel color directly from the parent
   // Wire's endpoint Port. Do not call connectionConfig()/wireChannelFor()
@@ -331,38 +333,37 @@ function componentConfig(n){
     out:{side:'right',channel:'signal',color:'#171715',flow:'out'},
     control:{side:'top',channel:'control',color:'#6c6c65',flow:'control'}
   };
-  for(const id of ['in','out','control']){
-    const p=n.config.ports[id]||(n.config.ports[id]={});
+  const specs=Attachment.pointSpecs(n);
+  const canonicalPointIds=new Set(specs.map(spec=>spec.id));
+  if(!n.parts.points)n.parts.points={};
+  for(const stale of Object.keys(n.parts.points))if(!canonicalPointIds.has(stale))delete n.parts.points[stale];
+  n.parts.ports={}; // compatibility projection only; populated from authoritative point descriptors below.
+  const configuredCompatIds=new Set(['in','out','control',...specs.map(spec=>spec.compatId)]);
+  for(const compatId of configuredCompatIds){
+    const spec=specs.find(item=>item.compatId===compatId);
+    const fallback=defaults[compatId]||{side:spec?.side||'point',channel:'signal',color:'#171715',flow:spec?.defaultFlow||'duplex'};
+    const p=n.config.ports[compatId]||(n.config.ports[compatId]={});
     if(typeof p.label!=='string')p.label='';
     if(!['external','internal','both'].includes(p.face))p.face='external';
-    const d=defaults[id];
-    if(!['left','right','top','bottom'].includes(p.side))p.side=d.side;
-    normalizePortChannels(p,d.flow,0);
+    if(!['left','right','top','bottom','point'].includes(p.side))p.side=fallback.side;
+    normalizePortChannels(p,fallback.flow,0);
+  }
+  for(const spec of specs){
+    const p=n.config.ports[spec.compatId];
+    // Geometry belongs to the canonical attachment descriptor, not stale authored side metadata.
+    p.side=spec.side;
     const active=activePortChannel(p);
-    n.parts.ports[id]={
-      kind:'port',
-      id,
-      ownerKind:'component',
-      ownerId:n.id,
-      placement:{kind:'boundary',side:p.side},
-      side:p.side,
-      connectionCount:p.connectionCount,
-      connections:p.connections.map(connection=>({...connection})),
-      activeConnection:p.activeConnection,
-      channelCount:p.connectionCount,
-      channels:p.connections.map(connection=>({...connection})),
-      activeChannel:p.activeConnection,
-      connection:active.name,
-      channel:active.name,
-      color:active.color,
-      colorSlot:active.colorSlot,
-      flow:active.flow,
-      access:active.access,
-      label:p.label,
-      face:p.face,
+    const point={
+      kind:'attachment-point',dimension:0,id:spec.id,compatId:spec.compatId,role:spec.role,
+      ownerKind:'component',ownerId:n.id,
+      placement:{kind:spec.role==='self'?'self':'boundary',side:spec.side,t:Number.isFinite(Number(spec.t))?Number(spec.t):.5},side:spec.side,
+      connectionCount:p.connectionCount,connections:p.connections.map(connection=>({...connection})),activeConnection:p.activeConnection,
+      label:p.label,face:p.face,color:active.color,colorSlot:active.colorSlot,flow:active.flow,access:active.access,
       internal:{type:n.boundary.inside.type,channel:active.name,flow:active.flow,access:active.access},
       external:{type:n.boundary.outside.type,channel:active.name,flow:active.flow,access:active.access}
     };
+    n.parts.points[spec.id]=point;
+    n.parts.ports[spec.compatId]={...point,kind:'port',id:spec.compatId,pointId:spec.id};
   }
   return n.config;
 }
@@ -403,9 +404,10 @@ function wireEndpointMarker(w,end){
   cfg[key]=normalizeChannelMarker(cfg[key],'1');
   return cfg[key];
 }
-function wireMarkerSummaryForPort(nodeId,portId){
-  return wires.filter(w=>(w.a===nodeId&&w.aSide===portId)||(w.b===nodeId&&w.bSide===portId)).map(w=>
-    (w.a===nodeId&&w.aSide===portId)?wireEndpointMarker(w,'a'):wireEndpointMarker(w,'b')
+function wireMarkerSummaryForPort(nodeId,pointId){
+  const node=nodes.find(n=>n.id===nodeId),spec=node?Attachment.resolveSpec(node,pointId):null,compatId=spec?.compatId||pointId;
+  return wires.filter(w=>(w.a===nodeId&&w.aSide===compatId)||(w.b===nodeId&&w.bSide===compatId)).map(w=>
+    (w.a===nodeId&&w.aSide===compatId)?wireEndpointMarker(w,'a'):wireEndpointMarker(w,'b')
   );
 }
 function endpointMarkerDisplay(w,end){
@@ -454,10 +456,7 @@ function connectionConfig(w){
   delete w.config.color;
   delete w.config.channel;
 
-  if(!Array.isArray(w.attachments))w.attachments=[];
-  w.attachments.forEach(part=>{
-    if(part.type==='port'||part.kind==='port')wirePartPortConfig(w,part);
-  });
+  if(!Array.isArray(w.attachments))w.attachments=[]; // non-point legacy/extension parts only; point attachments migrate in Data Core.
   w.duplex=w.config.direction==='duplex';
   if(w.duplex)ensureDuplexEndpointFlows(w);
   return w.config;

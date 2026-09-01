@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "soveraeign.schematic/package@0.1",
+  "title": "SOV Schematic Package",
+  "type": "object",
+  "required": ["schema", "version", "manifest", "document", "workspace", "templates", "assets"],
+  "properties": {
+    "schema": {"const": "soveraeign.schematic/package@0.1"},
+    "version": {"const": 1},
+    "manifest": {
+      "type": "object",
+      "required": ["id", "title", "entry", "createdAt", "updatedAt"],
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "entry": {"const": "document"},
+        "createdAt": {"type": "string"},
+        "updatedAt": {"type": "string"},
+        "generator": {"type": "string"}
+      }
+    },
+    "document": {"type": "object"},
+    "workspace": {"type": "object"},
+    "templates": {"type": "array", "items": {"type": "object"}},
+    "assets": {"type": "array", "items": {"type": "object"}},
+    "meta": {"type": "object"}
+  },
+  "additionalProperties": true
+}

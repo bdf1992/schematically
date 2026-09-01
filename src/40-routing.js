@@ -449,7 +449,13 @@ function routeSegments(points){
   for(let i=0;i<pts.length-1;i++) out.push({a:pts[i],b:pts[i+1]});
   return out;
 }
-function sameTerminal(n1,s1,n2,s2){ return n1===n2 && s1===s2; }
+function terminalPointId(nodeId,id){
+  const node=nodes.find(n=>n.id===nodeId);
+  return node?(Attachment.pointId(node,id)||String(id??'')):String(id??'');
+}
+function sameTerminal(n1,s1,n2,s2){
+  return n1===n2 && terminalPointId(n1,s1)===terminalPointId(n2,s2);
+}
 function findEquivalentWire(a,aSide,b,bSide){
   return wires.findIndex(w=>
     sameTerminal(w.a,w.aSide,a,aSide) && sameTerminal(w.b,w.bSide,b,bSide)

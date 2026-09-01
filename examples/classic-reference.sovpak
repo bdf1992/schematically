@@ -1,0 +1,2331 @@
+{
+  "schema": "soveraeign.schematic/package@0.1",
+  "version": 1,
+  "manifest": {
+    "id": "classic-reference",
+    "title": "SOV Schematic Classic Reference",
+    "entry": "document",
+    "createdAt": "2026-09-01T03:12:19.467Z",
+    "updatedAt": "2026-09-01T03:12:19.467Z",
+    "generator": "SOV Schematic 0.1 Beta.24"
+  },
+  "document": {
+    "schema": "soveraeign.schematic/document@0.1",
+    "id": "example-source-hold",
+    "revision": 0,
+    "meta": {
+      "title": "Classic 01 \u2014 Source to Hold",
+      "updatedAt": "2026-09-01T03:12:19.463Z"
+    },
+    "canvas": {
+      "id": "canvas:global",
+      "scope": "global",
+      "dimension": 2,
+      "state": "open"
+    },
+    "components": [
+      {
+        "id": "c1",
+        "type": "act",
+        "symbolId": "act",
+        "x": 230,
+        "y": 300,
+        "canvasId": "canvas:global",
+        "canvas": {
+          "id": "canvas:component:c1",
+          "scope": "local",
+          "dimension": 2,
+          "state": "closed",
+          "ownerKind": "component",
+          "ownerId": "c1"
+        },
+        "form": {
+          "body": {
+            "kind": "surface",
+            "material": "generic",
+            "thickness": 0
+          },
+          "dimension": 2,
+          "frame": {
+            "mode": "none",
+            "thickness": 0,
+            "depth": 0
+          },
+          "regions": {
+            "interior": {
+              "state": "closed"
+            }
+          }
+        },
+        "boundary": {
+          "kind": "boundary",
+          "shape": "blank",
+          "inside": {
+            "type": "act"
+          },
+          "outside": {
+            "type": "canvas"
+          }
+        },
+        "parts": {
+          "sides": {
+            "left": {
+              "kind": "side",
+              "id": "left",
+              "owner": "c1"
+            },
+            "right": {
+              "kind": "side",
+              "id": "right",
+              "owner": "c1"
+            },
+            "top": {
+              "kind": "side",
+              "id": "top",
+              "owner": "c1"
+            },
+            "bottom": {
+              "kind": "side",
+              "id": "bottom",
+              "owner": "c1"
+            }
+          },
+          "ports": {}
+        },
+        "config": {
+          "label": "Source",
+          "colorSlot": 0,
+          "signalMode": "source",
+          "presentation": {
+            "graphic": {
+              "kind": "symbol",
+              "ref": "sym-act",
+              "svg": ""
+            },
+            "size": {
+              "w": 112,
+              "h": 84
+            },
+            "labelMode": "boundary",
+            "interiorColorSlot": 0,
+            "text": "",
+            "padding": 16,
+            "boundaryShape": "roundRect",
+            "boundaryColorMode": "separate-from-interior",
+            "internalLayout": "glyph-only",
+            "portTopology": "external"
+          },
+          "ports": {
+            "in": {
+              "side": "left",
+              "face": "external",
+              "label": "",
+              "connectionCount": 1,
+              "activeConnection": 0,
+              "connections": [
+                {
+                  "id": "connection-1",
+                  "name": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "in"
+                }
+              ],
+              "channelCount": 1,
+              "activeChannel": 0,
+              "channel": "Connection 1",
+              "colorSlot": 0,
+              "flow": "in"
+            },
+            "out": {
+              "side": "right",
+              "face": "external",
+              "label": "",
+              "connectionCount": 1,
+              "activeConnection": 0,
+              "connections": [
+                {
+                  "id": "connection-1",
+                  "name": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "out"
+                }
+              ],
+              "channelCount": 1,
+              "activeChannel": 0,
+              "channel": "Connection 1",
+              "colorSlot": 0,
+              "flow": "out"
+            },
+            "control": {
+              "side": "top",
+              "face": "external",
+              "label": "",
+              "connectionCount": 1,
+              "activeConnection": 0,
+              "connections": [
+                {
+                  "id": "connection-1",
+                  "name": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "control"
+                }
+              ],
+              "channelCount": 1,
+              "activeChannel": 0,
+              "channel": "Connection 1",
+              "colorSlot": 0,
+              "flow": "control"
+            }
+          }
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "parentId": null,
+        "incomplete": false
+      },
+      {
+        "id": "c2",
+        "type": "hold",
+        "symbolId": "hold",
+        "x": 520,
+        "y": 300,
+        "canvasId": "canvas:global",
+        "canvas": {
+          "id": "canvas:component:c2",
+          "scope": "local",
+          "dimension": 2,
+          "state": "closed",
+          "ownerKind": "component",
+          "ownerId": "c2"
+        },
+        "form": {
+          "body": {
+            "kind": "surface",
+            "material": "generic",
+            "thickness": 0
+          },
+          "dimension": 2,
+          "frame": {
+            "mode": "none",
+            "thickness": 0,
+            "depth": 0
+          },
+          "regions": {
+            "interior": {
+              "state": "closed"
+            }
+          }
+        },
+        "boundary": {
+          "kind": "boundary",
+          "shape": "blank",
+          "inside": {
+            "type": "hold"
+          },
+          "outside": {
+            "type": "canvas"
+          }
+        },
+        "parts": {
+          "sides": {
+            "left": {
+              "kind": "side",
+              "id": "left",
+              "owner": "c2"
+            },
+            "right": {
+              "kind": "side",
+              "id": "right",
+              "owner": "c2"
+            },
+            "top": {
+              "kind": "side",
+              "id": "top",
+              "owner": "c2"
+            },
+            "bottom": {
+              "kind": "side",
+              "id": "bottom",
+              "owner": "c2"
+            }
+          },
+          "ports": {}
+        },
+        "config": {
+          "label": "Hold",
+          "colorSlot": 0,
+          "signalMode": "relay",
+          "presentation": {
+            "graphic": {
+              "kind": "symbol",
+              "ref": "sym-hold",
+              "svg": ""
+            },
+            "size": {
+              "w": 112,
+              "h": 84
+            },
+            "labelMode": "boundary",
+            "interiorColorSlot": 0,
+            "text": "",
+            "padding": 16,
+            "boundaryShape": "roundRect",
+            "boundaryColorMode": "separate-from-interior",
+            "internalLayout": "glyph-only",
+            "portTopology": "external"
+          },
+          "ports": {
+            "in": {
+              "side": "left",
+              "face": "external",
+              "label": "",
+              "connectionCount": 1,
+              "activeConnection": 0,
+              "connections": [
+                {
+                  "id": "connection-1",
+                  "name": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "in"
+                }
+              ],
+              "channelCount": 1,
+              "activeChannel": 0,
+              "channel": "Connection 1",
+              "colorSlot": 0,
+              "flow": "in"
+            },
+            "out": {
+              "side": "right",
+              "face": "external",
+              "label": "",
+              "connectionCount": 1,
+              "activeConnection": 0,
+              "connections": [
+                {
+                  "id": "connection-1",
+                  "name": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "out"
+                }
+              ],
+              "channelCount": 1,
+              "activeChannel": 0,
+              "channel": "Connection 1",
+              "colorSlot": 0,
+              "flow": "out"
+            },
+            "control": {
+              "side": "top",
+              "face": "external",
+              "label": "",
+              "connectionCount": 1,
+              "activeConnection": 0,
+              "connections": [
+                {
+                  "id": "connection-1",
+                  "name": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "control"
+                }
+              ],
+              "channelCount": 1,
+              "activeChannel": 0,
+              "channel": "Connection 1",
+              "colorSlot": 0,
+              "flow": "control"
+            }
+          }
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "parentId": null,
+        "incomplete": false
+      }
+    ],
+    "wires": [
+      {
+        "id": "k1",
+        "a": "c1",
+        "b": "c2",
+        "aSide": "out",
+        "bSide": "in",
+        "canvasId": "canvas:global",
+        "canvas": {
+          "id": "canvas:wire:k1",
+          "scope": "local",
+          "dimension": 1,
+          "state": "open",
+          "ownerKind": "wire",
+          "ownerId": "k1"
+        },
+        "lane": 0,
+        "net": 0,
+        "config": {
+          "direction": "forward",
+          "reciprocity": "none",
+          "aConnectionIndex": 0,
+          "bConnectionIndex": 0,
+          "aChannelMarker": "1",
+          "bChannelMarker": "1",
+          "label": "signal"
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "attachments": [],
+        "duplex": false
+      }
+    ],
+    "references": [],
+    "layout": {}
+  },
+  "workspace": {
+    "view": {}
+  },
+  "templates": [
+    {
+      "id": "example-source-hold",
+      "title": "Classic 01 \u2014 Source to Hold",
+      "file": "01-source-hold.sov",
+      "description": "Simple source-to-relay flow"
+    },
+    {
+      "id": "example-duplex-buffer",
+      "title": "Classic 02 \u2014 Duplex Buffer",
+      "file": "02-duplex-buffer.sov",
+      "description": "Duplex/reciprocal relationship"
+    },
+    {
+      "id": "example-contained-stage",
+      "title": "Classic 03 \u2014 Contained Stage",
+      "file": "03-contained-stage.sov",
+      "description": "Hosting via an open interior Region"
+    },
+    {
+      "id": "example-boundary-port",
+      "title": "Classic 04 \u2014 Boundary Port",
+      "file": "04-boundary-port.sov",
+      "description": "Explicit boundary crossing through an inside-facing Port"
+    },
+    {
+      "id": "example-rate-chain",
+      "title": "Classic 05 \u2014 Rate Chain",
+      "file": "05-rate-chain.sov",
+      "description": "Global \u00d7 Component \u00d7 Wire rate composition"
+    },
+    {
+      "id": "example-read-write-evidence",
+      "title": "Classic 06 \u2014 Read / Write Evidence",
+      "file": "06-read-write-evidence.sov",
+      "description": "Write to a Record and Read for a Witness without conflating access with authority"
+    }
+  ],
+  "assets": [
+    {
+      "kind": "schematic",
+      "path": "01-source-hold.sov",
+      "description": "Simple source-to-relay flow",
+      "document": {
+        "schema": "soveraeign.schematic/document@0.1",
+        "id": "example-source-hold",
+        "revision": 0,
+        "meta": {
+          "title": "Classic 01 \u2014 Source to Hold",
+          "updatedAt": "2026-09-01T03:12:19.463Z"
+        },
+        "canvas": {
+          "id": "canvas:global",
+          "scope": "global",
+          "dimension": 2,
+          "state": "open"
+        },
+        "components": [
+          {
+            "id": "c1",
+            "type": "act",
+            "symbolId": "act",
+            "x": 230,
+            "y": 300,
+            "canvasId": "canvas:global",
+            "canvas": {
+              "id": "canvas:component:c1",
+              "scope": "local",
+              "dimension": 2,
+              "state": "closed",
+              "ownerKind": "component",
+              "ownerId": "c1"
+            },
+            "form": {
+              "body": {
+                "kind": "surface",
+                "material": "generic",
+                "thickness": 0
+              },
+              "dimension": 2,
+              "frame": {
+                "mode": "none",
+                "thickness": 0,
+                "depth": 0
+              },
+              "regions": {
+                "interior": {
+                  "state": "closed"
+                }
+              }
+            },
+            "boundary": {
+              "kind": "boundary",
+              "shape": "blank",
+              "inside": {
+                "type": "act"
+              },
+              "outside": {
+                "type": "canvas"
+              }
+            },
+            "parts": {
+              "sides": {
+                "left": {
+                  "kind": "side",
+                  "id": "left",
+                  "owner": "c1"
+                },
+                "right": {
+                  "kind": "side",
+                  "id": "right",
+                  "owner": "c1"
+                },
+                "top": {
+                  "kind": "side",
+                  "id": "top",
+                  "owner": "c1"
+                },
+                "bottom": {
+                  "kind": "side",
+                  "id": "bottom",
+                  "owner": "c1"
+                }
+              },
+              "ports": {}
+            },
+            "config": {
+              "label": "Source",
+              "colorSlot": 0,
+              "signalMode": "source",
+              "presentation": {
+                "graphic": {
+                  "kind": "symbol",
+                  "ref": "sym-act",
+                  "svg": ""
+                },
+                "size": {
+                  "w": 112,
+                  "h": 84
+                },
+                "labelMode": "boundary",
+                "interiorColorSlot": 0,
+                "text": "",
+                "padding": 16,
+                "boundaryShape": "roundRect",
+                "boundaryColorMode": "separate-from-interior",
+                "internalLayout": "glyph-only",
+                "portTopology": "external"
+              },
+              "ports": {
+                "in": {
+                  "side": "left",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "in"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "in"
+                },
+                "out": {
+                  "side": "right",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "out"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "out"
+                },
+                "control": {
+                  "side": "top",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "control"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "control"
+                }
+              }
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 1
+            },
+            "parentId": null,
+            "incomplete": false
+          },
+          {
+            "id": "c2",
+            "type": "hold",
+            "symbolId": "hold",
+            "x": 520,
+            "y": 300,
+            "canvasId": "canvas:global",
+            "canvas": {
+              "id": "canvas:component:c2",
+              "scope": "local",
+              "dimension": 2,
+              "state": "closed",
+              "ownerKind": "component",
+              "ownerId": "c2"
+            },
+            "form": {
+              "body": {
+                "kind": "surface",
+                "material": "generic",
+                "thickness": 0
+              },
+              "dimension": 2,
+              "frame": {
+                "mode": "none",
+                "thickness": 0,
+                "depth": 0
+              },
+              "regions": {
+                "interior": {
+                  "state": "closed"
+                }
+              }
+            },
+            "boundary": {
+              "kind": "boundary",
+              "shape": "blank",
+              "inside": {
+                "type": "hold"
+              },
+              "outside": {
+                "type": "canvas"
+              }
+            },
+            "parts": {
+              "sides": {
+                "left": {
+                  "kind": "side",
+                  "id": "left",
+                  "owner": "c2"
+                },
+                "right": {
+                  "kind": "side",
+                  "id": "right",
+                  "owner": "c2"
+                },
+                "top": {
+                  "kind": "side",
+                  "id": "top",
+                  "owner": "c2"
+                },
+                "bottom": {
+                  "kind": "side",
+                  "id": "bottom",
+                  "owner": "c2"
+                }
+              },
+              "ports": {}
+            },
+            "config": {
+              "label": "Hold",
+              "colorSlot": 0,
+              "signalMode": "relay",
+              "presentation": {
+                "graphic": {
+                  "kind": "symbol",
+                  "ref": "sym-hold",
+                  "svg": ""
+                },
+                "size": {
+                  "w": 112,
+                  "h": 84
+                },
+                "labelMode": "boundary",
+                "interiorColorSlot": 0,
+                "text": "",
+                "padding": 16,
+                "boundaryShape": "roundRect",
+                "boundaryColorMode": "separate-from-interior",
+                "internalLayout": "glyph-only",
+                "portTopology": "external"
+              },
+              "ports": {
+                "in": {
+                  "side": "left",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "in"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "in"
+                },
+                "out": {
+                  "side": "right",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "out"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "out"
+                },
+                "control": {
+                  "side": "top",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "control"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "control"
+                }
+              }
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 1
+            },
+            "parentId": null,
+            "incomplete": false
+          }
+        ],
+        "wires": [
+          {
+            "id": "k1",
+            "a": "c1",
+            "b": "c2",
+            "aSide": "out",
+            "bSide": "in",
+            "canvasId": "canvas:global",
+            "canvas": {
+              "id": "canvas:wire:k1",
+              "scope": "local",
+              "dimension": 1,
+              "state": "open",
+              "ownerKind": "wire",
+              "ownerId": "k1"
+            },
+            "lane": 0,
+            "net": 0,
+            "config": {
+              "direction": "forward",
+              "reciprocity": "none",
+              "aConnectionIndex": 0,
+              "bConnectionIndex": 0,
+              "aChannelMarker": "1",
+              "bChannelMarker": "1",
+              "label": "signal"
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 1
+            },
+            "attachments": [],
+            "duplex": false
+          }
+        ],
+        "references": [],
+        "layout": {}
+      }
+    },
+    {
+      "kind": "schematic",
+      "path": "02-duplex-buffer.sov",
+      "description": "Duplex/reciprocal relationship",
+      "document": {
+        "schema": "soveraeign.schematic/document@0.1",
+        "id": "example-duplex-buffer",
+        "revision": 0,
+        "meta": {
+          "title": "Classic 02 \u2014 Duplex Buffer",
+          "updatedAt": "2026-09-01T03:12:19.465Z"
+        },
+        "canvas": {
+          "id": "canvas:global",
+          "scope": "global",
+          "dimension": 2,
+          "state": "open"
+        },
+        "components": [
+          {
+            "id": "c1",
+            "type": "act",
+            "symbolId": "act",
+            "x": 220,
+            "y": 300,
+            "canvasId": "canvas:global",
+            "canvas": {
+              "id": "canvas:component:c1",
+              "scope": "local",
+              "dimension": 2,
+              "state": "closed",
+              "ownerKind": "component",
+              "ownerId": "c1"
+            },
+            "form": {
+              "body": {
+                "kind": "surface",
+                "material": "generic",
+                "thickness": 0
+              },
+              "dimension": 2,
+              "frame": {
+                "mode": "none",
+                "thickness": 0,
+                "depth": 0
+              },
+              "regions": {
+                "interior": {
+                  "state": "closed"
+                }
+              }
+            },
+            "boundary": {
+              "kind": "boundary",
+              "shape": "blank",
+              "inside": {
+                "type": "act"
+              },
+              "outside": {
+                "type": "canvas"
+              }
+            },
+            "parts": {
+              "sides": {
+                "left": {
+                  "kind": "side",
+                  "id": "left",
+                  "owner": "c1"
+                },
+                "right": {
+                  "kind": "side",
+                  "id": "right",
+                  "owner": "c1"
+                },
+                "top": {
+                  "kind": "side",
+                  "id": "top",
+                  "owner": "c1"
+                },
+                "bottom": {
+                  "kind": "side",
+                  "id": "bottom",
+                  "owner": "c1"
+                }
+              },
+              "ports": {}
+            },
+            "config": {
+              "label": "Requester",
+              "colorSlot": 0,
+              "signalMode": "source",
+              "presentation": {
+                "graphic": {
+                  "kind": "symbol",
+                  "ref": "sym-act",
+                  "svg": ""
+                },
+                "size": {
+                  "w": 112,
+                  "h": 84
+                },
+                "labelMode": "boundary",
+                "interiorColorSlot": 0,
+                "text": "",
+                "padding": 16,
+                "boundaryShape": "roundRect",
+                "boundaryColorMode": "separate-from-interior",
+                "internalLayout": "glyph-only",
+                "portTopology": "external"
+              },
+              "ports": {
+                "in": {
+                  "side": "left",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "in"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "in"
+                },
+                "out": {
+                  "side": "right",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "out"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "out"
+                },
+                "control": {
+                  "side": "top",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "control"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "control"
+                }
+              }
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 1
+            },
+            "parentId": null,
+            "incomplete": false
+          },
+          {
+            "id": "c2",
+            "type": "buffer",
+            "symbolId": "buffer",
+            "x": 530,
+            "y": 300,
+            "canvasId": "canvas:global",
+            "canvas": {
+              "id": "canvas:component:c2",
+              "scope": "local",
+              "dimension": 2,
+              "state": "closed",
+              "ownerKind": "component",
+              "ownerId": "c2"
+            },
+            "form": {
+              "body": {
+                "kind": "surface",
+                "material": "generic",
+                "thickness": 0
+              },
+              "dimension": 2,
+              "frame": {
+                "mode": "none",
+                "thickness": 0,
+                "depth": 0
+              },
+              "regions": {
+                "interior": {
+                  "state": "closed"
+                }
+              }
+            },
+            "boundary": {
+              "kind": "boundary",
+              "shape": "blank",
+              "inside": {
+                "type": "buffer"
+              },
+              "outside": {
+                "type": "canvas"
+              }
+            },
+            "parts": {
+              "sides": {
+                "left": {
+                  "kind": "side",
+                  "id": "left",
+                  "owner": "c2"
+                },
+                "right": {
+                  "kind": "side",
+                  "id": "right",
+                  "owner": "c2"
+                },
+                "top": {
+                  "kind": "side",
+                  "id": "top",
+                  "owner": "c2"
+                },
+                "bottom": {
+                  "kind": "side",
+                  "id": "bottom",
+                  "owner": "c2"
+                }
+              },
+              "ports": {}
+            },
+            "config": {
+              "label": "Buffer",
+              "colorSlot": 0,
+              "signalMode": "relay",
+              "presentation": {
+                "graphic": {
+                  "kind": "symbol",
+                  "ref": "sym-buffer",
+                  "svg": ""
+                },
+                "size": {
+                  "w": 112,
+                  "h": 84
+                },
+                "labelMode": "boundary",
+                "interiorColorSlot": 0,
+                "text": "",
+                "padding": 16,
+                "boundaryShape": "roundRect",
+                "boundaryColorMode": "separate-from-interior",
+                "internalLayout": "glyph-only",
+                "portTopology": "external"
+              },
+              "ports": {
+                "in": {
+                  "side": "left",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "in"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "in"
+                },
+                "out": {
+                  "side": "right",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "out"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "out"
+                },
+                "control": {
+                  "side": "top",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "control"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "control"
+                }
+              }
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 1
+            },
+            "parentId": null,
+            "incomplete": false
+          }
+        ],
+        "wires": [
+          {
+            "id": "k1",
+            "a": "c1",
+            "b": "c2",
+            "aSide": "out",
+            "bSide": "in",
+            "canvasId": "canvas:global",
+            "canvas": {
+              "id": "canvas:wire:k1",
+              "scope": "local",
+              "dimension": 1,
+              "state": "open",
+              "ownerKind": "wire",
+              "ownerId": "k1"
+            },
+            "lane": 0,
+            "net": 0,
+            "config": {
+              "direction": "duplex",
+              "reciprocity": "expected",
+              "aConnectionIndex": 0,
+              "bConnectionIndex": 0,
+              "aChannelMarker": "req",
+              "bChannelMarker": "ret",
+              "label": "request / return"
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 1
+            },
+            "attachments": [],
+            "duplex": true
+          }
+        ],
+        "references": [],
+        "layout": {}
+      }
+    },
+    {
+      "kind": "schematic",
+      "path": "03-contained-stage.sov",
+      "description": "Hosting via an open interior Region",
+      "document": {
+        "schema": "soveraeign.schematic/document@0.1",
+        "id": "example-contained-stage",
+        "revision": 0,
+        "meta": {
+          "title": "Classic 03 \u2014 Contained Stage",
+          "updatedAt": "2026-09-01T03:12:19.465Z"
+        },
+        "canvas": {
+          "id": "canvas:global",
+          "scope": "global",
+          "dimension": 2,
+          "state": "open"
+        },
+        "components": [
+          {
+            "id": "c1",
+            "type": "switch",
+            "symbolId": "switch",
+            "x": 480,
+            "y": 320,
+            "canvasId": "canvas:global",
+            "canvas": {
+              "id": "canvas:component:c1",
+              "scope": "local",
+              "dimension": 2,
+              "state": "closed",
+              "ownerKind": "component",
+              "ownerId": "c1"
+            },
+            "form": {
+              "dimension": 2,
+              "body": {
+                "kind": "surface",
+                "material": "panel",
+                "thickness": 18
+              },
+              "frame": {
+                "mode": "frame",
+                "thickness": 18,
+                "depth": 24
+              },
+              "regions": {
+                "interior": {
+                  "state": "open"
+                }
+              }
+            },
+            "boundary": {
+              "kind": "boundary",
+              "shape": "blank",
+              "inside": {
+                "type": "switch"
+              },
+              "outside": {
+                "type": "canvas"
+              }
+            },
+            "parts": {
+              "sides": {
+                "left": {
+                  "kind": "side",
+                  "id": "left",
+                  "owner": "c1"
+                },
+                "right": {
+                  "kind": "side",
+                  "id": "right",
+                  "owner": "c1"
+                },
+                "top": {
+                  "kind": "side",
+                  "id": "top",
+                  "owner": "c1"
+                },
+                "bottom": {
+                  "kind": "side",
+                  "id": "bottom",
+                  "owner": "c1"
+                }
+              },
+              "ports": {}
+            },
+            "config": {
+              "label": "Stage",
+              "colorSlot": 0,
+              "signalMode": "source",
+              "presentation": {
+                "size": {
+                  "w": 520,
+                  "h": 330
+                }
+              },
+              "ports": {
+                "in": {
+                  "side": "left",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "in"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "in"
+                },
+                "out": {
+                  "side": "right",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "out"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "out"
+                },
+                "control": {
+                  "side": "top",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "control"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "control"
+                }
+              }
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 1
+            },
+            "parentId": null,
+            "incomplete": false
+          },
+          {
+            "id": "c2",
+            "type": "buffer",
+            "symbolId": "buffer",
+            "x": 390,
+            "y": 300,
+            "canvasId": "canvas:component:c1",
+            "canvas": {
+              "id": "canvas:component:c2",
+              "scope": "local",
+              "dimension": 2,
+              "state": "closed",
+              "ownerKind": "component",
+              "ownerId": "c2"
+            },
+            "form": {
+              "body": {
+                "kind": "surface",
+                "material": "generic",
+                "thickness": 0
+              },
+              "dimension": 2,
+              "frame": {
+                "mode": "none",
+                "thickness": 0,
+                "depth": 0
+              },
+              "regions": {
+                "interior": {
+                  "state": "closed"
+                }
+              }
+            },
+            "boundary": {
+              "kind": "boundary",
+              "shape": "blank",
+              "inside": {
+                "type": "buffer"
+              },
+              "outside": {
+                "type": "canvas"
+              }
+            },
+            "parts": {
+              "sides": {
+                "left": {
+                  "kind": "side",
+                  "id": "left",
+                  "owner": "c2"
+                },
+                "right": {
+                  "kind": "side",
+                  "id": "right",
+                  "owner": "c2"
+                },
+                "top": {
+                  "kind": "side",
+                  "id": "top",
+                  "owner": "c2"
+                },
+                "bottom": {
+                  "kind": "side",
+                  "id": "bottom",
+                  "owner": "c2"
+                }
+              },
+              "ports": {}
+            },
+            "config": {
+              "label": "Contained Buffer",
+              "colorSlot": 0,
+              "signalMode": "relay",
+              "presentation": {
+                "graphic": {
+                  "kind": "symbol",
+                  "ref": "sym-buffer",
+                  "svg": ""
+                },
+                "size": {
+                  "w": 112,
+                  "h": 84
+                },
+                "labelMode": "boundary",
+                "interiorColorSlot": 0,
+                "text": "",
+                "padding": 16,
+                "boundaryShape": "roundRect",
+                "boundaryColorMode": "separate-from-interior",
+                "internalLayout": "glyph-only",
+                "portTopology": "external"
+              },
+              "ports": {
+                "in": {
+                  "side": "left",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "in"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "in"
+                },
+                "out": {
+                  "side": "right",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "out"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "out"
+                },
+                "control": {
+                  "side": "top",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "control"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "control"
+                }
+              }
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 1
+            },
+            "parentId": "c1",
+            "incomplete": false
+          }
+        ],
+        "wires": [],
+        "references": [],
+        "layout": {}
+      }
+    },
+    {
+      "kind": "schematic",
+      "path": "04-boundary-port.sov",
+      "description": "Explicit boundary crossing through an inside-facing Port",
+      "document": {
+        "schema": "soveraeign.schematic/document@0.1",
+        "id": "example-boundary-port",
+        "revision": 0,
+        "meta": {
+          "title": "Classic 04 \u2014 Boundary Port",
+          "updatedAt": "2026-09-01T03:12:19.466Z"
+        },
+        "canvas": {
+          "id": "canvas:global",
+          "scope": "global",
+          "dimension": 2,
+          "state": "open"
+        },
+        "components": [
+          {
+            "id": "c1",
+            "type": "switch",
+            "symbolId": "switch",
+            "x": 520,
+            "y": 330,
+            "canvasId": "canvas:global",
+            "canvas": {
+              "id": "canvas:component:c1",
+              "scope": "local",
+              "dimension": 2,
+              "state": "closed",
+              "ownerKind": "component",
+              "ownerId": "c1"
+            },
+            "form": {
+              "dimension": 2,
+              "body": {
+                "kind": "surface",
+                "material": "panel",
+                "thickness": 12
+              },
+              "frame": {
+                "mode": "frame",
+                "thickness": 20,
+                "depth": 12
+              },
+              "regions": {
+                "interior": {
+                  "state": "open"
+                }
+              }
+            },
+            "boundary": {
+              "kind": "boundary",
+              "shape": "blank",
+              "inside": {
+                "type": "switch"
+              },
+              "outside": {
+                "type": "canvas"
+              }
+            },
+            "parts": {
+              "sides": {
+                "left": {
+                  "kind": "side",
+                  "id": "left",
+                  "owner": "c1"
+                },
+                "right": {
+                  "kind": "side",
+                  "id": "right",
+                  "owner": "c1"
+                },
+                "top": {
+                  "kind": "side",
+                  "id": "top",
+                  "owner": "c1"
+                },
+                "bottom": {
+                  "kind": "side",
+                  "id": "bottom",
+                  "owner": "c1"
+                }
+              },
+              "ports": {}
+            },
+            "config": {
+              "label": "Boundary",
+              "colorSlot": 0,
+              "signalMode": "source",
+              "presentation": {
+                "size": {
+                  "w": 500,
+                  "h": 330
+                }
+              },
+              "ports": {
+                "in": {
+                  "side": "left",
+                  "face": "internal",
+                  "label": "INNER",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "in"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "in"
+                },
+                "out": {
+                  "side": "right",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "out"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "out"
+                },
+                "control": {
+                  "side": "top",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "control"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "control"
+                }
+              }
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 1
+            },
+            "parentId": null,
+            "incomplete": false
+          },
+          {
+            "id": "c2",
+            "type": "act",
+            "symbolId": "act",
+            "x": 410,
+            "y": 330,
+            "canvasId": "canvas:component:c1",
+            "canvas": {
+              "id": "canvas:component:c2",
+              "scope": "local",
+              "dimension": 2,
+              "state": "closed",
+              "ownerKind": "component",
+              "ownerId": "c2"
+            },
+            "form": {
+              "body": {
+                "kind": "surface",
+                "material": "generic",
+                "thickness": 0
+              },
+              "dimension": 2,
+              "frame": {
+                "mode": "none",
+                "thickness": 0,
+                "depth": 0
+              },
+              "regions": {
+                "interior": {
+                  "state": "closed"
+                }
+              }
+            },
+            "boundary": {
+              "kind": "boundary",
+              "shape": "blank",
+              "inside": {
+                "type": "act"
+              },
+              "outside": {
+                "type": "canvas"
+              }
+            },
+            "parts": {
+              "sides": {
+                "left": {
+                  "kind": "side",
+                  "id": "left",
+                  "owner": "c2"
+                },
+                "right": {
+                  "kind": "side",
+                  "id": "right",
+                  "owner": "c2"
+                },
+                "top": {
+                  "kind": "side",
+                  "id": "top",
+                  "owner": "c2"
+                },
+                "bottom": {
+                  "kind": "side",
+                  "id": "bottom",
+                  "owner": "c2"
+                }
+              },
+              "ports": {}
+            },
+            "config": {
+              "label": "Inside Source",
+              "colorSlot": 0,
+              "signalMode": "source",
+              "presentation": {
+                "graphic": {
+                  "kind": "symbol",
+                  "ref": "sym-act",
+                  "svg": ""
+                },
+                "size": {
+                  "w": 112,
+                  "h": 84
+                },
+                "labelMode": "boundary",
+                "interiorColorSlot": 0,
+                "text": "",
+                "padding": 16,
+                "boundaryShape": "roundRect",
+                "boundaryColorMode": "separate-from-interior",
+                "internalLayout": "glyph-only",
+                "portTopology": "external"
+              },
+              "ports": {
+                "in": {
+                  "side": "left",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "in"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "in"
+                },
+                "out": {
+                  "side": "right",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "out"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "out"
+                },
+                "control": {
+                  "side": "top",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "control"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "control"
+                }
+              }
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 1
+            },
+            "parentId": "c1",
+            "incomplete": false
+          }
+        ],
+        "wires": [
+          {
+            "id": "k1",
+            "a": "c2",
+            "b": "c1",
+            "aSide": "out",
+            "bSide": "in",
+            "canvasId": "canvas:component:c1",
+            "canvas": {
+              "id": "canvas:wire:k1",
+              "scope": "local",
+              "dimension": 1,
+              "state": "open",
+              "ownerKind": "wire",
+              "ownerId": "k1"
+            },
+            "lane": 0,
+            "net": 0,
+            "config": {
+              "direction": "forward",
+              "reciprocity": "none",
+              "aConnectionIndex": 0,
+              "bConnectionIndex": 0,
+              "aChannelMarker": "inside",
+              "bChannelMarker": "edge",
+              "label": "explicit boundary path"
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 1
+            },
+            "attachments": [],
+            "duplex": false
+          }
+        ],
+        "references": [],
+        "layout": {}
+      }
+    },
+    {
+      "kind": "schematic",
+      "path": "05-rate-chain.sov",
+      "description": "Global \u00d7 Component \u00d7 Wire rate composition",
+      "document": {
+        "schema": "soveraeign.schematic/document@0.1",
+        "id": "example-rate-chain",
+        "revision": 0,
+        "meta": {
+          "title": "Classic 05 \u2014 Rate Chain",
+          "updatedAt": "2026-09-01T03:12:19.466Z",
+          "timeScale": 2
+        },
+        "canvas": {
+          "id": "canvas:global",
+          "scope": "global",
+          "dimension": 2,
+          "state": "open"
+        },
+        "components": [
+          {
+            "id": "c1",
+            "type": "act",
+            "symbolId": "act",
+            "x": 180,
+            "y": 300,
+            "canvasId": "canvas:global",
+            "canvas": {
+              "id": "canvas:component:c1",
+              "scope": "local",
+              "dimension": 2,
+              "state": "closed",
+              "ownerKind": "component",
+              "ownerId": "c1"
+            },
+            "form": {
+              "body": {
+                "kind": "surface",
+                "material": "generic",
+                "thickness": 0
+              },
+              "dimension": 2,
+              "frame": {
+                "mode": "none",
+                "thickness": 0,
+                "depth": 0
+              },
+              "regions": {
+                "interior": {
+                  "state": "closed"
+                }
+              }
+            },
+            "boundary": {
+              "kind": "boundary",
+              "shape": "blank",
+              "inside": {
+                "type": "act"
+              },
+              "outside": {
+                "type": "canvas"
+              }
+            },
+            "parts": {
+              "sides": {
+                "left": {
+                  "kind": "side",
+                  "id": "left",
+                  "owner": "c1"
+                },
+                "right": {
+                  "kind": "side",
+                  "id": "right",
+                  "owner": "c1"
+                },
+                "top": {
+                  "kind": "side",
+                  "id": "top",
+                  "owner": "c1"
+                },
+                "bottom": {
+                  "kind": "side",
+                  "id": "bottom",
+                  "owner": "c1"
+                }
+              },
+              "ports": {}
+            },
+            "config": {
+              "label": "Fast Source",
+              "colorSlot": 0,
+              "signalMode": "source",
+              "presentation": {
+                "graphic": {
+                  "kind": "symbol",
+                  "ref": "sym-act",
+                  "svg": ""
+                },
+                "size": {
+                  "w": 112,
+                  "h": 84
+                },
+                "labelMode": "boundary",
+                "interiorColorSlot": 0,
+                "text": "",
+                "padding": 16,
+                "boundaryShape": "roundRect",
+                "boundaryColorMode": "separate-from-interior",
+                "internalLayout": "glyph-only",
+                "portTopology": "external"
+              },
+              "ports": {
+                "in": {
+                  "side": "left",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "in"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "in"
+                },
+                "out": {
+                  "side": "right",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "out"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "out"
+                },
+                "control": {
+                  "side": "top",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "control"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "control"
+                }
+              }
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 2
+            },
+            "parentId": null,
+            "incomplete": false
+          },
+          {
+            "id": "c2",
+            "type": "buffer",
+            "symbolId": "buffer",
+            "x": 460,
+            "y": 300,
+            "canvasId": "canvas:global",
+            "canvas": {
+              "id": "canvas:component:c2",
+              "scope": "local",
+              "dimension": 2,
+              "state": "closed",
+              "ownerKind": "component",
+              "ownerId": "c2"
+            },
+            "form": {
+              "body": {
+                "kind": "surface",
+                "material": "generic",
+                "thickness": 0
+              },
+              "dimension": 2,
+              "frame": {
+                "mode": "none",
+                "thickness": 0,
+                "depth": 0
+              },
+              "regions": {
+                "interior": {
+                  "state": "closed"
+                }
+              }
+            },
+            "boundary": {
+              "kind": "boundary",
+              "shape": "blank",
+              "inside": {
+                "type": "buffer"
+              },
+              "outside": {
+                "type": "canvas"
+              }
+            },
+            "parts": {
+              "sides": {
+                "left": {
+                  "kind": "side",
+                  "id": "left",
+                  "owner": "c2"
+                },
+                "right": {
+                  "kind": "side",
+                  "id": "right",
+                  "owner": "c2"
+                },
+                "top": {
+                  "kind": "side",
+                  "id": "top",
+                  "owner": "c2"
+                },
+                "bottom": {
+                  "kind": "side",
+                  "id": "bottom",
+                  "owner": "c2"
+                }
+              },
+              "ports": {}
+            },
+            "config": {
+              "label": "Slow Buffer",
+              "colorSlot": 0,
+              "signalMode": "relay",
+              "presentation": {
+                "graphic": {
+                  "kind": "symbol",
+                  "ref": "sym-buffer",
+                  "svg": ""
+                },
+                "size": {
+                  "w": 112,
+                  "h": 84
+                },
+                "labelMode": "boundary",
+                "interiorColorSlot": 0,
+                "text": "",
+                "padding": 16,
+                "boundaryShape": "roundRect",
+                "boundaryColorMode": "separate-from-interior",
+                "internalLayout": "glyph-only",
+                "portTopology": "external"
+              },
+              "ports": {
+                "in": {
+                  "side": "left",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "in"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "in"
+                },
+                "out": {
+                  "side": "right",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "out"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "out"
+                },
+                "control": {
+                  "side": "top",
+                  "face": "external",
+                  "label": "",
+                  "connectionCount": 1,
+                  "activeConnection": 0,
+                  "connections": [
+                    {
+                      "id": "connection-1",
+                      "name": "Connection 1",
+                      "colorSlot": 0,
+                      "flow": "control"
+                    }
+                  ],
+                  "channelCount": 1,
+                  "activeChannel": 0,
+                  "channel": "Connection 1",
+                  "colorSlot": 0,
+                  "flow": "control"
+                }
+              }
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 0.5
+            },
+            "parentId": null,
+            "incomplete": false
+          }
+        ],
+        "wires": [
+          {
+            "id": "k1",
+            "a": "c1",
+            "b": "c2",
+            "aSide": "out",
+            "bSide": "in",
+            "canvasId": "canvas:global",
+            "canvas": {
+              "id": "canvas:wire:k1",
+              "scope": "local",
+              "dimension": 1,
+              "state": "open",
+              "ownerKind": "wire",
+              "ownerId": "k1"
+            },
+            "lane": 0,
+            "net": 0,
+            "config": {
+              "direction": "forward",
+              "reciprocity": "none",
+              "aConnectionIndex": 0,
+              "bConnectionIndex": 0,
+              "aChannelMarker": "1",
+              "bChannelMarker": "1",
+              "label": "0.5\u00d7 propagation"
+            },
+            "editor": {
+              "pinned": false,
+              "locked": false,
+              "hidden": false,
+              "opacity": 1,
+              "rate": 0.5
+            },
+            "attachments": [],
+            "duplex": false
+          }
+        ],
+        "references": [],
+        "layout": {}
+      }
+    }
+  ],
+  "meta": {
+    "purpose": "Reference corpus for SOV Schematic 0.1 public beta"
+  }
+}

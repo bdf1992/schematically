@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "soveraeign.schematic/document@0.1",
+  "title": "SOV Schematic Document",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "revision",
+    "components",
+    "wires",
+    "references"
+  ],
+  "properties": {
+    "schema": {
+      "const": "soveraeign.schematic/document@0.1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "meta": {
+      "type": "object",
+      "description": "Document metadata. Beta.24 may include timeScale and persisted checkpoints."
+    },
+    "canvas": {
+      "type": "object"
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "description": "Component records may include Port Connection access: none | read | write | read-write."
+      }
+    },
+    "wires": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "a",
+          "aSide",
+          "b",
+          "bSide"
+        ],
+        "description": "Wire config may include forwardOperation/reverseOperation: none | read | write."
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "layout": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

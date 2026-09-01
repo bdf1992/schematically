@@ -1,0 +1,446 @@
+'use strict';
+// 0.1 Beta concern: transport-neutral document formats + canonical CRUD semantics.
+// This file intentionally has no DOM dependencies and is shared by browser and MCP adapters.
+(function(root,factory){
+  let Attachment=root.SovSchematicAttachment;
+  if(!Attachment&&typeof module!=='undefined'&&module.exports)Attachment=require('./06-attachment-core.js');
+  const api=factory(Attachment);
+  root.SovSchematicData=api;
+  if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof globalThis!=='undefined'?globalThis:this,function(Attachment){
+  if(!Attachment)throw new Error('SovSchematicAttachment core is required');
+  const DOCUMENT_SCHEMA='soveraeign.schematic/document@0.1';
+  const WORKSPACE_SCHEMA='soveraeign.schematic/workspace@0.1';
+  const PACKAGE_SCHEMA='soveraeign.schematic/package@0.1';
+  const OPERATION_SCHEMA='soveraeign.schematic/operation@0.1';
+  const RECEIPT_SCHEMA='soveraeign.schematic/receipt@0.1';
+  const GLOBAL_CANVAS_ID='canvas:global';
+  const RESOURCE_KEYS={component:'components',wire:'wires',reference:'references'};
+
+  const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
+  const isObject=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
+  const nowIso=()=>new Date().toISOString();
+  const cleanString=(value,fallback='')=>typeof value==='string'?value:fallback;
+  const num=(value,fallback=0)=>Number.isFinite(Number(value))?Number(value):fallback;
+
+  function nextId(items,prefix){
+    let max=0;
+    for(const item of items||[]){
+      const m=String(item?.id||'').match(new RegExp('^'+prefix+'(\\d+)$'));
+      if(m)max=Math.max(max,Number(m[1]));
+    }
+    return prefix+(max+1);
+  }
+  function makeDocument(input={}){
+    const doc={
+      schema:DOCUMENT_SCHEMA,
+      id:cleanString(input.id,'schematic-1'),
+      revision:Math.max(0,Math.trunc(num(input.revision,0))),
+      meta:isObject(input.meta)?clone(input.meta):{},
+      canvas:{id:GLOBAL_CANVAS_ID,scope:'global',dimension:2,state:'open'},
+      components:Array.isArray(input.components)?clone(input.components):[],
+      wires:Array.isArray(input.wires)?clone(input.wires):Array.isArray(input.connections)?clone(input.connections):[],
+      references:Array.isArray(input.references)?clone(input.references):[],
+      layout:isObject(input.layout)?clone(input.layout):{}
+    };
+    if(input.canvas&&isObject(input.canvas))doc.canvas={...doc.canvas,...clone(input.canvas),id:GLOBAL_CANVAS_ID,scope:'global',dimension:2,state:'open'};
+    doc.meta.updatedAt=cleanString(doc.meta.updatedAt,nowIso());
+    return normalizeDocument(doc);
+  }
+  function normalizeDocument(input){
+    const doc=input&&isObject(input)?input:{};
+    doc.schema=DOCUMENT_SCHEMA;
+    doc.id=cleanString(doc.id,'schematic-1');
+    doc.revision=Math.max(0,Math.trunc(num(doc.revision,0)));
+    if(!isObject(doc.meta))doc.meta={};
+    if(!isObject(doc.canvas))doc.canvas={};
+    Object.assign(doc.canvas,{id:GLOBAL_CANVAS_ID,scope:'global',dimension:2,state:'open'});
+    if(!Array.isArray(doc.components))doc.components=[];
+    if(!Array.isArray(doc.wires))doc.wires=Array.isArray(doc.connections)?doc.connections:[];
+    if(!Array.isArray(doc.references))doc.references=[];
+    if(!isObject(doc.layout))doc.layout={};
+    for(const component of doc.components){
+      component.form=normalizeComponentForm(component.form,component.canvas);
+      if(!isObject(component.canvas))component.canvas={};
+      component.canvas.id=`canvas:component:${component.id||'unknown'}`;component.canvas.scope='local';component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
+      ensureAttachmentPortConfigs(component);
+      const ports=component?.config?.ports;
+      if(!isObject(ports))continue;
+      for(const port of Object.values(ports)){
+        if(!isObject(port))continue;
+        if(Array.isArray(port.connections))for(const connection of port.connections){
+          if(!['none','read','write','read-write'].includes(connection.access))connection.access='read-write';
+        }
+        if(!['none','read','write','read-write'].includes(port.access))port.access=Array.isArray(port.connections)&&port.connections[port.activeConnection||0]?.access||'read-write';
+      }
+    }
+    for(const wire of doc.wires){
+      const aComponent=doc.components.find(c=>c.id===wire.a),bComponent=doc.components.find(c=>c.id===wire.b);
+      if(aComponent)Attachment.syncWireEndpoint(wire,'a',aComponent,wire.aAttachment?.pointId||wire.aSide);
+      if(bComponent)Attachment.syncWireEndpoint(wire,'b',bComponent,wire.bAttachment?.pointId||wire.bSide);
+      if(!isObject(wire.config))wire.config={};
+      if(!['none','read','write'].includes(wire.config.forwardOperation))wire.config.forwardOperation='none';
+      if(!['none','read','write'].includes(wire.config.reverseOperation))wire.config.reverseOperation='none';
+    }
+    migrateLegacyWirePointAttachments(doc);
+    if('connections' in doc)delete doc.connections;
+    return doc;
+  }
+  function makePackage(input={}){
+    const document=makeDocument(clone(input.document||input.workspace?.document||{}));
+    const view=isObject(input.workspace?.view)?clone(input.workspace.view):isObject(input.view)?clone(input.view):{};
+    const manifest=isObject(input.manifest)?clone(input.manifest):{};
+    const timestamp=nowIso();
+    return {
+      schema:PACKAGE_SCHEMA,
+      version:1,
+      manifest:{
+        id:cleanString(manifest.id,`${document.id||'schematic'}-package`),
+        title:cleanString(manifest.title,document.meta?.title||document.id||'Soveraeign Schematic'),
+        entry:'document',
+        createdAt:cleanString(manifest.createdAt,timestamp),
+        updatedAt:timestamp,
+        generator:cleanString(manifest.generator,'SOV Schematic 0.1 Beta.24')
+      },
+      document,
+      workspace:{view},
+      templates:Array.isArray(input.templates)?clone(input.templates):[],
+      assets:Array.isArray(input.assets)?clone(input.assets):[],
+      meta:isObject(input.meta)?clone(input.meta):{}
+    };
+  }
+  function validatePackage(input){
+    const errors=[];
+    if(!isObject(input))return {ok:false,errors:['package must be an object']};
+    if(input.schema!==PACKAGE_SCHEMA)errors.push(`schema must equal ${PACKAGE_SCHEMA}`);
+    const documentCheck=validateDocument(input.document||{});
+    errors.push(...documentCheck.errors.map(error=>`document: ${error}`));
+    if(input.workspace!=null&&!isObject(input.workspace))errors.push('workspace must be an object');
+    if(input.templates!=null&&!Array.isArray(input.templates))errors.push('templates must be an array');
+    if(input.assets!=null&&!Array.isArray(input.assets))errors.push('assets must be an array');
+    return {ok:errors.length===0,errors};
+  }
+  function documentFromFilePayload(input){
+    if(!isObject(input))throw new Error('File payload must be an object');
+    if(input.schema===PACKAGE_SCHEMA){
+      const check=validatePackage(input);if(!check.ok)throw new Error(check.errors.join('; '));
+      return makeDocument(clone(input.document));
+    }
+    if(input.schema===WORKSPACE_SCHEMA)return makeDocument(clone(input.document));
+    if(input.schema===DOCUMENT_SCHEMA)return makeDocument(clone(input));
+    throw new Error(`Unsupported file schema: ${input.schema||'missing'}`);
+  }
+  function componentCanvasId(component){
+    return component?.canvas?.id||`canvas:component:${component?.id||'unknown'}`;
+  }
+  function containingCanvasId(component){return component?.canvasId||GLOBAL_CANVAS_ID}
+  function defaultPorts(){
+    const port=(side,flow,channel='signal')=>({side,face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',name:'Connection 1',colorSlot:0,flow,access:'read-write'}],channelCount:1,activeChannel:0,channel:'Connection 1',colorSlot:0,flow,access:'read-write'});
+    return {in:port('left','in'),out:port('right','out'),control:port('top','control','control')};
+  }
+  function defaultPortForSpec(spec){
+    const standard=defaultPorts()[spec.compatId];if(standard)return standard;
+    const flow=spec.defaultFlow||'duplex',channel=flow==='control'?'control':'signal';
+    return {side:spec.side,face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',name:'Connection 1',colorSlot:0,flow,access:'read-write'}],channelCount:1,activeChannel:0,channel:'Connection 1',colorSlot:0,flow,access:'read-write'};
+  }
+  function ensureAttachmentPortConfigs(component){
+    if(!isObject(component.config))component.config={};
+    if(!isObject(component.config.ports))component.config.ports=defaultPorts();
+    for(const spec of Attachment.pointSpecs(component)){
+      if(!isObject(component.config.ports[spec.compatId]))component.config.ports[spec.compatId]=defaultPortForSpec(spec);
+      component.config.ports[spec.compatId].side=spec.side;
+    }
+    return component;
+  }
+  function isLegacyWirePointAttachment(part){
+    return !!part&&['port','point','attachment-point'].includes(String(part.kind||part.type||''));
+  }
+  function hostedPointComponentFromLegacyAttachment(doc,wire,part){
+    const id=cleanString(part.componentId,nextId(doc.components,'c'));
+    const existing=doc.components.find(c=>c.id===id);if(existing)return existing;
+    const cfg=isObject(part.config)?clone(part.config):{};
+    const t=Math.max(.02,Math.min(.98,num(part.placement?.t??part.t,.5)));
+    const ports=defaultPorts();ports.out={...ports.out,...cfg,side:'point'};
+    const active=Array.isArray(ports.out.connections)?ports.out.connections[Math.max(0,Math.min(ports.out.connections.length-1,ports.out.activeConnection||0))]:null;
+    const colorSlot=Math.max(0,Math.trunc(num(active?.colorSlot??cfg.colorSlot,0)));
+    const point=makeComponent(doc,{
+      id,symbolId:'port',x:0,y:0,canvasId:`canvas:wire:${wire.id}`,
+      form:{dimension:0,body:{kind:'point',material:'generic',thickness:0},frame:{mode:'none',thickness:0,depth:0},regions:{interior:{state:'closed'}}},
+      placement:{kind:'wire',wireId:wire.id,t,sourceAttachmentId:part.id||null},
+      config:{label:cleanString(cfg.label,''),colorSlot,signalMode:'relay',presentation:{graphic:{kind:'none',ref:'sym-port',svg:''},size:{w:80,h:64},labelMode:cleanString(cfg.label,'')?'outside':'none',interiorColorSlot:colorSlot,text:'',padding:8,boundaryShape:'point',boundaryColorMode:'separate-from-interior',internalLayout:'glyph-only',portTopology:'self',backdrop:'none'},ports}
+    });
+    doc.components.push(point);return point;
+  }
+  function migrateLegacyWirePointAttachments(doc){
+    for(const wire of doc.wires){
+      if(!Array.isArray(wire.attachments)||!wire.attachments.length)continue;
+      const keep=[];
+      for(const part of wire.attachments){
+        if(isLegacyWirePointAttachment(part))hostedPointComponentFromLegacyAttachment(doc,wire,part);else keep.push(part);
+      }
+      wire.attachments=keep;
+    }
+    return doc;
+  }
+  function canonicalAttachmentPointIdsForComponent(component){return Attachment.pointIds(component)}
+  function canonicalAttachmentPointDescriptors(component){return Attachment.descriptors(component,component?.config?.ports||{})}
+  function canonicalPortIdsForComponent(component){return Attachment.pointSpecs(component).map(spec=>spec.compatId)}
+  function canonicalPortIdForComponent(component,portId){
+    const spec=Attachment.resolveSpec(component,portId);
+    if(spec)return spec.compatId;
+    return Attachment.defaultCompatId(component,cleanString(portId,'')==='in'?'start':'end');
+  }
+  function reconcileComponentWirePorts(doc,componentId){
+    const component=doc.components.find(c=>c.id===componentId);if(!component)return [];
+    const changed=[];
+    for(const wire of doc.wires||[]){
+      let dirty=false;
+      if(wire.a===componentId){const before=wire.aSide;Attachment.syncWireEndpoint(wire,'a',component,wire.aAttachment?.pointId||wire.aSide);if(before!==wire.aSide)dirty=true}
+      if(wire.b===componentId){const before=wire.bSide;Attachment.syncWireEndpoint(wire,'b',component,wire.bAttachment?.pointId||wire.bSide);if(before!==wire.bSide)dirty=true}
+      if(dirty){const reach=connectionReachability(doc,wire.a,wire.aSide,wire.b,wire.bSide);if(reach.ok)wire.canvasId=reach.canvasId;changed.push(wire.id)}
+    }
+    return changed;
+  }
+  function normalizeComponentForm(value={},legacyCanvas=null){
+    const form=isObject(value)?clone(value):{};
+    const legacyOpen=legacyCanvas?.state==='open';
+    const rawDimension=Number(form.dimension);
+    const dimension=[0,1,2].includes(rawDimension)?rawDimension:2; // Legacy 3D migrates to 2D until spatial volume is earned.
+    const defaultKind=['point','path','surface'][dimension];
+    if(!isObject(form.body))form.body={};
+    form.dimension=dimension;
+    form.body.kind=['point','path','surface'].includes(form.body.kind)?form.body.kind:defaultKind;
+    form.body.material=cleanString(form.body.material,'generic')||'generic';
+    form.body.thickness=Math.max(0,num(form.body.thickness,0));
+    if(!isObject(form.frame))form.frame={};
+    form.frame.mode=['none','frame','shell'].includes(form.frame.mode)?form.frame.mode:'none';
+    form.frame.thickness=Math.max(0,num(form.frame.thickness,form.frame.mode==='none'?0:12));
+    form.frame.depth=Math.max(0,num(form.frame.depth,0));
+    if(!isObject(form.regions))form.regions={};
+    if(!isObject(form.regions.interior))form.regions.interior={};
+    if(!['open','closed'].includes(form.regions.interior.state))form.regions.interior.state=legacyOpen?'open':'closed';
+    if(dimension<2)form.regions.interior.state='closed';
+    return form;
+  }
+  function makeComponent(doc,value={}){
+    const symbolId=cleanString(value.symbolId||value.type,'blank')||'blank';
+    const id=cleanString(value.id,nextId(doc.components,'c'));
+    const canvasId=cleanString(value.canvasId,GLOBAL_CANVAS_ID);
+    const ports=isObject(value.config?.ports)?clone(value.config.ports):defaultPorts();
+    const component={
+      id,
+      type:symbolId==='blank'?null:symbolId,
+      symbolId,
+      x:num(value.x,120),y:num(value.y,120),
+      canvasId,
+      canvas:{id:`canvas:component:${id}`,scope:'local',dimension:2,state:value.canvas?.state==='open'?'open':'closed',ownerKind:'component',ownerId:id},
+      form:normalizeComponentForm(value.form,value.canvas),
+      boundary:isObject(value.boundary)?clone(value.boundary):{kind:'boundary',shape:'blank',inside:{type:symbolId==='blank'?null:symbolId},outside:{type:'canvas'}},
+      parts:isObject(value.parts)?clone(value.parts):{sides:{left:{kind:'side',id:'left',owner:id},right:{kind:'side',id:'right',owner:id},top:{kind:'side',id:'top',owner:id},bottom:{kind:'side',id:'bottom',owner:id}},ports:{}},
+      config:{
+        label:cleanString(value.config?.label||value.label,''),
+        colorSlot:Math.max(0,Math.trunc(num(value.config?.colorSlot,0))),
+        signalMode:['source','relay','passive'].includes(value.config?.signalMode)?value.config.signalMode:'source',
+        attachmentPoints:Array.isArray(value.config?.attachmentPoints)?clone(value.config.attachmentPoints):[],
+        presentation:isObject(value.config?.presentation)?clone(value.config.presentation):{graphic:{kind:'symbol',ref:`sym-${symbolId}`,svg:''},size:{w:112,h:84},labelMode:'boundary',interiorColorSlot:0,text:'',padding:16,boundaryShape:'roundRect',boundaryColorMode:'separate-from-interior',internalLayout:'glyph-only',portTopology:'external',backdrop:'auto'},
+        ports
+      },
+      editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
+      parentId:value.parentId??null,
+      placement:isObject(value.placement)?clone(value.placement):{kind:canvasId.startsWith('canvas:wire:')?'wire':'surface',...(canvasId.startsWith('canvas:wire:')?{wireId:canvasId.slice('canvas:wire:'.length),t:.5}:{x:num(value.x,120),y:num(value.y,120)})},
+      incomplete:symbolId==='blank'
+    };
+    return ensureAttachmentPortConfigs(component);
+  }
+  function attachmentPointConfig(doc,componentId,pointId){
+    const component=doc.components.find(c=>c.id===componentId);if(!component)return null;
+    const spec=Attachment.resolveSpec(component,pointId);if(!spec)return null;
+    return component?.config?.ports?.[spec.compatId]||null;
+  }
+  const portConfig=attachmentPointConfig;
+  function attachmentHostSurfaces(doc,component){
+    const placement=component?.placement||{};
+    if(placement.kind==='wire'||String(component?.canvasId||'').startsWith('canvas:wire:')){
+      const wireId=placement.wireId||String(component.canvasId||'').slice('canvas:wire:'.length);
+      const host=doc.wires.find(w=>w.id===wireId);
+      return {inside:`canvas:wire:${wireId}`,outside:host?.canvasId||GLOBAL_CANVAS_ID};
+    }
+    if(['edge','path'].includes(placement.kind)&&placement.hostId){
+      const host=doc.components.find(c=>c.id===placement.hostId);
+      if(host)return {inside:componentCanvasId(host),outside:containingCanvasId(host)};
+    }
+    return {outside:containingCanvasId(component),inside:componentCanvasId(component)};
+  }
+  function portExposedCanvasIds(doc,componentId,portId){
+    const component=doc.components.find(c=>c.id===componentId);if(!component)return [];
+    const port=attachmentPointConfig(doc,componentId,portId);if(!port)return [];
+    const face=port.face||'external',surfaces=attachmentHostSurfaces(doc,component);
+    if(face==='internal')return [surfaces.inside];
+    if(face==='both')return [...new Set([surfaces.outside,surfaces.inside])];
+    return [surfaces.outside];
+  }
+  function connectionReachability(doc,a,aSide,b,bSide){
+    const aSet=portExposedCanvasIds(doc,a,aSide),bSet=new Set(portExposedCanvasIds(doc,b,bSide));
+    const shared=aSet.filter(x=>bSet.has(x));
+    if(!shared.length)return {ok:false,canvasId:null,reason:'Boundary blocks implicit reach-through'};
+    shared.sort((x,y)=>(x===GLOBAL_CANVAS_ID?1:0)-(y===GLOBAL_CANVAS_ID?1:0));
+    return {ok:true,canvasId:shared[0]};
+  }
+  function makeWire(doc,value={}){
+    const id=cleanString(value.id,nextId(doc.wires,'k'));
+    const a=cleanString(value.a),b=cleanString(value.b);
+    if(!a||!b)throw new Error('wire.create requires a and b component ids');
+    const aComponent=doc.components.find(c=>c.id===a),bComponent=doc.components.find(c=>c.id===b);
+    if(!aComponent||!bComponent)throw new Error('wire endpoint component not found');
+    const aInput=value.aAttachment?.pointId??value.aSide??Attachment.defaultCompatId(aComponent,'end');
+    const bInput=value.bAttachment?.pointId??value.bSide??Attachment.defaultCompatId(bComponent,'start');
+    const aSpec=Attachment.resolveSpec(aComponent,aInput),bSpec=Attachment.resolveSpec(bComponent,bInput);
+    if(!aSpec)throw new Error(`wire.create invalid attachment ${aInput} for ${Attachment.effectiveDimension(aComponent)}D component`);
+    if(!bSpec)throw new Error(`wire.create invalid attachment ${bInput} for ${Attachment.effectiveDimension(bComponent)}D component`);
+    const aSide=aSpec.compatId,bSide=bSpec.compatId;
+    const reach=connectionReachability(doc,a,aSpec.id,b,bSpec.id);
+    if(!reach.ok)throw new Error(reach.reason);
+    return {
+      id,a,b,aSide,bSide,
+      aAttachment:{kind:'attachment-ref',componentId:a,pointId:aSpec.id},
+      bAttachment:{kind:'attachment-ref',componentId:b,pointId:bSpec.id},canvasId:reach.canvasId,
+      canvas:{id:`canvas:wire:${id}`,scope:'local',dimension:1,state:'open',ownerKind:'wire',ownerId:id},
+      lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
+      net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
+      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,'')},
+      editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
+      attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
+    };
+  }
+  function makeReference(doc,value={}){
+    return {id:cleanString(value.id,nextId(doc.references,'r')),kind:cleanString(value.kind,'reference'),label:cleanString(value.label,''),target:value.target??null,data:isObject(value.data)?clone(value.data):{}};
+  }
+  function resourceArray(doc,resource){
+    const key=RESOURCE_KEYS[resource];if(!key)throw new Error(`Unsupported resource: ${resource}`);return doc[key];
+  }
+  function deepMerge(target,patch){
+    if(!isObject(patch))return clone(patch);
+    const out=isObject(target)?target:{};
+    for(const [k,v] of Object.entries(patch)){
+      if(k==='id')continue;
+      out[k]=isObject(v)?deepMerge(isObject(out[k])?out[k]:{},v):clone(v);
+    }
+    return out;
+  }
+  function list(doc,resource,query={}){
+    let items=resourceArray(doc,resource);
+    const allowed=['canvasId','symbolId','type','kind','parentId'];
+    for(const key of allowed)if(query[key]!==undefined)items=items.filter(x=>x?.[key]===query[key]);
+    return clone(items);
+  }
+  function read(doc,resource,id){const item=resourceArray(doc,resource).find(x=>x.id===id);return item?clone(item):null}
+  function isLocked(record){return record?.editor?.locked===true}
+  function assertUnlocked(record,label='entity'){if(isLocked(record))throw new Error(`Locked ${label} is immutable`)}
+  function assertCarrierEndpointAccepts(doc,componentId){
+    const component=doc.components.find(c=>c.id===componentId);
+    if(component&&isLocked(component))throw new Error('Locked Component attachments cannot accept new Wires');
+  }
+  function create(doc,resource,value={}){
+    const arr=resourceArray(doc,resource);
+    if(resource==='wire'){assertCarrierEndpointAccepts(doc,value?.a);assertCarrierEndpointAccepts(doc,value?.b)}
+    const record=resource==='component'?makeComponent(doc,value):resource==='wire'?makeWire(doc,value):makeReference(doc,value);
+    if(arr.some(x=>x.id===record.id))throw new Error(`${resource} id already exists: ${record.id}`);
+    arr.push(record);return clone(record);
+  }
+  function update(doc,resource,id,patch={}){
+    const arr=resourceArray(doc,resource),index=arr.findIndex(x=>x.id===id);if(index<0)throw new Error(`${resource} not found: ${id}`);
+    const current=arr[index];assertUnlocked(current,resource);
+    const candidate=deepMerge(clone(current),patch);candidate.id=id;
+    if(resource==='component'){
+      candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
+      candidate.form=normalizeComponentForm(candidate.form,candidate.canvas);candidate.canvas.state=candidate.form.regions.interior.state;
+      ensureAttachmentPortConfigs(candidate);
+      if(candidate.config?.presentation?.size){candidate.config.presentation.size.w=Math.max(80,num(candidate.config.presentation.size.w,112));candidate.config.presentation.size.h=Math.max(64,num(candidate.config.presentation.size.h,84));}
+    }else if(resource==='wire'){
+      const aChanged=candidate.a!==current.a||candidate.aSide!==current.aSide||candidate.aAttachment?.pointId!==current.aAttachment?.pointId;
+      const bChanged=candidate.b!==current.b||candidate.bSide!==current.bSide||candidate.bAttachment?.pointId!==current.bAttachment?.pointId;
+      if(aChanged)assertCarrierEndpointAccepts(doc,candidate.a);if(bChanged)assertCarrierEndpointAccepts(doc,candidate.b);
+      const reach=connectionReachability({...doc,wires:doc.wires.map((w,i)=>i===index?candidate:w)},candidate.a,candidate.aSide,candidate.b,candidate.bSide);if(!reach.ok)throw new Error(reach.reason);
+      candidate.canvasId=reach.canvasId;candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:wire:${id}`;candidate.canvas.ownerId=id;candidate.canvas.dimension=1;candidate.canvas.state='open';
+      candidate.duplex=candidate.config?.direction==='duplex';
+    }
+    arr[index]=candidate;
+    if(resource==='component')reconcileComponentWirePorts(doc,id);
+    if(resource==='wire')migrateLegacyWirePointAttachments(doc);
+    return clone(arr[index]);
+  }
+  function remove(doc,resource,id){
+    const arr=resourceArray(doc,resource),index=arr.findIndex(x=>x.id===id);if(index<0)return null;
+    const removed=arr[index];assertUnlocked(removed,resource);
+    if(resource==='component'){
+      const containing=removed.canvasId||GLOBAL_CANVAS_ID;
+      for(const child of doc.components)if(child.canvasId===componentCanvasId(removed)){child.canvasId=containing;child.parentId=removed.parentId??null;child.placement={kind:'surface',x:child.x,y:child.y};}
+      for(let i=doc.wires.length-1;i>=0;i--)if(doc.wires[i].a===id||doc.wires[i].b===id)remove(doc,'wire',doc.wires[i].id);
+    }else if(resource==='wire'){
+      const hostedCanvas=`canvas:wire:${id}`;
+      for(const component of doc.components)if(component.canvasId===hostedCanvas){component.canvasId=GLOBAL_CANVAS_ID;component.parentId=null;component.placement={kind:'surface',x:component.x,y:component.y};}
+    }
+    arr.splice(index,1);return clone(removed);
+  }
+  function touch(doc){doc.revision=Math.max(0,Math.trunc(num(doc.revision,0)))+1;doc.meta=doc.meta||{};doc.meta.updatedAt=nowIso();return doc.revision}
+  function makeReceipt(op,ok,result,revisionBefore,error=null){return {schema:RECEIPT_SCHEMA,operationId:op.id||null,ok,revisionBefore,revisionAfter:result?.revisionAfter??revisionBefore,result:result?.value??result??null,error:error?{message:String(error.message||error)}:null}}
+  function applyOperation(document,operation={}){
+    const doc=normalizeDocument(document),op={schema:OPERATION_SCHEMA,id:operation.id||`op-${Date.now()}`,op:operation.op,resource:operation.resource,resourceId:operation.resourceId??operation.idValue??null,value:clone(operation.value),patch:clone(operation.patch),query:clone(operation.query||{})};
+    const before=doc.revision;
+    try{
+      let value,mutates=false;
+      switch(op.op){
+        case 'list':value=list(doc,op.resource,op.query);break;
+        case 'read':value=read(doc,op.resource,op.resourceId);break;
+        case 'create':value=create(doc,op.resource,op.value||{});mutates=true;break;
+        case 'update':value=update(doc,op.resource,op.resourceId,op.patch||{});mutates=true;break;
+        case 'delete':value=remove(doc,op.resource,op.resourceId);mutates=value!==null;break;
+        default:throw new Error(`Unsupported CRUD op: ${op.op}`);
+      }
+      if(mutates)touch(doc);
+      return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:value,error:null};
+    }catch(error){return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:false,revisionBefore:before,revisionAfter:doc.revision,result:null,error:{message:String(error.message||error)}}}
+  }
+  function replaceDocument(target,input){
+    const incoming=makeDocument(clone(input));
+    const components=target.components,wires=target.wires,references=target.references;
+    components.splice(0,components.length,...incoming.components);
+    wires.splice(0,wires.length,...incoming.wires);
+    references.splice(0,references.length,...incoming.references);
+    target.schema=DOCUMENT_SCHEMA;target.id=incoming.id;target.revision=incoming.revision;target.meta=incoming.meta;target.canvas=incoming.canvas;target.layout=incoming.layout;
+    return target;
+  }
+  function validateDocument(input){
+    const errors=[];
+    if(!isObject(input))return {ok:false,errors:['document must be an object']};
+    if(input.schema!==DOCUMENT_SCHEMA)errors.push(`schema must equal ${DOCUMENT_SCHEMA}`);
+    if(!Array.isArray(input.components))errors.push('components must be an array');
+    if(!Array.isArray(input.wires))errors.push('wires must be an array');
+    if(!Array.isArray(input.references))errors.push('references must be an array');
+    const ids=new Set();
+    for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]],['reference',input.references||[]]])for(const item of items){if(!item?.id)errors.push(`${kind} missing id`);else if(ids.has(`${kind}:${item.id}`))errors.push(`duplicate ${kind} id: ${item.id}`);else ids.add(`${kind}:${item.id}`)}
+    const componentIds=new Set((input.components||[]).map(x=>x.id));
+    for(const wire of input.wires||[]){
+      if(!componentIds.has(wire.a))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.a}`);
+      if(!componentIds.has(wire.b))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.b}`);
+      if(componentIds.has(wire.a)&&componentIds.has(wire.b)){
+        const reach=connectionReachability(input,wire.a,wire.aSide,wire.b,wire.bSide);if(!reach.ok)errors.push(`wire ${wire.id||'?'}: ${reach.reason}`);
+      }
+      for(const key of ['forwardOperation','reverseOperation'])if(wire.config?.[key]!=null&&!['none','read','write'].includes(wire.config[key]))errors.push(`wire ${wire.id||'?'} invalid ${key}: ${wire.config[key]}`);
+    }
+    return {ok:errors.length===0,errors};
+  }
+  function operationTools(){
+    const resourceSchema={type:'string',enum:['component','wire','reference']};
+    return [
+      {name:'schematic.list',description:'List schematic resources.',inputSchema:{type:'object',properties:{resource:resourceSchema,query:{type:'object'}},required:['resource'],additionalProperties:false}},
+      {name:'schematic.get',description:'Read one schematic resource by id.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'}},required:['resource','id'],additionalProperties:false}},
+      {name:'schematic.create',description:'Create a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,value:{type:'object'}},required:['resource','value'],additionalProperties:false}},
+      {name:'schematic.update',description:'Patch a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},patch:{type:'object'}},required:['resource','id','patch'],additionalProperties:false}},
+      {name:'schematic.delete',description:'Delete a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'}},required:['resource','id'],additionalProperties:false}},
+      {name:'schematic.document.get',description:'Return the entire schematic document.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
+      {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
+    ];
+  }
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+});

@@ -83,8 +83,7 @@ function applySelectedColorSlot(slot){
       normalizePortConnections(p);
       p.connections[p.activeConnection].colorSlot=slot;
       p.connections[p.activeConnection].color=slotColor(slot);
-      if(info.ownerKind==='component')componentConfig(info.owner);
-      else wirePartPortConfig(info.owner,info.part);
+      componentConfig(info.owner);
     }
   }
   closeColorSlotPanel();
@@ -147,13 +146,12 @@ function selectedCanvasContextId(){
   if(typeof selected==='string'&&selected.startsWith('wire:')){
     const w=wires[Number(selected.split(':')[1])];return w?.canvasId||GLOBAL_CANVAS_ID;
   }
-  if(typeof selected==='string'&&selected.startsWith('port:')){
+  if(isAttachmentSelectionValue(selected)){
     const info=selectedPortInfo();
     if(info?.ownerKind==='component'){
-      const node=info.owner,face=info.port.face||'external';
-      return face==='internal'?componentCanvas(node).id:(node.canvasId||GLOBAL_CANVAS_ID);
+      const exposed=portExposedCanvasIds(info.owner,info.pointId||info.portId);
+      return exposed[0]||info.owner.canvasId||GLOBAL_CANVAS_ID;
     }
-    if(info?.ownerKind==='wire')return info.owner.canvasId||GLOBAL_CANVAS_ID;
   }
   const n=nodes.find(n=>n.id===selected);return n?.canvasId||GLOBAL_CANVAS_ID;
 }
@@ -202,7 +200,7 @@ function openSelectionSettings(kind){
 }
 function selectedSurfaceKind(){
   if(typeof selected==='string'&&selected.startsWith('wire:'))return 'wire';
-  if(typeof selected==='string'&&selected.startsWith('port:'))return 'port';
+  if(isAttachmentSelectionValue(selected))return 'port';
   return selected?'component':null;
 }
 function showComponentBar(n){
@@ -264,35 +262,23 @@ function showConnectionBar(w,i){
 }
 
 function selectedPortInfo(){
-  if(typeof selected!=='string'||!selected.startsWith('port:'))return null;
+  if(typeof selected!=='string'||(!selected.startsWith('point:')&&!selected.startsWith('port:')))return null;
   const parts=selected.split(':');
-  if(parts[1]==='component'){
-    const node=nodes.find(n=>n.id===parts[2]);if(!node)return null;
-    const portId=parts[3],port=componentConfig(node).ports[portId];if(!port)return null;
-    return {ownerKind:'component',owner:node,node,portId,port};
+  const offset=parts[0]==='point'?1:1;
+  if(parts[offset]==='component'){
+    const node=nodes.find(n=>n.id===parts[offset+1]);if(!node)return null;
+    const point=Attachment.resolveSpec(node,parts[offset+2]);if(!point)return null;
+    const port=componentConfig(node).ports[point.compatId];if(!port)return null;
+    return {ownerKind:'component',owner:node,node,pointId:point.id,portId:point.compatId,point,port};
   }
-  if(parts[1]==='wire'){
-    const wire=wires.find(w=>w.id===parts[2]);if(!wire)return null;
-    const part=wire.attachments.find(p=>p.id===parts[3]&&(p.type==='port'||p.kind==='port'));if(!part)return null;
-    const port=wirePartPortConfig(wire,part);
-    return {ownerKind:'wire',owner:wire,wire,part,portId:part.id,port};
-  }
-
-  // Legacy component Port selection format: port:<componentId>:<portId>
+  // Legacy selection format: port:<componentId>:<compatPortId>
   const node=nodes.find(n=>n.id===parts[1]);
-  if(node){
-    const portId=parts[2],port=componentConfig(node).ports[portId];
-    return port?{ownerKind:'component',owner:node,node,portId,port}:null;
-  }
+  if(node){const point=Attachment.resolveSpec(node,parts[2]);if(!point)return null;const port=componentConfig(node).ports[point.compatId];return port?{ownerKind:'component',owner:node,node,pointId:point.id,portId:point.compatId,point,port}:null}
   return null;
 }
 function portMarkerSummaryText(info){
-  if(info.ownerKind==='component'){
-    const markers=wireMarkerSummaryForPort(info.owner.id,info.portId);
-    return markers.length?markers.join(' · '):'No wire markers';
-  }
-  const w=info.owner;
-  return `A ${wireEndpointMarker(w,'a')} · B ${wireEndpointMarker(w,'b')}`;
+  const markers=wireMarkerSummaryForPort(info.owner.id,info.portId);
+  return markers.length?markers.join(' · '):'No wire markers';
 }
 function showPortBar(info){
   const port=info.port;
@@ -302,8 +288,8 @@ function showPortBar(info){
   syncSelectionFormState('port',null);
   componentBarFields.hidden=true;connectionBarFields.hidden=true;portBarFields.hidden=false;
 
-  barPortSide.disabled=info.ownerKind==='wire';
-  barPortSide.value=info.ownerKind==='wire'?'along':port.side;
+  barPortSide.disabled=true;
+  barPortSide.value=info.point?.side||Attachment.resolveSpec(info.owner,info.pointId)?.side||port.side||'point';
 
   const ch=portConnection(port);
   barPortLabel.value=port.label||'';
@@ -316,18 +302,13 @@ function showPortBar(info){
   closeColorSlotPanel();
   positionSelectionBar();
 }
-function portDisplayName(info){
-  if(info.ownerKind==='component'){
-    return componentConfig(info.owner).label||byId(info.owner.symbolId).name;
-  }
-  return info.owner.config?.label||info.owner.id||'Wire';
-}
+function portDisplayName(info){return componentConfig(info.owner).label||byId(info.owner.symbolId).name}
 
 function restoreSelectedSurface(){
   if(typeof selected!=='string')return;
   if(selected.startsWith('wire:')){
     const i=Number(selected.split(':')[1]);if(wires[i])selectWire(i);
-  }else if(selected.startsWith('port:')){
+  }else if(isAttachmentSelectionValue(selected)){
     const info=selectedPortInfo();if(info)selectPortRef(info);
   }else{
     const n=nodes.find(n=>n.id===selected);if(n)selectNode(n.id);
@@ -338,12 +319,9 @@ function positionSelectionBar(){
   let p=null;
   if(typeof selected==='string'&&selected.startsWith('wire:')){
     const i=Number(selected.split(':')[1]),w=wires[i];if(w)p=connectionMidpoint(w,i);
-  }else if(typeof selected==='string'&&selected.startsWith('port:')){
+  }else if(isAttachmentSelectionValue(selected)){
     const info=selectedPortInfo();
-    if(info){
-      if(info.ownerKind==='component')p=portPos(info.node,info.portId);
-      else p=wirePartPoint(info.wire,info.part);
-    }
+    if(info)p=portPos(info.node,info.pointId||info.portId);
   }else{
     const n=nodes.find(n=>n.id===selected);if(n){const size=componentSize(n);p={x:n.x,y:n.y-size.h/2-10}}
   }

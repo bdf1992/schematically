@@ -1,0 +1,7 @@
+# Agent skills
+
+- `author/SKILL.md` — author valid semantic schematics.
+- `operator/SKILL.md` — operate `.sov` / `.sovpak`, Browser API, HTTP, and MCP.
+- `reviewer/SKILL.md` — independently review a schematic/public-beta build.
+
+The skills intentionally point agents back to the same public formats and CRUD semantics used by the interactive editor.

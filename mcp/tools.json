@@ -1,0 +1,18 @@
+{
+  "protocolVersion": "2026-07-28",
+  "endpoint": "/mcp",
+  "tools": [
+    "schematic.list",
+    "schematic.get",
+    "schematic.create",
+    "schematic.update",
+    "schematic.delete",
+    "schematic.document.get",
+    "schematic.document.replace",
+    "schematic.history.undo",
+    "schematic.history.redo",
+    "schematic.checkpoint.list",
+    "schematic.checkpoint.create",
+    "schematic.checkpoint.restore"
+  ]
+}

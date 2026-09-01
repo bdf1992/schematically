@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "soveraeign.schematic/workspace@0.1",
+  "title": "SOV Schematic Workspace",
+  "type": "object",
+  "required": ["schema", "document", "view"],
+  "properties": {
+    "schema": {"const": "soveraeign.schematic/workspace@0.1"},
+    "document": {"type": "object"},
+    "view": {"type": "object"}
+  },
+  "additionalProperties": true
+}

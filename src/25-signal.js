@@ -2,7 +2,14 @@
 // 0.1 Beta concern: Derived signal/voltage activation and diffusion state.
 
 function incomingSignals(componentId,signalState){
-  const colors=[];
+  const colors=[],component=nodes.find(n=>n.id===componentId),placement=component?.placement||{};
+  if(placement.kind==='wire'&&placement.wireId){
+    const host=wires.find(w=>w.id===placement.wireId);
+    if(host){
+      if(wireDirectionActive(host,'forward',signalState))colors.push(signalState.colors.get(host.a));
+      if((connectionConfig(host).direction==='duplex'||connectionConfig(host).direction==='reverse')&&wireDirectionActive(host,'reverse',signalState))colors.push(signalState.colors.get(host.b));
+    }
+  }
   for(const w of wires){
     const cfg=connectionConfig(w);
     if(cfg.direction==='forward' && w.b===componentId && wireDirectionActive(w,'forward',signalState)) colors.push(signalState.colors.get(w.a));

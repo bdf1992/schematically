@@ -1,0 +1,164 @@
+{
+  "schema": "soveraeign.schematic/package@0.1",
+  "version": 1,
+  "manifest": {
+    "id": "schematic-1-package",
+    "title": "Soveraeign Schematic",
+    "entry": "document",
+    "createdAt": "2026-09-01T02:41:44.674Z",
+    "updatedAt": "2026-09-01T02:41:44.674Z",
+    "generator": "SOV Schematic 0.1 Beta.24"
+  },
+  "document": {
+    "schema": "soveraeign.schematic/document@0.1",
+    "id": "schematic-1",
+    "revision": 0,
+    "meta": {
+      "updatedAt": "2026-09-01T02:41:44.107Z",
+      "title": "Soveraeign Schematic"
+    },
+    "canvas": {
+      "id": "canvas:global",
+      "scope": "global",
+      "dimension": 2,
+      "state": "open"
+    },
+    "components": [],
+    "wires": [],
+    "references": [],
+    "layout": {}
+  },
+  "workspace": {
+    "view": {
+      "camera": {
+        "x": 0,
+        "y": 0,
+        "w": 1200,
+        "h": 760
+      },
+      "grid": {
+        "visible": true,
+        "snap": true,
+        "size": 24
+      },
+      "showFlow": true,
+      "colorEngine": {
+        "theme": "pastel",
+        "palette": "spectrum",
+        "custom": [
+          "#C84E64",
+          "#DB8750",
+          "#B7A647",
+          "#58A27C",
+          "#4E86BE",
+          "#8B63B2"
+        ],
+        "diffuse": true
+      }
+    }
+  },
+  "templates": [
+    {
+      "id": "component:blank",
+      "kind": "component",
+      "symbolId": "blank",
+      "name": "BLANK",
+      "family": "UNSET",
+      "role": "incomplete",
+      "meaning": "Incomplete component. Choose its type.",
+      "properties": [
+        "incomplete",
+        "type-required"
+      ]
+    },
+    {
+      "id": "component:act",
+      "kind": "component",
+      "symbolId": "act",
+      "name": "ACT",
+      "family": "ACTIVE",
+      "role": "transform",
+      "meaning": "Transforms input into output. Activity does not grant authority.",
+      "properties": [
+        "agentic",
+        "authority-neutral"
+      ]
+    },
+    {
+      "id": "component:hold",
+      "kind": "component",
+      "symbolId": "hold",
+      "name": "HOLD",
+      "family": "PASSIVE",
+      "role": "state",
+      "meaning": "Keeps bounded state.",
+      "properties": [
+        "stateful"
+      ]
+    },
+    {
+      "id": "component:buffer",
+      "kind": "component",
+      "symbolId": "buffer",
+      "name": "BUFFER",
+      "family": "PASSIVE",
+      "role": "state",
+      "meaning": "Holds flow temporarily, then releases it.",
+      "properties": [
+        "temporary-state"
+      ]
+    },
+    {
+      "id": "component:gate",
+      "kind": "component",
+      "symbolId": "gate",
+      "name": "GATE",
+      "family": "MECHANICAL",
+      "role": "control",
+      "meaning": "Passes or refuses flow using a declared condition.",
+      "properties": [
+        "conditional",
+        "authority-neutral"
+      ]
+    },
+    {
+      "id": "component:switch",
+      "kind": "component",
+      "symbolId": "switch",
+      "name": "SWITCH",
+      "family": "MECHANICAL",
+      "role": "control",
+      "meaning": "Opens or closes a path from explicit control.",
+      "properties": [
+        "externally-controlled"
+      ]
+    },
+    {
+      "id": "component:limit",
+      "kind": "component",
+      "symbolId": "limit",
+      "name": "LIMIT",
+      "family": "PASSIVE",
+      "role": "constraint",
+      "meaning": "Restricts a flow dimension without judgement.",
+      "properties": [
+        "non-judgemental"
+      ]
+    },
+    {
+      "id": "component:receipt",
+      "kind": "component",
+      "symbolId": "receipt",
+      "name": "RECEIPT",
+      "family": "PASSIVE",
+      "role": "evidence",
+      "meaning": "Durable evidence emitted by a crossing or action.",
+      "properties": [
+        "durable",
+        "evidentiary"
+      ]
+    }
+  ],
+  "assets": [],
+  "meta": {}
+}
