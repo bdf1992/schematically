@@ -8,12 +8,14 @@ verified `main`, and reproduce the full QA gate locally.
 ```bash
 git clone https://github.com/bdf1992/schematically.git
 cd schematically
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
-python -m playwright install chromium   # add --with-deps on a fresh Linux box
+scripts/setup.sh          # venv + QA deps + Chromium + environment doctor
 ```
 
-Node 18+ is required for `node --check` syntax gates and the MCP server.
+The doctor verifies deterministic rebuild, headless Chromium, and Node
+(18+ required for `node --check` gates and the MCP server), then prints the
+next commands. `scripts/setup.sh --doctor` re-verifies an existing
+environment; `--system` skips the venv. Onboarding guidance for humans and
+agents lives in `skills/steward/SKILL.md`.
 
 ## 2. Running the editor locally
 

@@ -12,11 +12,19 @@ import json, socket, subprocess, tempfile, time
 from pathlib import Path
 from urllib import request, error
 
+import re
+
 from playwright.sync_api import sync_playwright
 from browser_runtime import chromium_launch_kwargs
 
 ROOT = Path(__file__).resolve().parents[1]
 HTML = (ROOT / 'index.html').read_text(encoding='utf-8')
+
+# --- Steward skill: every script and doc it points people at must exist.
+steward = (ROOT / 'skills/steward/SKILL.md').read_text(encoding='utf-8')
+referenced = set(re.findall(r'(?:scripts/[\w.]+|[A-Z][A-Z-]+\.md|docs/[\w./-]+\.md)', steward))
+missing = sorted(p for p in referenced if not (ROOT / p).exists())
+assert not missing, f'steward skill references missing files: {missing}'
 
 # --- Browser: every operation the operator skill documents must exist and act.
 DOCUMENTED = [

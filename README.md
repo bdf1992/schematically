@@ -36,6 +36,7 @@ The agent-facing corpus ships with the repository:
 
 - `AGENTS.md` — repository invariants and concern contract
 - `skills/author`, `skills/operator`, `skills/reviewer` — authoring, operating, and reviewing skills
+- `skills/steward` — installation, onboarding, channels, and the release/quality process
 - `examples/` — executable golden documents and a portable reference pack
 
 ## Source and build
