@@ -2,86 +2,12 @@ name: settle-beta24
 on:
   push:
     branches: [rc/0.1.0-rc1]
+    paths:
+      - '.github/workflows/settlement-payload-probe.yml'
 permissions:
   contents: write
 jobs:
-  settle:
-    if: ${{ github.actor != 'github-actions[bot]' }}
+  staging:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - name: Materialize and verify Beta.24 candidate
-        shell: bash
-        run: |
-          set -euxo pipefail
-          : > /tmp/beta24.tar.xz
-          for f in .beta24/payload-*.b64; do
-            base64 -d "$f" >> /tmp/beta24.tar.xz
-          done
-
-          echo "payload sha256: $(sha256sum /tmp/beta24.tar.xz | awk '{print $1}')"
-
-          tmp="$(mktemp -d)"
-          tar -xJf /tmp/beta24.tar.xz -C "$tmp"
-          test -d "$tmp/root"
-
-          manifest="$GITHUB_WORKSPACE/.beta24/expected.sha256"
-          test -f "$manifest"
-          cut -c67- "$manifest" | LC_ALL=C sort > "$tmp/expected-files"
-          (cd "$tmp/root" && find . -type f -print | LC_ALL=C sort) > "$tmp/actual-files"
-          diff -u "$tmp/expected-files" "$tmp/actual-files"
-          (cd "$tmp/root" && sha256sum -c "$manifest")
-          echo 'Beta.24 exact file set and content verified'
-
-          cp -a "$tmp/root/." .
-          rm -rf .beta24
-          rm -f .github/workflows/settlement-payload-probe.yml
-
-          cat > LICENSE <<'EOF'
-          MIT License
-
-          Copyright (c) 2026 bdf1992
-
-          Permission is hereby granted, free of charge, to any person obtaining a copy
-          of this software and associated documentation files (the "Software"), to deal
-          in the Software without restriction, including without limitation the rights
-          to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-          copies of the Software, and to permit persons to whom the Software is
-          furnished to do so, subject to the following conditions:
-
-          The above copyright notice and this permission notice shall be included in all
-          copies or substantial portions of the Software.
-
-          THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-          IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-          FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-          AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-          LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-          OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-          SOFTWARE.
-          EOF
-
-          python - <<'PY'
-          from pathlib import Path
-          required = [
-              'src/00-state.js', 'src/05-data-core.js', 'src/06-attachment-core.js',
-              'src/15-editor-kernel.js', 'src/30-canvas.js', 'src/55-render.js',
-              'src/60-interactions.js', 'src/75-persistence.js',
-              '.github/workflows/ci.yml', 'scripts/qa.py', 'scripts/golden_run.py',
-              'mcp/server.mjs', 'mcp/tools.json', 'PUBLIC-BETA-FREEZE.md',
-              'QA-0.1.md', 'MODULE-QA.md', 'RC-0.1.md'
-          ]
-          missing = [p for p in required if not Path(p).is_file()]
-          if missing:
-              raise SystemExit('missing: ' + ', '.join(missing))
-          print('Beta.24 normative tree materialized')
-          PY
-
-          git diff --check
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'rc: settle exact Beta.24 candidate tree with MIT license'
-          git push origin HEAD:rc/0.1.0-rc1
+      - run: echo 'Beta.24 authoritative ZIP transport staging'
