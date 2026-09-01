@@ -1,6 +1,9 @@
 name: schematic-ci
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -22,3 +25,27 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Run authoritative RC QA
         run: python scripts/qa.py
+      - name: Stage deployable site
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: python scripts/stage_site.py
+      - name: Upload Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy QA-verified build to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
