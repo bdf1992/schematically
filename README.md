@@ -1,21 +1,23 @@
 # SOV Schematic
 
-A compact, AI-native schematic editor. A document is a semantic model — Components, Parts, Wires, Form, boundaries, signals, containment — projected to SVG, not a drawing that pretends to be one. People edit it in the browser; agents edit it through the same data core over a Browser API, HTTP, and MCP.
+A compact, AI-native schematic editor. A document is a semantic model — Components, Parts, Wires, Form, boundaries, signals, containment — projected to SVG, not a drawing that pretends to be one. People edit it in the browser; agents edit it through the same data core over a browser API, HTTP, and MCP.
+
+`GLOSSARY.md` defines the vocabulary used below, once, with the machine name behind each term.
 
 ## The model
 
 - **Component** — a closed boundary with behavior, content, and a Form. Nested Components use the same implementation as root Components.
-- **Form** — dimension + Body + Frame + addressable Regions. Dimensions are earned: 0D behaves as an attachable point, 1D as a path/carrier with endpoint topology, 2D as a surface/boundary with addressable boundary attachment points.
-- **Attachment points (0D)** — one concern normalizes Port-like behavior everywhere: selection, hit-testing, wiring, color, label, history, and API behavior are identical whether a point lives on a 1D path or a 2D boundary. Attachment counts are template data, not a renderer rule.
-- **Wire** — an open 1D carrier connecting attachment points that share an exposed surface. Wires can host Components inline (`wireId + t`); duplex Wires carry simultaneous forward/reverse packets.
-- **Direction ≠ access ≠ authority** — Ports carry direction (Input / Output / Input + Output / Trigger) and access (None / Read / Write / Read + Write) as independent axes. Read/Write describes the represented effect; it never grants permission.
-- **Boundaries are real** — no implicit reach-through. Crossing a Component boundary requires an inside-facing or both-facing Port on that Component, and every surface (UI, API, HTTP, MCP) enforces the same legality.
+- **Form** — dimension + Body + Frame + addressable Regions. Dimension changes behavior, not just appearance: 0D behaves as an attachable point, 1D as a path with endpoint topology, 2D as a surface with addressable boundary Ports.
+- **Port** — a 0D attachment point, the only place a Wire can attach. One concern implements Ports everywhere: selection, hit-testing, wiring, color, label, history, and API behavior are identical whether the Port lives on a 1D path or a 2D boundary. How many Ports a template exposes is template data, not a renderer rule.
+- **Wire** — an open 1D carrier connecting two Ports that share an exposed surface. Wires can host Components inline (`wireId + t`); duplex Wires carry forward and reverse packets at the same time.
+- **Direction ≠ access ≠ authority** — a Port carries direction (Input / Output / Input + Output / Trigger) and access (None / Read / Write / Read + Write) as independent axes. Access describes what a packet can represent; it never grants permission.
+- **Boundaries are real** — no implicit reach-through. Crossing a Component boundary requires a Port on that Component whose face is Inside or Both, and every entry point (UI, API, HTTP, MCP) applies the same rule.
 
-`ATTACHMENT-POINT-MODEL.md`, `FORM-MODEL.md`, `HOST-SURFACE-MODEL.md`, `CANVAS-MODEL.md`, and `reference/REFERENCE.md` specify these in detail.
+`ATTACHMENT-POINT-MODEL.md`, `FORM-MODEL.md`, `HOST-SURFACE-MODEL.md`, `CANVAS-MODEL.md`, and `reference/REFERENCE.md` specify these in detail; `GLOSSARY.md` maps each term to its machine name.
 
 ## The editor
 
-Semantic undo/redo with gesture compression; named checkpoints persisted in the file; multi-select, marquee, and a semantic clipboard for Component subtrees with their internal Wires; Pin (geometry frozen), Lock (mutation frozen), Hidden (recoverable), Opacity, and per-entity Rate; settle/ghost hosting onto open interiors and Wires with an intentional dwell so growth never creates surprise objects; blank-canvas quick search; light/dark/system appearance with surface-relative ink; a global time scale composed with per-Component and per-Wire rates for packet travel. `EDITOR-KERNEL.md` covers the kernel contract.
+Undo/redo is semantic: one gesture produces one history entry. Named checkpoints persist in the file. Multi-select, marquee, and a clipboard copy Component subtrees together with the Wires inside them. Each entity can be Pinned (geometry frozen), Locked (mutation frozen), Hidden (recoverable), given an Opacity, and given a Rate. Dropping a Component onto an open interior or a Wire hosts it there, after a short dwell that shows a ghost of the prospective host, so growth never creates surprise objects. Typing on a blank canvas opens search. Appearance is Light, Dark, or System, with ink relative to the surface. A global time scale composes with per-Component and per-Wire rates to set packet travel speed. `EDITOR-KERNEL.md` covers the kernel contract.
 
 ## Files and formats
 
@@ -35,6 +37,7 @@ Schemas live in `formats/`; `DATA-FORMATS.md` explains them.
 The agent-facing corpus ships with the repository:
 
 - `AGENTS.md` — repository invariants and concern contract
+- `GLOSSARY.md` — one definition per term, with machine names
 - `skills/author`, `skills/operator`, `skills/reviewer` — authoring, operating, and reviewing skills
 - `examples/` — executable golden documents and a portable reference pack
 

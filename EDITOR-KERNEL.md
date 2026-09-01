@@ -26,7 +26,3 @@ The editor kernel is deliberately separate from schematic semantics.
 4. Hidden is recoverable and is not deletion.
 5. Search desaturation never writes opacity/hidden state.
 6. Checkpoints persist with the save file; undo/redo stacks are session-local.
-
-
-### Access axis
-Port Connections may carry `access: none | read | write | read-write`. Wire config may carry `forwardOperation` / `reverseOperation: none | read | write`. Direction, access, and authority are independent.

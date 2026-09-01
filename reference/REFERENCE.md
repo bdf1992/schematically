@@ -9,7 +9,7 @@
 - Component boundary = closed line.
 - Wire = open line.
 - Part = named/addressable section of a line.
-- Port = boundary/path Part that exposes an interface to a surface.
+- Port = 0D attachment point: a Part on a boundary or path that exposes an interface to a surface.
 
 ## Form
 
@@ -25,17 +25,17 @@ An open interior Region may host other Components. Hosting changes relationship/
 
 ## Port reachability
 
-- outside face → containing surface
-- inside face → Component's interior surface
-- both → both surfaces
+- Outside face (`external`) → containing surface
+- Inside face (`internal`) → Component's interior surface
+- Both (`both`) → both surfaces
 
 A Wire is legal only if the endpoint exposure sets share a surface.
 
 ## Signals
 
-- Source = active without upstream input
-- On input = relay behavior
-- Passive = does not originate packet flow
+- Source (`source`) = active without upstream input
+- On input (`relay`) = relays what it receives
+- Passive (`passive`) = does not originate packet flow
 
 Packet travel rate in the current projection is:
 
@@ -66,9 +66,9 @@ See `examples/`:
 
 These are separate axes:
 
-- `direction` says how a signal crosses a boundary (`in`, `out`, `duplex`, `control`).
-- `access` says what kind of interaction that Port/Connection permits (`none`, `read`, `write`, `read-write`).
-- Wire packet `operation` says what the concrete crossing represents (`none`, `read`, `write`).
-- authority is deliberately not inferred from any of the above.
+- Port direction (connection slot `flow`) says how a signal crosses at that Port: `in` Input, `out` Output, `duplex` Input + Output, `control` Trigger.
+- Port access (connection slot `access`) says what the Port can represent: `none`, `read`, `write`, `read-write`.
+- Wire packet operation (`forwardOperation` / `reverseOperation`) says what a concrete crossing does: `none` (Signal), `read`, `write`.
+- Authority is never inferred from any of the above.
 
-A useful evidentiary reading is: a durable Record can receive a **Write** representing what happened, while an Observer/Witness can participate in a **Read** representing observation of what happened. This is representational semantics, not an authorization grant.
+A useful evidentiary reading: a durable Record can receive a **Write** representing what happened, while an Observer/Witness can take part in a **Read** representing observation of it. This is representational semantics, not an authorization grant.

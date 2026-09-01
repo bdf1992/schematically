@@ -2,7 +2,9 @@
 
 - `00-state.js` — runtime state and DOM references.
 - `05-data-core.js` — transport-neutral documents, packages, validation, CRUD, reachability.
+- `06-attachment-core.js` — pure 0D Port topology: dimensional cardinality, host-dimensional projection, and legacy Port/Wire endpoint compatibility mapping. No DOM or rendering authority.
 - `10-model.js` — Component/Wire/Port semantic normalization.
+- `15-editor-kernel.js` — history, checkpoints, semantic clipboard, multi-selection, settle hosting, Pin/Lock/Hidden/Opacity, search/Objects, appearance and rate.
 - `20-ui.js` — panels, palette/grid UI helpers.
 - `25-signal.js` — derived signal state.
 - `30-canvas.js` — camera, spatial movement and Form-region containment.
@@ -15,9 +17,4 @@
 - `80-bootstrap.js` — global controls/keyboard/startup.
 - `85-api.js` — browser API adapter.
 
-File lifecycle belongs in `75-persistence.js`; no other concern should independently serialize, download, open, or replace schematic files.
-
-- `src/15-editor-kernel.js` — history, checkpoints, semantic clipboard, multi-selection, settle hosting, Pin/Lock/Hidden/Opacity, search/Objects, appearance and rate.
-
-### `src/06-attachment-core.js`
-Pure 0D attachment-point topology, dimensional cardinality, host-dimensional projection, and legacy Port/Wire endpoint compatibility mapping. No DOM or rendering authority.
+File lifecycle belongs in `75-persistence.js`; no other concern may serialize, download, open, or replace schematic files.

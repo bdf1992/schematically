@@ -2,7 +2,7 @@
 
 SOV Schematic is a semantic editor, not an SVG drawing program.
 
-Before changing behavior, identify the owning concern in `MODULES.md`. Do not duplicate model, routing, rendering, interaction, persistence, or API logic in another module.
+Before changing behavior, identify the owning concern in `MODULES.md`. Use the terms defined in `GLOSSARY.md`; do not coin a synonym for a defined concept. Do not duplicate model, routing, rendering, interaction, persistence, or API logic in another module.
 
 ## Invariants
 

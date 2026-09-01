@@ -181,7 +181,7 @@ window.addEventListener('unhandledrejection',()=>{if(activeNodeDragState)finishA
 
 function growBlankFromConnection(sourceNode,sourcePointId,P,mods){
   const source=nodes.find(n=>n.id===sourceNode),sourceSpec=source?Attachment.resolveSpec(source,sourcePointId):null;
-  if(!source||!sourceSpec){statusEl.textContent='Attachment no longer exists';return null}
+  if(!source||!sourceSpec){statusEl.textContent='Port no longer exists';return null}
   const sourceCompat=sourceSpec.compatId;
 
   // Release is a settle event, so the new Blank may align to the current grid.

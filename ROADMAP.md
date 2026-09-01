@@ -1,4 +1,4 @@
-# Schematically roadmap boundary
+# Roadmap boundary
 
 This file answers one question: **what belongs in the current RC, and what starts only after the RC merges?**
 

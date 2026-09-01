@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Review a schematic independently for structural coherence, boundary correctness, and public-format validity.
+Review a schematic independently for structural coherence, boundary correctness, and public-format validity. Terms follow `GLOSSARY.md`.
 
 ## Review order
 
@@ -15,7 +15,8 @@ Review a schematic independently for structural coherence, boundary correctness,
 7. Inspect Form controls for observable meaning: material, body thickness, frame, frame depth, interior state.
 8. Confirm checkpoints are non-recursive snapshots and current document remains loadable.
 9. Exercise API/MCP CRUD rather than trusting UI appearance.
-10. Report limitations separately from defects.
+10. Confirm no reading of direction, access, or packet operation is treated as authority.
+11. Report limitations separately from defects.
 
 ## Quality bar
 
@@ -26,7 +27,3 @@ A green review means:
 - `.sov` and `.sovpak` parse/round-trip;
 - API and MCP tools operate on the same semantic core;
 - locked/pinned/boundary invariants cannot be bypassed by ordinary editor operations.
-
-
-## Read/write axis
-Treat direction, access, and authority as separate. `direction ≠ access ≠ authority`. A Port access value constrains representable Read/Write packet operations; it does not grant authority.

@@ -1,6 +1,6 @@
 # Browser API — 0.1
 
-The browser exposes `window.SovSchematicAPI`. UI actions and API mutations share the same document/CRUD core.
+The browser exposes `window.SovSchematicAPI`. UI actions and API mutations share the same document/CRUD core. Terms follow `GLOSSARY.md`.
 
 ## Formats
 
@@ -48,16 +48,14 @@ Resources are `component`, `wire`, and `reference`.
 
 Every mutation produces the same revisioned receipt semantics as MCP/HTTP adapters. Wire writes cannot bypass surface/Port reachability.
 
-
 ## Editor/history API
 
 `window.SovSchematicAPI` additionally exposes `history.list/undo/redo`, `checkpoints.list/create/restore`, semantic selection clipboard helpers, and view appearance/global-rate accessors. MCP exposes history undo/redo and checkpoint list/create/restore for its file-backed document.
 
+## Direction, access, operation
 
-### Access axis
-Port Connections may carry `access: none | read | write | read-write`. Wire config may carry `forwardOperation` / `reverseOperation: none | read | write`. Direction, access, and authority are independent.
+Port connection slots carry `flow` and `access`; Wire config carries `forwardOperation` / `reverseOperation`. `DATA-FORMATS.md` defines the fields and values. None of them grants authority.
 
+## Port ids at Wire endpoints
 
-## Attachment IDs
-
-Wire endpoints accept canonical built-in attachment IDs (`self`, `start`, `end`, `left`, `right`, `top`), template-declared attachment IDs, or their document@0.1 compatibility Port IDs at Wire endpoints. Returned Wire records preserve canonical endpoint references in `aAttachment` / `bAttachment` while retaining `aSide` / `bSide` for compatibility.
+Wire endpoints accept a built-in Port id (`self`, `start`, `end`, `left`, `right`, `top`), a template-declared Port id, or a document@0.1 compatibility id (`in`, `out`, `control`). Returned Wire records carry the canonical id in `aAttachment.pointId` / `bAttachment.pointId` and keep `aSide` / `bSide` for compatibility.

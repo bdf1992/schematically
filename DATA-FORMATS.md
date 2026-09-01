@@ -1,6 +1,6 @@
 # Data formats — 0.1
 
-The editor now distinguishes a normal schematic file, a portable package, local workspace state, and CRUD envelopes.
+Four formats: the editable schematic file, a portable package, browser-local workspace state, and CRUD envelopes. Terms follow `GLOSSARY.md`.
 
 ## `.sov` — `soveraeign.schematic/document@0.1`
 
@@ -13,7 +13,7 @@ The normal editable schematic file. It contains semantic document state only:
 - spatial containment / surface membership;
 - document-owned layout metadata.
 
-It intentionally excludes local camera/grid/editor preferences so the schematic stays portable and deterministic.
+It excludes camera, grid, and editor preferences so the schematic stays portable and deterministic.
 
 MIME: `application/vnd.soveraeign.schematic+json`.
 
@@ -81,20 +81,18 @@ File import and CRUD Wire creation/update use the same reachability contract as 
 
 Loading a file cannot be used to make a child Component implicitly reach through its containing Component boundary.
 
-
 ## Editor utility fields
 
 Components and Wires may carry an `editor` object with `pinned`, `locked`, `hidden`, `opacity`, and `rate`. Named checkpoints persist in `document.meta.checkpoints`; each checkpoint stores a non-recursive document snapshot. Global rate is `document.meta.timeScale`.
 
+## Direction, access, operation
 
-### Access axis
-Port Connections may carry `access: none | read | write | read-write`. Wire config may carry `forwardOperation` / `reverseOperation: none | read | write`. Direction, access, and authority are independent.
+Each Port connection slot carries `flow: in | out | duplex | control` and `access: none | read | write | read-write`. Wire config carries `forwardOperation` / `reverseOperation: none | read | write`. Direction, access, and authority are independent axes; none of these fields grants permission.
 
+## Port compatibility
 
-## Attachment compatibility
-
-Normalized Components expose `parts.points` with canonical 0D identities. Wire endpoints additionally store `aAttachment` / `bAttachment` records containing canonical `pointId` values. Legacy `config.ports`, `parts.ports`, and `aSide` / `bSide` remain compatibility projections for document@0.1.
+Normalized Components expose `parts.points` with canonical Port ids. Wire endpoints additionally store `aAttachment` / `bAttachment` records containing canonical `pointId` values. Legacy `config.ports`, `parts.ports`, and `aSide` / `bSide` remain compatibility projections for document@0.1.
 
 ## Template attachment seam
 
-A 2D Component may declare additional boundary attachment descriptors under `config.attachmentPoints`, e.g. `{id, compatId?, side: left|right|top|bottom, t: 0..1, defaultFlow?}`. Built-in dimensional attachment sets remain defaults. Full Part/facet/cell grammar is intentionally post-RC.
+A 2D Component may declare additional boundary attachment descriptors under `config.attachmentPoints`, e.g. `{id, compatId?, side: left|right|top|bottom, t: 0..1, defaultFlow?}`. Built-in dimensional attachment sets remain defaults. The full Part/facet/cell grammar is post-RC.

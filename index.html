@@ -660,7 +660,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       </label>
       <details class="mini-disclosure"><summary><span class="info-dot">i</span> Drag modifiers</summary><div>Shift = half grid · Ctrl/Cmd = double grid · Alt = free.</div></details>
     </div>
-    <button class="btn active" id="flowBtn" title="Show circuit direction">Flow</button>
+    <button class="btn active" id="flowBtn" title="Show signal flow">Flow</button>
   </div>
 </header>
 
@@ -672,11 +672,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   <div class="section help-stack" aria-label="Schematic help">
     <details class="help-disclosure">
       <summary><b>Parts</b><span class="helper-snippet">owned structure</span><span class="info-dot">i</span></summary>
-      <div class="help-body"><b>Boundary</b> separates inside/outside. <b>Side</b> names boundary regions. <b>Port</b> is an addressable crossing or attachment.</div>
+      <div class="help-body"><b>Boundary</b> separates inside from outside. <b>Side</b> names a boundary region. <b>Port</b> is an addressable point where a Wire attaches or crosses.</div>
     </details>
     <details class="help-disclosure">
-      <summary><b>Wires</b><span class="helper-snippet">carry connections</span><span class="info-dot">i</span></summary>
-      <div class="help-body">A Wire connects Port faces. Endpoint markers belong to the Wire; Wire Parts are owned attachments such as taps and junctions.</div>
+      <summary><b>Wires</b><span class="helper-snippet">connect Ports</span><span class="info-dot">i</span></summary>
+      <div class="help-body">A Wire connects two Ports that share a surface. Endpoint markers belong to the Wire. A Port placed on a Wire is an ordinary 0D Component hosted by that Wire.</div>
     </details>
     <details class="help-disclosure">
       <summary><b>Marks</b><span class="helper-snippet">read the drawing</span><span class="info-dot">i</span></summary>
@@ -725,13 +725,13 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         <option value="duplex">Duplex</option>
         </select>
       </div>
-      <input id="barConnectionLabel" class="bar-input bar-label" type="text" placeholder="Label" aria-label="Connection label" title="Wire label">
+      <input id="barConnectionLabel" class="bar-input bar-label" type="text" placeholder="Label" aria-label="Wire label" title="Wire label">
     </div>
 
     <div class="selection-bar-fields" id="portBarFields" hidden>
       <div class="icon-select port-template-select" aria-label="Port placement">
         <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h8"></path><circle cx="16" cy="12" r="4"></circle></svg></span>
-        <select id="barPortSide" class="bar-select" aria-label="Port placement" title="Derived attachment position">
+        <select id="barPortSide" class="bar-select" aria-label="Port placement" title="Placement, derived from the host">
         <option value="left">Left</option>
         <option value="right">Right</option>
         <option value="top">Top</option>
@@ -850,10 +850,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       </div>
 
       <div id="wireSettingsFields" class="settings-surface" hidden>
-        <div class="settings-head"><b>Wire settings</b><span>Endpoint mapping and return semantics</span></div>
+        <div class="settings-head"><b>Wire settings</b><span>Return rule · packet operations · markers</span></div>
         <div class="settings-grid settings-grid-compact">
           <label>Return
-            <select id="barConnectionReciprocity" aria-label="Connection reciprocity" title="Return rule">
+            <select id="barConnectionReciprocity" aria-label="Wire return rule" title="Return rule">
               <option value="none">No return rule</option>
               <option value="expected">Return expected</option>
               <option value="required">Return required</option>
@@ -878,14 +878,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
           <label><span id="barWireInLabel">IN marker</span><input id="barWireInMarker" type="text" maxlength="12" placeholder="Ch" aria-label="Wire input channel marker"></label>
           <label>IN color <span id="barWireInColor" class="color-slot-chip readonly-slot" title="Input Port color"></span></label>
         </div>
-        <button id="barAddWirePortBtn" class="bar-action settings-action" type="button" title="Add a Port part to this wire">+ Port part</button>
+        <button id="barAddWirePortBtn" class="bar-action settings-action" type="button" title="Add a Port on this Wire">+ Port</button>
       </div>
 
       <div id="portSettingsFields" class="settings-surface" hidden>
-        <div class="settings-head"><b>Attachment settings</b><span>Boundary face and signal behavior</span></div>
+        <div class="settings-head"><b>Port settings</b><span>Face · direction · access</span></div>
         <div class="settings-grid settings-grid-compact">
           <label>Face
-            <select id="barPortFace" aria-label="Port face" title="Inside/outside face">
+            <select id="barPortFace" aria-label="Port face" title="Which side of the boundary this Port is exposed to">
               <option value="external">Outside</option>
               <option value="internal">Inside</option>
               <option value="both">Both</option>
@@ -946,7 +946,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       </dl>
     </div>
     <div id="portDetail" hidden>
-      <div class="kind-badge">PORT PART</div>
+      <div class="kind-badge">PORT</div>
       <dl class="kv">
         <dt>Owner</dt><dd id="pOwner"></dd>
         <dt>Port</dt><dd id="pId"></dd>
@@ -959,7 +959,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         <dt>Access</dt><dd id="pAccess"></dd>
         <dt>Port color</dt><dd id="pColor"></dd>
       </dl>
-      <details class="inline-help"><summary><span class="info-dot">i</span> Port behavior</summary><div>Direction controls input/output. Access controls read/write capability. Face controls inside/outside boundary placement. Access is not authority.</div></details>
+      <details class="inline-help"><summary><span class="info-dot">i</span> Port behavior</summary><div>Direction controls input/output. Access controls what a packet can represent: Read, Write, or both. Face controls which side of the boundary the Port is exposed to. Access is not authority.</div></details>
     </div>
     <div id="connectionDetail" hidden>
       <div class="kind-badge">WIRE</div>
@@ -974,10 +974,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         <dt>Parts</dt><dd id="cWireParts"></dd>
         <dt>Label</dt><dd id="cLabel">—</dd>
       </dl>
-      <details class="inline-help"><summary><span class="info-dot">i</span> Wire mapping</summary><div>The Wire maps endpoint connections and concrete packet operations. Port access declares capability; packet R/W declares the concrete operation. Access is not authority.</div></details>
+      <details class="inline-help"><summary><span class="info-dot">i</span> Wire mapping</summary><div>Port access declares what a Port can represent. The Wire's OUT and RETURN operations declare what each packet does: Signal, Read, or Write. Access is not authority.</div></details>
     </div>
   </div>
-  <div class="section"><details class="help-disclosure"><summary><b>Reading</b><span class="helper-snippet">exists · carries · resolves</span><span class="info-dot">i</span></summary><div class="help-body"><b>Component</b> exists · <b>Connection</b> carries · <b>Reference</b> resolves · <b>Modifier</b> qualifies.</div></details></div>
+  <div class="section"><details class="help-disclosure"><summary><b>Reading</b><span class="helper-snippet">exists · carries · resolves</span><span class="info-dot">i</span></summary><div class="help-body"><b>Component</b> exists · <b>Wire</b> carries · <b>Reference</b> resolves.</div></details></div>
 </aside>
 </div>
 
@@ -4212,7 +4212,7 @@ function addConnection(a,aSide,b,bSide){
   if(findEquivalentWire(a,aSide,b,bSide)>=0)return true;
 
   const reverse=findReverseWire(a,aSide,b,bSide);
-  if(reverse>=0){const cfg=connectionConfig(wires[reverse]);cfg.direction='duplex';wires[reverse].duplex=true;ensureDuplexEndpointFlows(wires[reverse]);wires[reverse].canvasId=reach.canvasId;routeCache.delete(reverse);selected=`wire:${reverse}`;statusEl.textContent='Duplex connection';return true}
+  if(reverse>=0){const cfg=connectionConfig(wires[reverse]);cfg.direction='duplex';wires[reverse].duplex=true;ensureDuplexEndpointFlows(wires[reverse]);wires[reverse].canvasId=reach.canvasId;routeCache.delete(reverse);selected=`wire:${reverse}`;statusEl.textContent='Duplex Wire';return true}
   const wire=SovSchematicData.makeWire(diagram,{a,b,aSide,bSide});
   wires.push(wire);wireCanvas(wire);
   const id=wires.length-1;routeCache.delete(id);selected=`wire:${id}`;refreshCanvasScopeControl();return true;
@@ -5027,7 +5027,7 @@ window.addEventListener('unhandledrejection',()=>{if(activeNodeDragState)finishA
 
 function growBlankFromConnection(sourceNode,sourcePointId,P,mods){
   const source=nodes.find(n=>n.id===sourceNode),sourceSpec=source?Attachment.resolveSpec(source,sourcePointId):null;
-  if(!source||!sourceSpec){statusEl.textContent='Attachment no longer exists';return null}
+  if(!source||!sourceSpec){statusEl.textContent='Port no longer exists';return null}
   const sourceCompat=sourceSpec.compatId;
 
   // Release is a settle event, so the new Blank may align to the current grid.
@@ -5361,7 +5361,7 @@ function deleteSelected(){
   }else if(isAttachmentSelectionValue(selected)){
     // Canonical attachment points are structural topology of the current host form.
     // Delete does not silently change dimensional cardinality.
-    statusEl.textContent='Attachment point is structural';
+    statusEl.textContent='Port is structural · delete refused';
     return;
   }else{
     const ids=selectedComponentIds.size?[...selectedComponentIds]:[selected];
@@ -5438,14 +5438,14 @@ barWireReturnOperation.addEventListener('change',()=>{
   const i=Number(selected.split(':')[1]);selectWire(i);scheduleHistoryCapture();
 });
 barAddWirePortBtn.addEventListener('click',()=>{
-  const w=mutableSelectedConnection('Add attachment point');if(!w)return;
+  const w=mutableSelectedConnection('Add Port');if(!w)return;
   const cfg=connectionConfig(w),hosted=nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&componentForm(n).dimension===0);
   const offsets=[0,.14,-.14,.28,-.28,.38,-.38],t=Math.max(.08,Math.min(.92,.5+(offsets[hosted.length]??0)));
   const channel=wireOutConnection(w),path=renderedWirePath(w);let x=0,y=0;
   if(path){const q=path.getPointAtLength(path.getTotalLength()*t);x=q.x;y=q.y}
   const ports={out:{side:'point',face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',name:'Connection 1',colorSlot:channel.colorSlot,flow:cfg.direction==='duplex'?'duplex':'out',access:'read-write'}]}};
   const point=SovSchematicData.makeComponent(diagram,{symbolId:'port',x,y,canvasId:wireCanvas(w).id,placement:{kind:'wire',wireId:w.id,t},form:{dimension:0,body:{kind:'point',material:'generic',thickness:0},frame:{mode:'none',thickness:0,depth:0},regions:{interior:{state:'closed'}}},config:{label:'',colorSlot:channel.colorSlot,signalMode:'relay',presentation:{graphic:{kind:'none',ref:'sym-port',svg:''},labelMode:'none',backdrop:'none'},ports}});
-  nodes.push(point);syncNodeBoundaryContext(point);render();selectPort(point.id,'self');scheduleHistoryCapture();statusEl.textContent='Attachment point added';
+  nodes.push(point);syncNodeBoundaryContext(point);render();selectPort(point.id,'self');scheduleHistoryCapture();statusEl.textContent='Port added';
 });
 barConnectionLabel.addEventListener('input',()=>{
   const w=mutableSelectedConnection('Edit Wire label');if(!w)return;

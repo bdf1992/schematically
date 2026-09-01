@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Operate SOV Schematic through its public data, browser API, HTTP, and MCP surfaces.
+Operate SOV Schematic through its public data, browser API, HTTP, and MCP surfaces. Terms follow `GLOSSARY.md`.
 
 ## Canonical formats
 
@@ -51,6 +51,4 @@ Additional server tools:
 
 Do not treat successful transport as semantic validity. A valid Wire must still satisfy Port/surface reachability.
 
-
-## Read/write axis
-Treat direction, access, and authority as separate. `direction ≠ access ≠ authority`. A Port access value constrains representable Read/Write packet operations; it does not grant authority.
+Direction, access, and authority are independent axes. A Port's access constrains which Read/Write packet operations a Wire can represent; it never grants authority.

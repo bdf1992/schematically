@@ -473,7 +473,7 @@ function addConnection(a,aSide,b,bSide){
   if(findEquivalentWire(a,aSide,b,bSide)>=0)return true;
 
   const reverse=findReverseWire(a,aSide,b,bSide);
-  if(reverse>=0){const cfg=connectionConfig(wires[reverse]);cfg.direction='duplex';wires[reverse].duplex=true;ensureDuplexEndpointFlows(wires[reverse]);wires[reverse].canvasId=reach.canvasId;routeCache.delete(reverse);selected=`wire:${reverse}`;statusEl.textContent='Duplex connection';return true}
+  if(reverse>=0){const cfg=connectionConfig(wires[reverse]);cfg.direction='duplex';wires[reverse].duplex=true;ensureDuplexEndpointFlows(wires[reverse]);wires[reverse].canvasId=reach.canvasId;routeCache.delete(reverse);selected=`wire:${reverse}`;statusEl.textContent='Duplex Wire';return true}
   const wire=SovSchematicData.makeWire(diagram,{a,b,aSide,bSide});
   wires.push(wire);wireCanvas(wire);
   const id=wires.length-1;routeCache.delete(id);selected=`wire:${id}`;refreshCanvasScopeControl();return true;

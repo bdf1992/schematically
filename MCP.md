@@ -1,8 +1,6 @@
 # MCP + HTTP surface — 0.1
 
-`mcp/server.mjs` is restored to the distributable package and imports the same `src/05-data-core.js` used by the browser.
-
-Default durable server file: `data/schematic.sov`.
+`mcp/server.mjs` imports the same `src/05-data-core.js` the browser uses. Default durable server file: `data/schematic.sov`. Terms follow `GLOSSARY.md`.
 
 ## MCP
 
@@ -10,33 +8,29 @@ Default durable server file: `data/schematic.sov`.
 POST /mcp
 ```
 
-Tools:
+Tools, as listed in `mcp/tools.json`:
 
-- `schematic.list`
-- `schematic.get`
-- `schematic.create`
-- `schematic.update`
-- `schematic.delete`
-- `schematic.document.get`
-- `schematic.document.replace`
+- `schematic.list`, `schematic.get`, `schematic.create`, `schematic.update`, `schematic.delete`
+- `schematic.document.get`, `schematic.document.replace`
+- `schematic.history.undo`, `schematic.history.redo`
+- `schematic.checkpoint.list`, `schematic.checkpoint.create`, `schematic.checkpoint.restore`
 
 Resources: `component`, `wire`, `reference`.
 
 ## HTTP
 
-`GET /api/v1/formats` advertises document, package, workspace, operation, and receipt schemas.
+`GET /api/v1/formats` advertises the document, package, workspace, operation, and receipt schemas. `/api/v1/components`, `/api/v1/wires`, and `/api/v1/references` expose the same CRUD as the MCP tools.
 
-The server persists the canonical `.sov` document. `.sovpak` is a transport/package format around that same document rather than a second mutable authority.
+The server persists the canonical `.sov` document. `.sovpak` is a package around that same document, not a second mutable authority.
 
 ## Boundary rule
 
-MCP/HTTP Wire writes use the same reachability function as the UI. A child Component cannot use an API mutation to reach an outer Port that is not exposed to its surface.
+MCP and HTTP Wire writes use the same reachability function as the UI. A child Component cannot use an API mutation to reach an outer Port that is not exposed to its surface. A refused write returns a receipt with `ok: false` and does not enter history.
 
+## Direction, access, operation
 
-### Access axis
-Port Connections may carry `access: none | read | write | read-write`. Wire config may carry `forwardOperation` / `reverseOperation: none | read | write`. Direction, access, and authority are independent.
+Same fields as the browser API: `DATA-FORMATS.md` defines `flow`, `access`, `forwardOperation`, and `reverseOperation`. None of them grants authority.
 
+## Port ids
 
-## Attachment compatibility
-
-Agent calls may author Wire endpoints with canonical 0D point IDs or legacy Port IDs. The shared data core validates both through the same attachment-point concern; MCP does not have a separate Port legality implementation.
+Agent calls may name Wire endpoints with canonical Port ids or document@0.1 compatibility ids; `API.md` lists both. The shared data core validates both. MCP has no separate legality implementation.

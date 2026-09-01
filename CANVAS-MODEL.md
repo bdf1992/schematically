@@ -1,6 +1,6 @@
 # Canvas model — 0.1
 
-Canvas is a **model property**, not a UI mode. There is no persistent Canvas mode or context badge in the toolbar.
+Canvas is a **model property**, not a UI mode. In prose this document and `GLOSSARY.md` call it a surface.
 
 ## Surfaces
 
@@ -14,12 +14,12 @@ A Component carries `canvasId`, meaning **the surface it currently lives on**. D
 
 Ports are exposed to surfaces:
 
-- `outside`/`external` → Component's containing canvas.
-- `inside`/`internal` → Component's own local canvas.
+- `external` (Outside) → the Component's containing surface.
+- `internal` (Inside) → the Component's own interior surface.
 - `both` → both surfaces.
 
-A Wire may only be created when its two endpoint Ports are exposed to at least one identical canvas. The Wire is assigned to that shared canvas.
+A Wire may only be created when its two endpoint Ports are exposed to at least one shared surface. The Wire is assigned to that surface.
 
-Therefore a child Component cannot wire directly to its container's outside Port. It must use an inside-facing Port (or a `both` Port) exposed to the child's local surface.
+Therefore a child Component cannot wire directly to its container's outside Port. It must use a parent Port whose face is Inside or Both, which is exposed to the child's surface.
 
 **Invariant:** no implicit reach-through across a Component boundary.

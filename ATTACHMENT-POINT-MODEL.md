@@ -1,6 +1,6 @@
 # Attachment Point Model — 0.1
 
-Port is no longer an independent geometry subsystem. The canonical primitive is a **0D attachment point**.
+Port is no longer an independent geometry subsystem. The canonical primitive is a **0D attachment point**. The editor, the API docs, and the skills call this primitive a **Port**; this document says *attachment point* when it means the implementation concern (`src/06-attachment-core.js`) and its records.
 
 ## Cardinality
 
@@ -26,7 +26,7 @@ A 0D Component **is** its attachment point. It does not contain another Port.
 - `parts.points` is the authoritative normalized point projection.
 - Wire `aSide/bSide` remain compatibility names while `aAttachment/bAttachment.pointId` stores `start/end/self/left/right/top`.
 
-The compatibility layer is intentionally removable in a future file-format transition.
+A future file-format transition can remove the compatibility layer.
 
 
 ## Interaction authority

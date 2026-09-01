@@ -64,7 +64,7 @@ function deleteSelected(){
   }else if(isAttachmentSelectionValue(selected)){
     // Canonical attachment points are structural topology of the current host form.
     // Delete does not silently change dimensional cardinality.
-    statusEl.textContent='Attachment point is structural';
+    statusEl.textContent='Port is structural · delete refused';
     return;
   }else{
     const ids=selectedComponentIds.size?[...selectedComponentIds]:[selected];
@@ -141,14 +141,14 @@ barWireReturnOperation.addEventListener('change',()=>{
   const i=Number(selected.split(':')[1]);selectWire(i);scheduleHistoryCapture();
 });
 barAddWirePortBtn.addEventListener('click',()=>{
-  const w=mutableSelectedConnection('Add attachment point');if(!w)return;
+  const w=mutableSelectedConnection('Add Port');if(!w)return;
   const cfg=connectionConfig(w),hosted=nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&componentForm(n).dimension===0);
   const offsets=[0,.14,-.14,.28,-.28,.38,-.38],t=Math.max(.08,Math.min(.92,.5+(offsets[hosted.length]??0)));
   const channel=wireOutConnection(w),path=renderedWirePath(w);let x=0,y=0;
   if(path){const q=path.getPointAtLength(path.getTotalLength()*t);x=q.x;y=q.y}
   const ports={out:{side:'point',face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',name:'Connection 1',colorSlot:channel.colorSlot,flow:cfg.direction==='duplex'?'duplex':'out',access:'read-write'}]}};
   const point=SovSchematicData.makeComponent(diagram,{symbolId:'port',x,y,canvasId:wireCanvas(w).id,placement:{kind:'wire',wireId:w.id,t},form:{dimension:0,body:{kind:'point',material:'generic',thickness:0},frame:{mode:'none',thickness:0,depth:0},regions:{interior:{state:'closed'}}},config:{label:'',colorSlot:channel.colorSlot,signalMode:'relay',presentation:{graphic:{kind:'none',ref:'sym-port',svg:''},labelMode:'none',backdrop:'none'},ports}});
-  nodes.push(point);syncNodeBoundaryContext(point);render();selectPort(point.id,'self');scheduleHistoryCapture();statusEl.textContent='Attachment point added';
+  nodes.push(point);syncNodeBoundaryContext(point);render();selectPort(point.id,'self');scheduleHistoryCapture();statusEl.textContent='Port added';
 });
 barConnectionLabel.addEventListener('input',()=>{
   const w=mutableSelectedConnection('Edit Wire label');if(!w)return;
