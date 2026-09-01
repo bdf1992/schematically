@@ -1,4 +1,4 @@
-# Attachment Point Model — Beta.24
+# Attachment Point Model — 0.1
 
 Port is no longer an independent geometry subsystem. The canonical primitive is a **0D attachment point**.
 
@@ -26,10 +26,10 @@ A 0D Component **is** its attachment point. It does not contain another Port.
 - `parts.points` is the authoritative normalized point projection.
 - Wire `aSide/bSide` remain compatibility names while `aAttachment/bAttachment.pointId` stores `start/end/self/left/right/top`.
 
-The compatibility layer is intentionally removable after the Beta file-format transition.
+The compatibility layer is intentionally removable in a future file-format transition.
 
 
-## Beta.24 interaction authority
+## Interaction authority
 
 A Wire tap is no longer an authoritative `wire.attachments[]` Port. It is an ordinary **0D Component hosted by the Wire**. Legacy Wire Port/point attachments are migrated into hosted 0D Components during document normalization.
 

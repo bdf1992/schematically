@@ -1,4 +1,4 @@
-# File model — 0.1 Beta.24
+# File model — 0.1
 
 ## File menu
 
@@ -30,7 +30,7 @@ package
 └─ meta
 ```
 
-Beta.24 deliberately keeps the package JSON-readable. Compression can be introduced later as a container encoding without changing these package members.
+The package format deliberately stays JSON-readable. Compression can be introduced later as a container encoding without changing these package members.
 
 ## Recovery
 

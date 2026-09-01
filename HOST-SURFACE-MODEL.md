@@ -1,4 +1,4 @@
-# Host Surface Model — 0.1 Beta.24
+# Host Surface Model — 0.1
 
 A Component is not a box. It is a semantic entity that can be projected on different host surfaces.
 
@@ -12,10 +12,10 @@ The same drag/settle resolver chooses an open Component interior first, otherwis
 
 `presentation.backdrop`: `auto | none | body | frame`.
 
-Beta.24 makes placement/projection structural. It does not infer packet-processing semantics solely from being visually inline; those semantics must remain explicit.
+Placement/projection is structural. It does not infer packet-processing semantics solely from being visually inline; those semantics must remain explicit.
 
 
-## Beta.24 inline anchoring
+## Inline anchoring
 
 A Component settled onto a Wire is projected from the Wire's local geometry rather than merely positioned nearby:
 

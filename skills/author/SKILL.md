@@ -1,4 +1,4 @@
-# SOV Schematic Author Skill — 0.1 Public Beta
+# SOV Schematic Author Skill — 0.1
 
 ## Purpose
 

@@ -37,7 +37,7 @@ A Wire is legal only if the endpoint exposure sets share a surface.
 - On input = relay behavior
 - Passive = does not originate packet flow
 
-Packet travel rate in the Beta projection is:
+Packet travel rate in the current projection is:
 
 `global time scale × source Component rate × Wire rate`
 

@@ -1,6 +1,6 @@
 # Classic examples
 
-These files are executable reference material for the 0.1 public-beta contract.
+These files are executable reference material for the 0.1 contract.
 
 | File | Demonstrates |
 | --- | --- |

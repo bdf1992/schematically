@@ -1,4 +1,4 @@
-# SOV Schematic Operator Skill — 0.1 Public Beta
+# SOV Schematic Operator Skill — 0.1
 
 ## Purpose
 

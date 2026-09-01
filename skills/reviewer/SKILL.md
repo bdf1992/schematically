@@ -1,4 +1,4 @@
-# SOV Schematic Reviewer Skill — 0.1 Public Beta
+# SOV Schematic Reviewer Skill — 0.1
 
 ## Purpose
 
@@ -17,7 +17,7 @@ Review a schematic independently for structural coherence, boundary correctness,
 9. Exercise API/MCP CRUD rather than trusting UI appearance.
 10. Report limitations separately from defects.
 
-## Public-beta quality bar
+## Quality bar
 
 A green review means:
 - standalone `index.html` boots;

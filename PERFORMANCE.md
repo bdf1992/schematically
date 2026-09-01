@@ -1,8 +1,8 @@
-# Performance — 0.1 Beta.24
+# Performance — 0.1
 
 ## Decision
 
-Keep vanilla JavaScript + SVG for the 0.1 public beta. The severe small-diagram lag was a repeated-computation defect rather than evidence that the stack itself must be replaced.
+Keep vanilla JavaScript + SVG for the 0.1 line. The severe small-diagram lag was a repeated-computation defect rather than evidence that the stack itself must be replaced.
 
 ## Current regression measurements
 

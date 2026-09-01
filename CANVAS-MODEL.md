@@ -1,4 +1,4 @@
-# Canvas model — 0.1 Beta.7
+# Canvas model — 0.1
 
 Canvas is a **model property**, not a UI mode. There is no persistent Canvas mode or context badge in the toolbar.
 

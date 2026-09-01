@@ -1,4 +1,4 @@
-# Data formats — 0.1 Beta.24
+# Data formats — 0.1
 
 The editor now distinguishes a normal schematic file, a portable package, local workspace state, and CRUD envelopes.
 
@@ -21,7 +21,7 @@ Schema: `formats/schematic.document.schema.json`.
 
 ## `.sovpak` — `soveraeign.schematic/package@0.1`
 
-Portable package file. Beta.24 uses a transparent JSON package rather than a binary archive so humans, MCP clients, version control, and validators can inspect it directly.
+Portable package file. The package is a transparent JSON package rather than a binary archive so humans, MCP clients, version control, and validators can inspect it directly.
 
 A package contains:
 
@@ -82,19 +82,19 @@ File import and CRUD Wire creation/update use the same reachability contract as 
 Loading a file cannot be used to make a child Component implicitly reach through its containing Component boundary.
 
 
-## Editor utility fields (Beta.24)
+## Editor utility fields
 
 Components and Wires may carry an `editor` object with `pinned`, `locked`, `hidden`, `opacity`, and `rate`. Named checkpoints persist in `document.meta.checkpoints`; each checkpoint stores a non-recursive document snapshot. Global rate is `document.meta.timeScale`.
 
 
-### Beta.24 access axis
+### Access axis
 Port Connections may carry `access: none | read | write | read-write`. Wire config may carry `forwardOperation` / `reverseOperation: none | read | write`. Direction, access, and authority are independent.
 
 
-## Beta.24 attachment compatibility
+## Attachment compatibility
 
 Normalized Components expose `parts.points` with canonical 0D identities. Wire endpoints additionally store `aAttachment` / `bAttachment` records containing canonical `pointId` values. Legacy `config.ports`, `parts.ports`, and `aSide` / `bSide` remain compatibility projections for document@0.1.
 
-## Beta.24 template attachment seam
+## Template attachment seam
 
 A 2D Component may declare additional boundary attachment descriptors under `config.attachmentPoints`, e.g. `{id, compatId?, side: left|right|top|bottom, t: 0..1, defaultFlow?}`. Built-in dimensional attachment sets remain defaults. Full Part/facet/cell grammar is intentionally post-RC.

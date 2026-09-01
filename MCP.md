@@ -1,4 +1,4 @@
-# MCP + HTTP surface — 0.1 Beta.24
+# MCP + HTTP surface — 0.1
 
 `mcp/server.mjs` is restored to the distributable package and imports the same `src/05-data-core.js` used by the browser.
 
@@ -33,7 +33,7 @@ The server persists the canonical `.sov` document. `.sovpak` is a transport/pack
 MCP/HTTP Wire writes use the same reachability function as the UI. A child Component cannot use an API mutation to reach an outer Port that is not exposed to its surface.
 
 
-### Beta.24 access axis
+### Access axis
 Port Connections may carry `access: none | read | write | read-write`. Wire config may carry `forwardOperation` / `reverseOperation: none | read | write`. Direction, access, and authority are independent.
 
 

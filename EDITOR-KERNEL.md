@@ -1,4 +1,4 @@
-# Editor Kernel — 0.1 Beta.24
+# Editor Kernel — 0.1
 
 The editor kernel is deliberately separate from schematic semantics.
 
@@ -16,7 +16,7 @@ The editor kernel is deliberately separate from schematic semantics.
 - **Search**: blank-canvas typing opens search/command; nonmatches are temporarily desaturated.
 - **Objects**: fallback Inspector surface when nothing is selected.
 - **Appearance**: Light/Dark/System editor chrome. Authored schematic palette remains document semantics.
-- **Rate**: global × source Component × Wire multiplier controls packet travel timing in the Beta model.
+- **Rate**: global × source Component × Wire multiplier controls packet travel timing.
 
 ## Invariants
 
@@ -28,5 +28,5 @@ The editor kernel is deliberately separate from schematic semantics.
 6. Checkpoints persist with the save file; undo/redo stacks are session-local.
 
 
-### Beta.24 access axis
+### Access axis
 Port Connections may carry `access: none | read | write | read-write`. Wire config may carry `forwardOperation` / `reverseOperation: none | read | write`. Direction, access, and authority are independent.
