@@ -614,7 +614,7 @@ function componentPortLocalPosition(n,pointId){
   if(spec.side==='bottom')return{x:alongX,y:size.h/2+faceOffset};
   return{x:0,y:0};
 }
-function renderedWirePath(w){return wiresG.querySelector(`.wire-group[data-wire-id="${w.id}"] .wire`)}
+function renderedWirePath(w){return workspace.querySelector(`.wire-group[data-wire-id="${w.id}"] .wire`)}
 function pathTangentAngleAtLength(path,length){
   if(!path?.getTotalLength)return 0;const L=path.getTotalLength(),eps=Math.max(.35,Math.min(2,L/500));
   const here=path.getPointAtLength(Math.max(0,Math.min(L,length)));

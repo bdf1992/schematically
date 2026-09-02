@@ -79,20 +79,8 @@ EXPORT_JS = r"""
   clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
   clone.querySelectorAll('.port-hit,.wire-hit').forEach(x => x.remove());
 
-  // The editor paints every wire in one layer beneath the nodes, so a wire on a local
-  // surface (inside a Plane or Component) is hidden by its host's body until the host is
-  // entered. A static picture has no "enter", so lift each local-surface wire to just after
-  // its host: above the host body, below the hosted children that follow it.
-  const nodesLayer = clone.querySelector('#nodes');
-  if (nodesLayer && Array.isArray(typeof wires !== 'undefined' ? wires : null)) {
-    for (const group of [...clone.querySelectorAll('#wires .wire-group')]) {
-      const wire = wires.find(w => w.id === group.dataset.wireId);
-      const canvasId = wire?.canvasId || '';
-      if (!canvasId.startsWith('canvas:component:')) continue;
-      const host = nodesLayer.querySelector(`.node[data-id="${canvasId.slice('canvas:component:'.length)}"]`);
-      if (host) host.after(group);
-    }
-  }
+  // A wire on a local surface already sits just after its host in the node layer
+  // (renderWires), so the picture shows it above the host body with no lifting here.
 
   const defs = document.querySelector('.hidden-symbols defs').cloneNode(true);
   clone.insertBefore(defs, clone.firstChild);
