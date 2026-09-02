@@ -32,7 +32,7 @@ Saved documents carry authored truth only. Runtime projections (local canvas des
 
 Schemas live in `formats/`; `DATA-FORMATS.md` explains them.
 
-`python scripts/export_svg.py [file.sov ...] [--out DIR] [--appearance light|dark]` renders documents to standalone `.svg` files headlessly (defaults to every example). Computed styles are inlined, so the files render outside the editor, for example as images in markdown. `tests/svg_export_qa.py` keeps the examples exporting. `node scripts/validate_sov.mjs file.sov` validates documents headlessly with the same data core.
+`python scripts/export_svg.py [file.sov ...] [--out DIR] [--appearance light|dark] [--loop]` renders documents to standalone `.svg` files headlessly (defaults to every example). Computed styles are inlined, so the files render outside the editor, for example as images in markdown. Packet travel times come from path length and rate, so an export animates without ever repeating; `--loop` snaps every animation to a divisor of one period so the file returns to where it began, moving no travel time further than a stated budget. `python scripts/loop_svg.py file.svg --record file.gif` writes one loop as a GIF, animated WebP, or APNG, stepping the SVG clock rather than sleeping between frames. `tests/svg_export_qa.py` keeps the examples exporting and `tests/loop_svg_qa.py` checks that a looped export is actually back at its start after its period. `node scripts/validate_sov.mjs file.sov` validates documents headlessly with the same data core.
 
 ## Agent surfaces
 
