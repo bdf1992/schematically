@@ -14,6 +14,7 @@
 - `75-persistence.js` — File lifecycle, `.sov`/`.sovpak`, recovery, rehydration.
 - `80-bootstrap.js` — global controls/keyboard/startup.
 - `85-api.js` — browser API adapter.
+- `87-live.js` — live link: publishes a read-only snapshot of this editor session (file, revision, camera, selection, document) to a local server. Off unless started; no other module talks to the link.
 
 File lifecycle belongs in `75-persistence.js`; no other concern should independently serialize, download, open, or replace schematic files.
 

@@ -44,6 +44,7 @@ BROWSER=[
     'tests/menu_dismissal_qa.py',
     'tests/appearance_history_qa.py',
     'tests/agent_api_mcp_golden_qa.py',
+    'tests/live_link_qa.py',
     'tests/skills_conformance_qa.py',
     'tests/render_idempotence_qa.py',
     'tests/drag_lifecycle_stress_qa.py',

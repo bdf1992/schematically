@@ -22,6 +22,22 @@ Tools:
 
 Resources: `component`, `wire`, `reference`.
 
+### Live link (read-only)
+
+- `schematic.live.selection` — what the browser editor currently has selected: kind (`component` / `wire` / `point` / `none`), the ids, and the selected record. No document body.
+- `schematic.live.get` — the whole editor snapshot: file name and revision, dirty flag, counts, camera and appearance, selection, and the in-browser document.
+
+Both answer `connected:false` when no editor is pushing, and carry `ageMs` and `stale` so an old snapshot is never mistaken for a live one. The snapshot is the **unsaved editor state**, which is a different document from the `.sov` file this server owns; `schematic.document.get` still reads the server's file.
+
+The editor must be asked to publish: open it with `?live=1` (or `?live=http://host:port`), or call `window.SovSchematicLive.start()`. It pushes on every selection and revision change, plus a heartbeat, and stops with `SovSchematicLive.stop()`. Pushing never mutates the server document.
+
+```text
+POST /api/v1/live      # editor -> server, schema soveraeign.schematic/live@0.1
+GET  /api/v1/live      # full snapshot with age
+GET  /api/v1/live?selection=1   # same without the document body
+```
+
+
 ## HTTP
 
 `GET /api/v1/formats` advertises document, package, workspace, operation, and receipt schemas.

@@ -38,6 +38,8 @@ Schemas live in `formats/`; `DATA-FORMATS.md` explains them.
 
 `window.SovSchematicAPI` (browser), a REST surface, and an MCP server (`mcp/server.mjs`) all delegate to the same transport-neutral data core — agent-created records cannot bypass editor legality, refusals return receipts without entering history, and history/checkpoints are operable over MCP. See `API.md` and `MCP.md`.
 
+A running editor can also publish what it is doing. Started with `?live=1` or `SovSchematicLive.start()`, it pushes a read-only snapshot — file, revision, camera, appearance and the current selection with its record — to the local server, where `schematic.live.selection` and `schematic.live.get` read it back. That snapshot is the unsaved browser state, so an agent can see what a person has selected while they are talking about it; it is observation only and never changes the server's document.
+
 The agent-facing corpus ships with the repository:
 
 - `AGENTS.md` — repository invariants and concern contract
