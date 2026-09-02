@@ -28,7 +28,7 @@ One desktop-style **File** menu: New, Open, Save, Save As, Export SVG, Export Pa
 - recovery → `soveraeign.schematic/workspace@0.1`
 - CRUD envelopes → `operation@0.1` / `receipt@0.1`
 
-Saved documents carry authored truth only. Runtime projections (local canvas descriptors, boundary/parts, port-level mirrors, realized colors) are rebuilt on load and never written, so a `.sov` is a few lines per entity. Older files that still carry those projections load unchanged.
+Saved documents carry authored truth only. Runtime projections (local canvas descriptors, boundary/parts, port-level mirrors, realized colors) are rebuilt on load and never written, so a `.sov` is a few lines per entity. Older files that still carry those projections load unchanged. A sparse record takes its symbol's template preset on load exactly as the API applies it, so a hand-written file and an API-created document normalize to the same records.
 
 Schemas live in `formats/`; `DATA-FORMATS.md` explains them.
 

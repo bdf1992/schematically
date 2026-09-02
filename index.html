@@ -1219,6 +1219,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!isObject(doc.layout))doc.layout={};
     for(const component of doc.components){
       normalizeComponentIdentity(component);
+      applyTemplatePreset(component);
       component.form=normalizeComponentForm(component.form,component.canvas);
       if(!isObject(component.canvas))component.canvas={};
       component.canvas.id=`canvas:component:${component.id||'unknown'}`;component.canvas.scope='local';component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
@@ -1317,6 +1318,18 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     }
     return component;
   }
+  // A sparse record (a hand-written file, a compact save) takes the same template
+  // preset makeComponent applies through the API, and only where the record supplies
+  // nothing: authored fields always win.
+  function applyTemplatePreset(component){
+    const preset=templatePreset(component.symbolId)||{};
+    if(!isObject(component.config))component.config={};
+    if(!isObject(component.form)&&isObject(preset.form))component.form=clone(preset.form);
+    if(!isObject(component.config.presentation)&&isObject(preset.presentation))component.config.presentation=clone(preset.presentation);
+    if(!['source','relay','passive'].includes(component.config.signalMode)&&preset.signalMode)component.config.signalMode=preset.signalMode;
+    if(!['standard','none'].includes(component.config.attachmentDefaults)&&preset.attachmentDefaults==='none')component.config.attachmentDefaults='none';
+    return component;
+  }
   function normalizeComponentIdentity(component){
     component.symbolId=normalizeSymbolId(component.symbolId||component.type);
     component.type=component.symbolId==='blank'?null:component.symbolId;
@@ -1399,19 +1412,18 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   function makeComponent(doc,value={}){
     const symbolId=normalizeSymbolId(value.symbolId||value.type);
-    const preset=templatePreset(symbolId)||{};
+    const seed=applyTemplatePreset({symbolId,form:isObject(value.form)?clone(value.form):null,config:isObject(value.config)?clone(value.config):{}});
     const id=cleanString(value.id,nextId(doc.components,'c'));
     const canvasId=cleanString(value.canvasId,GLOBAL_CANVAS_ID);
-    const form=normalizeComponentForm(isObject(value.form)?value.form:preset.form,value.canvas);
+    const form=normalizeComponentForm(seed.form,value.canvas);
     const config={
       label:cleanString(value.config?.label||value.label,''),
       colorSlot:Math.max(0,Math.trunc(num(value.config?.colorSlot,0))),
-      signalMode:['source','relay','passive'].includes(value.config?.signalMode)?value.config.signalMode:(preset.signalMode||'source'),
-      presentation:isObject(value.config?.presentation)?clone(value.config.presentation):(preset.presentation?clone(preset.presentation):{}),
+      signalMode:['source','relay','passive'].includes(seed.config.signalMode)?seed.config.signalMode:'source',
+      presentation:isObject(seed.config.presentation)?clone(seed.config.presentation):{},
       ports:isObject(value.config?.ports)?clone(value.config.ports):{}
     };
-    const attachmentDefaults=['standard','none'].includes(value.config?.attachmentDefaults)?value.config.attachmentDefaults:preset.attachmentDefaults;
-    if(attachmentDefaults&&attachmentDefaults!=='standard')config.attachmentDefaults=attachmentDefaults;
+    if(['standard','none'].includes(seed.config.attachmentDefaults))config.attachmentDefaults=seed.config.attachmentDefaults;
     if(Array.isArray(value.config?.attachmentPoints)&&value.config.attachmentPoints.length)config.attachmentPoints=clone(value.config.attachmentPoints);
     const component={
       id,
@@ -1441,7 +1453,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     delete c.canvas;delete c.boundary;delete c.parts;delete c.type;delete c.incomplete;
     if(isObject(c.config)){
       delete c.config.color;
-      if(c.config.attachmentDefaults==='standard')delete c.config.attachmentDefaults;
+      // 'none' is always stored; 'standard' only where it overrides a preset of 'none' (a Plane).
+      if(c.config.attachmentDefaults==='standard'&&(templatePreset(c.symbolId)?.attachmentDefaults||'standard')==='standard')delete c.config.attachmentDefaults;
       if(Array.isArray(c.config.attachmentPoints)&&!c.config.attachmentPoints.length)delete c.config.attachmentPoints;
       if(isObject(c.config.presentation))for(const key of DERIVED_PRESENTATION_KEYS)delete c.config.presentation[key];
       if(isObject(c.config.ports))for(const port of Object.values(c.config.ports)){
