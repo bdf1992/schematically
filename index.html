@@ -1427,8 +1427,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       presentation:isObject(value.config?.presentation)?clone(value.config.presentation):(preset.presentation?clone(preset.presentation):{}),
       ports:isObject(value.config?.ports)?clone(value.config.ports):{}
     };
+    // An authored choice stays on the runtime record either way, so a later normalization
+    // pass cannot replace a Plane's authored 'standard' with its preset 'none'.
     const attachmentDefaults=['standard','none'].includes(value.config?.attachmentDefaults)?value.config.attachmentDefaults:preset.attachmentDefaults;
-    if(attachmentDefaults&&attachmentDefaults!=='standard')config.attachmentDefaults=attachmentDefaults;
+    if(attachmentDefaults==='none'||value.config?.attachmentDefaults==='standard')config.attachmentDefaults=attachmentDefaults;
     if(Array.isArray(value.config?.attachmentPoints)&&value.config.attachmentPoints.length)config.attachmentPoints=clone(value.config.attachmentPoints);
     const component={
       id,
@@ -1458,7 +1460,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     delete c.canvas;delete c.boundary;delete c.parts;delete c.type;delete c.incomplete;
     if(isObject(c.config)){
       delete c.config.color;
-      if(c.config.attachmentDefaults==='standard')delete c.config.attachmentDefaults;
+      // 'none' is always stored; 'standard' only where it overrides a preset of 'none' (a Plane).
+      if(c.config.attachmentDefaults==='standard'&&(templatePreset(c.symbolId)?.attachmentDefaults||'standard')==='standard')delete c.config.attachmentDefaults;
       if(Array.isArray(c.config.attachmentPoints)&&!c.config.attachmentPoints.length)delete c.config.attachmentPoints;
       if(isObject(c.config.presentation))for(const key of DERIVED_PRESENTATION_KEYS)delete c.config.presentation[key];
       if(isObject(c.config.ports))for(const port of Object.values(c.config.ports)){
