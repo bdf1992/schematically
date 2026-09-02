@@ -10,6 +10,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -26,26 +28,50 @@ jobs:
       - name: Run authoritative RC QA
         run: python scripts/qa.py
       - name: Stage deployable site
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: python scripts/stage_site.py
-      - name: Upload Pages artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v3
+        if: github.event_name == 'push'
+        run: python scripts/stage_site.py --qa "scripts/qa.py PASS (run ${{ github.run_id }})"
+      - name: Upload staged site
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
         with:
+          name: site
           path: _site
+          retention-days: 7
 
+  # Every pushed branch deploys to its own URL behind Cloudflare Access.
+  #   main          -> https://schematically.pages.dev               (production)
+  #   any other ref -> https://<branch-slug>.schematically.pages.dev  (preview)
+  # Cloudflare slugs a branch by lowercasing it and replacing "/" with "-".
+  # Nothing deploys unless the verify job above passed for this exact commit.
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      pages: write
-      id-token: write
+    concurrency:
+      group: deploy-${{ github.ref }}
+      cancel-in-progress: true
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+      url: ${{ steps.deploy.outputs.deployment-url }}
     steps:
-      - name: Deploy QA-verified build to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: _site
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy _site
+            --project-name=schematically
+            --branch=${{ github.ref_name }}
+            --commit-hash=${{ github.sha }}
+      - name: Record URL
+        run: |
+          echo "### Deployed ${{ github.ref_name }} @ ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "alias: ${{ steps.deploy.outputs.pages-deployment-alias-url }}" >> "$GITHUB_STEP_SUMMARY"
