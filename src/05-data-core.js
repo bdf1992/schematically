@@ -105,6 +105,9 @@
     for(const wire of doc.wires){
       normalizeWireEndpoints(doc,wire,{strict:false});
       normalizeWireForm(wire);
+      // A carrier runs on the surface its ends share. A file may leave that out; derive it
+      // the way wire.create does. An unreachable pair stays as written for validation to report.
+      if(!cleanString(wire.canvasId)){try{wire.canvasId=carrierCanvasId(doc,wire,null)}catch(_){wire.canvasId=null}}
       if(!isObject(wire.config))wire.config={};
       if(!['none','read','write'].includes(wire.config.forwardOperation))wire.config.forwardOperation='none';
       if(!['none','read','write'].includes(wire.config.reverseOperation))wire.config.reverseOperation='none';

@@ -63,7 +63,8 @@ def main() -> None:
         assert code == 0, log
         assert '08-gated-service.sov' in log, 'the authored golden example is missing'
 
-        # A wire inside a host without canvasId is reported, and the message names the surface.
+        # A missing wire canvasId is derived on load; a written one that disagrees with the ends
+        # is kept and reported, and the message names the surface the ends share.
         doc = json.loads((ROOT / 'examples/08-gated-service.sov').read_text(encoding='utf-8'))
         inner = [w for w in doc['wires'] if w.get('canvasId', '').startswith('canvas:component:')]
         assert inner, 'example 08 should carry interior wires'
@@ -71,7 +72,12 @@ def main() -> None:
         path = out / 'missing-canvas.sov'
         path.write_text(json.dumps(doc), encoding='utf-8')
         code, log = run_validator([path])
-        assert code == 1 and 'canvasId missing' in log and 'canvas:component:svc' in log, log
+        assert code == 0, log
+        inner[1]['canvasId'] = 'canvas:global'
+        path = out / 'wrong-canvas.sov'
+        path.write_text(json.dumps(doc), encoding='utf-8')
+        code, log = run_validator([path])
+        assert code == 1 and 'canvasId is canvas:global' in log and 'canvas:component:svc' in log, log
 
     # Palette table matches SYMBOLS exactly.
     state = (ROOT / 'src/00-state.js').read_text(encoding='utf-8')

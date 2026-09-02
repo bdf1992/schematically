@@ -46,8 +46,8 @@ for (const file of files) {
     let surface;
     try { surface = Data.carrierCanvasId(doc, wire, wire.canvasId || null); }
     catch (error) { if (!errors.some(e => e.startsWith(`wire ${wire.id}`))) errors.push(`wire ${wire.id}: ${error.message}`); continue; }
-    // The file loader does not fill wire.canvasId. A wire whose ends live on a local surface
-    // (inside a Plane or Component) is then routed and drawn as if it were on the global canvas.
+    // The loader derives a missing wire.canvasId from the ends; one that is written but names a
+    // different surface is kept as written and routes there, so report the disagreement.
     const stored = wire.canvasId || null;
     if (surface !== Data.GLOBAL_CANVAS_ID && stored !== surface) {
       errors.push(`wire ${wire.id}: canvasId ${stored ? `is ${stored}` : 'missing'}; both ends are on ${surface}, set "canvasId": "${surface}"`);
