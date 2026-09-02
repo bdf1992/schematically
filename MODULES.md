@@ -22,6 +22,12 @@ The desktop shell lives under `desktop/` (a Tauri crate wrapping the same standa
 
 - `src/15-editor-kernel.js` — history, checkpoints, semantic clipboard, multi-selection, settle hosting, Pin/Lock/Hidden/Opacity, search/Objects, appearance and rate.
 
+A free 0D form has no side, so it has no normal and gets no stub: `stubPos` returns
+the point itself and a Wire leaves it in whatever direction the route wants. A Point
+hosted on a boundary, a Path or a Wire keeps a stub, because there the host has the
+normal, not the Point. `pointBodyRadius` is the one radius the body, the grip and the
+hit area are all derived from.
+
 `SURFACE_DIMENSION` is 2: the dimension at which a form bounds a region. A 3D Pod is
 a surface too, so every "is this a surface" test asks for 2-or-more, never exactly 2.
 `Attachment.boundaryDimension` is `min(effectiveDimension, SURFACE_DIMENSION)`, which

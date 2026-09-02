@@ -248,37 +248,47 @@ window.addEventListener('mouseup',()=>{if(activeNodeDragState)finishActiveNodeDr
 window.addEventListener('error',()=>{if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'runtime error recovered'})});
 window.addEventListener('unhandledrejection',()=>{if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'runtime rejection recovered'})});
 
+// Which of a grown form's own points faces back at what grew it: its input when it
+// sits downstream, its output when it sits upstream. A 0D form has only `self`, which
+// is projected as an output, so it answers for either direction.
+function growthPointFacing(node,want){
+  const specs=Attachment.pointSpecs(node);
+  const match=specs.find(s=>s.compatId===want);
+  if(match)return match.compatId;
+  return (want==='in'?specs[0]:specs.at(-1))?.compatId||null;
+}
 function growBlankFromConnection(sourceNode,sourcePointId,P,mods){
   const source=nodes.find(n=>n.id===sourceNode),sourceSpec=source?Attachment.resolveSpec(source,sourcePointId):null;
   if(!source||!sourceSpec){statusEl.textContent='Attachment no longer exists';return null}
   const sourceCompat=sourceSpec.compatId;
 
-  // A Wire ends on a Point, so dragging one into open space and dwelling grows a
-  // Point. Deciding it is an ACT or a HOLD is a later, separate thought - and under
-  // the ladder a typed Component is a composition, not the thing a carrier lands on.
-  // Release is a settle event, so the new Point may align to the current grid.
-  const blank=addNode('point',P.x,P.y,mods,{render:false,select:false});
+  // Growing out of a thing grows another of the same thing. Dragging from a Point
+  // gives a Point, from a Plane a Plane; the gesture continues what is already there
+  // rather than deciding on the person's behalf that the next thing is different.
+  // Release is a settle event, so the new form may align to the current grid.
+  const grown=addNode(source.symbolId,P.x,P.y,mods,{render:false,select:false});
 
-  // Direction is derived from the canonical attachment descriptor. Gesture code
-  // must never reinterpret self/start/end/left/right/top with its own Port rules.
-  // A 0D form exposes exactly one point, `self`, for either direction.
+  // Direction is derived from the canonical attachment descriptor, and the point the
+  // new form is joined on is whichever end of its own set faces back: the first for
+  // something downstream, the last for something upstream. Gesture code must never
+  // reinterpret self/start/end/left/right/top with its own Port rules.
   let connected=false;
   if(sourceCompat==='out'){
-    connected=addConnection(sourceNode,sourceSpec.id,blank.id,'self');
+    connected=addConnection(sourceNode,sourceSpec.id,grown.id,growthPointFacing(grown,'in'));
   }else{
-    connected=addConnection(blank.id,'self',sourceNode,sourceSpec.id);
+    connected=addConnection(grown.id,growthPointFacing(grown,'out'),sourceNode,sourceSpec.id);
   }
   if(!connected){
-    const i=nodes.findIndex(n=>n.id===blank.id);if(i>=0)nodes.splice(i,1);
+    const i=nodes.findIndex(n=>n.id===grown.id);if(i>=0)nodes.splice(i,1);
     render();statusEl.textContent='Boundary blocks growth onto another surface';return null;
   }
 
   render();
-  selectNode(blank.id);
+  selectNode(grown.id);
 
-  // A Point needs no type decision, so nothing is focused and nothing is asked. Its
-  // label is the only thing worth naming, and only if the person wants to.
-  statusEl.textContent='Point created';
+  // Nothing is asked for afterwards: what grew is the same kind of thing it grew out
+  // of, so there is no type left to choose.
+  statusEl.textContent=`${byId(grown.symbolId).name} created`;
 }
 
 function beginWireDrag(e,n,side,g){
@@ -314,6 +324,9 @@ function beginWireDrag(e,n,side,g){
     blankDwellTimer:null,
     blankAnchor:null,
     blankReady:false,
+    // What a dwell would grow: the same kind of thing this drag started from.
+    blankName:byId(n.symbolId).name,
+    blankSymbolId:n.symbolId,
     blankGhost:null
   };
 
@@ -333,10 +346,21 @@ function showWireBlankGhost(P){
   if(!wireDrag)return;
   wireDrag.blankGhost?.remove();
   const g=document.createElementNS('http://www.w3.org/2000/svg','g');g.setAttribute('class','wire-blank-ghost');g.setAttribute('transform',`translate(${P.x} ${P.y})`);
-  // The ghost is the shape of what will actually appear: a Point, not a body.
-  const r=document.createElementNS('http://www.w3.org/2000/svg','circle');r.setAttribute('class','body');r.setAttribute('cx','0');r.setAttribute('cy','0');r.setAttribute('r','14');g.appendChild(r);
+  // The ghost is the shape of what will actually appear, so a 0D form previews as a
+  // disc and anything with a body previews as one.
+  const preset=SovSchematicData.templatePreset(wireDrag.blankSymbolId);
+  const zeroD=Number(preset?.form?.dimension)===0;
+  let r;
+  if(zeroD){
+    r=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    r.setAttribute('cx','0');r.setAttribute('cy','0');r.setAttribute('r','14');
+  }else{
+    r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    r.setAttribute('x','-56');r.setAttribute('y','-42');r.setAttribute('width','112');r.setAttribute('height','84');r.setAttribute('rx','9');
+  }
+  r.setAttribute('class','body');g.appendChild(r);
   for(const line of [[-10,0,10,0],[0,-10,0,10]]){const l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('class','plus');l.setAttribute('x1',line[0]);l.setAttribute('y1',line[1]);l.setAttribute('x2',line[2]);l.setAttribute('y2',line[3]);g.appendChild(l)}
-  const label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('text-anchor','middle');label.setAttribute('x','0');label.setAttribute('y','29');label.textContent='NEW POINT';g.appendChild(label);
+  const label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('text-anchor','middle');label.setAttribute('x','0');label.setAttribute('y','29');label.textContent=`NEW ${wireDrag.blankName||'POINT'}`;g.appendChild(label);
   ghostLayer.appendChild(g);wireDrag.blankGhost=g;
 }
 function armWireBlankCandidate(P){
@@ -346,7 +370,7 @@ function armWireBlankCandidate(P){
   clearWireBlankCandidate();wireDrag.blankAnchor={x:P.x,y:P.y};
   wireDrag.blankDwellTimer=setTimeout(()=>{
     if(!wireDrag||wireDrag.snap)return;
-    wireDrag.blankReady=true;wireDrag.blankDwellTimer=null;showWireBlankGhost(wireDrag.blankAnchor);statusEl.textContent='Release → new Point';
+    wireDrag.blankReady=true;wireDrag.blankDwellTimer=null;showWireBlankGhost(wireDrag.blankAnchor);statusEl.textContent=`Release → new ${wireDrag.blankName||'POINT'}`;
   },WIRE_BLANK_DWELL_MS);
 }
 function wirePointerMove(e){

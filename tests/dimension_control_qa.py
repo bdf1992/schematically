@@ -5,9 +5,11 @@ across dimensions changes which attachment points exist, so a change that would 
 a Wire ending on a point that no longer exists is refused rather than silently
 dropping the connection. The Form select is the same act and answers to the same rule.
 
-Dragging a Wire into open space and dwelling grows a Point, not a typed Component: a
-Wire ends on a Point, and a Component is a composition rather than the thing a
-carrier lands on.
+Dragging a Wire into open space and dwelling grows another of whatever it grew out
+of, joined on whichever of that form's points faces back. The gesture continues what
+is already there rather than deciding on the person's behalf that the next thing is
+something else, and nothing is asked for afterwards because no type is left to pick.
+A free Point has no side, so a Wire leaves it in whatever direction the route wants.
 """
 import asyncio
 import sys
@@ -125,11 +127,12 @@ async def main():
             await page.mouse.move(cx + (tx - cx) * i / 12, cy + (ty - cy) * i / 12)
             await page.wait_for_timeout(22)
         await page.wait_for_timeout(700)   # the dwell
+        # The ghost names and shapes what will actually appear. HOLD is 2D, so a body.
         ghost_label = await page.evaluate(
             "document.querySelector('.wire-blank-ghost text')?.textContent||''")
-        assert ghost_label == 'NEW POINT', ghost_label
-        # The ghost is the shape of what appears, so it is a circle rather than a body.
-        assert await page.locator('.wire-blank-ghost circle.body').count() == 1
+        assert ghost_label == 'NEW HOLD', ghost_label
+        assert await page.locator('.wire-blank-ghost rect.body').count() == 1
+        assert await page.locator('.wire-blank-ghost circle.body').count() == 0
         await page.mouse.up()
         await page.wait_for_timeout(260)
 
@@ -137,15 +140,58 @@ async def main():
             'nothing was grown; status=' + await page.evaluate('statusEl.textContent'))
         assert await page.evaluate('wires.length') == before_wires + 1, 'it was not connected'
         grown = await page.evaluate('nodes.at(-1)')
-        assert grown['symbolId'] == 'point', grown
-        assert await dimension_of(page, grown['id']) == 0, grown
-        # A Point needs no type decision, so nothing asks for one.
-        assert 'type' not in (await page.evaluate('statusEl.textContent')).lower(), \
+        assert grown['symbolId'] == 'hold', grown
+        # Nothing is asked for afterwards: there is no type left to choose.
+        assert (await page.evaluate('statusEl.textContent')) == 'HOLD created', \
             await page.evaluate('statusEl.textContent')
-        # It is joined through its one point, `self`.
+        # Grown downstream of an output, so it is joined on its own input.
         joined = await page.evaluate(
             '(id)=>wires.filter(w=>w.a===id||w.b===id).map(w=>w.a===id?w.aSide:w.bSide)', grown['id'])
-        assert joined and all(side == 'out' for side in joined), joined
+        assert joined == ['in'], joined
+
+        # Growing out of a Point gives a Point, joined through its one point `self`.
+        seed = await page.evaluate(
+            "window.SovSchematicAPI.create('component',{symbolId:'point',x:260,y:180}).result")
+        await page.wait_for_timeout(140)
+        rbox = await page.locator(
+            f'.node[data-id="{seed["id"]}"] .port-hit[data-point="self"]').bounding_box()
+        # The inner grip moves a Point and the outer ring wires from it, so the drag
+        # has to start on the ring rather than at the centre.
+        rx = rbox['x'] + rbox['width'] * 0.86
+        ry = rbox['y'] + rbox['height'] / 2
+        px = surface['x'] + surface['width'] * 0.32
+        py = surface['y'] + surface['height'] * 0.45
+        await page.mouse.move(rx, ry)
+        await page.mouse.down()
+        for i in range(1, 13):
+            await page.mouse.move(rx + (px - rx) * i / 12, ry + (py - ry) * i / 12)
+            await page.wait_for_timeout(22)
+        await page.wait_for_timeout(700)
+        ghost = await page.evaluate(
+            "document.querySelector('.wire-blank-ghost text')?.textContent||''")
+        assert ghost == 'NEW POINT', (ghost, await page.evaluate('statusEl.textContent'))
+        assert await page.locator('.wire-blank-ghost circle.body').count() == 1
+        await page.mouse.up()
+        await page.wait_for_timeout(280)
+        twin = await page.evaluate('nodes.at(-1)')
+        assert twin['symbolId'] == 'point', twin
+        assert await dimension_of(page, twin['id']) == 0, twin
+
+        # A free Point has no side, so it is given no stub direction and a Wire leaves
+        # it wherever the route wants rather than along a normal it does not have.
+        assert await page.evaluate(
+            '(id)=>{const n=nodes.find(n=>n.id===id),p={x:n.x,y:n.y};'
+            'const s=stubPos(p,"self",26,n,null);return s.x===p.x&&s.y===p.y}', twin['id']), \
+            'a free Point was pushed out along a normal'
+
+        # A Point is drawn at a size a person can see and aim at, and the drawn radius
+        # is the one the rest of the editor reasons about.
+        radius = await page.evaluate('(id)=>pointBodyRadius(nodes.find(n=>n.id===id))', twin['id'])
+        assert radius >= 9, radius
+        drawn = await page.evaluate(
+            '(id)=>Number(document.querySelector(`.node[data-id="${id}"] .dimensional-point-body`)'
+            '.getAttribute("r"))', twin['id'])
+        assert abs(drawn - radius) < 1e-6, (drawn, radius)
 
         assert not errors, errors
         await browser.close()

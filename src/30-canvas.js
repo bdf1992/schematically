@@ -518,6 +518,12 @@ function finishKeyboardMove(mods){
 
 
 const POINT_EXTENT=24; // a 0D form occupies a fixed small footprint; presentation.size does not apply to it
+// A Point is small but it is not nothing: it has a radius, it grows with its body
+// thickness, and the grip and the hit area are derived from it so they never disagree.
+function pointBodyRadius(n){
+  const thickness=Number(componentForm(n)?.body?.thickness)||0;
+  return Math.max(7,Math.min(16,7+thickness*.16));
+}
 function componentSize(n){
   const p=componentConfig(n).presentation;
   if(componentForm(n).dimension===0)return {w:POINT_EXTENT,h:POINT_EXTENT};
@@ -730,7 +736,17 @@ function portNormal(side){
 // `inward` says which side of a boundary the carrier is on (true: the interior), for a
 // boundary-hosted Point and for a 2D form's own boundary point alike. Without it the
 // point's face decides.
+// A free 0D form has no side to face, so it has no normal and gets no stub: a Wire
+// leaves it in whatever direction the route wants. A Point stuck to a boundary is a
+// different case - there the boundary has the normal, not the Point - and it keeps one.
+function pointIsSideless(node,portId){
+  if(!node)return false;
+  if(Attachment.resolveSpec(node,portId)?.side!=='point')return false;
+  const placement=componentPlacement(node);
+  return !['edge','path','wire'].includes(placement?.kind);
+}
 function stubPos(P,portId,d=26,node=null,inward=null){
+  if(pointIsSideless(node,portId))return {x:P.x,y:P.y};
   let side,face='external';
   if(node){side=physicalPortSide(node,portId);face=componentAttachmentPoint(node,portId)?.config?.face||'external'}else side=portId==='in'?'left':portId==='control'?'top':'right';
   const placement=node?componentPlacement(node):null;

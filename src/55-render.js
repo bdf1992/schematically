@@ -152,7 +152,7 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   const backdrop=componentBackdropMode(n);g.dataset.backdrop=backdrop;
   if(form.dimension===0){
     const pointCfg=componentAttachmentPoint(n,'self')?.config,point=document.createElementNS('http://www.w3.org/2000/svg','circle');
-    point.setAttribute('class','dimensional-point-body port attachment-point');point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
+    point.setAttribute('class','dimensional-point-body port attachment-point');point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(pointBodyRadius(n)));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
     const display=String(cfg.label||'').trim()||componentTypeCaption(n,s);
     if(display){
       // A hosted Point inherits its host's angle; its label stays upright and below the point in world space.
@@ -208,7 +208,9 @@ function render(){
         // A 0D form is both a movable object and an attachment. The inner grip moves it
         // (drag) or selects it (click); the outer ring is the wiring/attachment target.
         const grip=document.createElementNS('http://www.w3.org/2000/svg','circle');
-        grip.setAttribute('class','point-grip');grip.setAttribute('cx',localX);grip.setAttribute('cy',localY);grip.setAttribute('r','8');g.appendChild(grip);
+        grip.setAttribute('class','point-grip');grip.setAttribute('cx',localX);grip.setAttribute('cy',localY);
+        // The grip is the inner disc of the Point itself, so it grows with it.
+        grip.setAttribute('r',String(pointBodyRadius(n)*.62));g.appendChild(grip);
       }
       if(pcfg.label){
         const portLabel=document.createElementNS('http://www.w3.org/2000/svg','text');

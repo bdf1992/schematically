@@ -20,7 +20,7 @@
   // supplied nothing, so authored records always win over the preset.
   const LEGACY_SYMBOL_IDS={port:'point'};
   const TEMPLATE_PRESETS={
-    point:{form:{dimension:0},presentation:{graphic:{kind:'none'},labelMode:'none',backdrop:'none'},signalMode:'relay'},
+    point:{form:{dimension:0,body:{thickness:24}},presentation:{graphic:{kind:'none'},labelMode:'none',backdrop:'none'},signalMode:'relay'},
     // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
     // component record is the static 1D role (a rail that hosts Points).
     path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
