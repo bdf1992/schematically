@@ -141,7 +141,7 @@ Port override on a Component, for access or face. Write the whole port record; t
 3. Place records on a grid: rows for flow, columns for stage. Compute Plane sizes from their children.
 4. Write the file in the authored form above.
 5. Validate: `node scripts/validate_sov.mjs my.sov`. Fix every line it prints. It uses the same checks the editor runs at load, plus the wire `canvasId` check.
-6. Render: `python scripts/export_svg.py my.sov --out out/`. Look at the SVG. Check that every wire is visible end to end, nothing overlaps, and hosted records sit inside their host. The export lifts wires inside a Plane above the Plane body; in the editor those wires show when the Plane is entered.
+6. Render: `python scripts/export_svg.py my.sov --out out/`. Look at the SVG. Check that every wire is visible end to end, nothing overlaps, and hosted records sit inside their host.
 7. Repeat 5 and 6 until the drawing says what the description says. Then hand over the `.sov` and the `.svg` together.
 
 ## Anti-patterns
