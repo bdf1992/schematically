@@ -80,3 +80,4 @@ A useful evidentiary reading is: a durable Record can receive a **Write** repres
 - Hosted Point placements: `{kind:'wire',wireId,t}`, `{kind:'path',hostId,t}`, `{kind:'edge',hostId,side,t}`; interior hosting uses `canvasId`.
 - Saved documents are compact: runtime projections are rebuilt on load (see `DATA-FORMATS.md`).
 - Example: `07-plane-with-points.sov`.
+- Wire = carrier Path: `form.dimension 1`, `role carrier`, ends bound (`attachment-ref`) or free (`{kind:'free',x,y}`); see `ATTACHMENT-POINT-MODEL.md`.

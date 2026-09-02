@@ -427,6 +427,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .node[data-dimension="0"].nested-child .dimensional-point-body{stroke-width:2.4}
 .settle-host-ghost.path-host rect,.settle-host-ghost.edge-host rect{fill:color-mix(in srgb,var(--canvas-tone) 76%,#6f8fb7 24%);stroke:#6f8fb7}
 .settle-host-ghost.path-host .settle-wire-axis,.settle-host-ghost.edge-host .settle-wire-axis{stroke:#6f8fb7;stroke-width:2;stroke-dasharray:5 3;vector-effect:non-scaling-stroke}
+
+/* --- Carrier Path ends ------------------------------------------------------ */
+.carrier-end-handle{fill:var(--panel);stroke:var(--canvas-ink);stroke-width:1.6;cursor:grab;pointer-events:all;touch-action:none;vector-effect:non-scaling-stroke}
+.carrier-end-handle.bound{opacity:0;transition:opacity .1s}
+.wire-group:hover .carrier-end-handle.bound,.wire-group .wire.selected~.carrier-end-handle.bound{opacity:1}
+.carrier-end-handle.free{stroke-width:2;stroke-dasharray:2 2}
+.wire-group.has-free-end .wire{stroke-dasharray:7 5}
+.endpoint-halo.free-end{stroke-dasharray:2 3}
 </style>
 </head>
 <body>
@@ -705,7 +713,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     </details>
     <details class="help-disclosure">
       <summary><b>Wires</b><span class="helper-snippet">carry connections</span><span class="info-dot">i</span></summary>
-      <div class="help-body">A Wire connects two Points whose faces share a surface. Endpoint markers belong to the Wire; a Point dropped on a Wire is a tap.</div>
+      <div class="help-body">A Wire is a carrier Path. Each end is bound to a Point or free: drag an end handle onto a Point to bind it, or anywhere else to free it. Both ends bound and sharing a surface is a connection; a Point dropped on a Wire is a tap.</div>
     </details>
     <details class="help-disclosure">
       <summary><b>Marks</b><span class="helper-snippet">read the drawing</span><span class="info-dot">i</span></summary>
@@ -995,8 +1003,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       <details class="inline-help"><summary><span class="info-dot">i</span> Port behavior</summary><div>Direction controls input/output. Access controls read/write capability. Face controls inside/outside boundary placement. Access is not authority.</div></details>
     </div>
     <div id="connectionDetail" hidden>
-      <div class="kind-badge">WIRE</div>
+      <div class="kind-badge">WIRE · CARRIER PATH</div>
       <dl class="kv">
+        <dt>Ends</dt><dd id="cEnds">bound → bound</dd>
         <dt>From</dt><dd id="cFrom"></dd>
         <dt>To</dt><dd id="cTo"></dd>
         <dt>Direction</dt><dd id="cDirection"></dd>
@@ -1157,7 +1166,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   const LEGACY_SYMBOL_IDS={port:'point'};
   const TEMPLATE_PRESETS={
     point:{form:{dimension:0},presentation:{graphic:{kind:'none'},labelMode:'none',backdrop:'none'},signalMode:'relay'},
-    path:{form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
+    // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
+    // component record is the static 1D role (a rail that hosts Points).
+    path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
     plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:320,h:220}}}
   };
   function normalizeSymbolId(value){const id=String(value||'blank')||'blank';return LEGACY_SYMBOL_IDS[id]||id}
@@ -1223,9 +1234,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       }
     }
     for(const wire of doc.wires){
-      const aComponent=doc.components.find(c=>c.id===wire.a),bComponent=doc.components.find(c=>c.id===wire.b);
-      if(aComponent)Attachment.syncWireEndpoint(wire,'a',aComponent,wire.aAttachment?.pointId||wire.aSide);
-      if(bComponent)Attachment.syncWireEndpoint(wire,'b',bComponent,wire.bAttachment?.pointId||wire.bSide);
+      normalizeWireEndpoints(doc,wire,{strict:false});
+      normalizeWireForm(wire);
       if(!isObject(wire.config))wire.config={};
       if(!['none','read','write'].includes(wire.config.forwardOperation))wire.config.forwardOperation='none';
       if(!['none','read','write'].includes(wire.config.reverseOperation))wire.config.reverseOperation='none';
@@ -1494,31 +1504,83 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     shared.sort((x,y)=>(x===GLOBAL_CANVAS_ID?1:0)-(y===GLOBAL_CANVAS_ID?1:0));
     return {ok:true,canvasId:shared[0]};
   }
+  // A Wire is a carrier Path: a 1D form whose two ends are each bound to an attachment
+  // point (`{kind:'attachment-ref',componentId,pointId}`) or free (`{kind:'free',x,y}`).
+  // `a`/`aSide` and `b`/`bSide` are the bound-end projections the document schema names;
+  // they are null for a free end.
+  function isFreeEndpoint(att){return isObject(att)&&att.kind==='free'}
+  function wireEndBound(wire,end){return !isFreeEndpoint(wire?.[end+'Attachment'])&&!!wire?.[end]}
+  function normalizeWireEndpoints(doc,wire,{strict=true}={}){
+    for(const end of ['a','b']){
+      const key=end+'Attachment',sideKey=end+'Side',att=wire[key];
+      if(isFreeEndpoint(att)){wire[key]={kind:'free',x:num(att.x,0),y:num(att.y,0)};wire[end]=null;wire[sideKey]=null;continue}
+      const componentId=cleanString(wire[end])||cleanString(att?.componentId);
+      const component=componentId?doc.components.find(c=>c.id===componentId):null;
+      if(!component){
+        if(strict)throw new Error(componentId?'wire endpoint component not found':'wire.create requires each end to be bound (a/aSide) or free ({kind:"free",x,y})');
+        continue;
+      }
+      const input=att?.pointId??wire[sideKey]??Attachment.defaultCompatId(component,end==='a'?'end':'start');
+      const spec=Attachment.resolveSpec(component,input);
+      if(!spec){if(strict)throw new Error(`wire.create invalid attachment ${input} for ${Attachment.effectiveDimension(component)}D component`);continue}
+      wire[end]=component.id;Attachment.syncWireEndpoint(wire,end,component,spec.id);
+    }
+    return wire;
+  }
+  function normalizeWireForm(wire){
+    if(!isObject(wire.form))wire.form={};
+    wire.form.dimension=1;
+    if(!isObject(wire.form.body))wire.form.body={};
+    wire.form.body.kind='path';
+    wire.form.body.material=cleanString(wire.form.body.material,'generic')||'generic';
+    wire.form.body.thickness=Math.max(0,num(wire.form.body.thickness,0));
+    wire.role='carrier';
+    return wire;
+  }
+  // The surface a carrier runs on: shared by both bound ends, adopted from a single bound
+  // end (preferring the current surface when it is exposed), or wherever it was placed.
+  function carrierCanvasId(doc,wire,preferred=null){
+    const aBound=wireEndBound(wire,'a'),bBound=wireEndBound(wire,'b');
+    if(aBound&&bBound){const reach=connectionReachability(doc,wire.a,wire.aSide,wire.b,wire.bSide);if(!reach.ok)throw new Error(reach.reason);return reach.canvasId}
+    const bound=aBound?'a':bBound?'b':null;
+    if(bound){
+      const exposed=portExposedCanvasIds(doc,wire[bound],wire[bound+'Side']);
+      if(!exposed.length)throw new Error('wire endpoint exposes no surface');
+      return exposed.includes(preferred)?preferred:exposed[0];
+    }
+    return cleanString(preferred,'')||GLOBAL_CANVAS_ID;
+  }
+  function bindWireEndpoint(doc,wire,end,componentId,pointId){
+    const component=doc.components.find(c=>c.id===componentId);if(!component)throw new Error('wire endpoint component not found');
+    assertCarrierEndpointAccepts(doc,componentId);
+    const spec=Attachment.resolveSpec(component,pointId);if(!spec)throw new Error(`invalid attachment ${pointId}`);
+    const before={a:wire.a,aSide:wire.aSide,b:wire.b,bSide:wire.bSide,aAttachment:clone(wire.aAttachment),bAttachment:clone(wire.bAttachment),canvasId:wire.canvasId};
+    wire[end]=component.id;Attachment.syncWireEndpoint(wire,end,component,spec.id);
+    try{wire.canvasId=carrierCanvasId(doc,wire,wire.canvasId)}catch(error){Object.assign(wire,before);throw error}
+    return wire;
+  }
+  function freeWireEndpoint(doc,wire,end,x,y){
+    wire[end+'Attachment']={kind:'free',x:num(x,0),y:num(y,0)};wire[end]=null;wire[end+'Side']=null;
+    wire.canvasId=carrierCanvasId(doc,wire,wire.canvasId);
+    return wire;
+  }
   function makeWire(doc,value={}){
     const id=cleanString(value.id,nextId(doc.wires,'k'));
-    const a=cleanString(value.a),b=cleanString(value.b);
-    if(!a||!b)throw new Error('wire.create requires a and b component ids');
-    const aComponent=doc.components.find(c=>c.id===a),bComponent=doc.components.find(c=>c.id===b);
-    if(!aComponent||!bComponent)throw new Error('wire endpoint component not found');
-    const aInput=value.aAttachment?.pointId??value.aSide??Attachment.defaultCompatId(aComponent,'end');
-    const bInput=value.bAttachment?.pointId??value.bSide??Attachment.defaultCompatId(bComponent,'start');
-    const aSpec=Attachment.resolveSpec(aComponent,aInput),bSpec=Attachment.resolveSpec(bComponent,bInput);
-    if(!aSpec)throw new Error(`wire.create invalid attachment ${aInput} for ${Attachment.effectiveDimension(aComponent)}D component`);
-    if(!bSpec)throw new Error(`wire.create invalid attachment ${bInput} for ${Attachment.effectiveDimension(bComponent)}D component`);
-    const aSide=aSpec.compatId,bSide=bSpec.compatId;
-    const reach=connectionReachability(doc,a,aSpec.id,b,bSpec.id);
-    if(!reach.ok)throw new Error(reach.reason);
-    return {
-      id,a,b,aSide,bSide,
-      aAttachment:{kind:'attachment-ref',componentId:a,pointId:aSpec.id},
-      bAttachment:{kind:'attachment-ref',componentId:b,pointId:bSpec.id},canvasId:reach.canvasId,
+    const wire={id,a:cleanString(value.a)||null,b:cleanString(value.b)||null,aSide:value.aSide??null,bSide:value.bSide??null,aAttachment:isObject(value.aAttachment)?clone(value.aAttachment):null,bAttachment:isObject(value.bAttachment)?clone(value.bAttachment):null};
+    if(!wire.a&&!wire.aAttachment&&!wire.b&&!wire.bAttachment)throw new Error('wire.create requires a and b component ids, or free endpoints');
+    for(const end of ['a','b'])if(!wire[end]&&!wire[end+'Attachment'])throw new Error(`wire.create requires ${end} (component id) or ${end}Attachment`);
+    normalizeWireEndpoints(doc,wire,{strict:true});
+    const canvasId=carrierCanvasId(doc,wire,cleanString(value.canvasId,'')||null);
+    return normalizeWireForm({
+      ...wire,canvasId,
       canvas:{id:`canvas:wire:${id}`,scope:'local',dimension:1,state:'open',ownerKind:'wire',ownerId:id},
+      form:isObject(value.form)?clone(value.form):{dimension:1,body:{kind:'path',material:'generic',thickness:0}},
       lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
       net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
       config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,'')},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
-    };
+    });
   }
   function makeReference(doc,value={}){
     return {id:cleanString(value.id,nextId(doc.references,'r')),kind:cleanString(value.kind,'reference'),label:cleanString(value.label,''),target:value.target??null,data:isObject(value.data)?clone(value.data):{}};
@@ -1566,11 +1628,25 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       ensureAttachmentPortConfigs(candidate);
       if(candidate.config?.presentation?.size){candidate.config.presentation.size.w=Math.max(80,num(candidate.config.presentation.size.w,112));candidate.config.presentation.size.h=Math.max(64,num(candidate.config.presentation.size.h,84));}
     }else if(resource==='wire'){
+      // A patch may rebind an end (a/aSide or aAttachment ref) or free it (aAttachment {kind:'free'}).
+      for(const end of ['a','b']){
+        const key=end+'Attachment',patched=patch?.[key];
+        if(isObject(patched)&&patched.kind==='free'){candidate[key]={kind:'free',x:num(patched.x,current[key]?.x),y:num(patched.y,current[key]?.y)};continue}
+        const idChanged=patch?.[end]!==undefined&&patch[end]!==current[end];
+        const sideChanged=patch?.[end+'Side']!==undefined&&patch[end+'Side']!==current[end+'Side'];
+        const pointChanged=isObject(patched)&&!!patched.pointId&&patched.pointId!==current[key]?.pointId;
+        if(idChanged||sideChanged||pointChanged){
+          if(!pointChanged)candidate[key]=null; // resolve the end again from a/aSide
+          if(idChanged)candidate[end]=patch[end];
+        }
+      }
+      normalizeWireEndpoints(doc,candidate,{strict:true});
       const aChanged=candidate.a!==current.a||candidate.aSide!==current.aSide||candidate.aAttachment?.pointId!==current.aAttachment?.pointId;
       const bChanged=candidate.b!==current.b||candidate.bSide!==current.bSide||candidate.bAttachment?.pointId!==current.bAttachment?.pointId;
       if(aChanged)assertCarrierEndpointAccepts(doc,candidate.a);if(bChanged)assertCarrierEndpointAccepts(doc,candidate.b);
-      const reach=connectionReachability({...doc,wires:doc.wires.map((w,i)=>i===index?candidate:w)},candidate.a,candidate.aSide,candidate.b,candidate.bSide);if(!reach.ok)throw new Error(reach.reason);
-      candidate.canvasId=reach.canvasId;candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:wire:${id}`;candidate.canvas.ownerId=id;candidate.canvas.dimension=1;candidate.canvas.state='open';
+      candidate.canvasId=carrierCanvasId({...doc,wires:doc.wires.map((w,i)=>i===index?candidate:w)},candidate,cleanString(patch?.canvasId,'')||current.canvasId||null);
+      candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:wire:${id}`;candidate.canvas.ownerId=id;candidate.canvas.dimension=1;candidate.canvas.state='open';
+      normalizeWireForm(candidate);
       candidate.duplex=candidate.config?.direction==='duplex';
     }
     arr[index]=candidate;
@@ -1630,9 +1706,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]],['reference',input.references||[]]])for(const item of items){if(!item?.id)errors.push(`${kind} missing id`);else if(ids.has(`${kind}:${item.id}`))errors.push(`duplicate ${kind} id: ${item.id}`);else ids.add(`${kind}:${item.id}`)}
     const componentIds=new Set((input.components||[]).map(x=>x.id));
     for(const wire of input.wires||[]){
-      if(!componentIds.has(wire.a))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.a}`);
-      if(!componentIds.has(wire.b))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.b}`);
-      if(componentIds.has(wire.a)&&componentIds.has(wire.b)){
+      const aFree=isFreeEndpoint(wire.aAttachment),bFree=isFreeEndpoint(wire.bAttachment);
+      if(!aFree&&!componentIds.has(wire.a))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.a}`);
+      if(!bFree&&!componentIds.has(wire.b))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.b}`);
+      if(!aFree&&!bFree&&componentIds.has(wire.a)&&componentIds.has(wire.b)){
         const reach=connectionReachability(input,wire.a,wire.aSide,wire.b,wire.bSide);if(!reach.ok)errors.push(`wire ${wire.id||'?'}: ${reach.reason}`);
       }
       for(const key of ['forwardOperation','reverseOperation'])if(wire.config?.[key]!=null&&!['none','read','write'].includes(wire.config[key]))errors.push(`wire ${wire.id||'?'} invalid ${key}: ${wire.config[key]}`);
@@ -1651,7 +1728,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
 /* END src/05-data-core.js */
 </script>
@@ -2136,9 +2213,24 @@ function portCanEmit(port){
   return flow==='out' || flow==='duplex';
 }
 function endpointAttachmentPoint(w,end){
+  if(SovSchematicData.isFreeEndpoint(w?.[end+'Attachment']))return null;
   const ref=Attachment.wireEndpointRef(w,end,nodes);if(!ref)return null;
   const node=nodes.find(n=>n.id===ref.componentId);if(!node)return null;
   return {...ref,node,config:componentConfig(node).ports[ref.compatId]};
+}
+// A carrier end is bound to a component's attachment point or free in world space.
+function carrierEndpoint(w,end){
+  const att=w?.[end+'Attachment'];
+  if(SovSchematicData.isFreeEndpoint(att))return {kind:'free',pos:{x:Number(att.x)||0,y:Number(att.y)||0},node:null,pointId:null};
+  const bound=endpointAttachmentPoint(w,end);
+  if(!bound)return null;
+  return {kind:'bound',node:bound.node,pointId:bound.pointId,compatId:bound.compatId,pos:portPos(bound.node,bound.pointId)};
+}
+function carrierEndpointPos(w,end){return carrierEndpoint(w,end)?.pos||null}
+function carrierEndBound(w,end){return carrierEndpoint(w,end)?.kind==='bound'}
+function carrierIsRenderable(w){
+  for(const end of ['a','b']){const ep=carrierEndpoint(w,end);if(!ep)return false;if(ep.kind==='bound'&&isEffectivelyHidden(ep.node))return false}
+  return true;
 }
 function endpointPortConfig(w,end){return endpointAttachmentPoint(w,end)?.config||null}
 function endpointAllowsReceive(w,end){
@@ -2379,6 +2471,13 @@ function wireBoundaryColors(w){
 }
 function connectionConfig(w){
   wireCanvas(w);
+  // A Wire is a carrier Path: 1D Form, carrier role, ends bound or free.
+  if(!w.form||typeof w.form!=='object')w.form={};w.form.dimension=1;
+  if(!w.form.body||typeof w.form.body!=='object')w.form.body={};w.form.body.kind='path';
+  if(typeof w.form.body.material!=='string'||!w.form.body.material)w.form.body.material='generic';
+  w.form.body.thickness=Math.max(0,Math.min(128,Number(w.form.body.thickness)||0));
+  w.role='carrier';
+  for(const end of ['a','b'])if(SovSchematicData.isFreeEndpoint(w[end+'Attachment'])){w[end]=null;w[end==='a'?'aSide':'bSide']=null}
   if(!w.config)w.config={};
   if(!['none','forward','reverse','duplex'].includes(w.config.direction))w.config.direction=w.duplex?'duplex':'forward';
   if(!['none','expected','required'].includes(w.config.reciprocity))w.config.reciprocity='none';
@@ -2434,16 +2533,16 @@ function pointAlongPolyline(points,t=.5){
 }
 function wirePartPoint(w,part){
   const i=wires.indexOf(w);
-  const a=nodes.find(n=>n.id===w.a),b=nodes.find(n=>n.id===w.b);
-  if(!a||!b)return null;
-  const points=stableRouteForWire(i,w,portPos(a,w.aSide),portPos(b,w.bSide),[]);
+  const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');
+  if(!A||!B)return null;
+  const points=stableRouteForWire(i,w,A,B,[]);
   return pointAlongPolyline(points,part?.t??part?.placement?.t??.5);
 }
 function connectionMidpoint(w,i){
-  const a=nodes.find(n=>n.id===w.a),b=nodes.find(n=>n.id===w.b);
-  if(!a||!b)return null;
+  const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');
+  if(!A||!B)return null;
   const occupied=[];
-  const points=stableRouteForWire(i,w,portPos(a,w.aSide),portPos(b,w.bSide),occupied);
+  const points=stableRouteForWire(i,w,A,B,occupied);
   if(points.length<2)return null;
   let total=0;
   const lens=[];
@@ -3130,8 +3229,9 @@ function wireSignalColors(w,signalState){
   const cfg=connectionConfig(w);
   const aConnection=endpointConnection(w,'a');
   const bConnection=endpointConnection(w,'b');
-  const aSignal=signalState.colors.get(w.a)||componentConfig(nodes.find(n=>n.id===w.a)).color;
-  const bSignal=signalState.colors.get(w.b)||componentConfig(nodes.find(n=>n.id===w.b)).color;
+  // A free end has no source Component; its side of the carrier takes the connection color.
+  const aSignal=signalState.colors.get(w.a)||aConnection.color;
+  const bSignal=signalState.colors.get(w.b)||bConnection.color;
   const forwardLive=cfg.direction!=='none' && wireDirectionActive(w,'forward',signalState);
   const reverseLive=cfg.direction==='duplex' ? wireDirectionActive(w,'reverse',signalState) : (cfg.direction==='reverse' && wireDirectionActive(w,'reverse',signalState));
   return {
@@ -3450,7 +3550,7 @@ function activeCanvasNodeIds(canvasId=selectedCanvasContextId()){
   if(canvasId===GLOBAL_CANVAS_ID)return new Set(nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===GLOBAL_CANVAS_ID).map(n=>n.id));
   const d=canvasDescriptorById(canvasId);if(!d)return new Set();
   if(d.ownerKind==='component')return new Set(nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===canvasId).map(n=>n.id));
-  if(d.ownerKind==='wire'){const w=wires.find(w=>w.id===d.ownerId);return new Set(w?[w.a,w.b]:[])}
+  if(d.ownerKind==='wire'){const w=wires.find(w=>w.id===d.ownerId);return new Set(w?[w.a,w.b].filter(Boolean):[])}
   return new Set();
 }
 function activeCanvasWireSet(canvasId=selectedCanvasContextId()){
@@ -3471,7 +3571,7 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
   for(const n of scopedNodes){const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
   const wireIds=activeCanvasWireSet(canvasId),occupied=[];
-  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const a=nodes.find(n=>n.id===w.a),bb=nodes.find(n=>n.id===w.b);if(!a||!bb)return;const points=stableRouteForWire(i,w,portPos(a,w.aSide),portPos(bb,w.bSide),occupied);occupied.push(...routeSegments(points));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
+  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
   return Number.isFinite(l)?{l,r,t,b}:null;
 }
 function fitDiagram(){
@@ -4098,9 +4198,8 @@ function captureDragSnapshots(nodeId){
   dragRouteSnapshots.clear();
   const occupied=[];
   wires.forEach((w,i)=>{
-    const a=nodes.find(n=>n.id===w.a), b=nodes.find(n=>n.id===w.b);
-    if(!a||!b) return;
-    const A=portPos(a,w.aSide), B=portPos(b,w.bSide);
+    const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
+    if(!A||!B) return;
     const points=stableRouteForWire(i,w,A,B,occupied);
     occupied.push(...routeSegments(points));
     if(w.a===nodeId || w.b===nodeId){
@@ -4116,9 +4215,8 @@ function settleDraggedRoutes(){
   if(!activeNodeDrag) return;
   const occupied=[];
   wires.forEach((w,i)=>{
-    const a=nodes.find(n=>n.id===w.a), b=nodes.find(n=>n.id===w.b);
-    if(!a||!b) return;
-    const A=portPos(a,w.aSide), B=portPos(b,w.bSide);
+    const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
+    if(!A||!B) return;
 
     if(w.a===activeNodeDrag || w.b===activeNodeDrag){
       const candidate=routePoints(A,B,w.aSide,w.bSide,w.a,w.b,w.lane??i,occupied,w.id);
@@ -4164,7 +4262,8 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   const sourceNode=nodes.find(n=>n.id===sourceId);
   const targetNode=nodes.find(n=>n.id===targetId);
   const routedWire=wireId?wires.find(x=>x.id===wireId):null;
-  const SA=stubPos(A,aSide,26,sourceNode,wireEndpointInward(routedWire,sourceNode)), SB=stubPos(B,bSide,26,targetNode,wireEndpointInward(routedWire,targetNode));
+  // A free end has no boundary to leave; the route starts exactly there.
+  const SA=sourceNode?stubPos(A,aSide,26,sourceNode,wireEndpointInward(routedWire,sourceNode)):A, SB=targetNode?stubPos(B,bSide,26,targetNode,wireEndpointInward(routedWire,targetNode)):B;
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
   const otherRects=nodes
     .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
@@ -4281,7 +4380,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
   const targetNode=nodes.find(n=>n.id===w.b);
   let rebuilt=null;
   if(cachedCore.length>=2){
-    const SA=stubPos(A,w.aSide,26,sourceNode,wireEndpointInward(w,sourceNode)), SB=stubPos(B,w.bSide,26,targetNode,wireEndpointInward(w,targetNode));
+    const SA=sourceNode?stubPos(A,w.aSide,26,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?stubPos(B,w.bSide,26,targetNode,wireEndpointInward(w,targetNode)):B;
     const inner=cachedCore.slice(1,-1).map(q=>({x:q.x,y:q.y}));
     rebuilt=normalizePoints([A,SA,...inner,SB,B]);
 
@@ -4305,7 +4404,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     return candidate.points;
   }
 
-  const SA=stubPos(A,w.aSide,26,sourceNode,wireEndpointInward(w,sourceNode)), SB=stubPos(B,w.bSide,26,targetNode,wireEndpointInward(w,targetNode));
+  const SA=sourceNode?stubPos(A,w.aSide,26,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?stubPos(B,w.bSide,26,targetNode,wireEndpointInward(w,targetNode)):B;
   const rebuiltCore=normalizePoints([SA,...rebuilt.slice(2,-2),SB]);
   const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
   const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied);
@@ -4346,6 +4445,7 @@ function terminalPointId(nodeId,id){
   return node?(Attachment.pointId(node,id)||String(id??'')):String(id??'');
 }
 function sameTerminal(n1,s1,n2,s2){
+  if(!n1||!n2)return false; // a free end is never the same terminal as anything
   return n1===n2 && terminalPointId(n1,s1)===terminalPointId(n2,s2);
 }
 function findEquivalentWire(a,aSide,b,bSide){
@@ -4371,9 +4471,23 @@ function addConnection(a,aSide,b,bSide){
   const id=wires.length-1;routeCache.delete(id);selected=`wire:${id}`;refreshCanvasScopeControl();return true;
 }
 
+// A carrier Path from the palette: a Wire with two free ends, laid across the drop point on
+// whichever surface is there (an open interior, else the world).
+function addCarrier(x,y,mods=null,options={}){
+  const step=dragSnapStep(mods||{});
+  const cx=step>0?snapCoord(x,step):x,cy=step>0?snapCoord(y,step):y,half=120;
+  const host=nodes.filter(c=>componentAcceptsChildren(c)&&!isEntityLocked(c)&&!isEffectivelyHidden(c)&&pointInsideComponent(cx,cy,c,-componentConfig(c).presentation.padding)).sort((p,q)=>{const P=componentSize(p),Q=componentSize(q);return P.w*P.h-Q.w*Q.h})[0];
+  const w=SovSchematicData.makeWire(diagram,{aAttachment:{kind:'free',x:cx-half,y:cy},bAttachment:{kind:'free',x:cx+half,y:cy},canvasId:host?componentCanvas(host).id:GLOBAL_CANVAS_ID});
+  wires.push(w);wireCanvas(w);connectionConfig(w);
+  const i=wires.length-1;routeCache.delete(i);
+  if(options.render!==false)render();
+  if(options.select!==false)selectWire(i);
+  return w;
+}
 function addNode(symbolId,x=null,y=null,mods=null,options={}){
   const centerX=camera.x+camera.w/2,centerY=camera.y+camera.h/2;
   const px=x==null?centerX+(Math.random()-.5)*90:x,py=y==null?centerY+(Math.random()-.5)*70:y;
+  if(SovSchematicData.templatePreset(symbolId)?.carrier)return addCarrier(px,py,x!=null&&y!=null?mods:null,options);
   const n=SovSchematicData.makeComponent(diagram,{symbolId,x:px,y:py,canvasId:GLOBAL_CANVAS_ID});
   ensureEntityCanvas(n,'component');
   if(x!=null&&y!=null){
@@ -4475,9 +4589,11 @@ function selectWire(i,{focus=true}={}){
   const w=wires[i];
   if(!w){hideSelectionBar();return}
   connectionDetail.hidden=false;
-  const cfg=connectionConfig(w),a=nodes.find(n=>n.id===w.a),b=nodes.find(n=>n.id===w.b);
-  cFrom.textContent=`${componentConfig(a).label||byId(a.symbolId).name}.${w.aSide} · ch ${wireEndpointMarker(w,'a')}`;
-  cTo.textContent=`${componentConfig(b).label||byId(b.symbolId).name}.${w.bSide} · ch ${wireEndpointMarker(w,'b')}`;
+  const cfg=connectionConfig(w),epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b');
+  const endText=(ep,end)=>ep?.kind==='bound'?`${componentConfig(ep.node).label||byId(ep.node.symbolId).name}.${ep.pointId} · ch ${wireEndpointMarker(w,end)}`:ep?`free · ${Math.round(ep.pos.x)}, ${Math.round(ep.pos.y)}`:'—';
+  cFrom.textContent=endText(epA,'a');
+  cTo.textContent=endText(epB,'b');
+  cEnds.textContent=`${epA?.kind==='bound'?'bound':'free'} → ${epB?.kind==='bound'?'bound':'free'}`;
   cDirection.textContent=cfg.direction;
   cReciprocity.textContent=cfg.reciprocity;
   cOperations.textContent=cfg.direction==='duplex'?`A→B ${wireOperationLabel(cfg.forwardOperation)} · B→A ${wireOperationLabel(cfg.reverseOperation)}`:`${wireOperationLabel(wireOperation(w,cfg.direction==='reverse'?'reverse':'forward'))}`;
@@ -4706,21 +4822,17 @@ function clearEndpointFocus(){
 }
 function focusWireEndpoints(w){
   clearEndpointFocus();
-  for(const [nodeId,side] of [[w.a,w.aSide],[w.b,w.bSide]]){
-    const nodeEl=document.querySelector(`.node[data-id="${nodeId}"]`);
-    if(!nodeEl) continue;
-    nodeEl.querySelector(`.port-hit[data-side="${side}"]`)?.classList.add('endpoint-focus');
-    const portHit=nodeEl.querySelector(`.port-hit[data-side="${side}"]`);
-    const visiblePort=portHit?.nextElementSibling;
-    visiblePort?.classList.add('endpoint-focus');
-    const n=nodes.find(n=>n.id===nodeId);
-    if(n){
-      const P=portPos(n,side);
-      const halo=document.createElementNS('http://www.w3.org/2000/svg','circle');
-      halo.setAttribute('class','endpoint-halo');
-      halo.setAttribute('cx',P.x);halo.setAttribute('cy',P.y);halo.setAttribute('r','10');
-      ghostLayer.appendChild(halo);
+  for(const end of ['a','b']){
+    const ep=carrierEndpoint(w,end);if(!ep)continue;
+    if(ep.kind==='bound'){
+      const nodeEl=document.querySelector(`.node[data-id="${ep.node.id}"]`),side=ep.compatId;
+      nodeEl?.querySelector(`.port-hit[data-side="${side}"]`)?.classList.add('endpoint-focus');
+      nodeEl?.querySelector(`.port-hit[data-side="${side}"]`)?.nextElementSibling?.classList.add('endpoint-focus');
     }
+    const halo=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    halo.setAttribute('class','endpoint-halo'+(ep.kind==='free'?' free-end':''));
+    halo.setAttribute('cx',ep.pos.x);halo.setAttribute('cy',ep.pos.y);halo.setAttribute('r','10');
+    ghostLayer.appendChild(halo);
   }
 }
 function angleDelta(a,b){
@@ -4903,8 +5015,9 @@ function renderWires(signalState=computeSignalState()){
   const dragging=!!activeNodeDrag;
 
   wires.forEach((w,i)=>{
-    const editor=entityEditorState(w);const cfg=connectionConfig(w);const a=nodes.find(n=>n.id===w.a), b=nodes.find(n=>n.id===w.b); if(!a||!b||editor.hidden||isEffectivelyHidden(a)||isEffectivelyHidden(b))return;
-    const A=portPos(a,w.aSide), B=portPos(b,w.bSide);
+    const editor=entityEditorState(w);const cfg=connectionConfig(w);if(editor.hidden||!carrierIsRenderable(w))return;
+    const epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b'),a=epA.node,b=epB.node;
+    const A=epA.pos, B=epB.pos;
     const touchesDragged = dragging && (w.a===activeNodeDrag || w.b===activeNodeDrag);
     const snapshot = touchesDragged ? dragRouteSnapshots.get(i) : null;
 
@@ -4919,7 +5032,7 @@ function renderWires(signalState=computeSignalState()){
 
     const signal=wireSignalColors(w,signalState);
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
-    group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
+    group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':'')+((epA.kind==='free'||epB.kind==='free')?' has-free-end':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
 
     const gradientId=`wire-gradient-${i}-${renderEpoch++}`;
     const gradient=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
@@ -4988,16 +5101,32 @@ function renderWires(signalState=computeSignalState()){
 
     if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'RETURN!':'RETURN?';group.appendChild(mark)}
     if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13);label.setAttribute('text-anchor','middle');label.textContent=cfg.label;group.appendChild(label)}
-    const markerA=document.createElementNS('http://www.w3.org/2000/svg','text');
-    markerA.setAttribute('class','endpoint-channel-tag');
-    {const side=physicalPortSide(a,w.aSide);markerA.setAttribute('x',A.x+(side==='left'?-14:side==='right'?14:0));markerA.setAttribute('y',A.y+(side==='top'?-12:side==='bottom'?15:4));markerA.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
-    markerA.textContent=endpointMarkerDisplay(w,'a');
-    group.appendChild(markerA);
-    const markerB=document.createElementNS('http://www.w3.org/2000/svg','text');
-    markerB.setAttribute('class','endpoint-channel-tag');
-    {const side=physicalPortSide(b,w.bSide);markerB.setAttribute('x',B.x+(side==='left'?-14:side==='right'?14:0));markerB.setAttribute('y',B.y+(side==='top'?-12:side==='bottom'?15:4));markerB.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
-    markerB.textContent=endpointMarkerDisplay(w,'b');
-    group.appendChild(markerB)
+    // Channel markers belong to bound ends; a free end has no port to mark.
+    if(a){
+      const markerA=document.createElementNS('http://www.w3.org/2000/svg','text');
+      markerA.setAttribute('class','endpoint-channel-tag');
+      {const side=physicalPortSide(a,w.aSide);markerA.setAttribute('x',A.x+(side==='left'?-14:side==='right'?14:0));markerA.setAttribute('y',A.y+(side==='top'?-12:side==='bottom'?15:4));markerA.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
+      markerA.textContent=endpointMarkerDisplay(w,'a');
+      group.appendChild(markerA);
+    }
+    if(b){
+      const markerB=document.createElementNS('http://www.w3.org/2000/svg','text');
+      markerB.setAttribute('class','endpoint-channel-tag');
+      {const side=physicalPortSide(b,w.bSide);markerB.setAttribute('x',B.x+(side==='left'?-14:side==='right'?14:0));markerB.setAttribute('y',B.y+(side==='top'?-12:side==='bottom'?15:4));markerB.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
+      markerB.textContent=endpointMarkerDisplay(w,'b');
+      group.appendChild(markerB);
+    }
+    // End handles: a free end shows an open ring where the Path stops; a bound end's handle sits a
+    // little way along the lead so the Component's own port keeps pointer priority at the terminal.
+    {const L=base.getTotalLength();
+     for(const [end,ep,at] of [['a',epA,0],['b',epB,L]]){
+       const q=ep.kind==='free'?ep.pos:base.getPointAtLength(at===0?Math.min(20,L/2):Math.max(L-20,L/2));
+       const handle=document.createElementNS('http://www.w3.org/2000/svg','circle');
+       handle.setAttribute('class','carrier-end-handle'+(ep.kind==='free'?' free':' bound'));handle.dataset.end=end;handle.dataset.wireIndex=String(i);
+       handle.setAttribute('cx',q.x);handle.setAttribute('cy',q.y);handle.setAttribute('r',ep.kind==='free'?'6':'4.5');
+       handle.addEventListener('pointerdown',e=>{e.stopPropagation();beginCarrierEndDrag(e,i,end)});
+       group.appendChild(handle);
+     }}
     // Legacy Wire-owned attachment points are migrated to hosted 0D Components before projection.
 
     hit.addEventListener('pointerdown',e=>{e.stopPropagation();selectWire(i);focusWireVisual(i)});
@@ -5367,9 +5496,9 @@ function updateWireDrag(e){
   }
   const occupied=[];
   wires.forEach((w,i)=>{
-    const wa=nodes.find(n=>n.id===w.a), wb=nodes.find(n=>n.id===w.b);
-    if(!wa||!wb) return;
-    const pts=stableRouteForWire(i,w,portPos(wa,w.aSide),portPos(wb,w.bSide),occupied);
+    const WA=carrierEndpointPos(w,'a'), WB=carrierEndpointPos(w,'b');
+    if(!WA||!WB) return;
+    const pts=stableRouteForWire(i,w,WA,WB,occupied);
     occupied.push(...routeSegments(pts));
   });
   wireDrag.ghost.setAttribute('d',routePath(
@@ -5410,6 +5539,79 @@ function finishWireDrag(){
   restoreSelectionBarAfterGesture();
 }
 function cancelWireDrag(){ if(wireDrag) finishWireDrag(); }
+
+// --- Carrier end handles ------------------------------------------------------
+// Dragging a Path end rebinds it: release on an attachment point binds, release
+// anywhere else leaves the end free at that spot. The other end constrains which
+// points are legal (they must share its exposed surface); with the other end free
+// the carrier adopts the surface of the point it is bound to.
+let carrierEndDrag=null;
+function findCarrierSnapTarget(w,end,P){
+  const other=end==='a'?'b':'a',otherEp=carrierEndpoint(w,other);
+  const allowed=otherEp?.kind==='bound'?new Set(portExposedCanvasIds(otherEp.node,otherEp.pointId)):null;
+  let best=null,bestD=SNAP_RADIUS;
+  for(const n of nodes){
+    if(isEntityLocked(n)||isEffectivelyHidden(n))continue;
+    for(const pointId of componentAttachmentPointIds(n)){
+      if(otherEp?.kind==='bound'&&n.id===otherEp.node.id&&pointId===otherEp.pointId)continue;
+      if(allowed&&!portExposedCanvasIds(n,pointId).some(c=>allowed.has(c)))continue;
+      const Q=portPos(n,pointId),d=Math.hypot(P.x-Q.x,P.y-Q.y);
+      if(d<bestD){bestD=d;best={node:n.id,side:pointId}}
+    }
+  }
+  return best;
+}
+function bindCarrierEnd(w,end,nodeId,pointId){SovSchematicData.bindWireEndpoint(diagram,w,end,nodeId,pointId);return w}
+function freeCarrierEnd(w,end,P){SovSchematicData.freeWireEndpoint(diagram,w,end,P.x,P.y);return w}
+function beginCarrierEndDrag(e,i,end){
+  const w=wires[i];if(!w)return;e.preventDefault();e.stopPropagation();
+  if(isEntityLocked(w)||isEntityPinned(w)){statusEl.textContent=isEntityLocked(w)?'Locked · rebind refused':'Pinned · rebind refused';selectWire(i,{focus:false});return}
+  cancelWireDrag();if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'carrier handoff'});
+  const ghost=document.createElementNS('http://www.w3.org/2000/svg','path');ghost.setAttribute('class','ghost-wire');
+  const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('class','ghost-end');dot.setAttribute('r','6');
+  ghostLayer.appendChild(ghost);ghostLayer.appendChild(dot);ghost.style.display='none';dot.style.display='none';
+  carrierEndDrag={pointerId:e.pointerId,i,end,other:end==='a'?'b':'a',ghost,dot,snap:null,moved:false,startClient:{x:e.clientX,y:e.clientY}};
+  selectWire(i,{focus:false});setSelectionBarSuppressed(true);
+  statusEl.textContent='Path end armed · drag to rebind';
+}
+function carrierEndPointerMove(e){
+  const d=carrierEndDrag;if(!d||e.pointerId!==d.pointerId)return;
+  if(!d.moved){if(Math.hypot(e.clientX-d.startClient.x,e.clientY-d.startClient.y)<6)return;d.moved=true;d.ghost.style.display='';d.dot.style.display='';workspace.classList.add('wiring');setHistoryHint('Rebind Path end')}
+  e.preventDefault();
+  const w=wires[d.i];if(!w){finishCarrierEndDrag();return}
+  const P=svgPoint(e.clientX,e.clientY),snap=findCarrierSnapTarget(w,d.end,P);d.snap=snap;clearSnapTargets();
+  const B=snap?portPos(nodes.find(n=>n.id===snap.node),snap.side):P;
+  if(snap)document.querySelector(`.node[data-id="${snap.node}"] .port-hit[data-point="${snap.side}"]`)?.classList.add('snap-target');
+  const otherEp=carrierEndpoint(w,d.other);
+  if(otherEp){
+    const from=d.other==='a',occupied=[];
+    wires.forEach((x,j)=>{if(j===d.i)return;const XA=carrierEndpointPos(x,'a'),XB=carrierEndpointPos(x,'b');if(XA&&XB)occupied.push(...routeSegments(stableRouteForWire(j,x,XA,XB,occupied)))});
+    const A=from?otherEp.pos:B,Z=from?B:otherEp.pos;
+    d.ghost.setAttribute('d',routePath(A,Z,from?(otherEp.compatId||null):(snap?.side||null),from?(snap?.side||null):(otherEp.compatId||null),from?(otherEp.node?.id||null):(snap?.node||null),from?(snap?.node||null):(otherEp.node?.id||null),d.i,occupied));
+  }
+  d.dot.setAttribute('cx',B.x);d.dot.setAttribute('cy',B.y);
+  statusEl.textContent=snap?`Release → bind to ${componentDisplayName(nodes.find(n=>n.id===snap.node))}`:'Release → free end';
+}
+function carrierEndPointerUp(e){
+  const d=carrierEndDrag;if(!d||e.pointerId!==d.pointerId)return;e.preventDefault();
+  const w=wires[d.i],moved=d.moved,snap=d.snap,P=svgPoint(e.clientX,e.clientY);
+  finishCarrierEndDrag();
+  if(!w)return;
+  if(!moved){selectWire(d.i);return}
+  try{
+    if(snap){bindCarrierEnd(w,d.end,snap.node,snap.side);statusEl.textContent='Path end bound'}
+    else{freeCarrierEnd(w,d.end,P);statusEl.textContent='Path end freed'}
+  }catch(error){statusEl.textContent=error.message}
+  routeCache.delete(d.i);arrowPoseCache.clear();render();selectWire(d.i,{focus:false});scheduleHistoryCapture();
+}
+function finishCarrierEndDrag(){
+  const d=carrierEndDrag;if(!d)return;
+  d.ghost?.remove();d.dot?.remove();clearSnapTargets();workspace.classList.remove('wiring');carrierEndDrag=null;restoreSelectionBarAfterGesture();
+}
+window.addEventListener('pointermove',carrierEndPointerMove,true);
+window.addEventListener('pointerup',carrierEndPointerUp,true);
+window.addEventListener('pointercancel',e=>{if(carrierEndDrag&&e.pointerId===carrierEndDrag.pointerId)finishCarrierEndDrag()},true);
+window.addEventListener('blur',()=>finishCarrierEndDrag());
 
 // Port gestures are tracked globally after pointer-down. This gives a plain
 // click a reliable selection path and keeps a real drag alive even when the

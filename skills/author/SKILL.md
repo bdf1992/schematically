@@ -15,7 +15,7 @@ Prefer the browser API, REST API, or MCP tools over direct mutation of runtime a
 - **Form** — dimension + Body + Frame + addressable Regions.
 - **Part** — an owned/addressable section of a line or boundary.
 - **Port** — a Part exposed to one or more surfaces. Port face controls boundary reachability.
-- **Wire** — an open 1-D carrier/path connecting Ports that share an exposed surface.
+- **Wire** — a carrier Path: a 1-D form whose ends are each bound to a Port (`a`/`aSide`, `b`/`bSide`) or free (`aAttachment: {kind:'free',x,y}`). Two bound ends must share an exposed surface. Create a free-ended carrier with `wire.create` using free attachments; bind or free an end later with `wire.update`.
 - **Hosting/settle** — a Component becomes contained by settling into an open interior Region. It remains the same Component implementation.
 
 ## Boundary invariant

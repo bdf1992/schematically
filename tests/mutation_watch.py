@@ -87,6 +87,20 @@ MUTANTS=[
       'new':'delete c.canvas;',
       'test':'tests/document_compaction_qa.py'
     },
+    {
+      'name':'carrier-both-ends-bound-skips-reachability',
+      'file':'src/05-data-core.js',
+      'old':"if(aBound&&bBound){const reach=connectionReachability(doc,wire.a,wire.aSide,wire.b,wire.bSide);if(!reach.ok)throw new Error(reach.reason);return reach.canvasId}",
+      'new':"if(aBound&&bBound){const reach=connectionReachability(doc,wire.a,wire.aSide,wire.b,wire.bSide);return reach.canvasId||GLOBAL_CANVAS_ID}",
+      'test':'tests/carrier_path_qa.py'
+    },
+    {
+      'name':'carrier-end-snap-ignores-surface',
+      'file':'src/60-interactions.js',
+      'old':"if(allowed&&!portExposedCanvasIds(n,pointId).some(c=>allowed.has(c)))continue;",
+      'new':"if(false)continue;",
+      'test':'tests/carrier_path_qa.py'
+    },
 ]
 
 killed=[]

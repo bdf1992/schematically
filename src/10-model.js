@@ -181,9 +181,24 @@ function portCanEmit(port){
   return flow==='out' || flow==='duplex';
 }
 function endpointAttachmentPoint(w,end){
+  if(SovSchematicData.isFreeEndpoint(w?.[end+'Attachment']))return null;
   const ref=Attachment.wireEndpointRef(w,end,nodes);if(!ref)return null;
   const node=nodes.find(n=>n.id===ref.componentId);if(!node)return null;
   return {...ref,node,config:componentConfig(node).ports[ref.compatId]};
+}
+// A carrier end is bound to a component's attachment point or free in world space.
+function carrierEndpoint(w,end){
+  const att=w?.[end+'Attachment'];
+  if(SovSchematicData.isFreeEndpoint(att))return {kind:'free',pos:{x:Number(att.x)||0,y:Number(att.y)||0},node:null,pointId:null};
+  const bound=endpointAttachmentPoint(w,end);
+  if(!bound)return null;
+  return {kind:'bound',node:bound.node,pointId:bound.pointId,compatId:bound.compatId,pos:portPos(bound.node,bound.pointId)};
+}
+function carrierEndpointPos(w,end){return carrierEndpoint(w,end)?.pos||null}
+function carrierEndBound(w,end){return carrierEndpoint(w,end)?.kind==='bound'}
+function carrierIsRenderable(w){
+  for(const end of ['a','b']){const ep=carrierEndpoint(w,end);if(!ep)return false;if(ep.kind==='bound'&&isEffectivelyHidden(ep.node))return false}
+  return true;
 }
 function endpointPortConfig(w,end){return endpointAttachmentPoint(w,end)?.config||null}
 function endpointAllowsReceive(w,end){
@@ -424,6 +439,13 @@ function wireBoundaryColors(w){
 }
 function connectionConfig(w){
   wireCanvas(w);
+  // A Wire is a carrier Path: 1D Form, carrier role, ends bound or free.
+  if(!w.form||typeof w.form!=='object')w.form={};w.form.dimension=1;
+  if(!w.form.body||typeof w.form.body!=='object')w.form.body={};w.form.body.kind='path';
+  if(typeof w.form.body.material!=='string'||!w.form.body.material)w.form.body.material='generic';
+  w.form.body.thickness=Math.max(0,Math.min(128,Number(w.form.body.thickness)||0));
+  w.role='carrier';
+  for(const end of ['a','b'])if(SovSchematicData.isFreeEndpoint(w[end+'Attachment'])){w[end]=null;w[end==='a'?'aSide':'bSide']=null}
   if(!w.config)w.config={};
   if(!['none','forward','reverse','duplex'].includes(w.config.direction))w.config.direction=w.duplex?'duplex':'forward';
   if(!['none','expected','required'].includes(w.config.reciprocity))w.config.reciprocity='none';
@@ -479,16 +501,16 @@ function pointAlongPolyline(points,t=.5){
 }
 function wirePartPoint(w,part){
   const i=wires.indexOf(w);
-  const a=nodes.find(n=>n.id===w.a),b=nodes.find(n=>n.id===w.b);
-  if(!a||!b)return null;
-  const points=stableRouteForWire(i,w,portPos(a,w.aSide),portPos(b,w.bSide),[]);
+  const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');
+  if(!A||!B)return null;
+  const points=stableRouteForWire(i,w,A,B,[]);
   return pointAlongPolyline(points,part?.t??part?.placement?.t??.5);
 }
 function connectionMidpoint(w,i){
-  const a=nodes.find(n=>n.id===w.a),b=nodes.find(n=>n.id===w.b);
-  if(!a||!b)return null;
+  const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');
+  if(!A||!B)return null;
   const occupied=[];
-  const points=stableRouteForWire(i,w,portPos(a,w.aSide),portPos(b,w.bSide),occupied);
+  const points=stableRouteForWire(i,w,A,B,occupied);
   if(points.length<2)return null;
   let total=0;
   const lens=[];

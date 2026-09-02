@@ -128,3 +128,13 @@ Path `in`/`out`, a standard 2D surface `in`/`out`/`control`, and a Plane
 
 `config.attachmentDefaults: standard | none` is stored only when `none`. The symbol
 ids `point`, `path`, `plane` carry Form presets; `port` is read as `point`.
+
+
+## Carrier endpoints (dev, 2026-09-01)
+
+A wire's `aAttachment` / `bAttachment` may be `{kind:'free',x,y}`; then `a` / `aSide`
+(or `b` / `bSide`) are `null`. The schema's required keys are still present. A wire
+carries `form.dimension: 1` and `role: 'carrier'`. `wire.create` accepts any mix of
+bound (`a`/`aSide` or an `aAttachment` ref) and free ends; `wire.update` rebinds an end
+with `a`/`aSide` or frees it with `aAttachment: {kind:'free',x,y}`. Validation requires
+bound ends to exist and two bound ends to share a surface; free ends are always valid.

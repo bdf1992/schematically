@@ -9,7 +9,7 @@ A compact, AI-native schematic editor. A document is a semantic model — Compon
 - **Component** — a typed Plane: a closed boundary with behavior, content, and a Form. Nested Components use the same implementation as root Components.
 - **Form** — dimension + Body + Frame + addressable Regions. Dimensions are earned: 0D behaves as an attachable point, 1D as a path/carrier with endpoint topology, 2D as a surface/boundary with addressable boundary attachment points.
 - **Attachment points (0D)** — one concern normalizes Port-like behavior everywhere: selection, hit-testing, wiring, color, label, history, and API behavior are identical whether a point lives on a 1D path or a 2D boundary. Built-in boundary points are template data (`config.attachmentDefaults`): typed Components start with left/right/top, a Plane starts with none.
-- **Wire** — an open 1D carrier connecting attachment points that share an exposed surface. Wires can host Components inline (`wireId + t`); duplex Wires carry simultaneous forward/reverse packets.
+- **Wire = carrier Path** — every Wire is a 1D Form with the carrier role, and each of its two ends is either bound to an attachment point or free in space. Drawing from a port binds both ends; the palette Path drops a carrier with two free ends; an end handle binds when dropped on a Point and frees when dropped elsewhere. Both ends bound and sharing an exposed surface is a connection. Wires can host Components inline (`wireId + t`); duplex Wires carry simultaneous forward/reverse packets.
 - **Direction ≠ access ≠ authority** — Ports carry direction (Input / Output / Input + Output / Trigger) and access (None / Read / Write / Read + Write) as independent axes. Read/Write describes the represented effect; it never grants permission.
 - **Boundaries are real** — no implicit reach-through. Crossing a Component boundary requires an inside-facing or both-facing Port on that Component, and every surface (UI, API, HTTP, MCP) enforces the same legality.
 
@@ -54,7 +54,7 @@ The agent-facing corpus ships with the repository:
 
 The current line stabilizes primitives so future work adds definitions and rules rather than parallel implementations. The concerns ahead, tracked as NEXT issues and sketched in `ROADMAP.md`, `HORIZON-SPACE.md`, and `docs/vision/`:
 
-- a formal Point / Path / Surface cell grammar, with the public Wire concept subsumed into generic 1D Path semantics (the primitives, hosted-Point attachment, and template attachment defaults landed first; Wire → Path is the remaining step);
+- a formal Point / Path / Surface cell grammar, with the public Wire concept subsumed into generic 1D Path semantics (primitives, hosted-Point attachment, template attachment defaults, and Wire as a carrier Path with bound-or-free ends have landed; what remains is storing carriers and Components in one record kind, which is a file-format transition);
 - data-driven attachment descriptors, domain packs, and data-backed built-ins;
 - a small logic machine for particle routing and signal state;
 - generalized Spaces — admitted grammars beyond the current 2D canvas, including eventual 3D volume semantics;

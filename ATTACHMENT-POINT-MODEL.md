@@ -63,3 +63,24 @@ built-in point, so a carrier is never orphaned silently.
 
 Gesture on a 0D form: the inner grip moves it (drag) or selects it (click); the
 outer ring is the wiring target. Both are on the same `.node`; no second event path.
+
+
+## Wire as carrier Path (dev, 2026-09-01)
+
+A Wire record is a 1D Path (`form.dimension = 1`, `role = 'carrier'`). Its ends are
+`aAttachment` / `bAttachment`, each either
+
+- bound: `{kind: 'attachment-ref', componentId, pointId}` with `a` / `aSide` projected, or
+- free: `{kind: 'free', x, y}` with `a` / `aSide` null.
+
+The boundary of a carrier is its two end Points; binding identifies an end Point with a
+Component's attachment point. The surface a carrier runs on is shared by two bound ends,
+adopted from a single bound end (the current surface is kept when that end exposes it),
+or the surface it was dropped on when both ends are free. Binding an end whose partner is
+bound is refused when the two points share no surface; the refusal is the same over
+gesture, API, HTTP, and MCP. A free end carries no signal, no packets, and no channel
+marker.
+
+Storage: carriers still live in `document.wires` and Components in `document.components`.
+That split is compatibility debt of the same kind as `config.ports` versus `parts.points`;
+folding carriers into one record kind is a file-format transition, not a runtime change.

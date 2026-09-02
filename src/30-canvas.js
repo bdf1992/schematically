@@ -291,7 +291,7 @@ function activeCanvasNodeIds(canvasId=selectedCanvasContextId()){
   if(canvasId===GLOBAL_CANVAS_ID)return new Set(nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===GLOBAL_CANVAS_ID).map(n=>n.id));
   const d=canvasDescriptorById(canvasId);if(!d)return new Set();
   if(d.ownerKind==='component')return new Set(nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===canvasId).map(n=>n.id));
-  if(d.ownerKind==='wire'){const w=wires.find(w=>w.id===d.ownerId);return new Set(w?[w.a,w.b]:[])}
+  if(d.ownerKind==='wire'){const w=wires.find(w=>w.id===d.ownerId);return new Set(w?[w.a,w.b].filter(Boolean):[])}
   return new Set();
 }
 function activeCanvasWireSet(canvasId=selectedCanvasContextId()){
@@ -312,7 +312,7 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
   for(const n of scopedNodes){const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
   const wireIds=activeCanvasWireSet(canvasId),occupied=[];
-  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const a=nodes.find(n=>n.id===w.a),bb=nodes.find(n=>n.id===w.b);if(!a||!bb)return;const points=stableRouteForWire(i,w,portPos(a,w.aSide),portPos(bb,w.bSide),occupied);occupied.push(...routeSegments(points));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
+  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
   return Number.isFinite(l)?{l,r,t,b}:null;
 }
 function fitDiagram(){

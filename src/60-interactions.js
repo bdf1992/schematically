@@ -355,9 +355,9 @@ function updateWireDrag(e){
   }
   const occupied=[];
   wires.forEach((w,i)=>{
-    const wa=nodes.find(n=>n.id===w.a), wb=nodes.find(n=>n.id===w.b);
-    if(!wa||!wb) return;
-    const pts=stableRouteForWire(i,w,portPos(wa,w.aSide),portPos(wb,w.bSide),occupied);
+    const WA=carrierEndpointPos(w,'a'), WB=carrierEndpointPos(w,'b');
+    if(!WA||!WB) return;
+    const pts=stableRouteForWire(i,w,WA,WB,occupied);
     occupied.push(...routeSegments(pts));
   });
   wireDrag.ghost.setAttribute('d',routePath(
@@ -398,6 +398,79 @@ function finishWireDrag(){
   restoreSelectionBarAfterGesture();
 }
 function cancelWireDrag(){ if(wireDrag) finishWireDrag(); }
+
+// --- Carrier end handles ------------------------------------------------------
+// Dragging a Path end rebinds it: release on an attachment point binds, release
+// anywhere else leaves the end free at that spot. The other end constrains which
+// points are legal (they must share its exposed surface); with the other end free
+// the carrier adopts the surface of the point it is bound to.
+let carrierEndDrag=null;
+function findCarrierSnapTarget(w,end,P){
+  const other=end==='a'?'b':'a',otherEp=carrierEndpoint(w,other);
+  const allowed=otherEp?.kind==='bound'?new Set(portExposedCanvasIds(otherEp.node,otherEp.pointId)):null;
+  let best=null,bestD=SNAP_RADIUS;
+  for(const n of nodes){
+    if(isEntityLocked(n)||isEffectivelyHidden(n))continue;
+    for(const pointId of componentAttachmentPointIds(n)){
+      if(otherEp?.kind==='bound'&&n.id===otherEp.node.id&&pointId===otherEp.pointId)continue;
+      if(allowed&&!portExposedCanvasIds(n,pointId).some(c=>allowed.has(c)))continue;
+      const Q=portPos(n,pointId),d=Math.hypot(P.x-Q.x,P.y-Q.y);
+      if(d<bestD){bestD=d;best={node:n.id,side:pointId}}
+    }
+  }
+  return best;
+}
+function bindCarrierEnd(w,end,nodeId,pointId){SovSchematicData.bindWireEndpoint(diagram,w,end,nodeId,pointId);return w}
+function freeCarrierEnd(w,end,P){SovSchematicData.freeWireEndpoint(diagram,w,end,P.x,P.y);return w}
+function beginCarrierEndDrag(e,i,end){
+  const w=wires[i];if(!w)return;e.preventDefault();e.stopPropagation();
+  if(isEntityLocked(w)||isEntityPinned(w)){statusEl.textContent=isEntityLocked(w)?'Locked · rebind refused':'Pinned · rebind refused';selectWire(i,{focus:false});return}
+  cancelWireDrag();if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'carrier handoff'});
+  const ghost=document.createElementNS('http://www.w3.org/2000/svg','path');ghost.setAttribute('class','ghost-wire');
+  const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('class','ghost-end');dot.setAttribute('r','6');
+  ghostLayer.appendChild(ghost);ghostLayer.appendChild(dot);ghost.style.display='none';dot.style.display='none';
+  carrierEndDrag={pointerId:e.pointerId,i,end,other:end==='a'?'b':'a',ghost,dot,snap:null,moved:false,startClient:{x:e.clientX,y:e.clientY}};
+  selectWire(i,{focus:false});setSelectionBarSuppressed(true);
+  statusEl.textContent='Path end armed · drag to rebind';
+}
+function carrierEndPointerMove(e){
+  const d=carrierEndDrag;if(!d||e.pointerId!==d.pointerId)return;
+  if(!d.moved){if(Math.hypot(e.clientX-d.startClient.x,e.clientY-d.startClient.y)<6)return;d.moved=true;d.ghost.style.display='';d.dot.style.display='';workspace.classList.add('wiring');setHistoryHint('Rebind Path end')}
+  e.preventDefault();
+  const w=wires[d.i];if(!w){finishCarrierEndDrag();return}
+  const P=svgPoint(e.clientX,e.clientY),snap=findCarrierSnapTarget(w,d.end,P);d.snap=snap;clearSnapTargets();
+  const B=snap?portPos(nodes.find(n=>n.id===snap.node),snap.side):P;
+  if(snap)document.querySelector(`.node[data-id="${snap.node}"] .port-hit[data-point="${snap.side}"]`)?.classList.add('snap-target');
+  const otherEp=carrierEndpoint(w,d.other);
+  if(otherEp){
+    const from=d.other==='a',occupied=[];
+    wires.forEach((x,j)=>{if(j===d.i)return;const XA=carrierEndpointPos(x,'a'),XB=carrierEndpointPos(x,'b');if(XA&&XB)occupied.push(...routeSegments(stableRouteForWire(j,x,XA,XB,occupied)))});
+    const A=from?otherEp.pos:B,Z=from?B:otherEp.pos;
+    d.ghost.setAttribute('d',routePath(A,Z,from?(otherEp.compatId||null):(snap?.side||null),from?(snap?.side||null):(otherEp.compatId||null),from?(otherEp.node?.id||null):(snap?.node||null),from?(snap?.node||null):(otherEp.node?.id||null),d.i,occupied));
+  }
+  d.dot.setAttribute('cx',B.x);d.dot.setAttribute('cy',B.y);
+  statusEl.textContent=snap?`Release → bind to ${componentDisplayName(nodes.find(n=>n.id===snap.node))}`:'Release → free end';
+}
+function carrierEndPointerUp(e){
+  const d=carrierEndDrag;if(!d||e.pointerId!==d.pointerId)return;e.preventDefault();
+  const w=wires[d.i],moved=d.moved,snap=d.snap,P=svgPoint(e.clientX,e.clientY);
+  finishCarrierEndDrag();
+  if(!w)return;
+  if(!moved){selectWire(d.i);return}
+  try{
+    if(snap){bindCarrierEnd(w,d.end,snap.node,snap.side);statusEl.textContent='Path end bound'}
+    else{freeCarrierEnd(w,d.end,P);statusEl.textContent='Path end freed'}
+  }catch(error){statusEl.textContent=error.message}
+  routeCache.delete(d.i);arrowPoseCache.clear();render();selectWire(d.i,{focus:false});scheduleHistoryCapture();
+}
+function finishCarrierEndDrag(){
+  const d=carrierEndDrag;if(!d)return;
+  d.ghost?.remove();d.dot?.remove();clearSnapTargets();workspace.classList.remove('wiring');carrierEndDrag=null;restoreSelectionBarAfterGesture();
+}
+window.addEventListener('pointermove',carrierEndPointerMove,true);
+window.addEventListener('pointerup',carrierEndPointerUp,true);
+window.addEventListener('pointercancel',e=>{if(carrierEndDrag&&e.pointerId===carrierEndDrag.pointerId)finishCarrierEndDrag()},true);
+window.addEventListener('blur',()=>finishCarrierEndDrag());
 
 // Port gestures are tracked globally after pointer-down. This gives a plain
 // click a reliable selection path and keeps a real drag alive even when the

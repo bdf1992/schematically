@@ -282,7 +282,7 @@
     </details>
     <details class="help-disclosure">
       <summary><b>Wires</b><span class="helper-snippet">carry connections</span><span class="info-dot">i</span></summary>
-      <div class="help-body">A Wire connects two Points whose faces share a surface. Endpoint markers belong to the Wire; a Point dropped on a Wire is a tap.</div>
+      <div class="help-body">A Wire is a carrier Path. Each end is bound to a Point or free: drag an end handle onto a Point to bind it, or anywhere else to free it. Both ends bound and sharing a surface is a connection; a Point dropped on a Wire is a tap.</div>
     </details>
     <details class="help-disclosure">
       <summary><b>Marks</b><span class="helper-snippet">read the drawing</span><span class="info-dot">i</span></summary>
@@ -572,8 +572,9 @@
       <details class="inline-help"><summary><span class="info-dot">i</span> Port behavior</summary><div>Direction controls input/output. Access controls read/write capability. Face controls inside/outside boundary placement. Access is not authority.</div></details>
     </div>
     <div id="connectionDetail" hidden>
-      <div class="kind-badge">WIRE</div>
+      <div class="kind-badge">WIRE · CARRIER PATH</div>
       <dl class="kv">
+        <dt>Ends</dt><dd id="cEnds">bound → bound</dd>
         <dt>From</dt><dd id="cFrom"></dd>
         <dt>To</dt><dd id="cTo"></dd>
         <dt>Direction</dt><dd id="cDirection"></dd>
