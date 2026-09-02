@@ -2,11 +2,12 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 
 const HERE=path.dirname(fileURLToPath(import.meta.url));
-await import(path.join(HERE,'../src/06-attachment-core.js'));
-await import(path.join(HERE,'../src/05-data-core.js'));
+// Absolute paths are not valid ESM specifiers on Windows; import by file:// URL everywhere.
+await import(pathToFileURL(path.join(HERE,'../src/06-attachment-core.js')).href);
+await import(pathToFileURL(path.join(HERE,'../src/05-data-core.js')).href);
 const Data=globalThis.SovSchematicData;
 if(!Data)throw new Error('SovSchematicData core failed to load');
 

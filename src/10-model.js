@@ -79,14 +79,6 @@ function ensureComponentStructure(n){
   n.incomplete=insideType==null;
 
   if(!n.parts)n.parts={};
-  if(!n.parts.sides){
-    n.parts.sides={
-      left:{kind:'side',id:'left',owner:n.id},
-      right:{kind:'side',id:'right',owner:n.id},
-      top:{kind:'side',id:'top',owner:n.id},
-      bottom:{kind:'side',id:'bottom',owner:n.id}
-    };
-  }
   if(!n.parts.points)n.parts.points={};
   if(!n.parts.ports)n.parts.ports={}; // compatibility projection only
   return n;
@@ -189,9 +181,24 @@ function portCanEmit(port){
   return flow==='out' || flow==='duplex';
 }
 function endpointAttachmentPoint(w,end){
+  if(SovSchematicData.isFreeEndpoint(w?.[end+'Attachment']))return null;
   const ref=Attachment.wireEndpointRef(w,end,nodes);if(!ref)return null;
   const node=nodes.find(n=>n.id===ref.componentId);if(!node)return null;
   return {...ref,node,config:componentConfig(node).ports[ref.compatId]};
+}
+// A carrier end is bound to a component's attachment point or free in world space.
+function carrierEndpoint(w,end){
+  const att=w?.[end+'Attachment'];
+  if(SovSchematicData.isFreeEndpoint(att))return {kind:'free',pos:{x:Number(att.x)||0,y:Number(att.y)||0},node:null,pointId:null};
+  const bound=endpointAttachmentPoint(w,end);
+  if(!bound)return null;
+  return {kind:'bound',node:bound.node,pointId:bound.pointId,compatId:bound.compatId,pos:portPos(bound.node,bound.pointId)};
+}
+function carrierEndpointPos(w,end){return carrierEndpoint(w,end)?.pos||null}
+function carrierEndBound(w,end){return carrierEndpoint(w,end)?.kind==='bound'}
+function carrierIsRenderable(w){
+  for(const end of ['a','b']){const ep=carrierEndpoint(w,end);if(!ep)return false;if(ep.kind==='bound'&&isEffectivelyHidden(ep.node))return false}
+  return true;
 }
 function endpointPortConfig(w,end){return endpointAttachmentPoint(w,end)?.config||null}
 function endpointAllowsReceive(w,end){
@@ -287,6 +294,14 @@ function componentPlacement(n){
 function componentIsPoint(n){return componentForm(n).dimension===0}
 function componentIsPath(n){return componentForm(n).dimension===1}
 function componentIsSurface(n){return componentForm(n).dimension===2}
+// A primitive shows no type name of its own; only an authored label is drawn.
+function componentTypeCaption(n,s=byId(n.symbolId)){return isPrimitiveSymbol(n.symbolId)?'':(s?.name||'')}
+// Wires whose endpoint sits on one of this component's built-in points. Used to refuse
+// attachment-default or type changes that would silently orphan a carrier.
+function wiresOnBuiltinPoints(n){
+  const ids=new Set(Attachment.builtinPointIds(n));
+  return wires.filter(w=>(w.a===n.id&&ids.has(Attachment.pointId(n,w.aAttachment?.pointId||w.aSide)))||(w.b===n.id&&ids.has(Attachment.pointId(n,w.bAttachment?.pointId||w.bSide))));
+}
 function componentHostedOnComponentPath(n){return componentPlacement(n).kind==='path'}
 function componentHostedOnComponentEdge(n){return componentPlacement(n).kind==='edge'}
 function componentBackdropMode(n){
@@ -315,11 +330,6 @@ function componentConfig(n){
   if('contains' in presentation)delete presentation.contains; // legacy only; Form interior owns hosting state.
   if(typeof presentation.padding!=='number')presentation.padding=16;
   presentation.padding=Math.max(8,Math.min(36,presentation.padding));
-  if(!presentation.boundaryShape)presentation.boundaryShape='roundRect';
-  presentation.svgRef=presentation.graphic.ref;
-  presentation.internalLayout=formHostsChildren(n)?'nested-components':presentation.graphic.kind==='custom'?'custom-svg':'glyph-only';
-  presentation.portTopology=presentation.portTopology||'external';
-  presentation.boundaryColorMode='separate-from-interior';
   if(!['auto','none','body','frame'].includes(presentation.backdrop))presentation.backdrop='auto';
   if(!Number.isInteger(n.config.colorSlot)){
     n.config.colorSlot=/^#[0-9a-fA-F]{6}$/.test(n.config.color||'')?nearestSlot(n.config.color):0;
@@ -338,7 +348,9 @@ function componentConfig(n){
   if(!n.parts.points)n.parts.points={};
   for(const stale of Object.keys(n.parts.points))if(!canonicalPointIds.has(stale))delete n.parts.points[stale];
   n.parts.ports={}; // compatibility projection only; populated from authoritative point descriptors below.
-  const configuredCompatIds=new Set(['in','out','control',...specs.map(spec=>spec.compatId)]);
+  // Only points the effective dimension exposes get a contract. Authored contracts for
+  // points a dimension change hid are left in place so switching back restores them.
+  const configuredCompatIds=new Set(specs.map(spec=>spec.compatId));
   for(const compatId of configuredCompatIds){
     const spec=specs.find(item=>item.compatId===compatId);
     const fallback=defaults[compatId]||{side:spec?.side||'point',channel:'signal',color:'#171715',flow:spec?.defaultFlow||'duplex'};
@@ -427,6 +439,13 @@ function wireBoundaryColors(w){
 }
 function connectionConfig(w){
   wireCanvas(w);
+  // A Wire is a carrier Path: 1D Form, carrier role, ends bound or free.
+  if(!w.form||typeof w.form!=='object')w.form={};w.form.dimension=1;
+  if(!w.form.body||typeof w.form.body!=='object')w.form.body={};w.form.body.kind='path';
+  if(typeof w.form.body.material!=='string'||!w.form.body.material)w.form.body.material='generic';
+  w.form.body.thickness=Math.max(0,Math.min(128,Number(w.form.body.thickness)||0));
+  w.role='carrier';
+  for(const end of ['a','b'])if(SovSchematicData.isFreeEndpoint(w[end+'Attachment'])){w[end]=null;w[end==='a'?'aSide':'bSide']=null}
   if(!w.config)w.config={};
   if(!['none','forward','reverse','duplex'].includes(w.config.direction))w.config.direction=w.duplex?'duplex':'forward';
   if(!['none','expected','required'].includes(w.config.reciprocity))w.config.reciprocity='none';
@@ -482,16 +501,16 @@ function pointAlongPolyline(points,t=.5){
 }
 function wirePartPoint(w,part){
   const i=wires.indexOf(w);
-  const a=nodes.find(n=>n.id===w.a),b=nodes.find(n=>n.id===w.b);
-  if(!a||!b)return null;
-  const points=stableRouteForWire(i,w,portPos(a,w.aSide),portPos(b,w.bSide),[]);
+  const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');
+  if(!A||!B)return null;
+  const points=stableRouteForWire(i,w,A,B,[]);
   return pointAlongPolyline(points,part?.t??part?.placement?.t??.5);
 }
 function connectionMidpoint(w,i){
-  const a=nodes.find(n=>n.id===w.a),b=nodes.find(n=>n.id===w.b);
-  if(!a||!b)return null;
+  const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');
+  if(!A||!B)return null;
   const occupied=[];
-  const points=stableRouteForWire(i,w,portPos(a,w.aSide),portPos(b,w.bSide),occupied);
+  const points=stableRouteForWire(i,w,A,B,occupied);
   if(points.length<2)return null;
   let total=0;
   const lens=[];

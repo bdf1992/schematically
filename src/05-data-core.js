@@ -16,6 +16,32 @@
   const RECEIPT_SCHEMA='soveraeign.schematic/receipt@0.1';
   const GLOBAL_CANVAS_ID='canvas:global';
   const RESOURCE_KEYS={component:'components',wire:'wires',reference:'references'};
+  // Dimensional primitives. A template preset is applied only where the caller
+  // supplied nothing, so authored records always win over the preset.
+  const LEGACY_SYMBOL_IDS={port:'point'};
+  const TEMPLATE_PRESETS={
+    point:{form:{dimension:0},presentation:{graphic:{kind:'none'},labelMode:'none',backdrop:'none'},signalMode:'relay'},
+    // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
+    // component record is the static 1D role (a rail that hosts Points).
+    path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
+    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:320,h:220}}}
+  };
+  // Loading a file applies the same preset rule as makeComponent: a preset field fills in
+  // only where the record supplied nothing, so a sparse authored Plane or Point loads the
+  // way an API-created one is born, and a full saved record is left exactly as written.
+  function applyTemplatePreset(component){
+    const preset=templatePreset(component.symbolId);if(!preset)return component;
+    if(!isObject(component.form)&&isObject(preset.form))component.form=clone(preset.form);
+    if(!isObject(component.config))component.config={};
+    const config=component.config;
+    if(!['source','relay','passive'].includes(config.signalMode)&&preset.signalMode)config.signalMode=preset.signalMode;
+    if(!isObject(config.presentation)&&isObject(preset.presentation))config.presentation=clone(preset.presentation);
+    if(!['standard','none'].includes(config.attachmentDefaults)&&preset.attachmentDefaults&&preset.attachmentDefaults!=='standard')config.attachmentDefaults=preset.attachmentDefaults;
+    return component;
+  }
+  function normalizeSymbolId(value){const id=String(value||'blank')||'blank';return LEGACY_SYMBOL_IDS[id]||id}
+  function templatePreset(symbolId){return clone(TEMPLATE_PRESETS[normalizeSymbolId(symbolId)]||null)}
+  function isPrimitiveSymbol(symbolId){return Object.prototype.hasOwnProperty.call(TEMPLATE_PRESETS,normalizeSymbolId(symbolId))}
 
   const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
   const isObject=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
@@ -60,6 +86,8 @@
     if(!Array.isArray(doc.references))doc.references=[];
     if(!isObject(doc.layout))doc.layout={};
     for(const component of doc.components){
+      normalizeComponentIdentity(component);
+      applyTemplatePreset(component);
       component.form=normalizeComponentForm(component.form,component.canvas);
       if(!isObject(component.canvas))component.canvas={};
       component.canvas.id=`canvas:component:${component.id||'unknown'}`;component.canvas.scope='local';component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
@@ -75,9 +103,11 @@
       }
     }
     for(const wire of doc.wires){
-      const aComponent=doc.components.find(c=>c.id===wire.a),bComponent=doc.components.find(c=>c.id===wire.b);
-      if(aComponent)Attachment.syncWireEndpoint(wire,'a',aComponent,wire.aAttachment?.pointId||wire.aSide);
-      if(bComponent)Attachment.syncWireEndpoint(wire,'b',bComponent,wire.bAttachment?.pointId||wire.bSide);
+      normalizeWireEndpoints(doc,wire,{strict:false});
+      normalizeWireForm(wire);
+      // A carrier runs on the surface its ends share. A file may leave that out; derive it
+      // the way wire.create does. An unreachable pair stays as written for validation to report.
+      if(!cleanString(wire.canvasId)){try{wire.canvasId=carrierCanvasId(doc,wire,null)}catch(_){wire.canvasId=null}}
       if(!isObject(wire.config))wire.config={};
       if(!['none','read','write'].includes(wire.config.forwardOperation))wire.config.forwardOperation='none';
       if(!['none','read','write'].includes(wire.config.reverseOperation))wire.config.reverseOperation='none';
@@ -134,22 +164,40 @@
     return component?.canvas?.id||`canvas:component:${component?.id||'unknown'}`;
   }
   function containingCanvasId(component){return component?.canvasId||GLOBAL_CANVAS_ID}
-  function defaultPorts(){
-    const port=(side,flow,channel='signal')=>({side,face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',name:'Connection 1',colorSlot:0,flow,access:'read-write'}],channelCount:1,activeChannel:0,channel:'Connection 1',colorSlot:0,flow,access:'read-write'});
-    return {in:port('left','in'),out:port('right','out'),control:port('top','control','control')};
+  // A default point contract is minimal: one connection, outside face, no label.
+  // Port-level mirrors (flow/access/colorSlot/channel*) are runtime projections and
+  // are not part of the default record.
+  function defaultPointContract(side,flow){
+    return {side,face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',name:'Connection 1',colorSlot:0,flow,access:'read-write'}]};
   }
+  const STANDARD_POINT_FLOWS={in:['left','in'],out:['right','out'],control:['top','control']};
   function defaultPortForSpec(spec){
-    const standard=defaultPorts()[spec.compatId];if(standard)return standard;
-    const flow=spec.defaultFlow||'duplex',channel=flow==='control'?'control':'signal';
-    return {side:spec.side,face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',name:'Connection 1',colorSlot:0,flow,access:'read-write'}],channelCount:1,activeChannel:0,channel:'Connection 1',colorSlot:0,flow,access:'read-write'};
+    const standard=STANDARD_POINT_FLOWS[spec.compatId];
+    if(standard)return defaultPointContract(spec.side||standard[0],standard[1]);
+    return defaultPointContract(spec.side,spec.defaultFlow||'duplex');
   }
+  // Only the points the effective dimension actually exposes get a contract.
+  // A 0D Point owns `out` (its `self`), a 1D Path `in`/`out`, a standard 2D
+  // surface `in`/`out`/`control`; a surface with attachmentDefaults='none' owns
+  // only what its data-declared boundary points require.
   function ensureAttachmentPortConfigs(component){
     if(!isObject(component.config))component.config={};
-    if(!isObject(component.config.ports))component.config.ports=defaultPorts();
+    if(!isObject(component.config.ports))component.config.ports={};
     for(const spec of Attachment.pointSpecs(component)){
       if(!isObject(component.config.ports[spec.compatId]))component.config.ports[spec.compatId]=defaultPortForSpec(spec);
       component.config.ports[spec.compatId].side=spec.side;
     }
+    return component;
+  }
+  function normalizeComponentIdentity(component){
+    component.symbolId=normalizeSymbolId(component.symbolId||component.type);
+    component.type=component.symbolId==='blank'?null:component.symbolId;
+    if(!isObject(component.config))component.config={};
+    if(!['standard','none'].includes(component.config.attachmentDefaults))delete component.config.attachmentDefaults;
+    if(!Array.isArray(component.config.attachmentPoints))delete component.config.attachmentPoints;
+    const graphic=component.config.presentation?.graphic;
+    if(isObject(graphic)&&graphic.ref==='sym-port')graphic.ref='sym-point';
+    if(isObject(component.boundary?.inside)&&component.boundary.inside.type==='port')component.boundary.inside.type='point';
     return component;
   }
   function isLegacyWirePointAttachment(part){
@@ -160,14 +208,13 @@
     const existing=doc.components.find(c=>c.id===id);if(existing)return existing;
     const cfg=isObject(part.config)?clone(part.config):{};
     const t=Math.max(.02,Math.min(.98,num(part.placement?.t??part.t,.5)));
-    const ports=defaultPorts();ports.out={...ports.out,...cfg,side:'point'};
+    const ports={out:{...defaultPointContract('point','duplex'),...cfg,side:'point'}};
     const active=Array.isArray(ports.out.connections)?ports.out.connections[Math.max(0,Math.min(ports.out.connections.length-1,ports.out.activeConnection||0))]:null;
     const colorSlot=Math.max(0,Math.trunc(num(active?.colorSlot??cfg.colorSlot,0)));
     const point=makeComponent(doc,{
-      id,symbolId:'port',x:0,y:0,canvasId:`canvas:wire:${wire.id}`,
-      form:{dimension:0,body:{kind:'point',material:'generic',thickness:0},frame:{mode:'none',thickness:0,depth:0},regions:{interior:{state:'closed'}}},
+      id,symbolId:'point',x:0,y:0,canvasId:`canvas:wire:${wire.id}`,
       placement:{kind:'wire',wireId:wire.id,t,sourceAttachmentId:part.id||null},
-      config:{label:cleanString(cfg.label,''),colorSlot,signalMode:'relay',presentation:{graphic:{kind:'none',ref:'sym-port',svg:''},size:{w:80,h:64},labelMode:cleanString(cfg.label,'')?'outside':'none',interiorColorSlot:colorSlot,text:'',padding:8,boundaryShape:'point',boundaryColorMode:'separate-from-interior',internalLayout:'glyph-only',portTopology:'self',backdrop:'none'},ports}
+      config:{label:cleanString(cfg.label,''),colorSlot,signalMode:'relay',presentation:{graphic:{kind:'none'},labelMode:cleanString(cfg.label,'')?'outside':'none',interiorColorSlot:colorSlot,backdrop:'none'},ports}
     });
     doc.components.push(point);return point;
   }
@@ -223,34 +270,80 @@
     return form;
   }
   function makeComponent(doc,value={}){
-    const symbolId=cleanString(value.symbolId||value.type,'blank')||'blank';
+    const symbolId=normalizeSymbolId(value.symbolId||value.type);
+    const preset=templatePreset(symbolId)||{};
     const id=cleanString(value.id,nextId(doc.components,'c'));
     const canvasId=cleanString(value.canvasId,GLOBAL_CANVAS_ID);
-    const ports=isObject(value.config?.ports)?clone(value.config.ports):defaultPorts();
+    const form=normalizeComponentForm(isObject(value.form)?value.form:preset.form,value.canvas);
+    const config={
+      label:cleanString(value.config?.label||value.label,''),
+      colorSlot:Math.max(0,Math.trunc(num(value.config?.colorSlot,0))),
+      signalMode:['source','relay','passive'].includes(value.config?.signalMode)?value.config.signalMode:(preset.signalMode||'source'),
+      presentation:isObject(value.config?.presentation)?clone(value.config.presentation):(preset.presentation?clone(preset.presentation):{}),
+      ports:isObject(value.config?.ports)?clone(value.config.ports):{}
+    };
+    // An authored choice stays on the runtime record either way, so a later normalization
+    // pass cannot replace a Plane's authored 'standard' with its preset 'none'.
+    const attachmentDefaults=['standard','none'].includes(value.config?.attachmentDefaults)?value.config.attachmentDefaults:preset.attachmentDefaults;
+    if(attachmentDefaults==='none'||value.config?.attachmentDefaults==='standard')config.attachmentDefaults=attachmentDefaults;
+    if(Array.isArray(value.config?.attachmentPoints)&&value.config.attachmentPoints.length)config.attachmentPoints=clone(value.config.attachmentPoints);
     const component={
       id,
       type:symbolId==='blank'?null:symbolId,
       symbolId,
       x:num(value.x,120),y:num(value.y,120),
       canvasId,
-      canvas:{id:`canvas:component:${id}`,scope:'local',dimension:2,state:value.canvas?.state==='open'?'open':'closed',ownerKind:'component',ownerId:id},
-      form:normalizeComponentForm(value.form,value.canvas),
-      boundary:isObject(value.boundary)?clone(value.boundary):{kind:'boundary',shape:'blank',inside:{type:symbolId==='blank'?null:symbolId},outside:{type:'canvas'}},
-      parts:isObject(value.parts)?clone(value.parts):{sides:{left:{kind:'side',id:'left',owner:id},right:{kind:'side',id:'right',owner:id},top:{kind:'side',id:'top',owner:id},bottom:{kind:'side',id:'bottom',owner:id}},ports:{}},
-      config:{
-        label:cleanString(value.config?.label||value.label,''),
-        colorSlot:Math.max(0,Math.trunc(num(value.config?.colorSlot,0))),
-        signalMode:['source','relay','passive'].includes(value.config?.signalMode)?value.config.signalMode:'source',
-        attachmentPoints:Array.isArray(value.config?.attachmentPoints)?clone(value.config.attachmentPoints):[],
-        presentation:isObject(value.config?.presentation)?clone(value.config.presentation):{graphic:{kind:'symbol',ref:`sym-${symbolId}`,svg:''},size:{w:112,h:84},labelMode:'boundary',interiorColorSlot:0,text:'',padding:16,boundaryShape:'roundRect',boundaryColorMode:'separate-from-interior',internalLayout:'glyph-only',portTopology:'external',backdrop:'auto'},
-        ports
-      },
+      canvas:{id:`canvas:component:${id}`,scope:'local',dimension:form.dimension,state:form.regions.interior.state,ownerKind:'component',ownerId:id},
+      form,
+      config,
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       parentId:value.parentId??null,
       placement:isObject(value.placement)?clone(value.placement):{kind:canvasId.startsWith('canvas:wire:')?'wire':'surface',...(canvasId.startsWith('canvas:wire:')?{wireId:canvasId.slice('canvas:wire:'.length),t:.5}:{x:num(value.x,120),y:num(value.y,120)})},
       incomplete:symbolId==='blank'
     };
+    if(isObject(value.boundary))component.boundary=clone(value.boundary);
+    if(isObject(value.parts))component.parts=clone(value.parts);
     return ensureAttachmentPortConfigs(component);
+  }
+  // Saved records carry authored truth only. Everything below is regenerated on load:
+  // local canvas descriptors, boundary/parts projections, port-level mirrors of the
+  // active connection, realized palette colors, and presentation layout hints.
+  const DERIVED_PORT_KEYS=['channelCount','activeChannel','channel','channels','colorSlot','color','flow','access','side'];
+  const DERIVED_PRESENTATION_KEYS=['svgRef','internalLayout','portTopology','boundaryColorMode','boundaryShape'];
+  function compactComponent(component){
+    const c=clone(component);
+    delete c.canvas;delete c.boundary;delete c.parts;delete c.type;delete c.incomplete;
+    if(isObject(c.config)){
+      delete c.config.color;
+      // 'none' is always stored; 'standard' only where it overrides a preset of 'none' (a Plane).
+      if(c.config.attachmentDefaults==='standard'&&(templatePreset(c.symbolId)?.attachmentDefaults||'standard')==='standard')delete c.config.attachmentDefaults;
+      if(Array.isArray(c.config.attachmentPoints)&&!c.config.attachmentPoints.length)delete c.config.attachmentPoints;
+      if(isObject(c.config.presentation))for(const key of DERIVED_PRESENTATION_KEYS)delete c.config.presentation[key];
+      if(isObject(c.config.ports))for(const port of Object.values(c.config.ports)){
+        if(!isObject(port))continue;
+        if(Array.isArray(port.connections)&&port.connections.length){
+          for(const key of DERIVED_PORT_KEYS)delete port[key];
+          for(const connection of port.connections)if(isObject(connection)){delete connection.color;delete connection.name}
+        }
+      }
+    }
+    if(isObject(c.placement)&&c.placement.kind==='surface')delete c.placement;
+    return c;
+  }
+  function compactWire(wire){
+    const w=clone(wire);
+    delete w.canvas;delete w.duplex;
+    if(Array.isArray(w.attachments)&&!w.attachments.length)delete w.attachments;
+    if(isObject(w.config))delete w.config._legacyColorMigrated;
+    return w;
+  }
+  function compactDocument(input){
+    const doc=clone(input);
+    delete doc.canvas;
+    doc.components=(doc.components||[]).map(compactComponent);
+    doc.wires=(doc.wires||[]).map(compactWire);
+    if(isObject(doc.meta)&&Array.isArray(doc.meta.checkpoints))doc.meta.checkpoints=doc.meta.checkpoints.map(cp=>isObject(cp)&&isObject(cp.document)?{...cp,document:compactDocument(cp.document)}:cp);
+    return doc;
   }
   function attachmentPointConfig(doc,componentId,pointId){
     const component=doc.components.find(c=>c.id===componentId);if(!component)return null;
@@ -286,31 +379,83 @@
     shared.sort((x,y)=>(x===GLOBAL_CANVAS_ID?1:0)-(y===GLOBAL_CANVAS_ID?1:0));
     return {ok:true,canvasId:shared[0]};
   }
+  // A Wire is a carrier Path: a 1D form whose two ends are each bound to an attachment
+  // point (`{kind:'attachment-ref',componentId,pointId}`) or free (`{kind:'free',x,y}`).
+  // `a`/`aSide` and `b`/`bSide` are the bound-end projections the document schema names;
+  // they are null for a free end.
+  function isFreeEndpoint(att){return isObject(att)&&att.kind==='free'}
+  function wireEndBound(wire,end){return !isFreeEndpoint(wire?.[end+'Attachment'])&&!!wire?.[end]}
+  function normalizeWireEndpoints(doc,wire,{strict=true}={}){
+    for(const end of ['a','b']){
+      const key=end+'Attachment',sideKey=end+'Side',att=wire[key];
+      if(isFreeEndpoint(att)){wire[key]={kind:'free',x:num(att.x,0),y:num(att.y,0)};wire[end]=null;wire[sideKey]=null;continue}
+      const componentId=cleanString(wire[end])||cleanString(att?.componentId);
+      const component=componentId?doc.components.find(c=>c.id===componentId):null;
+      if(!component){
+        if(strict)throw new Error(componentId?'wire endpoint component not found':'wire.create requires each end to be bound (a/aSide) or free ({kind:"free",x,y})');
+        continue;
+      }
+      const input=att?.pointId??wire[sideKey]??Attachment.defaultCompatId(component,end==='a'?'end':'start');
+      const spec=Attachment.resolveSpec(component,input);
+      if(!spec){if(strict)throw new Error(`wire.create invalid attachment ${input} for ${Attachment.effectiveDimension(component)}D component`);continue}
+      wire[end]=component.id;Attachment.syncWireEndpoint(wire,end,component,spec.id);
+    }
+    return wire;
+  }
+  function normalizeWireForm(wire){
+    if(!isObject(wire.form))wire.form={};
+    wire.form.dimension=1;
+    if(!isObject(wire.form.body))wire.form.body={};
+    wire.form.body.kind='path';
+    wire.form.body.material=cleanString(wire.form.body.material,'generic')||'generic';
+    wire.form.body.thickness=Math.max(0,num(wire.form.body.thickness,0));
+    wire.role='carrier';
+    return wire;
+  }
+  // The surface a carrier runs on: shared by both bound ends, adopted from a single bound
+  // end (preferring the current surface when it is exposed), or wherever it was placed.
+  function carrierCanvasId(doc,wire,preferred=null){
+    const aBound=wireEndBound(wire,'a'),bBound=wireEndBound(wire,'b');
+    if(aBound&&bBound){const reach=connectionReachability(doc,wire.a,wire.aSide,wire.b,wire.bSide);if(!reach.ok)throw new Error(reach.reason);return reach.canvasId}
+    const bound=aBound?'a':bBound?'b':null;
+    if(bound){
+      const exposed=portExposedCanvasIds(doc,wire[bound],wire[bound+'Side']);
+      if(!exposed.length)throw new Error('wire endpoint exposes no surface');
+      return exposed.includes(preferred)?preferred:exposed[0];
+    }
+    return cleanString(preferred,'')||GLOBAL_CANVAS_ID;
+  }
+  function bindWireEndpoint(doc,wire,end,componentId,pointId){
+    const component=doc.components.find(c=>c.id===componentId);if(!component)throw new Error('wire endpoint component not found');
+    assertCarrierEndpointAccepts(doc,componentId);
+    const spec=Attachment.resolveSpec(component,pointId);if(!spec)throw new Error(`invalid attachment ${pointId}`);
+    const before={a:wire.a,aSide:wire.aSide,b:wire.b,bSide:wire.bSide,aAttachment:clone(wire.aAttachment),bAttachment:clone(wire.bAttachment),canvasId:wire.canvasId};
+    wire[end]=component.id;Attachment.syncWireEndpoint(wire,end,component,spec.id);
+    try{wire.canvasId=carrierCanvasId(doc,wire,wire.canvasId)}catch(error){Object.assign(wire,before);throw error}
+    return wire;
+  }
+  function freeWireEndpoint(doc,wire,end,x,y){
+    wire[end+'Attachment']={kind:'free',x:num(x,0),y:num(y,0)};wire[end]=null;wire[end+'Side']=null;
+    wire.canvasId=carrierCanvasId(doc,wire,wire.canvasId);
+    return wire;
+  }
   function makeWire(doc,value={}){
     const id=cleanString(value.id,nextId(doc.wires,'k'));
-    const a=cleanString(value.a),b=cleanString(value.b);
-    if(!a||!b)throw new Error('wire.create requires a and b component ids');
-    const aComponent=doc.components.find(c=>c.id===a),bComponent=doc.components.find(c=>c.id===b);
-    if(!aComponent||!bComponent)throw new Error('wire endpoint component not found');
-    const aInput=value.aAttachment?.pointId??value.aSide??Attachment.defaultCompatId(aComponent,'end');
-    const bInput=value.bAttachment?.pointId??value.bSide??Attachment.defaultCompatId(bComponent,'start');
-    const aSpec=Attachment.resolveSpec(aComponent,aInput),bSpec=Attachment.resolveSpec(bComponent,bInput);
-    if(!aSpec)throw new Error(`wire.create invalid attachment ${aInput} for ${Attachment.effectiveDimension(aComponent)}D component`);
-    if(!bSpec)throw new Error(`wire.create invalid attachment ${bInput} for ${Attachment.effectiveDimension(bComponent)}D component`);
-    const aSide=aSpec.compatId,bSide=bSpec.compatId;
-    const reach=connectionReachability(doc,a,aSpec.id,b,bSpec.id);
-    if(!reach.ok)throw new Error(reach.reason);
-    return {
-      id,a,b,aSide,bSide,
-      aAttachment:{kind:'attachment-ref',componentId:a,pointId:aSpec.id},
-      bAttachment:{kind:'attachment-ref',componentId:b,pointId:bSpec.id},canvasId:reach.canvasId,
+    const wire={id,a:cleanString(value.a)||null,b:cleanString(value.b)||null,aSide:value.aSide??null,bSide:value.bSide??null,aAttachment:isObject(value.aAttachment)?clone(value.aAttachment):null,bAttachment:isObject(value.bAttachment)?clone(value.bAttachment):null};
+    if(!wire.a&&!wire.aAttachment&&!wire.b&&!wire.bAttachment)throw new Error('wire.create requires a and b component ids, or free endpoints');
+    for(const end of ['a','b'])if(!wire[end]&&!wire[end+'Attachment'])throw new Error(`wire.create requires ${end} (component id) or ${end}Attachment`);
+    normalizeWireEndpoints(doc,wire,{strict:true});
+    const canvasId=carrierCanvasId(doc,wire,cleanString(value.canvasId,'')||null);
+    return normalizeWireForm({
+      ...wire,canvasId,
       canvas:{id:`canvas:wire:${id}`,scope:'local',dimension:1,state:'open',ownerKind:'wire',ownerId:id},
+      form:isObject(value.form)?clone(value.form):{dimension:1,body:{kind:'path',material:'generic',thickness:0}},
       lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
       net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
       config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,'')},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
-    };
+    });
   }
   function makeReference(doc,value={}){
     return {id:cleanString(value.id,nextId(doc.references,'r')),kind:cleanString(value.kind,'reference'),label:cleanString(value.label,''),target:value.target??null,data:isObject(value.data)?clone(value.data):{}};
@@ -352,16 +497,31 @@
     const current=arr[index];assertUnlocked(current,resource);
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource==='component'){
+      normalizeComponentIdentity(candidate);
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
       candidate.form=normalizeComponentForm(candidate.form,candidate.canvas);candidate.canvas.state=candidate.form.regions.interior.state;
       ensureAttachmentPortConfigs(candidate);
       if(candidate.config?.presentation?.size){candidate.config.presentation.size.w=Math.max(80,num(candidate.config.presentation.size.w,112));candidate.config.presentation.size.h=Math.max(64,num(candidate.config.presentation.size.h,84));}
     }else if(resource==='wire'){
+      // A patch may rebind an end (a/aSide or aAttachment ref) or free it (aAttachment {kind:'free'}).
+      for(const end of ['a','b']){
+        const key=end+'Attachment',patched=patch?.[key];
+        if(isObject(patched)&&patched.kind==='free'){candidate[key]={kind:'free',x:num(patched.x,current[key]?.x),y:num(patched.y,current[key]?.y)};continue}
+        const idChanged=patch?.[end]!==undefined&&patch[end]!==current[end];
+        const sideChanged=patch?.[end+'Side']!==undefined&&patch[end+'Side']!==current[end+'Side'];
+        const pointChanged=isObject(patched)&&!!patched.pointId&&patched.pointId!==current[key]?.pointId;
+        if(idChanged||sideChanged||pointChanged){
+          if(!pointChanged)candidate[key]=null; // resolve the end again from a/aSide
+          if(idChanged)candidate[end]=patch[end];
+        }
+      }
+      normalizeWireEndpoints(doc,candidate,{strict:true});
       const aChanged=candidate.a!==current.a||candidate.aSide!==current.aSide||candidate.aAttachment?.pointId!==current.aAttachment?.pointId;
       const bChanged=candidate.b!==current.b||candidate.bSide!==current.bSide||candidate.bAttachment?.pointId!==current.bAttachment?.pointId;
       if(aChanged)assertCarrierEndpointAccepts(doc,candidate.a);if(bChanged)assertCarrierEndpointAccepts(doc,candidate.b);
-      const reach=connectionReachability({...doc,wires:doc.wires.map((w,i)=>i===index?candidate:w)},candidate.a,candidate.aSide,candidate.b,candidate.bSide);if(!reach.ok)throw new Error(reach.reason);
-      candidate.canvasId=reach.canvasId;candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:wire:${id}`;candidate.canvas.ownerId=id;candidate.canvas.dimension=1;candidate.canvas.state='open';
+      candidate.canvasId=carrierCanvasId({...doc,wires:doc.wires.map((w,i)=>i===index?candidate:w)},candidate,cleanString(patch?.canvasId,'')||current.canvasId||null);
+      candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:wire:${id}`;candidate.canvas.ownerId=id;candidate.canvas.dimension=1;candidate.canvas.state='open';
+      normalizeWireForm(candidate);
       candidate.duplex=candidate.config?.direction==='duplex';
     }
     arr[index]=candidate;
@@ -421,9 +581,10 @@
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]],['reference',input.references||[]]])for(const item of items){if(!item?.id)errors.push(`${kind} missing id`);else if(ids.has(`${kind}:${item.id}`))errors.push(`duplicate ${kind} id: ${item.id}`);else ids.add(`${kind}:${item.id}`)}
     const componentIds=new Set((input.components||[]).map(x=>x.id));
     for(const wire of input.wires||[]){
-      if(!componentIds.has(wire.a))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.a}`);
-      if(!componentIds.has(wire.b))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.b}`);
-      if(componentIds.has(wire.a)&&componentIds.has(wire.b)){
+      const aFree=isFreeEndpoint(wire.aAttachment),bFree=isFreeEndpoint(wire.bAttachment);
+      if(!aFree&&!componentIds.has(wire.a))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.a}`);
+      if(!bFree&&!componentIds.has(wire.b))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.b}`);
+      if(!aFree&&!bFree&&componentIds.has(wire.a)&&componentIds.has(wire.b)){
         const reach=connectionReachability(input,wire.a,wire.aSide,wire.b,wire.bSide);if(!reach.ok)errors.push(`wire ${wire.id||'?'}: ${reach.reason}`);
       }
       for(const key of ['forwardOperation','reverseOperation'])if(wire.config?.[key]!=null&&!['none','read','write'].includes(wire.config[key]))errors.push(`wire ${wire.id||'?'} invalid ${key}: ${wire.config[key]}`);
@@ -442,5 +603,5 @@
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });

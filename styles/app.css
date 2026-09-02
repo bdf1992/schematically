@@ -313,7 +313,6 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .toolbar-divider{width:1px;height:20px;background:var(--line);margin:0 2px}
 .bar-form-state{height:30px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--muted);padding:0 9px;font-size:9px;font-weight:850;letter-spacing:.04em;cursor:pointer;white-space:nowrap}
 .bar-form-state.active{color:var(--ink);border-color:#777;background:var(--hover)}
-.bar-form-state.wire-form{cursor:default}
 .node.canvas-out-of-scope{opacity:.11;pointer-events:none}
 .node.canvas-context-owner{opacity:1;pointer-events:auto}
 .wire-group.canvas-out-of-scope{opacity:.10;pointer-events:none}
@@ -407,3 +406,24 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .quick-action{min-width:30px;padding:0 8px;font-size:16px;line-height:1}
 .quick-action.quick-checkpoint{font-size:14px;font-weight:800}
 .quick-action:disabled{opacity:.36;cursor:default}
+
+/* --- Point / Path / Plane primitives --------------------------------------- */
+.symbol-grid.primitive-grid{grid-template-columns:1fr 1fr 1fr}
+.symbol-card.primitive svg{height:30px}
+.component-drop-ghost circle.body,.component-drop-ghost line.body{fill:var(--panel);stroke:var(--canvas-ink);stroke-width:2;stroke-dasharray:4 3}
+/* 0D: the inner grip moves/selects the Point; the outer ring (port-hit) wires from it. */
+.point-grip{fill:transparent;stroke:none;cursor:grab;pointer-events:all;touch-action:none}
+.node.dragging .point-grip{cursor:grabbing}
+.node[data-dimension="0"]:hover .port-hit,.node[data-dimension="0"].selected .port-hit{stroke:var(--component-boundary-color,var(--canvas-ink));stroke-width:1;stroke-dasharray:2 3;opacity:.55}
+.node[data-dimension="0"] .port-hit:hover{opacity:1;stroke-dasharray:none}
+.node[data-dimension="0"].nested-child .dimensional-point-body{stroke-width:2.4}
+.settle-host-ghost.path-host rect,.settle-host-ghost.edge-host rect{fill:color-mix(in srgb,var(--canvas-tone) 76%,#6f8fb7 24%);stroke:#6f8fb7}
+.settle-host-ghost.path-host .settle-wire-axis,.settle-host-ghost.edge-host .settle-wire-axis{stroke:#6f8fb7;stroke-width:2;stroke-dasharray:5 3;vector-effect:non-scaling-stroke}
+
+/* --- Carrier Path ends ------------------------------------------------------ */
+.carrier-end-handle{fill:var(--panel);stroke:var(--canvas-ink);stroke-width:1.6;cursor:grab;pointer-events:all;touch-action:none;vector-effect:non-scaling-stroke}
+.carrier-end-handle.bound{opacity:0;transition:opacity .1s}
+.wire-group:hover .carrier-end-handle.bound,.wire-group .wire.selected~.carrier-end-handle.bound{opacity:1}
+.carrier-end-handle.free{stroke-width:2;stroke-dasharray:2 2}
+.wire-group.has-free-end .wire{stroke-dasharray:7 5}
+.endpoint-halo.free-end{stroke-dasharray:2 3}

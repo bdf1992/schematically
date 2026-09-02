@@ -107,7 +107,7 @@ function updateHistoryUI(){
 
 // --- Checkpoints -----------------------------------------------------------
 function checkpointStore(){diagram.meta=diagram.meta||{};if(!Array.isArray(diagram.meta.checkpoints))diagram.meta.checkpoints=[];return diagram.meta.checkpoints}
-function checkpointSnapshot(){const doc=historyDocument();doc.meta=doc.meta||{};doc.meta.checkpoints=[];return doc}
+function checkpointSnapshot(){const doc=SovSchematicData.compactDocument(historyDocument());doc.meta=doc.meta||{};doc.meta.checkpoints=[];return doc}
 function createCheckpoint(name=null){
   commitHistoryCapture();const store=checkpointStore();const label=String(name||`Checkpoint ${store.length+1}`).trim()||`Checkpoint ${store.length+1}`;
   const cp={id:`cp-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,name:label,createdAt:new Date().toISOString(),revision:diagram.revision||0,document:checkpointSnapshot()};
@@ -146,7 +146,11 @@ function pasteClipboard({offset=32}={}){
   for(const old of comps){
     const value=SovSchematicData.clone(old);delete value.id;
     value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
-    if(old.parentId&&idMap.has(old.parentId)){value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`}else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
+    if(old.parentId&&idMap.has(old.parentId)){
+      value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
+      // A Point stuck to the copied host's boundary or path stays stuck to the copy.
+      if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
+    }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
     const fresh=SovSchematicData.makeComponent(diagram,value);nodes.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
   }
   for(const old of semanticClipboard.wires||[]){

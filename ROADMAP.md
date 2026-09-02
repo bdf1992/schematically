@@ -77,10 +77,11 @@ rc/<next>
 ### First post-RC candidates
 
 1. **Topology grammar — Issue #7**
+   - landed on `dev` 2026-09-01: Point / Path / Plane palette primitives with minimal default records; `config.attachmentDefaults` so a Plane exposes no built-in points; Points settle onto Paths, Plane boundaries, Wires, and open interiors through the one Component settle path; 0D grip/ring gesture; compact saved records; Wire as a carrier Path (1D form, carrier role, ends bound or free, end-handle rebind gesture, palette Path drops a free-ended carrier);
    - formal Point / Path / Surface cell/incidence model;
    - boundary operator / subcell vocabulary;
    - generic `Part` as owned addressable subcell/facet;
-   - `Wire` becomes a carrier role/configuration of `1D Path` rather than a parallel geometric primitive;
+   - `Wire` becomes a carrier role/configuration of `1D Path` rather than a parallel geometric primitive (semantics landed; storing carriers and Components in one record kind remains, as a file-format transition);
    - parametric `stick_to(path[t])` and relative placement.
 
 2. **Data-driven language — Issue #4**

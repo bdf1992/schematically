@@ -59,8 +59,8 @@ function appendComponentGraphic(g,n,cfg){
   g.appendChild(use);
 }
 function appendComponentText(g,n,cfg,s){
-  const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||s.name;
-  if(p.labelMode!=='none'){
+  const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s);
+  if(p.labelMode!=='none'&&label){
     const t=document.createElementNS('http://www.w3.org/2000/svg','text');
     t.setAttribute('text-anchor','middle');t.setAttribute('class',p.labelMode==='outside'?'outside-label':'component-label');
     if(componentHostedOnWire(n)&&componentBackdropMode(n)==='none'){
@@ -134,7 +134,14 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   if(form.dimension===0){
     const pointCfg=componentAttachmentPoint(n,'self')?.config,point=document.createElementNS('http://www.w3.org/2000/svg','circle');
     point.setAttribute('class','dimensional-point-body port attachment-point');point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
-    const display=String(cfg.label||'').trim()||(n.symbolId==='port'?'':s.name);if(display){const label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','component-label dimensional-point-label');label.setAttribute('text-anchor','middle');label.setAttribute('y','22');label.textContent=display;g.appendChild(label)}return
+    const display=String(cfg.label||'').trim()||componentTypeCaption(n,s);
+    if(display){
+      // A hosted Point inherits its host's angle; its label stays upright and below the point in world space.
+      const angle=componentHostAngle(n),label=document.createElementNS('http://www.w3.org/2000/svg','text');
+      label.setAttribute('class','component-label dimensional-point-label');label.setAttribute('text-anchor','middle');label.setAttribute('y','0');
+      label.setAttribute('transform',`rotate(${-angle}) translate(0 22)`);label.textContent=display;g.appendChild(label);
+    }
+    return
   }
   if(form.dimension===1){const line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('class','dimensional-path-body');line.setAttribute('x1',String(-size.w/2));line.setAttribute('x2',String(size.w/2));line.setAttribute('y1','0');line.setAttribute('y2','0');line.setAttribute('stroke-width',String(Math.max(2,Math.min(14,2+form.body.thickness*.18))));g.appendChild(line);appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);return}
   if(backdrop!=='none'){
@@ -177,6 +184,12 @@ function render(){
       if(selfPoint){vis=g.querySelector('.dimensional-point-body');if(vis){vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}}
       else{vis=document.createElementNS('http://www.w3.org/2000/svg','circle');vis.setAttribute('class','port attachment-point');vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.setAttribute('cx',localX);vis.setAttribute('cy',localY);vis.setAttribute('r','5');vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}
       g.appendChild(hit);if(!selfPoint)g.appendChild(vis);
+      if(selfPoint){
+        // A 0D form is both a movable object and an attachment. The inner grip moves it
+        // (drag) or selects it (click); the outer ring is the wiring/attachment target.
+        const grip=document.createElementNS('http://www.w3.org/2000/svg','circle');
+        grip.setAttribute('class','point-grip');grip.setAttribute('cx',localX);grip.setAttribute('cy',localY);grip.setAttribute('r','8');g.appendChild(grip);
+      }
       if(pcfg.label){
         const portLabel=document.createElementNS('http://www.w3.org/2000/svg','text');
         portLabel.setAttribute('class','port-label-text');
@@ -196,21 +209,17 @@ function clearEndpointFocus(){
 }
 function focusWireEndpoints(w){
   clearEndpointFocus();
-  for(const [nodeId,side] of [[w.a,w.aSide],[w.b,w.bSide]]){
-    const nodeEl=document.querySelector(`.node[data-id="${nodeId}"]`);
-    if(!nodeEl) continue;
-    nodeEl.querySelector(`.port-hit[data-side="${side}"]`)?.classList.add('endpoint-focus');
-    const portHit=nodeEl.querySelector(`.port-hit[data-side="${side}"]`);
-    const visiblePort=portHit?.nextElementSibling;
-    visiblePort?.classList.add('endpoint-focus');
-    const n=nodes.find(n=>n.id===nodeId);
-    if(n){
-      const P=portPos(n,side);
-      const halo=document.createElementNS('http://www.w3.org/2000/svg','circle');
-      halo.setAttribute('class','endpoint-halo');
-      halo.setAttribute('cx',P.x);halo.setAttribute('cy',P.y);halo.setAttribute('r','10');
-      ghostLayer.appendChild(halo);
+  for(const end of ['a','b']){
+    const ep=carrierEndpoint(w,end);if(!ep)continue;
+    if(ep.kind==='bound'){
+      const nodeEl=document.querySelector(`.node[data-id="${ep.node.id}"]`),side=ep.compatId;
+      nodeEl?.querySelector(`.port-hit[data-side="${side}"]`)?.classList.add('endpoint-focus');
+      nodeEl?.querySelector(`.port-hit[data-side="${side}"]`)?.nextElementSibling?.classList.add('endpoint-focus');
     }
+    const halo=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    halo.setAttribute('class','endpoint-halo'+(ep.kind==='free'?' free-end':''));
+    halo.setAttribute('cx',ep.pos.x);halo.setAttribute('cy',ep.pos.y);halo.setAttribute('r','10');
+    ghostLayer.appendChild(halo);
   }
 }
 function angleDelta(a,b){
@@ -379,7 +388,7 @@ function renderArrowPoses(group,poses,className='flow-chevron'){
 }
 
 function focusWireVisual(i){
-  document.querySelectorAll('.wire-group').forEach((g,j)=>g.classList.toggle('muted',j!==i));
+  document.querySelectorAll('.wire-group').forEach(g=>g.classList.toggle('muted',Number(g.dataset.wireIndex)!==i));
   const w=wires[i]; if(w) focusWireEndpoints(w);
 }
 function clearWireVisualFocus(){
@@ -388,13 +397,16 @@ function clearWireVisualFocus(){
 }
 function renderWires(signalState=computeSignalState()){
   wiresG.innerHTML='';
+  nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
   clearEndpointFocus();
   const occupied=[];
   const dragging=!!activeNodeDrag;
+  const hostAnchors=new Map();
 
   wires.forEach((w,i)=>{
-    const editor=entityEditorState(w);const cfg=connectionConfig(w);const a=nodes.find(n=>n.id===w.a), b=nodes.find(n=>n.id===w.b); if(!a||!b||editor.hidden||isEffectivelyHidden(a)||isEffectivelyHidden(b))return;
-    const A=portPos(a,w.aSide), B=portPos(b,w.bSide);
+    const editor=entityEditorState(w);const cfg=connectionConfig(w);if(editor.hidden||!carrierIsRenderable(w))return;
+    const epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b'),a=epA.node,b=epB.node;
+    const A=epA.pos, B=epB.pos;
     const touchesDragged = dragging && (w.a===activeNodeDrag || w.b===activeNodeDrag);
     const snapshot = touchesDragged ? dragRouteSnapshots.get(i) : null;
 
@@ -409,7 +421,7 @@ function renderWires(signalState=computeSignalState()){
 
     const signal=wireSignalColors(w,signalState);
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
-    group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
+    group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':'')+((epA.kind==='free'||epB.kind==='free')?' has-free-end':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
 
     const gradientId=`wire-gradient-${i}-${renderEpoch++}`;
     const gradient=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
@@ -449,7 +461,14 @@ function renderWires(signalState=computeSignalState()){
     renderPacketsForWire(group,cfg,points,signal,base.getTotalLength(),w);
 
     group.appendChild(hit);
-    wiresG.appendChild(group);
+    // Wires paint beneath the nodes, so a wire on a Component's interior surface would be
+    // hidden by its host's body. It is lifted to just after its host in the node layer:
+    // above the host body, beneath the hosted children that follow it.
+    const surface=w.canvasId||GLOBAL_CANVAS_ID;
+    const hostId=surface.startsWith('canvas:component:')?surface.slice('canvas:component:'.length):null;
+    const hostEl=hostId?nodesG.querySelector(`:scope > .node[data-id="${hostId}"]`):null;
+    if(hostEl){(hostAnchors.get(hostId)||hostEl).after(group);hostAnchors.set(hostId,group)}
+    else wiresG.appendChild(group);
 
     // Marks have no independent positional truth. Every arrow is regenerated
     // from the exact line geometry being rendered in this frame. If the line is
@@ -478,16 +497,32 @@ function renderWires(signalState=computeSignalState()){
 
     if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'RETURN!':'RETURN?';group.appendChild(mark)}
     if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13);label.setAttribute('text-anchor','middle');label.textContent=cfg.label;group.appendChild(label)}
-    const markerA=document.createElementNS('http://www.w3.org/2000/svg','text');
-    markerA.setAttribute('class','endpoint-channel-tag');
-    {const side=physicalPortSide(a,w.aSide);markerA.setAttribute('x',A.x+(side==='left'?-14:side==='right'?14:0));markerA.setAttribute('y',A.y+(side==='top'?-12:side==='bottom'?15:4));markerA.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
-    markerA.textContent=endpointMarkerDisplay(w,'a');
-    group.appendChild(markerA);
-    const markerB=document.createElementNS('http://www.w3.org/2000/svg','text');
-    markerB.setAttribute('class','endpoint-channel-tag');
-    {const side=physicalPortSide(b,w.bSide);markerB.setAttribute('x',B.x+(side==='left'?-14:side==='right'?14:0));markerB.setAttribute('y',B.y+(side==='top'?-12:side==='bottom'?15:4));markerB.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
-    markerB.textContent=endpointMarkerDisplay(w,'b');
-    group.appendChild(markerB)
+    // Channel markers belong to bound ends; a free end has no port to mark.
+    if(a){
+      const markerA=document.createElementNS('http://www.w3.org/2000/svg','text');
+      markerA.setAttribute('class','endpoint-channel-tag');
+      {const side=physicalPortSide(a,w.aSide);markerA.setAttribute('x',A.x+(side==='left'?-14:side==='right'?14:0));markerA.setAttribute('y',A.y+(side==='top'?-12:side==='bottom'?15:4));markerA.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
+      markerA.textContent=endpointMarkerDisplay(w,'a');
+      group.appendChild(markerA);
+    }
+    if(b){
+      const markerB=document.createElementNS('http://www.w3.org/2000/svg','text');
+      markerB.setAttribute('class','endpoint-channel-tag');
+      {const side=physicalPortSide(b,w.bSide);markerB.setAttribute('x',B.x+(side==='left'?-14:side==='right'?14:0));markerB.setAttribute('y',B.y+(side==='top'?-12:side==='bottom'?15:4));markerB.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
+      markerB.textContent=endpointMarkerDisplay(w,'b');
+      group.appendChild(markerB);
+    }
+    // End handles: a free end shows an open ring where the Path stops; a bound end's handle sits a
+    // little way along the lead so the Component's own port keeps pointer priority at the terminal.
+    {const L=base.getTotalLength();
+     for(const [end,ep,at] of [['a',epA,0],['b',epB,L]]){
+       const q=ep.kind==='free'?ep.pos:base.getPointAtLength(at===0?Math.min(20,L/2):Math.max(L-20,L/2));
+       const handle=document.createElementNS('http://www.w3.org/2000/svg','circle');
+       handle.setAttribute('class','carrier-end-handle'+(ep.kind==='free'?' free':' bound'));handle.dataset.end=end;handle.dataset.wireIndex=String(i);
+       handle.setAttribute('cx',q.x);handle.setAttribute('cy',q.y);handle.setAttribute('r',ep.kind==='free'?'6':'4.5');
+       handle.addEventListener('pointerdown',e=>{e.stopPropagation();beginCarrierEndDrag(e,i,end)});
+       group.appendChild(handle);
+     }}
     // Legacy Wire-owned attachment points are migrated to hosted 0D Components before projection.
 
     hit.addEventListener('pointerdown',e=>{e.stopPropagation();selectWire(i);focusWireVisual(i)});

@@ -82,9 +82,11 @@ function selectWire(i,{focus=true}={}){
   const w=wires[i];
   if(!w){hideSelectionBar();return}
   connectionDetail.hidden=false;
-  const cfg=connectionConfig(w),a=nodes.find(n=>n.id===w.a),b=nodes.find(n=>n.id===w.b);
-  cFrom.textContent=`${componentConfig(a).label||byId(a.symbolId).name}.${w.aSide} · ch ${wireEndpointMarker(w,'a')}`;
-  cTo.textContent=`${componentConfig(b).label||byId(b.symbolId).name}.${w.bSide} · ch ${wireEndpointMarker(w,'b')}`;
+  const cfg=connectionConfig(w),epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b');
+  const endText=(ep,end)=>ep?.kind==='bound'?`${componentConfig(ep.node).label||byId(ep.node.symbolId).name}.${ep.pointId} · ch ${wireEndpointMarker(w,end)}`:ep?`free · ${Math.round(ep.pos.x)}, ${Math.round(ep.pos.y)}`:'—';
+  cFrom.textContent=endText(epA,'a');
+  cTo.textContent=endText(epB,'b');
+  cEnds.textContent=`${epA?.kind==='bound'?'bound':'free'} → ${epB?.kind==='bound'?'bound':'free'}`;
   cDirection.textContent=cfg.direction;
   cReciprocity.textContent=cfg.reciprocity;
   cOperations.textContent=cfg.direction==='duplex'?`A→B ${wireOperationLabel(cfg.forwardOperation)} · B→A ${wireOperationLabel(cfg.reverseOperation)}`:`${wireOperationLabel(wireOperation(w,cfg.direction==='reverse'?'reverse':'forward'))}`;

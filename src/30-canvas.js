@@ -37,14 +37,17 @@ function makePaletteFloat(symbolId){
   return el;
 }
 function drawPaletteDropGhost(symbolId,p){
-  const s=byId(symbolId);
+  const s=byId(symbolId),preset=SovSchematicData.templatePreset(symbolId),dim=preset?.form?.dimension??2;
   paletteDropLayer.replaceChildren();
   const g=document.createElementNS('http://www.w3.org/2000/svg','g');
   g.setAttribute('class','component-drop-ghost');
   g.setAttribute('transform',`translate(${p.x} ${p.y})`);
-  g.innerHTML=`<rect class="body" x="-56" y="-42" width="112" height="84" rx="8"/>
-    <use class="glyph" href="#sym-${symbolId}" x="-40" y="-29" width="80" height="54"/>
-    <text x="0" y="32" text-anchor="middle">${escapeXML(s.name)}</text>`;
+  // The ghost has the dimension of what will be placed: a dot, a segment, or a surface.
+  if(dim===0)g.innerHTML=`<circle class="body" r="8"/><text x="0" y="24" text-anchor="middle">${escapeXML(s.name)}</text>`;
+  else if(dim===1){const half=(preset?.presentation?.size?.w||240)/2;g.innerHTML=`<line class="body" x1="${-half}" y1="0" x2="${half}" y2="0"/><text x="0" y="20" text-anchor="middle">${escapeXML(s.name)}</text>`}
+  else{const w=preset?.presentation?.size?.w||112,h=preset?.presentation?.size?.h||84;g.innerHTML=`<rect class="body" x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="8"/>
+    ${preset?'':`<use class="glyph" href="#sym-${symbolId}" x="-40" y="-29" width="80" height="54"/>`}
+    <text x="0" y="${h/2-10}" text-anchor="middle">${escapeXML(s.name)}</text>`}
   paletteDropLayer.appendChild(g);
 }
 function updatePaletteDrag(x,y){
@@ -174,12 +177,14 @@ document.addEventListener('visibilitychange',()=>{
 
 for (const [group, ids] of Object.entries(GROUPS)) {
   const section=document.createElement('div'); section.className='section';
-  section.innerHTML=`<h2>${group}</h2><div class="symbol-grid"></div>`;
+  section.dataset.group=group.toLowerCase();
+  section.innerHTML=`<h2>${group}</h2><div class="symbol-grid${group==='Primitives'?' primitive-grid':''}"></div>`;
   const grid=section.querySelector('.symbol-grid');
   ids.forEach(id=>{
-    const s=byId(id), b=document.createElement('button');
-    b.type='button'; b.className='symbol-card';
-    b.innerHTML=glyph(id)+`<b>${s.name}</b><small>${s.family} · ${s.diagram_class}</small>`;
+    const s=byId(id), b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
+    b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
+    const caption=preset?`${preset.form.dimension}D · ${s.role}`:`${s.family} · ${s.diagram_class}`;
+    b.innerHTML=glyph(id)+`<b>${s.name}</b><small>${caption}</small>`;
     bindPaletteComponent(b,id);
     grid.appendChild(b);
   });
@@ -286,7 +291,7 @@ function activeCanvasNodeIds(canvasId=selectedCanvasContextId()){
   if(canvasId===GLOBAL_CANVAS_ID)return new Set(nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===GLOBAL_CANVAS_ID).map(n=>n.id));
   const d=canvasDescriptorById(canvasId);if(!d)return new Set();
   if(d.ownerKind==='component')return new Set(nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===canvasId).map(n=>n.id));
-  if(d.ownerKind==='wire'){const w=wires.find(w=>w.id===d.ownerId);return new Set(w?[w.a,w.b]:[])}
+  if(d.ownerKind==='wire'){const w=wires.find(w=>w.id===d.ownerId);return new Set(w?[w.a,w.b].filter(Boolean):[])}
   return new Set();
 }
 function activeCanvasWireSet(canvasId=selectedCanvasContextId()){
@@ -307,7 +312,7 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
   for(const n of scopedNodes){const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
   const wireIds=activeCanvasWireSet(canvasId),occupied=[];
-  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const a=nodes.find(n=>n.id===w.a),bb=nodes.find(n=>n.id===w.b);if(!a||!bb)return;const points=stableRouteForWire(i,w,portPos(a,w.aSide),portPos(bb,w.bSide),occupied);occupied.push(...routeSegments(points));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
+  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
   return Number.isFinite(l)?{l,r,t,b}:null;
 }
 function fitDiagram(){
@@ -498,8 +503,10 @@ function finishKeyboardMove(mods){
 }
 
 
+const POINT_EXTENT=24; // a 0D form occupies a fixed small footprint; presentation.size does not apply to it
 function componentSize(n){
   const p=componentConfig(n).presentation;
+  if(componentForm(n).dimension===0)return {w:POINT_EXTENT,h:POINT_EXTENT};
   return {w:p.size.w,h:p.size.h};
 }
 function componentBounds(n,pad=0){
@@ -607,7 +614,7 @@ function componentPortLocalPosition(n,pointId){
   if(spec.side==='bottom')return{x:alongX,y:size.h/2+faceOffset};
   return{x:0,y:0};
 }
-function renderedWirePath(w){return wiresG.querySelector(`.wire-group[data-wire-id="${w.id}"] .wire`)}
+function renderedWirePath(w){return workspace.querySelector(`.wire-group[data-wire-id="${w.id}"] .wire`)}
 function pathTangentAngleAtLength(path,length){
   if(!path?.getTotalLength)return 0;const L=path.getTotalLength(),eps=Math.max(.35,Math.min(2,L/500));
   const here=path.getPointAtLength(Math.max(0,Math.min(L,length)));
@@ -647,13 +654,18 @@ function syncComponentAttachedPose(node){
 }
 function componentHostCandidateAtPoint(node,x=node.x,y=node.y){
   if(!node)return null;const dim=componentForm(node).dimension,ownedIds=new Set([node.id,...descendantsOf(node.id).map(n=>n.id)]);let best=null;const consider=c=>{if(c&&(!best||c.placement.distance<best.placement.distance))best=c};
+  const interiorHost=()=>{
+    const candidates=nodes.filter(candidate=>candidate.id!==node.id&&componentAcceptsChildren(candidate)&&!isEntityLocked(candidate)&&!isDescendantOf(candidate.id,node.id)&&pointInsideComponent(x,y,candidate,-componentConfig(candidate).presentation.padding)).sort((a,b)=>{const A=componentSize(a),B=componentSize(b);return A.w*A.h-B.w*B.h});
+    return candidates[0]?{kind:'component',entity:candidates[0],canvasId:componentCanvas(candidates[0]).id,placement:{distance:0}}:null;
+  };
   if(dim===0){
+    // A Point sticks to the nearest 1D carrier or 2D boundary within reach; otherwise it
+    // settles into an open interior like any other Component.
     for(const w of wires){if(entityEditorState(w).hidden||ownedIds.has(w.a)||ownedIds.has(w.b))continue;const q=nearestPointOnSvgPath(renderedWirePath(w),x,y);if(q&&q.distance<=24)consider({kind:'wire',entity:w,canvasId:wireCanvas(w).id,placement:q})}
     for(const host of nodes){if(host.id===node.id||ownedIds.has(host.id)||isEntityLocked(host)||isEffectivelyHidden(host))continue;if(componentIsPath(host)){const q=nearestPointOnComponentPath(host,x,y);if(q&&q.distance<=24)consider({kind:'path',entity:host,canvasId:componentCanvas(host).id,placement:q})}else if(componentIsSurface(host)){const q=nearestPointOnComponentEdge(host,x,y);if(q&&q.distance<=20)consider({kind:'edge',entity:host,canvasId:componentCanvas(host).id,placement:q})}}
-    return best;
+    return best||interiorHost();
   }
-  const componentCandidates=nodes.filter(candidate=>candidate.id!==node.id&&componentAcceptsChildren(candidate)&&!isEntityLocked(candidate)&&!isDescendantOf(candidate.id,node.id)&&pointInsideComponent(x,y,candidate,-componentConfig(candidate).presentation.padding)).sort((a,b)=>{const A=componentSize(a),B=componentSize(b);return A.w*A.h-B.w*B.h});
-  if(componentCandidates[0])return {kind:'component',entity:componentCandidates[0],canvasId:componentCanvas(componentCandidates[0]).id,placement:{distance:0}};
+  const interior=interiorHost();if(interior)return interior;
   for(const w of wires){if(entityEditorState(w).hidden||ownedIds.has(w.a)||ownedIds.has(w.b))continue;const q=nearestPointOnSvgPath(renderedWirePath(w),x,y);if(q&&q.distance<=24)consider({kind:'wire',entity:w,canvasId:wireCanvas(w).id,placement:q})}
   return best;
 }
@@ -694,9 +706,28 @@ function physicalPortSide(n,pointId){return Attachment.resolveSpec(n,pointId)?.s
 function portNormal(side){
   if(side==='left')return{x:-1,y:0};if(side==='top')return{x:0,y:-1};if(side==='bottom')return{x:0,y:1};return{x:1,y:0};
 }
-function stubPos(P,portId,d=26,node=null){
+// `inward` says which side of a boundary the carrier is on (true: the interior), for a
+// boundary-hosted Point and for a 2D form's own boundary point alike. Without it the
+// point's face decides.
+function stubPos(P,portId,d=26,node=null,inward=null){
   let side,face='external';
   if(node){side=physicalPortSide(node,portId);face=componentAttachmentPoint(node,portId)?.config?.face||'external'}else side=portId==='in'?'left':portId==='control'?'top':'right';
+  const placement=node?componentPlacement(node):null;
+  if(placement?.kind==='edge'){
+    // A Point stuck to a boundary leaves along that boundary's normal, into whichever surface carries the Wire.
+    const host=nodes.find(h=>h.id===placement.hostId);
+    const normal=rotateVectorByDegrees(portNormal(placement.side).x,portNormal(placement.side).y,host?componentHostAngle(host):0);
+    const sign=(inward==null?face==='internal':inward)?-1:1;return{x:P.x+normal.x*d*sign,y:P.y+normal.y*d*sign};
+  }
   let normal=portNormal(side);if(node&&componentHostedOnWire(node))normal=rotateVectorByDegrees(normal.x,normal.y,componentHostAngle(node));
-  const sign=face==='internal'?-1:1;return{x:P.x+normal.x*d*sign,y:P.y+normal.y*d*sign};
+  const sign=(inward==null?face==='internal':inward)?-1:1;return{x:P.x+normal.x*d*sign,y:P.y+normal.y*d*sign};
+}
+// True when a Wire runs on the interior surface behind the boundary its endpoint sits on: the
+// host of a boundary-hosted Point, or the 2D form itself for one of its own boundary points
+// (built-in or data-declared). Null when the endpoint has no boundary of its own.
+function wireEndpointInward(w,node){
+  if(!w||!node)return null;const surface=w.canvasId||GLOBAL_CANVAS_ID;const placement=componentPlacement(node);
+  if(placement.kind==='edge'){const host=nodes.find(h=>h.id===placement.hostId);return !!host&&surface===componentCanvas(host).id}
+  if(componentForm(node).dimension===2)return surface===componentCanvas(node).id;
+  return null;
 }

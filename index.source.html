@@ -20,6 +20,12 @@
     <path d="M39 48h18"/>
   </g>
 </symbol>
+<symbol id="sym-point" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
+    <circle cx="48" cy="32" r="9"/>
+    <circle cx="48" cy="32" r="2.5" fill="currentColor" stroke="none"/>
+  </g>
+</symbol>
 <symbol id="sym-port" viewBox="0 0 96 64">
   <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
     <path d="M8 32h28M60 32h28"/>
@@ -27,7 +33,17 @@
   </g>
 </symbol>
 <symbol id="sym-path" viewBox="0 0 96 64">
-  <path d="M8 32h80" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
+    <path d="M12 32h72"/>
+    <circle cx="12" cy="32" r="4" fill="currentColor" stroke="none"/>
+    <circle cx="84" cy="32" r="4" fill="currentColor" stroke="none"/>
+  </g>
+</symbol>
+<symbol id="sym-plane" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="14" y="10" width="68" height="44" rx="5"/>
+    <path d="M26 22h44M26 32h44M26 42h28" stroke-width="2.5" opacity=".5"/>
+  </g>
 </symbol>
 <symbol id="sym-join" viewBox="0 0 96 64">
   <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
@@ -130,7 +146,7 @@
 <div class="app">
 <header>
   <div class="brand">SOV SCHEMATIC</div>
-  <div class="tag">0.1 Beta.24 · file surface</div>
+  <div class="tag">0.1 dev · Point / Path / Plane</div>
   <div class="status" id="status">Ready</div>
   <div class="toolbar canvas-toolbar" aria-label="Workspace toolbar">
     <div class="file-menu-wrap">
@@ -256,17 +272,17 @@
 
 <aside class="palette">
   <div class="section grammar-compact">
-    <div class="grammar-line"><b>Parts</b> compose · <b>Components</b> contain · <b>Wires</b> connect</div>
+    <div class="grammar-line"><b>Point</b> attaches · <b>Path</b> carries · <b>Plane</b> hosts</div>
   </div>
   <div id="palette"></div>
   <div class="section help-stack" aria-label="Schematic help">
     <details class="help-disclosure">
-      <summary><b>Parts</b><span class="helper-snippet">owned structure</span><span class="info-dot">i</span></summary>
-      <div class="help-body"><b>Boundary</b> separates inside/outside. <b>Side</b> names boundary regions. <b>Port</b> is an addressable crossing or attachment.</div>
+      <summary><b>Primitives</b><span class="helper-snippet">0D · 1D · 2D</span><span class="info-dot">i</span></summary>
+      <div class="help-body">Drag a <b>Point</b> onto a Path, a Plane boundary, or a Wire and it sticks there as an attachment. Drag it inside an open Plane and it is hosted. A Plane starts with no built-in points; a typed Component is a Plane with template defaults.</div>
     </details>
     <details class="help-disclosure">
       <summary><b>Wires</b><span class="helper-snippet">carry connections</span><span class="info-dot">i</span></summary>
-      <div class="help-body">A Wire connects Port faces. Endpoint markers belong to the Wire; Wire Parts are owned attachments such as taps and junctions.</div>
+      <div class="help-body">A Wire is a carrier Path. Each end is bound to a Point or free: drag an end handle onto a Point to bind it, or anywhere else to free it. Both ends bound and sharing a surface is a connection; a Point dropped on a Wire is a tap.</div>
     </details>
     <details class="help-disclosure">
       <summary><b>Marks</b><span class="helper-snippet">read the drawing</span><span class="info-dot">i</span></summary>
@@ -291,6 +307,11 @@
       <div class="icon-select component-template-select" aria-label="Component template">
         <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3"></rect><path d="M3 12h3M18 12h3M12 3v3M12 18v3"></path></svg></span>
         <select id="barComponentType" class="bar-select bar-type" aria-label="Component template" title="Component template">
+        <optgroup label="Primitives">
+        <option value="point">Point</option>
+        <option value="path">Path</option>
+        <option value="plane">Plane</option>
+        </optgroup>
         <option value="blank">Untyped</option>
         <option value="act">Act</option>
         <option value="hold">Hold</option>
@@ -355,55 +376,32 @@
       <div id="componentSettingsFields" class="settings-surface">
         <div class="settings-head"><b>Component settings</b><span>Form first · appearance second</span></div>
         <details class="form-settings" id="formSettings" open>
-          <summary><b>Form</b><span class="helper-snippet">dimension · body · frame</span></summary>
+          <summary><b>Form</b><span class="helper-snippet">dimension · interior · attachments</span></summary>
           <div class="settings-grid settings-grid-compact">
             <label>Dimension
               <select id="formDimension">
                 <option value="0">0D · Point</option>
                 <option value="1">1D · Path</option>
-                <option value="2">2D · Surface</option>
+                <option value="2">2D · Plane</option>
               </select>
             </label>
-            <label>Body
-              <select id="formBodyKind">
-                <option value="point">Point</option>
-                <option value="path">Path</option>
-                <option value="surface">Surface</option>
-              </select>
-            </label>
-            <label>Material
-              <select id="formMaterial">
-                <option value="generic">Generic</option>
-                <option value="canvas">Canvas</option>
-                <option value="paper">Paper</option>
-                <option value="panel">Panel</option>
-                <option value="wood">Wood</option>
-                <option value="metal">Metal</option>
-                <option value="glass">Glass</option>
-                <option value="custom">Custom</option>
-              </select>
-            </label>
-            <label>Body thickness <input id="formBodyThickness" type="number" min="0" max="128" step="1"></label>
-            <label>Interior
+            <label data-dims="2">Interior
               <select id="formInteriorState">
                 <option value="closed">Closed</option>
                 <option value="open">Open · hosts Components</option>
               </select>
             </label>
-            <label>Frame
-              <select id="formFrameMode">
-                <option value="none">None</option>
-                <option value="frame">Frame</option>
-                <option value="shell">Shell</option>
+            <label data-dims="2">Attachments
+              <select id="formAttachments" title="Built-in boundary points">
+                <option value="standard">Left · Right · Top</option>
+                <option value="none">None · hosted Points only</option>
               </select>
             </label>
-            <label>Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
-            <label>Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
           </div>
-          <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Form defines dimensional topology. Body defines substrate/material. Frame is boundary structure. Interior openness is structural state, not presentation.</div></details>
+          <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
         </details>
         <details class="form-settings">
-          <summary><b>Appearance</b><span class="helper-snippet">graphic · text · size</span></summary>
+          <summary><b>Appearance</b><span class="helper-snippet">graphic · size · material</span></summary>
           <div class="settings-grid settings-grid-compact">
           <label>Signal
             <select id="barComponentSignalMode" aria-label="Component signal mode" title="Signal behavior">
@@ -412,7 +410,7 @@
               <option value="passive">Passive</option>
             </select>
           </label>
-          <label>Graphic
+          <label data-dims="12">Graphic
             <select id="visualGraphicMode">
               <option value="symbol">Symbol</option>
               <option value="custom">Custom SVG</option>
@@ -427,11 +425,33 @@
               <option value="none">Hidden</option>
             </select>
           </label>
-          <label>Width <input id="visualWidth" type="number" min="80" max="520" step="8"></label>
-          <label>Height <input id="visualHeight" type="number" min="64" max="420" step="8"></label>
-          <label>Interior <button id="visualInteriorColor" class="color-slot-chip" type="button" aria-label="Interior palette slot"></button></label>
+          <label data-dims="12">Width <input id="visualWidth" type="number" min="80" max="520" step="8"></label>
+          <label data-dims="2">Height <input id="visualHeight" type="number" min="64" max="420" step="8"></label>
+          <label data-dims="2">Interior <button id="visualInteriorColor" class="color-slot-chip" type="button" aria-label="Interior palette slot"></button></label>
+          <label data-dims="2">Material
+            <select id="formMaterial">
+              <option value="generic">Generic</option>
+              <option value="canvas">Canvas</option>
+              <option value="paper">Paper</option>
+              <option value="panel">Panel</option>
+              <option value="wood">Wood</option>
+              <option value="metal">Metal</option>
+              <option value="glass">Glass</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label>Thickness <input id="formBodyThickness" type="number" min="0" max="128" step="1" title="Point radius · Path stroke · Plane depth"></label>
+          <label data-dims="2">Frame
+            <select id="formFrameMode">
+              <option value="none">None</option>
+              <option value="frame">Frame</option>
+              <option value="shell">Shell</option>
+            </select>
+          </label>
+          <label data-dims="2">Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
+          <label data-dims="2">Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
         </div>
-        <label class="settings-wide">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
+        <label class="settings-wide" data-dims="12">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
         <label class="settings-wide" id="visualSvgRow">SVG · viewBox 0 0 96 64
           <textarea id="visualSvgMarkup" spellcheck="false" placeholder="&lt;path d=&quot;...&quot;/&gt;"></textarea>
         </label>
@@ -468,7 +488,7 @@
           <label><span id="barWireInLabel">IN marker</span><input id="barWireInMarker" type="text" maxlength="12" placeholder="Ch" aria-label="Wire input channel marker"></label>
           <label>IN color <span id="barWireInColor" class="color-slot-chip readonly-slot" title="Input Port color"></span></label>
         </div>
-        <button id="barAddWirePortBtn" class="bar-action settings-action" type="button" title="Add a Port part to this wire">+ Port part</button>
+        <button id="barAddWirePortBtn" class="bar-action settings-action" type="button" title="Host a Point on this Wire">+ Point</button>
       </div>
 
       <div id="portSettingsFields" class="settings-surface" hidden>
@@ -504,7 +524,7 @@
 
     <div class="color-slot-panel" id="colorSlotPanel" hidden></div>
   </div>
-  <div class="hint" id="hint">Drag body: move · corner grip: right / down / diagonal resize · Form: dimensional structure · ⚙ details · Port wins overlap</div>
+  <div class="hint" id="hint">Drag body: move · corner grip: resize · Point: drag centre to move, drag ring to wire · drop a Point on a Path, Plane edge, or Wire to attach it</div>
 </main>
 
 <aside class="inspector">
@@ -552,8 +572,9 @@
       <details class="inline-help"><summary><span class="info-dot">i</span> Port behavior</summary><div>Direction controls input/output. Access controls read/write capability. Face controls inside/outside boundary placement. Access is not authority.</div></details>
     </div>
     <div id="connectionDetail" hidden>
-      <div class="kind-badge">WIRE</div>
+      <div class="kind-badge">WIRE · CARRIER PATH</div>
       <dl class="kv">
+        <dt>Ends</dt><dd id="cEnds">bound → bound</dd>
         <dt>From</dt><dd id="cFrom"></dd>
         <dt>To</dt><dd id="cTo"></dd>
         <dt>Direction</dt><dd id="cDirection"></dd>

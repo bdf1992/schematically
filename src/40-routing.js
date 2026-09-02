@@ -6,8 +6,12 @@ function nodeInsideContainer(node,container){return !!node&&!!container&&isDesce
 function ignoreContainerObstacle(candidate,sourceNode,targetNode){
   return componentAcceptsChildren(candidate)&&nodeInsideContainer(sourceNode,candidate)&&nodeInsideContainer(targetNode,candidate);
 }
-function endpointNeedsOuterObstacle(node,portId){
-  return !!node && (componentConfig(node).ports[portId]?.face||'external')!=='internal';
+function endpointNeedsOuterObstacle(node,portId,wire=null){
+  if(!node)return false;
+  // A carrier on the endpoint's own interior surface starts inside it: the body is the
+  // surface the carrier runs on, not an obstacle to route around.
+  if(wire&&(wire.canvasId||GLOBAL_CANVAS_ID)===componentCanvas(node).id)return false;
+  return (componentConfig(node).ports[portId]?.face||'external')!=='internal';
 }
 function segHitsRect(A,B,R){
   // Orthogonal segment only. Touching the outside boundary is acceptable;
@@ -207,9 +211,8 @@ function captureDragSnapshots(nodeId){
   dragRouteSnapshots.clear();
   const occupied=[];
   wires.forEach((w,i)=>{
-    const a=nodes.find(n=>n.id===w.a), b=nodes.find(n=>n.id===w.b);
-    if(!a||!b) return;
-    const A=portPos(a,w.aSide), B=portPos(b,w.bSide);
+    const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
+    if(!A||!B) return;
     const points=stableRouteForWire(i,w,A,B,occupied);
     occupied.push(...routeSegments(points));
     if(w.a===nodeId || w.b===nodeId){
@@ -225,9 +228,8 @@ function settleDraggedRoutes(){
   if(!activeNodeDrag) return;
   const occupied=[];
   wires.forEach((w,i)=>{
-    const a=nodes.find(n=>n.id===w.a), b=nodes.find(n=>n.id===w.b);
-    if(!a||!b) return;
-    const A=portPos(a,w.aSide), B=portPos(b,w.bSide);
+    const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
+    if(!A||!B) return;
 
     if(w.a===activeNodeDrag || w.b===activeNodeDrag){
       const candidate=routePoints(A,B,w.aSide,w.bSide,w.a,w.b,w.lane??i,occupied,w.id);
@@ -272,7 +274,9 @@ function scheduleDragSettle(mods=null){
 function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSeed=0,occupied=[],wireId=null){
   const sourceNode=nodes.find(n=>n.id===sourceId);
   const targetNode=nodes.find(n=>n.id===targetId);
-  const SA=stubPos(A,aSide,26,sourceNode), SB=stubPos(B,bSide,26,targetNode);
+  const routedWire=wireId?wires.find(x=>x.id===wireId):null;
+  // A free end has no boundary to leave; the route starts exactly there.
+  const SA=sourceNode?stubPos(A,aSide,26,sourceNode,wireEndpointInward(routedWire,sourceNode)):A, SB=targetNode?stubPos(B,bSide,26,targetNode,wireEndpointInward(routedWire,targetNode)):B;
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
   const otherRects=nodes
     .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
@@ -281,8 +285,8 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   // Source and target are included after the outward lead. This prevents a path
   // from exiting one side and visually tunneling through either endpoint card.
   const endpointRects=[];
-  if(endpointNeedsOuterObstacle(sourceNode,aSide))endpointRects.push(rectForNode(sourceNode,8));
-  if(endpointNeedsOuterObstacle(targetNode,bSide))endpointRects.push(rectForNode(targetNode,8));
+  if(endpointNeedsOuterObstacle(sourceNode,aSide,routedWire))endpointRects.push(rectForNode(sourceNode,8));
+  if(endpointNeedsOuterObstacle(targetNode,bSide,routedWire))endpointRects.push(rectForNode(targetNode,8));
   const obstacles=[...otherRects,...endpointRects];
 
   const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
@@ -389,7 +393,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
   const targetNode=nodes.find(n=>n.id===w.b);
   let rebuilt=null;
   if(cachedCore.length>=2){
-    const SA=stubPos(A,w.aSide,26,nodes.find(n=>n.id===w.a)), SB=stubPos(B,w.bSide,26,nodes.find(n=>n.id===w.b));
+    const SA=sourceNode?stubPos(A,w.aSide,26,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?stubPos(B,w.bSide,26,targetNode,wireEndpointInward(w,targetNode)):B;
     const inner=cachedCore.slice(1,-1).map(q=>({x:q.x,y:q.y}));
     rebuilt=normalizePoints([A,SA,...inner,SB,B]);
 
@@ -398,8 +402,8 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     const routeOnly=normalizePoints([SA,...inner,SB]);
     const endpointRects=[];
     const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
-    if(endpointNeedsOuterObstacle(sourceNode,w.aSide))endpointRects.push(rectForNode(sourceNode,8));
-    if(endpointNeedsOuterObstacle(targetNode,w.bSide))endpointRects.push(rectForNode(targetNode,8));
+    if(endpointNeedsOuterObstacle(sourceNode,w.aSide,w))endpointRects.push(rectForNode(sourceNode,8));
+    if(endpointNeedsOuterObstacle(targetNode,w.bSide,w))endpointRects.push(rectForNode(targetNode,8));
     const obstacles=[...otherRects,...endpointRects];
 
     if(!pathValid(routeOnly,obstacles)) rebuilt=null;
@@ -413,7 +417,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     return candidate.points;
   }
 
-  const SA=stubPos(A,w.aSide,26,nodes.find(n=>n.id===w.a)), SB=stubPos(B,w.bSide,26,nodes.find(n=>n.id===w.b));
+  const SA=sourceNode?stubPos(A,w.aSide,26,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?stubPos(B,w.bSide,26,targetNode,wireEndpointInward(w,targetNode)):B;
   const rebuiltCore=normalizePoints([SA,...rebuilt.slice(2,-2),SB]);
   const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
   const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied);
@@ -454,6 +458,7 @@ function terminalPointId(nodeId,id){
   return node?(Attachment.pointId(node,id)||String(id??'')):String(id??'');
 }
 function sameTerminal(n1,s1,n2,s2){
+  if(!n1||!n2)return false; // a free end is never the same terminal as anything
   return n1===n2 && terminalPointId(n1,s1)===terminalPointId(n2,s2);
 }
 function findEquivalentWire(a,aSide,b,bSide){
@@ -479,9 +484,23 @@ function addConnection(a,aSide,b,bSide){
   const id=wires.length-1;routeCache.delete(id);selected=`wire:${id}`;refreshCanvasScopeControl();return true;
 }
 
+// A carrier Path from the palette: a Wire with two free ends, laid across the drop point on
+// whichever surface is there (an open interior, else the world).
+function addCarrier(x,y,mods=null,options={}){
+  const step=dragSnapStep(mods||{});
+  const cx=step>0?snapCoord(x,step):x,cy=step>0?snapCoord(y,step):y,half=120;
+  const host=nodes.filter(c=>componentAcceptsChildren(c)&&!isEntityLocked(c)&&!isEffectivelyHidden(c)&&pointInsideComponent(cx,cy,c,-componentConfig(c).presentation.padding)).sort((p,q)=>{const P=componentSize(p),Q=componentSize(q);return P.w*P.h-Q.w*Q.h})[0];
+  const w=SovSchematicData.makeWire(diagram,{aAttachment:{kind:'free',x:cx-half,y:cy},bAttachment:{kind:'free',x:cx+half,y:cy},canvasId:host?componentCanvas(host).id:GLOBAL_CANVAS_ID});
+  wires.push(w);wireCanvas(w);connectionConfig(w);
+  const i=wires.length-1;routeCache.delete(i);
+  if(options.render!==false)render();
+  if(options.select!==false)selectWire(i);
+  return w;
+}
 function addNode(symbolId,x=null,y=null,mods=null,options={}){
   const centerX=camera.x+camera.w/2,centerY=camera.y+camera.h/2;
   const px=x==null?centerX+(Math.random()-.5)*90:x,py=y==null?centerY+(Math.random()-.5)*70:y;
+  if(SovSchematicData.templatePreset(symbolId)?.carrier)return addCarrier(px,py,x!=null&&y!=null?mods:null,options);
   const n=SovSchematicData.makeComponent(diagram,{symbolId,x:px,y:py,canvasId:GLOBAL_CANVAS_ID});
   ensureEntityCanvas(n,'component');
   if(x!=null&&y!=null){

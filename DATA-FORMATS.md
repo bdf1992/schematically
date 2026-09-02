@@ -98,3 +98,44 @@ Normalized Components expose `parts.points` with canonical 0D identities. Wire e
 ## Template attachment seam
 
 A 2D Component may declare additional boundary attachment descriptors under `config.attachmentPoints`, e.g. `{id, compatId?, side: left|right|top|bottom, t: 0..1, defaultFlow?}`. Built-in dimensional attachment sets remain defaults. Full Part/facet/cell grammar is intentionally post-RC.
+
+
+## Compact records (dev, 2026-09-01)
+
+`.sov`, `.sovpak`, recovery snapshots, API `document.get`, and embedded checkpoints
+are written through `SovSchematicData.compactDocument()`. It strips what the loader
+rebuilds:
+
+- component `canvas`, `boundary`, `parts`, `type`, `incomplete`;
+- port-level mirrors of the active connection (`flow`, `access`, `colorSlot`,
+  `color`, `channel*`, `side`) and realized `connection.color` / `connection.name`;
+- `config.color`, and the presentation layout hints `svgRef`, `internalLayout`,
+  `portTopology`, `boundaryColorMode`, `boundaryShape`;
+- `placement` when it is plain surface placement (implied by `x`/`y`);
+- wire `canvas`, `duplex`, and an empty `attachments[]`;
+- the document-level root `canvas`.
+
+`aSide` / `bSide` stay in the file because the document schema requires them.
+Files that still carry the full projections load identically; nothing is removed
+from the reader.
+
+### Default records
+
+A default point contract is one connection, outside face, no label. Only the points
+the effective dimension exposes get a contract: a Point owns `out` (its `self`), a
+Path `in`/`out`, a standard 2D surface `in`/`out`/`control`, and a Plane
+(`attachmentDefaults: none`) owns nothing until a Point is hosted on it.
+
+`config.attachmentDefaults: standard | none` is stored when `none`, and when `standard`
+overrides a Plane's preset of `none`. The symbol
+ids `point`, `path`, `plane` carry Form presets; `port` is read as `point`.
+
+
+## Carrier endpoints (dev, 2026-09-01)
+
+A wire's `aAttachment` / `bAttachment` may be `{kind:'free',x,y}`; then `a` / `aSide`
+(or `b` / `bSide`) are `null`. The schema's required keys are still present. A wire
+carries `form.dimension: 1` and `role: 'carrier'`. `wire.create` accepts any mix of
+bound (`a`/`aSide` or an `aAttachment` ref) and free ends; `wire.update` rebinds an end
+with `a`/`aSide` or frees it with `aAttachment: {kind:'free',x,y}`. Validation requires
+bound ends to exist and two bound ends to share a surface; free ends are always valid.

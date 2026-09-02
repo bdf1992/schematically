@@ -69,8 +69,9 @@ function wireSignalColors(w,signalState){
   const cfg=connectionConfig(w);
   const aConnection=endpointConnection(w,'a');
   const bConnection=endpointConnection(w,'b');
-  const aSignal=signalState.colors.get(w.a)||componentConfig(nodes.find(n=>n.id===w.a)).color;
-  const bSignal=signalState.colors.get(w.b)||componentConfig(nodes.find(n=>n.id===w.b)).color;
+  // A free end has no source Component; its side of the carrier takes the connection color.
+  const aSignal=signalState.colors.get(w.a)||aConnection.color;
+  const bSignal=signalState.colors.get(w.b)||bConnection.color;
   const forwardLive=cfg.direction!=='none' && wireDirectionActive(w,'forward',signalState);
   const reverseLive=cfg.direction==='duplex' ? wireDirectionActive(w,'reverse',signalState) : (cfg.direction==='reverse' && wireDirectionActive(w,'reverse',signalState));
   return {

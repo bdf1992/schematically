@@ -171,7 +171,7 @@ function syncSelectionFormState(kind,entity){
     const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;barFormState.title=`${formDimensionLabel(f)} · configure Form`;
     barFormState.classList.toggle('active',f.frame.mode!=='none'||f.regions.interior.state==='open');
   }else{
-    barFormState.textContent='1D';barFormState.title='Wire Form · 1D path';barFormState.disabled=true;barFormState.classList.add('wire-form');
+    barFormState.textContent='1D';barFormState.title='Wire Form · 1D path · configure Wire settings';barFormState.classList.add('wire-form');
   }
 }
 function syncComponentVisualPanel(n){
@@ -181,8 +181,11 @@ function syncComponentVisualPanel(n){
   visualText.value=p.text;visualSvgMarkup.value=p.graphic.svg;visualSvgRow.hidden=p.graphic.kind!=='custom';
   setSlotChip(visualInteriorColor,p.interiorColorSlot);
   const f=componentForm(n);
-  formDimension.value=String(f.dimension);formBodyKind.value=f.body.kind;formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
+  formDimension.value=String(f.dimension);formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
   formInteriorState.value=f.regions.interior.state;formFrameMode.value=f.frame.mode;formFrameThickness.value=String(f.frame.thickness);formFrameDepth.value=String(f.frame.depth);
+  formAttachments.value=Attachment.attachmentDefaults(n);
+  // Settings are shown per dimension: a Point has no size or frame, a Path no height or interior.
+  for(const el of componentSettingsFields.querySelectorAll('[data-dims]')){const dims=String(el.dataset.dims).split('').map(Number);el.hidden=!dims.includes(f.dimension)}
 }
 function syncSelectionSettings(kind){
   if(typeof syncEntityUtilityPanel==='function')syncEntityUtilityPanel(kind);

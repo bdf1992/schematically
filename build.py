@@ -12,4 +12,7 @@ def inline_script(match):
 
 source=re.sub(r'<script src="([^"]+)"></script>',inline_script,source)
 (ROOT/'index.html').write_text(source,encoding='utf-8')
+dist_dir=ROOT/'desktop/dist'
+dist_dir.mkdir(parents=True,exist_ok=True)
+(dist_dir/'index.html').write_text(source,encoding='utf-8')
 print(ROOT/'index.html')

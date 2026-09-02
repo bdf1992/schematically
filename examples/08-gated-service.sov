@@ -1,0 +1,254 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "example-gated-service",
+  "revision": 0,
+  "meta": {
+    "title": "Classic 08 — Gated service, authored by hand"
+  },
+  "components": [
+    {
+      "id": "grant",
+      "symbolId": "authority",
+      "x": 160,
+      "y": 290,
+      "config": {
+        "label": "Grant",
+        "signalMode": "source"
+      }
+    },
+    {
+      "id": "req",
+      "symbolId": "act",
+      "x": 160,
+      "y": 430,
+      "config": {
+        "label": "Requester",
+        "signalMode": "source"
+      }
+    },
+    {
+      "id": "svc",
+      "symbolId": "plane",
+      "x": 640,
+      "y": 360,
+      "form": {
+        "dimension": 2,
+        "regions": {
+          "interior": {
+            "state": "open"
+          }
+        }
+      },
+      "config": {
+        "label": "Service",
+        "attachmentDefaults": "none",
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "none",
+          "size": {
+            "w": 560,
+            "h": 260
+          }
+        }
+      }
+    },
+    {
+      "id": "permit",
+      "symbolId": "point",
+      "x": 360,
+      "y": 295,
+      "canvasId": "canvas:component:svc",
+      "parentId": "svc",
+      "placement": {
+        "kind": "edge",
+        "hostId": "svc",
+        "side": "left",
+        "t": 0.25
+      },
+      "form": {
+        "dimension": 0
+      },
+      "config": {
+        "label": "permit",
+        "ports": {
+          "out": {
+            "face": "both"
+          }
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "none",
+          "backdrop": "none"
+        }
+      }
+    },
+    {
+      "id": "ingress",
+      "symbolId": "point",
+      "x": 360,
+      "y": 425,
+      "canvasId": "canvas:component:svc",
+      "parentId": "svc",
+      "placement": {
+        "kind": "edge",
+        "hostId": "svc",
+        "side": "left",
+        "t": 0.75
+      },
+      "form": {
+        "dimension": 0
+      },
+      "config": {
+        "label": "ingress",
+        "ports": {
+          "out": {
+            "face": "both"
+          }
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "none",
+          "backdrop": "none"
+        }
+      }
+    },
+    {
+      "id": "egress",
+      "symbolId": "point",
+      "x": 920,
+      "y": 360,
+      "canvasId": "canvas:component:svc",
+      "parentId": "svc",
+      "placement": {
+        "kind": "edge",
+        "hostId": "svc",
+        "side": "right",
+        "t": 0.5
+      },
+      "form": {
+        "dimension": 0
+      },
+      "config": {
+        "label": "egress",
+        "ports": {
+          "out": {
+            "face": "both"
+          }
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "none",
+          "backdrop": "none"
+        }
+      }
+    },
+    {
+      "id": "check",
+      "symbolId": "gate",
+      "x": 560,
+      "y": 400,
+      "canvasId": "canvas:component:svc",
+      "parentId": "svc",
+      "config": {
+        "label": "Check"
+      }
+    },
+    {
+      "id": "store",
+      "symbolId": "hold",
+      "x": 760,
+      "y": 400,
+      "canvasId": "canvas:component:svc",
+      "parentId": "svc",
+      "config": {
+        "label": "Store"
+      }
+    },
+    {
+      "id": "log",
+      "symbolId": "receipt",
+      "x": 1120,
+      "y": 360,
+      "config": {
+        "label": "Receipt"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "k1",
+      "a": "grant",
+      "aSide": "out",
+      "b": "permit",
+      "bSide": "out",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "scoped permission"
+      }
+    },
+    {
+      "id": "k2",
+      "a": "permit",
+      "aSide": "out",
+      "b": "check",
+      "bSide": "control",
+      "canvasId": "canvas:component:svc"
+    },
+    {
+      "id": "k3",
+      "a": "req",
+      "aSide": "out",
+      "b": "ingress",
+      "bSide": "out",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "request"
+      }
+    },
+    {
+      "id": "k4",
+      "a": "ingress",
+      "aSide": "out",
+      "b": "check",
+      "bSide": "in",
+      "canvasId": "canvas:component:svc"
+    },
+    {
+      "id": "k5",
+      "a": "check",
+      "aSide": "out",
+      "b": "store",
+      "bSide": "in",
+      "canvasId": "canvas:component:svc"
+    },
+    {
+      "id": "k6",
+      "a": "store",
+      "aSide": "out",
+      "b": "egress",
+      "bSide": "out",
+      "canvasId": "canvas:component:svc"
+    },
+    {
+      "id": "k7",
+      "a": "egress",
+      "aSide": "out",
+      "b": "log",
+      "bSide": "in",
+      "canvasId": "canvas:global",
+      "config": {
+        "forwardOperation": "write",
+        "label": "record"
+      }
+    }
+  ],
+  "references": []
+}
