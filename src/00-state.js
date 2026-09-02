@@ -5,6 +5,16 @@ const SYMBOLS = [{"id":"blank","name":"BLANK","family":"UNSET","role":"incomplet
 // Primitives are the dimensional basis (0D / 1D / 2D). Components are typed 2D forms
 // whose attachment defaults are template data; a typed Plane is an ordinary Component.
 const GROUPS = {"Primitives": ["point","path","plane"], "Components": ["blank","act","hold","buffer","gate","switch","limit","receipt","observe"]};
+// The dimensional ladder, and the only thing the palette offers. Each rung is
+// bounded by the rung below it and a Point has no lower boundary, so the ladder is
+// the boundary recursion read upwards. `pod` is the next rung; it is declared here
+// with available:false so adding it is one flag rather than a new shape.
+const DIMENSIONAL_LADDER=[
+  {symbolId:'point',dimension:0,sense:'where',boundedBy:null,available:true},
+  {symbolId:'path',dimension:1,sense:'through',boundedBy:'Points',available:true},
+  {symbolId:'plane',dimension:2,sense:'across',boundedBy:'Paths',available:true},
+  {symbolId:'pod',dimension:3,sense:'within',boundedBy:'Planes',available:false}
+];
 const PRIMITIVE_SYMBOL_IDS=new Set(GROUPS.Primitives);
 function isPrimitiveSymbol(id){return PRIMITIVE_SYMBOL_IDS.has(String(id||''))}
 const workspace = document.getElementById('workspace');

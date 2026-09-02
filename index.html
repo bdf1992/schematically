@@ -462,6 +462,23 @@ button.points-row:hover{background:color-mix(in srgb,currentColor 8%,transparent
 button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-offset:1px}
 .points-row.current{border-color:var(--accent,#4E86BE)}
 .points-actions{display:flex;gap:6px;margin-top:8px}
+
+/* The palette is the dimensional ladder: one rung per row, read top to bottom.
+   A rung that is declared but not built is shown dimmed and cannot be dragged. */
+.symbol-ladder{display:flex;flex-direction:column;gap:6px}
+.symbol-card.ladder-rung{
+  display:grid;grid-template-columns:34px 1fr;align-items:center;gap:10px;
+  padding:8px 10px;
+}
+.symbol-card.ladder-rung svg{width:34px;height:26px}
+.ladder-glyph-pending{
+  display:block;width:34px;height:26px;border-radius:5px;
+  border:1px dashed var(--line);opacity:.5;
+}
+.ladder-text b{display:block;font-size:11px;letter-spacing:.08em}
+.ladder-text small{display:block;color:var(--muted);font-size:9px;margin-top:1px}
+.symbol-card.ladder-rung.pending{cursor:default;opacity:.45}
+.symbol-card.ladder-rung.pending:hover{background:var(--panel);border-color:transparent}
 </style>
 </head>
 <body>
@@ -729,24 +746,7 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
 </header>
 
 <aside class="palette">
-  <div class="section grammar-compact">
-    <div class="grammar-line"><b>Point</b> attaches · <b>Path</b> carries · <b>Plane</b> hosts</div>
-  </div>
   <div id="palette"></div>
-  <div class="section help-stack" aria-label="Schematic help">
-    <details class="help-disclosure">
-      <summary><b>Primitives</b><span class="helper-snippet">0D · 1D · 2D</span><span class="info-dot">i</span></summary>
-      <div class="help-body">Drag a <b>Point</b> onto a Path, a Plane boundary, or a Wire and it sticks there as an attachment. Drag it inside an open Plane and it is hosted. A Plane starts with no built-in points; a typed Component is a Plane with template defaults.</div>
-    </details>
-    <details class="help-disclosure">
-      <summary><b>Wires</b><span class="helper-snippet">carry connections</span><span class="info-dot">i</span></summary>
-      <div class="help-body">A Wire is a carrier Path. Each end is bound to a Point or free: drag an end handle onto a Point to bind it, or anywhere else to free it. Both ends bound and sharing a surface is a connection; a Point dropped on a Wire is a tap.</div>
-    </details>
-    <details class="help-disclosure">
-      <summary><b>Marks</b><span class="helper-snippet">read the drawing</span><span class="info-dot">i</span></summary>
-      <div class="help-body help-marks"><b>→</b> flow · <b>○</b> terminal · <b>●</b> join · <b>◇</b> conditional · <b>┃</b> stop</div>
-    </details>
-  </div>
 </aside>
 
 <main class="workspace-wrap">
@@ -1798,6 +1798,16 @@ const SYMBOLS = [{"id":"blank","name":"BLANK","family":"UNSET","role":"incomplet
 // Primitives are the dimensional basis (0D / 1D / 2D). Components are typed 2D forms
 // whose attachment defaults are template data; a typed Plane is an ordinary Component.
 const GROUPS = {"Primitives": ["point","path","plane"], "Components": ["blank","act","hold","buffer","gate","switch","limit","receipt","observe"]};
+// The dimensional ladder, and the only thing the palette offers. Each rung is
+// bounded by the rung below it and a Point has no lower boundary, so the ladder is
+// the boundary recursion read upwards. `pod` is the next rung; it is declared here
+// with available:false so adding it is one flag rather than a new shape.
+const DIMENSIONAL_LADDER=[
+  {symbolId:'point',dimension:0,sense:'where',boundedBy:null,available:true},
+  {symbolId:'path',dimension:1,sense:'through',boundedBy:'Points',available:true},
+  {symbolId:'plane',dimension:2,sense:'across',boundedBy:'Paths',available:true},
+  {symbolId:'pod',dimension:3,sense:'within',boundedBy:'Planes',available:false}
+];
 const PRIMITIVE_SYMBOL_IDS=new Set(GROUPS.Primitives);
 function isPrimitiveSymbol(id){return PRIMITIVE_SYMBOL_IDS.has(String(id||''))}
 const workspace = document.getElementById('workspace');
@@ -3603,19 +3613,28 @@ document.addEventListener('visibilitychange',()=>{
 });
 
 
-for (const [group, ids] of Object.entries(GROUPS)) {
-  const section=document.createElement('div'); section.className='section';
-  section.dataset.group=group.toLowerCase();
-  section.innerHTML=`<h2>${group}</h2><div class="symbol-grid${group==='Primitives'?' primitive-grid':''}"></div>`;
-  const grid=section.querySelector('.symbol-grid');
-  ids.forEach(id=>{
-    const s=byId(id), b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
-    b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
-    const caption=preset?`${preset.form.dimension}D · ${s.role}`:`${s.family} · ${s.diagram_class}`;
-    b.innerHTML=glyph(id)+`<b>${s.name}</b><small>${caption}</small>`;
-    bindPaletteComponent(b,id);
-    grid.appendChild(b);
-  });
+// One card per rung, one rung per row: the palette is the ladder, read top to
+// bottom. Typed Components are no longer offered here - they are compositions of
+// these, not siblings of them - though existing documents still carry them and the
+// selection bar still retypes to them.
+{
+  const section=document.createElement('div');
+  section.className='section';section.dataset.group='primitives';
+  section.innerHTML='<h2>Form</h2><div class="symbol-ladder"></div>';
+  const ladder=section.querySelector('.symbol-ladder');
+  for(const rung of DIMENSIONAL_LADDER){
+    const s=byId(rung.symbolId);
+    if(!s&&rung.available)continue;
+    const b=document.createElement('button');
+    b.type='button';b.className='symbol-card ladder-rung'+(rung.available?'':' pending');
+    b.dataset.symbolId=rung.symbolId;b.dataset.dimension=String(rung.dimension);
+    const name=s?s.name:rung.symbolId.toUpperCase();
+    b.innerHTML=`${rung.available?glyph(rung.symbolId):'<span class="ladder-glyph-pending" aria-hidden="true"></span>'}`
+      +`<span class="ladder-text"><b>${name}</b><small>${rung.dimension}D · ${rung.sense}</small></span>`;
+    if(rung.available)bindPaletteComponent(b,rung.symbolId);
+    else{b.disabled=true;b.title=`${name} is not built yet: ${rung.dimension}D, bounded by ${rung.boundedBy}`}
+    ladder.appendChild(b);
+  }
   palette.appendChild(section);
 }
 

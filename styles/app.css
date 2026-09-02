@@ -455,3 +455,20 @@ button.points-row:hover{background:color-mix(in srgb,currentColor 8%,transparent
 button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-offset:1px}
 .points-row.current{border-color:var(--accent,#4E86BE)}
 .points-actions{display:flex;gap:6px;margin-top:8px}
+
+/* The palette is the dimensional ladder: one rung per row, read top to bottom.
+   A rung that is declared but not built is shown dimmed and cannot be dragged. */
+.symbol-ladder{display:flex;flex-direction:column;gap:6px}
+.symbol-card.ladder-rung{
+  display:grid;grid-template-columns:34px 1fr;align-items:center;gap:10px;
+  padding:8px 10px;
+}
+.symbol-card.ladder-rung svg{width:34px;height:26px}
+.ladder-glyph-pending{
+  display:block;width:34px;height:26px;border-radius:5px;
+  border:1px dashed var(--line);opacity:.5;
+}
+.ladder-text b{display:block;font-size:11px;letter-spacing:.08em}
+.ladder-text small{display:block;color:var(--muted);font-size:9px;margin-top:1px}
+.symbol-card.ladder-rung.pending{cursor:default;opacity:.45}
+.symbol-card.ladder-rung.pending:hover{background:var(--panel);border-color:transparent}

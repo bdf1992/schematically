@@ -175,19 +175,28 @@ document.addEventListener('visibilitychange',()=>{
 });
 
 
-for (const [group, ids] of Object.entries(GROUPS)) {
-  const section=document.createElement('div'); section.className='section';
-  section.dataset.group=group.toLowerCase();
-  section.innerHTML=`<h2>${group}</h2><div class="symbol-grid${group==='Primitives'?' primitive-grid':''}"></div>`;
-  const grid=section.querySelector('.symbol-grid');
-  ids.forEach(id=>{
-    const s=byId(id), b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
-    b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
-    const caption=preset?`${preset.form.dimension}D · ${s.role}`:`${s.family} · ${s.diagram_class}`;
-    b.innerHTML=glyph(id)+`<b>${s.name}</b><small>${caption}</small>`;
-    bindPaletteComponent(b,id);
-    grid.appendChild(b);
-  });
+// One card per rung, one rung per row: the palette is the ladder, read top to
+// bottom. Typed Components are no longer offered here - they are compositions of
+// these, not siblings of them - though existing documents still carry them and the
+// selection bar still retypes to them.
+{
+  const section=document.createElement('div');
+  section.className='section';section.dataset.group='primitives';
+  section.innerHTML='<h2>Form</h2><div class="symbol-ladder"></div>';
+  const ladder=section.querySelector('.symbol-ladder');
+  for(const rung of DIMENSIONAL_LADDER){
+    const s=byId(rung.symbolId);
+    if(!s&&rung.available)continue;
+    const b=document.createElement('button');
+    b.type='button';b.className='symbol-card ladder-rung'+(rung.available?'':' pending');
+    b.dataset.symbolId=rung.symbolId;b.dataset.dimension=String(rung.dimension);
+    const name=s?s.name:rung.symbolId.toUpperCase();
+    b.innerHTML=`${rung.available?glyph(rung.symbolId):'<span class="ladder-glyph-pending" aria-hidden="true"></span>'}`
+      +`<span class="ladder-text"><b>${name}</b><small>${rung.dimension}D · ${rung.sense}</small></span>`;
+    if(rung.available)bindPaletteComponent(b,rung.symbolId);
+    else{b.disabled=true;b.title=`${name} is not built yet: ${rung.dimension}D, bounded by ${rung.boundedBy}`}
+    ladder.appendChild(b);
+  }
   palette.appendChild(section);
 }
 
