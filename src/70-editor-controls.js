@@ -80,8 +80,12 @@ function deleteSelected(){
 }
 
 barFormState.addEventListener('click',()=>{
-  const kind=selectedSurfaceKind();if(kind!=='component')return;
-  openSelectionSettings('component');formSettings.open=true;formSettings.scrollIntoView({block:'nearest'});
+  const kind=selectedSurfaceKind();
+  if(kind==='component'){
+    openSelectionSettings('component');formSettings.open=true;formSettings.scrollIntoView({block:'nearest'});
+  }else if(kind==='wire'){
+    openSelectionSettings('wire');wireSettingsFields.scrollIntoView({block:'nearest'});
+  }
 });
 function updateSelectedComponentForm(mutator){
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Form edit'))return;setHistoryHint('Edit Component Form');
