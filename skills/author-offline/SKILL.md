@@ -26,7 +26,7 @@ Coordinates are absolute canvas units, and `x`/`y` is the record's centre. A typ
 
 ## The authored form
 
-The file loader fills defaults for anything not written: port contracts, form body, editor flags. So a record can be short. The exceptions are Planes and Points: the loader does not apply their palette presets, so their records must carry the fields below.
+The file loader fills defaults for anything not written: palette presets, port contracts, form body, editor flags. So a record can be short. A preset fills a field only where the record says nothing, so anything you write wins.
 
 Document envelope:
 
@@ -51,16 +51,14 @@ Typed Component on the global canvas:
 
 `signalMode` is `source` (emits), `relay` (passes on, the default for most palette entries), or `passive`.
 
-Plane. All four of these blocks are required for a Plane to come out as a Plane:
+Plane. The preset gives it an open interior, no built-in points, no glyph, no label, and a 320 by 220 size. Write `presentation.size` when the children need more room; write the rest only to override:
 
 ```json
 {"id": "svc", "symbolId": "plane", "x": 640, "y": 360,
- "form": {"dimension": 2, "regions": {"interior": {"state": "open"}}},
- "config": {"label": "Service", "attachmentDefaults": "none",
-            "presentation": {"graphic": {"kind": "none"}, "labelMode": "none", "size": {"w": 560, "h": 260}}}}
+ "config": {"label": "Service", "presentation": {"size": {"w": 560, "h": 260}}}}
 ```
 
-Without `attachmentDefaults: "none"` it gets `in`/`out`/`control` like a Component. Without the open interior it cannot host anything. Without the size it is 112 by 84 and its children overflow it. A Plane draws no label; the label is for readers of the file.
+If you write `form` yourself, write the whole block including `"regions": {"interior": {"state": "open"}}`, because a written `form` replaces the preset form rather than merging with it. The same goes for `presentation`: writing it replaces the preset, so include `"graphic": {"kind": "none"}` and `"labelMode": "none"` alongside the size. A Plane draws no label; the label is for readers of the file.
 
 Point hosted on a Plane boundary. `placement.side` is `left`, `right`, `top`, or `bottom`; `t` runs 0 to 1 along that side. Set `x`/`y` to the matching spot on the edge so the file reads consistently. `face: "both"` is what makes it a crossing:
 
@@ -68,9 +66,7 @@ Point hosted on a Plane boundary. `placement.side` is `left`, `right`, `top`, or
 {"id": "ingress", "symbolId": "point", "x": 360, "y": 425,
  "canvasId": "canvas:component:svc", "parentId": "svc",
  "placement": {"kind": "edge", "hostId": "svc", "side": "left", "t": 0.75},
- "form": {"dimension": 0},
- "config": {"label": "ingress", "ports": {"out": {"face": "both"}},
-            "presentation": {"graphic": {"kind": "none"}, "labelMode": "none", "backdrop": "none"}}}
+ "config": {"label": "ingress", "ports": {"out": {"face": "both"}}}}
 ```
 
 A Point has one attachment point, always addressed as `out`, whichever way packets go through it.
@@ -165,7 +161,7 @@ Each pair shows a record that is wrong, what the validator or renderer does with
 
 Fix: give `outer` a port with face `internal` or `both`, wire `inner.out → outer.<port>` on `canvas:component:outer`, then `outer.<port> → ext.in` on `canvas:global`. `examples/04-boundary-port.sov` shows the Component form; `examples/08-gated-service.sov` shows the Plane form with hosted Points.
 
-**A Plane written like a Component.** Same file, but the Plane record is just `{"id", "symbolId": "plane", "x", "y", "config": {"label"}}`. Not refused. It loads as a closed 112 by 84 box with `in`/`out`/`control`, and every child overflows it. Fix: the four-block Plane record above.
+**A Plane with a partial `form` or `presentation`.** Writing `"form": {"dimension": 2}` replaces the preset form, so the interior comes out closed and the Plane cannot host anything; writing `"presentation": {"size": ...}` alone drops the preset's `graphic: none` and `labelMode: none`, so the Plane grows a glyph and a label. Not refused. Fix: either omit the block and take the preset, or write it whole.
 
 **Wiring to a bare Plane.** A Plane with `attachmentDefaults: "none"` and no hosted Points exposes nothing, so a Wire ending on it has no surface. Refused at load.
 

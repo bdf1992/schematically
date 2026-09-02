@@ -5,10 +5,9 @@
 //   node scripts/validate_sov.mjs file.sov [more.sov ...]
 //   node scripts/validate_sov.mjs --compact file.sov     # also print the compact saved form
 //
-// Sparse authored records are accepted: the loader fills form, port contracts, and wire
-// endpoint references the same way `file.open` does. Note that file loading does not
-// apply palette presets, so a Plane or Point record must carry its own dimension,
-// interior state, attachmentDefaults, and presentation (see skills/author-offline).
+// Sparse authored records are accepted: the loader applies palette presets and fills form,
+// port contracts, and wire endpoint references the same way `file.open` does (see
+// skills/author-offline for the authored form).
 import fs from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';

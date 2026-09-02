@@ -13,6 +13,7 @@ STATIC=[
     'tests/dimensional_form_qa.py',
     'tests/pre_repo_hardening_qa.py',
     'tests/author_offline_qa.py',
+    'tests/file_load_presets_qa.py',
 ]
 BROWSER=[
     'tests/attachment_point_refactor_qa.py',

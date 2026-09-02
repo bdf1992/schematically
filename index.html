@@ -1171,6 +1171,19 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
     plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:320,h:220}}}
   };
+  // Loading a file applies the same preset rule as makeComponent: a preset field fills in
+  // only where the record supplied nothing, so a sparse authored Plane or Point loads the
+  // way an API-created one is born, and a full saved record is left exactly as written.
+  function applyTemplatePreset(component){
+    const preset=templatePreset(component.symbolId);if(!preset)return component;
+    if(!isObject(component.form)&&isObject(preset.form))component.form=clone(preset.form);
+    if(!isObject(component.config))component.config={};
+    const config=component.config;
+    if(!['source','relay','passive'].includes(config.signalMode)&&preset.signalMode)config.signalMode=preset.signalMode;
+    if(!isObject(config.presentation)&&isObject(preset.presentation))config.presentation=clone(preset.presentation);
+    if(!['standard','none'].includes(config.attachmentDefaults)&&preset.attachmentDefaults&&preset.attachmentDefaults!=='standard')config.attachmentDefaults=preset.attachmentDefaults;
+    return component;
+  }
   function normalizeSymbolId(value){const id=String(value||'blank')||'blank';return LEGACY_SYMBOL_IDS[id]||id}
   function templatePreset(symbolId){return clone(TEMPLATE_PRESETS[normalizeSymbolId(symbolId)]||null)}
   function isPrimitiveSymbol(symbolId){return Object.prototype.hasOwnProperty.call(TEMPLATE_PRESETS,normalizeSymbolId(symbolId))}
@@ -1219,6 +1232,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!isObject(doc.layout))doc.layout={};
     for(const component of doc.components){
       normalizeComponentIdentity(component);
+      applyTemplatePreset(component);
       component.form=normalizeComponentForm(component.form,component.canvas);
       if(!isObject(component.canvas))component.canvas={};
       component.canvas.id=`canvas:component:${component.id||'unknown'}`;component.canvas.scope='local';component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
