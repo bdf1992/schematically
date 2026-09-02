@@ -69,6 +69,26 @@ with sync_playwright() as p:
     core=page.evaluate('''()=>{const d=SovSchematicData.makeDocument({components:[{id:'p',symbolId:'point',x:0,y:0},{id:'pl',symbolId:'plane',x:0,y:0}]});
       const p=d.components[0],pl=d.components[1];return {p:[p.form.dimension,p.config.signalMode,p.config.presentation.labelMode],pl:[pl.form.regions.interior.state,pl.config.attachmentDefaults,pl.config.presentation.size.w]}}''')
     assert core=={'p':[0,'relay','none'],'pl':['open','none',320]},core
+    # 5. A wire written without a surface takes the one its ends expose, as makeWire does.
+    surfaces=page.evaluate('''(text)=>{SovSchematicAPI.file.open(text,'wires.sov');
+      const doc=SovSchematicAPI.document.get();const w=id=>doc.wires.find(w=>w.id===id).canvasId;
+      return {valid:SovSchematicData.validateDocument(doc),k1:w('k1'),k2:w('k2'),k3:w('k3'),k4:w('k4'),
+        core:SovSchematicData.makeDocument(JSON.parse(text)).wires.map(w=>w.canvasId)}}''',json.dumps({
+      'schema':'soveraeign.schematic/document@0.1','id':'wires','components':[
+        {'id':'a','symbolId':'act','x':100,'y':300},{'id':'b','symbolId':'hold','x':300,'y':300},
+        {'id':'pl','symbolId':'plane','x':700,'y':400},
+        {'id':'pin','symbolId':'point','x':540,'y':400,'canvasId':'canvas:component:pl','parentId':'pl','placement':{'kind':'edge','hostId':'pl','side':'left','t':.5},'config':{'ports':{'out':{'face':'both'}}}},
+        {'id':'h1','symbolId':'hold','x':700,'y':360,'canvasId':'canvas:component:pl','parentId':'pl'},
+        {'id':'h2','symbolId':'hold','x':700,'y':460,'canvasId':'canvas:component:pl','parentId':'pl'},
+      ],'wires':[
+        {'id':'k1','a':'a','aSide':'out','b':'b','bSide':'in'},
+        {'id':'k2','a':'pin','aSide':'out','b':'h1','bSide':'in'},
+        {'id':'k3','a':'h1','aSide':'out','b':'h2','bSide':'in'},
+        {'id':'k4','a':'b','aSide':'out','b':'pin','bSide':'out','canvasId':'canvas:global'},
+      ],'references':[]}))
+    assert surfaces['valid']['ok'],surfaces['valid']
+    assert surfaces['k1']=='canvas:global' and surfaces['k2']=='canvas:component:pl' and surfaces['k3']=='canvas:component:pl' and surfaces['k4']=='canvas:global',surfaces
+    assert surfaces['core']==['canvas:global','canvas:component:pl','canvas:component:pl','canvas:global'],surfaces['core']
     browser.close()
 assert not errors,errors
 print('PASS file load parity QA')

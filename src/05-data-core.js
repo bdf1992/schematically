@@ -92,6 +92,9 @@
     for(const wire of doc.wires){
       normalizeWireEndpoints(doc,wire,{strict:false});
       normalizeWireForm(wire);
+      // A record without a surface takes the one its ends expose, as makeWire does; an
+      // unreachable pair is left for validateDocument to report.
+      if(!cleanString(wire.canvasId,'')){try{wire.canvasId=carrierCanvasId(doc,wire,null)}catch(_){}}
       if(!isObject(wire.config))wire.config={};
       if(!['none','read','write'].includes(wire.config.forwardOperation))wire.config.forwardOperation='none';
       if(!['none','read','write'].includes(wire.config.reverseOperation))wire.config.reverseOperation='none';
