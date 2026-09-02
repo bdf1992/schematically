@@ -28,6 +28,10 @@ Resources: `component`, `wire`, `reference`.
 
 The server persists the canonical `.sov` document. `.sovpak` is a transport/package format around that same document rather than a second mutable authority.
 
+### Optimistic concurrency
+
+`schematic.create`, `schematic.update`, and `schematic.delete` accept an optional `ifRevision` (number): the document revision the caller last observed. It is optional — omit it and the write applies unconditionally, as before. When present and it does not match the document's current revision, the write is refused: the tool call returns `ok:false` with `error.message` of the form `Stale revision: expected <ifRevision>, document is at <current>`, and nothing is mutated.
+
 ## Boundary rule
 
 MCP/HTTP Wire writes use the same reachability function as the UI. A child Component cannot use an API mutation to reach an outer Port that is not exposed to its surface.

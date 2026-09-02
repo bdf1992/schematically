@@ -544,8 +544,17 @@
   }
   function touch(doc){doc.revision=Math.max(0,Math.trunc(num(doc.revision,0)))+1;doc.meta=doc.meta||{};doc.meta.updatedAt=nowIso();return doc.revision}
   function makeReceipt(op,ok,result,revisionBefore,error=null){return {schema:RECEIPT_SCHEMA,operationId:op.id||null,ok,revisionBefore,revisionAfter:result?.revisionAfter??revisionBefore,result:result?.value??result??null,error:error?{message:String(error.message||error)}:null}}
+  // ifRevision is the document revision the caller observed. Absent/null/undefined means
+  // no check is made; a mismatch on a mutating op refuses the write before it happens.
   function applyOperation(document,operation={}){
-    const doc=normalizeDocument(document),op={schema:OPERATION_SCHEMA,id:operation.id||`op-${Date.now()}`,op:operation.op,resource:operation.resource,resourceId:operation.resourceId??operation.idValue??null,value:clone(operation.value),patch:clone(operation.patch),query:clone(operation.query||{})};
+    const op={schema:OPERATION_SCHEMA,id:operation.id||`op-${Date.now()}`,op:operation.op,resource:operation.resource,resourceId:operation.resourceId??operation.idValue??null,value:clone(operation.value),patch:clone(operation.patch),query:clone(operation.query||{}),ifRevision:operation.ifRevision};
+    // Check the raw revision before normalizeDocument touches anything: normalization backfills
+    // legacy shapes in place, and a refused write must leave the document exactly as it was.
+    const rawRevision=Math.max(0,Math.trunc(num(document?.revision,0)));
+    if(typeof op.ifRevision==='number'&&op.ifRevision!==rawRevision&&['create','update','delete'].includes(op.op)){
+      return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:false,revisionBefore:rawRevision,revisionAfter:rawRevision,result:null,error:{message:`Stale revision: expected ${op.ifRevision}, document is at ${rawRevision}`}};
+    }
+    const doc=normalizeDocument(document);
     const before=doc.revision;
     try{
       let value,mutates=false;
@@ -596,9 +605,9 @@
     return [
       {name:'schematic.list',description:'List schematic resources.',inputSchema:{type:'object',properties:{resource:resourceSchema,query:{type:'object'}},required:['resource'],additionalProperties:false}},
       {name:'schematic.get',description:'Read one schematic resource by id.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'}},required:['resource','id'],additionalProperties:false}},
-      {name:'schematic.create',description:'Create a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,value:{type:'object'}},required:['resource','value'],additionalProperties:false}},
-      {name:'schematic.update',description:'Patch a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},patch:{type:'object'}},required:['resource','id','patch'],additionalProperties:false}},
-      {name:'schematic.delete',description:'Delete a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'}},required:['resource','id'],additionalProperties:false}},
+      {name:'schematic.create',description:'Create a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,value:{type:'object'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','value'],additionalProperties:false}},
+      {name:'schematic.update',description:'Patch a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},patch:{type:'object'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','id','patch'],additionalProperties:false}},
+      {name:'schematic.delete',description:'Delete a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','id'],additionalProperties:false}},
       {name:'schematic.document.get',description:'Return the entire schematic document.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
