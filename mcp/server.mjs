@@ -56,7 +56,7 @@ function executeTool(name,args={}){
   }[name];
   if(!map)return {ok:false,value:{error:`Unknown tool: ${name}`},mutates:false};
   const mutates=['create','update','delete'].includes(map.op),before=mutates?cloneDoc():null;
-  const receipt=Data.applyOperation(documentState,{schema:Data.OPERATION_SCHEMA,id:`mcp-${Date.now()}`,op:map.op,resource:args.resource,resourceId:args.id??null,value:args.value??null,patch:args.patch??null,query:args.query??{}});
+  const receipt=Data.applyOperation(documentState,{schema:Data.OPERATION_SCHEMA,id:`mcp-${Date.now()}`,op:map.op,resource:args.resource,resourceId:args.id??null,value:args.value??null,patch:args.patch??null,query:args.query??{},ifRevision:args.ifRevision});
   if(receipt.ok&&mutates)recordHistory(before);
   return {ok:receipt.ok,value:receipt,mutates:receipt.ok&&mutates};
 }
