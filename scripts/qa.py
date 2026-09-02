@@ -15,6 +15,7 @@ STATIC=[
     'tests/author_offline_qa.py',
     'tests/file_load_presets_qa.py',
     'tests/file_load_wire_canvas_qa.py',
+    'tests/desktop_shell_qa.py',
 ]
 BROWSER=[
     'tests/attachment_point_refactor_qa.py',

@@ -48,6 +48,10 @@ The agent-facing corpus ships with the repository:
 
 `index.source.html` + `src/*.js` + `styles/app.css` are the canonical development inputs. `python build.py` produces `index.html`, a deterministic standalone build that opens directly from disk. Module ownership is defined in `MODULES.md`; do not duplicate a concern into another module.
 
+## Desktop
+
+`desktop/` is a Tauri crate that wraps the same `index.html` in a native window. `cargo build --manifest-path desktop/src-tauri/Cargo.toml` (or `tauri build` from `desktop/src-tauri`, for a real installer) builds it. The Windows installer registers `.sov` and `.sovpak`, so double-clicking a document opens it in SOV Schematic.
+
 ## Quality practice
 
 `python scripts/qa.py` is the single authoritative gate, identical locally and in CI: static checks, browser interaction suites, API/HTTP/MCP parity and conformance, stress and performance watchers, mutation tests, the golden corpus, and syntax checks. Defects found by hand get an issue and, once fixed, a regression suite inside the gate. Pushes to `main` deploy to GitHub Pages only after the gate passes. `LOCAL-SETUP.md` covers machine setup, the local QA loop, and the green-main update pattern; `docs/BRANCHING.md` covers the release flow.
