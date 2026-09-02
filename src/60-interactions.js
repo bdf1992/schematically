@@ -126,7 +126,7 @@ function updateActiveNodeDrag(e){
   document.querySelectorAll('.node.scope-drop-target,.wire-group.scope-drop-target').forEach(el=>el.classList.remove('scope-drop-target'));
   const n=state.node,target=componentHostCandidateAtPoint(n,n.x,n.y);
   if(target?.kind==='component')document.querySelector(`.node[data-id="${target.entity.id}"]`)?.classList.add('scope-drop-target');
-  if(target?.kind==='wire')wiresG.querySelector(`.wire-group[data-wire-id="${target.entity.id}"]`)?.classList.add('scope-drop-target');
+  if(target?.kind==='wire')workspace.querySelector(`.wire-group[data-wire-id="${target.entity.id}"]`)?.classList.add('scope-drop-target');
   armHostCandidate(state,target);
   if(settleTimer){clearTimeout(settleTimer);settleTimer=null}scheduleDragVisualRefresh();scheduleDragSettle(state.modifiers);
 }

@@ -388,7 +388,7 @@ function renderArrowPoses(group,poses,className='flow-chevron'){
 }
 
 function focusWireVisual(i){
-  document.querySelectorAll('.wire-group').forEach((g,j)=>g.classList.toggle('muted',j!==i));
+  document.querySelectorAll('.wire-group').forEach(g=>g.classList.toggle('muted',Number(g.dataset.wireIndex)!==i));
   const w=wires[i]; if(w) focusWireEndpoints(w);
 }
 function clearWireVisualFocus(){
@@ -397,9 +397,11 @@ function clearWireVisualFocus(){
 }
 function renderWires(signalState=computeSignalState()){
   wiresG.innerHTML='';
+  nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
   clearEndpointFocus();
   const occupied=[];
   const dragging=!!activeNodeDrag;
+  const hostAnchors=new Map();
 
   wires.forEach((w,i)=>{
     const editor=entityEditorState(w);const cfg=connectionConfig(w);if(editor.hidden||!carrierIsRenderable(w))return;
@@ -459,7 +461,14 @@ function renderWires(signalState=computeSignalState()){
     renderPacketsForWire(group,cfg,points,signal,base.getTotalLength(),w);
 
     group.appendChild(hit);
-    wiresG.appendChild(group);
+    // Wires paint beneath the nodes, so a wire on a Component's interior surface would be
+    // hidden by its host's body. It is lifted to just after its host in the node layer:
+    // above the host body, beneath the hosted children that follow it.
+    const surface=w.canvasId||GLOBAL_CANVAS_ID;
+    const hostId=surface.startsWith('canvas:component:')?surface.slice('canvas:component:'.length):null;
+    const hostEl=hostId?nodesG.querySelector(`:scope > .node[data-id="${hostId}"]`):null;
+    if(hostEl){(hostAnchors.get(hostId)||hostEl).after(group);hostAnchors.set(hostId,group)}
+    else wiresG.appendChild(group);
 
     // Marks have no independent positional truth. Every arrow is regenerated
     // from the exact line geometry being rendered in this frame. If the line is

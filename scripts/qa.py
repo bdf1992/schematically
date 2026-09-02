@@ -29,6 +29,7 @@ BROWSER=[
     'tests/read_write_access_qa.py',
     'tests/wire_host_inline_qa.py',
     'tests/host_surface_qa.py',
+    'tests/local_surface_wires_qa.py',
     'tests/tray_settle_qa.py',
     'tests/beta20_ports_history_qa.py',
     'tests/grid_visibility_qa.py',
