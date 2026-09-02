@@ -7038,17 +7038,89 @@ function liveNotifyChanged(){
   liveLink.timer=setTimeout(()=>{liveLink.timer=null;livePush()},delay);
 }
 
+// ---------------------------------------------------------------------------
+// Reload stream
+// ---------------------------------------------------------------------------
+// With the server in --watch mode, a change to the authoring inputs rebuilds and
+// tells every open editor to reload. The drawing on the canvas is not the server's
+// document, so it would be lost: it is stashed here first and picked up on load.
+// The stash is separate from File > Restore Recovery, which is a deliberate act by
+// a person and keeps its own key and its own meaning.
+
+const LIVE_CARRY_KEY='sov.live.carry';
+const LIVE_CARRY_MAX_AGE_MS=20000;
+let liveStream=null;
+
+function liveCarryStash(){
+  try{
+    localStorage.setItem(LIVE_CARRY_KEY,JSON.stringify({
+      at:Date.now(),
+      selection:typeof selected==='string'?selected:null,
+      camera:{x:camera.x,y:camera.y,w:camera.w,h:camera.h},
+      document:snapshotDocument()
+    }));
+  }catch(_){ }
+}
+
+function liveCarryRestore(){
+  let carried=null;
+  try{
+    const raw=localStorage.getItem(LIVE_CARRY_KEY);
+    if(!raw)return false;
+    localStorage.removeItem(LIVE_CARRY_KEY);
+    carried=JSON.parse(raw);
+  }catch(_){return false}
+  // Only a stash from the reload that just happened; anything older is somebody
+  // else's tab or a stale key, and silently replacing a document would be worse
+  // than losing one.
+  if(!carried||Date.now()-Number(carried.at||0)>LIVE_CARRY_MAX_AGE_MS)return false;
+  try{
+    replaceRuntimeDocument(carried.document);
+    if(carried.camera){camera.x=carried.camera.x;camera.y=carried.camera.y;camera.w=carried.camera.w;camera.h=carried.camera.h;applyCamera()}
+    if(carried.selection){
+      if(carried.selection.startsWith('wire:'))selectWire(Number(carried.selection.slice(5)),{focus:false});
+      else if(carried.selection.startsWith('point:component:')){const [,,id,pointId]=carried.selection.split(':');selectPort(id,pointId)}
+      else selectNode(carried.selection,{focus:false});
+    }
+    statusEl.textContent='Reloaded on rebuild';
+    return true;
+  }catch(error){
+    statusEl.textContent=`Could not carry the document across the reload: ${error.message}`;
+    return false;
+  }
+}
+
+function liveOpenStream(){
+  if(liveStream||typeof EventSource!=='function')return;
+  try{liveStream=new EventSource(`${liveLink.endpoint}/api/v1/live/stream`)}catch(_){return}
+  liveStream.addEventListener('reload',()=>{liveCarryStash();location.reload()});
+  liveStream.addEventListener('build-failed',event=>{
+    let detail='';
+    try{detail=JSON.parse(event.data)?.error||''}catch(_){ }
+    statusEl.textContent=`Build failed${detail?`: ${detail}`:''}`;
+  });
+  // EventSource reconnects on its own; a closed stream is not an editor error.
+  liveStream.onerror=()=>{};
+}
+
+function liveCloseStream(){
+  if(!liveStream)return;
+  liveStream.close();liveStream=null;
+}
+
 function liveStart(endpoint){
   if(endpoint)liveLink.endpoint=String(endpoint).replace(/\/+$/,'');
   liveLink.enabled=true;
   try{localStorage.setItem(LIVE_STORAGE_KEY,liveLink.endpoint)}catch(_){ }
   if(!liveLink.heartbeat)liveLink.heartbeat=setInterval(()=>livePush({force:true}),LIVE_HEARTBEAT_MS);
+  liveOpenStream();
   livePush({force:true});
   return liveStatus();
 }
 
 function liveStop(){
   liveLink.enabled=false;
+  liveCloseStream();
   if(liveLink.heartbeat){clearInterval(liveLink.heartbeat);liveLink.heartbeat=null}
   if(liveLink.timer){clearTimeout(liveLink.timer);liveLink.timer=null}
   try{localStorage.removeItem(LIVE_STORAGE_KEY)}catch(_){ }
@@ -7090,7 +7162,9 @@ const SovSchematicLive={
   stop:liveStop,
   status:liveStatus,
   push:()=>livePush({force:true}),
-  snapshot:liveSnapshot
+  snapshot:liveSnapshot,
+  stash:liveCarryStash,
+  restore:liveCarryRestore
 };
 window.SovSchematicLive=SovSchematicLive;
 
@@ -7103,7 +7177,9 @@ window.SovSchematicLive=SovSchematicLive;
     if(param!==null)requested=param===''||param==='1'||param==='true'?LIVE_DEFAULT_ENDPOINT:param;
     else requested=localStorage.getItem(LIVE_STORAGE_KEY);
   }catch(_){ }
-  if(requested)liveStart(requested);
+  if(!requested)return;
+  liveStart(requested);
+  liveCarryRestore();
 })();
 /* END src/87-live.js */
 </script>

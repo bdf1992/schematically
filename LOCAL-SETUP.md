@@ -77,3 +77,17 @@ scripts/update_local.sh --serve  # …then serves on http://localhost:8000
 The script checks the `schematic-ci` conclusion for the exact `origin/main`
 head SHA and refuses to update when that run is missing, pending, or failed.
 Set `GITHUB_TOKEN` if the repository is private.
+
+## Iterating on the interface
+
+```
+node mcp/server.mjs --port 8790 --watch
+```
+
+Then open `http://127.0.0.1:8790/editor?live=1`. The server serves the editor, so
+the page and the API share an origin; `?live=1` needs no port named. A saved change
+under `src/`, `styles/`, `index.source.html` or `build.py` rebuilds and every open
+editor reloads itself, keeping the drawing, the selection and the camera. An agent
+reads what is selected through `schematic.live.selection`, so a change can be
+discussed without describing it. Opening `index.html` from disk instead does not
+work: a `file://` page has an opaque origin and the push never lands.

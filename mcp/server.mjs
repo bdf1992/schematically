@@ -3,6 +3,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
+import {spawn} from 'node:child_process';
 
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 // Absolute paths are not valid ESM specifiers on Windows; import by file:// URL everywhere.
@@ -17,6 +18,8 @@ const PORT=Number(arg('--port',8787));
 const FILE=path.resolve(arg('--file',path.join(HERE,'../data/schematic.sov')));
 const HOST=arg('--host','127.0.0.1');
 const MCP_VERSION='2026-07-28';
+const WATCH=args.includes('--watch');
+const REPO=path.resolve(HERE,'..');
 
 function loadDocument(){
   try{return Data.documentFromFilePayload(JSON.parse(fs.readFileSync(FILE,'utf8')))}catch(_){return Data.makeDocument({id:'schematic-1'})}
@@ -39,6 +42,45 @@ function liveSelectionState(){
   if(!state.snapshot)return state;
   const {document:_document,...rest}=state.snapshot;
   return {...state,snapshot:rest};
+}
+
+// --- Watch mode -------------------------------------------------------------
+// With --watch, a change to the authoring inputs rebuilds index.html and tells every
+// open editor to reload itself. Editing then shows up without anyone touching the
+// browser, which is the whole difference between iterating and running errands.
+const WATCH_PATHS=['src','styles','index.source.html','build.py'];
+const WATCH_DEBOUNCE_MS=180;
+const streamClients=new Set();
+let buildVersion=0,buildTimer=null,building=false,buildPending=false;
+function streamSend(event,data){
+  const payload=`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for(const res of streamClients){try{res.write(payload)}catch(_){streamClients.delete(res)}}
+}
+function runBuild(){
+  if(building){buildPending=true;return}
+  building=true;
+  const child=spawn(process.platform==='win32'?'python':'python3',['build.py'],{cwd:REPO});
+  let stderr='';
+  child.stderr.on('data',chunk=>{stderr+=chunk});
+  child.on('error',error=>{building=false;console.error('build failed to start:',error.message);streamSend('build-failed',{error:String(error.message)})});
+  child.on('close',code=>{
+    building=false;
+    if(code===0){buildVersion++;console.log(`rebuilt (${buildVersion})`);streamSend('reload',{buildVersion})}
+    else{console.error(`build exited ${code}\n${stderr.trim()}`);streamSend('build-failed',{code,error:stderr.trim().split('\n').at(-1)||`exit ${code}`})}
+    if(buildPending){buildPending=false;runBuild()}
+  });
+}
+function startWatching(){
+  for(const rel of WATCH_PATHS){
+    const target=path.join(REPO,rel);
+    if(!fs.existsSync(target))continue;
+    try{
+      fs.watch(target,{recursive:fs.statSync(target).isDirectory()},()=>{
+        clearTimeout(buildTimer);buildTimer=setTimeout(runBuild,WATCH_DEBOUNCE_MS);
+      });
+    }catch(error){console.warn(`cannot watch ${rel}: ${error.message}`)}
+  }
+  console.log(`watching ${WATCH_PATHS.join(', ')} - open editors reload on rebuild`);
 }
 const cloneDoc=()=>Data.makeDocument(Data.clone(documentState));
 function recordHistory(snapshot){historyUndo.push(snapshot);if(historyUndo.length>120)historyUndo.shift();historyRedo=[]}
@@ -138,9 +180,22 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url||'/',`http://${req.headers.host||HOST}`);
   try{
     if((url.pathname==='/editor'||url.pathname==='/index.html')&&req.method==='GET')return serveEditor(res);
+    if(url.pathname==='/api/v1/live/stream'&&req.method==='GET'){
+      res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-store','connection':'keep-alive','access-control-allow-origin':'*'});
+      res.write(`retry: 2000\n\n`);
+      res.write(`event: hello\ndata: ${JSON.stringify({watching:WATCH,buildVersion})}\n\n`);
+      streamClients.add(res);
+      const keepAlive=setInterval(()=>{try{res.write(': keep-alive\n\n')}catch(_){ }},20000);
+      req.on('close',()=>{clearInterval(keepAlive);streamClients.delete(res)});
+      return;
+    }
     if(url.pathname==='/mcp'&&req.method==='POST')return await handleMcp(req,res);
     if(url.pathname.startsWith('/api/v1/'))return await handleApi(req,res,url);
     return json(res,200,{name:'soveraeign-schematic',version:'0.1.24',document:FILE,mcp:'/mcp',api:'/api/v1',editor:'/editor',live:liveState().connected?'/api/v1/live (connected)':'/api/v1/live (no editor)'});
   }catch(error){return json(res,500,{error:String(error.message||error)})}
 });
-server.listen(PORT,HOST,()=>console.log(`Soveraeign Schematic API + MCP http://${HOST}:${PORT} · ${FILE}`));
+server.listen(PORT,HOST,()=>{
+  console.log(`Soveraeign Schematic API + MCP http://${HOST}:${PORT} · ${FILE}`);
+  console.log(`editor http://${HOST}:${PORT}/editor?live=1`);
+  if(WATCH)startWatching();
+});
