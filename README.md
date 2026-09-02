@@ -32,6 +32,8 @@ Saved documents carry authored truth only. Runtime projections (local canvas des
 
 Schemas live in `formats/`; `DATA-FORMATS.md` explains them.
 
+`python scripts/export_svg.py [file.sov ...] [--out DIR] [--appearance light|dark]` renders documents to standalone `.svg` files headlessly (defaults to every example). Computed styles are inlined, so the files render outside the editor, for example as images in markdown. `tests/svg_export_qa.py` keeps the examples exporting. `node scripts/validate_sov.mjs file.sov` validates documents headlessly with the same data core.
+
 ## Agent surfaces
 
 `window.SovSchematicAPI` (browser), a REST surface, and an MCP server (`mcp/server.mjs`) all delegate to the same transport-neutral data core — agent-created records cannot bypass editor legality, refusals return receipts without entering history, and history/checkpoints are operable over MCP. See `API.md` and `MCP.md`.
@@ -39,7 +41,7 @@ Schemas live in `formats/`; `DATA-FORMATS.md` explains them.
 The agent-facing corpus ships with the repository:
 
 - `AGENTS.md` — repository invariants and concern contract
-- `skills/author`, `skills/operator`, `skills/reviewer` — authoring, operating, and reviewing skills
+- `skills/author`, `skills/author-offline`, `skills/operator`, `skills/reviewer` — authoring (live and file-only), operating, and reviewing skills
 - `examples/` — executable golden documents and a portable reference pack
 
 ## Source and build

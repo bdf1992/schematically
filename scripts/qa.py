@@ -12,6 +12,7 @@ ROOT=Path(__file__).resolve().parents[1]
 STATIC=[
     'tests/dimensional_form_qa.py',
     'tests/pre_repo_hardening_qa.py',
+    'tests/author_offline_qa.py',
 ]
 BROWSER=[
     'tests/attachment_point_refactor_qa.py',
@@ -32,6 +33,7 @@ BROWSER=[
     'tests/editor_kernel_qa.py',
     'tests/editor_kernel_extended_qa.py',
     'tests/file_surface_qa.py',
+    'tests/svg_export_qa.py',
     'tests/menu_dismissal_qa.py',
     'tests/appearance_history_qa.py',
     'tests/agent_api_mcp_golden_qa.py',
