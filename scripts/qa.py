@@ -23,6 +23,7 @@ BROWSER=[
     'tests/configurable_attachment_defaults_qa.py',
     'tests/primitive_forms_qa.py',
     'tests/path_endpoints_qa.py',
+    'tests/points_surface_qa.py',
     'tests/document_compaction_qa.py',
     'tests/carrier_path_qa.py',
     'tests/attachment_interaction_parity_qa.py',

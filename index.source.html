@@ -340,9 +340,9 @@
     </div>
 
     <div class="selection-bar-fields" id="portBarFields" hidden>
-      <div class="icon-select port-template-select" aria-label="Port placement">
+      <div class="icon-select port-template-select" aria-label="Point placement">
         <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h8"></path><circle cx="16" cy="12" r="4"></circle></svg></span>
-        <select id="barPortSide" class="bar-select" aria-label="Port placement" title="Derived attachment position">
+        <select id="barPortSide" class="bar-select" aria-label="Port placement" title="Where this Point sits on its host">
         <option value="left">Left</option>
         <option value="right">Right</option>
         <option value="top">Top</option>
@@ -350,8 +350,8 @@
         <option value="along">Along wire</option>
         </select>
       </div>
-      <input id="barPortLabel" class="bar-input bar-label" type="text" maxlength="24" placeholder="Port label" aria-label="Port label" title="Port label">
-      <button id="barPortColorSlot" class="color-slot-chip" type="button" title="Port color" aria-label="Port palette slot"></button>
+      <input id="barPortLabel" class="bar-input bar-label" type="text" maxlength="24" placeholder="Point label" aria-label="Point label" title="Point label">
+      <button id="barPortColorSlot" class="color-slot-chip" type="button" title="Point color" aria-label="Point palette slot"></button>
     </div>
 
     <button id="barFormState" class="bar-form-state" type="button" title="Form · dimension, body and frame" aria-label="Component form">2D</button>
@@ -373,6 +373,13 @@
           <label>Rate <select id="entityRate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
         </div>
       </div>
+      <div id="pointsSurface" class="settings-surface points-settings">
+        <div class="settings-head"><b>Points</b><span id="pointsSummary">attachments on this object</span></div>
+        <div class="points-list" id="pointsList" role="list"></div>
+        <div class="points-actions">
+          <button id="pointsBuiltinToggle" class="bar-action settings-action" type="button"></button>
+        </div>
+      </div>
       <div id="componentSettingsFields" class="settings-surface">
         <div class="settings-head"><b>Component settings</b><span>Form first · appearance second</span></div>
         <details class="form-settings" id="formSettings" open>
@@ -389,12 +396,6 @@
               <select id="formInteriorState">
                 <option value="closed">Closed</option>
                 <option value="open">Open · hosts Components</option>
-              </select>
-            </label>
-            <label data-dims="2">Attachments
-              <select id="formAttachments" title="Built-in boundary points">
-                <option value="standard">Left · Right · Top</option>
-                <option value="none">None · hosted Points only</option>
               </select>
             </label>
           </div>
@@ -484,25 +485,25 @@
             </select>
           </label>
           <label><span id="barWireOutLabel">OUT marker</span><input id="barWireOutMarker" type="text" maxlength="12" placeholder="Ch" aria-label="Wire output channel marker"></label>
-          <label>OUT color <span id="barWireOutColor" class="color-slot-chip readonly-slot" title="Output Port color"></span></label>
+          <label>OUT color <span id="barWireOutColor" class="color-slot-chip readonly-slot" title="Output Point color"></span></label>
           <label><span id="barWireInLabel">IN marker</span><input id="barWireInMarker" type="text" maxlength="12" placeholder="Ch" aria-label="Wire input channel marker"></label>
-          <label>IN color <span id="barWireInColor" class="color-slot-chip readonly-slot" title="Input Port color"></span></label>
+          <label>IN color <span id="barWireInColor" class="color-slot-chip readonly-slot" title="Input Point color"></span></label>
         </div>
         <button id="barAddWirePortBtn" class="bar-action settings-action" type="button" title="Host a Point on this Wire">+ Point</button>
       </div>
 
       <div id="portSettingsFields" class="settings-surface" hidden>
-        <div class="settings-head"><b>Attachment settings</b><span>Boundary face and signal behavior</span></div>
+        <div class="settings-head"><b>Point settings</b><span>Boundary face, direction and access</span></div>
         <div class="settings-grid settings-grid-compact">
           <label>Face
-            <select id="barPortFace" aria-label="Port face" title="Inside/outside face">
+            <select id="barPortFace" aria-label="Point face" title="Inside/outside face">
               <option value="external">Outside</option>
               <option value="internal">Inside</option>
               <option value="both">Both</option>
             </select>
           </label>
           <label>Direction
-            <select id="barPortFlow" aria-label="Port direction" title="Input/output behavior">
+            <select id="barPortFlow" aria-label="Point direction" title="Input/output behavior">
               <option value="in">Input</option>
               <option value="out">Output</option>
               <option value="duplex">Input + Output</option>
@@ -510,7 +511,7 @@
             </select>
           </label>
           <label>Access
-            <select id="barPortAccess" aria-label="Port access" title="Read/write capability">
+            <select id="barPortAccess" aria-label="Point access" title="Read/write capability">
               <option value="none">None</option>
               <option value="read">Read</option>
               <option value="write">Write</option>

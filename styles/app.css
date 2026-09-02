@@ -439,3 +439,19 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 }
 .transforming-node .path-endpoint-halo{cursor:grabbing}
 .node:not(.selected) .path-endpoint-handle-group{display:none}
+
+/* Points list: what is attached to the selected object, read as state. Rows that
+   lead somewhere are buttons; rows that only report are plain. */
+.points-list{display:flex;flex-direction:column;gap:2px;margin:6px 0 0}
+.points-row{
+  display:flex;align-items:baseline;gap:8px;
+  padding:5px 8px;border-radius:6px;border:1px solid transparent;
+  background:none;text-align:left;font:inherit;color:inherit;width:100%;
+}
+.points-row b{flex:0 0 auto;font-weight:600}
+.points-row span{flex:1 1 auto;opacity:.72;font-size:.92em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.points-row{cursor:pointer}
+button.points-row:hover{background:color-mix(in srgb,currentColor 8%,transparent)}
+button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-offset:1px}
+.points-row.current{border-color:var(--accent,#4E86BE)}
+.points-actions{display:flex;gap:6px;margin-top:8px}

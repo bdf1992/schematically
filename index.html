@@ -446,6 +446,22 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 }
 .transforming-node .path-endpoint-halo{cursor:grabbing}
 .node:not(.selected) .path-endpoint-handle-group{display:none}
+
+/* Points list: what is attached to the selected object, read as state. Rows that
+   lead somewhere are buttons; rows that only report are plain. */
+.points-list{display:flex;flex-direction:column;gap:2px;margin:6px 0 0}
+.points-row{
+  display:flex;align-items:baseline;gap:8px;
+  padding:5px 8px;border-radius:6px;border:1px solid transparent;
+  background:none;text-align:left;font:inherit;color:inherit;width:100%;
+}
+.points-row b{flex:0 0 auto;font-weight:600}
+.points-row span{flex:1 1 auto;opacity:.72;font-size:.92em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.points-row{cursor:pointer}
+button.points-row:hover{background:color-mix(in srgb,currentColor 8%,transparent)}
+button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-offset:1px}
+.points-row.current{border-color:var(--accent,#4E86BE)}
+.points-actions{display:flex;gap:6px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -782,9 +798,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     </div>
 
     <div class="selection-bar-fields" id="portBarFields" hidden>
-      <div class="icon-select port-template-select" aria-label="Port placement">
+      <div class="icon-select port-template-select" aria-label="Point placement">
         <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h8"></path><circle cx="16" cy="12" r="4"></circle></svg></span>
-        <select id="barPortSide" class="bar-select" aria-label="Port placement" title="Derived attachment position">
+        <select id="barPortSide" class="bar-select" aria-label="Port placement" title="Where this Point sits on its host">
         <option value="left">Left</option>
         <option value="right">Right</option>
         <option value="top">Top</option>
@@ -792,8 +808,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         <option value="along">Along wire</option>
         </select>
       </div>
-      <input id="barPortLabel" class="bar-input bar-label" type="text" maxlength="24" placeholder="Port label" aria-label="Port label" title="Port label">
-      <button id="barPortColorSlot" class="color-slot-chip" type="button" title="Port color" aria-label="Port palette slot"></button>
+      <input id="barPortLabel" class="bar-input bar-label" type="text" maxlength="24" placeholder="Point label" aria-label="Point label" title="Point label">
+      <button id="barPortColorSlot" class="color-slot-chip" type="button" title="Point color" aria-label="Point palette slot"></button>
     </div>
 
     <button id="barFormState" class="bar-form-state" type="button" title="Form · dimension, body and frame" aria-label="Component form">2D</button>
@@ -815,6 +831,13 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
           <label>Rate <select id="entityRate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
         </div>
       </div>
+      <div id="pointsSurface" class="settings-surface points-settings">
+        <div class="settings-head"><b>Points</b><span id="pointsSummary">attachments on this object</span></div>
+        <div class="points-list" id="pointsList" role="list"></div>
+        <div class="points-actions">
+          <button id="pointsBuiltinToggle" class="bar-action settings-action" type="button"></button>
+        </div>
+      </div>
       <div id="componentSettingsFields" class="settings-surface">
         <div class="settings-head"><b>Component settings</b><span>Form first · appearance second</span></div>
         <details class="form-settings" id="formSettings" open>
@@ -831,12 +854,6 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
               <select id="formInteriorState">
                 <option value="closed">Closed</option>
                 <option value="open">Open · hosts Components</option>
-              </select>
-            </label>
-            <label data-dims="2">Attachments
-              <select id="formAttachments" title="Built-in boundary points">
-                <option value="standard">Left · Right · Top</option>
-                <option value="none">None · hosted Points only</option>
               </select>
             </label>
           </div>
@@ -926,25 +943,25 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
             </select>
           </label>
           <label><span id="barWireOutLabel">OUT marker</span><input id="barWireOutMarker" type="text" maxlength="12" placeholder="Ch" aria-label="Wire output channel marker"></label>
-          <label>OUT color <span id="barWireOutColor" class="color-slot-chip readonly-slot" title="Output Port color"></span></label>
+          <label>OUT color <span id="barWireOutColor" class="color-slot-chip readonly-slot" title="Output Point color"></span></label>
           <label><span id="barWireInLabel">IN marker</span><input id="barWireInMarker" type="text" maxlength="12" placeholder="Ch" aria-label="Wire input channel marker"></label>
-          <label>IN color <span id="barWireInColor" class="color-slot-chip readonly-slot" title="Input Port color"></span></label>
+          <label>IN color <span id="barWireInColor" class="color-slot-chip readonly-slot" title="Input Point color"></span></label>
         </div>
         <button id="barAddWirePortBtn" class="bar-action settings-action" type="button" title="Host a Point on this Wire">+ Point</button>
       </div>
 
       <div id="portSettingsFields" class="settings-surface" hidden>
-        <div class="settings-head"><b>Attachment settings</b><span>Boundary face and signal behavior</span></div>
+        <div class="settings-head"><b>Point settings</b><span>Boundary face, direction and access</span></div>
         <div class="settings-grid settings-grid-compact">
           <label>Face
-            <select id="barPortFace" aria-label="Port face" title="Inside/outside face">
+            <select id="barPortFace" aria-label="Point face" title="Inside/outside face">
               <option value="external">Outside</option>
               <option value="internal">Inside</option>
               <option value="both">Both</option>
             </select>
           </label>
           <label>Direction
-            <select id="barPortFlow" aria-label="Port direction" title="Input/output behavior">
+            <select id="barPortFlow" aria-label="Point direction" title="Input/output behavior">
               <option value="in">Input</option>
               <option value="out">Output</option>
               <option value="duplex">Input + Output</option>
@@ -952,7 +969,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
             </select>
           </label>
           <label>Access
-            <select id="barPortAccess" aria-label="Port access" title="Read/write capability">
+            <select id="barPortAccess" aria-label="Point access" title="Read/write capability">
               <option value="none">None</option>
               <option value="read">Read</option>
               <option value="write">Write</option>
@@ -1814,7 +1831,10 @@ const visualSvgRow=document.getElementById('visualSvgRow');
 const visualSvgMarkup=document.getElementById('visualSvgMarkup');
 const formSettings=document.getElementById('formSettings');
 const formDimension=document.getElementById('formDimension');
-const formAttachments=document.getElementById('formAttachments');
+const pointsSurface=document.getElementById('pointsSurface');
+const pointsSummary=document.getElementById('pointsSummary');
+const pointsList=document.getElementById('pointsList');
+const pointsBuiltinToggle=document.getElementById('pointsBuiltinToggle');
 const formMaterial=document.getElementById('formMaterial');
 const formBodyThickness=document.getElementById('formBodyThickness');
 const formInteriorState=document.getElementById('formInteriorState');
@@ -3059,15 +3079,107 @@ function syncComponentVisualPanel(n){
   const f=componentForm(n);
   formDimension.value=String(f.dimension);formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
   formInteriorState.value=f.regions.interior.state;formFrameMode.value=f.frame.mode;formFrameThickness.value=String(f.frame.thickness);formFrameDepth.value=String(f.frame.depth);
-  formAttachments.value=Attachment.attachmentDefaults(n);
   // Settings are shown per dimension: a Point has no size or frame, a Path no height or interior.
   for(const el of componentSettingsFields.querySelectorAll('[data-dims]')){const dims=String(el.dataset.dims).split('').map(Number);el.hidden=!dims.includes(f.dimension)}
+}
+// What a Wire ending on this point connects to, in the other end's own words.
+function pointAttachmentSummary(ownerId,pointId){
+  const attached=[];
+  for(const w of wires){
+    for(const end of ['a','b']){
+      if(w[end]!==ownerId)continue;
+      const stored=end==='a'?w.aAttachment?.pointId||w.aSide:w.bAttachment?.pointId||w.bSide;
+      const owner=nodes.find(n=>n.id===ownerId);
+      if(!owner||Attachment.pointId(owner,stored)!==pointId)continue;
+      const far=end==='a'?'b':'a',farId=w[far];
+      const farNode=nodes.find(n=>n.id===farId);
+      const farPointId=far==='a'?w.aAttachment?.pointId||w.aSide:w.bAttachment?.pointId||w.bSide;
+      if(farNode){
+        const label=componentConfig(farNode).label||byId(farNode.symbolId).name;
+        const spec=Attachment.resolveSpec(farNode,farPointId);
+        attached.push({wire:w,text:spec&&spec.id!=='self'?`${label}.${spec.id}`:label});
+      }else attached.push({wire:w,text:'free end'});
+    }
+  }
+  return attached;
+}
+// Points hosted on this object rather than exposed by it: a Point settled on a
+// Wire or along a Path is attached to it just as much as a boundary point is.
+function hostedPointsOn(ownerId,ownerKind){
+  return nodes.filter(n=>{
+    if(componentForm(n).dimension!==0)return false;
+    const placement=componentPlacement(n);
+    if(ownerKind==='wire')return placement.kind==='wire'&&placement.wireId===ownerId;
+    return ['path','edge'].includes(placement.kind)&&placement.hostId===ownerId;
+  });
+}
+function pointsRow(text,detail,{onClick=null,current=false}={}){
+  const row=document.createElement(onClick?'button':'div');
+  if(onClick){row.type='button';row.addEventListener('click',onClick)}
+  row.className='points-row'+(current?' current':'');
+  row.setAttribute('role','listitem');
+  const name=document.createElement('b');name.textContent=text;row.appendChild(name);
+  const note=document.createElement('span');note.textContent=detail;row.appendChild(note);
+  return row;
+}
+// Attachments are state: this lists the points on the selected object and what is
+// on each of them. It is not where the set is configured — points arrive by being
+// dropped and leave by being deleted.
+function syncPointsSurface(kind){
+  const owner=kind==='component'?nodes.find(n=>n.id===selected)
+    :kind==='wire'?wires[Number(String(selected).slice(5))]:null;
+  pointsSurface.hidden=!owner;
+  if(!owner)return;
+  pointsList.replaceChildren();
+  const rows=[];
+  if(kind==='component'){
+    for(const point of componentAttachmentPoints(owner)){
+      const attached=pointAttachmentSummary(owner.id,point.id);
+      const where=point.side==='point'?'self':point.side;
+      const detail=attached.length?attached.map(a=>a.text).join(', '):'nothing attached';
+      const isCurrent=selected===`point:component:${owner.id}:${point.id}`;
+      rows.push(pointsRow(point.config?.label||point.id,`${where} · ${detail}`,
+        {onClick:()=>selectPort(owner.id,point.id),current:isCurrent}));
+    }
+  }else{
+    for(const end of ['a','b']){
+      const ep=carrierEndpoint(owner,end);
+      if(!ep){rows.push(pointsRow(end.toUpperCase(),'unresolved'));continue}
+      if(ep.kind==='bound'){
+        const label=componentConfig(ep.node).label||byId(ep.node.symbolId).name;
+        rows.push(pointsRow(end.toUpperCase(),`bound · ${label}.${ep.pointId}`,
+          {onClick:()=>selectPort(ep.node.id,ep.pointId)}));
+      }else rows.push(pointsRow(end.toUpperCase(),`free · ${Math.round(ep.pos.x)}, ${Math.round(ep.pos.y)}`));
+    }
+  }
+  for(const hosted of hostedPointsOn(owner.id,kind)){
+    const t=componentPlacement(hosted).t;
+    rows.push(pointsRow(componentConfig(hosted).label||hosted.id,
+      `hosted${Number.isFinite(t)?` · t ${t.toFixed(2)}`:''}`,
+      {onClick:()=>selectNode(hosted.id),current:selected===hosted.id}));
+  }
+  if(!rows.length)rows.push(pointsRow('None','nothing is attached to this object yet'));
+  for(const row of rows)pointsList.appendChild(row);
+  const count=rows.length&&rows[0].querySelector('b')?.textContent==='None'?0:rows.length;
+  pointsSummary.textContent=count===1?'1 point':`${count} points`;
+
+  // Built-in boundary points are template data, so removing or restoring the whole
+  // set is an action on the list rather than a setting inside Form.
+  const canToggle=kind==='component'&&componentForm(owner).dimension===2;
+  pointsBuiltinToggle.hidden=!canToggle;
+  if(canToggle){
+    const none=Attachment.attachmentDefaults(owner)==='none';
+    pointsBuiltinToggle.textContent=none?'Add built-in points':'Remove built-in points';
+    pointsBuiltinToggle.title=none?'Restore the left / right / top template points'
+      :'Remove the left / right / top template points; hosted Points stay';
+  }
 }
 function syncSelectionSettings(kind){
   if(typeof syncEntityUtilityPanel==='function')syncEntityUtilityPanel(kind);
   componentSettingsFields.hidden=kind!=='component';
   wireSettingsFields.hidden=kind!=='wire';
   portSettingsFields.hidden=kind!=='port';
+  syncPointsSurface(kind);
   if(kind==='component'){
     const n=nodes.find(n=>n.id===selected);if(n){barComponentSignalMode.value=normalizeSignalMode(componentConfig(n));syncComponentVisualPanel(n)}
   }
@@ -5956,13 +6068,13 @@ function updateSelectedComponentForm(mutator){
   routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 }
 formDimension.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.dimension=Number(formDimension.value);f.body.kind=['point','path','surface'][f.dimension]}));
-formAttachments.addEventListener('change',()=>{
-  // Built-in 2D points are template defaults. Turning them off is refused while a Wire
-  // still ends on one, so the change never silently orphans a carrier.
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Attachment defaults edit'))return;
-  const next=formAttachments.value==='none'?'none':'standard';
-  if(next==='none'&&Attachment.attachmentDefaults(n)!=='none'&&wiresOnBuiltinPoints(n).length){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent='Detach Wires from built-in points first';return}
-  setHistoryHint('Change attachment defaults');
+pointsBuiltinToggle.addEventListener('click',()=>{
+  // Built-in 2D points are template data. Removing them is refused while a Wire still
+  // ends on one, so the change never silently orphans a carrier.
+  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Built-in points edit'))return;
+  const next=Attachment.attachmentDefaults(n)==='none'?'standard':'none';
+  if(next==='none'&&wiresOnBuiltinPoints(n).length){statusEl.textContent='Detach Wires from built-in points first';return}
+  setHistoryHint(next==='none'?'Remove built-in points':'Add built-in points');
   if(next==='none')n.config.attachmentDefaults='none';else delete n.config.attachmentDefaults;
   SovSchematicData.reconcileComponentWirePorts(diagram,n.id);componentConfig(n);
   routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();

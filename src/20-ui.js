@@ -183,15 +183,107 @@ function syncComponentVisualPanel(n){
   const f=componentForm(n);
   formDimension.value=String(f.dimension);formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
   formInteriorState.value=f.regions.interior.state;formFrameMode.value=f.frame.mode;formFrameThickness.value=String(f.frame.thickness);formFrameDepth.value=String(f.frame.depth);
-  formAttachments.value=Attachment.attachmentDefaults(n);
   // Settings are shown per dimension: a Point has no size or frame, a Path no height or interior.
   for(const el of componentSettingsFields.querySelectorAll('[data-dims]')){const dims=String(el.dataset.dims).split('').map(Number);el.hidden=!dims.includes(f.dimension)}
+}
+// What a Wire ending on this point connects to, in the other end's own words.
+function pointAttachmentSummary(ownerId,pointId){
+  const attached=[];
+  for(const w of wires){
+    for(const end of ['a','b']){
+      if(w[end]!==ownerId)continue;
+      const stored=end==='a'?w.aAttachment?.pointId||w.aSide:w.bAttachment?.pointId||w.bSide;
+      const owner=nodes.find(n=>n.id===ownerId);
+      if(!owner||Attachment.pointId(owner,stored)!==pointId)continue;
+      const far=end==='a'?'b':'a',farId=w[far];
+      const farNode=nodes.find(n=>n.id===farId);
+      const farPointId=far==='a'?w.aAttachment?.pointId||w.aSide:w.bAttachment?.pointId||w.bSide;
+      if(farNode){
+        const label=componentConfig(farNode).label||byId(farNode.symbolId).name;
+        const spec=Attachment.resolveSpec(farNode,farPointId);
+        attached.push({wire:w,text:spec&&spec.id!=='self'?`${label}.${spec.id}`:label});
+      }else attached.push({wire:w,text:'free end'});
+    }
+  }
+  return attached;
+}
+// Points hosted on this object rather than exposed by it: a Point settled on a
+// Wire or along a Path is attached to it just as much as a boundary point is.
+function hostedPointsOn(ownerId,ownerKind){
+  return nodes.filter(n=>{
+    if(componentForm(n).dimension!==0)return false;
+    const placement=componentPlacement(n);
+    if(ownerKind==='wire')return placement.kind==='wire'&&placement.wireId===ownerId;
+    return ['path','edge'].includes(placement.kind)&&placement.hostId===ownerId;
+  });
+}
+function pointsRow(text,detail,{onClick=null,current=false}={}){
+  const row=document.createElement(onClick?'button':'div');
+  if(onClick){row.type='button';row.addEventListener('click',onClick)}
+  row.className='points-row'+(current?' current':'');
+  row.setAttribute('role','listitem');
+  const name=document.createElement('b');name.textContent=text;row.appendChild(name);
+  const note=document.createElement('span');note.textContent=detail;row.appendChild(note);
+  return row;
+}
+// Attachments are state: this lists the points on the selected object and what is
+// on each of them. It is not where the set is configured — points arrive by being
+// dropped and leave by being deleted.
+function syncPointsSurface(kind){
+  const owner=kind==='component'?nodes.find(n=>n.id===selected)
+    :kind==='wire'?wires[Number(String(selected).slice(5))]:null;
+  pointsSurface.hidden=!owner;
+  if(!owner)return;
+  pointsList.replaceChildren();
+  const rows=[];
+  if(kind==='component'){
+    for(const point of componentAttachmentPoints(owner)){
+      const attached=pointAttachmentSummary(owner.id,point.id);
+      const where=point.side==='point'?'self':point.side;
+      const detail=attached.length?attached.map(a=>a.text).join(', '):'nothing attached';
+      const isCurrent=selected===`point:component:${owner.id}:${point.id}`;
+      rows.push(pointsRow(point.config?.label||point.id,`${where} · ${detail}`,
+        {onClick:()=>selectPort(owner.id,point.id),current:isCurrent}));
+    }
+  }else{
+    for(const end of ['a','b']){
+      const ep=carrierEndpoint(owner,end);
+      if(!ep){rows.push(pointsRow(end.toUpperCase(),'unresolved'));continue}
+      if(ep.kind==='bound'){
+        const label=componentConfig(ep.node).label||byId(ep.node.symbolId).name;
+        rows.push(pointsRow(end.toUpperCase(),`bound · ${label}.${ep.pointId}`,
+          {onClick:()=>selectPort(ep.node.id,ep.pointId)}));
+      }else rows.push(pointsRow(end.toUpperCase(),`free · ${Math.round(ep.pos.x)}, ${Math.round(ep.pos.y)}`));
+    }
+  }
+  for(const hosted of hostedPointsOn(owner.id,kind)){
+    const t=componentPlacement(hosted).t;
+    rows.push(pointsRow(componentConfig(hosted).label||hosted.id,
+      `hosted${Number.isFinite(t)?` · t ${t.toFixed(2)}`:''}`,
+      {onClick:()=>selectNode(hosted.id),current:selected===hosted.id}));
+  }
+  if(!rows.length)rows.push(pointsRow('None','nothing is attached to this object yet'));
+  for(const row of rows)pointsList.appendChild(row);
+  const count=rows.length&&rows[0].querySelector('b')?.textContent==='None'?0:rows.length;
+  pointsSummary.textContent=count===1?'1 point':`${count} points`;
+
+  // Built-in boundary points are template data, so removing or restoring the whole
+  // set is an action on the list rather than a setting inside Form.
+  const canToggle=kind==='component'&&componentForm(owner).dimension===2;
+  pointsBuiltinToggle.hidden=!canToggle;
+  if(canToggle){
+    const none=Attachment.attachmentDefaults(owner)==='none';
+    pointsBuiltinToggle.textContent=none?'Add built-in points':'Remove built-in points';
+    pointsBuiltinToggle.title=none?'Restore the left / right / top template points'
+      :'Remove the left / right / top template points; hosted Points stay';
+  }
 }
 function syncSelectionSettings(kind){
   if(typeof syncEntityUtilityPanel==='function')syncEntityUtilityPanel(kind);
   componentSettingsFields.hidden=kind!=='component';
   wireSettingsFields.hidden=kind!=='wire';
   portSettingsFields.hidden=kind!=='port';
+  syncPointsSurface(kind);
   if(kind==='component'){
     const n=nodes.find(n=>n.id===selected);if(n){barComponentSignalMode.value=normalizeSignalMode(componentConfig(n));syncComponentVisualPanel(n)}
   }

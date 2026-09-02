@@ -100,13 +100,13 @@ function updateSelectedComponentForm(mutator){
   routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 }
 formDimension.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.dimension=Number(formDimension.value);f.body.kind=['point','path','surface'][f.dimension]}));
-formAttachments.addEventListener('change',()=>{
-  // Built-in 2D points are template defaults. Turning them off is refused while a Wire
-  // still ends on one, so the change never silently orphans a carrier.
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Attachment defaults edit'))return;
-  const next=formAttachments.value==='none'?'none':'standard';
-  if(next==='none'&&Attachment.attachmentDefaults(n)!=='none'&&wiresOnBuiltinPoints(n).length){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent='Detach Wires from built-in points first';return}
-  setHistoryHint('Change attachment defaults');
+pointsBuiltinToggle.addEventListener('click',()=>{
+  // Built-in 2D points are template data. Removing them is refused while a Wire still
+  // ends on one, so the change never silently orphans a carrier.
+  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Built-in points edit'))return;
+  const next=Attachment.attachmentDefaults(n)==='none'?'standard':'none';
+  if(next==='none'&&wiresOnBuiltinPoints(n).length){statusEl.textContent='Detach Wires from built-in points first';return}
+  setHistoryHint(next==='none'?'Remove built-in points':'Add built-in points');
   if(next==='none')n.config.attachmentDefaults='none';else delete n.config.attachmentDefaults;
   SovSchematicData.reconcileComponentWirePorts(diagram,n.id);componentConfig(n);
   routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();

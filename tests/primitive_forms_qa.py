@@ -97,23 +97,23 @@ async def main():
     await page.mouse.up();await page.wait_for_timeout(150)
     assert await page.evaluate('activeNodeDragState===null')
 
-    # Form settings show only what the dimension has; Attachments is a 2D setting.
+    # Form settings show only what the dimension has. Attachments are not among them:
+    # they are state, listed on the Points surface (tests/points_surface_qa.py).
     await page.evaluate('(id)=>{selectNode(id);openSelectionSettings("component")}',pl['id'])
-    assert await page.evaluate('formAttachments.value')=='none'
-    assert await page.evaluate('formAttachments.closest("label").hidden') is False
+    assert await page.evaluate('(id)=>Attachment.attachmentDefaults(nodes.find(n=>n.id===id))',pl['id'])=='none'
+    assert await page.evaluate('!document.getElementById("formAttachments")')
     await page.evaluate('(id)=>{selectNode(id);openSelectionSettings("component")}',p2['id'])
-    assert await page.evaluate('formAttachments.closest("label").hidden') is True
     assert await page.evaluate('visualHeight.closest("label").hidden') is True
     assert await page.evaluate('document.getElementById("formBodyKind")===null')
 
-    # Turning built-in points off is refused while a Wire still ends on one.
-    await page.evaluate('(id)=>{selectNode(id);openSelectionSettings("component");formAttachments.value="none";formAttachments.dispatchEvent(new Event("change"))}',act['id'])
+    # Removing built-in points is refused while a Wire still ends on one.
+    await page.evaluate('(id)=>{selectNode(id);openSelectionSettings("component");pointsBuiltinToggle.click()}',act['id'])
     await page.wait_for_timeout(50)
     assert await page.evaluate('(id)=>Attachment.attachmentDefaults(nodes.find(n=>n.id===id))',act['id'])=='standard'
     assert 'Detach' in await page.locator('#status').inner_text()
     # Without Wires it is allowed, and the built-in points disappear.
     free=await page.evaluate("window.SovSchematicAPI.create('component',{symbolId:'gate',x:1100,y:620}).result")
-    await page.evaluate('(id)=>{selectNode(id);openSelectionSettings("component");formAttachments.value="none";formAttachments.dispatchEvent(new Event("change"))}',free['id'])
+    await page.evaluate('(id)=>{selectNode(id);openSelectionSettings("component");pointsBuiltinToggle.click()}',free['id'])
     await page.wait_for_timeout(50)
     assert await page.evaluate('(id)=>componentAttachmentPointIds(nodes.find(n=>n.id===id))',free['id'])==[]
     assert await page.locator(f'.node[data-id="{free["id"]}"] .attachment-point').count()==0
