@@ -1,9 +1,9 @@
 """Desktop shell QA.
 
 Static checks over the desktop/ Tauri shell and its one seam into the editor:
-`tauri.conf.json` registers both file associations, `main.rs` exposes the
-`opened_document` command, and `src/75-persistence.js` only reaches
-`window.__TAURI__` behind a presence check. No browser, no cargo build.
+`tauri.conf.json` registers both file associations and a Windows icon,
+`main.rs` exposes the `opened_document` command, and `src/75-persistence.js`
+only reaches `window.__TAURI__` behind a presence check. No browser, no cargo build.
 """
 from __future__ import annotations
 import json
@@ -27,6 +27,11 @@ def main() -> None:
     assert frontend_dist != '../..', 'frontendDist must not embed the repository root'
 
     assert conf['app']['withGlobalTauri'] is True, 'app.withGlobalTauri must be true'
+
+    icons = conf['bundle']['icon']
+    assert icons and any(i.lower().endswith('.ico') for i in icons), icons
+    ico_path = next(i for i in icons if i.lower().endswith('.ico'))
+    assert (ROOT / 'desktop/src-tauri' / ico_path).exists(), f'missing {ico_path}'
 
     main_rs = (ROOT / 'desktop/src-tauri/src/main.rs').read_text(encoding='utf-8')
     assert re.search(r'fn\s+opened_document\s*\(', main_rs), 'opened_document command missing'
