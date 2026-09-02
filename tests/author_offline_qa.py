@@ -23,8 +23,8 @@ VALIDATE = ROOT / 'scripts/validate_sov.mjs'
 FENCE = re.compile(r'^```(\S+)([^\n]*)\n(.*?)^```', re.S | re.M)
 
 
-def run_validator(paths: list[Path]) -> tuple[int, str]:
-    proc = subprocess.run(['node', str(VALIDATE), *map(str, paths)], cwd=ROOT, capture_output=True, text=True)
+def run_validator(paths: list[Path], *flags: str) -> tuple[int, str]:
+    proc = subprocess.run(['node', str(VALIDATE), *flags, *map(str, paths)], cwd=ROOT, capture_output=True, text=True)
     return proc.returncode, proc.stdout + proc.stderr
 
 
@@ -63,15 +63,25 @@ def main() -> None:
         assert code == 0, log
         assert '08-gated-service.sov' in log, 'the authored golden example is missing'
 
-        # A wire inside a host without canvasId is reported, and the message names the surface.
+        # A wire inside a host without canvasId takes its surface from its ends; one written for
+        # the wrong surface is reported, and the message names the right one.
         doc = json.loads((ROOT / 'examples/08-gated-service.sov').read_text(encoding='utf-8'))
         inner = [w for w in doc['wires'] if w.get('canvasId', '').startswith('canvas:component:')]
         assert inner, 'example 08 should carry interior wires'
+        wire_id = inner[0]['id']
         del inner[0]['canvasId']
         path = out / 'missing-canvas.sov'
         path.write_text(json.dumps(doc), encoding='utf-8')
+        code, log = run_validator([path], '--compact')
+        assert code == 0, log
+        compact = json.loads(log[log.index('{'):])
+        filled = next(w for w in compact['wires'] if w['id'] == wire_id)
+        assert filled['canvasId'] == 'canvas:component:svc', filled
+        inner[0]['canvasId'] = 'canvas:global'
+        path = out / 'wrong-canvas.sov'
+        path.write_text(json.dumps(doc), encoding='utf-8')
         code, log = run_validator([path])
-        assert code == 1 and 'canvasId missing' in log and 'canvas:component:svc' in log, log
+        assert code == 1 and 'canvasId is canvas:global; both ends are on canvas:component:svc' in log, log
 
     # Palette table matches SYMBOLS exactly.
     state = (ROOT / 'src/00-state.js').read_text(encoding='utf-8')

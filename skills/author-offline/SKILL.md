@@ -20,13 +20,13 @@ A document is a semantic model, not a drawing. The renderer projects it, so the 
 
 Every record lives on a surface. The top level is `canvas:global`. Each Component or Plane with id `X` owns a local surface `canvas:component:X`. A record placed inside `X` carries both `"canvasId": "canvas:component:X"` and `"parentId": "X"`.
 
-Wires carry a `canvasId` too, and the file loader does not fill it in. A wire between two things inside `X` must say `"canvasId": "canvas:component:X"` or it is routed and drawn as if it were on the global canvas. Top-level wires say `"canvasId": "canvas:global"`.
+Wires carry a `canvasId` too. When both ends are bound the loader derives it from them, so it may be omitted; when written it must agree with the ends. A wire between two things inside `X` runs on `"canvasId": "canvas:component:X"`; top-level wires say `"canvasId": "canvas:global"`.
 
 Coordinates are absolute canvas units, and `x`/`y` is the record's centre. A typed Component defaults to 112 by 84. A Point occupies a fixed 24-unit footprint. The default view is about 1200 by 760, but the renderer fits to content, so use whatever extent the drawing needs.
 
 ## The authored form
 
-The file loader fills defaults for anything not written: port contracts, form body, editor flags. So a record can be short. The exceptions are Planes and Points: the loader does not apply their palette presets, so their records must carry the fields below.
+The file loader fills defaults for anything not written: palette presets, port contracts, form body, editor flags. So a record can be short, a Plane or Point included; the fields below are what the presets give them, written out so the file reads on its own.
 
 Document envelope:
 
@@ -143,9 +143,9 @@ Port override on a Component, for access or face. Write the whole port record; t
 1. Write the topology as a list before any JSON: each record with its type and role, each wire as `a.side → b.side`, and which surface each wire is on.
 2. Decide the regions. Anything that is "inside" something else gets a Plane host and boundary Points for every crossing.
 3. Place records on a grid: rows for flow, columns for stage. Compute Plane sizes from their children.
-4. Write the file in the authored form above. Set `canvasId` on every wire.
-5. Validate: `node scripts/validate_sov.mjs my.sov`. Fix every line it prints. It uses the same checks the editor runs at load, plus the wire `canvasId` check.
-6. Render: `python scripts/export_svg.py my.sov --out out/`. Look at the SVG. Check that every wire is visible end to end, nothing overlaps, and hosted records sit inside their host. The export lifts wires inside a Plane above the Plane body; in the editor those wires show when the Plane is entered.
+4. Write the file in the authored form above. Set `canvasId` and `parentId` on every hosted record; on a wire `canvasId` may be omitted when both ends are bound.
+5. Validate: `node scripts/validate_sov.mjs my.sov`. Fix every line it prints. It uses the same checks the editor runs at load, plus a check that a written wire `canvasId` agrees with its ends.
+6. Render: `python scripts/export_svg.py my.sov --out out/`. Look at the SVG. Check that every wire is visible end to end, nothing overlaps, and hosted records sit inside their host. Wires inside a Plane paint above the Plane body, in the editor and in the export.
 7. Repeat 5 and 6 until the drawing says what the description says. Then hand over the `.sov` and the `.svg` together.
 
 ## Anti-patterns
@@ -182,7 +182,7 @@ Fix: host a Point on the Plane's boundary and end the Wire on the Point's `out`.
 
 **A boundary Point without `face: "both"`.** The Point is reachable from outside only, so the interior wire from it to a hosted Component is refused with the reach-through message. Fix: `"ports": {"out": {"face": "both"}}` on the Point.
 
-**Interior wires without `canvasId`.** Not refused. The wire is treated as global, routed around the outside of the Plane, and mostly hidden under it. The validator reports `canvasId missing; both ends are on canvas:component:X`. Fix: set it.
+**Interior wires with the wrong `canvasId`.** A wire written with `canvas:global` between two records inside `X` is routed and drawn on the wrong surface. The validator reports `canvasId is canvas:global; both ends are on canvas:component:X`. Fix: set it to that surface, or omit it and let the loader derive it.
 
 **Hosted record with only one of `canvasId` and `parentId`.** Loads inconsistently: the record may render on the wrong surface or fail to move with its host. Always write both.
 
