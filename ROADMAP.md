@@ -77,6 +77,7 @@ rc/<next>
 ### First post-RC candidates
 
 1. **Topology grammar — Issue #7**
+   - landed on `dev` 2026-09-01: Point / Path / Plane palette primitives with minimal default records; `config.attachmentDefaults` so a Plane exposes no built-in points; Points settle onto Paths, Plane boundaries, Wires, and open interiors through the one Component settle path; 0D grip/ring gesture; compact saved records;
    - formal Point / Path / Surface cell/incidence model;
    - boundary operator / subcell vocabulary;
    - generic `Part` as owned addressable subcell/facet;

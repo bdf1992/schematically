@@ -16,6 +16,17 @@
   const RECEIPT_SCHEMA='soveraeign.schematic/receipt@0.1';
   const GLOBAL_CANVAS_ID='canvas:global';
   const RESOURCE_KEYS={component:'components',wire:'wires',reference:'references'};
+  // Dimensional primitives. A template preset is applied only where the caller
+  // supplied nothing, so authored records always win over the preset.
+  const LEGACY_SYMBOL_IDS={port:'point'};
+  const TEMPLATE_PRESETS={
+    point:{form:{dimension:0},presentation:{graphic:{kind:'none'},labelMode:'none',backdrop:'none'},signalMode:'relay'},
+    path:{form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
+    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:320,h:220}}}
+  };
+  function normalizeSymbolId(value){const id=String(value||'blank')||'blank';return LEGACY_SYMBOL_IDS[id]||id}
+  function templatePreset(symbolId){return clone(TEMPLATE_PRESETS[normalizeSymbolId(symbolId)]||null)}
+  function isPrimitiveSymbol(symbolId){return Object.prototype.hasOwnProperty.call(TEMPLATE_PRESETS,normalizeSymbolId(symbolId))}
 
   const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
   const isObject=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
@@ -60,6 +71,7 @@
     if(!Array.isArray(doc.references))doc.references=[];
     if(!isObject(doc.layout))doc.layout={};
     for(const component of doc.components){
+      normalizeComponentIdentity(component);
       component.form=normalizeComponentForm(component.form,component.canvas);
       if(!isObject(component.canvas))component.canvas={};
       component.canvas.id=`canvas:component:${component.id||'unknown'}`;component.canvas.scope='local';component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
@@ -134,22 +146,40 @@
     return component?.canvas?.id||`canvas:component:${component?.id||'unknown'}`;
   }
   function containingCanvasId(component){return component?.canvasId||GLOBAL_CANVAS_ID}
-  function defaultPorts(){
-    const port=(side,flow,channel='signal')=>({side,face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',name:'Connection 1',colorSlot:0,flow,access:'read-write'}],channelCount:1,activeChannel:0,channel:'Connection 1',colorSlot:0,flow,access:'read-write'});
-    return {in:port('left','in'),out:port('right','out'),control:port('top','control','control')};
+  // A default point contract is minimal: one connection, outside face, no label.
+  // Port-level mirrors (flow/access/colorSlot/channel*) are runtime projections and
+  // are not part of the default record.
+  function defaultPointContract(side,flow){
+    return {side,face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',name:'Connection 1',colorSlot:0,flow,access:'read-write'}]};
   }
+  const STANDARD_POINT_FLOWS={in:['left','in'],out:['right','out'],control:['top','control']};
   function defaultPortForSpec(spec){
-    const standard=defaultPorts()[spec.compatId];if(standard)return standard;
-    const flow=spec.defaultFlow||'duplex',channel=flow==='control'?'control':'signal';
-    return {side:spec.side,face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',name:'Connection 1',colorSlot:0,flow,access:'read-write'}],channelCount:1,activeChannel:0,channel:'Connection 1',colorSlot:0,flow,access:'read-write'};
+    const standard=STANDARD_POINT_FLOWS[spec.compatId];
+    if(standard)return defaultPointContract(spec.side||standard[0],standard[1]);
+    return defaultPointContract(spec.side,spec.defaultFlow||'duplex');
   }
+  // Only the points the effective dimension actually exposes get a contract.
+  // A 0D Point owns `out` (its `self`), a 1D Path `in`/`out`, a standard 2D
+  // surface `in`/`out`/`control`; a surface with attachmentDefaults='none' owns
+  // only what its data-declared boundary points require.
   function ensureAttachmentPortConfigs(component){
     if(!isObject(component.config))component.config={};
-    if(!isObject(component.config.ports))component.config.ports=defaultPorts();
+    if(!isObject(component.config.ports))component.config.ports={};
     for(const spec of Attachment.pointSpecs(component)){
       if(!isObject(component.config.ports[spec.compatId]))component.config.ports[spec.compatId]=defaultPortForSpec(spec);
       component.config.ports[spec.compatId].side=spec.side;
     }
+    return component;
+  }
+  function normalizeComponentIdentity(component){
+    component.symbolId=normalizeSymbolId(component.symbolId||component.type);
+    component.type=component.symbolId==='blank'?null:component.symbolId;
+    if(!isObject(component.config))component.config={};
+    if(!['standard','none'].includes(component.config.attachmentDefaults))delete component.config.attachmentDefaults;
+    if(!Array.isArray(component.config.attachmentPoints))delete component.config.attachmentPoints;
+    const graphic=component.config.presentation?.graphic;
+    if(isObject(graphic)&&graphic.ref==='sym-port')graphic.ref='sym-point';
+    if(isObject(component.boundary?.inside)&&component.boundary.inside.type==='port')component.boundary.inside.type='point';
     return component;
   }
   function isLegacyWirePointAttachment(part){
@@ -160,14 +190,13 @@
     const existing=doc.components.find(c=>c.id===id);if(existing)return existing;
     const cfg=isObject(part.config)?clone(part.config):{};
     const t=Math.max(.02,Math.min(.98,num(part.placement?.t??part.t,.5)));
-    const ports=defaultPorts();ports.out={...ports.out,...cfg,side:'point'};
+    const ports={out:{...defaultPointContract('point','duplex'),...cfg,side:'point'}};
     const active=Array.isArray(ports.out.connections)?ports.out.connections[Math.max(0,Math.min(ports.out.connections.length-1,ports.out.activeConnection||0))]:null;
     const colorSlot=Math.max(0,Math.trunc(num(active?.colorSlot??cfg.colorSlot,0)));
     const point=makeComponent(doc,{
-      id,symbolId:'port',x:0,y:0,canvasId:`canvas:wire:${wire.id}`,
-      form:{dimension:0,body:{kind:'point',material:'generic',thickness:0},frame:{mode:'none',thickness:0,depth:0},regions:{interior:{state:'closed'}}},
+      id,symbolId:'point',x:0,y:0,canvasId:`canvas:wire:${wire.id}`,
       placement:{kind:'wire',wireId:wire.id,t,sourceAttachmentId:part.id||null},
-      config:{label:cleanString(cfg.label,''),colorSlot,signalMode:'relay',presentation:{graphic:{kind:'none',ref:'sym-port',svg:''},size:{w:80,h:64},labelMode:cleanString(cfg.label,'')?'outside':'none',interiorColorSlot:colorSlot,text:'',padding:8,boundaryShape:'point',boundaryColorMode:'separate-from-interior',internalLayout:'glyph-only',portTopology:'self',backdrop:'none'},ports}
+      config:{label:cleanString(cfg.label,''),colorSlot,signalMode:'relay',presentation:{graphic:{kind:'none'},labelMode:cleanString(cfg.label,'')?'outside':'none',interiorColorSlot:colorSlot,backdrop:'none'},ports}
     });
     doc.components.push(point);return point;
   }
@@ -223,34 +252,77 @@
     return form;
   }
   function makeComponent(doc,value={}){
-    const symbolId=cleanString(value.symbolId||value.type,'blank')||'blank';
+    const symbolId=normalizeSymbolId(value.symbolId||value.type);
+    const preset=templatePreset(symbolId)||{};
     const id=cleanString(value.id,nextId(doc.components,'c'));
     const canvasId=cleanString(value.canvasId,GLOBAL_CANVAS_ID);
-    const ports=isObject(value.config?.ports)?clone(value.config.ports):defaultPorts();
+    const form=normalizeComponentForm(isObject(value.form)?value.form:preset.form,value.canvas);
+    const config={
+      label:cleanString(value.config?.label||value.label,''),
+      colorSlot:Math.max(0,Math.trunc(num(value.config?.colorSlot,0))),
+      signalMode:['source','relay','passive'].includes(value.config?.signalMode)?value.config.signalMode:(preset.signalMode||'source'),
+      presentation:isObject(value.config?.presentation)?clone(value.config.presentation):(preset.presentation?clone(preset.presentation):{}),
+      ports:isObject(value.config?.ports)?clone(value.config.ports):{}
+    };
+    const attachmentDefaults=['standard','none'].includes(value.config?.attachmentDefaults)?value.config.attachmentDefaults:preset.attachmentDefaults;
+    if(attachmentDefaults&&attachmentDefaults!=='standard')config.attachmentDefaults=attachmentDefaults;
+    if(Array.isArray(value.config?.attachmentPoints)&&value.config.attachmentPoints.length)config.attachmentPoints=clone(value.config.attachmentPoints);
     const component={
       id,
       type:symbolId==='blank'?null:symbolId,
       symbolId,
       x:num(value.x,120),y:num(value.y,120),
       canvasId,
-      canvas:{id:`canvas:component:${id}`,scope:'local',dimension:2,state:value.canvas?.state==='open'?'open':'closed',ownerKind:'component',ownerId:id},
-      form:normalizeComponentForm(value.form,value.canvas),
-      boundary:isObject(value.boundary)?clone(value.boundary):{kind:'boundary',shape:'blank',inside:{type:symbolId==='blank'?null:symbolId},outside:{type:'canvas'}},
-      parts:isObject(value.parts)?clone(value.parts):{sides:{left:{kind:'side',id:'left',owner:id},right:{kind:'side',id:'right',owner:id},top:{kind:'side',id:'top',owner:id},bottom:{kind:'side',id:'bottom',owner:id}},ports:{}},
-      config:{
-        label:cleanString(value.config?.label||value.label,''),
-        colorSlot:Math.max(0,Math.trunc(num(value.config?.colorSlot,0))),
-        signalMode:['source','relay','passive'].includes(value.config?.signalMode)?value.config.signalMode:'source',
-        attachmentPoints:Array.isArray(value.config?.attachmentPoints)?clone(value.config.attachmentPoints):[],
-        presentation:isObject(value.config?.presentation)?clone(value.config.presentation):{graphic:{kind:'symbol',ref:`sym-${symbolId}`,svg:''},size:{w:112,h:84},labelMode:'boundary',interiorColorSlot:0,text:'',padding:16,boundaryShape:'roundRect',boundaryColorMode:'separate-from-interior',internalLayout:'glyph-only',portTopology:'external',backdrop:'auto'},
-        ports
-      },
+      canvas:{id:`canvas:component:${id}`,scope:'local',dimension:form.dimension,state:form.regions.interior.state,ownerKind:'component',ownerId:id},
+      form,
+      config,
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       parentId:value.parentId??null,
       placement:isObject(value.placement)?clone(value.placement):{kind:canvasId.startsWith('canvas:wire:')?'wire':'surface',...(canvasId.startsWith('canvas:wire:')?{wireId:canvasId.slice('canvas:wire:'.length),t:.5}:{x:num(value.x,120),y:num(value.y,120)})},
       incomplete:symbolId==='blank'
     };
+    if(isObject(value.boundary))component.boundary=clone(value.boundary);
+    if(isObject(value.parts))component.parts=clone(value.parts);
     return ensureAttachmentPortConfigs(component);
+  }
+  // Saved records carry authored truth only. Everything below is regenerated on load:
+  // local canvas descriptors, boundary/parts projections, port-level mirrors of the
+  // active connection, realized palette colors, and presentation layout hints.
+  const DERIVED_PORT_KEYS=['channelCount','activeChannel','channel','channels','colorSlot','color','flow','access','side'];
+  const DERIVED_PRESENTATION_KEYS=['svgRef','internalLayout','portTopology','boundaryColorMode','boundaryShape'];
+  function compactComponent(component){
+    const c=clone(component);
+    delete c.canvas;delete c.boundary;delete c.parts;delete c.type;delete c.incomplete;
+    if(isObject(c.config)){
+      delete c.config.color;
+      if(c.config.attachmentDefaults==='standard')delete c.config.attachmentDefaults;
+      if(Array.isArray(c.config.attachmentPoints)&&!c.config.attachmentPoints.length)delete c.config.attachmentPoints;
+      if(isObject(c.config.presentation))for(const key of DERIVED_PRESENTATION_KEYS)delete c.config.presentation[key];
+      if(isObject(c.config.ports))for(const port of Object.values(c.config.ports)){
+        if(!isObject(port))continue;
+        if(Array.isArray(port.connections)&&port.connections.length){
+          for(const key of DERIVED_PORT_KEYS)delete port[key];
+          for(const connection of port.connections)if(isObject(connection)){delete connection.color;delete connection.name}
+        }
+      }
+    }
+    if(isObject(c.placement)&&c.placement.kind==='surface')delete c.placement;
+    return c;
+  }
+  function compactWire(wire){
+    const w=clone(wire);
+    delete w.canvas;delete w.duplex;
+    if(Array.isArray(w.attachments)&&!w.attachments.length)delete w.attachments;
+    if(isObject(w.config))delete w.config._legacyColorMigrated;
+    return w;
+  }
+  function compactDocument(input){
+    const doc=clone(input);
+    delete doc.canvas;
+    doc.components=(doc.components||[]).map(compactComponent);
+    doc.wires=(doc.wires||[]).map(compactWire);
+    if(isObject(doc.meta)&&Array.isArray(doc.meta.checkpoints))doc.meta.checkpoints=doc.meta.checkpoints.map(cp=>isObject(cp)&&isObject(cp.document)?{...cp,document:compactDocument(cp.document)}:cp);
+    return doc;
   }
   function attachmentPointConfig(doc,componentId,pointId){
     const component=doc.components.find(c=>c.id===componentId);if(!component)return null;
@@ -352,6 +424,7 @@
     const current=arr[index];assertUnlocked(current,resource);
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource==='component'){
+      normalizeComponentIdentity(candidate);
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
       candidate.form=normalizeComponentForm(candidate.form,candidate.canvas);candidate.canvas.state=candidate.form.regions.interior.state;
       ensureAttachmentPortConfigs(candidate);
@@ -442,5 +515,5 @@
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });

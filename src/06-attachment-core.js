@@ -14,18 +14,27 @@
   function hostDimension(entity){
     const placement=entity?.placement||{};
     if(placement.kind==='wire'||String(entity?.canvasId||'').startsWith('canvas:wire:'))return 1;
-    if(placement.kind==='edge')return 1;
+    if(placement.kind==='edge'||placement.kind==='path')return 1;
     return 2;
+  }
+  // 2D built-in points (left/right/top) are template defaults, not an ontology.
+  // `config.attachmentDefaults='none'` exposes no built-ins: the surface is then
+  // attachable only through hosted 0D Points and data-declared boundary points.
+  const ATTACHMENT_DEFAULT_MODES=new Set(['standard','none']);
+  function attachmentDefaults(entity){
+    const mode=entity?.config?.attachmentDefaults;
+    return ATTACHMENT_DEFAULT_MODES.has(mode)?mode:'standard';
   }
   // Connectivity follows the lower-dimensional host when a richer form is settled onto it.
   // A 2D ACT hosted by a Wire therefore exposes only the Wire-aligned 1D endpoints.
   function effectiveDimension(entity){return Math.min(intrinsicDimension(entity),hostDimension(entity))}
-  function basePointSpecs(d){
+  function basePointSpecs(d,entity=null){
     if(d===0)return [{id:'self',compatId:'out',side:'point',role:'self',defaultFlow:'duplex',t:.5}];
     if(d===1)return [
       {id:'start',compatId:'in',side:'left',role:'endpoint',defaultFlow:'in',t:0},
       {id:'end',compatId:'out',side:'right',role:'endpoint',defaultFlow:'out',t:1}
     ];
+    if(attachmentDefaults(entity)==='none')return [];
     return [
       {id:'left',compatId:'in',side:'left',role:'boundary',defaultFlow:'in',t:.5},
       {id:'right',compatId:'out',side:'right',role:'boundary',defaultFlow:'out',t:.5},
@@ -55,9 +64,10 @@
     return out;
   }
   function pointSpecs(entity){
-    const d=effectiveDimension(entity),base=basePointSpecs(d);
+    const d=effectiveDimension(entity),base=basePointSpecs(d,entity);
     return [...base,...customPointSpecs(entity,d,base)];
   }
+  function builtinPointIds(entity){return basePointSpecs(effectiveDimension(entity),entity).map(x=>x.id)}
   function pointIds(entity){return pointSpecs(entity).map(x=>x.id)}
   function resolveSpec(entity,id){
     const value=String(id??'');
@@ -68,7 +78,7 @@
   function compatId(entity,id){return resolveSpec(entity,id)?.compatId||null}
   function defaultCompatId(entity,preference='end'){
     const specs=pointSpecs(entity);
-    return (preference==='start'?specs[0]:specs.at(-1))?.compatId||'out';
+    return (preference==='start'?specs[0]:specs.at(-1))?.compatId||null;
   }
   function descriptor(entity,id,legacyPorts={}){
     const spec=resolveSpec(entity,id);if(!spec)return null;
@@ -89,14 +99,16 @@
     const stored=end==='a'?wire?.aAttachment:wire?.bAttachment;
     const legacy=end==='a'?wire?.aSide:wire?.bSide;
     const spec=resolveSpec(component,stored?.pointId||legacy)||pointSpecs(component)[end==='a'?pointSpecs(component).length-1:0];
+    if(!spec)return null; // the component exposes no attachment point for this endpoint
     return {componentId,pointId:spec.id,compatId:spec.compatId,spec};
   }
   function syncWireEndpoint(wire,end,component,id){
     const spec=resolveSpec(component,id)||pointSpecs(component)[end==='a'?pointSpecs(component).length-1:0];
+    if(!spec)return null; // leave the stored reference untouched; validation reports it as unreachable
     const key=end==='a'?'aAttachment':'bAttachment';
     wire[key]={kind:'attachment-ref',componentId:component.id,pointId:spec.id};
     if(end==='a')wire.aSide=spec.compatId;else wire.bSide=spec.compatId;
     return wire[key];
   }
-  return {intrinsicDimension,hostDimension,effectiveDimension,pointSpecs,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
+  return {intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
 });

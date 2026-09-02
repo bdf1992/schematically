@@ -272,7 +272,8 @@ function scheduleDragSettle(mods=null){
 function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSeed=0,occupied=[],wireId=null){
   const sourceNode=nodes.find(n=>n.id===sourceId);
   const targetNode=nodes.find(n=>n.id===targetId);
-  const SA=stubPos(A,aSide,26,sourceNode), SB=stubPos(B,bSide,26,targetNode);
+  const routedWire=wireId?wires.find(x=>x.id===wireId):null;
+  const SA=stubPos(A,aSide,26,sourceNode,wireEndpointInward(routedWire,sourceNode)), SB=stubPos(B,bSide,26,targetNode,wireEndpointInward(routedWire,targetNode));
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
   const otherRects=nodes
     .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
@@ -389,7 +390,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
   const targetNode=nodes.find(n=>n.id===w.b);
   let rebuilt=null;
   if(cachedCore.length>=2){
-    const SA=stubPos(A,w.aSide,26,nodes.find(n=>n.id===w.a)), SB=stubPos(B,w.bSide,26,nodes.find(n=>n.id===w.b));
+    const SA=stubPos(A,w.aSide,26,sourceNode,wireEndpointInward(w,sourceNode)), SB=stubPos(B,w.bSide,26,targetNode,wireEndpointInward(w,targetNode));
     const inner=cachedCore.slice(1,-1).map(q=>({x:q.x,y:q.y}));
     rebuilt=normalizePoints([A,SA,...inner,SB,B]);
 
@@ -413,7 +414,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     return candidate.points;
   }
 
-  const SA=stubPos(A,w.aSide,26,nodes.find(n=>n.id===w.a)), SB=stubPos(B,w.bSide,26,nodes.find(n=>n.id===w.b));
+  const SA=stubPos(A,w.aSide,26,sourceNode,wireEndpointInward(w,sourceNode)), SB=stubPos(B,w.bSide,26,targetNode,wireEndpointInward(w,targetNode));
   const rebuiltCore=normalizePoints([SA,...rebuilt.slice(2,-2),SB]);
   const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
   const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied);

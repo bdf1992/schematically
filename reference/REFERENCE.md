@@ -72,3 +72,11 @@ These are separate axes:
 - authority is deliberately not inferred from any of the above.
 
 A useful evidentiary reading is: a durable Record can receive a **Write** representing what happened, while an Observer/Witness can participate in a **Read** representing observation of what happened. This is representational semantics, not an authorization grant.
+
+## Primitives (dev)
+
+- `point` (0D) · `path` (1D) · `plane` (2D) are palette primitives with Form presets; `port` is a legacy alias of `point`.
+- A Plane has `config.attachmentDefaults: none`: no built-in `left`/`right`/`top`. Attachment is emergent from Points hosted on its boundary.
+- Hosted Point placements: `{kind:'wire',wireId,t}`, `{kind:'path',hostId,t}`, `{kind:'edge',hostId,side,t}`; interior hosting uses `canvasId`.
+- Saved documents are compact: runtime projections are rebuilt on load (see `DATA-FORMATS.md`).
+- Example: `07-plane-with-points.sov`.

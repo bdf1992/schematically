@@ -66,6 +66,27 @@ MUTANTS=[
       'new':'return base;',
       'test':'tests/configurable_attachment_defaults_qa.py'
     },
+    {
+      'name':'plane-attachment-defaults-ignored',
+      'file':'src/06-attachment-core.js',
+      'old':"if(attachmentDefaults(entity)==='none')return [];",
+      'new':"if(false)return [];",
+      'test':'tests/primitive_forms_qa.py'
+    },
+    {
+      'name':'point-cannot-settle-into-interior',
+      'file':'src/30-canvas.js',
+      'old':'return best||interiorHost();',
+      'new':'return best;',
+      'test':'tests/primitive_forms_qa.py'
+    },
+    {
+      'name':'saved-records-keep-runtime-projections',
+      'file':'src/05-data-core.js',
+      'old':'delete c.canvas;delete c.boundary;delete c.parts;delete c.type;delete c.incomplete;',
+      'new':'delete c.canvas;',
+      'test':'tests/document_compaction_qa.py'
+    },
 ]
 
 killed=[]

@@ -16,6 +16,8 @@ STATIC=[
 BROWSER=[
     'tests/attachment_point_refactor_qa.py',
     'tests/configurable_attachment_defaults_qa.py',
+    'tests/primitive_forms_qa.py',
+    'tests/document_compaction_qa.py',
     'tests/attachment_interaction_parity_qa.py',
     'tests/attachment_growth_direction_qa.py',
     'tests/attachment_terminal_identity_qa.py',

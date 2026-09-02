@@ -4,9 +4,11 @@ A compact, AI-native schematic editor. A document is a semantic model — Compon
 
 ## The model
 
-- **Component** — a closed boundary with behavior, content, and a Form. Nested Components use the same implementation as root Components.
+- **Point / Path / Plane** — the dimensional basis, and the first three entries in the palette. A 0D Point is an attachment. A 1D Path carries between its two ends. A 2D Plane bounds a region that hosts Points on its boundary and Components in its interior. Each has a minimal default record; the preset lives in `05-data-core.js`.
+- **Hosting is attachment** — drop a Point on a Path, on a Plane boundary, or on a Wire and it sticks there parametrically (`placement = {kind: path | edge | wire, t}`), riding along when the host moves or resizes. Drop it inside an open Plane and it is hosted in the interior. A Point on a boundary with face `both` is a crossing.
+- **Component** — a typed Plane: a closed boundary with behavior, content, and a Form. Nested Components use the same implementation as root Components.
 - **Form** — dimension + Body + Frame + addressable Regions. Dimensions are earned: 0D behaves as an attachable point, 1D as a path/carrier with endpoint topology, 2D as a surface/boundary with addressable boundary attachment points.
-- **Attachment points (0D)** — one concern normalizes Port-like behavior everywhere: selection, hit-testing, wiring, color, label, history, and API behavior are identical whether a point lives on a 1D path or a 2D boundary. Attachment counts are template data, not a renderer rule.
+- **Attachment points (0D)** — one concern normalizes Port-like behavior everywhere: selection, hit-testing, wiring, color, label, history, and API behavior are identical whether a point lives on a 1D path or a 2D boundary. Built-in boundary points are template data (`config.attachmentDefaults`): typed Components start with left/right/top, a Plane starts with none.
 - **Wire** — an open 1D carrier connecting attachment points that share an exposed surface. Wires can host Components inline (`wireId + t`); duplex Wires carry simultaneous forward/reverse packets.
 - **Direction ≠ access ≠ authority** — Ports carry direction (Input / Output / Input + Output / Trigger) and access (None / Read / Write / Read + Write) as independent axes. Read/Write describes the represented effect; it never grants permission.
 - **Boundaries are real** — no implicit reach-through. Crossing a Component boundary requires an inside-facing or both-facing Port on that Component, and every surface (UI, API, HTTP, MCP) enforces the same legality.
@@ -25,6 +27,8 @@ One desktop-style **File** menu: New, Open, Save, Save As, Export SVG, Export Pa
 - `.sovpak` → `soveraeign.schematic/package@0.1`
 - recovery → `soveraeign.schematic/workspace@0.1`
 - CRUD envelopes → `operation@0.1` / `receipt@0.1`
+
+Saved documents carry authored truth only. Runtime projections (local canvas descriptors, boundary/parts, port-level mirrors, realized colors) are rebuilt on load and never written, so a `.sov` is a few lines per entity. Older files that still carry those projections load unchanged.
 
 Schemas live in `formats/`; `DATA-FORMATS.md` explains them.
 
@@ -50,7 +54,7 @@ The agent-facing corpus ships with the repository:
 
 The current line stabilizes primitives so future work adds definitions and rules rather than parallel implementations. The concerns ahead, tracked as NEXT issues and sketched in `ROADMAP.md`, `HORIZON-SPACE.md`, and `docs/vision/`:
 
-- a formal Point / Path / Surface cell grammar, with the public Wire concept subsumed into generic 1D Path semantics;
+- a formal Point / Path / Surface cell grammar, with the public Wire concept subsumed into generic 1D Path semantics (the primitives, hosted-Point attachment, and template attachment defaults landed first; Wire → Path is the remaining step);
 - data-driven attachment descriptors, domain packs, and data-backed built-ins;
 - a small logic machine for particle routing and signal state;
 - generalized Spaces — admitted grammars beyond the current 2D canvas, including eventual 3D volume semantics;

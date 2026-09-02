@@ -11,7 +11,8 @@ let currentFileFormat='document';
 let lastFileFingerprint=null;
 
 function snapshotDocument(){
-  const doc=SovSchematicData.makeDocument(SovSchematicData.clone(diagram));
+  // Files and API snapshots carry authored truth only; runtime projections are rebuilt on load.
+  const doc=SovSchematicData.compactDocument(SovSchematicData.makeDocument(SovSchematicData.clone(diagram)));
   doc.meta=doc.meta||{};
   doc.meta.title=doc.meta.title||'Soveraeign Schematic';
   return doc;
@@ -146,8 +147,8 @@ function documentFileText(){
   return JSON.stringify(snapshotDocument(),null,2);
 }
 function collectPackageTemplates(){
-  return (GROUPS.Components||[]).map(symbolId=>{
-    const symbol=byId(symbolId);
+  return [...(GROUPS.Primitives||[]),...(GROUPS.Components||[])].map(symbolId=>{
+    const symbol=byId(symbolId),preset=SovSchematicData.templatePreset(symbolId);
     return {
       id:`component:${symbolId}`,
       kind:'component',
@@ -156,7 +157,8 @@ function collectPackageTemplates(){
       family:symbol?.family||null,
       role:symbol?.role||null,
       meaning:symbol?.meaning||'',
-      properties:SovSchematicData.clone(symbol?.properties||[])
+      properties:SovSchematicData.clone(symbol?.properties||[]),
+      ...(preset?{preset}:{})
     };
   });
 }

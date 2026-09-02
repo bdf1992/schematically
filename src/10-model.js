@@ -79,14 +79,6 @@ function ensureComponentStructure(n){
   n.incomplete=insideType==null;
 
   if(!n.parts)n.parts={};
-  if(!n.parts.sides){
-    n.parts.sides={
-      left:{kind:'side',id:'left',owner:n.id},
-      right:{kind:'side',id:'right',owner:n.id},
-      top:{kind:'side',id:'top',owner:n.id},
-      bottom:{kind:'side',id:'bottom',owner:n.id}
-    };
-  }
   if(!n.parts.points)n.parts.points={};
   if(!n.parts.ports)n.parts.ports={}; // compatibility projection only
   return n;
@@ -287,6 +279,14 @@ function componentPlacement(n){
 function componentIsPoint(n){return componentForm(n).dimension===0}
 function componentIsPath(n){return componentForm(n).dimension===1}
 function componentIsSurface(n){return componentForm(n).dimension===2}
+// A primitive shows no type name of its own; only an authored label is drawn.
+function componentTypeCaption(n,s=byId(n.symbolId)){return isPrimitiveSymbol(n.symbolId)?'':(s?.name||'')}
+// Wires whose endpoint sits on one of this component's built-in points. Used to refuse
+// attachment-default or type changes that would silently orphan a carrier.
+function wiresOnBuiltinPoints(n){
+  const ids=new Set(Attachment.builtinPointIds(n));
+  return wires.filter(w=>(w.a===n.id&&ids.has(Attachment.pointId(n,w.aAttachment?.pointId||w.aSide)))||(w.b===n.id&&ids.has(Attachment.pointId(n,w.bAttachment?.pointId||w.bSide))));
+}
 function componentHostedOnComponentPath(n){return componentPlacement(n).kind==='path'}
 function componentHostedOnComponentEdge(n){return componentPlacement(n).kind==='edge'}
 function componentBackdropMode(n){
@@ -315,11 +315,6 @@ function componentConfig(n){
   if('contains' in presentation)delete presentation.contains; // legacy only; Form interior owns hosting state.
   if(typeof presentation.padding!=='number')presentation.padding=16;
   presentation.padding=Math.max(8,Math.min(36,presentation.padding));
-  if(!presentation.boundaryShape)presentation.boundaryShape='roundRect';
-  presentation.svgRef=presentation.graphic.ref;
-  presentation.internalLayout=formHostsChildren(n)?'nested-components':presentation.graphic.kind==='custom'?'custom-svg':'glyph-only';
-  presentation.portTopology=presentation.portTopology||'external';
-  presentation.boundaryColorMode='separate-from-interior';
   if(!['auto','none','body','frame'].includes(presentation.backdrop))presentation.backdrop='auto';
   if(!Number.isInteger(n.config.colorSlot)){
     n.config.colorSlot=/^#[0-9a-fA-F]{6}$/.test(n.config.color||'')?nearestSlot(n.config.color):0;
@@ -338,7 +333,9 @@ function componentConfig(n){
   if(!n.parts.points)n.parts.points={};
   for(const stale of Object.keys(n.parts.points))if(!canonicalPointIds.has(stale))delete n.parts.points[stale];
   n.parts.ports={}; // compatibility projection only; populated from authoritative point descriptors below.
-  const configuredCompatIds=new Set(['in','out','control',...specs.map(spec=>spec.compatId)]);
+  // Only points the effective dimension exposes get a contract. Authored contracts for
+  // points a dimension change hid are left in place so switching back restores them.
+  const configuredCompatIds=new Set(specs.map(spec=>spec.compatId));
   for(const compatId of configuredCompatIds){
     const spec=specs.find(item=>item.compatId===compatId);
     const fallback=defaults[compatId]||{side:spec?.side||'point',channel:'signal',color:'#171715',flow:spec?.defaultFlow||'duplex'};

@@ -20,6 +20,8 @@ function transformMinimumSize(node){
   let minW=80,minH=64;
   const p=componentConfig(node).presentation;
   for(const child of descendantsOf(node.id)){
+    // Points stuck to the boundary ride the edge; they do not constrain the interior.
+    if(['edge','path'].includes(componentPlacement(child).kind))continue;
     const size=componentSize(child);
     minW=Math.max(minW,2*(Math.abs(child.x-node.x)+size.w/2+p.padding));
     minH=Math.max(minH,2*(Math.abs(child.y-node.y)+size.h/2+p.padding));
@@ -158,14 +160,20 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
 }
 function bindNode(g,n){
   g.addEventListener('pointerdown',e=>{
+    if(e.target.closest('.point-grip')){
+      // 0D grip: move the Point (settle onto a Path, Plane boundary, Wire, or interior).
+      if(e.shiftKey){selectNode(n.id,{focus:false,additive:true,toggle:true});if(!selectedComponentIds.has(n.id))return}
+      else if(!selectedComponentIds.has(n.id))selectNode(n.id,{focus:false});
+      beginActiveNodeDrag(e,g,n);return;
+    }
     const port=e.target.closest('.port-hit');if(port){beginWireDrag(e,n,port.dataset.point||port.dataset.side,g);return}
     const transform=e.target.closest('.transform-handle,.transform-handle-halo');if(transform){beginComponentTransform(e,n,transform.dataset.transform);return}
     if(e.shiftKey){selectNode(n.id,{focus:false,additive:true,toggle:true});if(!selectedComponentIds.has(n.id))return}
     else if(!selectedComponentIds.has(n.id))selectNode(n.id,{focus:false});
     beginActiveNodeDrag(e,g,n);
   });
-  g.addEventListener('click',e=>{if(e.target.closest('.port-hit,.transform-handle,.transform-handle-halo')){e.preventDefault();e.stopPropagation();return}e.stopPropagation();if(!e.shiftKey&&selectedComponentIds.size<=1)selectNode(n.id)});
-  g.addEventListener('dblclick',e=>{if(e.target.closest('.port-hit,.transform-handle,.transform-handle-halo'))return;e.preventDefault();e.stopPropagation();focusComponent(n)});
+  g.addEventListener('click',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo')){e.preventDefault();e.stopPropagation();return}e.stopPropagation();if(!e.shiftKey&&selectedComponentIds.size<=1)selectNode(n.id)});
+  g.addEventListener('dblclick',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo'))return;e.preventDefault();e.stopPropagation();focusComponent(n)});
 }
 window.addEventListener('pointermove',updateActiveNodeDrag,true);
 window.addEventListener('pointerup',e=>finishActiveNodeDrag(e),true);
@@ -418,7 +426,23 @@ workspace.addEventListener('pointerdown',e=>{if(e.target===workspace && !panDrag
 barComponentType.addEventListener('change',()=>{
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'type change'))return;setHistoryHint('Change Component type');
   const next=barComponentType.value;
-  if(!GROUPS.Components.includes(next))return;
+  if(!GROUPS.Components.includes(next)&&!GROUPS.Primitives.includes(next)){barComponentType.value=n.symbolId;return}
+
+  // Retyping to a primitive applies that primitive's Form preset. Refuse when a
+  // Wire already ends on a built-in point the preset would remove.
+  const preset=SovSchematicData.templatePreset(next);
+  if(preset){
+    const f=componentForm(n),nextDefaults=preset.attachmentDefaults||'standard';
+    const wouldRemoveBuiltins=f.dimension!==preset.form.dimension||(nextDefaults==='none'&&Attachment.attachmentDefaults(n)!=='none');
+    if(wouldRemoveBuiltins&&wiresOnBuiltinPoints(n).length){barComponentType.value=n.symbolId;statusEl.textContent='Detach Wires from built-in points first';return}
+    const beforeOpen=formHostsChildren(n);
+    f.dimension=preset.form.dimension;f.body.kind=['point','path','surface'][f.dimension];
+    if(preset.form.regions?.interior?.state)f.regions.interior.state=preset.form.regions.interior.state;
+    if(f.dimension<2)f.regions.interior.state='closed';
+    if(nextDefaults==='none')n.config.attachmentDefaults='none';else delete n.config.attachmentDefaults;
+    if(beforeOpen&&!formHostsChildren(n)){const fallback=n.canvasId||GLOBAL_CANVAS_ID;for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}}
+    SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
+  }
 
   ensureComponentStructure(n);
   n.boundary.inside.type=next==='blank'?null:next;

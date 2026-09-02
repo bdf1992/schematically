@@ -14,3 +14,4 @@ These files are executable reference material for the 0.1 contract.
 All `.sov` examples pass `SovSchematicData.validateDocument()`.
 
 - `06-read-write-evidence.sov` — Write into a durable RECORD and Read for a WITNESS/Observer; demonstrates direction vs access without treating either as authority.
+- `07-plane-with-points.sov` — a Plane with two boundary-hosted Points (face `both`) carrying a Source → Stage → Record chain across its boundary; written in the compact record form.

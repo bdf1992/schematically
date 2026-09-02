@@ -1,7 +1,7 @@
 # Module ownership — 0.1
 
 - `00-state.js` — runtime state and DOM references.
-- `05-data-core.js` — transport-neutral documents, packages, validation, CRUD, reachability.
+- `05-data-core.js` — transport-neutral documents, packages, validation, CRUD, reachability, primitive template presets, and compact serialization (`compactDocument`).
 - `10-model.js` — Component/Wire/Port semantic normalization.
 - `20-ui.js` — panels, palette/grid UI helpers.
 - `25-signal.js` — derived signal state.

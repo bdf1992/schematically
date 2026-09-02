@@ -27,3 +27,13 @@ A Component settled onto a Wire is projected from the Wire's local geometry rath
 - the same settle dwell/ghost mechanism is used for 1-D Wire hosts and 2-D Component hosts.
 
 The derived pose is runtime projection and is not additional persisted truth.
+
+
+## Point hosting (dev, 2026-09-01)
+
+A 0D Point uses the same settle resolver with three more host kinds, chosen by
+proximity: a Wire (`kind: wire`), a 1D Path Component (`kind: path`, `hostId`, `t`),
+or a 2D boundary (`kind: edge`, `hostId`, `side`, `t`), each within a small reach;
+otherwise an open interior (`kind: component`) like any Component. Pose is derived
+from the host on every render, and the host's resize handles ignore boundary-hosted
+children. Copy/paste keeps a boundary-hosted Point stuck to the copied host.

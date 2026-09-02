@@ -59,8 +59,8 @@ function appendComponentGraphic(g,n,cfg){
   g.appendChild(use);
 }
 function appendComponentText(g,n,cfg,s){
-  const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||s.name;
-  if(p.labelMode!=='none'){
+  const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s);
+  if(p.labelMode!=='none'&&label){
     const t=document.createElementNS('http://www.w3.org/2000/svg','text');
     t.setAttribute('text-anchor','middle');t.setAttribute('class',p.labelMode==='outside'?'outside-label':'component-label');
     if(componentHostedOnWire(n)&&componentBackdropMode(n)==='none'){
@@ -134,7 +134,14 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   if(form.dimension===0){
     const pointCfg=componentAttachmentPoint(n,'self')?.config,point=document.createElementNS('http://www.w3.org/2000/svg','circle');
     point.setAttribute('class','dimensional-point-body port attachment-point');point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
-    const display=String(cfg.label||'').trim()||(n.symbolId==='port'?'':s.name);if(display){const label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','component-label dimensional-point-label');label.setAttribute('text-anchor','middle');label.setAttribute('y','22');label.textContent=display;g.appendChild(label)}return
+    const display=String(cfg.label||'').trim()||componentTypeCaption(n,s);
+    if(display){
+      // A hosted Point inherits its host's angle; its label stays upright and below the point in world space.
+      const angle=componentHostAngle(n),label=document.createElementNS('http://www.w3.org/2000/svg','text');
+      label.setAttribute('class','component-label dimensional-point-label');label.setAttribute('text-anchor','middle');label.setAttribute('y','0');
+      label.setAttribute('transform',`rotate(${-angle}) translate(0 22)`);label.textContent=display;g.appendChild(label);
+    }
+    return
   }
   if(form.dimension===1){const line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('class','dimensional-path-body');line.setAttribute('x1',String(-size.w/2));line.setAttribute('x2',String(size.w/2));line.setAttribute('y1','0');line.setAttribute('y2','0');line.setAttribute('stroke-width',String(Math.max(2,Math.min(14,2+form.body.thickness*.18))));g.appendChild(line);appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);return}
   if(backdrop!=='none'){
@@ -177,6 +184,12 @@ function render(){
       if(selfPoint){vis=g.querySelector('.dimensional-point-body');if(vis){vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}}
       else{vis=document.createElementNS('http://www.w3.org/2000/svg','circle');vis.setAttribute('class','port attachment-point');vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.setAttribute('cx',localX);vis.setAttribute('cy',localY);vis.setAttribute('r','5');vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}
       g.appendChild(hit);if(!selfPoint)g.appendChild(vis);
+      if(selfPoint){
+        // A 0D form is both a movable object and an attachment. The inner grip moves it
+        // (drag) or selects it (click); the outer ring is the wiring/attachment target.
+        const grip=document.createElementNS('http://www.w3.org/2000/svg','circle');
+        grip.setAttribute('class','point-grip');grip.setAttribute('cx',localX);grip.setAttribute('cy',localY);grip.setAttribute('r','8');g.appendChild(grip);
+      }
       if(pcfg.label){
         const portLabel=document.createElementNS('http://www.w3.org/2000/svg','text');
         portLabel.setAttribute('class','port-label-text');
