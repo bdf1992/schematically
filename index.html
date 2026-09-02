@@ -434,6 +434,18 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .carrier-end-handle.free{stroke-width:2;stroke-dasharray:2 2}
 .wire-group.has-free-end .wire{stroke-dasharray:7 5}
 .endpoint-halo.free-end{stroke-dasharray:2 3}
+
+/* A 1D form's two ends are draggable handles while it is selected. They sit above
+   the endpoint attachment points, which stay wireable through their own hit area. */
+.path-endpoint-halo{fill:transparent;stroke:none;cursor:grab;pointer-events:all}
+.path-endpoint-handle{
+  fill:var(--surface,#fff);
+  stroke:var(--accent,#4E86BE);
+  stroke-width:2;
+  pointer-events:none;
+}
+.transforming-node .path-endpoint-halo{cursor:grabbing}
+.node:not(.selected) .path-endpoint-handle-group{display:none}
 </style>
 </head>
 <body>
@@ -2048,6 +2060,15 @@ const DEFAULT_WIRE_COLOR='#171715';
 const DEFAULT_CHANNEL='signal';
 let wirePartSeq=1;
 let renderEpoch=1;
+// A 1D Path's length is authored by dragging its ends, so it is not bound by the
+// minimum a 2D body needs; the ceiling only keeps a mis-drag from filling the canvas.
+const PATH_MIN_LENGTH=24,PATH_MAX_LENGTH=4000;
+function normalizeAngleDegrees(value){
+  const n=Number(value);
+  if(!Number.isFinite(n))return 0;
+  const wrapped=((n%360)+360)%360;
+  return Number((wrapped>=180?wrapped-360:wrapped).toFixed(3));
+}
 const PALETTE_DRAG_THRESHOLD=10,PALETTE_HOLD_DELAY=220;
 let paletteDrag=null;
 const PORT_DRAG_THRESHOLD=14;
@@ -2380,8 +2401,16 @@ function componentConfig(n){
   if(typeof presentation.graphic.ref!=='string')presentation.graphic.ref=`sym-${n.symbolId||'blank'}`;
   if(typeof presentation.graphic.svg!=='string')presentation.graphic.svg='';
   if(!presentation.size)presentation.size={w:112,h:84};
-  presentation.size.w=Math.max(80,Math.min(520,Number(presentation.size.w)||112));
+  // A 1D Path's width is its length, set by dragging either end, so it is not held
+  // to the minimum a 2D body needs and may run much longer across a canvas.
+  const isPath=Number(n.form?.dimension)===1;
+  presentation.size.w=isPath
+    ?Math.max(PATH_MIN_LENGTH,Math.min(PATH_MAX_LENGTH,Number(presentation.size.w)||160))
+    :Math.max(80,Math.min(520,Number(presentation.size.w)||112));
   presentation.size.h=Math.max(64,Math.min(420,Number(presentation.size.h)||84));
+  // Authored direction in degrees. A hosted form takes its host's angle instead;
+  // this is the angle of a form standing free on a surface.
+  presentation.angle=normalizeAngleDegrees(presentation.angle);
   if(!['boundary','inside','outside','none'].includes(presentation.labelMode))presentation.labelMode='boundary';
   if(!Number.isInteger(presentation.interiorColorSlot))presentation.interiorColorSlot=n.config.colorSlot??0;
   presentation.interiorColorSlot=normalizeSlot(presentation.interiorColorSlot,0);
@@ -3883,7 +3912,14 @@ function componentInlineTerminalHalfSpan(node){
   const box=componentInlineGraphicBox(node);
   return box.w*(.5-8/96);
 }
-function componentHostAngle(node){return Number(wireHostPoseCache.get(node?.id)?.angle)||0}
+// The world angle of a form: a hosted form rides its host's pose, a free one carries
+// its own authored direction. Every geometry caller wants this, not one or the other.
+function componentHostAngle(node){
+  if(!node)return 0;
+  const hosted=wireHostPoseCache.get(node.id);
+  if(hosted&&Number.isFinite(Number(hosted.angle)))return Number(hosted.angle);
+  return normalizeAngleDegrees(node.config?.presentation?.angle);
+}
 function rotateVectorByDegrees(x,y,angle){const r=angle*Math.PI/180,c=Math.cos(r),s=Math.sin(r);return{x:x*c-y*s,y:x*s+y*c}}
 function componentPortLocalPosition(n,pointId){
   const size=componentSize(n),spec=Attachment.resolveSpec(n,pointId);if(!spec)return{x:0,y:0};
@@ -4727,6 +4763,25 @@ function appendComponentText(g,n,cfg,s){
     t.setAttribute('y',componentAcceptsChildren(n)?String(-p.size.h/2+72):'5');t.textContent=annotation;g.appendChild(t);
   }
 }
+// A 1D form is defined by where its two ends are. Each end gets a handle that sets
+// that end directly; the form's origin, length and angle follow from the pair. The
+// handles sit on top of the endpoint attachment points, which stay wireable.
+function appendPathEndpointHandles(g,n){
+  const half=Math.max(PATH_MIN_LENGTH,componentSize(n).w)/2;
+  const group=document.createElementNS('http://www.w3.org/2000/svg','g');
+  group.setAttribute('class','path-endpoint-handle-group');
+  for(const [end,x] of [['start',-half],['end',half]]){
+    const halo=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    halo.setAttribute('class','path-endpoint-halo');halo.dataset.pathEnd=end;
+    halo.setAttribute('cx',String(x));halo.setAttribute('cy','0');halo.setAttribute('r','13');
+    group.appendChild(halo);
+    const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    dot.setAttribute('class','path-endpoint-handle');dot.dataset.pathEnd=end;
+    dot.setAttribute('cx',String(x));dot.setAttribute('cy','0');dot.setAttribute('r','5');
+    group.appendChild(dot);
+  }
+  g.appendChild(group);
+}
 function appendComponentTransformHandles(g,n,cfg){
   const {w,h}=componentSize(n);
   const baseX=w/2+8,baseY=h/2+8,offset=14;
@@ -4822,7 +4877,8 @@ function render(){
     g.style.opacity=String(editor.opacity);
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
     const signalColor=componentSignals.get(n.id)||cfg.color;
-    {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
+    // A hosted form rides its host's pose; a free 1D form carries its own direction.
+    {const angle=componentHostAngle(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${angle?` rotate(${angle})`:''}`)}
     renderComponentVisual(g,n,cfg,s,signalColor);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
@@ -4847,6 +4903,10 @@ function render(){
         portLabel.setAttribute('x',localX+offsets.dx);portLabel.setAttribute('y',localY+offsets.dy);portLabel.setAttribute('text-anchor',offsets.anchor);portLabel.textContent=pcfg.label;g.appendChild(portLabel);
       }
     }
+    // After the attachment points, so the endpoint handles sit above their hit circles
+    // and win the pointer. Always drawn, shown by CSS only while selected: selection
+    // re-classes the node without re-rendering it.
+    if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===1&&!componentPlacement(n).hostId)appendPathEndpointHandles(g,n);
     bindNode(g,n); nodesG.appendChild(g);
   });
   renderWires(signalState);
@@ -5222,6 +5282,63 @@ function scheduleComponentTransformProjection(){
     routeCache.clear();arrowPoseCache.clear();render();setSelectionBarSuppressed(true);
   });
 }
+// --- 1D endpoint gesture ----------------------------------------------------
+// Dragging one end of a Path pins the other end and moves this one. Origin, length
+// and angle are all derived from the resulting pair, so every reader downstream —
+// hosted Points at t, bound Wires, routing — follows without knowing about the drag.
+let pathEndpointGesture=null;
+function pathEndpointWorldPositions(n){
+  const half=Math.max(PATH_MIN_LENGTH,componentSize(n).w)/2,angle=componentHostAngle(n);
+  const a=rotateVectorByDegrees(-half,0,angle),b=rotateVectorByDegrees(half,0,angle);
+  return {start:{x:n.x+a.x,y:n.y+a.y},end:{x:n.x+b.x,y:n.y+b.y}};
+}
+function beginPathEndpointDrag(e,n,end){
+  e.preventDefault();e.stopPropagation();
+  if(isEntityLocked(n)||isEntityPinned(n)){statusEl.textContent=isEntityLocked(n)?'Locked · endpoint refused':'Pinned · endpoint refused';return}
+  setHistoryHint('Move Path End');
+  if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'endpoint handoff'});
+  cancelWireDrag();
+  if(keyboardMoveNodeId)finishKeyboardMove({});
+  const ends=pathEndpointWorldPositions(n);
+  pathEndpointGesture={node:n,end,pointerId:e.pointerId,anchor:end==='start'?ends.end:ends.start};
+  selectNode(n.id,{focus:false});
+  setSelectionBarSuppressed(true);
+  workspace.classList.add('transforming-node');
+  statusEl.textContent=end==='start'?'Move start':'Move end';
+}
+function updatePathEndpointDrag(e){
+  const t=pathEndpointGesture;if(!t||e.pointerId!==t.pointerId)return;
+  e.preventDefault();
+  const q=svgPoint(e.clientX,e.clientY),anchor=t.anchor;
+  let dx=q.x-anchor.x,dy=q.y-anchor.y;
+  // Shift snaps the direction to 15 degrees, the same increment the grid implies.
+  if(e.shiftKey){
+    const length=Math.hypot(dx,dy),snapped=Math.round(Math.atan2(dy,dx)*180/Math.PI/15)*15*Math.PI/180;
+    dx=Math.cos(snapped)*length;dy=Math.sin(snapped)*length;
+  }
+  const length=Math.max(PATH_MIN_LENGTH,Math.min(PATH_MAX_LENGTH,Math.hypot(dx,dy)));
+  const scale=length/Math.max(1e-6,Math.hypot(dx,dy));
+  const tip={x:anchor.x+dx*scale,y:anchor.y+dy*scale};
+  const p=componentConfig(t.node).presentation;
+  p.size.w=length;
+  // The angle always runs start -> end, whichever end the pointer is holding.
+  const from=t.end==='start'?tip:anchor,to=t.end==='start'?anchor:tip;
+  p.angle=normalizeAngleDegrees(Math.atan2(to.y-from.y,to.x-from.x)*180/Math.PI);
+  t.node.x=(anchor.x+tip.x)/2;t.node.y=(anchor.y+tip.y)/2;
+  scheduleComponentTransformProjection();
+}
+function finishPathEndpointDrag(e){
+  const t=pathEndpointGesture;if(!t||(e&&e.pointerId!=null&&e.pointerId!==t.pointerId))return;
+  pathEndpointGesture=null;
+  workspace.classList.remove('transforming-node');
+  setSelectionBarSuppressed(false);
+  routeCache.clear();arrowPoseCache.clear();
+  syncAllNodeBoundaryContext();
+  render();
+  positionSelectionBar();
+  commitHistoryCapture('Move Path End');
+  statusEl.textContent='Path end moved';
+}
 function beginComponentTransform(e,n,kind){
   e.preventDefault();e.stopPropagation();
   if(isEntityLocked(n)||isEntityPinned(n)){statusEl.textContent=isEntityLocked(n)?'Locked · resize refused':'Pinned · resize refused';return}
@@ -5267,6 +5384,9 @@ function finishComponentTransform(e){
 window.addEventListener('pointermove',updateComponentTransform,true);
 window.addEventListener('pointerup',finishComponentTransform,true);
 window.addEventListener('pointercancel',finishComponentTransform,true);
+window.addEventListener('pointermove',updatePathEndpointDrag,true);
+window.addEventListener('pointerup',finishPathEndpointDrag,true);
+window.addEventListener('pointercancel',finishPathEndpointDrag,true);
 
 const HOST_ADOPT_DWELL=280;
 function hostCandidateKey(candidate){return candidate?`${candidate.kind}:${candidate.entity?.id||''}`:''}
@@ -5354,13 +5474,14 @@ function bindNode(g,n){
       beginActiveNodeDrag(e,g,n);return;
     }
     const port=e.target.closest('.port-hit');if(port){beginWireDrag(e,n,port.dataset.point||port.dataset.side,g);return}
+    const pathEnd=e.target.closest('.path-endpoint-handle,.path-endpoint-halo');if(pathEnd){beginPathEndpointDrag(e,n,pathEnd.dataset.pathEnd);return}
     const transform=e.target.closest('.transform-handle,.transform-handle-halo');if(transform){beginComponentTransform(e,n,transform.dataset.transform);return}
     if(e.shiftKey){selectNode(n.id,{focus:false,additive:true,toggle:true});if(!selectedComponentIds.has(n.id))return}
     else if(!selectedComponentIds.has(n.id))selectNode(n.id,{focus:false});
     beginActiveNodeDrag(e,g,n);
   });
-  g.addEventListener('click',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo')){e.preventDefault();e.stopPropagation();return}e.stopPropagation();if(!e.shiftKey&&selectedComponentIds.size<=1)selectNode(n.id)});
-  g.addEventListener('dblclick',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo'))return;e.preventDefault();e.stopPropagation();focusComponent(n)});
+  g.addEventListener('click',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo,.path-endpoint-handle,.path-endpoint-halo')){e.preventDefault();e.stopPropagation();return}e.stopPropagation();if(!e.shiftKey&&selectedComponentIds.size<=1)selectNode(n.id)});
+  g.addEventListener('dblclick',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo,.path-endpoint-handle,.path-endpoint-halo'))return;e.preventDefault();e.stopPropagation();focusComponent(n)});
 }
 window.addEventListener('pointermove',updateActiveNodeDrag,true);
 window.addEventListener('pointerup',e=>finishActiveNodeDrag(e),true);

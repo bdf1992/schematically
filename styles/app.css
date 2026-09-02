@@ -427,3 +427,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .carrier-end-handle.free{stroke-width:2;stroke-dasharray:2 2}
 .wire-group.has-free-end .wire{stroke-dasharray:7 5}
 .endpoint-halo.free-end{stroke-dasharray:2 3}
+
+/* A 1D form's two ends are draggable handles while it is selected. They sit above
+   the endpoint attachment points, which stay wireable through their own hit area. */
+.path-endpoint-halo{fill:transparent;stroke:none;cursor:grab;pointer-events:all}
+.path-endpoint-handle{
+  fill:var(--surface,#fff);
+  stroke:var(--accent,#4E86BE);
+  stroke-width:2;
+  pointer-events:none;
+}
+.transforming-node .path-endpoint-halo{cursor:grabbing}
+.node:not(.selected) .path-endpoint-handle-group{display:none}

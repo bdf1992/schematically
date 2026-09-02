@@ -596,7 +596,14 @@ function componentInlineTerminalHalfSpan(node){
   const box=componentInlineGraphicBox(node);
   return box.w*(.5-8/96);
 }
-function componentHostAngle(node){return Number(wireHostPoseCache.get(node?.id)?.angle)||0}
+// The world angle of a form: a hosted form rides its host's pose, a free one carries
+// its own authored direction. Every geometry caller wants this, not one or the other.
+function componentHostAngle(node){
+  if(!node)return 0;
+  const hosted=wireHostPoseCache.get(node.id);
+  if(hosted&&Number.isFinite(Number(hosted.angle)))return Number(hosted.angle);
+  return normalizeAngleDegrees(node.config?.presentation?.angle);
+}
 function rotateVectorByDegrees(x,y,angle){const r=angle*Math.PI/180,c=Math.cos(r),s=Math.sin(r);return{x:x*c-y*s,y:x*s+y*c}}
 function componentPortLocalPosition(n,pointId){
   const size=componentSize(n),spec=Attachment.resolveSpec(n,pointId);if(!spec)return{x:0,y:0};

@@ -5,7 +5,7 @@
 - `10-model.js` — Component/Wire/Port semantic normalization.
 - `20-ui.js` — panels, palette/grid UI helpers.
 - `25-signal.js` — derived signal state.
-- `30-canvas.js` — camera, spatial movement and Form-region containment.
+- `30-canvas.js` — camera, spatial movement, world angle (`componentHostAngle`: a hosted form's pose, otherwise its own authored `presentation.angle`) and Form-region containment.
 - `40-routing.js` — Wire geometry.
 - `50-selection.js` — selection projection.
 - `55-render.js` — SVG projection.

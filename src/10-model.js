@@ -320,8 +320,16 @@ function componentConfig(n){
   if(typeof presentation.graphic.ref!=='string')presentation.graphic.ref=`sym-${n.symbolId||'blank'}`;
   if(typeof presentation.graphic.svg!=='string')presentation.graphic.svg='';
   if(!presentation.size)presentation.size={w:112,h:84};
-  presentation.size.w=Math.max(80,Math.min(520,Number(presentation.size.w)||112));
+  // A 1D Path's width is its length, set by dragging either end, so it is not held
+  // to the minimum a 2D body needs and may run much longer across a canvas.
+  const isPath=Number(n.form?.dimension)===1;
+  presentation.size.w=isPath
+    ?Math.max(PATH_MIN_LENGTH,Math.min(PATH_MAX_LENGTH,Number(presentation.size.w)||160))
+    :Math.max(80,Math.min(520,Number(presentation.size.w)||112));
   presentation.size.h=Math.max(64,Math.min(420,Number(presentation.size.h)||84));
+  // Authored direction in degrees. A hosted form takes its host's angle instead;
+  // this is the angle of a form standing free on a surface.
+  presentation.angle=normalizeAngleDegrees(presentation.angle);
   if(!['boundary','inside','outside','none'].includes(presentation.labelMode))presentation.labelMode='boundary';
   if(!Number.isInteger(presentation.interiorColorSlot))presentation.interiorColorSlot=n.config.colorSlot??0;
   presentation.interiorColorSlot=normalizeSlot(presentation.interiorColorSlot,0);

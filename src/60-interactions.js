@@ -35,6 +35,63 @@ function scheduleComponentTransformProjection(){
     routeCache.clear();arrowPoseCache.clear();render();setSelectionBarSuppressed(true);
   });
 }
+// --- 1D endpoint gesture ----------------------------------------------------
+// Dragging one end of a Path pins the other end and moves this one. Origin, length
+// and angle are all derived from the resulting pair, so every reader downstream —
+// hosted Points at t, bound Wires, routing — follows without knowing about the drag.
+let pathEndpointGesture=null;
+function pathEndpointWorldPositions(n){
+  const half=Math.max(PATH_MIN_LENGTH,componentSize(n).w)/2,angle=componentHostAngle(n);
+  const a=rotateVectorByDegrees(-half,0,angle),b=rotateVectorByDegrees(half,0,angle);
+  return {start:{x:n.x+a.x,y:n.y+a.y},end:{x:n.x+b.x,y:n.y+b.y}};
+}
+function beginPathEndpointDrag(e,n,end){
+  e.preventDefault();e.stopPropagation();
+  if(isEntityLocked(n)||isEntityPinned(n)){statusEl.textContent=isEntityLocked(n)?'Locked · endpoint refused':'Pinned · endpoint refused';return}
+  setHistoryHint('Move Path End');
+  if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'endpoint handoff'});
+  cancelWireDrag();
+  if(keyboardMoveNodeId)finishKeyboardMove({});
+  const ends=pathEndpointWorldPositions(n);
+  pathEndpointGesture={node:n,end,pointerId:e.pointerId,anchor:end==='start'?ends.end:ends.start};
+  selectNode(n.id,{focus:false});
+  setSelectionBarSuppressed(true);
+  workspace.classList.add('transforming-node');
+  statusEl.textContent=end==='start'?'Move start':'Move end';
+}
+function updatePathEndpointDrag(e){
+  const t=pathEndpointGesture;if(!t||e.pointerId!==t.pointerId)return;
+  e.preventDefault();
+  const q=svgPoint(e.clientX,e.clientY),anchor=t.anchor;
+  let dx=q.x-anchor.x,dy=q.y-anchor.y;
+  // Shift snaps the direction to 15 degrees, the same increment the grid implies.
+  if(e.shiftKey){
+    const length=Math.hypot(dx,dy),snapped=Math.round(Math.atan2(dy,dx)*180/Math.PI/15)*15*Math.PI/180;
+    dx=Math.cos(snapped)*length;dy=Math.sin(snapped)*length;
+  }
+  const length=Math.max(PATH_MIN_LENGTH,Math.min(PATH_MAX_LENGTH,Math.hypot(dx,dy)));
+  const scale=length/Math.max(1e-6,Math.hypot(dx,dy));
+  const tip={x:anchor.x+dx*scale,y:anchor.y+dy*scale};
+  const p=componentConfig(t.node).presentation;
+  p.size.w=length;
+  // The angle always runs start -> end, whichever end the pointer is holding.
+  const from=t.end==='start'?tip:anchor,to=t.end==='start'?anchor:tip;
+  p.angle=normalizeAngleDegrees(Math.atan2(to.y-from.y,to.x-from.x)*180/Math.PI);
+  t.node.x=(anchor.x+tip.x)/2;t.node.y=(anchor.y+tip.y)/2;
+  scheduleComponentTransformProjection();
+}
+function finishPathEndpointDrag(e){
+  const t=pathEndpointGesture;if(!t||(e&&e.pointerId!=null&&e.pointerId!==t.pointerId))return;
+  pathEndpointGesture=null;
+  workspace.classList.remove('transforming-node');
+  setSelectionBarSuppressed(false);
+  routeCache.clear();arrowPoseCache.clear();
+  syncAllNodeBoundaryContext();
+  render();
+  positionSelectionBar();
+  commitHistoryCapture('Move Path End');
+  statusEl.textContent='Path end moved';
+}
 function beginComponentTransform(e,n,kind){
   e.preventDefault();e.stopPropagation();
   if(isEntityLocked(n)||isEntityPinned(n)){statusEl.textContent=isEntityLocked(n)?'Locked · resize refused':'Pinned · resize refused';return}
@@ -80,6 +137,9 @@ function finishComponentTransform(e){
 window.addEventListener('pointermove',updateComponentTransform,true);
 window.addEventListener('pointerup',finishComponentTransform,true);
 window.addEventListener('pointercancel',finishComponentTransform,true);
+window.addEventListener('pointermove',updatePathEndpointDrag,true);
+window.addEventListener('pointerup',finishPathEndpointDrag,true);
+window.addEventListener('pointercancel',finishPathEndpointDrag,true);
 
 const HOST_ADOPT_DWELL=280;
 function hostCandidateKey(candidate){return candidate?`${candidate.kind}:${candidate.entity?.id||''}`:''}
@@ -167,13 +227,14 @@ function bindNode(g,n){
       beginActiveNodeDrag(e,g,n);return;
     }
     const port=e.target.closest('.port-hit');if(port){beginWireDrag(e,n,port.dataset.point||port.dataset.side,g);return}
+    const pathEnd=e.target.closest('.path-endpoint-handle,.path-endpoint-halo');if(pathEnd){beginPathEndpointDrag(e,n,pathEnd.dataset.pathEnd);return}
     const transform=e.target.closest('.transform-handle,.transform-handle-halo');if(transform){beginComponentTransform(e,n,transform.dataset.transform);return}
     if(e.shiftKey){selectNode(n.id,{focus:false,additive:true,toggle:true});if(!selectedComponentIds.has(n.id))return}
     else if(!selectedComponentIds.has(n.id))selectNode(n.id,{focus:false});
     beginActiveNodeDrag(e,g,n);
   });
-  g.addEventListener('click',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo')){e.preventDefault();e.stopPropagation();return}e.stopPropagation();if(!e.shiftKey&&selectedComponentIds.size<=1)selectNode(n.id)});
-  g.addEventListener('dblclick',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo'))return;e.preventDefault();e.stopPropagation();focusComponent(n)});
+  g.addEventListener('click',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo,.path-endpoint-handle,.path-endpoint-halo')){e.preventDefault();e.stopPropagation();return}e.stopPropagation();if(!e.shiftKey&&selectedComponentIds.size<=1)selectNode(n.id)});
+  g.addEventListener('dblclick',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo,.path-endpoint-handle,.path-endpoint-halo'))return;e.preventDefault();e.stopPropagation();focusComponent(n)});
 }
 window.addEventListener('pointermove',updateActiveNodeDrag,true);
 window.addEventListener('pointerup',e=>finishActiveNodeDrag(e),true);

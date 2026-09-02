@@ -77,6 +77,25 @@ function appendComponentText(g,n,cfg,s){
     t.setAttribute('y',componentAcceptsChildren(n)?String(-p.size.h/2+72):'5');t.textContent=annotation;g.appendChild(t);
   }
 }
+// A 1D form is defined by where its two ends are. Each end gets a handle that sets
+// that end directly; the form's origin, length and angle follow from the pair. The
+// handles sit on top of the endpoint attachment points, which stay wireable.
+function appendPathEndpointHandles(g,n){
+  const half=Math.max(PATH_MIN_LENGTH,componentSize(n).w)/2;
+  const group=document.createElementNS('http://www.w3.org/2000/svg','g');
+  group.setAttribute('class','path-endpoint-handle-group');
+  for(const [end,x] of [['start',-half],['end',half]]){
+    const halo=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    halo.setAttribute('class','path-endpoint-halo');halo.dataset.pathEnd=end;
+    halo.setAttribute('cx',String(x));halo.setAttribute('cy','0');halo.setAttribute('r','13');
+    group.appendChild(halo);
+    const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    dot.setAttribute('class','path-endpoint-handle');dot.dataset.pathEnd=end;
+    dot.setAttribute('cx',String(x));dot.setAttribute('cy','0');dot.setAttribute('r','5');
+    group.appendChild(dot);
+  }
+  g.appendChild(group);
+}
 function appendComponentTransformHandles(g,n,cfg){
   const {w,h}=componentSize(n);
   const baseX=w/2+8,baseY=h/2+8,offset=14;
@@ -172,7 +191,8 @@ function render(){
     g.style.opacity=String(editor.opacity);
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
     const signalColor=componentSignals.get(n.id)||cfg.color;
-    {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
+    // A hosted form rides its host's pose; a free 1D form carries its own direction.
+    {const angle=componentHostAngle(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${angle?` rotate(${angle})`:''}`)}
     renderComponentVisual(g,n,cfg,s,signalColor);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
@@ -197,6 +217,10 @@ function render(){
         portLabel.setAttribute('x',localX+offsets.dx);portLabel.setAttribute('y',localY+offsets.dy);portLabel.setAttribute('text-anchor',offsets.anchor);portLabel.textContent=pcfg.label;g.appendChild(portLabel);
       }
     }
+    // After the attachment points, so the endpoint handles sit above their hit circles
+    // and win the pointer. Always drawn, shown by CSS only while selected: selection
+    // re-classes the node without re-rendering it.
+    if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===1&&!componentPlacement(n).hostId)appendPathEndpointHandles(g,n);
     bindNode(g,n); nodesG.appendChild(g);
   });
   renderWires(signalState);

@@ -284,6 +284,15 @@ const DEFAULT_WIRE_COLOR='#171715';
 const DEFAULT_CHANNEL='signal';
 let wirePartSeq=1;
 let renderEpoch=1;
+// A 1D Path's length is authored by dragging its ends, so it is not bound by the
+// minimum a 2D body needs; the ceiling only keeps a mis-drag from filling the canvas.
+const PATH_MIN_LENGTH=24,PATH_MAX_LENGTH=4000;
+function normalizeAngleDegrees(value){
+  const n=Number(value);
+  if(!Number.isFinite(n))return 0;
+  const wrapped=((n%360)+360)%360;
+  return Number((wrapped>=180?wrapped-360:wrapped).toFixed(3));
+}
 const PALETTE_DRAG_THRESHOLD=10,PALETTE_HOLD_DELAY=220;
 let paletteDrag=null;
 const PORT_DRAG_THRESHOLD=14;
