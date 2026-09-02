@@ -126,7 +126,8 @@ the effective dimension exposes get a contract: a Point owns `out` (its `self`),
 Path `in`/`out`, a standard 2D surface `in`/`out`/`control`, and a Plane
 (`attachmentDefaults: none`) owns nothing until a Point is hosted on it.
 
-`config.attachmentDefaults: standard | none` is stored only when `none`. The symbol
+`config.attachmentDefaults: standard | none` is stored when `none`, and when `standard`
+overrides a Plane's preset of `none`. The symbol
 ids `point`, `path`, `plane` carry Form presets; `port` is read as `point`.
 
 

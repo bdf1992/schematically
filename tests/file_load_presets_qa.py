@@ -23,6 +23,12 @@ const doc=D.documentFromFilePayload({schema:D.DOCUMENT_SCHEMA,id:'t',revision:0,
 const api=D.makeComponent(D.makeDocument({}),{id:'apl',symbolId:'plane',x:0,y:0});
 const pick=c=>({form:c.form,signalMode:c.config.signalMode,presentation:c.config.presentation??null,attachmentDefaults:c.config.attachmentDefaults??null,ports:Object.keys(c.config.ports)});
 const out={};for(const c of doc.components)out[c.id]=pick(c);out.api=pick(api);out.valid=D.validateDocument(doc);
+// An authored 'standard' on a Plane survives create, a later normalization pass, and save.
+const stdApi=D.makeComponent(D.makeDocument({}),{id:'astd',symbolId:'plane',x:0,y:0,config:{attachmentDefaults:'standard'}});
+const again=D.normalizeDocument({components:[JSON.parse(JSON.stringify(stdApi))],wires:[]}).components[0];
+const saved=D.compactDocument(doc),ad=c=>c.config.attachmentDefaults??null;
+out.std={api:ad(stdApi),again:ad(again),againPorts:Object.keys(again.config.ports),savedClosed:ad(saved.components.find(c=>c.id==='closed')),savedPl:ad(saved.components.find(c=>c.id==='pl')),
+  actSaved:ad(D.compactComponent(D.makeComponent(D.makeDocument({}),{id:'a',symbolId:'act',x:0,y:0,config:{attachmentDefaults:'standard'}})))};
 console.log(JSON.stringify(out));
 """
 
@@ -51,6 +57,9 @@ def main() -> None:
     assert cl['presentation'] == {'size': {'w': 100, 'h': 80}}, cl['presentation']
     # A typed Component is untouched: no preset exists for it.
     assert r['c']['form']['dimension'] == 2 and r['c']['ports'] == ['in', 'out', 'control'] and r['c']['presentation'] is None, r['c']
+    # An authored 'standard' on a Plane is kept on the runtime record, survives re-normalization,
+    # and is saved; 'none' is always saved; a typed Component's 'standard' is the default and is not.
+    assert r['std'] == {'api': 'standard', 'again': 'standard', 'againPorts': ['in', 'out', 'control'], 'savedClosed': 'standard', 'savedPl': 'none', 'actSaved': None}, r['std']
     print('PASS file load presets QA')
 
 
