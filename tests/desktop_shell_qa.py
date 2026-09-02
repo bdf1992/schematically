@@ -26,6 +26,8 @@ def main() -> None:
     assert frontend_dist == '../dist', frontend_dist
     assert frontend_dist != '../..', 'frontendDist must not embed the repository root'
 
+    assert conf['app']['withGlobalTauri'] is True, 'app.withGlobalTauri must be true'
+
     main_rs = (ROOT / 'desktop/src-tauri/src/main.rs').read_text(encoding='utf-8')
     assert re.search(r'fn\s+opened_document\s*\(', main_rs), 'opened_document command missing'
     assert 'tauri::command' in main_rs
