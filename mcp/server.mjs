@@ -123,13 +123,24 @@ async function handleApi(req,res,url){
   return json(res,404,{error:'not found'});
 }
 
+// The editor is served from this origin so the live link is a same-origin request.
+// Opened from file:// the browser has an opaque origin and the push never lands.
+const EDITOR_FILE=path.join(HERE,'../index.html');
+function serveEditor(res){
+  let html;
+  try{html=fs.readFileSync(EDITOR_FILE)}catch(_){return json(res,404,{error:`no build at ${EDITOR_FILE}; run python build.py`})}
+  res.writeHead(200,{'content-type':'text/html; charset=utf-8','content-length':html.length,'cache-control':'no-store'});
+  res.end(html);
+}
+
 const server=http.createServer(async(req,res)=>{
   if(req.method==='OPTIONS'){res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','access-control-allow-headers':'content-type,mcp-protocol-version,mcp-method,mcp-name'});return res.end()}
   const url=new URL(req.url||'/',`http://${req.headers.host||HOST}`);
   try{
+    if((url.pathname==='/editor'||url.pathname==='/index.html')&&req.method==='GET')return serveEditor(res);
     if(url.pathname==='/mcp'&&req.method==='POST')return await handleMcp(req,res);
     if(url.pathname.startsWith('/api/v1/'))return await handleApi(req,res,url);
-    return json(res,200,{name:'soveraeign-schematic',version:'0.1.24',document:FILE,mcp:'/mcp',api:'/api/v1',live:liveState().connected?'/api/v1/live (connected)':'/api/v1/live (no editor)'});
+    return json(res,200,{name:'soveraeign-schematic',version:'0.1.24',document:FILE,mcp:'/mcp',api:'/api/v1',editor:'/editor',live:liveState().connected?'/api/v1/live (connected)':'/api/v1/live (no editor)'});
   }catch(error){return json(res,500,{error:String(error.message||error)})}
 });
 server.listen(PORT,HOST,()=>console.log(`Soveraeign Schematic API + MCP http://${HOST}:${PORT} · ${FILE}`));

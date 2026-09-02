@@ -6875,7 +6875,12 @@ window.SovSchematicAPI=SovSchematicAPI;
 // observation only, and the editor keeps working when the server is absent.
 
 const LIVE_STORAGE_KEY='sov.live.endpoint';
-const LIVE_DEFAULT_ENDPOINT='http://127.0.0.1:8787';
+// Served from the server itself, the link is same-origin and needs no port named.
+// Opened from a file, there is no origin to infer, so fall back to the usual port.
+const LIVE_FALLBACK_ENDPOINT='http://127.0.0.1:8787';
+const LIVE_DEFAULT_ENDPOINT=(typeof location!=='undefined'&&/^https?:$/.test(location.protocol))
+  ?location.origin
+  :LIVE_FALLBACK_ENDPOINT;
 const LIVE_MIN_INTERVAL_MS=250;      // floor between pushes while the operator is active
 const LIVE_HEARTBEAT_MS=5000;        // idle push so a stale snapshot is detectable
 const LIVE_BACKOFF_MS=5000;          // wait after a failed push before trying again

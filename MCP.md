@@ -29,7 +29,9 @@ Resources: `component`, `wire`, `reference`.
 
 Both answer `connected:false` when no editor is pushing, and carry `ageMs` and `stale` so an old snapshot is never mistaken for a live one. The snapshot is the **unsaved editor state**, which is a different document from the `.sov` file this server owns; `schematic.document.get` still reads the server's file.
 
-The editor must be asked to publish: open it with `?live=1` (or `?live=http://host:port`), or call `window.SovSchematicLive.start()`. It pushes on every selection and revision change, plus a heartbeat, and stops with `SovSchematicLive.stop()`. Pushing never mutates the server document.
+The server also serves the built editor at `GET /editor`, so the page and the API share an origin and the link is a same-origin request. Opened from `file://` the browser has an opaque origin and the push never lands, which is the one setup that does not work.
+
+The editor must be asked to publish: open it with `?live=1` (same origin when served from `/editor`, otherwise `http://127.0.0.1:8787`), `?live=http://host:port` to name one, or call `window.SovSchematicLive.start()`. It pushes on every selection and revision change, plus a heartbeat, and stops with `SovSchematicLive.stop()`. Pushing never mutates the server document.
 
 ```text
 POST /api/v1/live      # editor -> server, schema soveraeign.schematic/live@0.1
