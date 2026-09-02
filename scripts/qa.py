@@ -39,6 +39,7 @@ BROWSER=[
     'tests/editor_kernel_extended_qa.py',
     'tests/file_surface_qa.py',
     'tests/svg_export_qa.py',
+    'tests/loop_svg_qa.py',
     'tests/menu_dismissal_qa.py',
     'tests/appearance_history_qa.py',
     'tests/agent_api_mcp_golden_qa.py',
