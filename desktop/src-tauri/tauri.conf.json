@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.soveraeign.schematic",
   "build": {
-    "frontendDist": "../.."
+    "frontendDist": "../dist"
   },
   "app": {
     "windows": [
