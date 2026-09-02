@@ -6,8 +6,12 @@ function nodeInsideContainer(node,container){return !!node&&!!container&&isDesce
 function ignoreContainerObstacle(candidate,sourceNode,targetNode){
   return componentAcceptsChildren(candidate)&&nodeInsideContainer(sourceNode,candidate)&&nodeInsideContainer(targetNode,candidate);
 }
-function endpointNeedsOuterObstacle(node,portId){
-  return !!node && (componentConfig(node).ports[portId]?.face||'external')!=='internal';
+function endpointNeedsOuterObstacle(node,portId,wire=null){
+  if(!node)return false;
+  // A carrier on the endpoint's own interior surface starts inside it: the body is the
+  // surface the carrier runs on, not an obstacle to route around.
+  if(wire&&(wire.canvasId||GLOBAL_CANVAS_ID)===componentCanvas(node).id)return false;
+  return (componentConfig(node).ports[portId]?.face||'external')!=='internal';
 }
 function segHitsRect(A,B,R){
   // Orthogonal segment only. Touching the outside boundary is acceptable;
@@ -281,8 +285,8 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   // Source and target are included after the outward lead. This prevents a path
   // from exiting one side and visually tunneling through either endpoint card.
   const endpointRects=[];
-  if(endpointNeedsOuterObstacle(sourceNode,aSide))endpointRects.push(rectForNode(sourceNode,8));
-  if(endpointNeedsOuterObstacle(targetNode,bSide))endpointRects.push(rectForNode(targetNode,8));
+  if(endpointNeedsOuterObstacle(sourceNode,aSide,routedWire))endpointRects.push(rectForNode(sourceNode,8));
+  if(endpointNeedsOuterObstacle(targetNode,bSide,routedWire))endpointRects.push(rectForNode(targetNode,8));
   const obstacles=[...otherRects,...endpointRects];
 
   const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
@@ -398,8 +402,8 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     const routeOnly=normalizePoints([SA,...inner,SB]);
     const endpointRects=[];
     const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
-    if(endpointNeedsOuterObstacle(sourceNode,w.aSide))endpointRects.push(rectForNode(sourceNode,8));
-    if(endpointNeedsOuterObstacle(targetNode,w.bSide))endpointRects.push(rectForNode(targetNode,8));
+    if(endpointNeedsOuterObstacle(sourceNode,w.aSide,w))endpointRects.push(rectForNode(sourceNode,8));
+    if(endpointNeedsOuterObstacle(targetNode,w.bSide,w))endpointRects.push(rectForNode(targetNode,8));
     const obstacles=[...otherRects,...endpointRects];
 
     if(!pathValid(routeOnly,obstacles)) rebuilt=null;

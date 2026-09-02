@@ -3982,8 +3982,9 @@ function physicalPortSide(n,pointId){return Attachment.resolveSpec(n,pointId)?.s
 function portNormal(side){
   if(side==='left')return{x:-1,y:0};if(side==='top')return{x:0,y:-1};if(side==='bottom')return{x:0,y:1};return{x:1,y:0};
 }
-// `inward` says which side of a boundary-hosted Point the carrier is on (true: the host's
-// interior). Without it the Point's own face decides, as for any other attachment.
+// `inward` says which side of a boundary the carrier is on (true: the interior), for a
+// boundary-hosted Point and for a 2D form's own boundary point alike. Without it the
+// point's face decides.
 function stubPos(P,portId,d=26,node=null,inward=null){
   let side,face='external';
   if(node){side=physicalPortSide(node,portId);face=componentAttachmentPoint(node,portId)?.config?.face||'external'}else side=portId==='in'?'left':portId==='control'?'top':'right';
@@ -3995,12 +3996,16 @@ function stubPos(P,portId,d=26,node=null,inward=null){
     const sign=(inward==null?face==='internal':inward)?-1:1;return{x:P.x+normal.x*d*sign,y:P.y+normal.y*d*sign};
   }
   let normal=portNormal(side);if(node&&componentHostedOnWire(node))normal=rotateVectorByDegrees(normal.x,normal.y,componentHostAngle(node));
-  const sign=face==='internal'?-1:1;return{x:P.x+normal.x*d*sign,y:P.y+normal.y*d*sign};
+  const sign=(inward==null?face==='internal':inward)?-1:1;return{x:P.x+normal.x*d*sign,y:P.y+normal.y*d*sign};
 }
-// True when a Wire runs on the interior surface of the host that a boundary-hosted Point sticks to.
+// True when a Wire runs on the interior surface behind the boundary its endpoint sits on: the
+// host of a boundary-hosted Point, or the 2D form itself for one of its own boundary points
+// (built-in or data-declared). Null when the endpoint has no boundary of its own.
 function wireEndpointInward(w,node){
-  if(!w||!node)return null;const placement=componentPlacement(node);if(placement.kind!=='edge')return null;
-  const host=nodes.find(h=>h.id===placement.hostId);return !!host&&(w.canvasId||GLOBAL_CANVAS_ID)===componentCanvas(host).id;
+  if(!w||!node)return null;const surface=w.canvasId||GLOBAL_CANVAS_ID;const placement=componentPlacement(node);
+  if(placement.kind==='edge'){const host=nodes.find(h=>h.id===placement.hostId);return !!host&&surface===componentCanvas(host).id}
+  if(componentForm(node).dimension===2)return surface===componentCanvas(node).id;
+  return null;
 }
 /* END src/30-canvas.js */
 </script>
@@ -4014,8 +4019,12 @@ function nodeInsideContainer(node,container){return !!node&&!!container&&isDesce
 function ignoreContainerObstacle(candidate,sourceNode,targetNode){
   return componentAcceptsChildren(candidate)&&nodeInsideContainer(sourceNode,candidate)&&nodeInsideContainer(targetNode,candidate);
 }
-function endpointNeedsOuterObstacle(node,portId){
-  return !!node && (componentConfig(node).ports[portId]?.face||'external')!=='internal';
+function endpointNeedsOuterObstacle(node,portId,wire=null){
+  if(!node)return false;
+  // A carrier on the endpoint's own interior surface starts inside it: the body is the
+  // surface the carrier runs on, not an obstacle to route around.
+  if(wire&&(wire.canvasId||GLOBAL_CANVAS_ID)===componentCanvas(node).id)return false;
+  return (componentConfig(node).ports[portId]?.face||'external')!=='internal';
 }
 function segHitsRect(A,B,R){
   // Orthogonal segment only. Touching the outside boundary is acceptable;
@@ -4289,8 +4298,8 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   // Source and target are included after the outward lead. This prevents a path
   // from exiting one side and visually tunneling through either endpoint card.
   const endpointRects=[];
-  if(endpointNeedsOuterObstacle(sourceNode,aSide))endpointRects.push(rectForNode(sourceNode,8));
-  if(endpointNeedsOuterObstacle(targetNode,bSide))endpointRects.push(rectForNode(targetNode,8));
+  if(endpointNeedsOuterObstacle(sourceNode,aSide,routedWire))endpointRects.push(rectForNode(sourceNode,8));
+  if(endpointNeedsOuterObstacle(targetNode,bSide,routedWire))endpointRects.push(rectForNode(targetNode,8));
   const obstacles=[...otherRects,...endpointRects];
 
   const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
@@ -4406,8 +4415,8 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     const routeOnly=normalizePoints([SA,...inner,SB]);
     const endpointRects=[];
     const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
-    if(endpointNeedsOuterObstacle(sourceNode,w.aSide))endpointRects.push(rectForNode(sourceNode,8));
-    if(endpointNeedsOuterObstacle(targetNode,w.bSide))endpointRects.push(rectForNode(targetNode,8));
+    if(endpointNeedsOuterObstacle(sourceNode,w.aSide,w))endpointRects.push(rectForNode(sourceNode,8));
+    if(endpointNeedsOuterObstacle(targetNode,w.bSide,w))endpointRects.push(rectForNode(targetNode,8));
     const obstacles=[...otherRects,...endpointRects];
 
     if(!pathValid(routeOnly,obstacles)) rebuilt=null;
