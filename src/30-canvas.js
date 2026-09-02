@@ -706,8 +706,9 @@ function physicalPortSide(n,pointId){return Attachment.resolveSpec(n,pointId)?.s
 function portNormal(side){
   if(side==='left')return{x:-1,y:0};if(side==='top')return{x:0,y:-1};if(side==='bottom')return{x:0,y:1};return{x:1,y:0};
 }
-// `inward` says which side of a boundary-hosted Point the carrier is on (true: the host's
-// interior). Without it the Point's own face decides, as for any other attachment.
+// `inward` says which side of a boundary the carrier is on (true: the interior), for a
+// boundary-hosted Point and for a 2D form's own boundary point alike. Without it the
+// point's face decides.
 function stubPos(P,portId,d=26,node=null,inward=null){
   let side,face='external';
   if(node){side=physicalPortSide(node,portId);face=componentAttachmentPoint(node,portId)?.config?.face||'external'}else side=portId==='in'?'left':portId==='control'?'top':'right';
@@ -719,10 +720,14 @@ function stubPos(P,portId,d=26,node=null,inward=null){
     const sign=(inward==null?face==='internal':inward)?-1:1;return{x:P.x+normal.x*d*sign,y:P.y+normal.y*d*sign};
   }
   let normal=portNormal(side);if(node&&componentHostedOnWire(node))normal=rotateVectorByDegrees(normal.x,normal.y,componentHostAngle(node));
-  const sign=face==='internal'?-1:1;return{x:P.x+normal.x*d*sign,y:P.y+normal.y*d*sign};
+  const sign=(inward==null?face==='internal':inward)?-1:1;return{x:P.x+normal.x*d*sign,y:P.y+normal.y*d*sign};
 }
-// True when a Wire runs on the interior surface of the host that a boundary-hosted Point sticks to.
+// True when a Wire runs on the interior surface behind the boundary its endpoint sits on: the
+// host of a boundary-hosted Point, or the 2D form itself for one of its own boundary points
+// (built-in or data-declared). Null when the endpoint has no boundary of its own.
 function wireEndpointInward(w,node){
-  if(!w||!node)return null;const placement=componentPlacement(node);if(placement.kind!=='edge')return null;
-  const host=nodes.find(h=>h.id===placement.hostId);return !!host&&(w.canvasId||GLOBAL_CANVAS_ID)===componentCanvas(host).id;
+  if(!w||!node)return null;const surface=w.canvasId||GLOBAL_CANVAS_ID;const placement=componentPlacement(node);
+  if(placement.kind==='edge'){const host=nodes.find(h=>h.id===placement.hostId);return !!host&&surface===componentCanvas(host).id}
+  if(componentForm(node).dimension===2)return surface===componentCanvas(node).id;
+  return null;
 }
