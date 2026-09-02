@@ -334,6 +334,17 @@ function initializePersistenceTracking(){
   lastFileFingerprint=null;
   updateRevisionReadout();
 }
+async function openDesktopLaunchDocument(){
+  if(!window.__TAURI__)return;
+  try{
+    const opened=await window.__TAURI__.core.invoke('opened_document');
+    if(!opened)return;
+    const parsed=parseFilePayload(opened.text);
+    applyOpenedPayload(parsed,opened.name);
+    statusEl.textContent=`Opened · ${currentFileName}`;
+  }catch(error){console.warn('Desktop launch document failed to open',error)}
+}
+openDesktopLaunchDocument();
 
 if(fileBtn)fileBtn.addEventListener('click',event=>{event.stopPropagation();setFileMenu(fileMenu.hidden)});
 if(fileMenu)fileMenu.addEventListener('click',event=>event.stopPropagation());

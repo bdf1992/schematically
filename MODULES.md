@@ -17,6 +17,8 @@
 
 File lifecycle belongs in `75-persistence.js`; no other concern should independently serialize, download, open, or replace schematic files.
 
+The desktop shell lives under `desktop/` (a Tauri crate wrapping the same standalone `index.html`); it does not duplicate file lifecycle. It calls the `opened_document` Tauri command and hands the result to `75-persistence.js` through the same `parseFilePayload` / `applyOpenedPayload` seam file Open already uses — the document-open seam stays in `75-persistence.js`.
+
 - `src/15-editor-kernel.js` — history, checkpoints, semantic clipboard, multi-selection, settle hosting, Pin/Lock/Hidden/Opacity, search/Objects, appearance and rate.
 
 ### `src/06-attachment-core.js`
