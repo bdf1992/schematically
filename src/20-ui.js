@@ -171,7 +171,7 @@ function syncSelectionFormState(kind,entity){
     const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;barFormState.title=`${formDimensionLabel(f)} · configure Form`;
     barFormState.classList.toggle('active',f.frame.mode!=='none'||f.regions.interior.state==='open');
   }else{
-    barFormState.textContent='1D';barFormState.title='Wire Form · 1D path';barFormState.disabled=true;barFormState.classList.add('wire-form');
+    barFormState.textContent='1D';barFormState.title='Wire Form · 1D path · configure Wire settings';barFormState.classList.add('wire-form');
   }
 }
 function syncComponentVisualPanel(n){
