@@ -79,18 +79,46 @@ function deleteSelected(){
   selected=null;hideSelectionBar();refreshCanvasScopeControl();render();selectNode(null);commitHistoryCapture();
 }
 
-barFormState.addEventListener('click',()=>{
-  const kind=selectedSurfaceKind();
-  if(kind==='component'){
-    openSelectionSettings('component');formSettings.open=true;formSettings.scrollIntoView({block:'nearest'});
-  }else if(kind==='wire'){
-    openSelectionSettings('wire');wireSettingsFields.scrollIntoView({block:'nearest'});
-  }
+// The dimension control changes the dimension. Clicking steps up the ladder and
+// wraps; shift steps back. The Form panel is still reachable from the gear, so this
+// button no longer spends a click getting to a setting it can just be.
+barFormState.addEventListener('click',event=>{
+  if(selectedSurfaceKind()!=='component')return;
+  const n=nodes.find(n=>n.id===selected);if(!n)return;
+  const from=componentForm(n).dimension;
+  const to=event.shiftKey?previousDimension(from):nextDimension(from);
+  setSelectedComponentDimension(to);
 });
+
+// Retyping across dimensions changes which attachment points exist, so a Wire that
+// ends on one that is about to disappear would be orphaned. Refuse instead, name the
+// count, and leave the form alone: dropping a person's connections silently to honour
+// a click on a dimension button is the worse of the two behaviours.
+function setSelectedComponentDimension(dimension){
+  const n=nodes.find(n=>n.id===selected);if(!n)return false;
+  const current=componentForm(n).dimension;
+  if(dimension===current)return true;
+  const surviving=new Set(Attachment.pointIds({...n,form:{...componentForm(n),dimension}}));
+  const orphaned=wiresOnComponent(n).filter(w=>{
+    for(const end of ['a','b']){
+      if(w[end]!==n.id)continue;
+      const pointId=Attachment.pointId(n,end==='a'?w.aAttachment?.pointId||w.aSide:w.bAttachment?.pointId||w.bSide);
+      if(pointId&&!surviving.has(pointId))return true;
+    }
+    return false;
+  });
+  if(orphaned.length){
+    statusEl.textContent=`${dimension}D drops ${orphaned.length===1?'a point a Wire ends on':`points ${orphaned.length} Wires end on`} · detach first`;
+    return false;
+  }
+  updateSelectedComponentForm(f=>{f.dimension=dimension;f.body.kind=['point','path','surface','volume'][dimension]});
+  statusEl.textContent=`${dimension}D · ${DIMENSION_NAMES[dimension]}`;
+  return true;
+}
 function updateSelectedComponentForm(mutator){
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Form edit'))return;setHistoryHint('Edit Component Form');
   const f=componentForm(n),beforeOpen=f.regions.interior.state==='open',beforeDimension=f.dimension;mutator(f,n);
-  if(f.dimension<2)f.regions.interior.state='closed';componentForm(n);
+  if(f.dimension<SURFACE_DIMENSION)f.regions.interior.state='closed';componentForm(n);
   if(beforeOpen&&f.regions.interior.state==='closed'){
     const fallback=n.canvasId||GLOBAL_CANVAS_ID;
     for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}
@@ -99,7 +127,12 @@ function updateSelectedComponentForm(mutator){
   componentConfig(n);
   routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 }
-formDimension.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.dimension=Number(formDimension.value);f.body.kind=['point','path','surface'][f.dimension]}));
+formDimension.addEventListener('change',()=>{
+  // The select and the bar button are the same act, so they answer to the same rule.
+  if(!setSelectedComponentDimension(Number(formDimension.value))){
+    const n=nodes.find(n=>n.id===selected);if(n)formDimension.value=String(componentForm(n).dimension);
+  }
+});
 pointsBuiltinToggle.addEventListener('click',()=>{
   // Built-in 2D points are template data. Removing them is refused while a Wire still
   // ends on one, so the change never silently orphans a carrier.

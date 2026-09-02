@@ -1,10 +1,11 @@
 """The palette is the dimensional ladder.
 
 One rung per row, read top to bottom, each naming its dimension and its sense.
+The rungs are in dimensional order and the glyph says which is which, so each card
+carries its name and nothing else; the dimension and the sense are on the title.
 Typed Components are not offered here - they are compositions of the primitives, not
 siblings of them - though documents that carry them still open and the selection
-bar still retypes to them. Pod is declared but not built: it shows dimmed and
-refuses to be dragged rather than being left out of the ladder.
+bar still retypes to them.
 """
 import asyncio
 import sys
@@ -18,7 +19,8 @@ HTML = ROOT / 'index.html'
 
 CARDS = ("[...document.querySelectorAll('#palette .symbol-card')].map(b=>({"
          "id:b.dataset.symbolId,dimension:b.dataset.dimension,disabled:b.disabled,"
-         "name:b.querySelector('b').textContent,caption:b.querySelector('small').textContent}))")
+         "name:b.querySelector('b').textContent,title:b.title,"
+         "extraText:b.textContent.trim()}))")
 
 
 async def main():
@@ -33,9 +35,13 @@ async def main():
         cards = await page.evaluate(CARDS)
         assert [c['id'] for c in cards] == ['point', 'path', 'plane', 'pod'], cards
         assert [c['dimension'] for c in cards] == ['0', '1', '2', '3'], cards
-        assert [c['caption'] for c in cards] == [
-            '0D · where', '1D · through', '2D · across', '3D · within'], cards
         assert [c['name'] for c in cards] == ['POINT', 'PATH', 'PLANE', 'POD'], cards
+        # The card is the name; dimension and sense live on the title.
+        assert [c['extraText'] for c in cards] == ['POINT', 'PATH', 'PLANE', 'POD'], cards
+        for card, sense in zip(cards, ['where', 'through', 'across', 'within']):
+            assert sense in card['title'] and f"{card['dimension']}D" in card['title'], card
+        assert 'bounded by Points' in cards[1]['title'], cards[1]
+        assert 'bounded by Planes' in cards[3]['title'], cards[3]
 
         # One rung per row: no two cards share a top edge.
         tops = await page.evaluate(
@@ -53,14 +59,20 @@ async def main():
         act = await page.evaluate("window.SovSchematicAPI.create('component',{symbolId:'act',x:300,y:300})")
         assert act['ok'], act
 
-        # Pod is declared, dimmed, and undraggable until it is built.
+        # Pod is a real rung: 3D, thick by frame, hosting like a Plane until it is spatial.
         pod = next(c for c in cards if c['id'] == 'pod')
-        assert pod['disabled'] is True, pod
-        assert await page.locator('.symbol-card[data-symbol-id="pod"].pending').count() == 1
-        before = await page.evaluate('nodes.length')
-        await page.locator('.symbol-card[data-symbol-id="pod"]').click(force=True)
-        await page.wait_for_timeout(150)
-        assert await page.evaluate('nodes.length') == before, 'a pending rung created something'
+        assert pod['disabled'] is False, pod
+        assert await page.locator('.symbol-card[data-symbol-id="pod"].pending').count() == 0
+        made = await page.evaluate("window.SovSchematicAPI.create('component',{symbolId:'pod',x:900,y:500}).result")
+        assert made['form']['dimension'] == 3, made
+        assert made['form']['frame']['mode'] == 'shell', made
+        assert made['form']['frame']['depth'] > 0, made
+        assert made['form']['regions']['interior']['state'] == 'open', made
+        assert made['config']['attachmentDefaults'] == 'none', made
+        # It is a surface: it bounds a region, hosts children, and takes size handles.
+        assert await page.evaluate('(id)=>componentIsSurface(nodes.find(n=>n.id===id))', made['id'])
+        assert await page.evaluate('(id)=>formHostsChildren(nodes.find(n=>n.id===id))', made['id'])
+        assert await page.locator(f'.node[data-id="{made["id"]}"] .transform-handle').count() > 0
 
         # The help disclosures and the grammar line are gone.
         assert await page.evaluate("document.querySelectorAll('.palette .help-disclosure').length") == 0

@@ -6,7 +6,12 @@
   root.SovSchematicAttachment=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VALID_DIMENSIONS=new Set([0,1,2]);
+  // 3D is admitted as a dimension before it is spatial. A Pod is bounded by Planes,
+  // so until volume semantics are earned its boundary behaves as a Plane's does and
+  // its thickness is carried by the frame. Everything that asks "is this a surface"
+  // must therefore ask for 2-or-more, never for exactly 2.
+  const VALID_DIMENSIONS=new Set([0,1,2,3]);
+  const SURFACE_DIMENSION=2;
   function intrinsicDimension(entity){
     const d=Number(entity?.form?.dimension);
     return VALID_DIMENSIONS.has(d)?d:2;
@@ -28,6 +33,8 @@
   // Connectivity follows the lower-dimensional host when a richer form is settled onto it.
   // A 2D ACT hosted by a Wire therefore exposes only the Wire-aligned 1D endpoints.
   function effectiveDimension(entity){return Math.min(intrinsicDimension(entity),hostDimension(entity))}
+  // The dimension whose boundary rules apply: 3D uses the 2D set until it is spatial.
+  function boundaryDimension(entity){return Math.min(effectiveDimension(entity),SURFACE_DIMENSION)}
   function basePointSpecs(d,entity=null){
     if(d===0)return [{id:'self',compatId:'out',side:'point',role:'self',defaultFlow:'duplex',t:.5}];
     if(d===1)return [
@@ -64,10 +71,10 @@
     return out;
   }
   function pointSpecs(entity){
-    const d=effectiveDimension(entity),base=basePointSpecs(d,entity);
+    const d=boundaryDimension(entity),base=basePointSpecs(d,entity);
     return [...base,...customPointSpecs(entity,d,base)];
   }
-  function builtinPointIds(entity){return basePointSpecs(effectiveDimension(entity),entity).map(x=>x.id)}
+  function builtinPointIds(entity){return basePointSpecs(boundaryDimension(entity),entity).map(x=>x.id)}
   function pointIds(entity){return pointSpecs(entity).map(x=>x.id)}
   function resolveSpec(entity,id){
     const value=String(id??'');
@@ -110,5 +117,5 @@
     if(end==='a')wire.aSide=spec.compatId;else wire.bSide=spec.compatId;
     return wire[key];
   }
-  return {intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
+  return {intrinsicDimension,hostDimension,effectiveDimension,boundaryDimension,SURFACE_DIMENSION,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
 });

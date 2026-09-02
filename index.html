@@ -467,16 +467,15 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
    A rung that is declared but not built is shown dimmed and cannot be dragged. */
 .symbol-ladder{display:flex;flex-direction:column;gap:6px}
 .symbol-card.ladder-rung{
-  display:grid;grid-template-columns:34px 1fr;align-items:center;gap:10px;
-  padding:8px 10px;
+  display:grid;grid-template-columns:52px 1fr;align-items:center;gap:12px;
+  padding:13px 12px;
 }
-.symbol-card.ladder-rung svg{width:34px;height:26px}
+.symbol-card.ladder-rung svg{width:52px;height:38px}
 .ladder-glyph-pending{
-  display:block;width:34px;height:26px;border-radius:5px;
+  display:block;width:52px;height:38px;border-radius:6px;
   border:1px dashed var(--line);opacity:.5;
 }
-.ladder-text b{display:block;font-size:11px;letter-spacing:.08em}
-.ladder-text small{display:block;color:var(--muted);font-size:9px;margin-top:1px}
+.ladder-text b{display:block;font-size:13px;letter-spacing:.1em}
 .symbol-card.ladder-rung.pending{cursor:default;opacity:.45}
 .symbol-card.ladder-rung.pending:hover{background:var(--panel);border-color:transparent}
 </style>
@@ -518,6 +517,13 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
   <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
     <rect x="14" y="10" width="68" height="44" rx="5"/>
     <path d="M26 22h44M26 32h44M26 42h28" stroke-width="2.5" opacity=".5"/>
+  </g>
+</symbol>
+<symbol id="sym-pod" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M24 8h50a5 5 0 0 1 5 5v38" stroke-width="2.5" opacity=".45"/>
+    <rect x="12" y="14" width="62" height="40" rx="5"/>
+    <rect x="20" y="22" width="46" height="24" rx="3" stroke-width="2.5" opacity=".5"/>
   </g>
 </symbol>
 <symbol id="sym-join" viewBox="0 0 96 64">
@@ -848,9 +854,10 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
                 <option value="0">0D · Point</option>
                 <option value="1">1D · Path</option>
                 <option value="2">2D · Plane</option>
+                <option value="3">3D · Pod</option>
               </select>
             </label>
-            <label data-dims="2">Interior
+            <label data-dims="23">Interior
               <select id="formInteriorState">
                 <option value="closed">Closed</option>
                 <option value="open">Open · hosts Components</option>
@@ -869,7 +876,7 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
               <option value="passive">Passive</option>
             </select>
           </label>
-          <label data-dims="12">Graphic
+          <label data-dims="123">Graphic
             <select id="visualGraphicMode">
               <option value="symbol">Symbol</option>
               <option value="custom">Custom SVG</option>
@@ -884,10 +891,10 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
               <option value="none">Hidden</option>
             </select>
           </label>
-          <label data-dims="12">Width <input id="visualWidth" type="number" min="80" max="520" step="8"></label>
-          <label data-dims="2">Height <input id="visualHeight" type="number" min="64" max="420" step="8"></label>
-          <label data-dims="2">Interior <button id="visualInteriorColor" class="color-slot-chip" type="button" aria-label="Interior palette slot"></button></label>
-          <label data-dims="2">Material
+          <label data-dims="123">Width <input id="visualWidth" type="number" min="80" max="520" step="8"></label>
+          <label data-dims="23">Height <input id="visualHeight" type="number" min="64" max="420" step="8"></label>
+          <label data-dims="23">Interior <button id="visualInteriorColor" class="color-slot-chip" type="button" aria-label="Interior palette slot"></button></label>
+          <label data-dims="23">Material
             <select id="formMaterial">
               <option value="generic">Generic</option>
               <option value="canvas">Canvas</option>
@@ -900,17 +907,17 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
             </select>
           </label>
           <label>Thickness <input id="formBodyThickness" type="number" min="0" max="128" step="1" title="Point radius · Path stroke · Plane depth"></label>
-          <label data-dims="2">Frame
+          <label data-dims="23">Frame
             <select id="formFrameMode">
               <option value="none">None</option>
               <option value="frame">Frame</option>
               <option value="shell">Shell</option>
             </select>
           </label>
-          <label data-dims="2">Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
-          <label data-dims="2">Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
+          <label data-dims="23">Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
+          <label data-dims="23">Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
         </div>
-        <label class="settings-wide" data-dims="12">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
+        <label class="settings-wide" data-dims="123">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
         <label class="settings-wide" id="visualSvgRow">SVG · viewBox 0 0 96 64
           <textarea id="visualSvgMarkup" spellcheck="false" placeholder="&lt;path d=&quot;...&quot;/&gt;"></textarea>
         </label>
@@ -1061,7 +1068,12 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
   root.SovSchematicAttachment=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VALID_DIMENSIONS=new Set([0,1,2]);
+  // 3D is admitted as a dimension before it is spatial. A Pod is bounded by Planes,
+  // so until volume semantics are earned its boundary behaves as a Plane's does and
+  // its thickness is carried by the frame. Everything that asks "is this a surface"
+  // must therefore ask for 2-or-more, never for exactly 2.
+  const VALID_DIMENSIONS=new Set([0,1,2,3]);
+  const SURFACE_DIMENSION=2;
   function intrinsicDimension(entity){
     const d=Number(entity?.form?.dimension);
     return VALID_DIMENSIONS.has(d)?d:2;
@@ -1083,6 +1095,8 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
   // Connectivity follows the lower-dimensional host when a richer form is settled onto it.
   // A 2D ACT hosted by a Wire therefore exposes only the Wire-aligned 1D endpoints.
   function effectiveDimension(entity){return Math.min(intrinsicDimension(entity),hostDimension(entity))}
+  // The dimension whose boundary rules apply: 3D uses the 2D set until it is spatial.
+  function boundaryDimension(entity){return Math.min(effectiveDimension(entity),SURFACE_DIMENSION)}
   function basePointSpecs(d,entity=null){
     if(d===0)return [{id:'self',compatId:'out',side:'point',role:'self',defaultFlow:'duplex',t:.5}];
     if(d===1)return [
@@ -1119,10 +1133,10 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
     return out;
   }
   function pointSpecs(entity){
-    const d=effectiveDimension(entity),base=basePointSpecs(d,entity);
+    const d=boundaryDimension(entity),base=basePointSpecs(d,entity);
     return [...base,...customPointSpecs(entity,d,base)];
   }
-  function builtinPointIds(entity){return basePointSpecs(effectiveDimension(entity),entity).map(x=>x.id)}
+  function builtinPointIds(entity){return basePointSpecs(boundaryDimension(entity),entity).map(x=>x.id)}
   function pointIds(entity){return pointSpecs(entity).map(x=>x.id)}
   function resolveSpec(entity,id){
     const value=String(id??'');
@@ -1165,7 +1179,7 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
     if(end==='a')wire.aSide=spec.compatId;else wire.bSide=spec.compatId;
     return wire[key];
   }
-  return {intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
+  return {intrinsicDimension,hostDimension,effectiveDimension,boundaryDimension,SURFACE_DIMENSION,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
 });
 /* END src/06-attachment-core.js */
 </script>
@@ -1197,7 +1211,11 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
     // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
     // component record is the static 1D role (a rail that hosts Points).
     path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
-    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:320,h:220}}}
+    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:320,h:220}}},
+    // A Pod is 3D. Until volume semantics are earned it is a Plane wearing a shell:
+    // the frame is what makes it read as thick, and it is a real default rather than
+    // something a person has to switch on to see what a Pod is.
+    pod:{form:{dimension:3,body:{thickness:34},frame:{mode:'shell',thickness:10,depth:26},regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:340,h:240}}}
   };
   // Loading a file applies the same preset rule as makeComponent: a preset field fills in
   // only where the record supplied nothing, so a sparse authored Plane or Point loads the
@@ -1425,11 +1443,11 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
     const form=isObject(value)?clone(value):{};
     const legacyOpen=legacyCanvas?.state==='open';
     const rawDimension=Number(form.dimension);
-    const dimension=[0,1,2].includes(rawDimension)?rawDimension:2; // Legacy 3D migrates to 2D until spatial volume is earned.
-    const defaultKind=['point','path','surface'][dimension];
+    const dimension=[0,1,2,3].includes(rawDimension)?rawDimension:2;
+    const defaultKind=['point','path','surface','volume'][dimension];
     if(!isObject(form.body))form.body={};
     form.dimension=dimension;
-    form.body.kind=['point','path','surface'].includes(form.body.kind)?form.body.kind:defaultKind;
+    form.body.kind=['point','path','surface','volume'].includes(form.body.kind)?form.body.kind:defaultKind;
     form.body.material=cleanString(form.body.material,'generic')||'generic';
     form.body.thickness=Math.max(0,num(form.body.thickness,0));
     if(!isObject(form.frame))form.frame={};
@@ -1794,10 +1812,10 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
 'use strict';
 // 0.1 Beta concern: Runtime state, DOM handles, palette/color kernel.
 
-const SYMBOLS = [{"id":"blank","name":"BLANK","family":"UNSET","role":"incomplete","meaning":"Incomplete component. Choose its type.","verbs":[],"properties":["incomplete","type-required"],"diagram_class":"COMPONENT"},{"id":"ground","name":"GROUND","family":"PASSIVE","role":"reference","meaning":"Reference point used to resolve meaning, state, or authority.","verbs":["resolve","reference"],"properties":["non-authoritative-by-itself"],"diagram_class":"REFERENCE"},{"id":"point","name":"POINT","family":"PRIMITIVE","role":"attachment","meaning":"0D attachment. Sticks to a Path, a Plane boundary, or a Wire; Wires end on Points.","verbs":["attach","enter","exit"],"properties":["addressable","0d"],"diagram_class":"BOUNDARY"},{"id":"port","name":"PORT","family":"PASSIVE","role":"boundary","meaning":"Legacy alias of POINT. Documents normalize it to point.","verbs":["enter","exit"],"properties":["addressable","legacy-alias"],"diagram_class":"BOUNDARY"},{"id":"path","name":"PATH","family":"PRIMITIVE","role":"carrier","meaning":"1D route with start and end. Hosts Points along its length. It does not imply permission or success.","verbs":["carry"],"properties":["direction-neutral","1d"],"diagram_class":"CONNECTION"},{"id":"plane","name":"PLANE","family":"PRIMITIVE","role":"surface","meaning":"Bounded 2D region. Hosts Points on its boundary and Components in its interior. A typed Plane is a Component.","verbs":["host","bound"],"properties":["bounded","hosts","2d"],"diagram_class":"SURFACE"},{"id":"join","name":"JOIN","family":"MECHANICAL","role":"connection","meaning":"Paths are connected.","verbs":["join"],"properties":["connected"],"diagram_class":"CONNECTION"},{"id":"cross","name":"CROSS","family":"PASSIVE","role":"connection","meaning":"Paths cross but do not connect.","verbs":["cross"],"properties":["not-connected"],"diagram_class":"CONNECTION"},{"id":"hold","name":"HOLD","family":"PASSIVE","role":"state","meaning":"Keeps bounded state.","verbs":["hold","store"],"properties":["stateful"],"diagram_class":"STATE"},{"id":"buffer","name":"BUFFER","family":"PASSIVE","role":"state","meaning":"Holds flow temporarily, then releases it.","verbs":["buffer","release"],"properties":["temporary-state"],"diagram_class":"STATE"},{"id":"act","name":"ACT","family":"ACTIVE","role":"transform","meaning":"Transforms input into output. Activity does not grant authority.","verbs":["act","transform"],"properties":["agentic","authority-neutral"],"diagram_class":"TRANSFORM"},{"id":"gate","name":"GATE","family":"MECHANICAL","role":"control","meaning":"Passes or refuses flow using a declared condition.","verbs":["check","pass","refuse"],"properties":["conditional","authority-neutral"],"diagram_class":"CONTROL"},{"id":"switch","name":"SWITCH","family":"MECHANICAL","role":"control","meaning":"Opens or closes a path from explicit control.","verbs":["open","close"],"properties":["externally-controlled"],"diagram_class":"CONTROL"},{"id":"limit","name":"LIMIT","family":"PASSIVE","role":"constraint","meaning":"Restricts a flow dimension without judgement.","verbs":["limit"],"properties":["non-judgemental"],"diagram_class":"CONTROL"},{"id":"one-way","name":"ONE-WAY","family":"PASSIVE","role":"direction","meaning":"Allows flow in one direction.","verbs":["pass"],"properties":["directional","non-reciprocal"],"diagram_class":"CONNECTION"},{"id":"return","name":"RETURN","family":"PASSIVE","role":"reciprocity","meaning":"Requires a matching return path.","verbs":["return"],"properties":["reciprocal"],"diagram_class":"CONNECTION"},{"id":"observe","name":"OBSERVE","family":"PASSIVE","role":"evidence","meaning":"Reads evidence from outside the action path.","verbs":["observe"],"properties":["independent-read"],"diagram_class":"EVIDENCE"},{"id":"receipt","name":"RECEIPT","family":"PASSIVE","role":"evidence","meaning":"Durable evidence emitted by a crossing or action.","verbs":["record","return"],"properties":["durable","evidentiary"],"diagram_class":"EVIDENCE"},{"id":"authority","name":"AUTHORITY","family":"PASSIVE","role":"control-reference","meaning":"Typed, scoped permission supplied as a control input.","verbs":["grant","scope"],"properties":["typed","scoped"],"diagram_class":"REFERENCE"},{"id":"refuse","name":"REFUSE","family":"MECHANICAL","role":"termination","meaning":"Ends an attempted path explicitly.","verbs":["refuse","stop"],"properties":["explicit-terminal"],"diagram_class":"TERMINATION"}];
+const SYMBOLS = [{"id":"blank","name":"BLANK","family":"UNSET","role":"incomplete","meaning":"Incomplete component. Choose its type.","verbs":[],"properties":["incomplete","type-required"],"diagram_class":"COMPONENT"},{"id":"ground","name":"GROUND","family":"PASSIVE","role":"reference","meaning":"Reference point used to resolve meaning, state, or authority.","verbs":["resolve","reference"],"properties":["non-authoritative-by-itself"],"diagram_class":"REFERENCE"},{"id":"point","name":"POINT","family":"PRIMITIVE","role":"attachment","meaning":"0D attachment. Sticks to a Path, a Plane boundary, or a Wire; Wires end on Points.","verbs":["attach","enter","exit"],"properties":["addressable","0d"],"diagram_class":"BOUNDARY"},{"id":"port","name":"PORT","family":"PASSIVE","role":"boundary","meaning":"Legacy alias of POINT. Documents normalize it to point.","verbs":["enter","exit"],"properties":["addressable","legacy-alias"],"diagram_class":"BOUNDARY"},{"id":"path","name":"PATH","family":"PRIMITIVE","role":"carrier","meaning":"1D route with start and end. Hosts Points along its length. It does not imply permission or success.","verbs":["carry"],"properties":["direction-neutral","1d"],"diagram_class":"CONNECTION"},{"id":"plane","name":"PLANE","family":"PRIMITIVE","role":"surface","meaning":"Bounded 2D region. Hosts Points on its boundary and Components in its interior. A typed Plane is a Component.","verbs":["host","bound"],"properties":["bounded","hosts","2d"],"diagram_class":"SURFACE"},{"id":"pod","name":"POD","family":"PRIMITIVE","role":"volume","meaning":"Bounded 3D region, bounded by Planes. Thick by default; its boundary behaves as a Plane's until volume semantics are earned.","verbs":["enclose","host","bound"],"properties":["bounded","hosts","3d"],"diagram_class":"SURFACE"},{"id":"join","name":"JOIN","family":"MECHANICAL","role":"connection","meaning":"Paths are connected.","verbs":["join"],"properties":["connected"],"diagram_class":"CONNECTION"},{"id":"cross","name":"CROSS","family":"PASSIVE","role":"connection","meaning":"Paths cross but do not connect.","verbs":["cross"],"properties":["not-connected"],"diagram_class":"CONNECTION"},{"id":"hold","name":"HOLD","family":"PASSIVE","role":"state","meaning":"Keeps bounded state.","verbs":["hold","store"],"properties":["stateful"],"diagram_class":"STATE"},{"id":"buffer","name":"BUFFER","family":"PASSIVE","role":"state","meaning":"Holds flow temporarily, then releases it.","verbs":["buffer","release"],"properties":["temporary-state"],"diagram_class":"STATE"},{"id":"act","name":"ACT","family":"ACTIVE","role":"transform","meaning":"Transforms input into output. Activity does not grant authority.","verbs":["act","transform"],"properties":["agentic","authority-neutral"],"diagram_class":"TRANSFORM"},{"id":"gate","name":"GATE","family":"MECHANICAL","role":"control","meaning":"Passes or refuses flow using a declared condition.","verbs":["check","pass","refuse"],"properties":["conditional","authority-neutral"],"diagram_class":"CONTROL"},{"id":"switch","name":"SWITCH","family":"MECHANICAL","role":"control","meaning":"Opens or closes a path from explicit control.","verbs":["open","close"],"properties":["externally-controlled"],"diagram_class":"CONTROL"},{"id":"limit","name":"LIMIT","family":"PASSIVE","role":"constraint","meaning":"Restricts a flow dimension without judgement.","verbs":["limit"],"properties":["non-judgemental"],"diagram_class":"CONTROL"},{"id":"one-way","name":"ONE-WAY","family":"PASSIVE","role":"direction","meaning":"Allows flow in one direction.","verbs":["pass"],"properties":["directional","non-reciprocal"],"diagram_class":"CONNECTION"},{"id":"return","name":"RETURN","family":"PASSIVE","role":"reciprocity","meaning":"Requires a matching return path.","verbs":["return"],"properties":["reciprocal"],"diagram_class":"CONNECTION"},{"id":"observe","name":"OBSERVE","family":"PASSIVE","role":"evidence","meaning":"Reads evidence from outside the action path.","verbs":["observe"],"properties":["independent-read"],"diagram_class":"EVIDENCE"},{"id":"receipt","name":"RECEIPT","family":"PASSIVE","role":"evidence","meaning":"Durable evidence emitted by a crossing or action.","verbs":["record","return"],"properties":["durable","evidentiary"],"diagram_class":"EVIDENCE"},{"id":"authority","name":"AUTHORITY","family":"PASSIVE","role":"control-reference","meaning":"Typed, scoped permission supplied as a control input.","verbs":["grant","scope"],"properties":["typed","scoped"],"diagram_class":"REFERENCE"},{"id":"refuse","name":"REFUSE","family":"MECHANICAL","role":"termination","meaning":"Ends an attempted path explicitly.","verbs":["refuse","stop"],"properties":["explicit-terminal"],"diagram_class":"TERMINATION"}];
 // Primitives are the dimensional basis (0D / 1D / 2D). Components are typed 2D forms
 // whose attachment defaults are template data; a typed Plane is an ordinary Component.
-const GROUPS = {"Primitives": ["point","path","plane"], "Components": ["blank","act","hold","buffer","gate","switch","limit","receipt","observe"]};
+const GROUPS = {"Primitives": ["point","path","plane","pod"], "Components": ["blank","act","hold","buffer","gate","switch","limit","receipt","observe"]};
 // The dimensional ladder, and the only thing the palette offers. Each rung is
 // bounded by the rung below it and a Point has no lower boundary, so the ladder is
 // the boundary recursion read upwards. `pod` is the next rung; it is declared here
@@ -1806,8 +1824,12 @@ const DIMENSIONAL_LADDER=[
   {symbolId:'point',dimension:0,sense:'where',boundedBy:null,available:true},
   {symbolId:'path',dimension:1,sense:'through',boundedBy:'Points',available:true},
   {symbolId:'plane',dimension:2,sense:'across',boundedBy:'Paths',available:true},
-  {symbolId:'pod',dimension:3,sense:'within',boundedBy:'Planes',available:false}
+  {symbolId:'pod',dimension:3,sense:'within',boundedBy:'Planes',available:true}
 ];
+const SURFACE_DIMENSION=2;   // the dimension at which a form bounds a region; 3D borrows it
+const DIMENSION_NAMES=['Point','Path','Plane','Pod'];
+const nextDimension=d=>(Number(d)+1)%DIMENSION_NAMES.length;
+const previousDimension=d=>(Number(d)+DIMENSION_NAMES.length-1)%DIMENSION_NAMES.length;
 const PRIMITIVE_SYMBOL_IDS=new Set(GROUPS.Primitives);
 function isPrimitiveSymbol(id){return PRIMITIVE_SYMBOL_IDS.has(String(id||''))}
 const workspace = document.getElementById('workspace');
@@ -2370,10 +2392,12 @@ function wirePartPortConfig(w,part){
 function componentForm(n){
   if(!n.form)n.form={};
   const f=n.form,legacy=componentCanvas(n),dim=Number(f.dimension);
-  f.dimension=[0,1,2].includes(dim)?dim:2; // 3D is deferred to the post-Beta Space model.
+  // 3D is admitted before it is spatial: a Pod is thick by frame and borrows the
+  // Plane's boundary rules. Volume semantics are still to be earned.
+  f.dimension=[0,1,2,3].includes(dim)?dim:2;
   if(!f.body)f.body={};
-  const defaultKind=['point','path','surface'][f.dimension];
-  if(!['point','path','surface'].includes(f.body.kind))f.body.kind=defaultKind;
+  const defaultKind=['point','path','surface','volume'][f.dimension];
+  if(!['point','path','surface','volume'].includes(f.body.kind))f.body.kind=defaultKind;
   if(typeof f.body.material!=='string'||!f.body.material)f.body.material='generic';
   f.body.thickness=Math.max(0,Math.min(128,Number(f.body.thickness)||0));
   if(!f.frame)f.frame={};
@@ -2382,12 +2406,12 @@ function componentForm(n){
   f.frame.depth=Math.max(0,Math.min(128,Number(f.frame.depth)||0));
   if(!f.regions)f.regions={};if(!f.regions.interior)f.regions.interior={};
   if(!['open','closed'].includes(f.regions.interior.state))f.regions.interior.state=legacy.state==='open'?'open':'closed';
-  if(f.dimension<2)f.regions.interior.state='closed';
+  if(f.dimension<SURFACE_DIMENSION)f.regions.interior.state='closed';
   legacy.state=f.regions.interior.state;legacy.dimension=f.dimension; // compatibility projection only
   return f;
 }
 function formDimensionLabel(f){return `${f.dimension}D · ${f.body.kind[0].toUpperCase()+f.body.kind.slice(1)}`}
-function formHostsChildren(n){const f=componentForm(n);return f.dimension===2&&f.regions.interior.state==='open'}
+function formHostsChildren(n){const f=componentForm(n);return f.dimension>=SURFACE_DIMENSION&&f.regions.interior.state==='open'}
 function componentHostDescriptor(n){return canvasDescriptorById(n?.canvasId||GLOBAL_CANVAS_ID)||canvasDescriptorById(GLOBAL_CANVAS_ID)}
 function componentHostedOnWire(n){return componentHostDescriptor(n)?.ownerKind==='wire'}
 function componentPlacement(n){
@@ -2404,11 +2428,13 @@ function componentPlacement(n){
 }
 function componentIsPoint(n){return componentForm(n).dimension===0}
 function componentIsPath(n){return componentForm(n).dimension===1}
-function componentIsSurface(n){return componentForm(n).dimension===2}
+// A Pod is a surface too: 3D borrows the Plane's boundary until it is spatial.
+function componentIsSurface(n){return componentForm(n).dimension>=SURFACE_DIMENSION}
 // A primitive shows no type name of its own; only an authored label is drawn.
 function componentTypeCaption(n,s=byId(n.symbolId)){return isPrimitiveSymbol(n.symbolId)?'':(s?.name||'')}
 // Wires whose endpoint sits on one of this component's built-in points. Used to refuse
 // attachment-default or type changes that would silently orphan a carrier.
+function wiresOnComponent(n){return wires.filter(w=>w.a===n.id||w.b===n.id)}
 function wiresOnBuiltinPoints(n){
   const ids=new Set(Attachment.builtinPointIds(n));
   return wires.filter(w=>(w.a===n.id&&ids.has(Attachment.pointId(n,w.aAttachment?.pointId||w.aSide)))||(w.b===n.id&&ids.has(Attachment.pointId(n,w.bAttachment?.pointId||w.bSide))));
@@ -3074,10 +3100,15 @@ function syncSelectionFormState(kind,entity){
   if(kind==='port'||!entity){barFormState.hidden=true;return}
   barFormState.hidden=false;barFormState.disabled=false;barFormState.classList.remove('wire-form');
   if(kind==='component'){
-    const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;barFormState.title=`${formDimensionLabel(f)} · configure Form`;
+    const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;
+    const next=nextDimension(f.dimension);
+    barFormState.title=`${formDimensionLabel(f)} · click for ${next}D ${DIMENSION_NAMES[next]} · shift-click to step back`;
     barFormState.classList.toggle('active',f.frame.mode!=='none'||f.regions.interior.state==='open');
   }else{
-    barFormState.textContent='1D';barFormState.title='Wire Form · 1D path · configure Wire settings';barFormState.classList.add('wire-form');
+    // A Wire is a carrier Path and cannot be another dimension, so its button reports
+    // rather than cycles. Disabled says that better than a click that does nothing.
+    barFormState.textContent='1D';barFormState.title='Wire Form · 1D carrier Path · not retypable';
+    barFormState.disabled=true;barFormState.classList.add('wire-form');
   }
 }
 function syncComponentVisualPanel(n){
@@ -3175,7 +3206,7 @@ function syncPointsSurface(kind){
 
   // Built-in boundary points are template data, so removing or restoring the whole
   // set is an action on the list rather than a setting inside Form.
-  const canToggle=kind==='component'&&componentForm(owner).dimension===2;
+  const canToggle=kind==='component'&&componentForm(owner).dimension>=SURFACE_DIMENSION;
   pointsBuiltinToggle.hidden=!canToggle;
   if(canToggle){
     const none=Attachment.attachmentDefaults(owner)==='none';
@@ -3629,10 +3660,15 @@ document.addEventListener('visibilitychange',()=>{
     b.type='button';b.className='symbol-card ladder-rung'+(rung.available?'':' pending');
     b.dataset.symbolId=rung.symbolId;b.dataset.dimension=String(rung.dimension);
     const name=s?s.name:rung.symbolId.toUpperCase();
+    // The rungs are in dimensional order and the glyph says which is which, so the
+    // card carries the name and nothing else. The rest is on the title.
     b.innerHTML=`${rung.available?glyph(rung.symbolId):'<span class="ladder-glyph-pending" aria-hidden="true"></span>'}`
-      +`<span class="ladder-text"><b>${name}</b><small>${rung.dimension}D · ${rung.sense}</small></span>`;
+      +`<span class="ladder-text"><b>${name}</b></span>`;
+    b.title=`${name} · ${rung.dimension}D · ${rung.sense}`
+      +(rung.boundedBy?` · bounded by ${rung.boundedBy}`:'')
+      +(rung.available?'':' · not built yet');
     if(rung.available)bindPaletteComponent(b,rung.symbolId);
-    else{b.disabled=true;b.title=`${name} is not built yet: ${rung.dimension}D, bounded by ${rung.boundedBy}`}
+    else b.disabled=true;
     ladder.appendChild(b);
   }
   palette.appendChild(section);
@@ -4182,7 +4218,7 @@ function stubPos(P,portId,d=26,node=null,inward=null){
 function wireEndpointInward(w,node){
   if(!w||!node)return null;const surface=w.canvasId||GLOBAL_CANVAS_ID;const placement=componentPlacement(node);
   if(placement.kind==='edge'){const host=nodes.find(h=>h.id===placement.hostId);return !!host&&surface===componentCanvas(host).id}
-  if(componentForm(node).dimension===2)return surface===componentCanvas(node).id;
+  if(componentForm(node).dimension>=SURFACE_DIMENSION)return surface===componentCanvas(node).id;
   return null;
 }
 /* END src/30-canvas.js */
@@ -5011,7 +5047,7 @@ function render(){
     // A hosted form rides its host's pose; a free 1D form carries its own direction.
     {const angle=componentHostAngle(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${angle?` rotate(${angle})`:''}`)}
     renderComponentVisual(g,n,cfg,s,signalColor);
-    if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
+    if(!editor.pinned&&!editor.locked&&componentForm(n).dimension>=SURFACE_DIMENSION)appendComponentTransformHandles(g,n,cfg);
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
       const pointId=point.id,pcfg=point.config,local=componentPortLocalPosition(n,pointId);
       const localX=local.x,localY=local.y;
@@ -5631,18 +5667,20 @@ function growBlankFromConnection(sourceNode,sourcePointId,P,mods){
   if(!source||!sourceSpec){statusEl.textContent='Attachment no longer exists';return null}
   const sourceCompat=sourceSpec.compatId;
 
-  // Release is a settle event, so the new Blank may align to the current grid.
-  const blank=addNode('blank',P.x,P.y,mods,{render:false,select:false});
+  // A Wire ends on a Point, so dragging one into open space and dwelling grows a
+  // Point. Deciding it is an ACT or a HOLD is a later, separate thought - and under
+  // the ladder a typed Component is a composition, not the thing a carrier lands on.
+  // Release is a settle event, so the new Point may align to the current grid.
+  const blank=addNode('point',P.x,P.y,mods,{render:false,select:false});
 
   // Direction is derived from the canonical attachment descriptor. Gesture code
   // must never reinterpret self/start/end/left/right/top with its own Port rules.
+  // A 0D form exposes exactly one point, `self`, for either direction.
   let connected=false;
   if(sourceCompat==='out'){
-    connected=addConnection(sourceNode,sourceSpec.id,blank.id,'left');
-  }else if(sourceCompat==='in'){
-    connected=addConnection(blank.id,'right',sourceNode,sourceSpec.id);
+    connected=addConnection(sourceNode,sourceSpec.id,blank.id,'self');
   }else{
-    connected=addConnection(blank.id,'right',sourceNode,sourceSpec.id);
+    connected=addConnection(blank.id,'self',sourceNode,sourceSpec.id);
   }
   if(!connected){
     const i=nodes.findIndex(n=>n.id===blank.id);if(i>=0)nodes.splice(i,1);
@@ -5652,11 +5690,9 @@ function growBlankFromConnection(sourceNode,sourcePointId,P,mods){
   render();
   selectNode(blank.id);
 
-  // Type is the first decision for a newly grown component.
-  requestAnimationFrame(()=>{
-    try{barComponentType.focus({preventScroll:true})}catch(_){barComponentType.focus()}
-  });
-  statusEl.textContent='Choose component type';
+  // A Point needs no type decision, so nothing is focused and nothing is asked. Its
+  // label is the only thing worth naming, and only if the person wants to.
+  statusEl.textContent='Point created';
 }
 
 function beginWireDrag(e,n,side,g){
@@ -5711,9 +5747,10 @@ function showWireBlankGhost(P){
   if(!wireDrag)return;
   wireDrag.blankGhost?.remove();
   const g=document.createElementNS('http://www.w3.org/2000/svg','g');g.setAttribute('class','wire-blank-ghost');g.setAttribute('transform',`translate(${P.x} ${P.y})`);
-  const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('class','body');r.setAttribute('x','-56');r.setAttribute('y','-42');r.setAttribute('width','112');r.setAttribute('height','84');r.setAttribute('rx','9');g.appendChild(r);
+  // The ghost is the shape of what will actually appear: a Point, not a body.
+  const r=document.createElementNS('http://www.w3.org/2000/svg','circle');r.setAttribute('class','body');r.setAttribute('cx','0');r.setAttribute('cy','0');r.setAttribute('r','14');g.appendChild(r);
   for(const line of [[-10,0,10,0],[0,-10,0,10]]){const l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('class','plus');l.setAttribute('x1',line[0]);l.setAttribute('y1',line[1]);l.setAttribute('x2',line[2]);l.setAttribute('y2',line[3]);g.appendChild(l)}
-  const label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('text-anchor','middle');label.setAttribute('x','0');label.setAttribute('y','29');label.textContent='NEW COMPONENT';g.appendChild(label);
+  const label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('text-anchor','middle');label.setAttribute('x','0');label.setAttribute('y','29');label.textContent='NEW POINT';g.appendChild(label);
   ghostLayer.appendChild(g);wireDrag.blankGhost=g;
 }
 function armWireBlankCandidate(P){
@@ -5723,7 +5760,7 @@ function armWireBlankCandidate(P){
   clearWireBlankCandidate();wireDrag.blankAnchor={x:P.x,y:P.y};
   wireDrag.blankDwellTimer=setTimeout(()=>{
     if(!wireDrag||wireDrag.snap)return;
-    wireDrag.blankReady=true;wireDrag.blankDwellTimer=null;showWireBlankGhost(wireDrag.blankAnchor);statusEl.textContent='Release → new Component';
+    wireDrag.blankReady=true;wireDrag.blankDwellTimer=null;showWireBlankGhost(wireDrag.blankAnchor);statusEl.textContent='Release → new Point';
   },WIRE_BLANK_DWELL_MS);
 }
 function wirePointerMove(e){
@@ -5769,7 +5806,7 @@ function wirePointerUp(e){
     growBlankFromConnection(sourceNode,sourceSide,dropPoint,e);
     return;
   }
-  if(droppedOnCanvas&&!blankReady){statusEl.textContent='No Component created · hold briefly for ghost';}
+  if(droppedOnCanvas&&!blankReady){statusEl.textContent='No Point created · hold briefly for ghost';}
 
   renderWires();
 }
@@ -5790,7 +5827,7 @@ function updateWireDrag(e){
     statusEl.textContent=`Release → ${target.label||byId(target.symbolId).name}`;
   } else {
     armWireBlankCandidate(P);
-    statusEl.textContent=wireDrag.blankReady?'Release → new Component':'Hold briefly to grow Component';
+    statusEl.textContent=wireDrag.blankReady?'Release → new Point':'Hold briefly to grow a Point';
   }
   const occupied=[];
   wires.forEach((w,i)=>{
@@ -5950,7 +5987,7 @@ barComponentType.addEventListener('change',()=>{
     const beforeOpen=formHostsChildren(n);
     f.dimension=preset.form.dimension;f.body.kind=['point','path','surface'][f.dimension];
     if(preset.form.regions?.interior?.state)f.regions.interior.state=preset.form.regions.interior.state;
-    if(f.dimension<2)f.regions.interior.state='closed';
+    if(f.dimension<SURFACE_DIMENSION)f.regions.interior.state='closed';
     if(nextDefaults==='none')n.config.attachmentDefaults='none';else delete n.config.attachmentDefaults;
     if(beforeOpen&&!formHostsChildren(n)){const fallback=n.canvasId||GLOBAL_CANVAS_ID;for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}}
     SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
@@ -6066,18 +6103,46 @@ function deleteSelected(){
   selected=null;hideSelectionBar();refreshCanvasScopeControl();render();selectNode(null);commitHistoryCapture();
 }
 
-barFormState.addEventListener('click',()=>{
-  const kind=selectedSurfaceKind();
-  if(kind==='component'){
-    openSelectionSettings('component');formSettings.open=true;formSettings.scrollIntoView({block:'nearest'});
-  }else if(kind==='wire'){
-    openSelectionSettings('wire');wireSettingsFields.scrollIntoView({block:'nearest'});
-  }
+// The dimension control changes the dimension. Clicking steps up the ladder and
+// wraps; shift steps back. The Form panel is still reachable from the gear, so this
+// button no longer spends a click getting to a setting it can just be.
+barFormState.addEventListener('click',event=>{
+  if(selectedSurfaceKind()!=='component')return;
+  const n=nodes.find(n=>n.id===selected);if(!n)return;
+  const from=componentForm(n).dimension;
+  const to=event.shiftKey?previousDimension(from):nextDimension(from);
+  setSelectedComponentDimension(to);
 });
+
+// Retyping across dimensions changes which attachment points exist, so a Wire that
+// ends on one that is about to disappear would be orphaned. Refuse instead, name the
+// count, and leave the form alone: dropping a person's connections silently to honour
+// a click on a dimension button is the worse of the two behaviours.
+function setSelectedComponentDimension(dimension){
+  const n=nodes.find(n=>n.id===selected);if(!n)return false;
+  const current=componentForm(n).dimension;
+  if(dimension===current)return true;
+  const surviving=new Set(Attachment.pointIds({...n,form:{...componentForm(n),dimension}}));
+  const orphaned=wiresOnComponent(n).filter(w=>{
+    for(const end of ['a','b']){
+      if(w[end]!==n.id)continue;
+      const pointId=Attachment.pointId(n,end==='a'?w.aAttachment?.pointId||w.aSide:w.bAttachment?.pointId||w.bSide);
+      if(pointId&&!surviving.has(pointId))return true;
+    }
+    return false;
+  });
+  if(orphaned.length){
+    statusEl.textContent=`${dimension}D drops ${orphaned.length===1?'a point a Wire ends on':`points ${orphaned.length} Wires end on`} · detach first`;
+    return false;
+  }
+  updateSelectedComponentForm(f=>{f.dimension=dimension;f.body.kind=['point','path','surface','volume'][dimension]});
+  statusEl.textContent=`${dimension}D · ${DIMENSION_NAMES[dimension]}`;
+  return true;
+}
 function updateSelectedComponentForm(mutator){
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Form edit'))return;setHistoryHint('Edit Component Form');
   const f=componentForm(n),beforeOpen=f.regions.interior.state==='open',beforeDimension=f.dimension;mutator(f,n);
-  if(f.dimension<2)f.regions.interior.state='closed';componentForm(n);
+  if(f.dimension<SURFACE_DIMENSION)f.regions.interior.state='closed';componentForm(n);
   if(beforeOpen&&f.regions.interior.state==='closed'){
     const fallback=n.canvasId||GLOBAL_CANVAS_ID;
     for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}
@@ -6086,7 +6151,12 @@ function updateSelectedComponentForm(mutator){
   componentConfig(n);
   routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 }
-formDimension.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.dimension=Number(formDimension.value);f.body.kind=['point','path','surface'][f.dimension]}));
+formDimension.addEventListener('change',()=>{
+  // The select and the bar button are the same act, so they answer to the same rule.
+  if(!setSelectedComponentDimension(Number(formDimension.value))){
+    const n=nodes.find(n=>n.id===selected);if(n)formDimension.value=String(componentForm(n).dimension);
+  }
+});
 pointsBuiltinToggle.addEventListener('click',()=>{
   // Built-in 2D points are template data. Removing them is refused while a Wire still
   // ends on one, so the change never silently orphans a carrier.

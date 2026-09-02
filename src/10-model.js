@@ -259,10 +259,12 @@ function wirePartPortConfig(w,part){
 function componentForm(n){
   if(!n.form)n.form={};
   const f=n.form,legacy=componentCanvas(n),dim=Number(f.dimension);
-  f.dimension=[0,1,2].includes(dim)?dim:2; // 3D is deferred to the post-Beta Space model.
+  // 3D is admitted before it is spatial: a Pod is thick by frame and borrows the
+  // Plane's boundary rules. Volume semantics are still to be earned.
+  f.dimension=[0,1,2,3].includes(dim)?dim:2;
   if(!f.body)f.body={};
-  const defaultKind=['point','path','surface'][f.dimension];
-  if(!['point','path','surface'].includes(f.body.kind))f.body.kind=defaultKind;
+  const defaultKind=['point','path','surface','volume'][f.dimension];
+  if(!['point','path','surface','volume'].includes(f.body.kind))f.body.kind=defaultKind;
   if(typeof f.body.material!=='string'||!f.body.material)f.body.material='generic';
   f.body.thickness=Math.max(0,Math.min(128,Number(f.body.thickness)||0));
   if(!f.frame)f.frame={};
@@ -271,12 +273,12 @@ function componentForm(n){
   f.frame.depth=Math.max(0,Math.min(128,Number(f.frame.depth)||0));
   if(!f.regions)f.regions={};if(!f.regions.interior)f.regions.interior={};
   if(!['open','closed'].includes(f.regions.interior.state))f.regions.interior.state=legacy.state==='open'?'open':'closed';
-  if(f.dimension<2)f.regions.interior.state='closed';
+  if(f.dimension<SURFACE_DIMENSION)f.regions.interior.state='closed';
   legacy.state=f.regions.interior.state;legacy.dimension=f.dimension; // compatibility projection only
   return f;
 }
 function formDimensionLabel(f){return `${f.dimension}D · ${f.body.kind[0].toUpperCase()+f.body.kind.slice(1)}`}
-function formHostsChildren(n){const f=componentForm(n);return f.dimension===2&&f.regions.interior.state==='open'}
+function formHostsChildren(n){const f=componentForm(n);return f.dimension>=SURFACE_DIMENSION&&f.regions.interior.state==='open'}
 function componentHostDescriptor(n){return canvasDescriptorById(n?.canvasId||GLOBAL_CANVAS_ID)||canvasDescriptorById(GLOBAL_CANVAS_ID)}
 function componentHostedOnWire(n){return componentHostDescriptor(n)?.ownerKind==='wire'}
 function componentPlacement(n){
@@ -293,11 +295,13 @@ function componentPlacement(n){
 }
 function componentIsPoint(n){return componentForm(n).dimension===0}
 function componentIsPath(n){return componentForm(n).dimension===1}
-function componentIsSurface(n){return componentForm(n).dimension===2}
+// A Pod is a surface too: 3D borrows the Plane's boundary until it is spatial.
+function componentIsSurface(n){return componentForm(n).dimension>=SURFACE_DIMENSION}
 // A primitive shows no type name of its own; only an authored label is drawn.
 function componentTypeCaption(n,s=byId(n.symbolId)){return isPrimitiveSymbol(n.symbolId)?'':(s?.name||'')}
 // Wires whose endpoint sits on one of this component's built-in points. Used to refuse
 // attachment-default or type changes that would silently orphan a carrier.
+function wiresOnComponent(n){return wires.filter(w=>w.a===n.id||w.b===n.id)}
 function wiresOnBuiltinPoints(n){
   const ids=new Set(Attachment.builtinPointIds(n));
   return wires.filter(w=>(w.a===n.id&&ids.has(Attachment.pointId(n,w.aAttachment?.pointId||w.aSide)))||(w.b===n.id&&ids.has(Attachment.pointId(n,w.bAttachment?.pointId||w.bSide))));

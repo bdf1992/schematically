@@ -168,10 +168,15 @@ function syncSelectionFormState(kind,entity){
   if(kind==='port'||!entity){barFormState.hidden=true;return}
   barFormState.hidden=false;barFormState.disabled=false;barFormState.classList.remove('wire-form');
   if(kind==='component'){
-    const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;barFormState.title=`${formDimensionLabel(f)} · configure Form`;
+    const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;
+    const next=nextDimension(f.dimension);
+    barFormState.title=`${formDimensionLabel(f)} · click for ${next}D ${DIMENSION_NAMES[next]} · shift-click to step back`;
     barFormState.classList.toggle('active',f.frame.mode!=='none'||f.regions.interior.state==='open');
   }else{
-    barFormState.textContent='1D';barFormState.title='Wire Form · 1D path · configure Wire settings';barFormState.classList.add('wire-form');
+    // A Wire is a carrier Path and cannot be another dimension, so its button reports
+    // rather than cycles. Disabled says that better than a click that does nothing.
+    barFormState.textContent='1D';barFormState.title='Wire Form · 1D carrier Path · not retypable';
+    barFormState.disabled=true;barFormState.classList.add('wire-form');
   }
 }
 function syncComponentVisualPanel(n){
@@ -269,7 +274,7 @@ function syncPointsSurface(kind){
 
   // Built-in boundary points are template data, so removing or restoring the whole
   // set is an action on the list rather than a setting inside Form.
-  const canToggle=kind==='component'&&componentForm(owner).dimension===2;
+  const canToggle=kind==='component'&&componentForm(owner).dimension>=SURFACE_DIMENSION;
   pointsBuiltinToggle.hidden=!canToggle;
   if(canToggle){
     const none=Attachment.attachmentDefaults(owner)==='none';

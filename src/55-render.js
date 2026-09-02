@@ -194,7 +194,7 @@ function render(){
     // A hosted form rides its host's pose; a free 1D form carries its own direction.
     {const angle=componentHostAngle(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${angle?` rotate(${angle})`:''}`)}
     renderComponentVisual(g,n,cfg,s,signalColor);
-    if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
+    if(!editor.pinned&&!editor.locked&&componentForm(n).dimension>=SURFACE_DIMENSION)appendComponentTransformHandles(g,n,cfg);
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
       const pointId=point.id,pcfg=point.config,local=componentPortLocalPosition(n,pointId);
       const localX=local.x,localY=local.y;

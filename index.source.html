@@ -45,6 +45,13 @@
     <path d="M26 22h44M26 32h44M26 42h28" stroke-width="2.5" opacity=".5"/>
   </g>
 </symbol>
+<symbol id="sym-pod" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M24 8h50a5 5 0 0 1 5 5v38" stroke-width="2.5" opacity=".45"/>
+    <rect x="12" y="14" width="62" height="40" rx="5"/>
+    <rect x="20" y="22" width="46" height="24" rx="3" stroke-width="2.5" opacity=".5"/>
+  </g>
+</symbol>
 <symbol id="sym-join" viewBox="0 0 96 64">
   <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
     <path d="M8 32h80M48 8v48"/>
@@ -373,9 +380,10 @@
                 <option value="0">0D · Point</option>
                 <option value="1">1D · Path</option>
                 <option value="2">2D · Plane</option>
+                <option value="3">3D · Pod</option>
               </select>
             </label>
-            <label data-dims="2">Interior
+            <label data-dims="23">Interior
               <select id="formInteriorState">
                 <option value="closed">Closed</option>
                 <option value="open">Open · hosts Components</option>
@@ -394,7 +402,7 @@
               <option value="passive">Passive</option>
             </select>
           </label>
-          <label data-dims="12">Graphic
+          <label data-dims="123">Graphic
             <select id="visualGraphicMode">
               <option value="symbol">Symbol</option>
               <option value="custom">Custom SVG</option>
@@ -409,10 +417,10 @@
               <option value="none">Hidden</option>
             </select>
           </label>
-          <label data-dims="12">Width <input id="visualWidth" type="number" min="80" max="520" step="8"></label>
-          <label data-dims="2">Height <input id="visualHeight" type="number" min="64" max="420" step="8"></label>
-          <label data-dims="2">Interior <button id="visualInteriorColor" class="color-slot-chip" type="button" aria-label="Interior palette slot"></button></label>
-          <label data-dims="2">Material
+          <label data-dims="123">Width <input id="visualWidth" type="number" min="80" max="520" step="8"></label>
+          <label data-dims="23">Height <input id="visualHeight" type="number" min="64" max="420" step="8"></label>
+          <label data-dims="23">Interior <button id="visualInteriorColor" class="color-slot-chip" type="button" aria-label="Interior palette slot"></button></label>
+          <label data-dims="23">Material
             <select id="formMaterial">
               <option value="generic">Generic</option>
               <option value="canvas">Canvas</option>
@@ -425,17 +433,17 @@
             </select>
           </label>
           <label>Thickness <input id="formBodyThickness" type="number" min="0" max="128" step="1" title="Point radius · Path stroke · Plane depth"></label>
-          <label data-dims="2">Frame
+          <label data-dims="23">Frame
             <select id="formFrameMode">
               <option value="none">None</option>
               <option value="frame">Frame</option>
               <option value="shell">Shell</option>
             </select>
           </label>
-          <label data-dims="2">Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
-          <label data-dims="2">Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
+          <label data-dims="23">Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
+          <label data-dims="23">Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
         </div>
-        <label class="settings-wide" data-dims="12">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
+        <label class="settings-wide" data-dims="123">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
         <label class="settings-wide" id="visualSvgRow">SVG · viewBox 0 0 96 64
           <textarea id="visualSvgMarkup" spellcheck="false" placeholder="&lt;path d=&quot;...&quot;/&gt;"></textarea>
         </label>

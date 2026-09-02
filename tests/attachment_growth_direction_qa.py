@@ -14,7 +14,10 @@ async def main():
         await page.set_content(HTML.read_text(),wait_until='load');await page.wait_for_timeout(150)
 
         # Canonical 1D endpoint names must retain their endpoint semantics when
-        # release-to-grow creates a new Component in empty space.
+        # release-to-grow creates a new form in empty space. What grows is a Point,
+        # whose one attachment is `self` (compat `out`), so these assertions are
+        # about direction: an `out`/`end` source stays upstream of what it grew, an
+        # `in`/`start` source stays downstream of it.
         await page.evaluate('''()=>{
           nodes.splice(0);wires.splice(0);routeCache.clear();arrowPoseCache.clear();
           const path=SovSchematicData.makeComponent(diagram,{id:'path',symbolId:'act',x:300,y:300});
@@ -28,7 +31,8 @@ async def main():
         assert len(state['wires'])==1,state
         w=state['wires'][0]
         assert w['a']=='path' and w['aPoint']=='end' and w['aSide']=='out',w
-        assert w['bPoint']=='left' and w['bSide']=='in',w
+        assert w['bPoint']=='self' and w['bSide']=='out',w
+        assert state['nodes'][-1]['dim']==0,state
 
         await page.evaluate('''()=>{
           nodes.splice(0);wires.splice(0);routeCache.clear();arrowPoseCache.clear();
@@ -38,7 +42,7 @@ async def main():
         }''')
         w=await page.evaluate('''()=>{const w=wires[0];return {a:w.a,aSide:w.aSide,b:w.b,bSide:w.bSide,aPoint:w.aAttachment?.pointId,bPoint:w.bAttachment?.pointId}}''')
         assert w['b']=='path' and w['bPoint']=='start' and w['bSide']=='in',w
-        assert w['aPoint']=='right' and w['aSide']=='out',w
+        assert w['aPoint']=='self' and w['aSide']=='out',w
 
         # 0D self is compatibility-projected to output, so it grows downstream,
         # never through the old fallback control branch.
@@ -50,7 +54,7 @@ async def main():
         }''')
         w=await page.evaluate('''()=>{const w=wires[0];return {a:w.a,aSide:w.aSide,b:w.b,bSide:w.bSide,aPoint:w.aAttachment?.pointId,bPoint:w.bAttachment?.pointId}}''')
         assert w['a']=='point' and w['aPoint']=='self' and w['aSide']=='out',w
-        assert w['bSide']=='in',w
+        assert w['bPoint']=='self' and w['bSide']=='out',w
 
         # 2D top remains control semantics through the same descriptor resolver.
         await page.evaluate('''()=>{
@@ -61,6 +65,7 @@ async def main():
         }''')
         w=await page.evaluate('''()=>{const w=wires[0];return {a:w.a,aSide:w.aSide,b:w.b,bSide:w.bSide,aPoint:w.aAttachment?.pointId,bPoint:w.bAttachment?.pointId}}''')
         assert w['b']=='surface' and w['bPoint']=='top' and w['bSide']=='control',w
+        assert w['aPoint']=='self' and w['aSide']=='out',w
         assert not errors,errors
         await browser.close()
     print('PASS canonical attachment growth direction QA')

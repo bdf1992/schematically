@@ -24,7 +24,11 @@
     // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
     // component record is the static 1D role (a rail that hosts Points).
     path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
-    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:320,h:220}}}
+    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:320,h:220}}},
+    // A Pod is 3D. Until volume semantics are earned it is a Plane wearing a shell:
+    // the frame is what makes it read as thick, and it is a real default rather than
+    // something a person has to switch on to see what a Pod is.
+    pod:{form:{dimension:3,body:{thickness:34},frame:{mode:'shell',thickness:10,depth:26},regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:340,h:240}}}
   };
   // Loading a file applies the same preset rule as makeComponent: a preset field fills in
   // only where the record supplied nothing, so a sparse authored Plane or Point loads the
@@ -252,11 +256,11 @@
     const form=isObject(value)?clone(value):{};
     const legacyOpen=legacyCanvas?.state==='open';
     const rawDimension=Number(form.dimension);
-    const dimension=[0,1,2].includes(rawDimension)?rawDimension:2; // Legacy 3D migrates to 2D until spatial volume is earned.
-    const defaultKind=['point','path','surface'][dimension];
+    const dimension=[0,1,2,3].includes(rawDimension)?rawDimension:2;
+    const defaultKind=['point','path','surface','volume'][dimension];
     if(!isObject(form.body))form.body={};
     form.dimension=dimension;
-    form.body.kind=['point','path','surface'].includes(form.body.kind)?form.body.kind:defaultKind;
+    form.body.kind=['point','path','surface','volume'].includes(form.body.kind)?form.body.kind:defaultKind;
     form.body.material=cleanString(form.body.material,'generic')||'generic';
     form.body.thickness=Math.max(0,num(form.body.thickness,0));
     if(!isObject(form.frame))form.frame={};

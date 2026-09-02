@@ -191,10 +191,15 @@ document.addEventListener('visibilitychange',()=>{
     b.type='button';b.className='symbol-card ladder-rung'+(rung.available?'':' pending');
     b.dataset.symbolId=rung.symbolId;b.dataset.dimension=String(rung.dimension);
     const name=s?s.name:rung.symbolId.toUpperCase();
+    // The rungs are in dimensional order and the glyph says which is which, so the
+    // card carries the name and nothing else. The rest is on the title.
     b.innerHTML=`${rung.available?glyph(rung.symbolId):'<span class="ladder-glyph-pending" aria-hidden="true"></span>'}`
-      +`<span class="ladder-text"><b>${name}</b><small>${rung.dimension}D · ${rung.sense}</small></span>`;
+      +`<span class="ladder-text"><b>${name}</b></span>`;
+    b.title=`${name} · ${rung.dimension}D · ${rung.sense}`
+      +(rung.boundedBy?` · bounded by ${rung.boundedBy}`:'')
+      +(rung.available?'':' · not built yet');
     if(rung.available)bindPaletteComponent(b,rung.symbolId);
-    else{b.disabled=true;b.title=`${name} is not built yet: ${rung.dimension}D, bounded by ${rung.boundedBy}`}
+    else b.disabled=true;
     ladder.appendChild(b);
   }
   palette.appendChild(section);
@@ -744,6 +749,6 @@ function stubPos(P,portId,d=26,node=null,inward=null){
 function wireEndpointInward(w,node){
   if(!w||!node)return null;const surface=w.canvasId||GLOBAL_CANVAS_ID;const placement=componentPlacement(node);
   if(placement.kind==='edge'){const host=nodes.find(h=>h.id===placement.hostId);return !!host&&surface===componentCanvas(host).id}
-  if(componentForm(node).dimension===2)return surface===componentCanvas(node).id;
+  if(componentForm(node).dimension>=SURFACE_DIMENSION)return surface===componentCanvas(node).id;
   return null;
 }

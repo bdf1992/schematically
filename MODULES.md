@@ -22,5 +22,10 @@ The desktop shell lives under `desktop/` (a Tauri crate wrapping the same standa
 
 - `src/15-editor-kernel.js` — history, checkpoints, semantic clipboard, multi-selection, settle hosting, Pin/Lock/Hidden/Opacity, search/Objects, appearance and rate.
 
+`SURFACE_DIMENSION` is 2: the dimension at which a form bounds a region. A 3D Pod is
+a surface too, so every "is this a surface" test asks for 2-or-more, never exactly 2.
+`Attachment.boundaryDimension` is `min(effectiveDimension, SURFACE_DIMENSION)`, which
+is how 3D borrows the Plane's boundary until volume semantics are earned.
+
 ### `src/06-attachment-core.js`
 Pure 0D attachment-point topology, dimensional cardinality, host-dimensional projection, and legacy Port/Wire endpoint compatibility mapping. No DOM or rendering authority.

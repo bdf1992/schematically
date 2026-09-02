@@ -36,13 +36,17 @@ interpretation.
 
 ## What exists today
 
-Point, Path and Plane are built and are the whole palette. Everything below that
-line is named, not built, and this document is the only place some of it exists:
+Point, Path, Plane and Pod are the whole palette. Pod is real but flat-bound; the
+composition ladder is named and not built, and this document is the only place some
+of it exists:
 
-- **Pod** is declared in `DIMENSIONAL_LADDER` (`src/00-state.js`) with
-  `available:false`. It appears in the palette dimmed and cannot be dragged, so the
-  ladder reads whole while being honest about what it can do. Building it means
-  3D form semantics, not a new palette shape.
+- **Pod** is built as far as a flat canvas allows. It is dimension 3 and it is
+  thick: the preset gives it a shell frame and body depth, so it reads as a volume
+  rather than a Plane wearing a label. Its boundary is not yet spatial - a Pod
+  borrows the Plane's attachment rules through `boundaryDimension`, which is
+  `min(dimension, 2)` - so a Point still lands on its edge as if it were 2D. What
+  is missing is volume semantics: faces, depth-ordering, and a Pod bounded by
+  Planes the way a Plane is bounded by Paths.
 - **Pattern** is where the typed Components go. `act`, `hold`, `buffer`, `gate`,
   `switch`, `limit`, `receipt` and `observe` are still in `GROUPS.Components` and
   still reachable from the selection bar's type control, so existing documents keep
