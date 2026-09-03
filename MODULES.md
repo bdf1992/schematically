@@ -4,6 +4,7 @@
 - `05-data-core.js` — transport-neutral documents, packages, validation, CRUD, reachability, primitive template presets, and compact serialization (`compactDocument`).
 - `10-model.js` — Component/Wire/Port semantic normalization.
 - `20-ui.js` — panels, palette/grid UI helpers.
+- `22-select-menu.js` — the editor's own dropdown lists. A `<select>` popup is a browser window, not part of the page, so the list is drawn in the document instead; the `<select>` keeps the value and keeps firing `change`. Opened by delegation, so a runtime-built list is covered without registration.
 - `25-signal.js` — derived signal state.
 - `30-canvas.js` — camera, spatial movement, world angle (`componentHostAngle`: a hosted form's pose, otherwise its own authored `presentation.angle`) and Form-region containment.
 - `40-routing.js` — Wire geometry.
