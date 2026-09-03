@@ -46,3 +46,18 @@ Tested **432** authored slot realizations across light/dark appearance, 3 themes
 The visible Contrast meter was removed from the editor. Contrast remains an automatic rendering invariant and is release-audited here.
 
 Slot identity is stable across appearance: `M1..M6` and `C1..C6` do not change in saved `.sov` files; only their light/dark realization changes.
+
+## What this audit does not see
+
+The table above measures palette slot values against the canvas tone. It is a check on
+colour arithmetic, and everything in it passes, which is why it was possible for the
+dark appearance to be visibly wrong while this page said PASS. It never opened the
+editor, so it could not see that the page declared no `color-scheme` and every native
+dropdown opened white over a dark canvas, and it could not see that a Plane's interior
+was built by moving its colour towards the ground rather than the ground towards its
+colour, which lands beside a white canvas and a long way above a near-black one.
+
+`tests/theme_audit_qa.py` is the check on what is actually drawn: it opens the editor in
+both appearances, composites every measured element against whatever really paints
+behind it, and holds the token decomposition to a ceiling of literal colours and
+per-appearance patches. Run it with `--report` for the numbers.

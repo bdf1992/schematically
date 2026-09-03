@@ -305,7 +305,17 @@ function nearestSlot(hex){
 }
 function lighten(hex,amount=.88){return mixHex([hex,'#FFFFFF'],[1-amount,amount])}
 function darken(hex,amount=.72){return mixHex([hex,'#111315'],[1-amount,amount])}
-function componentSurfaceFill(hex,amount=.86){return surfaceAppearance()==='dark'?darken(hex,Math.min(.88,amount*.82)):lighten(hex,amount)}
+// A region's fill is the ground moved a little towards the region's own colour - not
+// the colour moved a long way towards the ground. Those two constructions agree in a
+// light theme and disagree badly in a dark one: lightening an ink towards white lands
+// beside a white canvas, but darkening it towards black lands well above a near-black
+// one, so every Plane became a bright slab. Starting from the ground is symmetric, so a
+// surface reads as a surface in both appearances and a coloured Plane stays a tint of
+// its colour rather than a block of it.
+function componentSurfaceFill(hex,amount=.86){
+  const weight=Math.max(0,Math.min(1,1-amount));
+  return mixHex([canvasTone(),hex],[1-weight,weight]);
+}
 
 const DEFAULT_COMPONENT_COLOR='#171715';
 const DEFAULT_WIRE_COLOR='#171715';

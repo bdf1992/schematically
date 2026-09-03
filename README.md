@@ -57,6 +57,8 @@ The agent-facing corpus ships with the repository:
 
 ## Quality practice
 
+`python tests/theme_audit_qa.py --report` prints the theme audit: the token decomposition, the amount of colour written into rules as literals rather than tokens, whether the page declares a `color-scheme` so the browser paints its own surfaces for the right appearance, and the measured contrast of every text, edge and region against the surface it is actually sitting on, in both appearances. It runs inside the gate as an assertion. `contrast-audit.md` is the older check on palette arithmetic and says what it cannot see.
+
 `python scripts/qa.py` is the single authoritative gate, identical locally and in CI: static checks, browser interaction suites, API/HTTP/MCP parity and conformance, stress and performance watchers, mutation tests, the golden corpus, and syntax checks. Defects found by hand get an issue and, once fixed, a regression suite inside the gate. Pushes to `main` deploy to GitHub Pages only after the gate passes. `LOCAL-SETUP.md` covers machine setup, the local QA loop, and the green-main update pattern; `docs/BRANCHING.md` covers the release flow.
 
 ## Direction

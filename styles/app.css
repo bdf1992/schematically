@@ -1,5 +1,9 @@
 /* BEGIN styles/app.css */
 :root {
+  /* The browser paints selects, scrollbars, focus rings and autofill itself. It only
+     paints them for this theme if the page says which theme it is; without this a
+     dropdown opens white over a dark editor. */
+  color-scheme:light;
   --bg:#f4f4f1; --panel:#fff; --ink:#171715; --muted:#6c6c65;
   --line:#d8d8d1; --grid:#F1F1ED; --hover:#f4f4f0; --canvas-tone:#FEFEFC; --canvas-ink:#42423E; --canvas-muted:#73736D; --canvas-halo:#FEFEFC;
   --canvas-grid-size:24px;
@@ -373,6 +377,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .file-menu-item:disabled{color:var(--muted);opacity:.52;cursor:not-allowed}
 .file-menu-item:disabled:hover{background:transparent}
 :root[data-appearance="dark"]{
+  color-scheme:dark;
   --bg:#111315;--panel:#1C1F21;--ink:#EEEFEA;--muted:#A8AAA4;--line:#3B3F42;--hover:#292D30;--grid:#2B2E31;--canvas-tone:#17191B;--canvas-ink:#E7E8E3;--canvas-muted:#AEB0AA;--canvas-halo:#17191B;
 }
 :root[data-appearance="dark"] #workspace{background-color:var(--canvas-tone);box-shadow:inset 0 0 0 1px #303438}

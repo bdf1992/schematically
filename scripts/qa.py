@@ -23,6 +23,7 @@ BROWSER=[
     'tests/configurable_attachment_defaults_qa.py',
     'tests/palette_ladder_qa.py',
     'tests/patterns_qa.py',
+    'tests/theme_audit_qa.py',
     'tests/dimension_control_qa.py',
     'tests/primitive_forms_qa.py',
     'tests/path_endpoints_qa.py',
