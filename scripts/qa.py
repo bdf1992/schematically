@@ -25,6 +25,7 @@ BROWSER=[
     'tests/primitive_forms_qa.py',
     'tests/plane_not_dashed_visual.py',
     'tests/path_direction_qa.py',
+    'tests/free_segment_route_qa.py',
     'tests/document_compaction_qa.py',
     'tests/carrier_path_qa.py',
     'tests/attachment_interaction_parity_qa.py',

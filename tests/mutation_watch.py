@@ -92,6 +92,15 @@ MUTANTS=[
       'test':'tests/path_direction_qa.py'
     },
     {
+      # Two free ends have no normal to meet, so the carrier is the segment between them.
+      # Routing them anyway invents the bend that looked like a reset direction.
+      'name':'free-carrier-routed-as-if-bound',
+      'file':'src/40-routing.js',
+      'old':"  if(!sourceNode&&!targetNode){",
+      'new':"  if(false){",
+      'test':'tests/free_segment_route_qa.py'
+    },
+    {
       'name':'point-cannot-settle-into-interior',
       'file':'src/30-canvas.js',
       'old':'return best||interiorHost();',

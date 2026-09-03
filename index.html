@@ -4581,6 +4581,15 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   const routedWire=wireId?wires.find(x=>x.id===wireId):null;
   // A free end has no boundary to leave; the route starts exactly there.
   const SA=sourceNode?stubPos(A,aSide,26,sourceNode,wireEndpointInward(routedWire,sourceNode)):A, SB=targetNode?stubPos(B,bSide,26,targetNode,wireEndpointInward(routedWire,targetNode)):B;
+  // With both ends free, nothing dictates an approach direction at either end and there is no
+  // boundary to leave, so the carrier is the segment between its two 0D points - the same thing
+  // a 1D Form's body is between its own two boundary points. Orthogonal routing exists to meet
+  // bound attachment points on their normals; with none to meet, it only invents a bend, which
+  // is what made moving a free end look like it reset the line's direction.
+  if(!sourceNode&&!targetNode){
+    const straight=normalizePoints([A,B]);
+    return {points:straight,core:straight,score:0,signature:'free-segment',anchor:routeAnchor(straight),obstacles:[]};
+  }
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
   const otherRects=nodes
     .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
@@ -4676,6 +4685,9 @@ function routePath(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSe
 }
 function stableRouteForWire(index,w,A,B,occupied=[]){
   const candidate=routePoints(A,B,w.aSide,w.bSide,w.a,w.b,w.lane??index,occupied,w.id);
+  // A free-to-free segment has no interior channel to preserve, and a cached route from when an
+  // end was still bound must not survive the unbinding.
+  if(candidate.signature==='free-segment'){routeCache.delete(index);return candidate.points}
   const cached=routeCache.get(index);
 
   if(!cached){
