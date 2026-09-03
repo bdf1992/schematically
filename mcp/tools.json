@@ -13,6 +13,7 @@
     "schematic.history.redo",
     "schematic.checkpoint.list",
     "schematic.checkpoint.create",
-    "schematic.checkpoint.restore"
+    "schematic.checkpoint.restore",
+    "schematic.markers"
   ]
 }
