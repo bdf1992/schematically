@@ -53,6 +53,7 @@ const SovSchematicAPI={
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
+  markers:()=>SovSchematicData.markersFor(diagram),
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
   tools:()=>SovSchematicData.operationTools()
 };
