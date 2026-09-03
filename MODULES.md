@@ -7,6 +7,7 @@
 - `25-signal.js` — derived signal state.
 - `30-canvas.js` — camera, spatial movement, world angle (`componentHostAngle`: a hosted form's pose, otherwise its own authored `presentation.angle`) and Form-region containment.
 - `40-routing.js` — Wire geometry.
+- `45-patterns.js` — Patterns: arrangements of forms, the Pattern palette section, and `addPattern`. A Pattern builds through the ordinary creation and hosting paths and leaves ordinary records; nothing marks a form as having come from one.
 - `50-selection.js` — selection projection.
 - `55-render.js` — SVG projection.
 - `60-interactions.js` — pointer/drag gestures.

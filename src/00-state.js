@@ -304,6 +304,7 @@ let renderEpoch=1;
 // A 1D Path's length is authored by dragging its ends, so it is not bound by the
 // minimum a 2D body needs; the ceiling only keeps a mis-drag from filling the canvas.
 const PATH_MIN_LENGTH=24,PATH_MAX_LENGTH=4000;
+const PATH_HIT_HALF_HEIGHT=11;   // half the invisible band that makes a Path grabbable
 function normalizeAngleDegrees(value){
   const n=Number(value);
   if(!Number.isFinite(n))return 0;

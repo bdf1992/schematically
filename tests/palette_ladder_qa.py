@@ -17,7 +17,7 @@ from playwright.async_api import async_playwright
 ROOT = Path(__file__).resolve().parents[1]
 HTML = ROOT / 'index.html'
 
-CARDS = ("[...document.querySelectorAll('#palette .symbol-card')].map(b=>({"
+CARDS = ("[...document.querySelectorAll('#palette [data-group=\"primitives\"] .symbol-card')].map(b=>({"
          "id:b.dataset.symbolId,dimension:b.dataset.dimension,disabled:b.disabled,"
          "name:b.querySelector('b').textContent,title:b.title,"
          "extraText:b.textContent.trim()}))")
@@ -45,10 +45,14 @@ async def main():
 
         # One rung per row: no two cards share a top edge.
         tops = await page.evaluate(
-            "[...document.querySelectorAll('#palette .symbol-card')]"
+            "[...document.querySelectorAll('#palette [data-group=\"primitives\"] .symbol-card')]"
             ".map(b=>Math.round(b.getBoundingClientRect().top))")
         assert len(set(tops)) == len(tops), tops
         assert tops == sorted(tops), tops
+
+        # Patterns are a separate section; the Form ladder is only the four rungs.
+        assert await page.evaluate(
+            'document.querySelectorAll(`#palette [data-group="patterns"] .symbol-card`).length') > 0
 
         # Typed Components are gone from the palette but not from the document model.
         assert all(c['id'] in ('point', 'path', 'plane', 'pod') for c in cards), cards

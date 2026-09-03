@@ -471,3 +471,11 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
 .ladder-text b{display:block;font-size:13px;letter-spacing:.1em}
 .symbol-card.ladder-rung.pending{cursor:default;opacity:.45}
 .symbol-card.ladder-rung.pending:hover{background:var(--panel);border-color:transparent}
+
+/* A 1D form is drawn thin, so it carries an invisible band that makes it as easy to
+   grab as any other form. Endpoint handles sit above it and still win the pointer. */
+.dimensional-path-hit{fill:transparent;stroke:none;pointer-events:all;cursor:grab}
+.node.is-locked .dimensional-path-hit,.node.is-pinned .dimensional-path-hit{cursor:default}
+
+/* A Pattern card sits in the same ladder as a form, and keeps its one-line "made of". */
+.pattern-card .ladder-text small{display:block;color:var(--muted);font-size:9.5px;margin-top:2px}

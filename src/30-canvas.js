@@ -85,7 +85,7 @@ function finishPaletteGesture(e,cancelled=false){
     session.holdTimer=null;
   }
   const active=session.active;
-  const symbolId=session.symbolId;
+  const symbolId=session.symbolId,patternId=session.patternId;
   const over=active&&session.overCanvas&&canvasContainsClientPoint(e.clientX,e.clientY);
 
   // Clear visual/session state before creation causes any synchronous UI work.
@@ -93,20 +93,24 @@ function finishPaletteGesture(e,cancelled=false){
 
   try{
     if(!cancelled&&!canPlaceComponentOnActiveCanvas()){statusEl.textContent='1D canvas accepts Wire Parts, not Components';return}
+    const place=(x,y)=>patternId?addPattern(patternId,x,y):addNode(symbolId,x,y,e);
     if(!cancelled&&over){
       const q=svgPoint(e.clientX,e.clientY);
-      addNode(symbolId,q.x,q.y,e);
+      place(q.x,q.y);
     }else if(!cancelled&&!active){
-      addNode(symbolId);
+      patternId?addPattern(patternId):addNode(symbolId);
     }
-    statusEl.textContent='Select';
+    if(!patternId)statusEl.textContent='Select';
   }catch(err){
     console.error(err);
     statusEl.textContent='Placement failed · see console';
     throw err;
   }
 }
-function bindPaletteComponent(button,symbolId){
+function bindPalettePattern(button,patternId){bindPaletteSource(button,{patternId})}
+function bindPaletteComponent(button,symbolId){bindPaletteSource(button,{symbolId})}
+function bindPaletteSource(button,what){
+  const symbolId=what.symbolId||null,patternId=what.patternId||null;
   button.addEventListener('pointerdown',e=>{
     if(e.button!==0)return;
     e.preventDefault();
@@ -118,6 +122,7 @@ function bindPaletteComponent(button,symbolId){
     paletteDrag={
       button,
       symbolId,
+      patternId,
       pointerId:e.pointerId,
       startClient:{x:e.clientX,y:e.clientY},
       lastClient:{x:e.clientX,y:e.clientY},

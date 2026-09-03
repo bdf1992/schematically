@@ -162,7 +162,26 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     }
     return
   }
-  if(form.dimension===1){const line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('class','dimensional-path-body');line.setAttribute('x1',String(-size.w/2));line.setAttribute('x2',String(size.w/2));line.setAttribute('y1','0');line.setAttribute('y2','0');line.setAttribute('stroke-width',String(Math.max(2,Math.min(14,2+form.body.thickness*.18))));g.appendChild(line);appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);return}
+  if(form.dimension===1){
+    // A 1D form is drawn thin, so its own stroke is not something a person can hit.
+    // It gets the same treatment a Point gets: an invisible hit band over the body,
+    // wide enough to grab, so selecting and dragging a Path is the same act as
+    // selecting and dragging anything else on the ladder.
+    const half=size.w/2,stroke=Math.max(2,Math.min(14,2+form.body.thickness*.18));
+    const hit=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    hit.setAttribute('class','dimensional-path-hit');
+    hit.setAttribute('x',String(-half));hit.setAttribute('y',String(-PATH_HIT_HALF_HEIGHT));
+    hit.setAttribute('width',String(size.w));hit.setAttribute('height',String(PATH_HIT_HALF_HEIGHT*2));
+    g.appendChild(hit);
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('class','dimensional-path-body');
+    line.setAttribute('x1',String(-half));line.setAttribute('x2',String(half));
+    line.setAttribute('y1','0');line.setAttribute('y2','0');
+    line.setAttribute('stroke-width',String(stroke));
+    g.appendChild(line);
+    appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);
+    return;
+  }
   if(backdrop!=='none'){
     const depth=Math.min(12,Math.max(0,form.body.thickness*.18));
     if(depth>0){const back=document.createElementNS('http://www.w3.org/2000/svg','rect');back.setAttribute('class','component-body-depth');back.setAttribute('x',String(-size.w/2+depth));back.setAttribute('y',String(-size.h/2+depth));back.setAttribute('width',String(size.w));back.setAttribute('height',String(size.h));back.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(back)}

@@ -47,12 +47,18 @@ of it exists:
   `min(dimension, 2)` - so a Point still lands on its edge as if it were 2D. What
   is missing is volume semantics: faces, depth-ordering, and a Pod bounded by
   Planes the way a Plane is bounded by Paths.
-- **Pattern** is where the typed Components go. `act`, `hold`, `buffer`, `gate`,
-  `switch`, `limit`, `receipt` and `observe` are still in `GROUPS.Components` and
+- **Pattern** has a palette section and seven entries (`src/45-patterns.js`): PAIR,
+  CHAIN, HUB, RAIL, CARRIER, BLOCK, NEST. Each is an arrangement rather than a type.
+  Dropping one runs the same creation and hosting paths a person's gestures run, so
+  what lands is ordinary forms and Wires; nothing on the record says it came from a
+  Pattern, and there is no way to edit one as a unit afterwards. That would be a
+  Program.
+  BLOCK is the honest replacement for a typed Component: a Plane that came with
+  somewhere to attach. The eight typed ids - `act`, `hold`, `buffer`, `gate`,
+  `switch`, `limit`, `receipt`, `observe` - are still in `GROUPS.Components` and
   still reachable from the selection bar's type control, so existing documents keep
-  working, but they are no longer offered in the palette: they are compositions of
-  the primitives, not siblings of them. Re-authoring each one as a configured form
-  is open work, and the logic several of them declare today is wrong.
+  working, but they are not offered anywhere in the palette. Re-authoring them is
+  open work, and the logic several of them declare today is wrong.
 - **Program** and **Paradigm** have no implementation and no record type. Naming
   them here fixes the words so later work does not invent a third vocabulary for
   the same distinctions.

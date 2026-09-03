@@ -27,9 +27,15 @@ async def main():
     assert w0['aAttachment']['kind']=='attachment-ref' and w0['a']=='src',w0
     assert await page.locator('.wire-group[data-wire-id="k0"] .carrier-end-handle.bound').count()==2
 
-    # The palette Path drops a carrier with two free ends on the surface under the pointer.
+    # The palette PATH is the 1D form, not a carrier: it drops a Component that can be
+    # selected, moved and resized like every other rung of the ladder.
+    form=await page.evaluate('()=>{const n=addNode("path",300,700,null,{select:false});return {id:n.id,symbolId:n.symbolId,dim:componentForm(n).dimension}}')
+    assert form['symbolId']=='path' and form['dim']==1,form
+    assert await page.locator(f'.node[data-id="{form["id"]}"] .dimensional-path-hit').count()==1,form
+
+    # A loose carrier - a Wire with two free ends - is the CARRIER Pattern instead.
     before=await page.evaluate('({nodes:nodes.length,wires:wires.length})')
-    free=await page.evaluate('()=>{const w=addNode("path",500,500,null,{select:true});return {id:w.id,a:w.a,b:w.b,aAtt:w.aAttachment,bAtt:w.bAttachment,canvasId:w.canvasId,role:w.role,dim:w.form.dimension,selected}}')
+    free=await page.evaluate('()=>{const w=addCarrier(500,500,null,{select:true});return {id:w.id,a:w.a,b:w.b,aAtt:w.aAttachment,bAtt:w.bAttachment,canvasId:w.canvasId,role:w.role,dim:w.form.dimension,selected}}')
     after=await page.evaluate('({nodes:nodes.length,wires:wires.length})')
     assert after['nodes']==before['nodes'] and after['wires']==before['wires']+1,(before,after)
     assert free['a'] is None and free['b'] is None and free['aAtt']['kind']=='free' and free['bAtt']['kind']=='free',free

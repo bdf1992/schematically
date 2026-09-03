@@ -4,7 +4,8 @@ A compact, AI-native schematic editor. A document is a semantic model — Compon
 
 ## The model
 
-- **Point / Path / Plane** — the dimensional basis, and the whole palette. A 0D Point is an attachment. A 1D Path carries between its two ends. A 2D Plane bounds a region that hosts Points on its boundary and Components in its interior. Each has a minimal default record; the preset lives in `05-data-core.js`.
+- **Point / Path / Plane / Pod** — the dimensional basis, and the Form half of the palette. Each rung is bounded by the one below it: a Pod by Planes, a Plane by Paths, a Path by Points, a Point by nothing.
+- **Patterns** — arrangements of those forms, and the palette's second half. Dropping one runs the same creation and hosting paths a gesture runs and leaves ordinary records. A 0D Point is an attachment. A 1D Path carries between its two ends. A 2D Plane bounds a region that hosts Points on its boundary and Components in its interior. Each has a minimal default record; the preset lives in `05-data-core.js`.
 - **Hosting is attachment** — drop a Point on a Path, on a Plane boundary, or on a Wire and it sticks there parametrically (`placement = {kind: path | edge | wire, t}`), riding along when the host moves or resizes. Drop it inside an open Plane and it is hosted in the interior. A Point on a boundary with face `both` is a crossing.
 - **Component** — a typed Plane: a closed boundary with behavior, content, and a Form. Nested Components use the same implementation as root Components.
 - **Form** — dimension + Body + Frame + addressable Regions. Dimensions are earned: 0D behaves as an attachable point, 1D as a path/carrier with endpoint topology, 2D as a surface/boundary with addressable boundary attachment points.

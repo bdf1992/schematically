@@ -478,6 +478,14 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
 .ladder-text b{display:block;font-size:13px;letter-spacing:.1em}
 .symbol-card.ladder-rung.pending{cursor:default;opacity:.45}
 .symbol-card.ladder-rung.pending:hover{background:var(--panel);border-color:transparent}
+
+/* A 1D form is drawn thin, so it carries an invisible band that makes it as easy to
+   grab as any other form. Endpoint handles sit above it and still win the pointer. */
+.dimensional-path-hit{fill:transparent;stroke:none;pointer-events:all;cursor:grab}
+.node.is-locked .dimensional-path-hit,.node.is-pinned .dimensional-path-hit{cursor:default}
+
+/* A Pattern card sits in the same ladder as a form, and keeps its one-line "made of". */
+.pattern-card .ladder-text small{display:block;color:var(--muted);font-size:9.5px;margin-top:2px}
 </style>
 </head>
 <body>
@@ -524,6 +532,59 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
     <path d="M24 8h50a5 5 0 0 1 5 5v38" stroke-width="2.5" opacity=".45"/>
     <rect x="12" y="14" width="62" height="40" rx="5"/>
     <rect x="20" y="22" width="46" height="24" rx="3" stroke-width="2.5" opacity=".5"/>
+  </g>
+</symbol>
+<symbol id="pat-pair" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+    <path d="M26 32h44"/>
+    <circle cx="20" cy="32" r="6" fill="currentColor" stroke="none"/>
+    <circle cx="76" cy="32" r="6" fill="currentColor" stroke="none"/>
+  </g>
+</symbol>
+<symbol id="pat-chain" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+    <path d="M20 32h20M56 32h20"/>
+    <circle cx="14" cy="32" r="5" fill="currentColor" stroke="none"/>
+    <circle cx="48" cy="32" r="5" fill="currentColor" stroke="none"/>
+    <circle cx="82" cy="32" r="5" fill="currentColor" stroke="none"/>
+  </g>
+</symbol>
+<symbol id="pat-hub" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+    <path d="M26 32h14l16-16h14M26 32h34M26 32h14l16 16h14"/>
+    <circle cx="20" cy="32" r="6" fill="currentColor" stroke="none"/>
+    <circle cx="76" cy="16" r="5" fill="currentColor" stroke="none"/>
+    <circle cx="76" cy="32" r="5" fill="currentColor" stroke="none"/>
+    <circle cx="76" cy="48" r="5" fill="currentColor" stroke="none"/>
+  </g>
+</symbol>
+<symbol id="pat-rail" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+    <path d="M12 32h72"/>
+    <circle cx="30" cy="32" r="6" fill="currentColor" stroke="none"/>
+    <circle cx="48" cy="32" r="6" fill="currentColor" stroke="none"/>
+    <circle cx="66" cy="32" r="6" fill="currentColor" stroke="none"/>
+  </g>
+</symbol>
+<symbol id="pat-carrier" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+    <path d="M18 32h60"/>
+    <circle cx="14" cy="32" r="5"/>
+    <circle cx="82" cy="32" r="5"/>
+  </g>
+</symbol>
+<symbol id="pat-block" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="26" y="16" width="44" height="32" rx="4"/>
+    <circle cx="26" cy="32" r="5" fill="currentColor" stroke="none"/>
+    <circle cx="70" cy="32" r="5" fill="currentColor" stroke="none"/>
+    <circle cx="48" cy="16" r="5" fill="currentColor" stroke="none"/>
+  </g>
+</symbol>
+<symbol id="pat-nest" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="14" y="10" width="68" height="44" rx="5"/>
+    <rect x="34" y="22" width="28" height="20" rx="3" stroke-width="2.5" opacity=".65"/>
   </g>
 </symbol>
 <symbol id="sym-join" viewBox="0 0 96 64">
@@ -1208,9 +1269,11 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
   const LEGACY_SYMBOL_IDS={port:'point'};
   const TEMPLATE_PRESETS={
     point:{form:{dimension:0,body:{thickness:24}},presentation:{graphic:{kind:'none'},labelMode:'none',backdrop:'none'},signalMode:'relay'},
-    // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
-    // component record is the static 1D role (a rail that hosts Points).
-    path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
+    // PATH is the 1D form. It used to drop a carrier - a Wire with two free ends -
+    // which meant the ladder's 1D rung produced a different record kind from every
+    // other rung and could not be selected, moved or resized the way they can. A loose
+    // carrier is an arrangement, not a form, so it lives in the Pattern list instead.
+    path:{form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
     plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:320,h:220}}},
     // A Pod is 3D. Until volume semantics are earned it is a Plane wearing a shell:
     // the frame is what makes it read as thick, and it is a real default rather than
@@ -2115,6 +2178,7 @@ let renderEpoch=1;
 // A 1D Path's length is authored by dragging its ends, so it is not bound by the
 // minimum a 2D body needs; the ceiling only keeps a mis-drag from filling the canvas.
 const PATH_MIN_LENGTH=24,PATH_MAX_LENGTH=4000;
+const PATH_HIT_HALF_HEIGHT=11;   // half the invisible band that makes a Path grabbable
 function normalizeAngleDegrees(value){
   const n=Number(value);
   if(!Number.isFinite(n))return 0;
@@ -3554,7 +3618,7 @@ function finishPaletteGesture(e,cancelled=false){
     session.holdTimer=null;
   }
   const active=session.active;
-  const symbolId=session.symbolId;
+  const symbolId=session.symbolId,patternId=session.patternId;
   const over=active&&session.overCanvas&&canvasContainsClientPoint(e.clientX,e.clientY);
 
   // Clear visual/session state before creation causes any synchronous UI work.
@@ -3562,20 +3626,24 @@ function finishPaletteGesture(e,cancelled=false){
 
   try{
     if(!cancelled&&!canPlaceComponentOnActiveCanvas()){statusEl.textContent='1D canvas accepts Wire Parts, not Components';return}
+    const place=(x,y)=>patternId?addPattern(patternId,x,y):addNode(symbolId,x,y,e);
     if(!cancelled&&over){
       const q=svgPoint(e.clientX,e.clientY);
-      addNode(symbolId,q.x,q.y,e);
+      place(q.x,q.y);
     }else if(!cancelled&&!active){
-      addNode(symbolId);
+      patternId?addPattern(patternId):addNode(symbolId);
     }
-    statusEl.textContent='Select';
+    if(!patternId)statusEl.textContent='Select';
   }catch(err){
     console.error(err);
     statusEl.textContent='Placement failed · see console';
     throw err;
   }
 }
-function bindPaletteComponent(button,symbolId){
+function bindPalettePattern(button,patternId){bindPaletteSource(button,{patternId})}
+function bindPaletteComponent(button,symbolId){bindPaletteSource(button,{symbolId})}
+function bindPaletteSource(button,what){
+  const symbolId=what.symbolId||null,patternId=what.patternId||null;
   button.addEventListener('pointerdown',e=>{
     if(e.button!==0)return;
     e.preventDefault();
@@ -3587,6 +3655,7 @@ function bindPaletteComponent(button,symbolId){
     paletteDrag={
       button,
       symbolId,
+      patternId,
       pointerId:e.pointerId,
       startClient:{x:e.clientX,y:e.clientY},
       lastClient:{x:e.clientX,y:e.clientY},
@@ -4743,7 +4812,7 @@ function addCarrier(x,y,mods=null,options={}){
 function addNode(symbolId,x=null,y=null,mods=null,options={}){
   const centerX=camera.x+camera.w/2,centerY=camera.y+camera.h/2;
   const px=x==null?centerX+(Math.random()-.5)*90:x,py=y==null?centerY+(Math.random()-.5)*70:y;
-  if(SovSchematicData.templatePreset(symbolId)?.carrier)return addCarrier(px,py,x!=null&&y!=null?mods:null,options);
+  if(SovSchematicData.templatePreset(symbolId)?.carrier)return addCarrier(px,py,x!=null&&y!=null?mods:null,options); // no preset sets this today; a loose carrier is the CARRIER Pattern
   const n=SovSchematicData.makeComponent(diagram,{symbolId,x:px,y:py,canvasId:GLOBAL_CANVAS_ID});
   ensureEntityCanvas(n,'component');
   if(x!=null&&y!=null){
@@ -4758,6 +4827,169 @@ function addNode(symbolId,x=null,y=null,mods=null,options={}){
   return n;
 }
 /* END src/40-routing.js */
+</script>
+<script data-beta-module="src/45-patterns.js">
+/* BEGIN src/45-patterns.js */
+'use strict';
+// 0.1 concern: Patterns — arrangements of forms.
+//
+// A Pattern is the second ladder's first rung (VOCABULARY.md): forms put together.
+// It is not a new record kind and it is not a type. Dropping one runs the same
+// creation and hosting paths a person's own gestures run, and what lands is ordinary
+// Points, Paths, Planes and Wires with nothing marking them as having come from here.
+// A Pattern is therefore a starting arrangement, not a thing you can later edit as a
+// unit — that would be a Program, which does not exist yet.
+//
+// Each entry says what it is made of in one line, because the sidebar's job is to
+// teach the distinction between a form and an arrangement of forms.
+
+const PATTERNS=[
+  {
+    id:'pair',
+    name:'PAIR',
+    sense:'two Points, joined',
+    build(x,y){
+      const a=addNode('point',x-90,y,null,{render:false,select:false});
+      const b=addNode('point',x+90,y,null,{render:false,select:false});
+      addConnection(a.id,'self',b.id,'self');
+      return [a,b];
+    }
+  },
+  {
+    id:'chain',
+    name:'CHAIN',
+    sense:'Points in series',
+    build(x,y){
+      const made=[-140,0,140].map(dx=>addNode('point',x+dx,y,null,{render:false,select:false}));
+      for(let i=0;i<made.length-1;i++)addConnection(made[i].id,'self',made[i+1].id,'self');
+      return made;
+    }
+  },
+  {
+    id:'hub',
+    name:'HUB',
+    sense:'one Point, many out',
+    build(x,y){
+      const centre=addNode('point',x,y,null,{render:false,select:false});
+      const spokes=[[150,-110],[170,0],[150,110]].map(([dx,dy])=>
+        addNode('point',x+dx,y+dy,null,{render:false,select:false}));
+      for(const spoke of spokes)addConnection(centre.id,'self',spoke.id,'self');
+      return [centre,...spokes];
+    }
+  },
+  {
+    id:'rail',
+    name:'RAIL',
+    sense:'Points along a Path',
+    build(x,y){
+      const rail=addNode('path',x,y,null,{render:false,select:false});
+      // Settle each Point through the ordinary host path, so what lands is exactly
+      // what dragging a Point onto the Path by hand would have produced.
+      const riders=[];
+      for(const t of [.2,.5,.8]){
+        const half=Math.max(PATH_MIN_LENGTH,componentSize(rail).w)/2;
+        const point=addNode('point',rail.x-half+half*2*t,rail.y,null,{render:false,select:false});
+        applyComponentHost(point,componentHostCandidateAtPoint(point,point.x,point.y));
+        riders.push(point);
+      }
+      return [rail,...riders];
+    }
+  },
+  {
+    id:'carrier',
+    name:'CARRIER',
+    sense:'a Wire, ends free',
+    build(x,y){
+      // Not a form: a Wire whose two ends are bound to nothing yet. This is what the
+      // palette's PATH used to drop, which is why PATH would not behave like a form.
+      addCarrier(x,y,null,{render:false,select:false});
+      return [];
+    }
+  },
+  {
+    id:'block',
+    name:'BLOCK',
+    sense:'a Plane with Points',
+    build(x,y){
+      const plane=addNode('plane',x,y,null,{render:false,select:false});
+      // The template's built-in boundary points are what a typed Component always
+      // was: a Plane that came with somewhere to attach.
+      plane.config.attachmentDefaults='standard';
+      componentConfig(plane);
+      return [plane];
+    }
+  },
+  {
+    id:'nest',
+    name:'NEST',
+    sense:'a Plane within a Plane',
+    build(x,y){
+      const outer=addNode('plane',x,y,null,{render:false,select:false});
+      const size=componentSize(outer);
+      const inner=addNode('plane',x,y,null,{render:false,select:false});
+      const inner_p=componentConfig(inner).presentation;
+      inner_p.size.w=Math.max(80,Math.round(size.w*.5));
+      inner_p.size.h=Math.max(64,Math.round(size.h*.45));
+      updateContainmentFor(inner);
+      return [outer,inner];
+    }
+  }
+];
+
+function patternById(id){return PATTERNS.find(p=>p.id===String(id))||null}
+
+// One drop is one undoable step, however many forms it puts down.
+function addPattern(id,x=null,y=null){
+  const pattern=patternById(id);
+  if(!pattern){statusEl.textContent=`Unknown pattern: ${id}`;return null}
+  const centerX=camera.x+camera.w/2,centerY=camera.y+camera.h/2;
+  const px=x==null?centerX:x,py=y==null?centerY:y;
+  setHistoryHint(`Add ${pattern.name}`);
+  let made=[];
+  try{
+    made=pattern.build(px,py)||[];
+  }catch(error){
+    console.error(error);
+    statusEl.textContent=`${pattern.name} could not be placed`;
+    return null;
+  }
+  routeCache.clear();arrowPoseCache.clear();
+  syncAllNodeBoundaryContext();
+  render();
+  // The arrangement is the thing that was added, so all of it is selected. A Pattern
+  // made only of Wires selects nothing, which is the honest answer for it.
+  clearComponentSelectionSet();
+  for(const node of made)selectedComponentIds.add(node.id);
+  if(made.length)selectNode(made.at(-1).id,{preserveSet:true,focus:false});
+  commitHistoryCapture(`Add ${pattern.name}`);
+  statusEl.textContent=made.length?`${pattern.name} · ${made.length} forms`:`${pattern.name} added`;
+  return made;
+}
+
+// One line drawing per Pattern, showing the arrangement rather than a form.
+function patternGlyph(id){return `<svg viewBox="0 0 96 64"><use href="#pat-${id}"/></svg>`}
+
+// Patterns are arrangements of those forms, so they are a second section rather than
+// more rungs: dropping one puts down several ordinary forms already related to each
+// other. The card says what it is made of, because that distinction is the point.
+{
+  const section=document.createElement('div');
+  section.className='section';section.dataset.group='patterns';
+  section.innerHTML='<h2>Pattern</h2><div class="symbol-ladder pattern-ladder"></div>';
+  const list=section.querySelector('.symbol-ladder');
+  for(const pattern of PATTERNS){
+    const b=document.createElement('button');
+    b.type='button';b.className='symbol-card ladder-rung pattern-card';
+    b.dataset.patternId=pattern.id;
+    b.innerHTML=patternGlyph(pattern.id)
+      +`<span class="ladder-text"><b>${pattern.name}</b><small>${pattern.sense}</small></span>`;
+    b.title=`${pattern.name} · ${pattern.sense}`;
+    bindPalettePattern(b,pattern.id);
+    list.appendChild(b);
+  }
+  palette.appendChild(section);
+}
+/* END src/45-patterns.js */
 </script>
 <script data-beta-module="src/50-selection.js">
 /* BEGIN src/50-selection.js */
@@ -5031,7 +5263,26 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     }
     return
   }
-  if(form.dimension===1){const line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('class','dimensional-path-body');line.setAttribute('x1',String(-size.w/2));line.setAttribute('x2',String(size.w/2));line.setAttribute('y1','0');line.setAttribute('y2','0');line.setAttribute('stroke-width',String(Math.max(2,Math.min(14,2+form.body.thickness*.18))));g.appendChild(line);appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);return}
+  if(form.dimension===1){
+    // A 1D form is drawn thin, so its own stroke is not something a person can hit.
+    // It gets the same treatment a Point gets: an invisible hit band over the body,
+    // wide enough to grab, so selecting and dragging a Path is the same act as
+    // selecting and dragging anything else on the ladder.
+    const half=size.w/2,stroke=Math.max(2,Math.min(14,2+form.body.thickness*.18));
+    const hit=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    hit.setAttribute('class','dimensional-path-hit');
+    hit.setAttribute('x',String(-half));hit.setAttribute('y',String(-PATH_HIT_HALF_HEIGHT));
+    hit.setAttribute('width',String(size.w));hit.setAttribute('height',String(PATH_HIT_HALF_HEIGHT*2));
+    g.appendChild(hit);
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('class','dimensional-path-body');
+    line.setAttribute('x1',String(-half));line.setAttribute('x2',String(half));
+    line.setAttribute('y1','0');line.setAttribute('y2','0');
+    line.setAttribute('stroke-width',String(stroke));
+    g.appendChild(line);
+    appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);
+    return;
+  }
   if(backdrop!=='none'){
     const depth=Math.min(12,Math.max(0,form.body.thickness*.18));
     if(depth>0){const back=document.createElementNS('http://www.w3.org/2000/svg','rect');back.setAttribute('class','component-body-depth');back.setAttribute('x',String(-size.w/2+depth));back.setAttribute('y',String(-size.h/2+depth));back.setAttribute('width',String(size.w));back.setAttribute('height',String(size.h));back.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(back)}

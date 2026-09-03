@@ -21,9 +21,11 @@
   const LEGACY_SYMBOL_IDS={port:'point'};
   const TEMPLATE_PRESETS={
     point:{form:{dimension:0,body:{thickness:24}},presentation:{graphic:{kind:'none'},labelMode:'none',backdrop:'none'},signalMode:'relay'},
-    // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
-    // component record is the static 1D role (a rail that hosts Points).
-    path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
+    // PATH is the 1D form. It used to drop a carrier - a Wire with two free ends -
+    // which meant the ladder's 1D rung produced a different record kind from every
+    // other rung and could not be selected, moved or resized the way they can. A loose
+    // carrier is an arrangement, not a form, so it lives in the Pattern list instead.
+    path:{form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
     plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:320,h:220}}},
     // A Pod is 3D. Until volume semantics are earned it is a Plane wearing a shell:
     // the frame is what makes it read as thick, and it is a real default rather than

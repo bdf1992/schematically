@@ -500,7 +500,7 @@ function addCarrier(x,y,mods=null,options={}){
 function addNode(symbolId,x=null,y=null,mods=null,options={}){
   const centerX=camera.x+camera.w/2,centerY=camera.y+camera.h/2;
   const px=x==null?centerX+(Math.random()-.5)*90:x,py=y==null?centerY+(Math.random()-.5)*70:y;
-  if(SovSchematicData.templatePreset(symbolId)?.carrier)return addCarrier(px,py,x!=null&&y!=null?mods:null,options);
+  if(SovSchematicData.templatePreset(symbolId)?.carrier)return addCarrier(px,py,x!=null&&y!=null?mods:null,options); // no preset sets this today; a loose carrier is the CARRIER Pattern
   const n=SovSchematicData.makeComponent(diagram,{symbolId,x:px,y:py,canvasId:GLOBAL_CANVAS_ID});
   ensureEntityCanvas(n,'component');
   if(x!=null&&y!=null){
