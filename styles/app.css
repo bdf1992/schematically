@@ -96,7 +96,12 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .node .custom-graphic{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .custom-graphic [fill="currentColor"]{fill:currentColor}
 .node .custom-graphic [stroke="currentColor"]{stroke:currentColor}
-.node .container-guide{fill:none;stroke:var(--component-boundary-color,#777);stroke-width:1;stroke-dasharray:4 5;opacity:.22;pointer-events:none}
+/* The container guide marks where a child would settle. That is a drop affordance, not a
+   property of the surface: an open Plane is a Plane that can host, not a dashed Plane. It
+   answers a live question only while something is being dragged, so it is drawn only then. */
+.node .container-guide{fill:none;stroke:var(--component-boundary-color,#777);stroke-width:1;stroke-dasharray:4 5;opacity:0;transition:opacity .12s ease;pointer-events:none}
+.dragging-node .node .container-guide{opacity:.22}
+.node.scope-drop-target .container-guide{opacity:.4}
 .node.is-container>.body{stroke-width:1.8}
 .node .internal-text{font-size:9px;font-weight:600;opacity:.78}
 .node .outside-label{font-size:9px;opacity:.8}
