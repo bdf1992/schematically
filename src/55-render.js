@@ -143,7 +143,16 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     }
     return
   }
-  if(form.dimension===1){const line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('class','dimensional-path-body');line.setAttribute('x1',String(-size.w/2));line.setAttribute('x2',String(size.w/2));line.setAttribute('y1','0');line.setAttribute('y2','0');line.setAttribute('stroke-width',String(Math.max(2,Math.min(14,2+form.body.thickness*.18))));g.appendChild(line);appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);return}
+  if(form.dimension===1){
+    // The body is drawn between the two boundary points themselves. A host-imposed pose keeps
+    // them on the local x axis because the group is already rotated into the host's frame.
+    const g1=componentPoseIsHostImposed(n)?null:componentPathGeometry(n);
+    const A=g1?g1.start:{x:-size.w/2,y:0},B=g1?g1.end:{x:size.w/2,y:0};
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('class','dimensional-path-body');
+    line.setAttribute('x1',String(A.x));line.setAttribute('y1',String(A.y));line.setAttribute('x2',String(B.x));line.setAttribute('y2',String(B.y));
+    line.setAttribute('stroke-width',String(Math.max(2,Math.min(14,2+form.body.thickness*.18))));g.appendChild(line);
+    appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);return;
+  }
   if(backdrop!=='none'){
     const depth=Math.min(12,Math.max(0,form.body.thickness*.18));
     if(depth>0){const back=document.createElementNS('http://www.w3.org/2000/svg','rect');back.setAttribute('class','component-body-depth');back.setAttribute('x',String(-size.w/2+depth));back.setAttribute('y',String(-size.h/2+depth));back.setAttribute('width',String(size.w));back.setAttribute('height',String(size.h));back.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(back)}
@@ -184,6 +193,14 @@ function render(){
       if(selfPoint){vis=g.querySelector('.dimensional-point-body');if(vis){vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}}
       else{vis=document.createElementNS('http://www.w3.org/2000/svg','circle');vis.setAttribute('class','port attachment-point');vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.setAttribute('cx',localX);vis.setAttribute('cy',localY);vis.setAttribute('r','5');vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}
       g.appendChild(hit);if(!selfPoint)g.appendChild(vis);
+      // A 1D Form's ends are the same deal one dimension up: the geometry IS these two points,
+      // so the inner grip moves the end and reshapes the Path, and the outer ring wires it.
+      // Only while the Path owns its own direction; on a host the host sets the axis.
+      if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===1&&!componentPoseIsHostImposed(n)&&(pointId==='start'||pointId==='end')){
+        const endGrip=document.createElementNS('http://www.w3.org/2000/svg','circle');
+        endGrip.setAttribute('class','path-end-grip');endGrip.dataset.point=pointId;
+        endGrip.setAttribute('cx',localX);endGrip.setAttribute('cy',localY);endGrip.setAttribute('r','8');g.appendChild(endGrip);
+      }
       if(selfPoint){
         // A 0D form is both a movable object and an attachment. The inner grip moves it
         // (drag) or selects it (click); the outer ring is the wiring/attachment target.

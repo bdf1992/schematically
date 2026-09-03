@@ -126,9 +126,47 @@
     }));
   }
 
+  // ---- 1D geometry -------------------------------------------------------------------
+  // A 1D Form's geometry IS its two 0D boundary points. Length and direction are read off
+  // them, never stored beside them, so moving a point cannot disagree with the Form and
+  // nothing can "reset" a direction that was never held anywhere else.
+  //
+  // Points are local offsets from the entity's centre and are kept antipodal, so the centre
+  // the rest of the editor translates by stays the midpoint of the path.
+  const DEFAULT_PATH_LENGTH=112;
+  function finite(value,fallback=0){const n=Number(value);return Number.isFinite(n)?n:fallback}
+  function pathPoints(length=DEFAULT_PATH_LENGTH,angle=0){
+    const half=Math.max(1,finite(length,DEFAULT_PATH_LENGTH))/2,r=finite(angle)*Math.PI/180;
+    const dx=Math.cos(r)*half,dy=Math.sin(r)*half;
+    return [{x:-dx,y:-dy},{x:dx,y:dy}];
+  }
+  // Read a 1D Form's length and direction back off its points. `angle` is the true heading in
+  // [-180,180]; `axis` folds it to [-90,90] for anything that wants the line's tilt without
+  // its sense, such as keeping a label upright.
+  function pathGeometry(points){
+    const list=Array.isArray(points)?points:[];
+    const a=list[0]||{x:-DEFAULT_PATH_LENGTH/2,y:0},b=list[1]||{x:DEFAULT_PATH_LENGTH/2,y:0};
+    const ax=finite(a.x),ay=finite(a.y),bx=finite(b.x),by=finite(b.y);
+    const dx=bx-ax,dy=by-ay,length=Math.hypot(dx,dy);
+    let angle=length>1e-6?Math.atan2(dy,dx)*180/Math.PI:0,axis=angle;
+    while(axis>90)axis-=180;while(axis<-90)axis+=180;
+    return {
+      start:{x:ax,y:ay},end:{x:bx,y:by},
+      length:Math.max(1,length),angle,axis,
+      midpoint:{x:(ax+bx)/2,y:(ay+by)/2}
+    };
+  }
+  // Force the pair antipodal about the origin without changing what it draws: the residual
+  // midpoint comes back as a world-space nudge the caller folds into the entity's centre.
+  function centrePathPoints(points){
+    const g=pathGeometry(points),mid=g.midpoint;
+    return {points:[{x:g.start.x-mid.x,y:g.start.y-mid.y},{x:g.end.x-mid.x,y:g.end.y-mid.y}],offset:mid};
+  }
+
   return {
-    DIMENSIONS,BODY_KINDS,MODES,
+    DIMENSIONS,BODY_KINDS,MODES,DEFAULT_PATH_LENGTH,
     isDimension,dimension,bodyKind,dimensionOfBodyKind,isMode,
-    boundaryDimension,boundary,boundaryChain,elementAt,terminalPoints
+    boundaryDimension,boundary,boundaryChain,elementAt,terminalPoints,
+    pathPoints,pathGeometry,centrePathPoints
   };
 });

@@ -166,6 +166,13 @@ function bindNode(g,n){
       else if(!selectedComponentIds.has(n.id))selectNode(n.id,{focus:false});
       beginActiveNodeDrag(e,g,n);return;
     }
+    const pathEnd=e.target.closest('.path-end-grip');
+    if(pathEnd){
+      // 1D grip: move this boundary point. The Path's direction and length are read off its
+      // two points, so reshaping is the only thing that has to happen here.
+      if(!selectedComponentIds.has(n.id))selectNode(n.id,{focus:false});
+      beginPathEndDrag(e,n,pathEnd.dataset.point);return;
+    }
     const port=e.target.closest('.port-hit');if(port){beginWireDrag(e,n,port.dataset.point||port.dataset.side,g);return}
     const transform=e.target.closest('.transform-handle,.transform-handle-halo');if(transform){beginComponentTransform(e,n,transform.dataset.transform);return}
     if(e.shiftKey){selectNode(n.id,{focus:false,additive:true,toggle:true});if(!selectedComponentIds.has(n.id))return}
@@ -175,8 +182,43 @@ function bindNode(g,n){
   g.addEventListener('click',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo')){e.preventDefault();e.stopPropagation();return}e.stopPropagation();if(!e.shiftKey&&selectedComponentIds.size<=1)selectNode(n.id)});
   g.addEventListener('dblclick',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo'))return;e.preventDefault();e.stopPropagation();focusComponent(n)});
 }
-window.addEventListener('pointermove',updateActiveNodeDrag,true);
-window.addEventListener('pointerup',e=>finishActiveNodeDrag(e),true);
+// Reshaping a 1D Form by one of its boundary points. Nothing here assigns a direction: the
+// points are the geometry, and length and heading are read back off them.
+let pathEndDrag=null;
+function beginPathEndDrag(e,n,pointId){
+  if(!n||(pointId!=='start'&&pointId!=='end'))return;
+  if(isEntityLocked(n)||isEntityPinned(n)){statusEl.textContent=isEntityLocked(n)?'Locked · reshape refused':'Pinned · reshape refused';return}
+  e.preventDefault();e.stopPropagation();
+  cancelWireDrag();if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'path end handoff'});
+  pathEndDrag={pointerId:e.pointerId,id:n.id,pointId,moved:false,startClient:{x:e.clientX,y:e.clientY}};
+  setSelectionBarSuppressed(true);
+  statusEl.textContent='Path end armed · drag to reshape';
+}
+function updatePathEndDrag(e){
+  const d=pathEndDrag;if(!d||e.pointerId!==d.pointerId)return;
+  const n=nodes.find(x=>x.id===d.id);if(!n){pathEndDrag=null;return}
+  if(!d.moved){
+    if(Math.hypot(e.clientX-d.startClient.x,e.clientY-d.startClient.y)<4)return;
+    d.moved=true;setHistoryHint('Reshape Path');
+  }
+  e.preventDefault();
+  const P=svgPoint(e.clientX,e.clientY);
+  setComponentPathPoint(n,d.pointId,P.x,P.y);
+  const g=componentPathGeometry(n);
+  for(const child of descendantsOf(n.id))syncComponentAttachedPose(child);
+  routeCache.clear();arrowPoseCache.clear();render();
+  statusEl.textContent=g?`Path ${Math.round(g.length)} · ${Math.round(g.angle)}°`:'Path reshaped';
+}
+function finishPathEndDrag(e){
+  const d=pathEndDrag;if(!d)return;
+  pathEndDrag=null;restoreSelectionBarAfterGesture();
+  const n=nodes.find(x=>x.id===d.id);
+  if(!d.moved){if(n)selectNode(n.id);return}
+  if(n)updateContainmentFor(n);
+  routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();
+}
+window.addEventListener('pointermove',e=>{updatePathEndDrag(e);updateActiveNodeDrag(e)},true);
+window.addEventListener('pointerup',e=>{finishPathEndDrag(e);finishActiveNodeDrag(e)},true);
 window.addEventListener('pointercancel',e=>finishActiveNodeDrag(e,{force:true,reason:'pointer cancelled'}),true);
 workspace.addEventListener('lostpointercapture',()=>{if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'capture recovered'})});
 window.addEventListener('blur',()=>{if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'focus recovered'})});

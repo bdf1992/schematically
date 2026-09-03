@@ -3,6 +3,7 @@
 
 const byId=id=>SYMBOLS.find(s=>s.id===id);
 const Attachment=SovSchematicAttachment;
+const Form=SovSchematicForm;
 function componentAttachmentPointIds(n){return Attachment.pointIds(n)}
 function componentAttachmentPoints(n){return Attachment.descriptors(n,componentConfig(n).ports)}
 function componentAttachmentPoint(n,id){const spec=Attachment.resolveSpec(n,id);if(!spec)return null;return {...spec,config:componentConfig(n).ports[spec.compatId]}}
@@ -265,6 +266,20 @@ function componentForm(n){
   if(!['point','path','surface'].includes(f.body.kind))f.body.kind=defaultKind;
   if(typeof f.body.material!=='string'||!f.body.material)f.body.material='generic';
   f.body.thickness=Math.max(0,Math.min(128,Number(f.body.thickness)||0));
+  // A 1D Form carries its own geometry: the two 0D boundary points that bound it. Length and
+  // direction are read off those points and stored nowhere else, so moving a point cannot
+  // disagree with the Form and no cache can lose the direction between one render and the next.
+  if(f.dimension===1){
+    if(!f.geometry||typeof f.geometry!=='object')f.geometry={};
+    if(!Array.isArray(f.geometry.points)||f.geometry.points.length!==2){
+      const seed=Number(n.config?.presentation?.size?.w);
+      f.geometry.points=Form.pathPoints(Number.isFinite(seed)&&seed>0?seed:Form.DEFAULT_PATH_LENGTH,0);
+    }
+    // Keep the pair antipodal about the centre; any residual is a real move of the entity.
+    const centred=Form.centrePathPoints(f.geometry.points);
+    f.geometry.points=centred.points;
+    if(centred.offset.x||centred.offset.y){n.x=(Number(n.x)||0)+centred.offset.x;n.y=(Number(n.y)||0)+centred.offset.y}
+  }else if(f.geometry)delete f.geometry; // only a 1D Form has a path geometry to carry.
   if(!f.frame)f.frame={};
   if(!['none','frame','shell'].includes(f.frame.mode))f.frame.mode='none';
   f.frame.thickness=Math.max(0,Math.min(64,Number(f.frame.thickness)||(f.frame.mode==='none'?0:12)));
@@ -291,6 +306,40 @@ function componentPlacement(n){
   }
   return n.placement;
 }
+// The derived reading of a 1D Form: where its two boundary points sit relative to the centre,
+// how long it is, and which way it points. Every one of these is read off the points; none is
+// stored, so none can drift from them.
+function componentPathGeometry(n){
+  const f=componentForm(n);
+  if(f.dimension!==1)return null;
+  return Form.pathGeometry(f.geometry.points);
+}
+// Move one boundary point of a 1D Form in world space. The Form keeps its points antipodal
+// about its centre, so moving one end also moves the centre — which is what a line between two
+// points does. Direction follows the points; it is never assigned.
+function setComponentPathPoint(n,pointId,x,y){
+  const f=componentForm(n);
+  if(f.dimension!==1)return null;
+  const id=Attachment.pointId(n,pointId);
+  if(id!=='start'&&id!=='end')return null;
+  const g=Form.pathGeometry(f.geometry.points);
+  const other=id==='start'?g.end:g.start;
+  const fixed={x:(Number(n.x)||0)+other.x,y:(Number(n.y)||0)+other.y};
+  const moved={x:Number(x)||0,y:Number(y)||0};
+  const start=id==='start'?moved:fixed,end=id==='start'?fixed:moved;
+  n.x=(start.x+end.x)/2;n.y=(start.y+end.y)/2;
+  f.geometry.points=[{x:start.x-n.x,y:start.y-n.y},{x:end.x-n.x,y:end.y-n.y}];
+  return componentPathGeometry(n);
+}
+// Set a 1D Form's length and heading without touching its centre. Used when a host imposes an
+// axis on a Path settled onto it.
+function setComponentPathPose(n,{length=null,angle=null}={}){
+  const f=componentForm(n);
+  if(f.dimension!==1)return null;
+  const g=Form.pathGeometry(f.geometry.points);
+  f.geometry.points=Form.pathPoints(length==null?g.length:length,angle==null?g.angle:angle);
+  return componentPathGeometry(n);
+}
 function componentIsPoint(n){return componentForm(n).dimension===0}
 function componentIsPath(n){return componentForm(n).dimension===1}
 function componentIsSurface(n){return componentForm(n).dimension===2}
@@ -304,6 +353,12 @@ function wiresOnBuiltinPoints(n){
 }
 function componentHostedOnComponentPath(n){return componentPlacement(n).kind==='path'}
 function componentHostedOnComponentEdge(n){return componentPlacement(n).kind==='edge'}
+// True when the thing a Component is settled on dictates its axis. Such a Component is drawn
+// rotated into its host's frame, so its own points lie on the local x axis and the group's
+// rotation carries the direction. A Component nobody hosts owns its own direction.
+function componentPoseIsHostImposed(n){
+  return componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);
+}
 function componentBackdropMode(n){
   const p=componentConfig(n).presentation;
   if(!['auto','none','body','frame'].includes(p.backdrop))p.backdrop='auto';

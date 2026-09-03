@@ -83,6 +83,15 @@ MUTANTS=[
       'test':'tests/form_spine_qa.py'
     },
     {
+      # A 1D Form's direction lives in its two boundary points and must survive normalization.
+      # Re-seeding them on every pass is exactly the defect that made moving a Path reset it.
+      'name':'path-geometry-reset-on-normalize',
+      'file':'src/10-model.js',
+      'old':"    f.geometry.points=centred.points;",
+      'new':"    f.geometry.points=Form.pathPoints(Form.DEFAULT_PATH_LENGTH,0);",
+      'test':'tests/path_direction_qa.py'
+    },
+    {
       'name':'point-cannot-settle-into-interior',
       'file':'src/30-canvas.js',
       'old':'return best||interiorHost();',

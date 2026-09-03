@@ -426,6 +426,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 /* 0D: the inner grip moves/selects the Point; the outer ring (port-hit) wires from it. */
 .point-grip{fill:transparent;stroke:none;cursor:grab;pointer-events:all;touch-action:none}
 .node.dragging .point-grip{cursor:grabbing}
+/* A 1D Form's ends are its geometry, so the inner disc reshapes the Path and the ring around
+   it stays the wiring target - the same split a 0D Point already uses. */
+.path-end-grip{fill:transparent;stroke:none;cursor:grab;pointer-events:all;touch-action:none}
+.path-end-grip:active{cursor:grabbing}
 .node[data-dimension="0"]:hover .port-hit,.node[data-dimension="0"].selected .port-hit{stroke:var(--component-boundary-color,var(--canvas-ink));stroke-width:1;stroke-dasharray:2 3;opacity:.55}
 .node[data-dimension="0"] .port-hit:hover{opacity:1;stroke-dasharray:none}
 .node[data-dimension="0"].nested-child .dimensional-point-body{stroke-width:2.4}
@@ -1157,10 +1161,48 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     }));
   }
 
+  // ---- 1D geometry -------------------------------------------------------------------
+  // A 1D Form's geometry IS its two 0D boundary points. Length and direction are read off
+  // them, never stored beside them, so moving a point cannot disagree with the Form and
+  // nothing can "reset" a direction that was never held anywhere else.
+  //
+  // Points are local offsets from the entity's centre and are kept antipodal, so the centre
+  // the rest of the editor translates by stays the midpoint of the path.
+  const DEFAULT_PATH_LENGTH=112;
+  function finite(value,fallback=0){const n=Number(value);return Number.isFinite(n)?n:fallback}
+  function pathPoints(length=DEFAULT_PATH_LENGTH,angle=0){
+    const half=Math.max(1,finite(length,DEFAULT_PATH_LENGTH))/2,r=finite(angle)*Math.PI/180;
+    const dx=Math.cos(r)*half,dy=Math.sin(r)*half;
+    return [{x:-dx,y:-dy},{x:dx,y:dy}];
+  }
+  // Read a 1D Form's length and direction back off its points. `angle` is the true heading in
+  // [-180,180]; `axis` folds it to [-90,90] for anything that wants the line's tilt without
+  // its sense, such as keeping a label upright.
+  function pathGeometry(points){
+    const list=Array.isArray(points)?points:[];
+    const a=list[0]||{x:-DEFAULT_PATH_LENGTH/2,y:0},b=list[1]||{x:DEFAULT_PATH_LENGTH/2,y:0};
+    const ax=finite(a.x),ay=finite(a.y),bx=finite(b.x),by=finite(b.y);
+    const dx=bx-ax,dy=by-ay,length=Math.hypot(dx,dy);
+    let angle=length>1e-6?Math.atan2(dy,dx)*180/Math.PI:0,axis=angle;
+    while(axis>90)axis-=180;while(axis<-90)axis+=180;
+    return {
+      start:{x:ax,y:ay},end:{x:bx,y:by},
+      length:Math.max(1,length),angle,axis,
+      midpoint:{x:(ax+bx)/2,y:(ay+by)/2}
+    };
+  }
+  // Force the pair antipodal about the origin without changing what it draws: the residual
+  // midpoint comes back as a world-space nudge the caller folds into the entity's centre.
+  function centrePathPoints(points){
+    const g=pathGeometry(points),mid=g.midpoint;
+    return {points:[{x:g.start.x-mid.x,y:g.start.y-mid.y},{x:g.end.x-mid.x,y:g.end.y-mid.y}],offset:mid};
+  }
+
   return {
-    DIMENSIONS,BODY_KINDS,MODES,
+    DIMENSIONS,BODY_KINDS,MODES,DEFAULT_PATH_LENGTH,
     isDimension,dimension,bodyKind,dimensionOfBodyKind,isMode,
-    boundaryDimension,boundary,boundaryChain,elementAt,terminalPoints
+    boundaryDimension,boundary,boundaryChain,elementAt,terminalPoints,
+    pathPoints,pathGeometry,centrePathPoints
   };
 });
 /* END src/04-form-core.js */
@@ -2224,6 +2266,7 @@ const SNAP_RADIUS=34;
 
 const byId=id=>SYMBOLS.find(s=>s.id===id);
 const Attachment=SovSchematicAttachment;
+const Form=SovSchematicForm;
 function componentAttachmentPointIds(n){return Attachment.pointIds(n)}
 function componentAttachmentPoints(n){return Attachment.descriptors(n,componentConfig(n).ports)}
 function componentAttachmentPoint(n,id){const spec=Attachment.resolveSpec(n,id);if(!spec)return null;return {...spec,config:componentConfig(n).ports[spec.compatId]}}
@@ -2486,6 +2529,20 @@ function componentForm(n){
   if(!['point','path','surface'].includes(f.body.kind))f.body.kind=defaultKind;
   if(typeof f.body.material!=='string'||!f.body.material)f.body.material='generic';
   f.body.thickness=Math.max(0,Math.min(128,Number(f.body.thickness)||0));
+  // A 1D Form carries its own geometry: the two 0D boundary points that bound it. Length and
+  // direction are read off those points and stored nowhere else, so moving a point cannot
+  // disagree with the Form and no cache can lose the direction between one render and the next.
+  if(f.dimension===1){
+    if(!f.geometry||typeof f.geometry!=='object')f.geometry={};
+    if(!Array.isArray(f.geometry.points)||f.geometry.points.length!==2){
+      const seed=Number(n.config?.presentation?.size?.w);
+      f.geometry.points=Form.pathPoints(Number.isFinite(seed)&&seed>0?seed:Form.DEFAULT_PATH_LENGTH,0);
+    }
+    // Keep the pair antipodal about the centre; any residual is a real move of the entity.
+    const centred=Form.centrePathPoints(f.geometry.points);
+    f.geometry.points=centred.points;
+    if(centred.offset.x||centred.offset.y){n.x=(Number(n.x)||0)+centred.offset.x;n.y=(Number(n.y)||0)+centred.offset.y}
+  }else if(f.geometry)delete f.geometry; // only a 1D Form has a path geometry to carry.
   if(!f.frame)f.frame={};
   if(!['none','frame','shell'].includes(f.frame.mode))f.frame.mode='none';
   f.frame.thickness=Math.max(0,Math.min(64,Number(f.frame.thickness)||(f.frame.mode==='none'?0:12)));
@@ -2512,6 +2569,40 @@ function componentPlacement(n){
   }
   return n.placement;
 }
+// The derived reading of a 1D Form: where its two boundary points sit relative to the centre,
+// how long it is, and which way it points. Every one of these is read off the points; none is
+// stored, so none can drift from them.
+function componentPathGeometry(n){
+  const f=componentForm(n);
+  if(f.dimension!==1)return null;
+  return Form.pathGeometry(f.geometry.points);
+}
+// Move one boundary point of a 1D Form in world space. The Form keeps its points antipodal
+// about its centre, so moving one end also moves the centre — which is what a line between two
+// points does. Direction follows the points; it is never assigned.
+function setComponentPathPoint(n,pointId,x,y){
+  const f=componentForm(n);
+  if(f.dimension!==1)return null;
+  const id=Attachment.pointId(n,pointId);
+  if(id!=='start'&&id!=='end')return null;
+  const g=Form.pathGeometry(f.geometry.points);
+  const other=id==='start'?g.end:g.start;
+  const fixed={x:(Number(n.x)||0)+other.x,y:(Number(n.y)||0)+other.y};
+  const moved={x:Number(x)||0,y:Number(y)||0};
+  const start=id==='start'?moved:fixed,end=id==='start'?fixed:moved;
+  n.x=(start.x+end.x)/2;n.y=(start.y+end.y)/2;
+  f.geometry.points=[{x:start.x-n.x,y:start.y-n.y},{x:end.x-n.x,y:end.y-n.y}];
+  return componentPathGeometry(n);
+}
+// Set a 1D Form's length and heading without touching its centre. Used when a host imposes an
+// axis on a Path settled onto it.
+function setComponentPathPose(n,{length=null,angle=null}={}){
+  const f=componentForm(n);
+  if(f.dimension!==1)return null;
+  const g=Form.pathGeometry(f.geometry.points);
+  f.geometry.points=Form.pathPoints(length==null?g.length:length,angle==null?g.angle:angle);
+  return componentPathGeometry(n);
+}
 function componentIsPoint(n){return componentForm(n).dimension===0}
 function componentIsPath(n){return componentForm(n).dimension===1}
 function componentIsSurface(n){return componentForm(n).dimension===2}
@@ -2525,6 +2616,12 @@ function wiresOnBuiltinPoints(n){
 }
 function componentHostedOnComponentPath(n){return componentPlacement(n).kind==='path'}
 function componentHostedOnComponentEdge(n){return componentPlacement(n).kind==='edge'}
+// True when the thing a Component is settled on dictates its axis. Such a Component is drawn
+// rotated into its host's frame, so its own points lie on the local x axis and the group's
+// rotation carries the direction. A Component nobody hosts owns its own direction.
+function componentPoseIsHostImposed(n){
+  return componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);
+}
 function componentBackdropMode(n){
   const p=componentConfig(n).presentation;
   if(!['auto','none','body','frame'].includes(p.backdrop))p.backdrop='auto';
@@ -3954,7 +4051,11 @@ function finishKeyboardMove(mods){
 const POINT_EXTENT=24; // a 0D form occupies a fixed small footprint; presentation.size does not apply to it
 function componentSize(n){
   const p=componentConfig(n).presentation;
-  if(componentForm(n).dimension===0)return {w:POINT_EXTENT,h:POINT_EXTENT};
+  const form=componentForm(n);
+  if(form.dimension===0)return {w:POINT_EXTENT,h:POINT_EXTENT};
+  // A 1D Form's extent is the distance between its two boundary points. `presentation.size.w`
+  // is a compatibility projection of that, not a second place the length is kept.
+  if(form.dimension===1){const g=componentPathGeometry(n);if(g)return {w:g.length,h:p.size.h}}
   return {w:p.size.w,h:p.size.h};
 }
 function componentBounds(n,pad=0){
@@ -4044,15 +4145,31 @@ function componentInlineTerminalHalfSpan(node){
   const box=componentInlineGraphicBox(node);
   return box.w*(.5-8/96);
 }
-function componentHostAngle(node){return Number(wireHostPoseCache.get(node?.id)?.angle)||0}
+// The angle a Component is drawn at. A 1D Form answers from its own two boundary points, which
+// are entity state and survive a move, a save and a reload. Only a Component whose frame is
+// imposed by a host it is settled on falls back to the runtime pose.
+function componentHostAngle(node){
+  if(node&&componentForm(node).dimension===1&&!componentPoseIsHostImposed(node)){
+    return componentPathGeometry(node)?.axis||0;
+  }
+  return Number(wireHostPoseCache.get(node?.id)?.angle)||0;
+}
 function rotateVectorByDegrees(x,y,angle){const r=angle*Math.PI/180,c=Math.cos(r),s=Math.sin(r);return{x:x*c-y*s,y:x*s+y*c}}
 function componentPortLocalPosition(n,pointId){
   const size=componentSize(n),spec=Attachment.resolveSpec(n,pointId);if(!spec)return{x:0,y:0};
   const cfg=componentConfig(n),pcfg=cfg.ports[spec.compatId],effective=Attachment.effectiveDimension(n);
   if(effective===0)return{x:0,y:0};
   if(effective===1){
-    const half=componentHostedOnWire(n)?Math.max(18,componentInlineTerminalHalfSpan(n)):size.w/2;
-    return spec.id==='start'?{x:-half,y:0}:{x:half,y:0};
+    if(componentPoseIsHostImposed(n)){
+      // Settled on a host, the Component takes the host's axis, so its ends sit on the local x
+      // axis and the group's rotation carries the direction.
+      const half=componentHostedOnWire(n)?Math.max(18,componentInlineTerminalHalfSpan(n)):size.w/2;
+      return spec.id==='start'?{x:-half,y:0}:{x:half,y:0};
+    }
+    // Free-standing, the two boundary points ARE the geometry; direction is already in them.
+    const g=componentPathGeometry(n);
+    if(g)return spec.id==='start'?{x:g.start.x,y:g.start.y}:{x:g.end.x,y:g.end.y};
+    return spec.id==='start'?{x:-size.w/2,y:0}:{x:size.w/2,y:0};
   }
   const face=pcfg?.face||'external',faceOffset=face==='internal'?-4:face==='both'?0:4,t=Math.max(0,Math.min(1,Number.isFinite(Number(spec.t))?Number(spec.t):.5));
   const alongX=-size.w/2+size.w*t,alongY=-size.h/2+size.h*t;
@@ -4084,7 +4201,7 @@ function nearestPointOnSvgPath(path,x,y){
   return {...best,t:Math.max(.02,Math.min(.98,best.length/L)),pathLength:L,angle:pathTangentAngleAtLength(path,best.length)};
 }
 function nearestPointOnComponentPath(host,x,y){
-  if(!host||!componentIsPath(host))return null;const half=Math.max(24,componentSize(host).w/2),angle=componentHostAngle(host),r=-angle*Math.PI/180,dx=x-host.x,dy=y-host.y;
+  if(!host||!componentIsPath(host))return null;const half=Math.max(24,componentSize(host).w/2),angle=componentPathGeometry(host)?.angle??componentHostAngle(host),r=-angle*Math.PI/180,dx=x-host.x,dy=y-host.y;
   const lx=dx*Math.cos(r)-dy*Math.sin(r),ly=dx*Math.sin(r)+dy*Math.cos(r),clamped=Math.max(-half,Math.min(half,lx)),t=(clamped+half)/(half*2),world=rotateVectorByDegrees(clamped,0,angle);
   return {x:host.x+world.x,y:host.y+world.y,t,distance:Math.hypot(lx-clamped,ly),angle};
 }
@@ -4096,7 +4213,7 @@ function nearestPointOnComponentEdge(host,x,y){
 }
 function syncComponentAttachedPose(node){
   const placement=componentPlacement(node);if(!['path','edge'].includes(placement.kind))return;const host=nodes.find(n=>n.id===placement.hostId)||parentComponent(node);if(!host)return;let q=null;
-  if(placement.kind==='path'){const half=Math.max(24,componentSize(host).w/2),local=-half+half*2*placement.t,world=rotateVectorByDegrees(local,0,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)}}
+  if(placement.kind==='path'){const hostAngle=componentPathGeometry(host)?.angle??componentHostAngle(host),half=Math.max(24,componentSize(host).w/2),local=-half+half*2*placement.t,world=rotateVectorByDegrees(local,0,hostAngle);q={x:host.x+world.x,y:host.y+world.y,angle:hostAngle}}
   else{const {w,h}=componentSize(host),side=placement.side||'top',u=Math.max(0,Math.min(1,placement.t));let lx=0,ly=0,a=0;if(side==='top'||side==='bottom'){lx=-w/2+w*u;ly=side==='top'?-h/2:h/2}else{lx=side==='left'?-w/2:w/2;ly=-h/2+h*u;a=90}const world=rotateVectorByDegrees(lx,ly,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)+a}}
   node.x=q.x;node.y=q.y;wireHostPoseCache.set(node.id,{...q,hostId:host.id,t:placement.t});
 }
@@ -4144,7 +4261,9 @@ function moveDescendantsWithState(state,dx,dy){
 function portLayout(n){
   const result={},angle=componentHostAngle(n);
   for(const id of componentPortIds(n)){
-    const local=componentPortLocalPosition(n,id),rot=componentHostedOnWire(n)?rotateVectorByDegrees(local.x,local.y,angle):local;
+    // A host-imposed pose rotates the whole group, so its local points rotate with it. A
+    // Component that owns its direction already has it in the points.
+    const local=componentPortLocalPosition(n,id),rot=componentPoseIsHostImposed(n)?rotateVectorByDegrees(local.x,local.y,angle):local;
     result[id]={x:n.x+rot.x,y:n.y+rot.y};
   }
   return result;
@@ -4954,7 +5073,16 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     }
     return
   }
-  if(form.dimension===1){const line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('class','dimensional-path-body');line.setAttribute('x1',String(-size.w/2));line.setAttribute('x2',String(size.w/2));line.setAttribute('y1','0');line.setAttribute('y2','0');line.setAttribute('stroke-width',String(Math.max(2,Math.min(14,2+form.body.thickness*.18))));g.appendChild(line);appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);return}
+  if(form.dimension===1){
+    // The body is drawn between the two boundary points themselves. A host-imposed pose keeps
+    // them on the local x axis because the group is already rotated into the host's frame.
+    const g1=componentPoseIsHostImposed(n)?null:componentPathGeometry(n);
+    const A=g1?g1.start:{x:-size.w/2,y:0},B=g1?g1.end:{x:size.w/2,y:0};
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('class','dimensional-path-body');
+    line.setAttribute('x1',String(A.x));line.setAttribute('y1',String(A.y));line.setAttribute('x2',String(B.x));line.setAttribute('y2',String(B.y));
+    line.setAttribute('stroke-width',String(Math.max(2,Math.min(14,2+form.body.thickness*.18))));g.appendChild(line);
+    appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);return;
+  }
   if(backdrop!=='none'){
     const depth=Math.min(12,Math.max(0,form.body.thickness*.18));
     if(depth>0){const back=document.createElementNS('http://www.w3.org/2000/svg','rect');back.setAttribute('class','component-body-depth');back.setAttribute('x',String(-size.w/2+depth));back.setAttribute('y',String(-size.h/2+depth));back.setAttribute('width',String(size.w));back.setAttribute('height',String(size.h));back.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(back)}
@@ -4995,6 +5123,14 @@ function render(){
       if(selfPoint){vis=g.querySelector('.dimensional-point-body');if(vis){vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}}
       else{vis=document.createElementNS('http://www.w3.org/2000/svg','circle');vis.setAttribute('class','port attachment-point');vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.setAttribute('cx',localX);vis.setAttribute('cy',localY);vis.setAttribute('r','5');vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}
       g.appendChild(hit);if(!selfPoint)g.appendChild(vis);
+      // A 1D Form's ends are the same deal one dimension up: the geometry IS these two points,
+      // so the inner grip moves the end and reshapes the Path, and the outer ring wires it.
+      // Only while the Path owns its own direction; on a host the host sets the axis.
+      if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===1&&!componentPoseIsHostImposed(n)&&(pointId==='start'||pointId==='end')){
+        const endGrip=document.createElementNS('http://www.w3.org/2000/svg','circle');
+        endGrip.setAttribute('class','path-end-grip');endGrip.dataset.point=pointId;
+        endGrip.setAttribute('cx',localX);endGrip.setAttribute('cy',localY);endGrip.setAttribute('r','8');g.appendChild(endGrip);
+      }
       if(selfPoint){
         // A 0D form is both a movable object and an attachment. The inner grip moves it
         // (drag) or selects it (click); the outer ring is the wiring/attachment target.
@@ -5514,6 +5650,13 @@ function bindNode(g,n){
       else if(!selectedComponentIds.has(n.id))selectNode(n.id,{focus:false});
       beginActiveNodeDrag(e,g,n);return;
     }
+    const pathEnd=e.target.closest('.path-end-grip');
+    if(pathEnd){
+      // 1D grip: move this boundary point. The Path's direction and length are read off its
+      // two points, so reshaping is the only thing that has to happen here.
+      if(!selectedComponentIds.has(n.id))selectNode(n.id,{focus:false});
+      beginPathEndDrag(e,n,pathEnd.dataset.point);return;
+    }
     const port=e.target.closest('.port-hit');if(port){beginWireDrag(e,n,port.dataset.point||port.dataset.side,g);return}
     const transform=e.target.closest('.transform-handle,.transform-handle-halo');if(transform){beginComponentTransform(e,n,transform.dataset.transform);return}
     if(e.shiftKey){selectNode(n.id,{focus:false,additive:true,toggle:true});if(!selectedComponentIds.has(n.id))return}
@@ -5523,8 +5666,43 @@ function bindNode(g,n){
   g.addEventListener('click',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo')){e.preventDefault();e.stopPropagation();return}e.stopPropagation();if(!e.shiftKey&&selectedComponentIds.size<=1)selectNode(n.id)});
   g.addEventListener('dblclick',e=>{if(!e.target.closest('.point-grip')&&e.target.closest('.port-hit,.transform-handle,.transform-handle-halo'))return;e.preventDefault();e.stopPropagation();focusComponent(n)});
 }
-window.addEventListener('pointermove',updateActiveNodeDrag,true);
-window.addEventListener('pointerup',e=>finishActiveNodeDrag(e),true);
+// Reshaping a 1D Form by one of its boundary points. Nothing here assigns a direction: the
+// points are the geometry, and length and heading are read back off them.
+let pathEndDrag=null;
+function beginPathEndDrag(e,n,pointId){
+  if(!n||(pointId!=='start'&&pointId!=='end'))return;
+  if(isEntityLocked(n)||isEntityPinned(n)){statusEl.textContent=isEntityLocked(n)?'Locked · reshape refused':'Pinned · reshape refused';return}
+  e.preventDefault();e.stopPropagation();
+  cancelWireDrag();if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'path end handoff'});
+  pathEndDrag={pointerId:e.pointerId,id:n.id,pointId,moved:false,startClient:{x:e.clientX,y:e.clientY}};
+  setSelectionBarSuppressed(true);
+  statusEl.textContent='Path end armed · drag to reshape';
+}
+function updatePathEndDrag(e){
+  const d=pathEndDrag;if(!d||e.pointerId!==d.pointerId)return;
+  const n=nodes.find(x=>x.id===d.id);if(!n){pathEndDrag=null;return}
+  if(!d.moved){
+    if(Math.hypot(e.clientX-d.startClient.x,e.clientY-d.startClient.y)<4)return;
+    d.moved=true;setHistoryHint('Reshape Path');
+  }
+  e.preventDefault();
+  const P=svgPoint(e.clientX,e.clientY);
+  setComponentPathPoint(n,d.pointId,P.x,P.y);
+  const g=componentPathGeometry(n);
+  for(const child of descendantsOf(n.id))syncComponentAttachedPose(child);
+  routeCache.clear();arrowPoseCache.clear();render();
+  statusEl.textContent=g?`Path ${Math.round(g.length)} · ${Math.round(g.angle)}°`:'Path reshaped';
+}
+function finishPathEndDrag(e){
+  const d=pathEndDrag;if(!d)return;
+  pathEndDrag=null;restoreSelectionBarAfterGesture();
+  const n=nodes.find(x=>x.id===d.id);
+  if(!d.moved){if(n)selectNode(n.id);return}
+  if(n)updateContainmentFor(n);
+  routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();
+}
+window.addEventListener('pointermove',e=>{updatePathEndDrag(e);updateActiveNodeDrag(e)},true);
+window.addEventListener('pointerup',e=>{finishPathEndDrag(e);finishActiveNodeDrag(e)},true);
 window.addEventListener('pointercancel',e=>finishActiveNodeDrag(e,{force:true,reason:'pointer cancelled'}),true);
 workspace.addEventListener('lostpointercapture',()=>{if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'capture recovered'})});
 window.addEventListener('blur',()=>{if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'focus recovered'})});

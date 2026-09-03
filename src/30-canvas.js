@@ -506,7 +506,11 @@ function finishKeyboardMove(mods){
 const POINT_EXTENT=24; // a 0D form occupies a fixed small footprint; presentation.size does not apply to it
 function componentSize(n){
   const p=componentConfig(n).presentation;
-  if(componentForm(n).dimension===0)return {w:POINT_EXTENT,h:POINT_EXTENT};
+  const form=componentForm(n);
+  if(form.dimension===0)return {w:POINT_EXTENT,h:POINT_EXTENT};
+  // A 1D Form's extent is the distance between its two boundary points. `presentation.size.w`
+  // is a compatibility projection of that, not a second place the length is kept.
+  if(form.dimension===1){const g=componentPathGeometry(n);if(g)return {w:g.length,h:p.size.h}}
   return {w:p.size.w,h:p.size.h};
 }
 function componentBounds(n,pad=0){
@@ -596,15 +600,31 @@ function componentInlineTerminalHalfSpan(node){
   const box=componentInlineGraphicBox(node);
   return box.w*(.5-8/96);
 }
-function componentHostAngle(node){return Number(wireHostPoseCache.get(node?.id)?.angle)||0}
+// The angle a Component is drawn at. A 1D Form answers from its own two boundary points, which
+// are entity state and survive a move, a save and a reload. Only a Component whose frame is
+// imposed by a host it is settled on falls back to the runtime pose.
+function componentHostAngle(node){
+  if(node&&componentForm(node).dimension===1&&!componentPoseIsHostImposed(node)){
+    return componentPathGeometry(node)?.axis||0;
+  }
+  return Number(wireHostPoseCache.get(node?.id)?.angle)||0;
+}
 function rotateVectorByDegrees(x,y,angle){const r=angle*Math.PI/180,c=Math.cos(r),s=Math.sin(r);return{x:x*c-y*s,y:x*s+y*c}}
 function componentPortLocalPosition(n,pointId){
   const size=componentSize(n),spec=Attachment.resolveSpec(n,pointId);if(!spec)return{x:0,y:0};
   const cfg=componentConfig(n),pcfg=cfg.ports[spec.compatId],effective=Attachment.effectiveDimension(n);
   if(effective===0)return{x:0,y:0};
   if(effective===1){
-    const half=componentHostedOnWire(n)?Math.max(18,componentInlineTerminalHalfSpan(n)):size.w/2;
-    return spec.id==='start'?{x:-half,y:0}:{x:half,y:0};
+    if(componentPoseIsHostImposed(n)){
+      // Settled on a host, the Component takes the host's axis, so its ends sit on the local x
+      // axis and the group's rotation carries the direction.
+      const half=componentHostedOnWire(n)?Math.max(18,componentInlineTerminalHalfSpan(n)):size.w/2;
+      return spec.id==='start'?{x:-half,y:0}:{x:half,y:0};
+    }
+    // Free-standing, the two boundary points ARE the geometry; direction is already in them.
+    const g=componentPathGeometry(n);
+    if(g)return spec.id==='start'?{x:g.start.x,y:g.start.y}:{x:g.end.x,y:g.end.y};
+    return spec.id==='start'?{x:-size.w/2,y:0}:{x:size.w/2,y:0};
   }
   const face=pcfg?.face||'external',faceOffset=face==='internal'?-4:face==='both'?0:4,t=Math.max(0,Math.min(1,Number.isFinite(Number(spec.t))?Number(spec.t):.5));
   const alongX=-size.w/2+size.w*t,alongY=-size.h/2+size.h*t;
@@ -636,7 +656,7 @@ function nearestPointOnSvgPath(path,x,y){
   return {...best,t:Math.max(.02,Math.min(.98,best.length/L)),pathLength:L,angle:pathTangentAngleAtLength(path,best.length)};
 }
 function nearestPointOnComponentPath(host,x,y){
-  if(!host||!componentIsPath(host))return null;const half=Math.max(24,componentSize(host).w/2),angle=componentHostAngle(host),r=-angle*Math.PI/180,dx=x-host.x,dy=y-host.y;
+  if(!host||!componentIsPath(host))return null;const half=Math.max(24,componentSize(host).w/2),angle=componentPathGeometry(host)?.angle??componentHostAngle(host),r=-angle*Math.PI/180,dx=x-host.x,dy=y-host.y;
   const lx=dx*Math.cos(r)-dy*Math.sin(r),ly=dx*Math.sin(r)+dy*Math.cos(r),clamped=Math.max(-half,Math.min(half,lx)),t=(clamped+half)/(half*2),world=rotateVectorByDegrees(clamped,0,angle);
   return {x:host.x+world.x,y:host.y+world.y,t,distance:Math.hypot(lx-clamped,ly),angle};
 }
@@ -648,7 +668,7 @@ function nearestPointOnComponentEdge(host,x,y){
 }
 function syncComponentAttachedPose(node){
   const placement=componentPlacement(node);if(!['path','edge'].includes(placement.kind))return;const host=nodes.find(n=>n.id===placement.hostId)||parentComponent(node);if(!host)return;let q=null;
-  if(placement.kind==='path'){const half=Math.max(24,componentSize(host).w/2),local=-half+half*2*placement.t,world=rotateVectorByDegrees(local,0,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)}}
+  if(placement.kind==='path'){const hostAngle=componentPathGeometry(host)?.angle??componentHostAngle(host),half=Math.max(24,componentSize(host).w/2),local=-half+half*2*placement.t,world=rotateVectorByDegrees(local,0,hostAngle);q={x:host.x+world.x,y:host.y+world.y,angle:hostAngle}}
   else{const {w,h}=componentSize(host),side=placement.side||'top',u=Math.max(0,Math.min(1,placement.t));let lx=0,ly=0,a=0;if(side==='top'||side==='bottom'){lx=-w/2+w*u;ly=side==='top'?-h/2:h/2}else{lx=side==='left'?-w/2:w/2;ly=-h/2+h*u;a=90}const world=rotateVectorByDegrees(lx,ly,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)+a}}
   node.x=q.x;node.y=q.y;wireHostPoseCache.set(node.id,{...q,hostId:host.id,t:placement.t});
 }
@@ -696,7 +716,9 @@ function moveDescendantsWithState(state,dx,dy){
 function portLayout(n){
   const result={},angle=componentHostAngle(n);
   for(const id of componentPortIds(n)){
-    const local=componentPortLocalPosition(n,id),rot=componentHostedOnWire(n)?rotateVectorByDegrees(local.x,local.y,angle):local;
+    // A host-imposed pose rotates the whole group, so its local points rotate with it. A
+    // Component that owns its direction already has it in the points.
+    const local=componentPortLocalPosition(n,id),rot=componentPoseIsHostImposed(n)?rotateVectorByDegrees(local.x,local.y,angle):local;
     result[id]={x:n.x+rot.x,y:n.y+rot.y};
   }
   return result;

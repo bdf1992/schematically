@@ -71,6 +71,26 @@ fails if any dimension's points are re-enumerated by hand.
 Examples: painting = 2D / surface / material=canvas; wire = 1D / path / `carrier` Mode;
 enclosure = 3D / volume / shell.
 
+## A 1D Form's geometry is its two points
+
+Because the boundary of a 1D Form is its two 0D points, those points *are* its geometry.
+`form.geometry.points` holds them as local offsets from the entity's centre, kept antipodal so
+the centre stays the midpoint. Length and heading are read back off them:
+
+```text
+length = |end - start|        angle = atan2(end - start)        centre = midpoint
+```
+
+None of those three is stored anywhere. A derived direction cannot be reset, cannot disagree
+with where the points are, and cannot be lost by a cache — which is what used to happen, since
+orientation lived only in the runtime pose cache and was dropped whenever the entity moved.
+`presentation.size.w` is now a compatibility projection of the derived length.
+
+Dragging either end reshapes the Path: the inner grip moves the point, the ring around it stays
+the wiring target — the same split a 0D Point already used for move-versus-wire. A Path settled
+onto a host is the exception: there the host imposes the axis, the group is rotated into the
+host's frame, and the Path's own points sit on the local x axis.
+
 ## Standing
 
 0D, 1D and 2D are authored in the editor. 3D is carried by the Form spine — its boundary
