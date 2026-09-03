@@ -160,10 +160,39 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   }
   appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);
 }
+function markersById(){
+  const byId=new Map();
+  for(const marker of SovSchematicData.markersFor(diagram)){
+    const list=byId.get(marker.id);if(list)list.push(marker);else byId.set(marker.id,[marker]);
+  }
+  return byId;
+}
+function appendMarkerBadge(host,markers,x,y){
+  const badge=document.createElementNS('http://www.w3.org/2000/svg','g');
+  badge.setAttribute('class','marker-badge');
+  badge.setAttribute('transform',`translate(${x} ${y})`);
+  badge.setAttribute('title',markers.map(m=>m.message).join('; '));
+  const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  dot.setAttribute('class','marker-badge-dot');dot.setAttribute('r','7');
+  badge.appendChild(dot);
+  const mark=document.createElementNS('http://www.w3.org/2000/svg','text');
+  mark.setAttribute('class','marker-badge-mark');mark.setAttribute('text-anchor','middle');mark.setAttribute('y','3');mark.textContent='!';
+  badge.appendChild(mark);
+  host.appendChild(badge);
+}
+function markerCountEl(){
+  let el=document.getElementById('markerCount');
+  if(!el&&statusEl?.parentElement){
+    el=document.createElement('span');el.id='markerCount';el.className='marker-count';
+    statusEl.parentElement.insertBefore(el,statusEl.nextSibling);
+  }
+  return el;
+}
 function render(){
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
   const componentSignals=signalState.colors;
+  const markers=markersById();
   nodesG.innerHTML='';
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
     if(isEffectivelyHidden(n))return;
@@ -175,6 +204,7 @@ function render(){
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
     renderComponentVisual(g,n,cfg,s,signalColor);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
+    {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
       const pointId=point.id,pcfg=point.config,local=componentPortLocalPosition(n,pointId);
       const localX=local.x,localY=local.y;
@@ -199,7 +229,8 @@ function render(){
     }
     bindNode(g,n); nodesG.appendChild(g);
   });
-  renderWires(signalState);
+  renderWires(signalState,markers);
+  {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
 }
@@ -395,7 +426,7 @@ function clearWireVisualFocus(){
   document.querySelectorAll('.wire-group').forEach(g=>g.classList.remove('muted'));
   if(!(typeof selected==='string'&&selected.startsWith('wire:'))) clearEndpointFocus();
 }
-function renderWires(signalState=computeSignalState()){
+function renderWires(signalState=computeSignalState(),markers=markersById()){
   wiresG.innerHTML='';
   nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
   clearEndpointFocus();
@@ -418,6 +449,7 @@ function renderWires(signalState=computeSignalState()){
 
     const d=pathD(points);
     occupied.push(...routeSegments(points));
+    const wireMarkers=markers.get(w.id);
 
     const signal=wireSignalColors(w,signalState);
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
@@ -450,6 +482,10 @@ function renderWires(signalState=computeSignalState()){
 
     group.appendChild(voltage);
     group.appendChild(base);
+    if(wireMarkers){
+      const top=Math.min(...points.map(p=>p.y)),right=Math.max(...points.map(p=>p.x));
+      appendMarkerBadge(group,wireMarkers,right,top);
+    }
     {const L=base.getTotalLength();for(const hosted of nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&n.id!==activeNodeDrag)){
       const placement=componentPlacement(hosted),len=Math.max(1,Math.min(L-1,L*placement.t)),q=base.getPointAtLength(len),angle=pathTangentAngleAtLength(base,len);
       hosted.x=q.x;hosted.y=q.y;wireHostPoseCache.set(hosted.id,{x:q.x,y:q.y,angle,wireId:w.id,t:placement.t});

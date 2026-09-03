@@ -1744,6 +1744,30 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     }
     return {ok:errors.length===0,errors};
   }
+  // Labels an existing validateDocument error string with the id of the element it names and a
+  // short rule name, so a view can place it without knowing what validateDocument checks.
+  function markerElementId(document,message){
+    const named=message.match(/^(?:wire|component|reference) ([^\s:]+)/);
+    if(named)return named[1];
+    const duplicate=message.match(/^duplicate (?:component|wire|reference) id: (.+)$/);
+    if(duplicate)return duplicate[1];
+    return document?.id??null;
+  }
+  function markerRule(message){
+    if(/^schema must equal/.test(message))return 'document-schema';
+    if(/^(?:components|wires|references) must be an array$/.test(message))return 'document-shape';
+    if(/missing id$/.test(message))return 'identity';
+    if(/^duplicate (?:component|wire|reference) id:/.test(message))return 'identity';
+    if(/missing endpoint component:/.test(message))return 'wire-endpoint';
+    if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
+    return 'boundary-legality';
+  }
+  // Straight from validateDocument's own findings; no legality is re-derived here.
+  function markersFor(document){
+    const check=validateDocument(document);
+    if(check.ok)return [];
+    return check.errors.map(message=>({id:markerElementId(document,message),severity:'error',message,rule:markerRule(message)}));
+  }
   function operationTools(){
     const resourceSchema={type:'string',enum:['component','wire','reference']};
     return [
@@ -1756,7 +1780,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,markersFor,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
 /* END src/05-data-core.js */
 </script>
@@ -4810,10 +4834,39 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   }
   appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);
 }
+function markersById(){
+  const byId=new Map();
+  for(const marker of SovSchematicData.markersFor(diagram)){
+    const list=byId.get(marker.id);if(list)list.push(marker);else byId.set(marker.id,[marker]);
+  }
+  return byId;
+}
+function appendMarkerBadge(host,markers,x,y){
+  const badge=document.createElementNS('http://www.w3.org/2000/svg','g');
+  badge.setAttribute('class','marker-badge');
+  badge.setAttribute('transform',`translate(${x} ${y})`);
+  badge.setAttribute('title',markers.map(m=>m.message).join('; '));
+  const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  dot.setAttribute('class','marker-badge-dot');dot.setAttribute('r','7');
+  badge.appendChild(dot);
+  const mark=document.createElementNS('http://www.w3.org/2000/svg','text');
+  mark.setAttribute('class','marker-badge-mark');mark.setAttribute('text-anchor','middle');mark.setAttribute('y','3');mark.textContent='!';
+  badge.appendChild(mark);
+  host.appendChild(badge);
+}
+function markerCountEl(){
+  let el=document.getElementById('markerCount');
+  if(!el&&statusEl?.parentElement){
+    el=document.createElement('span');el.id='markerCount';el.className='marker-count';
+    statusEl.parentElement.insertBefore(el,statusEl.nextSibling);
+  }
+  return el;
+}
 function render(){
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
   const componentSignals=signalState.colors;
+  const markers=markersById();
   nodesG.innerHTML='';
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
     if(isEffectivelyHidden(n))return;
@@ -4825,6 +4878,7 @@ function render(){
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
     renderComponentVisual(g,n,cfg,s,signalColor);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
+    {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
       const pointId=point.id,pcfg=point.config,local=componentPortLocalPosition(n,pointId);
       const localX=local.x,localY=local.y;
@@ -4849,7 +4903,8 @@ function render(){
     }
     bindNode(g,n); nodesG.appendChild(g);
   });
-  renderWires(signalState);
+  renderWires(signalState,markers);
+  {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
 }
@@ -5045,7 +5100,7 @@ function clearWireVisualFocus(){
   document.querySelectorAll('.wire-group').forEach(g=>g.classList.remove('muted'));
   if(!(typeof selected==='string'&&selected.startsWith('wire:'))) clearEndpointFocus();
 }
-function renderWires(signalState=computeSignalState()){
+function renderWires(signalState=computeSignalState(),markers=markersById()){
   wiresG.innerHTML='';
   nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
   clearEndpointFocus();
@@ -5068,6 +5123,7 @@ function renderWires(signalState=computeSignalState()){
 
     const d=pathD(points);
     occupied.push(...routeSegments(points));
+    const wireMarkers=markers.get(w.id);
 
     const signal=wireSignalColors(w,signalState);
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
@@ -5100,6 +5156,10 @@ function renderWires(signalState=computeSignalState()){
 
     group.appendChild(voltage);
     group.appendChild(base);
+    if(wireMarkers){
+      const top=Math.min(...points.map(p=>p.y)),right=Math.max(...points.map(p=>p.x));
+      appendMarkerBadge(group,wireMarkers,right,top);
+    }
     {const L=base.getTotalLength();for(const hosted of nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&n.id!==activeNodeDrag)){
       const placement=componentPlacement(hosted),len=Math.max(1,Math.min(L-1,L*placement.t)),q=base.getPointAtLength(len),angle=pathTangentAngleAtLength(base,len);
       hosted.x=q.x;hosted.y=q.y;wireHostPoseCache.set(hosted.id,{x:q.x,y:q.y,angle,wireId:w.id,t:placement.t});
@@ -6624,6 +6684,7 @@ const SovSchematicAPI={
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
+  markers:()=>SovSchematicData.markersFor(diagram),
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
   tools:()=>SovSchematicData.operationTools()
 };

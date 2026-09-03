@@ -49,6 +49,14 @@ Resources are `component`, `wire`, and `reference`.
 Every mutation produces the same revisioned receipt semantics as MCP/HTTP adapters. Wire writes cannot bypass surface/Port reachability.
 
 
+## Markers
+
+```js
+SovSchematicAPI.markers()
+```
+
+Returns `{id, severity, message, rule}` for every current `document.get()`/CRUD validation finding, straight from the same check the core runs on write — no separate legality is computed for the view. The renderer draws these as a badge on each carrying element and a total count in the status area.
+
 ## Editor/history API
 
 `window.SovSchematicAPI` additionally exposes `history.list/undo/redo`, `checkpoints.list/create/restore`, semantic selection clipboard helpers, and view appearance/global-rate accessors. MCP exposes history undo/redo and checkpoint list/create/restore for its file-backed document.

@@ -600,6 +600,30 @@
     }
     return {ok:errors.length===0,errors};
   }
+  // Labels an existing validateDocument error string with the id of the element it names and a
+  // short rule name, so a view can place it without knowing what validateDocument checks.
+  function markerElementId(document,message){
+    const named=message.match(/^(?:wire|component|reference) ([^\s:]+)/);
+    if(named)return named[1];
+    const duplicate=message.match(/^duplicate (?:component|wire|reference) id: (.+)$/);
+    if(duplicate)return duplicate[1];
+    return document?.id??null;
+  }
+  function markerRule(message){
+    if(/^schema must equal/.test(message))return 'document-schema';
+    if(/^(?:components|wires|references) must be an array$/.test(message))return 'document-shape';
+    if(/missing id$/.test(message))return 'identity';
+    if(/^duplicate (?:component|wire|reference) id:/.test(message))return 'identity';
+    if(/missing endpoint component:/.test(message))return 'wire-endpoint';
+    if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
+    return 'boundary-legality';
+  }
+  // Straight from validateDocument's own findings; no legality is re-derived here.
+  function markersFor(document){
+    const check=validateDocument(document);
+    if(check.ok)return [];
+    return check.errors.map(message=>({id:markerElementId(document,message),severity:'error',message,rule:markerRule(message)}));
+  }
   function operationTools(){
     const resourceSchema={type:'string',enum:['component','wire','reference']};
     return [
@@ -612,5 +636,5 @@
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,markersFor,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
