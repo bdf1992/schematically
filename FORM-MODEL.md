@@ -23,9 +23,21 @@ They are not split, and the reason is worth keeping: telling them apart would me
 itself an authored thing, which is the 3D commitment and not paid for yet. One Field, different
 Models, costs nothing now.
 
-The discipline that comes with that: membership decides whether a Wire may connect
-(`connectionReachability`). A falloff decides nothing. Reachability must keep reading only the
-membership kind, or a gradient silently starts governing what can connect to what.
+The two Models divide on one line, and it is a rule rather than a discipline:
+
+| Field Model | Value | Attachment points | Governs connection |
+|---|---|---|---|
+| membership (a canvas) | in or out | the entities in it expose their own | yes — `connectionReachability` |
+| valued (a gradient) | a scalar with a falloff from a source Form | **none, ever** | no |
+
+A valued Field is something you see, not something you connect to: vector lines, tangents,
+rotation indicators, a wave running across a surface. It exposes no attachment points, nothing
+binds to it, and no Wire can end on it. Because that holds by construction, reachability can
+never read a falloff by accident — there is nothing there to read. The rule replaces the care
+that would otherwise be needed, and it is checkable rather than remembered.
+
+That stands until space itself becomes an authored thing. At that point the two may need
+separating again, and this is the paragraph to revisit.
 
 Standing: only the membership kind is built. A Field carrying a value with a falloff from a
 source Form is not implemented. When it is, it should absorb the influence radii that are
