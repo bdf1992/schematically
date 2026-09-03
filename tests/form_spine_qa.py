@@ -43,7 +43,14 @@ process.stdout.write(JSON.stringify({
   corner:Form.elementAt(2,['left','start']),
   volumePoints:Form.terminalPoints(3).map(p=>({id:p.id,dimension:p.dimension,via:p.via})),
   missing:Form.elementAt(2,['nope']),
-  bodyKinds:Form.BODY_KINDS
+  bodyKinds:Form.BODY_KINDS,
+  carrierEnds:(()=>{
+    const wire={id:'k1',form:{dimension:1},
+      aAttachment:{kind:'free',x:10,y:20},
+      bAttachment:{kind:'attachment-ref',componentId:'c1',pointId:'left'}};
+    return Attachment.carrierEndpointDescriptors(wire);
+  })(),
+  pathComponentPoints:Attachment.pointSpecs({form:{dimension:1}})
 }));
 """
 
@@ -84,7 +91,24 @@ assert all(p["dimension"] == 0 and p["via"]["bodyKind"] == "surface" for p in vo
 assert data["missing"] is None, data["missing"]
 assert data["bodyKinds"] == ["point", "path", "surface", "volume"], data["bodyKinds"]
 
-# 7. The spine stays pure: no DOM, routing, or editor state in the Form module.
+# 7. A carrier's ends and a 1D Component's boundary points are one system, not two. Same ids,
+#    same Mode, same dimension; they differ only in who owns them and whether they are bound.
+ends = data["carrierEnds"]
+points = data["pathComponentPoints"]
+assert [e["id"] for e in ends] == [p["id"] for p in points] == ["start", "end"], (ends, points)
+for endpoint, point in zip(ends, points):
+    assert endpoint["dimension"] == 0, endpoint
+    assert endpoint["mode"] == point["mode"] == "endpoint", (endpoint, point)
+    assert endpoint["role"] == point["role"] == "endpoint", (endpoint, point)
+    assert endpoint["side"] == point["side"] and endpoint["t"] == point["t"], (endpoint, point)
+    assert endpoint["ownerKind"] == "wire" and endpoint["ownerId"] == "k1", endpoint
+# A free end carries a position; a bound end carries the point it is identified with.
+assert ends[0]["bound"] is False and ends[0]["position"] == {"x": 10, "y": 20}, ends[0]
+assert ends[0]["binding"] is None, ends[0]
+assert ends[1]["bound"] is True and ends[1]["position"] is None, ends[1]
+assert ends[1]["binding"] == {"componentId": "c1", "pointId": "left"}, ends[1]
+
+# 8. The spine stays pure: no DOM, routing, or editor state in the Form module.
 form_src = (ROOT / "src/04-form-core.js").read_text(encoding="utf-8")
 for banned in ("document.", "window.", "querySelector", "render(", "nodes", "wires"):
     assert banned not in form_src, f"Form core must stay pure; found {banned!r}"

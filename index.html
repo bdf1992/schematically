@@ -1315,6 +1315,25 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return {...spec,kind:'attachment-point',dimension:0,ownerKind:'component',ownerId:entity?.id||null,config};
   }
   function descriptors(entity,legacyPorts={}){return pointSpecs(entity).map(spec=>descriptor(entity,spec.id,legacyPorts))}
+  // A carrier is a 1D Form, so its two ends are the same two 0D boundary points every 1D Form
+  // has — `start` and `end`, in `endpoint` Mode. `a`/`b` are only the carrier's older names for
+  // them. A descriptor here has the same shape as a Component's, so an endpoint and a Point are
+  // one kind of thing described once, differing in who owns it and whether it is bound.
+  const CARRIER_END_IDS={a:'start',b:'end'};
+  function carrierEndpointDescriptor(wire,end){
+    const key=String(end),id=CARRIER_END_IDS[key];if(!id)return null;
+    const spec=basePointSpecs(1).find(item=>item.id===id);if(!spec)return null;
+    const attachment=wire?.[key+'Attachment']||null;
+    const bound=!!attachment&&attachment.kind==='attachment-ref';
+    return {
+      ...spec,kind:'attachment-point',dimension:0,
+      ownerKind:'wire',ownerId:wire?.id||null,end:key,bound,
+      binding:bound?{componentId:attachment.componentId||null,pointId:attachment.pointId||null}:null,
+      position:bound?null:{x:Number(attachment?.x)||0,y:Number(attachment?.y)||0},
+      config:null
+    };
+  }
+  function carrierEndpointDescriptors(wire){return Object.keys(CARRIER_END_IDS).map(end=>carrierEndpointDescriptor(wire,end))}
   function normalizeOwnedPoint(record,{ownerKind='wire',ownerId=null,t=.5}={}){
     const point=record||{};point.kind='attachment-point';point.type='point';point.dimension=0;point.ownerKind=ownerKind;point.ownerId=ownerId;
     if(!point.placement||typeof point.placement!=='object')point.placement={kind:ownerKind==='wire'?'wire':'self',t};
@@ -1339,7 +1358,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(end==='a')wire.aSide=spec.compatId;else wire.bSide=spec.compatId;
     return wire[key];
   }
-  return {intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
+  return {intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,carrierEndpointDescriptor,carrierEndpointDescriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
 });
 /* END src/06-attachment-core.js */
 </script>
@@ -5477,7 +5496,11 @@ function renderWires(signalState=computeSignalState()){
      for(const [end,ep,at] of [['a',epA,0],['b',epB,L]]){
        const q=ep.kind==='free'?ep.pos:base.getPointAtLength(at===0?Math.min(20,L/2):Math.max(L-20,L/2));
        const handle=document.createElementNS('http://www.w3.org/2000/svg','circle');
+       // An end handle is a 0D attachment point in `endpoint` Mode, described the same way a
+       // Component's own point is; `a`/`b` are only the carrier's older names for start/end.
+       const desc=Attachment.carrierEndpointDescriptor(w,end);
        handle.setAttribute('class','carrier-end-handle'+(ep.kind==='free'?' free':' bound'));handle.dataset.end=end;handle.dataset.wireIndex=String(i);
+       if(desc){handle.dataset.point=desc.id;handle.dataset.mode=desc.mode;handle.dataset.dimension=String(desc.dimension)}
        handle.setAttribute('cx',q.x);handle.setAttribute('cy',q.y);handle.setAttribute('r',ep.kind==='free'?'6':'4.5');
        handle.addEventListener('pointerdown',e=>{e.stopPropagation();beginCarrierEndDrag(e,i,end)});
        group.appendChild(handle);

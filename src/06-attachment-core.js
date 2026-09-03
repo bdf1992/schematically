@@ -104,6 +104,25 @@
     return {...spec,kind:'attachment-point',dimension:0,ownerKind:'component',ownerId:entity?.id||null,config};
   }
   function descriptors(entity,legacyPorts={}){return pointSpecs(entity).map(spec=>descriptor(entity,spec.id,legacyPorts))}
+  // A carrier is a 1D Form, so its two ends are the same two 0D boundary points every 1D Form
+  // has — `start` and `end`, in `endpoint` Mode. `a`/`b` are only the carrier's older names for
+  // them. A descriptor here has the same shape as a Component's, so an endpoint and a Point are
+  // one kind of thing described once, differing in who owns it and whether it is bound.
+  const CARRIER_END_IDS={a:'start',b:'end'};
+  function carrierEndpointDescriptor(wire,end){
+    const key=String(end),id=CARRIER_END_IDS[key];if(!id)return null;
+    const spec=basePointSpecs(1).find(item=>item.id===id);if(!spec)return null;
+    const attachment=wire?.[key+'Attachment']||null;
+    const bound=!!attachment&&attachment.kind==='attachment-ref';
+    return {
+      ...spec,kind:'attachment-point',dimension:0,
+      ownerKind:'wire',ownerId:wire?.id||null,end:key,bound,
+      binding:bound?{componentId:attachment.componentId||null,pointId:attachment.pointId||null}:null,
+      position:bound?null:{x:Number(attachment?.x)||0,y:Number(attachment?.y)||0},
+      config:null
+    };
+  }
+  function carrierEndpointDescriptors(wire){return Object.keys(CARRIER_END_IDS).map(end=>carrierEndpointDescriptor(wire,end))}
   function normalizeOwnedPoint(record,{ownerKind='wire',ownerId=null,t=.5}={}){
     const point=record||{};point.kind='attachment-point';point.type='point';point.dimension=0;point.ownerKind=ownerKind;point.ownerId=ownerId;
     if(!point.placement||typeof point.placement!=='object')point.placement={kind:ownerKind==='wire'?'wire':'self',t};
@@ -128,5 +147,5 @@
     if(end==='a')wire.aSide=spec.compatId;else wire.bSide=spec.compatId;
     return wire[key];
   }
-  return {intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
+  return {intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,carrierEndpointDescriptor,carrierEndpointDescriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
 });

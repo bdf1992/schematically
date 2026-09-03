@@ -535,7 +535,11 @@ function renderWires(signalState=computeSignalState()){
      for(const [end,ep,at] of [['a',epA,0],['b',epB,L]]){
        const q=ep.kind==='free'?ep.pos:base.getPointAtLength(at===0?Math.min(20,L/2):Math.max(L-20,L/2));
        const handle=document.createElementNS('http://www.w3.org/2000/svg','circle');
+       // An end handle is a 0D attachment point in `endpoint` Mode, described the same way a
+       // Component's own point is; `a`/`b` are only the carrier's older names for start/end.
+       const desc=Attachment.carrierEndpointDescriptor(w,end);
        handle.setAttribute('class','carrier-end-handle'+(ep.kind==='free'?' free':' bound'));handle.dataset.end=end;handle.dataset.wireIndex=String(i);
+       if(desc){handle.dataset.point=desc.id;handle.dataset.mode=desc.mode;handle.dataset.dimension=String(desc.dimension)}
        handle.setAttribute('cx',q.x);handle.setAttribute('cy',q.y);handle.setAttribute('r',ep.kind==='free'?'6':'4.5');
        handle.addEventListener('pointerdown',e=>{e.stopPropagation();beginCarrierEndDrag(e,i,end)});
        group.appendChild(handle);
