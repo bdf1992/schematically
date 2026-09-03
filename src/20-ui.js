@@ -41,6 +41,9 @@ function openColorSlotPanel(kind){
   }else if(kind==='port'){
     const info=selectedPortInfo();if(!info)return;
     current=portConnection(info.port).colorSlot;
+  }else if(kind==='pattern'){
+    const record=selectedPatternRecord();if(!record)return;
+    current=record.colorSlot;
   }
 
   colorSlotPanel.replaceChildren();
@@ -76,6 +79,8 @@ function applySelectedColorSlot(slot){
     const n=nodes.find(n=>n.id===selected);if(n)componentConfig(n).colorSlot=slot;
   }else if(slotEditTarget==='component-interior'){
     const n=nodes.find(n=>n.id===selected);if(n)componentConfig(n).presentation.interiorColorSlot=slot;
+  }else if(slotEditTarget==='pattern'){
+    const record=selectedPatternRecord();if(record)record.colorSlot=slot;
   }else if(slotEditTarget==='port'){
     const info=selectedPortInfo();
     if(info){
@@ -235,6 +240,25 @@ function pointsRow(text,detail,{onClick=null,current=false}={}){
 // on each of them. It is not where the set is configured — points arrive by being
 // dropped and leave by being deleted.
 function syncPointsSurface(kind){
+  // A Pattern's parts are what a Pattern is attached to, so they read in the same
+  // place a Component's points do, and each row navigates to the part.
+  if(kind==='pattern'){
+    const record=selectedPatternRecord();
+    pointsSurface.hidden=!record;pointsBuiltinToggle.hidden=true;
+    if(!record)return;
+    pointsList.replaceChildren();
+    const rows=[];
+    for(const node of patternMemberNodes(record.id))
+      rows.push(pointsRow(componentDisplayName(node),`${componentForm(node).dimension}D · ${byId(node.symbolId).name}`,
+        {onClick:()=>{setPatternOpen(record.id,true);selectNode(node.id)},current:selected===node.id}));
+    for(const wire of patternMemberWires(record.id))
+      rows.push(pointsRow('Wire',connectionConfig(wire).label||wire.id,
+        {onClick:()=>{setPatternOpen(record.id,true);selectWire(wires.indexOf(wire))}}));
+    if(!rows.length)rows.push(pointsRow('None','this Pattern has no parts left'));
+    for(const row of rows)pointsList.appendChild(row);
+    pointsSummary.textContent=rows.length===1?'1 part':`${rows.length} parts`;
+    return;
+  }
   const owner=kind==='component'?nodes.find(n=>n.id===selected)
     :kind==='wire'?wires[Number(String(selected).slice(5))]:null;
   pointsSurface.hidden=!owner;
@@ -299,14 +323,45 @@ function openSelectionSettings(kind){
   barSelectionSettings.setAttribute('aria-expanded','true');
 }
 function selectedSurfaceKind(){
+  if(typeof selected==='string'&&selected.startsWith('pattern:'))return 'pattern';
   if(typeof selected==='string'&&selected.startsWith('wire:'))return 'wire';
   if(isAttachmentSelectionValue(selected))return 'port';
   return selected?'component':null;
 }
+// A Pattern gets the same bar a Component gets, and in the same order: what it is, what
+// it is called, what color it carries. OPEN and RELEASE are the two things only a
+// Pattern can do, so they are the only two extra controls.
+function showPatternBar(record){
+  if(!record)return;
+  selectionBar.hidden=false;
+  componentBarFields.hidden=true;connectionBarFields.hidden=true;portBarFields.hidden=true;patternBarFields.hidden=false;
+  if(barPatternKind.options.length!==PATTERN_KINDS.length){
+    barPatternKind.replaceChildren();
+    for(const kind of PATTERN_KINDS){
+      const option=document.createElement('option');
+      option.value=kind.id;option.textContent=kind.name;option.title=kind.sense;
+      barPatternKind.appendChild(option);
+    }
+  }
+  barPatternKind.value=record.kind;
+  // The kind is what the Pattern was made from. Changing it would have to rebuild the
+  // parts, which is a Program's job, so the control reads rather than edits.
+  barPatternKind.disabled=true;
+  barPatternLabel.value=record.label;
+  setSlotChip(barPatternColorSlot,record.colorSlot);
+  const open=patternIsOpen(record.id);
+  barPatternOpen.textContent=open?'CLOSE':'OPEN';
+  barPatternOpen.setAttribute('aria-pressed',open?'true':'false');
+  // A Pattern has no dimension of its own; its parts each have theirs.
+  barFormState.hidden=true;
+  if(!selectionSettingsPanel.hidden)syncSelectionSettings('pattern');
+  closeColorSlotPanel();
+  positionSelectionBar();
+}
 function showComponentBar(n){
   const cfg=componentConfig(n);
   selectionBar.hidden=false;
-  componentBarFields.hidden=false;connectionBarFields.hidden=true;portBarFields.hidden=true;
+  componentBarFields.hidden=false;connectionBarFields.hidden=true;portBarFields.hidden=true;patternBarFields.hidden=true;
   barComponentType.value=n.symbolId;
   barComponentLabel.value=cfg.label;
   setSlotChip(barComponentColorSlot,cfg.colorSlot);
@@ -319,7 +374,7 @@ function showComponentBar(n){
 function showConnectionBar(w,i){
   const cfg=connectionConfig(w);
   selectionBar.hidden=false;
-  componentBarFields.hidden=true;connectionBarFields.hidden=false;portBarFields.hidden=true;
+  componentBarFields.hidden=true;connectionBarFields.hidden=false;portBarFields.hidden=true;patternBarFields.hidden=true;
   barConnectionDirection.value=cfg.direction;
   barConnectionReciprocity.value=cfg.reciprocity;
 
@@ -406,7 +461,9 @@ function portDisplayName(info){return componentConfig(info.owner).label||byId(in
 
 function restoreSelectedSurface(){
   if(typeof selected!=='string')return;
-  if(selected.startsWith('wire:')){
+  if(selected.startsWith('pattern:')){
+    selectPattern(selected.slice(8),{focus:false});
+  }else if(selected.startsWith('wire:')){
     const i=Number(selected.split(':')[1]);if(wires[i])selectWire(i);
   }else if(isAttachmentSelectionValue(selected)){
     const info=selectedPortInfo();if(info)selectPortRef(info);
@@ -417,7 +474,9 @@ function restoreSelectedSurface(){
 function positionSelectionBar(){
   if(selectionBar.hidden)return;
   let p=null;
-  if(typeof selected==='string'&&selected.startsWith('wire:')){
+  if(typeof selected==='string'&&selected.startsWith('pattern:')){
+    const box=patternBounds(selected.slice(8));if(box)p={x:(box.l+box.r)/2,y:box.t-10};
+  }else if(typeof selected==='string'&&selected.startsWith('wire:')){
     const i=Number(selected.split(':')[1]),w=wires[i];if(w)p=connectionMidpoint(w,i);
   }else if(isAttachmentSelectionValue(selected)){
     const info=selectedPortInfo();

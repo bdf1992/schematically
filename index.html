@@ -486,6 +486,37 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
 
 /* A Pattern card sits in the same ladder as a form, and keeps its one-line "made of". */
 .pattern-card .ladder-text small{display:block;color:var(--muted);font-size:9.5px;margin-top:2px}
+
+/* A Pattern is one object made of forms, so it gets one outline. It is drawn under the
+   forms and never takes the pointer: clicking a part is what selects the Pattern, and a
+   hull that swallowed clicks would put the parts out of reach once it is open. */
+.pattern-hull{pointer-events:none}
+.pattern-hull rect{
+  fill:color-mix(in srgb,var(--pattern-color) 7%,transparent);
+  stroke:color-mix(in srgb,var(--pattern-color) 42%,transparent);
+  stroke-width:1.2;stroke-dasharray:2 6;stroke-linecap:round;
+}
+.pattern-hull.selected rect{
+  fill:color-mix(in srgb,var(--pattern-color) 12%,transparent);
+  stroke:var(--pattern-color);stroke-width:1.8;stroke-dasharray:none;
+}
+/* Open says the parts answer for themselves now, so the outline goes back to a hint. */
+.pattern-hull.open rect{fill:none;stroke-dasharray:1 7;stroke-width:1}
+.pattern-hull-label{
+  font:600 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.10em;
+  fill:color-mix(in srgb,var(--pattern-color) 70%,transparent);
+}
+.pattern-hull.selected .pattern-hull-label{fill:var(--pattern-color)}
+.pattern-hull.open .pattern-hull-label{fill:color-mix(in srgb,var(--pattern-color) 55%,transparent)}
+
+/* OPEN and RELEASE are the two things only a Pattern can do. */
+.bar-pattern-open,.bar-pattern-release{
+  border:1px solid var(--line);background:var(--panel);color:var(--ink);
+  border-radius:7px;padding:0 8px;height:26px;cursor:pointer;
+  font:600 9.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.10em;
+}
+.bar-pattern-open:hover,.bar-pattern-release:hover{border-color:var(--accent,#4E86BE)}
+.bar-pattern-open[aria-pressed="true"]{background:var(--accent,#4E86BE);border-color:var(--accent,#4E86BE);color:var(--panel)}
 </style>
 </head>
 <body>
@@ -821,6 +852,7 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
     <g id="wires"></g>
     <g id="ghostLayer" aria-hidden="true"></g>
     <g id="paletteDropLayer" aria-hidden="true"></g>
+    <g id="patternHulls" aria-hidden="true"></g>
     <g id="nodes"></g>
   </svg>
   <div class="quick-search" id="quickSearch" hidden>
@@ -877,6 +909,17 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
       </div>
       <input id="barPortLabel" class="bar-input bar-label" type="text" maxlength="24" placeholder="Point label" aria-label="Point label" title="Point label">
       <button id="barPortColorSlot" class="color-slot-chip" type="button" title="Point color" aria-label="Point palette slot"></button>
+    </div>
+
+    <div class="selection-bar-fields" id="patternBarFields" hidden>
+      <div class="icon-select pattern-template-select" aria-label="Pattern">
+        <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.5"></circle><circle cx="18" cy="12" r="2.5"></circle><path d="M8.5 12h7"></path></svg></span>
+        <select id="barPatternKind" class="bar-select bar-type" aria-label="Pattern" title="Pattern"></select>
+      </div>
+      <input id="barPatternLabel" class="bar-input bar-label" type="text" placeholder="Name" aria-label="Pattern name" title="Pattern name">
+      <button id="barPatternColorSlot" class="color-slot-chip" type="button" title="Pattern color" aria-label="Pattern palette slot"></button>
+      <button id="barPatternOpen" class="bar-pattern-open" type="button" title="Open the Pattern and work on its parts" aria-label="Open Pattern" aria-pressed="false">OPEN</button>
+      <button id="barPatternRelease" class="bar-pattern-release" type="button" title="Break this Pattern into loose forms" aria-label="Release Pattern">RELEASE</button>
     </div>
 
     <button id="barFormState" class="bar-form-state" type="button" title="Form · dimension, body and frame" aria-label="Component form">2D</button>
@@ -1082,6 +1125,19 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
         <dt>Interior</dt><dd id="iContains">Closed</dd>
       </dl>
     </div>
+    <div id="patternDetail" hidden>
+      <div class="kind-badge">PATTERN</div>
+      <dl class="kv">
+        <dt>Pattern</dt><dd id="qName">—</dd>
+        <dt>Made of</dt><dd id="qSense">—</dd>
+        <dt>Name</dt><dd id="qLabel">—</dd>
+        <dt>Parts</dt><dd id="qParts">—</dd>
+        <dt>Host</dt><dd id="qParent">—</dd>
+        <dt>Scope</dt><dd id="qScope">world</dd>
+        <dt>State</dt><dd id="qState">Closed · selects as one</dd>
+        <dt>Meaning</dt><dd id="qMeaning">—</dd>
+      </dl>
+    </div>
     <div id="portDetail" hidden>
       <div class="kind-badge">PORT PART</div>
       <dl class="kv">
@@ -1263,7 +1319,7 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
   const OPERATION_SCHEMA='soveraeign.schematic/operation@0.1';
   const RECEIPT_SCHEMA='soveraeign.schematic/receipt@0.1';
   const GLOBAL_CANVAS_ID='canvas:global';
-  const RESOURCE_KEYS={component:'components',wire:'wires',reference:'references'};
+  const RESOURCE_KEYS={component:'components',wire:'wires',reference:'references',pattern:'patterns'};
   // Dimensional primitives. A template preset is applied only where the caller
   // supplied nothing, so authored records always win over the preset.
   const LEGACY_SYMBOL_IDS={port:'point'};
@@ -1321,6 +1377,7 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
       components:Array.isArray(input.components)?clone(input.components):[],
       wires:Array.isArray(input.wires)?clone(input.wires):Array.isArray(input.connections)?clone(input.connections):[],
       references:Array.isArray(input.references)?clone(input.references):[],
+      patterns:Array.isArray(input.patterns)?clone(input.patterns):[],
       layout:isObject(input.layout)?clone(input.layout):{}
     };
     if(input.canvas&&isObject(input.canvas))doc.canvas={...doc.canvas,...clone(input.canvas),id:GLOBAL_CANVAS_ID,scope:'global',dimension:2,state:'open'};
@@ -1338,6 +1395,7 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
     if(!Array.isArray(doc.components))doc.components=[];
     if(!Array.isArray(doc.wires))doc.wires=Array.isArray(doc.connections)?doc.connections:[];
     if(!Array.isArray(doc.references))doc.references=[];
+    if(!Array.isArray(doc.patterns))doc.patterns=[];
     if(!isObject(doc.layout))doc.layout={};
     for(const component of doc.components){
       normalizeComponentIdentity(component);
@@ -1366,6 +1424,7 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
       if(!['none','read','write'].includes(wire.config.forwardOperation))wire.config.forwardOperation='none';
       if(!['none','read','write'].includes(wire.config.reverseOperation))wire.config.reverseOperation='none';
     }
+    normalizePatterns(doc);
     migrateLegacyWirePointAttachments(doc);
     if('connections' in doc)delete doc.connections;
     return doc;
@@ -1714,6 +1773,50 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
   function makeReference(doc,value={}){
     return {id:cleanString(value.id,nextId(doc.references,'r')),kind:cleanString(value.kind,'reference'),label:cleanString(value.label,''),target:value.target??null,data:isObject(value.data)?clone(value.data):{}};
   }
+  // A Pattern is a record, not a way of drawing several records at once. It has an id,
+  // a kind, a name and a color of its own, and a Component or Wire belongs to it by
+  // naming it in patternId. That is what makes a Pattern behave like a Component in the
+  // editor - one thing to select, name, move and delete - while the forms inside it stay
+  // ordinary forms that a person can still open up and work on.
+  function makePattern(doc,value={}){
+    return {
+      id:cleanString(value.id,nextId(doc.patterns,'q')),
+      kind:cleanString(value.kind,'group'),
+      label:cleanString(value.label,''),
+      colorSlot:Math.max(0,Math.min(5,Math.trunc(num(value.colorSlot,0))))
+    };
+  }
+  // Membership is a reference and references can dangle: a member naming a Pattern the
+  // document does not declare is loose, and a Pattern nothing names is nothing. Loading
+  // settles both rather than carrying a half-Pattern forward.
+  function normalizePatterns(doc){
+    if(!Array.isArray(doc.patterns))doc.patterns=[];
+    const declared=new Map();
+    for(const pattern of doc.patterns){
+      if(!isObject(pattern))continue;
+      pattern.id=cleanString(pattern.id,'');
+      pattern.kind=cleanString(pattern.kind,'group');
+      pattern.label=cleanString(pattern.label,'');
+      pattern.colorSlot=Math.max(0,Math.min(5,Math.trunc(num(pattern.colorSlot,0))));
+      if(pattern.id&&!declared.has(pattern.id))declared.set(pattern.id,pattern);
+    }
+    const used=new Set();
+    for(const member of [...doc.components,...doc.wires]){
+      if(!isObject(member))continue;
+      const ref=cleanString(member.patternId,'');
+      if(ref&&declared.has(ref)){member.patternId=ref;used.add(ref)}
+      else if('patternId' in member)delete member.patternId;
+    }
+    doc.patterns=[...declared.values()].filter(pattern=>used.has(pattern.id));
+    return doc;
+  }
+  function patternMemberIds(doc,patternId){
+    const id=cleanString(patternId,'');
+    return {
+      components:(doc.components||[]).filter(c=>c?.patternId===id).map(c=>c.id),
+      wires:(doc.wires||[]).filter(w=>w?.patternId===id).map(w=>w.id)
+    };
+  }
   function resourceArray(doc,resource){
     const key=RESOURCE_KEYS[resource];if(!key)throw new Error(`Unsupported resource: ${resource}`);return doc[key];
   }
@@ -1742,7 +1845,7 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
   function create(doc,resource,value={}){
     const arr=resourceArray(doc,resource);
     if(resource==='wire'){assertCarrierEndpointAccepts(doc,value?.a);assertCarrierEndpointAccepts(doc,value?.b)}
-    const record=resource==='component'?makeComponent(doc,value):resource==='wire'?makeWire(doc,value):makeReference(doc,value);
+    const record=resource==='component'?makeComponent(doc,value):resource==='wire'?makeWire(doc,value):resource==='pattern'?makePattern(doc,value):makeReference(doc,value);
     if(arr.some(x=>x.id===record.id))throw new Error(`${resource} id already exists: ${record.id}`);
     arr.push(record);return clone(record);
   }
@@ -1826,10 +1929,11 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
   }
   function replaceDocument(target,input){
     const incoming=makeDocument(clone(input));
-    const components=target.components,wires=target.wires,references=target.references;
+    const components=target.components,wires=target.wires,references=target.references,patterns=target.patterns;
     components.splice(0,components.length,...incoming.components);
     wires.splice(0,wires.length,...incoming.wires);
     references.splice(0,references.length,...incoming.references);
+    patterns.splice(0,patterns.length,...incoming.patterns);
     target.schema=DOCUMENT_SCHEMA;target.id=incoming.id;target.revision=incoming.revision;target.meta=incoming.meta;target.canvas=incoming.canvas;target.layout=incoming.layout;
     return target;
   }
@@ -1840,6 +1944,7 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
     if(!Array.isArray(input.components))errors.push('components must be an array');
     if(!Array.isArray(input.wires))errors.push('wires must be an array');
     if(!Array.isArray(input.references))errors.push('references must be an array');
+    if(!Array.isArray(input.patterns))errors.push('patterns must be an array');
     const ids=new Set();
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]],['reference',input.references||[]]])for(const item of items){if(!item?.id)errors.push(`${kind} missing id`);else if(ids.has(`${kind}:${item.id}`))errors.push(`duplicate ${kind} id: ${item.id}`);else ids.add(`${kind}:${item.id}`)}
     const componentIds=new Set((input.components||[]).map(x=>x.id));
@@ -1855,18 +1960,18 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
     return {ok:errors.length===0,errors};
   }
   function operationTools(){
-    const resourceSchema={type:'string',enum:['component','wire','reference']};
+    const resourceSchema={type:'string',enum:['component','wire','reference','pattern']};
     return [
       {name:'schematic.list',description:'List schematic resources.',inputSchema:{type:'object',properties:{resource:resourceSchema,query:{type:'object'}},required:['resource'],additionalProperties:false}},
       {name:'schematic.get',description:'Read one schematic resource by id.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'}},required:['resource','id'],additionalProperties:false}},
-      {name:'schematic.create',description:'Create a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,value:{type:'object'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','value'],additionalProperties:false}},
-      {name:'schematic.update',description:'Patch a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},patch:{type:'object'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','id','patch'],additionalProperties:false}},
-      {name:'schematic.delete',description:'Delete a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','id'],additionalProperties:false}},
+      {name:'schematic.create',description:'Create a component, wire, reference, or pattern.',inputSchema:{type:'object',properties:{resource:resourceSchema,value:{type:'object'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','value'],additionalProperties:false}},
+      {name:'schematic.update',description:'Patch a component, wire, reference, or pattern.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},patch:{type:'object'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','id','patch'],additionalProperties:false}},
+      {name:'schematic.delete',description:'Delete a component, wire, reference, or pattern. Deleting a pattern leaves its members loose; delete the members to remove the forms.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','id'],additionalProperties:false}},
       {name:'schematic.document.get',description:'Return the entire schematic document.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,makePattern,normalizePatterns,patternMemberIds,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
 /* END src/05-data-core.js */
 </script>
@@ -1903,9 +2008,20 @@ const palette = document.getElementById('palette');
 const statusEl = document.getElementById('status');
 const componentDetail=document.getElementById('componentDetail'),connectionDetail=document.getElementById('connectionDetail'),portDetail=document.getElementById('portDetail');
 const paletteDropLayer=document.getElementById('paletteDropLayer');
+const patternHullsG=document.getElementById('patternHulls');
+const patternDetail=document.getElementById('patternDetail');
+const qName=document.getElementById('qName'),qSense=document.getElementById('qSense'),qLabel=document.getElementById('qLabel');
+const qParts=document.getElementById('qParts'),qParent=document.getElementById('qParent'),qScope=document.getElementById('qScope');
+const qState=document.getElementById('qState'),qMeaning=document.getElementById('qMeaning');
 const selectionBar=document.getElementById('selectionBar');
 const componentBarFields=document.getElementById('componentBarFields');
 const connectionBarFields=document.getElementById('connectionBarFields');
+const patternBarFields=document.getElementById('patternBarFields');
+const barPatternKind=document.getElementById('barPatternKind');
+const barPatternLabel=document.getElementById('barPatternLabel');
+const barPatternColorSlot=document.getElementById('barPatternColorSlot');
+const barPatternOpen=document.getElementById('barPatternOpen');
+const barPatternRelease=document.getElementById('barPatternRelease');
 const barComponentType=document.getElementById('barComponentType');
 const barComponentLabel=document.getElementById('barComponentLabel');
 const barComponentColorSlot=document.getElementById('barComponentColorSlot');
@@ -2007,7 +2123,7 @@ const documentRevisionReadout=document.getElementById('documentRevisionReadout')
 
 const GLOBAL_CANVAS_ID=SovSchematicData.GLOBAL_CANVAS_ID;
 const diagram=SovSchematicData.makeDocument({id:'schematic-1'});
-const nodes=diagram.components,wires=diagram.wires;
+const nodes=diagram.components,wires=diagram.wires,patternRecords=diagram.patterns;
 let selected=null,seq=1;
 let wireDrag=null;
 const BASE_VIEW = {x:0,y:0,w:1200,h:760};
@@ -2883,6 +2999,21 @@ function copySelection(){
 function pasteClipboard({offset=32}={}){
   if(!semanticClipboard?.components?.length){statusEl.textContent='Clipboard empty';return []}
   setHistoryHint('Paste');const idMap=new Map(),created=[];
+  // A copied Pattern pastes as its own Pattern. Reusing the source's id would quietly
+  // enlarge the original; dropping it would paste the parts loose. Neither is a copy.
+  const patternMap=new Map();
+  const remapPattern=(sourceId)=>{
+    if(!sourceId)return null;
+    if(!patternMap.has(sourceId)){
+      const source=patternRecords.find(p=>p.id===sourceId);
+      if(!source){patternMap.set(sourceId,null)}
+      else{
+        const fresh=SovSchematicData.makePattern(diagram,{kind:source.kind,label:source.label,colorSlot:source.colorSlot});
+        patternRecords.push(fresh);patternMap.set(sourceId,fresh.id);
+      }
+    }
+    return patternMap.get(sourceId);
+  };
   const comps=semanticClipboard.components.slice().sort((a,b)=>nodeDepth(a)-nodeDepth(b));
   for(const old of comps){
     const value=SovSchematicData.clone(old);delete value.id;
@@ -2892,12 +3023,18 @@ function pasteClipboard({offset=32}={}){
       // A Point stuck to the copied host's boundary or path stays stuck to the copy.
       if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
     }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
-    const fresh=SovSchematicData.makeComponent(diagram,value);nodes.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
+    const fresh=SovSchematicData.makeComponent(diagram,value);
+    {const ref=remapPattern(old.patternId);if(ref)fresh.patternId=ref;else delete fresh.patternId}
+    nodes.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
   }
   for(const old of semanticClipboard.wires||[]){
     if(!idMap.has(old.a)||!idMap.has(old.b))continue;
     const value=SovSchematicData.clone(old);delete value.id;value.a=idMap.get(old.a);value.b=idMap.get(old.b);
-    try{wires.push(SovSchematicData.makeWire(diagram,value))}catch(_){ }
+    try{
+      const fresh=SovSchematicData.makeWire(diagram,value);
+      {const ref=remapPattern(old.patternId);if(ref)fresh.patternId=ref;else delete fresh.patternId}
+      wires.push(fresh);
+    }catch(_){ }
   }
   syncAllNodeBoundaryContext();setComponentSelection(created.filter(n=>semanticClipboard.rootIds.includes([...idMap.entries()].find(([,v])=>v===n.id)?.[0])).map(n=>n.id),created.at(-1)?.id);routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();statusEl.textContent=`Pasted · ${created.length} Component${created.length===1?'':'s'}`;return created;
 }
@@ -3037,6 +3174,9 @@ function openColorSlotPanel(kind){
   }else if(kind==='port'){
     const info=selectedPortInfo();if(!info)return;
     current=portConnection(info.port).colorSlot;
+  }else if(kind==='pattern'){
+    const record=selectedPatternRecord();if(!record)return;
+    current=record.colorSlot;
   }
 
   colorSlotPanel.replaceChildren();
@@ -3072,6 +3212,8 @@ function applySelectedColorSlot(slot){
     const n=nodes.find(n=>n.id===selected);if(n)componentConfig(n).colorSlot=slot;
   }else if(slotEditTarget==='component-interior'){
     const n=nodes.find(n=>n.id===selected);if(n)componentConfig(n).presentation.interiorColorSlot=slot;
+  }else if(slotEditTarget==='pattern'){
+    const record=selectedPatternRecord();if(record)record.colorSlot=slot;
   }else if(slotEditTarget==='port'){
     const info=selectedPortInfo();
     if(info){
@@ -3231,6 +3373,25 @@ function pointsRow(text,detail,{onClick=null,current=false}={}){
 // on each of them. It is not where the set is configured — points arrive by being
 // dropped and leave by being deleted.
 function syncPointsSurface(kind){
+  // A Pattern's parts are what a Pattern is attached to, so they read in the same
+  // place a Component's points do, and each row navigates to the part.
+  if(kind==='pattern'){
+    const record=selectedPatternRecord();
+    pointsSurface.hidden=!record;pointsBuiltinToggle.hidden=true;
+    if(!record)return;
+    pointsList.replaceChildren();
+    const rows=[];
+    for(const node of patternMemberNodes(record.id))
+      rows.push(pointsRow(componentDisplayName(node),`${componentForm(node).dimension}D · ${byId(node.symbolId).name}`,
+        {onClick:()=>{setPatternOpen(record.id,true);selectNode(node.id)},current:selected===node.id}));
+    for(const wire of patternMemberWires(record.id))
+      rows.push(pointsRow('Wire',connectionConfig(wire).label||wire.id,
+        {onClick:()=>{setPatternOpen(record.id,true);selectWire(wires.indexOf(wire))}}));
+    if(!rows.length)rows.push(pointsRow('None','this Pattern has no parts left'));
+    for(const row of rows)pointsList.appendChild(row);
+    pointsSummary.textContent=rows.length===1?'1 part':`${rows.length} parts`;
+    return;
+  }
   const owner=kind==='component'?nodes.find(n=>n.id===selected)
     :kind==='wire'?wires[Number(String(selected).slice(5))]:null;
   pointsSurface.hidden=!owner;
@@ -3295,14 +3456,45 @@ function openSelectionSettings(kind){
   barSelectionSettings.setAttribute('aria-expanded','true');
 }
 function selectedSurfaceKind(){
+  if(typeof selected==='string'&&selected.startsWith('pattern:'))return 'pattern';
   if(typeof selected==='string'&&selected.startsWith('wire:'))return 'wire';
   if(isAttachmentSelectionValue(selected))return 'port';
   return selected?'component':null;
 }
+// A Pattern gets the same bar a Component gets, and in the same order: what it is, what
+// it is called, what color it carries. OPEN and RELEASE are the two things only a
+// Pattern can do, so they are the only two extra controls.
+function showPatternBar(record){
+  if(!record)return;
+  selectionBar.hidden=false;
+  componentBarFields.hidden=true;connectionBarFields.hidden=true;portBarFields.hidden=true;patternBarFields.hidden=false;
+  if(barPatternKind.options.length!==PATTERN_KINDS.length){
+    barPatternKind.replaceChildren();
+    for(const kind of PATTERN_KINDS){
+      const option=document.createElement('option');
+      option.value=kind.id;option.textContent=kind.name;option.title=kind.sense;
+      barPatternKind.appendChild(option);
+    }
+  }
+  barPatternKind.value=record.kind;
+  // The kind is what the Pattern was made from. Changing it would have to rebuild the
+  // parts, which is a Program's job, so the control reads rather than edits.
+  barPatternKind.disabled=true;
+  barPatternLabel.value=record.label;
+  setSlotChip(barPatternColorSlot,record.colorSlot);
+  const open=patternIsOpen(record.id);
+  barPatternOpen.textContent=open?'CLOSE':'OPEN';
+  barPatternOpen.setAttribute('aria-pressed',open?'true':'false');
+  // A Pattern has no dimension of its own; its parts each have theirs.
+  barFormState.hidden=true;
+  if(!selectionSettingsPanel.hidden)syncSelectionSettings('pattern');
+  closeColorSlotPanel();
+  positionSelectionBar();
+}
 function showComponentBar(n){
   const cfg=componentConfig(n);
   selectionBar.hidden=false;
-  componentBarFields.hidden=false;connectionBarFields.hidden=true;portBarFields.hidden=true;
+  componentBarFields.hidden=false;connectionBarFields.hidden=true;portBarFields.hidden=true;patternBarFields.hidden=true;
   barComponentType.value=n.symbolId;
   barComponentLabel.value=cfg.label;
   setSlotChip(barComponentColorSlot,cfg.colorSlot);
@@ -3315,7 +3507,7 @@ function showComponentBar(n){
 function showConnectionBar(w,i){
   const cfg=connectionConfig(w);
   selectionBar.hidden=false;
-  componentBarFields.hidden=true;connectionBarFields.hidden=false;portBarFields.hidden=true;
+  componentBarFields.hidden=true;connectionBarFields.hidden=false;portBarFields.hidden=true;patternBarFields.hidden=true;
   barConnectionDirection.value=cfg.direction;
   barConnectionReciprocity.value=cfg.reciprocity;
 
@@ -3402,7 +3594,9 @@ function portDisplayName(info){return componentConfig(info.owner).label||byId(in
 
 function restoreSelectedSurface(){
   if(typeof selected!=='string')return;
-  if(selected.startsWith('wire:')){
+  if(selected.startsWith('pattern:')){
+    selectPattern(selected.slice(8),{focus:false});
+  }else if(selected.startsWith('wire:')){
     const i=Number(selected.split(':')[1]);if(wires[i])selectWire(i);
   }else if(isAttachmentSelectionValue(selected)){
     const info=selectedPortInfo();if(info)selectPortRef(info);
@@ -3413,7 +3607,9 @@ function restoreSelectedSurface(){
 function positionSelectionBar(){
   if(selectionBar.hidden)return;
   let p=null;
-  if(typeof selected==='string'&&selected.startsWith('wire:')){
+  if(typeof selected==='string'&&selected.startsWith('pattern:')){
+    const box=patternBounds(selected.slice(8));if(box)p={x:(box.l+box.r)/2,y:box.t-10};
+  }else if(typeof selected==='string'&&selected.startsWith('wire:')){
     const i=Number(selected.split(':')[1]),w=wires[i];if(w)p=connectionMidpoint(w,i);
   }else if(isAttachmentSelectionValue(selected)){
     const info=selectedPortInfo();
@@ -4831,23 +5027,24 @@ function addNode(symbolId,x=null,y=null,mods=null,options={}){
 <script data-beta-module="src/45-patterns.js">
 /* BEGIN src/45-patterns.js */
 'use strict';
-// 0.1 concern: Patterns — arrangements of forms.
+// 0.1 concern: Patterns — forms put together, and one thing while they are.
 //
-// A Pattern is the second ladder's first rung (VOCABULARY.md): forms put together.
-// It is not a new record kind and it is not a type. Dropping one runs the same
-// creation and hosting paths a person's own gestures run, and what lands is ordinary
-// Points, Paths, Planes and Wires with nothing marking them as having come from here.
-// A Pattern is therefore a starting arrangement, not a thing you can later edit as a
-// unit — that would be a Program, which does not exist yet.
+// A Pattern is the second ladder's first rung (VOCABULARY.md). It is a record of its
+// own: an id, a kind, a name and a color, with Components and Wires belonging to it by
+// naming it in `patternId`. That is what makes a Pattern behave the way a Component
+// does — one click selects it, one drag moves it, one Delete takes it, its name and
+// color live in one place — rather than being a way of drawing several forms at once.
 //
-// Each entry says what it is made of in one line, because the sidebar's job is to
-// teach the distinction between a form and an arrangement of forms.
+// It is still made of ordinary forms. OPEN steps inside and the parts select and move
+// one at a time; RELEASE drops the record and leaves the forms loose. Nothing about the
+// parts is special: a Pattern is who they belong to, not what they are.
 
-const PATTERNS=[
+const PATTERN_KINDS=[
   {
     id:'pair',
     name:'PAIR',
     sense:'two Points, joined',
+    meaning:'Two Points and the Wire between them. The smallest thing that is a relation rather than a location.',
     build(x,y){
       const a=addNode('point',x-90,y,null,{render:false,select:false});
       const b=addNode('point',x+90,y,null,{render:false,select:false});
@@ -4859,6 +5056,7 @@ const PATTERNS=[
     id:'chain',
     name:'CHAIN',
     sense:'Points in series',
+    meaning:'Points joined end to end, so what leaves one arrives at the next.',
     build(x,y){
       const made=[-140,0,140].map(dx=>addNode('point',x+dx,y,null,{render:false,select:false}));
       for(let i=0;i<made.length-1;i++)addConnection(made[i].id,'self',made[i+1].id,'self');
@@ -4869,6 +5067,7 @@ const PATTERNS=[
     id:'hub',
     name:'HUB',
     sense:'one Point, many out',
+    meaning:'One Point every other Point reaches. A shape, not a permission.',
     build(x,y){
       const centre=addNode('point',x,y,null,{render:false,select:false});
       const spokes=[[150,-110],[170,0],[150,110]].map(([dx,dy])=>
@@ -4881,6 +5080,7 @@ const PATTERNS=[
     id:'rail',
     name:'RAIL',
     sense:'Points along a Path',
+    meaning:'A Path carrying Points at positions along it, each riding the Path when it moves.',
     build(x,y){
       const rail=addNode('path',x,y,null,{render:false,select:false});
       // Settle each Point through the ordinary host path, so what lands is exactly
@@ -4899,21 +5099,19 @@ const PATTERNS=[
     id:'carrier',
     name:'CARRIER',
     sense:'a Wire, ends free',
+    meaning:'A Wire bound to nothing yet. This is what the palette PATH used to drop, before PATH became the 1D form.',
     build(x,y){
-      // Not a form: a Wire whose two ends are bound to nothing yet. This is what the
-      // palette's PATH used to drop, which is why PATH would not behave like a form.
-      addCarrier(x,y,null,{render:false,select:false});
-      return [];
+      const wire=addCarrier(x,y,null,{render:false,select:false});
+      return wire?{components:[],wires:[wire]}:{components:[],wires:[]};
     }
   },
   {
     id:'block',
     name:'BLOCK',
     sense:'a Plane with Points',
+    meaning:'A Plane that came with somewhere to attach. This is what a typed Component always was.',
     build(x,y){
       const plane=addNode('plane',x,y,null,{render:false,select:false});
-      // The template's built-in boundary points are what a typed Component always
-      // was: a Plane that came with somewhere to attach.
       plane.config.attachmentDefaults='standard';
       componentConfig(plane);
       return [plane];
@@ -4923,72 +5121,255 @@ const PATTERNS=[
     id:'nest',
     name:'NEST',
     sense:'a Plane within a Plane',
+    meaning:'A Plane held inside another Plane, so the inner one is scoped by the outer.',
     build(x,y){
       const outer=addNode('plane',x,y,null,{render:false,select:false});
       const size=componentSize(outer);
       const inner=addNode('plane',x,y,null,{render:false,select:false});
-      const inner_p=componentConfig(inner).presentation;
-      inner_p.size.w=Math.max(80,Math.round(size.w*.5));
-      inner_p.size.h=Math.max(64,Math.round(size.h*.45));
+      const innerPresentation=componentConfig(inner).presentation;
+      innerPresentation.size.w=Math.max(80,Math.round(size.w*.5));
+      innerPresentation.size.h=Math.max(64,Math.round(size.h*.45));
       updateContainmentFor(inner);
       return [outer,inner];
     }
   }
 ];
+// The palette section still calls the list PATTERNS; the entries are kinds, and a
+// dropped Pattern is a record whose `kind` names one of them.
+const PATTERNS=PATTERN_KINDS;
 
-function patternById(id){return PATTERNS.find(p=>p.id===String(id))||null}
+function patternKind(id){return PATTERN_KINDS.find(k=>k.id===String(id))||null}
+// Kept for the earlier name, which the API and the palette both used.
+function patternById(id){return patternKind(id)}
 
-// One drop is one undoable step, however many forms it puts down.
+// --- Pattern records -------------------------------------------------------
+function patternRecord(id){return patternRecords.find(p=>p.id===String(id))||null}
+function patternOf(entity){return entity?.patternId?patternRecord(entity.patternId):null}
+function patternMemberNodes(id){return nodes.filter(n=>n.patternId===id)}
+function patternMemberWires(id){return wires.filter(w=>w.patternId===id)}
+function patternMemberCount(id){return patternMemberNodes(id).length+patternMemberWires(id).length}
+function patternDisplayName(record){
+  if(!record)return '—';
+  return record.label||patternKind(record.kind)?.name||record.kind||record.id;
+}
+function patternSenseText(record){return patternKind(record?.kind)?.sense||'forms, together'}
+function patternColor(record){return slotColor(record?.colorSlot??0)}
+
+// A Pattern is open while its parts are being worked on. Open state is a view of the
+// session, not of the document: a saved file records who belongs to what, never which
+// Pattern happened to be unfolded when it was written.
+const openPatternIds=new Set();
+function patternIsOpen(id){return openPatternIds.has(String(id))}
+function setPatternOpen(id,open){
+  if(open)openPatternIds.add(String(id));else openPatternIds.delete(String(id));
+}
+// The Pattern a click on this node should land on: none if the node is loose, and none
+// while the Pattern is open, because open is exactly the state where the parts answer
+// for themselves.
+function enclosingClosedPattern(entity){
+  const record=patternOf(entity);
+  return record&&!patternIsOpen(record.id)?record:null;
+}
+
+function drawnWireBox(wireId){
+  const el=wiresG?.querySelector(`.wire-group[data-wire-id="${wireId}"]`);
+  if(!el||typeof el.getBBox!=='function')return null;
+  try{
+    const box=el.getBBox();
+    if(!Number.isFinite(box.x)||(!box.width&&!box.height))return null;
+    return {l:box.x,r:box.x+box.width,t:box.y,b:box.y+box.height};
+  }catch(_){return null}
+}
+function patternBounds(id,pad=18){
+  let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
+  for(const node of patternMemberNodes(id)){
+    const box=componentBounds(node);
+    l=Math.min(l,box.l);r=Math.max(r,box.r);t=Math.min(t,box.t);b=Math.max(b,box.b);
+  }
+  for(const wire of patternMemberWires(id)){
+    // A Wire's endpoints are not its extent: the router takes the room it takes, and a
+    // hull that cut through its own Wire would be lying about what belongs to it. Where
+    // the Wire has been drawn, its drawn box is the truth; otherwise fall back to the ends.
+    const box=drawnWireBox(wire.id);
+    if(box){l=Math.min(l,box.l);r=Math.max(r,box.r);t=Math.min(t,box.t);b=Math.max(b,box.b);continue}
+    for(const end of ['a','b']){
+      const pos=carrierEndpointPos(wire,end);if(!pos)continue;
+      l=Math.min(l,pos.x);r=Math.max(r,pos.x);t=Math.min(t,pos.y);b=Math.max(b,pos.y);
+    }
+  }
+  if(!Number.isFinite(l))return null;
+  return {l:l-pad,r:r+pad,t:t-pad,b:b+pad};
+}
+
+// --- Making one ------------------------------------------------------------
+// One drop is one undoable step, and what it leaves behind is a Pattern plus the forms
+// that belong to it.
 function addPattern(id,x=null,y=null){
-  const pattern=patternById(id);
-  if(!pattern){statusEl.textContent=`Unknown pattern: ${id}`;return null}
+  const kind=patternKind(id);
+  if(!kind){statusEl.textContent=`Unknown pattern: ${id}`;return null}
   const centerX=camera.x+camera.w/2,centerY=camera.y+camera.h/2;
   const px=x==null?centerX:x,py=y==null?centerY:y;
-  setHistoryHint(`Add ${pattern.name}`);
-  let made=[];
+  setHistoryHint(`Add ${kind.name}`);
+  const wiresBefore=new Set(wires.map(w=>w.id));
+  let built=[];
   try{
-    made=pattern.build(px,py)||[];
+    built=kind.build(px,py)||[];
   }catch(error){
     console.error(error);
-    statusEl.textContent=`${pattern.name} could not be placed`;
+    statusEl.textContent=`${kind.name} could not be placed`;
     return null;
   }
+  const madeNodes=Array.isArray(built)?built:(built.components||[]);
+  // Whatever a build wired up belongs to the Pattern too, however it made them.
+  const madeWires=Array.isArray(built)
+    ?wires.filter(w=>!wiresBefore.has(w.id))
+    :(built.wires||[]);
+
+  const record=SovSchematicData.makePattern(diagram,{kind:kind.id,label:'',colorSlot:0});
+  patternRecords.push(record);
+  for(const member of [...madeNodes,...madeWires])member.patternId=record.id;
+
   routeCache.clear();arrowPoseCache.clear();
   syncAllNodeBoundaryContext();
   render();
-  // The arrangement is the thing that was added, so all of it is selected. A Pattern
-  // made only of Wires selects nothing, which is the honest answer for it.
-  clearComponentSelectionSet();
-  for(const node of made)selectedComponentIds.add(node.id);
-  if(made.length)selectNode(made.at(-1).id,{preserveSet:true,focus:false});
-  commitHistoryCapture(`Add ${pattern.name}`);
-  statusEl.textContent=made.length?`${pattern.name} · ${made.length} forms`:`${pattern.name} added`;
-  return made;
+  selectPattern(record.id,{focus:false});
+  commitHistoryCapture(`Add ${kind.name}`);
+  statusEl.textContent=`${patternDisplayName(record)} · ${patternMemberCount(record.id)} parts`;
+  return madeNodes;
 }
 
-// One line drawing per Pattern, showing the arrangement rather than a form.
-function patternGlyph(id){return `<svg viewBox="0 0 96 64"><use href="#pat-${id}"/></svg>`}
+// --- Selecting one ---------------------------------------------------------
+// A Pattern selects as one thing. Its member Components go into the ordinary component
+// selection set, because that set is what dragging, nudging and deleting already read;
+// `selected` names the Pattern, so the bar and the inspector answer for the Pattern
+// rather than for whichever part happened to be under the pointer.
+function selectPattern(id,{focus=true}={}){
+  const record=patternRecord(id);
+  if(!record){selectNode(null);return null}
+  clearEndpointFocus?.();
+  selectedComponentIds.clear();
+  for(const node of patternMemberNodes(record.id))selectedComponentIds.add(node.id);
+  selected=`pattern:${record.id}`;
+  if(focus)activateCanvasKeyboard();
+  document.querySelectorAll('.node').forEach(el=>el.classList.toggle('selected',selectedComponentIds.has(el.dataset.id)));
+  document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));
+  document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
+  document.getElementById('emptyInspector').hidden=true;
+  hideInspectorKinds();
+  patternDetail.hidden=false;
+  qName.textContent=patternKind(record.kind)?.name||record.kind;
+  qSense.textContent=patternSenseText(record);
+  qLabel.textContent=record.label||'—';
+  {const n=patternMemberNodes(record.id).length,w=patternMemberWires(record.id).length;
+   qParts.textContent=`${n} form${n===1?'':'s'} · ${w} wire${w===1?'':'s'}`;}
+  {const host=patternMemberNodes(record.id)[0];
+   qParent.textContent=host?componentDisplayName(parentComponent(host)):'—';
+   qScope.textContent=host?componentScopePath(host):'world';}
+  qState.textContent=patternIsOpen(record.id)?'Open · parts select one at a time':'Closed · selects as one';
+  qMeaning.textContent=patternKind(record.kind)?.meaning||'Forms, together.';
+  showPatternBar(record);
+  renderPatternHulls();
+  return record;
+}
+function selectedPatternRecord(){
+  return typeof selected==='string'&&selected.startsWith('pattern:')?patternRecord(selected.slice(8)):null;
+}
 
-// Patterns are arrangements of those forms, so they are a second section rather than
-// more rungs: dropping one puts down several ordinary forms already related to each
-// other. The card says what it is made of, because that distinction is the point.
+// OPEN is a toggle, not a mode with its own exit: opening selects the first part so
+// there is something to work on, and closing puts the Pattern back in hand.
+function togglePatternOpen(id){
+  const record=patternRecord(id);if(!record)return;
+  const open=!patternIsOpen(record.id);
+  setPatternOpen(record.id,open);
+  if(open){
+    const first=patternMemberNodes(record.id)[0];
+    statusEl.textContent=`${patternDisplayName(record)} open · parts select one at a time`;
+    if(first)selectNode(first.id,{focus:false});else selectNode(null);
+  }else{
+    selectPattern(record.id,{focus:false});
+    statusEl.textContent=`${patternDisplayName(record)} closed`;
+  }
+  renderPatternHulls();
+}
+
+// RELEASE drops the record and leaves the forms exactly where they are. Nothing is
+// deleted, so it is the honest opposite of dropping a Pattern.
+function releasePattern(id){
+  const record=patternRecord(id);if(!record)return null;
+  commitHistoryCapture();
+  setHistoryHint(`Release ${patternDisplayName(record)}`);
+  const freed=patternMemberNodes(record.id);
+  for(const member of [...freed,...patternMemberWires(record.id)])delete member.patternId;
+  const index=patternRecords.findIndex(p=>p.id===record.id);
+  if(index>=0)patternRecords.splice(index,1);
+  openPatternIds.delete(record.id);
+  render();
+  setComponentSelection(freed.map(n=>n.id),freed.at(-1)?.id||null);
+  if(freed.length)selectNode(freed.at(-1).id,{preserveSet:true,focus:false});else selectNode(null);
+  commitHistoryCapture(`Release ${patternDisplayName(record)}`);
+  statusEl.textContent=`Released · ${freed.length} form${freed.length===1?'':'s'} loose`;
+  return freed;
+}
+
+function renamePattern(id,label){
+  const record=patternRecord(id);if(!record)return;
+  record.label=String(label||'').slice(0,60);
+  qLabel.textContent=record.label||'—';
+  renderPatternHulls();
+  scheduleHistoryCapture('Rename Pattern');
+}
+
+// --- Drawing the hull ------------------------------------------------------
+// A Pattern is one object, so it needs one outline. It is drawn under the forms and it
+// is never a hit target: clicking a member is what selects the Pattern, and an outline
+// that swallowed clicks in the gaps would make the parts harder to reach once open.
+function renderPatternHulls(){
+  if(!patternHullsG)return;
+  patternHullsG.replaceChildren();
+  for(const record of patternRecords){
+    const box=patternBounds(record.id);if(!box)continue;
+    const open=patternIsOpen(record.id);
+    const active=selectedPatternRecord()?.id===record.id;
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','pattern-hull'+(active?' selected':'')+(open?' open':''));
+    g.dataset.patternId=record.id;
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x',box.l);rect.setAttribute('y',box.t);
+    rect.setAttribute('width',Math.max(1,box.r-box.l));rect.setAttribute('height',Math.max(1,box.b-box.t));
+    rect.setAttribute('rx','14');
+    rect.style.setProperty('--pattern-color',patternColor(record));
+    g.appendChild(rect);
+    const label=document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('class','pattern-hull-label');
+    label.setAttribute('x',box.l+12);label.setAttribute('y',box.t-6);
+    label.style.setProperty('--pattern-color',patternColor(record));
+    label.textContent=patternDisplayName(record).toUpperCase()+(open?' · OPEN':'');
+    g.appendChild(label);
+    patternHullsG.appendChild(g);
+  }
+}
+
+// --- The palette section ---------------------------------------------------
+// Patterns are a second section because the vocabulary has two ladders. The card says
+// what the Pattern is made of, because that distinction is the point of the section.
 {
   const section=document.createElement('div');
   section.className='section';section.dataset.group='patterns';
   section.innerHTML='<h2>Pattern</h2><div class="symbol-ladder pattern-ladder"></div>';
   const list=section.querySelector('.symbol-ladder');
-  for(const pattern of PATTERNS){
+  for(const kind of PATTERN_KINDS){
     const b=document.createElement('button');
     b.type='button';b.className='symbol-card ladder-rung pattern-card';
-    b.dataset.patternId=pattern.id;
-    b.innerHTML=patternGlyph(pattern.id)
-      +`<span class="ladder-text"><b>${pattern.name}</b><small>${pattern.sense}</small></span>`;
-    b.title=`${pattern.name} · ${pattern.sense}`;
-    bindPalettePattern(b,pattern.id);
+    b.dataset.patternId=kind.id;
+    b.innerHTML=`<svg viewBox="0 0 96 64"><use href="#pat-${kind.id}"/></svg>`
+      +`<span class="ladder-text"><b>${kind.name}</b><small>${kind.sense}</small></span>`;
+    b.title=`${kind.name} · ${kind.sense}`;
+    bindPalettePattern(b,kind.id);
     list.appendChild(b);
   }
   palette.appendChild(section);
 }
+function patternGlyph(id){return `<svg viewBox="0 0 96 64"><use href="#pat-${id}"/></svg>`}
 /* END src/45-patterns.js */
 </script>
 <script data-beta-module="src/50-selection.js">
@@ -4996,8 +5377,15 @@ function patternGlyph(id){return `<svg viewBox="0 0 96 64"><use href="#pat-${id}
 'use strict';
 // 0.1 Beta concern: Selection state projected into contextual UI and inspector.
 
-function hideInspectorKinds(){componentDetail.hidden=true;connectionDetail.hidden=true;portDetail.hidden=true}
+function hideInspectorKinds(){componentDetail.hidden=true;connectionDetail.hidden=true;portDetail.hidden=true;patternDetail.hidden=true}
 function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false}={}){
+  // A form that belongs to a closed Pattern answers as the Pattern. Clicking a part is
+  // how a Pattern gets selected, which is why the whole arrangement is one click; OPEN
+  // is what makes the parts answer for themselves.
+  if(id&&!preserveSet&&!additive){
+    const group=enclosingClosedPattern(nodes.find(n=>n.id===id));
+    if(group)return void selectPattern(group.id,{focus});
+  }
   clearEndpointFocus();
   if(!preserveSet){
     if(!id)clearComponentSelectionSet();
@@ -5346,6 +5734,9 @@ function render(){
     bindNode(g,n); nodesG.appendChild(g);
   });
   renderWires(signalState);
+  // The hulls come after the wires because a Pattern's outline is measured from where
+  // its parts and its Wire ends actually landed.
+  renderPatternHulls?.();
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
 }
@@ -6369,13 +6760,46 @@ barPortLabel.addEventListener('input',()=>{
   render();selectPortRef(selectedPortInfo()||info,{focus:false});
 });
 barPortColorSlot.addEventListener('click',()=>openColorSlotPanel('port'));
+barPatternColorSlot.addEventListener('click',()=>openColorSlotPanel('pattern'));
+barPatternLabel.addEventListener('input',()=>{
+  const record=selectedPatternRecord();if(!record)return;
+  renamePattern(record.id,barPatternLabel.value);
+});
+barPatternOpen.addEventListener('click',()=>{
+  const record=selectedPatternRecord();
+  if(record){togglePatternOpen(record.id);return}
+  // Once open, a part is what is selected, so the button closes the Pattern it belongs to.
+  const node=nodes.find(n=>n.id===selected);const group=patternOf(node);
+  if(group)togglePatternOpen(group.id);
+});
+barPatternRelease.addEventListener('click',()=>{
+  const record=selectedPatternRecord();if(!record)return;
+  releasePattern(record.id);
+});
+
 function deleteSelected(){
   cancelWireDrag();
   if(!selected)return;
   // Flush any pending edit first so deletion always has a distinct pre-delete snapshot.
   commitHistoryCapture();
 
-  if(typeof selected==='string'&&selected.startsWith('wire:')){
+  if(typeof selected==='string'&&selected.startsWith('pattern:')){
+    // Deleting a Pattern deletes the Pattern: the parts belong to it, so they go too.
+    // RELEASE is the way to keep the forms and lose only the grouping.
+    const record=selectedPatternRecord();
+    if(record){
+      const memberNodes=patternMemberNodes(record.id),memberWires=patternMemberWires(record.id);
+      if([...memberNodes,...memberWires].some(isEntityLocked)){statusEl.textContent='Locked · delete refused';return}
+      setHistoryHint(`Delete ${patternDisplayName(record)}`);
+      for(const wire of memberWires)SovSchematicData.remove(diagram,'wire',wire.id);
+      for(const root of memberNodes.filter(n=>!memberNodes.some(other=>other.id!==n.id&&isDescendantOf(n.id,other.id))))
+        SovSchematicData.remove(diagram,'component',root.id);
+      const index=patternRecords.findIndex(p=>p.id===record.id);
+      if(index>=0)patternRecords.splice(index,1);
+      openPatternIds.delete(record.id);
+      clearComponentSelectionSet();syncAllNodeBoundaryContext();
+    }
+  }else if(typeof selected==='string'&&selected.startsWith('wire:')){
     const i=Number(selected.split(':')[1]);
     if(Number.isInteger(i)&&i>=0&&i<wires.length){if(isEntityLocked(wires[i])){statusEl.textContent='Locked · delete refused';return}setHistoryHint('Delete Wire');SovSchematicData.remove(diagram,'wire',wires[i].id)}
   }else if(isAttachmentSelectionValue(selected)){
@@ -7238,6 +7662,18 @@ const SovSchematicAPI={
   execute:(operation)=>runtimeCrud(operation),
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
+  // Patterns are records, so they read and write through the ordinary resource surface.
+  // These are the editor actions that have no CRUD equivalent: dropping one builds its
+  // parts, releasing one keeps them, and open is a view state rather than document state.
+  patterns:{
+    kinds:()=>PATTERN_KINDS.map(k=>({id:k.id,name:k.name,sense:k.sense,meaning:k.meaning})),
+    list:()=>SovSchematicData.clone(patternRecords),
+    add:(kind,x=null,y=null)=>{const made=addPattern(kind,x,y);return made?SovSchematicData.clone(selectedPatternRecord()||patternRecords.at(-1)):null},
+    members:(id)=>SovSchematicData.patternMemberIds(diagram,id),
+    release:(id)=>{const freed=releasePattern(id);return freed?freed.map(n=>n.id):null},
+    open:(id,open=true)=>{setPatternOpen(id,open);render();return patternIsOpen(id)},
+    select:(id)=>{const record=selectPattern(id);return record?SovSchematicData.clone(record):null}
+  },
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
   tools:()=>SovSchematicData.operationTools()

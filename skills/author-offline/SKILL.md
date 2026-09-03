@@ -122,6 +122,7 @@ Port override on a Component, for access or face. Write the whole port record; t
 | `plane` | Bounded 2D region that hosts Points on its boundary and Components inside. |
 | `point` | 0D attachment on a Path, a Plane boundary, or a Wire. |
 | `path` | 1D route with start and end that hosts Points. |
+| `pod` | Bounded 3D region, bounded by Planes. Thick by default; hosts like a Plane until volume semantics are earned. |
 | `blank` | Incomplete component whose type is still to be chosen. Do not author these. |
 
 ## Layout rules

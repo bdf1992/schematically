@@ -47,12 +47,19 @@ of it exists:
   `min(dimension, 2)` - so a Point still lands on its edge as if it were 2D. What
   is missing is volume semantics: faces, depth-ordering, and a Pod bounded by
   Planes the way a Plane is bounded by Paths.
-- **Pattern** has a palette section and seven entries (`src/45-patterns.js`): PAIR,
-  CHAIN, HUB, RAIL, CARRIER, BLOCK, NEST. Each is an arrangement rather than a type.
-  Dropping one runs the same creation and hosting paths a person's gestures run, so
-  what lands is ordinary forms and Wires; nothing on the record says it came from a
-  Pattern, and there is no way to edit one as a unit afterwards. That would be a
-  Program.
+- **Pattern** is a record kind, alongside Component and Wire. A Pattern has an id, a
+  kind, a name and a color; a Component or Wire belongs to one by naming it in
+  `patternId`; and `document.patterns` carries them through save, load and the CRUD
+  surface (`resource: 'pattern'`). That is what makes a Pattern behave the way a
+  Component behaves: one click on any part selects the Pattern, one drag moves it, one
+  Delete takes it, and its name and color live in one bar.
+  Seven kinds ship (`src/45-patterns.js`): PAIR, CHAIN, HUB, RAIL, CARRIER, BLOCK,
+  NEST. Dropping one runs the same creation and hosting paths a person's gestures run,
+  so its parts are ordinary forms and Wires; belonging to a Pattern is the only thing
+  that marks them. OPEN steps inside and the parts select and move one at a time;
+  RELEASE drops the record and leaves the forms exactly where they are.
+  The kind cannot be changed after the fact, because changing it would have to rebuild
+  the parts. That is a Program's job.
   BLOCK is the honest replacement for a typed Component: a Plane that came with
   somewhere to attach. The eight typed ids - `act`, `hold`, `buffer`, `gate`,
   `switch`, `limit`, `receipt`, `observe` - are still in `GROUPS.Components` and

@@ -15,7 +15,7 @@
   const OPERATION_SCHEMA='soveraeign.schematic/operation@0.1';
   const RECEIPT_SCHEMA='soveraeign.schematic/receipt@0.1';
   const GLOBAL_CANVAS_ID='canvas:global';
-  const RESOURCE_KEYS={component:'components',wire:'wires',reference:'references'};
+  const RESOURCE_KEYS={component:'components',wire:'wires',reference:'references',pattern:'patterns'};
   // Dimensional primitives. A template preset is applied only where the caller
   // supplied nothing, so authored records always win over the preset.
   const LEGACY_SYMBOL_IDS={port:'point'};
@@ -73,6 +73,7 @@
       components:Array.isArray(input.components)?clone(input.components):[],
       wires:Array.isArray(input.wires)?clone(input.wires):Array.isArray(input.connections)?clone(input.connections):[],
       references:Array.isArray(input.references)?clone(input.references):[],
+      patterns:Array.isArray(input.patterns)?clone(input.patterns):[],
       layout:isObject(input.layout)?clone(input.layout):{}
     };
     if(input.canvas&&isObject(input.canvas))doc.canvas={...doc.canvas,...clone(input.canvas),id:GLOBAL_CANVAS_ID,scope:'global',dimension:2,state:'open'};
@@ -90,6 +91,7 @@
     if(!Array.isArray(doc.components))doc.components=[];
     if(!Array.isArray(doc.wires))doc.wires=Array.isArray(doc.connections)?doc.connections:[];
     if(!Array.isArray(doc.references))doc.references=[];
+    if(!Array.isArray(doc.patterns))doc.patterns=[];
     if(!isObject(doc.layout))doc.layout={};
     for(const component of doc.components){
       normalizeComponentIdentity(component);
@@ -118,6 +120,7 @@
       if(!['none','read','write'].includes(wire.config.forwardOperation))wire.config.forwardOperation='none';
       if(!['none','read','write'].includes(wire.config.reverseOperation))wire.config.reverseOperation='none';
     }
+    normalizePatterns(doc);
     migrateLegacyWirePointAttachments(doc);
     if('connections' in doc)delete doc.connections;
     return doc;
@@ -466,6 +469,50 @@
   function makeReference(doc,value={}){
     return {id:cleanString(value.id,nextId(doc.references,'r')),kind:cleanString(value.kind,'reference'),label:cleanString(value.label,''),target:value.target??null,data:isObject(value.data)?clone(value.data):{}};
   }
+  // A Pattern is a record, not a way of drawing several records at once. It has an id,
+  // a kind, a name and a color of its own, and a Component or Wire belongs to it by
+  // naming it in patternId. That is what makes a Pattern behave like a Component in the
+  // editor - one thing to select, name, move and delete - while the forms inside it stay
+  // ordinary forms that a person can still open up and work on.
+  function makePattern(doc,value={}){
+    return {
+      id:cleanString(value.id,nextId(doc.patterns,'q')),
+      kind:cleanString(value.kind,'group'),
+      label:cleanString(value.label,''),
+      colorSlot:Math.max(0,Math.min(5,Math.trunc(num(value.colorSlot,0))))
+    };
+  }
+  // Membership is a reference and references can dangle: a member naming a Pattern the
+  // document does not declare is loose, and a Pattern nothing names is nothing. Loading
+  // settles both rather than carrying a half-Pattern forward.
+  function normalizePatterns(doc){
+    if(!Array.isArray(doc.patterns))doc.patterns=[];
+    const declared=new Map();
+    for(const pattern of doc.patterns){
+      if(!isObject(pattern))continue;
+      pattern.id=cleanString(pattern.id,'');
+      pattern.kind=cleanString(pattern.kind,'group');
+      pattern.label=cleanString(pattern.label,'');
+      pattern.colorSlot=Math.max(0,Math.min(5,Math.trunc(num(pattern.colorSlot,0))));
+      if(pattern.id&&!declared.has(pattern.id))declared.set(pattern.id,pattern);
+    }
+    const used=new Set();
+    for(const member of [...doc.components,...doc.wires]){
+      if(!isObject(member))continue;
+      const ref=cleanString(member.patternId,'');
+      if(ref&&declared.has(ref)){member.patternId=ref;used.add(ref)}
+      else if('patternId' in member)delete member.patternId;
+    }
+    doc.patterns=[...declared.values()].filter(pattern=>used.has(pattern.id));
+    return doc;
+  }
+  function patternMemberIds(doc,patternId){
+    const id=cleanString(patternId,'');
+    return {
+      components:(doc.components||[]).filter(c=>c?.patternId===id).map(c=>c.id),
+      wires:(doc.wires||[]).filter(w=>w?.patternId===id).map(w=>w.id)
+    };
+  }
   function resourceArray(doc,resource){
     const key=RESOURCE_KEYS[resource];if(!key)throw new Error(`Unsupported resource: ${resource}`);return doc[key];
   }
@@ -494,7 +541,7 @@
   function create(doc,resource,value={}){
     const arr=resourceArray(doc,resource);
     if(resource==='wire'){assertCarrierEndpointAccepts(doc,value?.a);assertCarrierEndpointAccepts(doc,value?.b)}
-    const record=resource==='component'?makeComponent(doc,value):resource==='wire'?makeWire(doc,value):makeReference(doc,value);
+    const record=resource==='component'?makeComponent(doc,value):resource==='wire'?makeWire(doc,value):resource==='pattern'?makePattern(doc,value):makeReference(doc,value);
     if(arr.some(x=>x.id===record.id))throw new Error(`${resource} id already exists: ${record.id}`);
     arr.push(record);return clone(record);
   }
@@ -578,10 +625,11 @@
   }
   function replaceDocument(target,input){
     const incoming=makeDocument(clone(input));
-    const components=target.components,wires=target.wires,references=target.references;
+    const components=target.components,wires=target.wires,references=target.references,patterns=target.patterns;
     components.splice(0,components.length,...incoming.components);
     wires.splice(0,wires.length,...incoming.wires);
     references.splice(0,references.length,...incoming.references);
+    patterns.splice(0,patterns.length,...incoming.patterns);
     target.schema=DOCUMENT_SCHEMA;target.id=incoming.id;target.revision=incoming.revision;target.meta=incoming.meta;target.canvas=incoming.canvas;target.layout=incoming.layout;
     return target;
   }
@@ -592,6 +640,7 @@
     if(!Array.isArray(input.components))errors.push('components must be an array');
     if(!Array.isArray(input.wires))errors.push('wires must be an array');
     if(!Array.isArray(input.references))errors.push('references must be an array');
+    if(!Array.isArray(input.patterns))errors.push('patterns must be an array');
     const ids=new Set();
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]],['reference',input.references||[]]])for(const item of items){if(!item?.id)errors.push(`${kind} missing id`);else if(ids.has(`${kind}:${item.id}`))errors.push(`duplicate ${kind} id: ${item.id}`);else ids.add(`${kind}:${item.id}`)}
     const componentIds=new Set((input.components||[]).map(x=>x.id));
@@ -607,16 +656,16 @@
     return {ok:errors.length===0,errors};
   }
   function operationTools(){
-    const resourceSchema={type:'string',enum:['component','wire','reference']};
+    const resourceSchema={type:'string',enum:['component','wire','reference','pattern']};
     return [
       {name:'schematic.list',description:'List schematic resources.',inputSchema:{type:'object',properties:{resource:resourceSchema,query:{type:'object'}},required:['resource'],additionalProperties:false}},
       {name:'schematic.get',description:'Read one schematic resource by id.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'}},required:['resource','id'],additionalProperties:false}},
-      {name:'schematic.create',description:'Create a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,value:{type:'object'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','value'],additionalProperties:false}},
-      {name:'schematic.update',description:'Patch a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},patch:{type:'object'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','id','patch'],additionalProperties:false}},
-      {name:'schematic.delete',description:'Delete a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','id'],additionalProperties:false}},
+      {name:'schematic.create',description:'Create a component, wire, reference, or pattern.',inputSchema:{type:'object',properties:{resource:resourceSchema,value:{type:'object'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','value'],additionalProperties:false}},
+      {name:'schematic.update',description:'Patch a component, wire, reference, or pattern.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},patch:{type:'object'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','id','patch'],additionalProperties:false}},
+      {name:'schematic.delete',description:'Delete a component, wire, reference, or pattern. Deleting a pattern leaves its members loose; delete the members to remove the forms.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','id'],additionalProperties:false}},
       {name:'schematic.document.get',description:'Return the entire schematic document.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,makePattern,normalizePatterns,patternMemberIds,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });

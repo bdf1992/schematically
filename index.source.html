@@ -339,6 +339,7 @@
     <g id="wires"></g>
     <g id="ghostLayer" aria-hidden="true"></g>
     <g id="paletteDropLayer" aria-hidden="true"></g>
+    <g id="patternHulls" aria-hidden="true"></g>
     <g id="nodes"></g>
   </svg>
   <div class="quick-search" id="quickSearch" hidden>
@@ -395,6 +396,17 @@
       </div>
       <input id="barPortLabel" class="bar-input bar-label" type="text" maxlength="24" placeholder="Point label" aria-label="Point label" title="Point label">
       <button id="barPortColorSlot" class="color-slot-chip" type="button" title="Point color" aria-label="Point palette slot"></button>
+    </div>
+
+    <div class="selection-bar-fields" id="patternBarFields" hidden>
+      <div class="icon-select pattern-template-select" aria-label="Pattern">
+        <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.5"></circle><circle cx="18" cy="12" r="2.5"></circle><path d="M8.5 12h7"></path></svg></span>
+        <select id="barPatternKind" class="bar-select bar-type" aria-label="Pattern" title="Pattern"></select>
+      </div>
+      <input id="barPatternLabel" class="bar-input bar-label" type="text" placeholder="Name" aria-label="Pattern name" title="Pattern name">
+      <button id="barPatternColorSlot" class="color-slot-chip" type="button" title="Pattern color" aria-label="Pattern palette slot"></button>
+      <button id="barPatternOpen" class="bar-pattern-open" type="button" title="Open the Pattern and work on its parts" aria-label="Open Pattern" aria-pressed="false">OPEN</button>
+      <button id="barPatternRelease" class="bar-pattern-release" type="button" title="Break this Pattern into loose forms" aria-label="Release Pattern">RELEASE</button>
     </div>
 
     <button id="barFormState" class="bar-form-state" type="button" title="Form · dimension, body and frame" aria-label="Component form">2D</button>
@@ -598,6 +610,19 @@
         <dt>Body</dt><dd id="iBody">Generic</dd>
         <dt>Frame</dt><dd id="iFrame">None</dd>
         <dt>Interior</dt><dd id="iContains">Closed</dd>
+      </dl>
+    </div>
+    <div id="patternDetail" hidden>
+      <div class="kind-badge">PATTERN</div>
+      <dl class="kv">
+        <dt>Pattern</dt><dd id="qName">—</dd>
+        <dt>Made of</dt><dd id="qSense">—</dd>
+        <dt>Name</dt><dd id="qLabel">—</dd>
+        <dt>Parts</dt><dd id="qParts">—</dd>
+        <dt>Host</dt><dd id="qParent">—</dd>
+        <dt>Scope</dt><dd id="qScope">world</dd>
+        <dt>State</dt><dd id="qState">Closed · selects as one</dd>
+        <dt>Meaning</dt><dd id="qMeaning">—</dd>
       </dl>
     </div>
     <div id="portDetail" hidden>

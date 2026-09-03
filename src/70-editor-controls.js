@@ -52,13 +52,46 @@ barPortLabel.addEventListener('input',()=>{
   render();selectPortRef(selectedPortInfo()||info,{focus:false});
 });
 barPortColorSlot.addEventListener('click',()=>openColorSlotPanel('port'));
+barPatternColorSlot.addEventListener('click',()=>openColorSlotPanel('pattern'));
+barPatternLabel.addEventListener('input',()=>{
+  const record=selectedPatternRecord();if(!record)return;
+  renamePattern(record.id,barPatternLabel.value);
+});
+barPatternOpen.addEventListener('click',()=>{
+  const record=selectedPatternRecord();
+  if(record){togglePatternOpen(record.id);return}
+  // Once open, a part is what is selected, so the button closes the Pattern it belongs to.
+  const node=nodes.find(n=>n.id===selected);const group=patternOf(node);
+  if(group)togglePatternOpen(group.id);
+});
+barPatternRelease.addEventListener('click',()=>{
+  const record=selectedPatternRecord();if(!record)return;
+  releasePattern(record.id);
+});
+
 function deleteSelected(){
   cancelWireDrag();
   if(!selected)return;
   // Flush any pending edit first so deletion always has a distinct pre-delete snapshot.
   commitHistoryCapture();
 
-  if(typeof selected==='string'&&selected.startsWith('wire:')){
+  if(typeof selected==='string'&&selected.startsWith('pattern:')){
+    // Deleting a Pattern deletes the Pattern: the parts belong to it, so they go too.
+    // RELEASE is the way to keep the forms and lose only the grouping.
+    const record=selectedPatternRecord();
+    if(record){
+      const memberNodes=patternMemberNodes(record.id),memberWires=patternMemberWires(record.id);
+      if([...memberNodes,...memberWires].some(isEntityLocked)){statusEl.textContent='Locked · delete refused';return}
+      setHistoryHint(`Delete ${patternDisplayName(record)}`);
+      for(const wire of memberWires)SovSchematicData.remove(diagram,'wire',wire.id);
+      for(const root of memberNodes.filter(n=>!memberNodes.some(other=>other.id!==n.id&&isDescendantOf(n.id,other.id))))
+        SovSchematicData.remove(diagram,'component',root.id);
+      const index=patternRecords.findIndex(p=>p.id===record.id);
+      if(index>=0)patternRecords.splice(index,1);
+      openPatternIds.delete(record.id);
+      clearComponentSelectionSet();syncAllNodeBoundaryContext();
+    }
+  }else if(typeof selected==='string'&&selected.startsWith('wire:')){
     const i=Number(selected.split(':')[1]);
     if(Number.isInteger(i)&&i>=0&&i<wires.length){if(isEntityLocked(wires[i])){statusEl.textContent='Locked · delete refused';return}setHistoryHint('Delete Wire');SovSchematicData.remove(diagram,'wire',wires[i].id)}
   }else if(isAttachmentSelectionValue(selected)){

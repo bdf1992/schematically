@@ -142,6 +142,21 @@ function copySelection(){
 function pasteClipboard({offset=32}={}){
   if(!semanticClipboard?.components?.length){statusEl.textContent='Clipboard empty';return []}
   setHistoryHint('Paste');const idMap=new Map(),created=[];
+  // A copied Pattern pastes as its own Pattern. Reusing the source's id would quietly
+  // enlarge the original; dropping it would paste the parts loose. Neither is a copy.
+  const patternMap=new Map();
+  const remapPattern=(sourceId)=>{
+    if(!sourceId)return null;
+    if(!patternMap.has(sourceId)){
+      const source=patternRecords.find(p=>p.id===sourceId);
+      if(!source){patternMap.set(sourceId,null)}
+      else{
+        const fresh=SovSchematicData.makePattern(diagram,{kind:source.kind,label:source.label,colorSlot:source.colorSlot});
+        patternRecords.push(fresh);patternMap.set(sourceId,fresh.id);
+      }
+    }
+    return patternMap.get(sourceId);
+  };
   const comps=semanticClipboard.components.slice().sort((a,b)=>nodeDepth(a)-nodeDepth(b));
   for(const old of comps){
     const value=SovSchematicData.clone(old);delete value.id;
@@ -151,12 +166,18 @@ function pasteClipboard({offset=32}={}){
       // A Point stuck to the copied host's boundary or path stays stuck to the copy.
       if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
     }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
-    const fresh=SovSchematicData.makeComponent(diagram,value);nodes.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
+    const fresh=SovSchematicData.makeComponent(diagram,value);
+    {const ref=remapPattern(old.patternId);if(ref)fresh.patternId=ref;else delete fresh.patternId}
+    nodes.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
   }
   for(const old of semanticClipboard.wires||[]){
     if(!idMap.has(old.a)||!idMap.has(old.b))continue;
     const value=SovSchematicData.clone(old);delete value.id;value.a=idMap.get(old.a);value.b=idMap.get(old.b);
-    try{wires.push(SovSchematicData.makeWire(diagram,value))}catch(_){ }
+    try{
+      const fresh=SovSchematicData.makeWire(diagram,value);
+      {const ref=remapPattern(old.patternId);if(ref)fresh.patternId=ref;else delete fresh.patternId}
+      wires.push(fresh);
+    }catch(_){ }
   }
   syncAllNodeBoundaryContext();setComponentSelection(created.filter(n=>semanticClipboard.rootIds.includes([...idMap.entries()].find(([,v])=>v===n.id)?.[0])).map(n=>n.id),created.at(-1)?.id);routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();statusEl.textContent=`Pasted · ${created.length} Component${created.length===1?'':'s'}`;return created;
 }

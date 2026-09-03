@@ -133,7 +133,7 @@ async function handleMcp(req,res){
   }
   return json(res,404,rpcError(id,-32601,'Method not found'),{'MCP-Protocol-Version':MCP_VERSION});
 }
-function resourceFromPath(segment){return ({components:'component',wires:'wire',references:'reference'})[segment]||null}
+function resourceFromPath(segment){return ({components:'component',wires:'wire',references:'reference',patterns:'pattern'})[segment]||null}
 async function handleApi(req,res,url){
   const parts=url.pathname.split('/').filter(Boolean);
   if(url.pathname==='/api/v1/formats'&&req.method==='GET')return json(res,200,{document:Data.DOCUMENT_SCHEMA,package:Data.PACKAGE_SCHEMA,workspace:Data.WORKSPACE_SCHEMA,operation:Data.OPERATION_SCHEMA,receipt:Data.RECEIPT_SCHEMA,resources:Object.keys(Data.RESOURCE_KEYS)});

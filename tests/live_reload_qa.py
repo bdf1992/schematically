@@ -113,12 +113,17 @@ async def main():
             assert not errors, errors
             await browser.close()
     finally:
-        io.open(WATCHED, 'w', encoding='utf-8', newline='').write(original)
+        # Stop the watcher before restoring the file. Restoring first makes the watcher
+        # queue one more rebuild, and that build can outlive the server and land on
+        # index.html after this test's own build has written it - which leaves a
+        # half-written index.html for whatever suite runs next.
         server.terminate()
         try:
             server.wait(timeout=10)
         except subprocess.TimeoutExpired:
             server.kill()
+        time.sleep(0.6)
+        io.open(WATCHED, 'w', encoding='utf-8', newline='').write(original)
         # Leave the build matching the restored source.
         subprocess.run([sys.executable, str(ROOT / 'build.py')], cwd=ROOT,
                        stdout=subprocess.DEVNULL, check=False)

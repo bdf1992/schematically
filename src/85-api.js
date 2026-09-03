@@ -52,6 +52,18 @@ const SovSchematicAPI={
   execute:(operation)=>runtimeCrud(operation),
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
+  // Patterns are records, so they read and write through the ordinary resource surface.
+  // These are the editor actions that have no CRUD equivalent: dropping one builds its
+  // parts, releasing one keeps them, and open is a view state rather than document state.
+  patterns:{
+    kinds:()=>PATTERN_KINDS.map(k=>({id:k.id,name:k.name,sense:k.sense,meaning:k.meaning})),
+    list:()=>SovSchematicData.clone(patternRecords),
+    add:(kind,x=null,y=null)=>{const made=addPattern(kind,x,y);return made?SovSchematicData.clone(selectedPatternRecord()||patternRecords.at(-1)):null},
+    members:(id)=>SovSchematicData.patternMemberIds(diagram,id),
+    release:(id)=>{const freed=releasePattern(id);return freed?freed.map(n=>n.id):null},
+    open:(id,open=true)=>{setPatternOpen(id,open);render();return patternIsOpen(id)},
+    select:(id)=>{const record=selectPattern(id);return record?SovSchematicData.clone(record):null}
+  },
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
   tools:()=>SovSchematicData.operationTools()

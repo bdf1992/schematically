@@ -1,8 +1,15 @@
 'use strict';
 // 0.1 Beta concern: Selection state projected into contextual UI and inspector.
 
-function hideInspectorKinds(){componentDetail.hidden=true;connectionDetail.hidden=true;portDetail.hidden=true}
+function hideInspectorKinds(){componentDetail.hidden=true;connectionDetail.hidden=true;portDetail.hidden=true;patternDetail.hidden=true}
 function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false}={}){
+  // A form that belongs to a closed Pattern answers as the Pattern. Clicking a part is
+  // how a Pattern gets selected, which is why the whole arrangement is one click; OPEN
+  // is what makes the parts answer for themselves.
+  if(id&&!preserveSet&&!additive){
+    const group=enclosingClosedPattern(nodes.find(n=>n.id===id));
+    if(group)return void selectPattern(group.id,{focus});
+  }
   clearEndpointFocus();
   if(!preserveSet){
     if(!id)clearComponentSelectionSet();

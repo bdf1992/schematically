@@ -36,6 +36,9 @@ with sync_playwright() as p:
     page.on('pageerror', lambda e: errors.append(str(e)))
     page.set_content(HTML, wait_until='load')
     page.wait_for_timeout(200)
+    # Say what actually broke. Without this a script that threw during load shows up as
+    # 'undefined has no create', which names the symptom and hides the cause.
+    assert not errors, f'the editor did not load: {errors}'
     result = page.evaluate('''(names)=>{
       const A=window.SovSchematicAPI;
       const missing=names.filter(path=>{let o=A;for(const k of path.split('.')){o=o?.[k];if(o===undefined)return true}return false});

@@ -245,6 +245,9 @@ function render(){
     bindNode(g,n); nodesG.appendChild(g);
   });
   renderWires(signalState);
+  // The hulls come after the wires because a Pattern's outline is measured from where
+  // its parts and its Wire ends actually landed.
+  renderPatternHulls?.();
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
 }

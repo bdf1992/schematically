@@ -20,7 +20,11 @@ Tools:
 - `schematic.document.get`
 - `schematic.document.replace`
 
-Resources: `component`, `wire`, `reference`.
+Resources: `component`, `wire`, `reference`, `pattern`.
+
+A `pattern` is the grouping record, not the forms. Its members name it in their own
+`patternId`, so deleting a pattern leaves the forms loose; delete the members to remove
+them. The paths are `/api/v1/patterns` and `/api/v1/patterns/{id}`.
 
 ### Live link (read-only)
 

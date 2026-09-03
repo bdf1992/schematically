@@ -479,3 +479,34 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
 
 /* A Pattern card sits in the same ladder as a form, and keeps its one-line "made of". */
 .pattern-card .ladder-text small{display:block;color:var(--muted);font-size:9.5px;margin-top:2px}
+
+/* A Pattern is one object made of forms, so it gets one outline. It is drawn under the
+   forms and never takes the pointer: clicking a part is what selects the Pattern, and a
+   hull that swallowed clicks would put the parts out of reach once it is open. */
+.pattern-hull{pointer-events:none}
+.pattern-hull rect{
+  fill:color-mix(in srgb,var(--pattern-color) 7%,transparent);
+  stroke:color-mix(in srgb,var(--pattern-color) 42%,transparent);
+  stroke-width:1.2;stroke-dasharray:2 6;stroke-linecap:round;
+}
+.pattern-hull.selected rect{
+  fill:color-mix(in srgb,var(--pattern-color) 12%,transparent);
+  stroke:var(--pattern-color);stroke-width:1.8;stroke-dasharray:none;
+}
+/* Open says the parts answer for themselves now, so the outline goes back to a hint. */
+.pattern-hull.open rect{fill:none;stroke-dasharray:1 7;stroke-width:1}
+.pattern-hull-label{
+  font:600 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.10em;
+  fill:color-mix(in srgb,var(--pattern-color) 70%,transparent);
+}
+.pattern-hull.selected .pattern-hull-label{fill:var(--pattern-color)}
+.pattern-hull.open .pattern-hull-label{fill:color-mix(in srgb,var(--pattern-color) 55%,transparent)}
+
+/* OPEN and RELEASE are the two things only a Pattern can do. */
+.bar-pattern-open,.bar-pattern-release{
+  border:1px solid var(--line);background:var(--panel);color:var(--ink);
+  border-radius:7px;padding:0 8px;height:26px;cursor:pointer;
+  font:600 9.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.10em;
+}
+.bar-pattern-open:hover,.bar-pattern-release:hover{border-color:var(--accent,#4E86BE)}
+.bar-pattern-open[aria-pressed="true"]{background:var(--accent,#4E86BE);border-color:var(--accent,#4E86BE);color:var(--panel)}
