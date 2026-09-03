@@ -41,7 +41,7 @@ function canvasOwnerComponentId(canvasId){const d=canvasDescriptorById(canvasId)
 function canvasOwnerWireId(canvasId){const d=canvasDescriptorById(canvasId);return d?.ownerKind==='wire'?d.ownerId:null}
 function canvasParentId(canvasId){
   const d=canvasDescriptorById(canvasId);if(!d||d.scope==='global')return null;
-  if(d.ownerKind==='component'){const owner=nodes.find(n=>n.id===d.ownerId);return owner?.canvasId||GLOBAL_CANVAS_ID}
+  if(d.ownerKind==='component'){const owner=nodeById(d.ownerId);return owner?.canvasId||GLOBAL_CANVAS_ID}
   return GLOBAL_CANVAS_ID;
 }
 function entityCanvasStateLabel(entity,kind){const c=ensureEntityCanvas(entity,kind);return `${c.state==='open'?'Open':'Closed'} · Local · ${c.dimension}D`}
@@ -183,7 +183,7 @@ function portCanEmit(port){
 function endpointAttachmentPoint(w,end){
   if(SovSchematicData.isFreeEndpoint(w?.[end+'Attachment']))return null;
   const ref=Attachment.wireEndpointRef(w,end,nodes);if(!ref)return null;
-  const node=nodes.find(n=>n.id===ref.componentId);if(!node)return null;
+  const node=nodeById(ref.componentId);if(!node)return null;
   return {...ref,node,config:componentConfig(node).ports[ref.compatId]};
 }
 // A carrier end is bound to a component's attachment point or free in world space.
@@ -241,7 +241,7 @@ function wirePartPortConfig(w,part){
   if(!part.config)part.config={};
   Attachment.normalizeOwnedPoint(part,{ownerKind:'wire',ownerId:w.id,t:part.t??.5});
   part.legacyKind='port';
-  part.canvasId=wireCanvas(w).id;
+  part.canvasId=wireCanvas(w).id;invalidateModelIndex();
 
   // Determine the inherited default channel color directly from the parent
   // Wire's endpoint Port. Do not call connectionConfig()/wireChannelFor()
@@ -417,7 +417,7 @@ function wireEndpointMarker(w,end){
   return cfg[key];
 }
 function wireMarkerSummaryForPort(nodeId,pointId){
-  const node=nodes.find(n=>n.id===nodeId),spec=node?Attachment.resolveSpec(node,pointId):null,compatId=spec?.compatId||pointId;
+  const node=nodeById(nodeId),spec=node?Attachment.resolveSpec(node,pointId):null,compatId=spec?.compatId||pointId;
   return wires.filter(w=>(w.a===nodeId&&w.aSide===compatId)||(w.b===nodeId&&w.bSide===compatId)).map(w=>
     (w.a===nodeId&&w.aSide===compatId)?wireEndpointMarker(w,'a'):wireEndpointMarker(w,'b')
   );

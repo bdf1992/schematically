@@ -227,7 +227,7 @@
       let dirty=false;
       if(wire.a===componentId){const before=wire.aSide;Attachment.syncWireEndpoint(wire,'a',component,wire.aAttachment?.pointId||wire.aSide);if(before!==wire.aSide)dirty=true}
       if(wire.b===componentId){const before=wire.bSide;Attachment.syncWireEndpoint(wire,'b',component,wire.bAttachment?.pointId||wire.bSide);if(before!==wire.bSide)dirty=true}
-      if(dirty){const reach=connectionReachability(doc,wire.a,wire.aSide,wire.b,wire.bSide);if(reach.ok)wire.canvasId=reach.canvasId;changed.push(wire.id)}
+      if(dirty){const reach=connectionReachability(doc,wire.a,wire.aSide,wire.b,wire.bSide);if(reach.ok){wire.canvasId=reach.canvasId;(typeof invalidateModelIndex==='function'&&invalidateModelIndex())}changed.push(wire.id)}
     }
     return changed;
   }
@@ -411,12 +411,12 @@
     const spec=Attachment.resolveSpec(component,pointId);if(!spec)throw new Error(`invalid attachment ${pointId}`);
     const before={a:wire.a,aSide:wire.aSide,b:wire.b,bSide:wire.bSide,aAttachment:clone(wire.aAttachment),bAttachment:clone(wire.bAttachment),canvasId:wire.canvasId};
     wire[end]=component.id;Attachment.syncWireEndpoint(wire,end,component,spec.id);
-    try{wire.canvasId=carrierCanvasId(doc,wire,wire.canvasId)}catch(error){Object.assign(wire,before);throw error}
+    try{wire.canvasId=carrierCanvasId(doc,wire,wire.canvasId);(typeof invalidateModelIndex==='function'&&invalidateModelIndex())}catch(error){Object.assign(wire,before);(typeof invalidateModelIndex==='function'&&invalidateModelIndex());throw error}
     return wire;
   }
   function freeWireEndpoint(doc,wire,end,x,y){
     wire[end+'Attachment']={kind:'free',x:num(x,0),y:num(y,0)};wire[end]=null;wire[end+'Side']=null;
-    wire.canvasId=carrierCanvasId(doc,wire,wire.canvasId);
+    wire.canvasId=carrierCanvasId(doc,wire,wire.canvasId);(typeof invalidateModelIndex==='function'&&invalidateModelIndex());
     return wire;
   }
   function makeWire(doc,value={}){
@@ -545,7 +545,7 @@
     const incoming=makeDocument(clone(input));
     const components=target.components,wires=target.wires,references=target.references;
     components.splice(0,components.length,...incoming.components);
-    wires.splice(0,wires.length,...incoming.wires);
+    wires.splice(0,wires.length,...incoming.wires);(typeof invalidateModelIndex==='function'&&invalidateModelIndex());
     references.splice(0,references.length,...incoming.references);
     target.schema=DOCUMENT_SCHEMA;target.id=incoming.id;target.revision=incoming.revision;target.meta=incoming.meta;target.canvas=incoming.canvas;target.layout=incoming.layout;
     return target;

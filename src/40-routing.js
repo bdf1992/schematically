@@ -274,7 +274,16 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   // A free end has no boundary to leave; the route starts exactly there.
   const SA=sourceNode?stubPos(A,aSide,26,sourceNode,wireEndpointInward(routedWire,sourceNode)):A, SB=targetNode?stubPos(B,bSide,26,targetNode,wireEndpointInward(routedWire,targetNode)):B;
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
-  const otherRects=nodes
+  // Obstacles come from the wire's own canvas. A component sealed inside another
+  // container cannot obstruct a route on the parent canvas — the container is the
+  // obstacle. This is O(result) via the canvas-membership index, not a full scan.
+  const routeCanvasId=(routedWire&&(routedWire.canvasId||GLOBAL_CANVAS_ID))
+    ||(sourceNode&&(sourceNode.canvasId||GLOBAL_CANVAS_ID))
+    ||(targetNode&&(targetNode.canvasId||GLOBAL_CANVAS_ID))
+    ||null;
+  const obstaclePool=routeCanvasId?nodesOnCanvas(routeCanvasId):nodes;
+
+  const otherRects=obstaclePool
     .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
     .map(n=>rectForNode(n,12));
 
@@ -285,7 +294,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   if(endpointNeedsOuterObstacle(targetNode,bSide))endpointRects.push(rectForNode(targetNode,8));
   const obstacles=[...otherRects,...endpointRects];
 
-  const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
+  const allRects=obstaclePool.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
   const xs=[SA.x,SB.x,(SA.x+SB.x)/2];
   const ys=[SA.y,SB.y,(SA.y+SB.y)/2];
 

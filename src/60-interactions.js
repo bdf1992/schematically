@@ -137,7 +137,7 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     settleActiveComponent(e||state.modifiers);
     for(const id of state.groupRootIds||[state.node.id]){
-      const root=nodes.find(n=>n.id===id);if(!root)continue;const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID;
+      const root=nodeById(id);if(!root)continue;const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID;
       let candidate;
       if(root.id===state.node.id){
         candidate=state.hostReady?state.hostCandidate:null;
@@ -188,7 +188,7 @@ window.addEventListener('error',()=>{if(activeNodeDragState)finishActiveNodeDrag
 window.addEventListener('unhandledrejection',()=>{if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'runtime rejection recovered'})});
 
 function growBlankFromConnection(sourceNode,sourcePointId,P,mods){
-  const source=nodes.find(n=>n.id===sourceNode),sourceSpec=source?Attachment.resolveSpec(source,sourcePointId):null;
+  const source=nodeById(sourceNode),sourceSpec=source?Attachment.resolveSpec(source,sourcePointId):null;
   if(!source||!sourceSpec){statusEl.textContent='Attachment no longer exists';return null}
   const sourceCompat=sourceSpec.compatId;
 
@@ -206,7 +206,7 @@ function growBlankFromConnection(sourceNode,sourcePointId,P,mods){
     connected=addConnection(blank.id,'right',sourceNode,sourceSpec.id);
   }
   if(!connected){
-    const i=nodes.findIndex(n=>n.id===blank.id);if(i>=0)nodes.splice(i,1);
+    const i=nodes.findIndex(n=>n.id===blank.id);if(i>=0){nodes.splice(i,1);invalidateModelIndex()}
     render();statusEl.textContent='Boundary blocks growth onto another surface';return null;
   }
 
@@ -345,7 +345,7 @@ function updateWireDrag(e){
   let B=P, bSide='in';
   if(snap){
     clearWireBlankCandidate();
-    const target=nodes.find(n=>n.id===snap.node); B=portPos(target,snap.side); bSide=snap.side;
+    const target=nodeById(snap.node); B=portPos(target,snap.side); bSide=snap.side;
     const hit=document.querySelector(`.node[data-id="${snap.node}"] .port-hit[data-side="${snap.side}"]`);
     if(hit) hit.classList.add('snap-target');
     statusEl.textContent=`Release → ${target.label||byId(target.symbolId).name}`;
@@ -439,7 +439,7 @@ function carrierEndPointerMove(e){
   e.preventDefault();
   const w=wires[d.i];if(!w){finishCarrierEndDrag();return}
   const P=svgPoint(e.clientX,e.clientY),snap=findCarrierSnapTarget(w,d.end,P);d.snap=snap;clearSnapTargets();
-  const B=snap?portPos(nodes.find(n=>n.id===snap.node),snap.side):P;
+  const B=snap?portPos(nodeById(snap.node),snap.side):P;
   if(snap)document.querySelector(`.node[data-id="${snap.node}"] .port-hit[data-point="${snap.side}"]`)?.classList.add('snap-target');
   const otherEp=carrierEndpoint(w,d.other);
   if(otherEp){
@@ -449,7 +449,7 @@ function carrierEndPointerMove(e){
     d.ghost.setAttribute('d',routePath(A,Z,from?(otherEp.compatId||null):(snap?.side||null),from?(snap?.side||null):(otherEp.compatId||null),from?(otherEp.node?.id||null):(snap?.node||null),from?(snap?.node||null):(otherEp.node?.id||null),d.i,occupied));
   }
   d.dot.setAttribute('cx',B.x);d.dot.setAttribute('cy',B.y);
-  statusEl.textContent=snap?`Release → bind to ${componentDisplayName(nodes.find(n=>n.id===snap.node))}`:'Release → free end';
+  statusEl.textContent=snap?`Release → bind to ${componentDisplayName(nodeById(snap.node))}`:'Release → free end';
 }
 function carrierEndPointerUp(e){
   const d=carrierEndDrag;if(!d||e.pointerId!==d.pointerId)return;e.preventDefault();
@@ -497,7 +497,7 @@ window.addEventListener('blur',()=>finishPanGesture());
 
 workspace.addEventListener('pointerdown',e=>{if(e.target===workspace && !panDrag&&!e.shiftKey&&!marqueeGesture){selected=null;selectNode(null)}});
 barComponentType.addEventListener('change',()=>{
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'type change'))return;setHistoryHint('Change Component type');
+  const n=nodeById(selected);if(!n||mutationBlocked(n,'type change'))return;setHistoryHint('Change Component type');
   const next=barComponentType.value;
   if(!GROUPS.Components.includes(next)&&!GROUPS.Primitives.includes(next)){barComponentType.value=n.symbolId;return}
 
@@ -532,12 +532,12 @@ barComponentType.addEventListener('change',()=>{
   selectNode(n.id);scheduleHistoryCapture();
 });
 barComponentLabel.addEventListener('input',()=>{
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'label edit'))return;setHistoryHint('Edit Component label');
+  const n=nodeById(selected);if(!n||mutationBlocked(n,'label edit'))return;setHistoryHint('Edit Component label');
   const cfg=componentConfig(n);cfg.label=barComponentLabel.value;
   refreshCanvasScopeControl();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 });
 barComponentSignalMode.addEventListener('change',()=>{
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'signal change'))return;setHistoryHint('Change signal mode');
+  const n=nodeById(selected);if(!n||mutationBlocked(n,'signal change'))return;setHistoryHint('Change signal mode');
   const cfg=componentConfig(n);cfg.signalMode=barComponentSignalMode.value;
   render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 });

@@ -291,7 +291,7 @@ function activeCanvasNodeIds(canvasId=selectedCanvasContextId()){
   if(canvasId===GLOBAL_CANVAS_ID)return new Set(nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===GLOBAL_CANVAS_ID).map(n=>n.id));
   const d=canvasDescriptorById(canvasId);if(!d)return new Set();
   if(d.ownerKind==='component')return new Set(nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===canvasId).map(n=>n.id));
-  if(d.ownerKind==='wire'){const w=wires.find(w=>w.id===d.ownerId);return new Set(w?[w.a,w.b].filter(Boolean):[])}
+  if(d.ownerKind==='wire'){const w=wireById(d.ownerId);return new Set(w?[w.a,w.b].filter(Boolean):[])}
   return new Set();
 }
 function activeCanvasWireSet(canvasId=selectedCanvasContextId()){
@@ -306,7 +306,7 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   const nodeIds=activeCanvasNodeIds(canvasId),scopedNodes=nodes.filter(n=>nodeIds.has(n.id));
   const d=canvasDescriptorById(canvasId);
   if(d?.ownerKind==='component'){
-    const owner=nodes.find(n=>n.id===d.ownerId);if(owner&&!scopedNodes.includes(owner))scopedNodes.unshift(owner);
+    const owner=nodeById(d.ownerId);if(owner&&!scopedNodes.includes(owner))scopedNodes.unshift(owner);
   }
   if(!scopedNodes.length&&canvasId===GLOBAL_CANVAS_ID)return null;
   let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
@@ -382,7 +382,7 @@ function applyNodeDragPosition(state){
   statusEl.textContent = `Held freely · ${snapModeLabel(step)} on release`;
 }
 function settleActiveComponent(mods=null){
-  const node = activeNodeDragState?.node || nodes.find(n=>n.id===activeNodeDrag);
+  const node = activeNodeDragState?.node || nodeById(activeNodeDrag);
   if(!node) return;
 
   const effective = modifierSnapshot(mods || activeNodeDragState?.modifiers || {});
@@ -459,7 +459,7 @@ function beginKeyboardMove(node){
 }
 function moveSelectedByArrow(e){
   if(typeof selected!=='string' || selected.startsWith('wire:')) return false;
-  const node=nodes.find(n=>n.id===selected);
+  const node=nodeById(selected);
   if(!node) return false;
   if(isEntityLocked(node)||isEntityPinned(node)){statusEl.textContent=isEntityLocked(node)?'Locked · move refused':'Pinned · move refused';return true}
 
@@ -490,7 +490,7 @@ function finishKeyboardMove(mods){
   // Arrow-key steps are intentionally aligned to the selected grid unless Alt
   // was used. Settling still applies the same rule for consistency.
   settleActiveComponent(mods);
-  const movedNode=nodes.find(n=>n.id===keyboardMoveNodeId);if(movedNode)updateContainmentFor(movedNode);
+  const movedNode=nodeById(keyboardMoveNodeId);if(movedNode)updateContainmentFor(movedNode);
   settleDraggedRoutes();
 
   keyboardMoveNodeId=null;
@@ -518,7 +518,7 @@ function pointInsideComponent(x,y,n,pad=0){
   return x>R.l&&x<R.r&&y>R.t&&y<R.b;
 }
 function componentAcceptsChildren(n){return formHostsChildren(n)}
-function parentComponent(node){const ownerId=canvasOwnerComponentId(node?.canvasId||GLOBAL_CANVAS_ID);return ownerId?nodes.find(n=>n.id===ownerId)||null:null}
+function parentComponent(node){const ownerId=canvasOwnerComponentId(node?.canvasId||GLOBAL_CANVAS_ID);return ownerId?nodeById(ownerId)||null:null}
 function componentDisplayName(node){
   if(!node)return '—';
   return componentConfig(node).label||byId(node.symbolId).name||node.id;
@@ -531,7 +531,7 @@ function componentScopePath(node){
 function syncNodeBoundaryContext(node){
   if(!node)return;
   ensureComponentStructure(node);
-  if(!node.canvasId)node.canvasId=node.parentId?localCanvasId('component',node.parentId):GLOBAL_CANVAS_ID;
+  if(!node.canvasId){node.canvasId=node.parentId?localCanvasId('component',node.parentId):GLOBAL_CANVAS_ID;invalidateModelIndex()}
   const parent=parentComponent(node),host=canvasDescriptorById(node.canvasId||GLOBAL_CANVAS_ID);
   node.parentId=parent?.id||null;node.boundary.inside.type=node.symbolId==='blank'?null:node.symbolId;node.type=node.boundary.inside.type;
   node.boundary.outside.type=parent?(parent.boundary.inside.type||parent.symbolId||'component'):host?.ownerKind==='wire'?'wire':'world';componentPlacement(node);
@@ -546,7 +546,7 @@ function setActiveCanvas(){
 function clearActiveCanvas(){
   const canvasId=selectedCanvasContextId(),d=canvasDescriptorById(canvasId)||canvasDescriptorById(GLOBAL_CANVAS_ID);
   if(d.scope==='global'){
-    nodes.splice(0,nodes.length);wires.splice(0,wires.length);diagram.references.splice(0,diagram.references.length);
+    nodes.splice(0,nodes.length);wires.splice(0,wires.length);diagram.references.splice(0,diagram.references.length);invalidateModelIndex();
   }else if(d.ownerKind==='component'){
     const removeIds=new Set(nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===canvasId).map(n=>n.id));
     for(let i=wires.length-1;i>=0;i--)if((wires[i].canvasId||GLOBAL_CANVAS_ID)===canvasId||removeIds.has(wires[i].a)||removeIds.has(wires[i].b))wires.splice(i,1);
@@ -554,7 +554,7 @@ function clearActiveCanvas(){
   }else if(d.ownerKind==='wire'){
     const hostedIds=nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===d.id).map(n=>n.id);
     for(const id of hostedIds)SovSchematicData.remove(diagram,'component',id);
-    const w=wires.find(w=>w.id===d.ownerId);if(w&&Array.isArray(w.attachments))w.attachments.splice(0,w.attachments.length);
+    const w=wireById(d.ownerId);if(w&&Array.isArray(w.attachments))w.attachments.splice(0,w.attachments.length);
   }
   routeCache.clear();arrowPoseCache.clear();dragRouteSnapshots.clear();selected=null;hideSelectionBar();refreshCanvasScopeControl();render();selectNode(null);
 }
@@ -573,7 +573,7 @@ function descendantsOf(parentId){
   return out;
 }
 function isDescendantOf(nodeId,parentId){
-  let cur=nodes.find(n=>n.id===nodeId),seen=new Set();
+  let cur=nodeById(nodeId),seen=new Set();
   while(cur){const parent=parentComponent(cur);if(!parent||seen.has(parent.id))break;if(parent.id===parentId)return true;seen.add(parent.id);cur=parent}
 
   return false;
@@ -647,7 +647,7 @@ function nearestPointOnComponentEdge(host,x,y){
   let best=null;for(const c of candidates){const d=Math.hypot(lx-c.x,ly-c.y);if(!best||d<best.distance)best={...c,distance:d}}const world=rotateVectorByDegrees(best.x,best.y,angle);return {...best,x:host.x+world.x,y:host.y+world.y,angle:angle+best.angle};
 }
 function syncComponentAttachedPose(node){
-  const placement=componentPlacement(node);if(!['path','edge'].includes(placement.kind))return;const host=nodes.find(n=>n.id===placement.hostId)||parentComponent(node);if(!host)return;let q=null;
+  const placement=componentPlacement(node);if(!['path','edge'].includes(placement.kind))return;const host=nodeById(placement.hostId)||parentComponent(node);if(!host)return;let q=null;
   if(placement.kind==='path'){const half=Math.max(24,componentSize(host).w/2),local=-half+half*2*placement.t,world=rotateVectorByDegrees(local,0,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)}}
   else{const {w,h}=componentSize(host),side=placement.side||'top',u=Math.max(0,Math.min(1,placement.t));let lx=0,ly=0,a=0;if(side==='top'||side==='bottom'){lx=-w/2+w*u;ly=side==='top'?-h/2:h/2}else{lx=side==='left'?-w/2:w/2;ly=-h/2+h*u;a=90}const world=rotateVectorByDegrees(lx,ly,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)+a}}
   node.x=q.x;node.y=q.y;wireHostPoseCache.set(node.id,{...q,hostId:host.id,t:placement.t});
@@ -672,16 +672,16 @@ function componentHostCandidateAtPoint(node,x=node.x,y=node.y){
 function applyComponentHost(node,candidate){
   if(!node)return null;
   if(candidate?.kind==='component'){
-    node.canvasId=candidate.canvasId;node.parentId=candidate.entity.id;node.placement={kind:'surface',x:node.x,y:node.y};wireHostPoseCache.delete(node.id)
+    node.canvasId=candidate.canvasId;node.parentId=candidate.entity.id;invalidateModelIndex();node.placement={kind:'surface',x:node.x,y:node.y};wireHostPoseCache.delete(node.id)
   }else if(candidate?.kind==='wire'){
-    node.canvasId=candidate.canvasId;node.parentId=null;node.placement={kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t};node.x=candidate.placement.x;node.y=candidate.placement.y;
+    node.canvasId=candidate.canvasId;node.parentId=null;invalidateModelIndex();node.placement={kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t};node.x=candidate.placement.x;node.y=candidate.placement.y;
     wireHostPoseCache.set(node.id,{x:node.x,y:node.y,angle:Number(candidate.placement.angle)||0,wireId:candidate.entity.id,t:node.placement.t})
   }else if(candidate?.kind==='path'){
     node.canvasId=candidate.canvasId;node.parentId=candidate.entity.id;node.placement={kind:'path',hostId:candidate.entity.id,t:candidate.placement.t};node.x=candidate.placement.x;node.y=candidate.placement.y;wireHostPoseCache.set(node.id,{x:node.x,y:node.y,angle:Number(candidate.placement.angle)||0,hostId:candidate.entity.id,t:node.placement.t})
   }else if(candidate?.kind==='edge'){
     node.canvasId=candidate.canvasId;node.parentId=candidate.entity.id;node.placement={kind:'edge',hostId:candidate.entity.id,side:candidate.placement.side,t:candidate.placement.t};node.x=candidate.placement.x;node.y=candidate.placement.y;wireHostPoseCache.set(node.id,{x:node.x,y:node.y,angle:Number(candidate.placement.angle)||0,hostId:candidate.entity.id,t:node.placement.t,side:node.placement.side})
   }else{
-    node.canvasId=GLOBAL_CANVAS_ID;node.parentId=null;node.placement={kind:'surface',x:node.x,y:node.y};wireHostPoseCache.delete(node.id)
+    node.canvasId=GLOBAL_CANVAS_ID;node.parentId=null;invalidateModelIndex();node.placement={kind:'surface',x:node.x,y:node.y};wireHostPoseCache.delete(node.id)
   }
   syncNodeBoundaryContext(node);for(const child of descendantsOf(node.id))syncNodeBoundaryContext(child);return candidate;
 }
@@ -714,7 +714,7 @@ function stubPos(P,portId,d=26,node=null,inward=null){
   const placement=node?componentPlacement(node):null;
   if(placement?.kind==='edge'){
     // A Point stuck to a boundary leaves along that boundary's normal, into whichever surface carries the Wire.
-    const host=nodes.find(h=>h.id===placement.hostId);
+    const host=nodeById(placement.hostId);
     const normal=rotateVectorByDegrees(portNormal(placement.side).x,portNormal(placement.side).y,host?componentHostAngle(host):0);
     const sign=(inward==null?face==='internal':inward)?-1:1;return{x:P.x+normal.x*d*sign,y:P.y+normal.y*d*sign};
   }
@@ -724,5 +724,5 @@ function stubPos(P,portId,d=26,node=null,inward=null){
 // True when a Wire runs on the interior surface of the host that a boundary-hosted Point sticks to.
 function wireEndpointInward(w,node){
   if(!w||!node)return null;const placement=componentPlacement(node);if(placement.kind!=='edge')return null;
-  const host=nodes.find(h=>h.id===placement.hostId);return !!host&&(w.canvasId||GLOBAL_CANVAS_ID)===componentCanvas(host).id;
+  const host=nodeById(placement.hostId);return !!host&&(w.canvasId||GLOBAL_CANVAS_ID)===componentCanvas(host).id;
 }

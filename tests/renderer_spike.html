@@ -1,0 +1,88 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>renderer spike</title>
+<style>html,body{margin:0;background:#111;color:#ddd;font:12px monospace}#out{position:fixed;left:8px;top:8px;white-space:pre}canvas,svg{position:fixed;inset:0;width:100vw;height:100vh}</style>
+<div id="out"></div>
+<script>
+// Same scene for every renderer: N components laid out as a grid of racks, each
+// component a rect with PORTS small squares along its bottom edge. LOD: ports are
+// only emitted when the camera zoom is above PORT_LOD, labels are not drawn at all.
+const PORTS=4, PORT_LOD=0.5, W=1600, H=1000;
+function makeScene(n){
+  const comp=new Float32Array(n*4), col=new Uint8Array(n*3);
+  const cols=Math.ceil(Math.sqrt(n));
+  for(let i=0;i<n;i++){const x=(i%cols)*40, y=Math.floor(i/cols)*30; comp[i*4]=x;comp[i*4+1]=y;comp[i*4+2]=32;comp[i*4+3]=20; col[i*3]=80+(i*37%120);col[i*3+1]=120+(i*53%100);col[i*3+2]=160}
+  const port=new Float32Array(n*PORTS*2);
+  for(let i=0;i<n;i++)for(let p=0;p<PORTS;p++){port[(i*PORTS+p)*2]=comp[i*4]+4+p*7;port[(i*PORTS+p)*2+1]=comp[i*4+1]+18}
+  return {n,comp,col,port,extent:cols*40};
+}
+function cam(scene,zoom,frame){ // pan across the scene at a given zoom
+  const sx=(frame*7)%Math.max(1,scene.extent-W/zoom); return {x:sx,y:(frame*3)%Math.max(1,scene.extent-H/zoom),zoom};
+}
+const frameTime=async(draw,frames=30)=>{ // avg ms per frame, measured rAF to rAF
+  await new Promise(r=>requestAnimationFrame(r));
+  const t0=performance.now();
+  for(let f=0;f<frames;f++){draw(f);await new Promise(r=>requestAnimationFrame(r))}
+  return (performance.now()-t0)/frames;
+};
+// ---------------- SVG (retained DOM, viewBox pan) ----------------
+async function runSvg(scene,zoom){
+  const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');document.body.appendChild(svg);
+  const t0=performance.now();const frag=document.createDocumentFragment();
+  for(let i=0;i<scene.n;i++){const r=document.createElementNS(ns,'rect');r.setAttribute('x',scene.comp[i*4]);r.setAttribute('y',scene.comp[i*4+1]);r.setAttribute('width',32);r.setAttribute('height',20);r.setAttribute('fill',`rgb(${scene.col[i*3]},${scene.col[i*3+1]},${scene.col[i*3+2]})`);frag.appendChild(r)}
+  if(zoom>=PORT_LOD)for(let i=0;i<scene.n*PORTS;i++){const r=document.createElementNS(ns,'rect');r.setAttribute('x',scene.port[i*2]);r.setAttribute('y',scene.port[i*2+1]);r.setAttribute('width',3);r.setAttribute('height',3);r.setAttribute('fill','#fc0');frag.appendChild(r)}
+  svg.appendChild(frag);const build=performance.now()-t0;
+  const ms=await frameTime(f=>{const c=cam(scene,zoom,f);svg.setAttribute('viewBox',`${c.x} ${c.y} ${W/zoom} ${H/zoom}`)});
+  svg.remove();return {build,frame:ms};
+}
+// ---------------- Canvas2D (immediate, culled) ----------------
+async function runCanvas(scene,zoom){
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;document.body.appendChild(cv);const g=cv.getContext('2d');
+  const ms=await frameTime(f=>{const c=cam(scene,zoom,f);g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,W,H);g.setTransform(zoom,0,0,zoom,-c.x*zoom,-c.y*zoom);
+    const x1=c.x+W/zoom,y1=c.y+H/zoom;let last='';
+    for(let i=0;i<scene.n;i++){const x=scene.comp[i*4],y=scene.comp[i*4+1];if(x>x1||y>y1||x+32<c.x||y+20<c.y)continue;const fs=`rgb(${scene.col[i*3]},${scene.col[i*3+1]},${scene.col[i*3+2]})`;if(fs!==last){g.fillStyle=fs;last=fs}g.fillRect(x,y,32,20)}
+    if(zoom>=PORT_LOD){g.fillStyle='#fc0';for(let i=0;i<scene.n*PORTS;i++){const x=scene.port[i*2],y=scene.port[i*2+1];if(x>x1||y>y1||x<c.x-3||y<c.y-3)continue;g.fillRect(x,y,3,3)}}});
+  cv.remove();return {build:0,frame:ms};
+}
+// ---------------- WebGL2 instanced quads ----------------
+async function runGl(scene,zoom){
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;document.body.appendChild(cv);const gl=cv.getContext('webgl2',{antialias:false});if(!gl)return {build:0,frame:NaN,note:'no webgl2'};
+  const vs=`#version 300 es
+  layout(location=0) in vec2 corner; layout(location=1) in vec4 rect; layout(location=2) in vec3 color; uniform vec4 view; out vec3 vc;
+  void main(){vec2 p=rect.xy+corner*rect.zw; vec2 s=(p-view.xy)*view.z; gl_Position=vec4(s.x/view.w*2.0-1.0, 1.0-s.y/(view.w*${H/W})*2.0, 0.0, 1.0); vc=color;}`;
+  const fs=`#version 300 es
+  precision mediump float; in vec3 vc; out vec4 o; void main(){o=vec4(vc,1.0);}`;
+  const sh=(t,s)=>{const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x};
+  const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs));gl.linkProgram(pr);gl.useProgram(pr);
+  const uView=gl.getUniformLocation(pr,'view');
+  const t0=performance.now();
+  const corner=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,corner);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,0,1,0,0,1,1,1]),gl.STATIC_DRAW);
+  function mkVao(rects,colors,count){const vao=gl.createVertexArray();gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER,corner);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+    const rb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,rb);gl.bufferData(gl.ARRAY_BUFFER,rects,gl.STATIC_DRAW);gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,4,gl.FLOAT,false,0,0);gl.vertexAttribDivisor(1,1);
+    const cb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,cb);gl.bufferData(gl.ARRAY_BUFFER,colors,gl.STATIC_DRAW);gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,3,gl.UNSIGNED_BYTE,true,0,0);gl.vertexAttribDivisor(2,1);
+    return {vao,count}}
+  const comps=mkVao(scene.comp,scene.col,scene.n);
+  const pr4=new Float32Array(scene.n*PORTS*4),pc=new Uint8Array(scene.n*PORTS*3);for(let i=0;i<scene.n*PORTS;i++){pr4[i*4]=scene.port[i*2];pr4[i*4+1]=scene.port[i*2+1];pr4[i*4+2]=3;pr4[i*4+3]=3;pc[i*3]=255;pc[i*3+1]=204;pc[i*3+2]=0}
+  const ports=mkVao(pr4,pc,scene.n*PORTS);const build=performance.now()-t0;
+  gl.viewport(0,0,W,H);
+  const ms=await frameTime(f=>{const c=cam(scene,zoom,f);gl.clearColor(.07,.07,.07,1);gl.clear(gl.COLOR_BUFFER_BIT);gl.uniform4f(uView,c.x,c.y,zoom,W);
+    gl.bindVertexArray(comps.vao);gl.drawArraysInstanced(gl.TRIANGLE_STRIP,0,4,comps.count);
+    if(zoom>=PORT_LOD){gl.bindVertexArray(ports.vao);gl.drawArraysInstanced(gl.TRIANGLE_STRIP,0,4,ports.count)}
+    gl.finish()});
+  cv.remove();gl.getExtension('WEBGL_lose_context')?.loseContext();return {build,frame:ms};
+}
+window.runSpike=async function(sizes,svgMax){
+  const out=[];const log=s=>{out.push(s);document.getElementById('out').textContent=out.join('\n')};
+  const res=[];
+  for(const n of sizes){const scene=makeScene(n);
+    for(const zoom of [0.25,1]){ // 0.25 = floor view (ports culled by LOD), 1 = rack view (ports drawn)
+      const row={n,ports:n*PORTS,zoom};
+      if(n<=svgMax)row.svg=await runSvg(scene,zoom);
+      row.canvas=await runCanvas(scene,zoom);
+      row.gl=await runGl(scene,zoom);
+      res.push(row);log(JSON.stringify(row));
+    }}
+  return res;
+};
+</script>

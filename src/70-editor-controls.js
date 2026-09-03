@@ -2,7 +2,7 @@
 // 0.1 Beta concern: Contextual editor mutations and selected-surface control bindings.
 
 function mutateSelectedPresentation(mutator,{reroute=false}={}){
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'settings edit'))return;setHistoryHint('Edit Component settings');
+  const n=nodeById(selected);if(!n||mutationBlocked(n,'settings edit'))return;setHistoryHint('Edit Component settings');
   const preserveEditorFocus=isEditableTarget(document.activeElement);
   const p=componentConfig(n).presentation;mutator(p,n);componentConfig(n);
   if(reroute){routeCache.clear();arrowPoseCache.clear()}
@@ -68,7 +68,7 @@ function deleteSelected(){
     return;
   }else{
     const ids=selectedComponentIds.size?[...selectedComponentIds]:[selected];
-    const targets=ids.map(id=>nodes.find(n=>n.id===id)).filter(Boolean);
+    const targets=ids.map(id=>nodeById(id)).filter(Boolean);
     if(targets.some(isEntityLocked)){statusEl.textContent='Locked · delete refused';return}
     setHistoryHint(targets.length>1?'Delete selection':'Delete Component');
     for(const root of targets.filter(n=>!targets.some(other=>other.id!==n.id&&isDescendantOf(n.id,other.id))))SovSchematicData.remove(diagram,'component',root.id);
@@ -84,7 +84,7 @@ barFormState.addEventListener('click',()=>{
   openSelectionSettings('component');formSettings.open=true;formSettings.scrollIntoView({block:'nearest'});
 });
 function updateSelectedComponentForm(mutator){
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Form edit'))return;setHistoryHint('Edit Component Form');
+  const n=nodeById(selected);if(!n||mutationBlocked(n,'Form edit'))return;setHistoryHint('Edit Component Form');
   const f=componentForm(n),beforeOpen=f.regions.interior.state==='open',beforeDimension=f.dimension;mutator(f,n);
   if(f.dimension<2)f.regions.interior.state='closed';componentForm(n);
   if(beforeOpen&&f.regions.interior.state==='closed'){
@@ -99,7 +99,7 @@ formDimension.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.di
 formAttachments.addEventListener('change',()=>{
   // Built-in 2D points are template defaults. Turning them off is refused while a Wire
   // still ends on one, so the change never silently orphans a carrier.
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Attachment defaults edit'))return;
+  const n=nodeById(selected);if(!n||mutationBlocked(n,'Attachment defaults edit'))return;
   const next=formAttachments.value==='none'?'none':'standard';
   if(next==='none'&&Attachment.attachmentDefaults(n)!=='none'&&wiresOnBuiltinPoints(n).length){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent='Detach Wires from built-in points first';return}
   setHistoryHint('Change attachment defaults');
@@ -159,7 +159,7 @@ barAddWirePortBtn.addEventListener('click',()=>{
   const ports={out:{side:'point',face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',colorSlot:channel.colorSlot,flow:cfg.direction==='duplex'?'duplex':'out',access:'read-write'}]}};
   // A Wire tap is an ordinary Point primitive hosted by the Wire; the preset supplies its 0D Form.
   const point=SovSchematicData.makeComponent(diagram,{symbolId:'point',x,y,canvasId:wireCanvas(w).id,placement:{kind:'wire',wireId:w.id,t},config:{colorSlot:channel.colorSlot,ports}});
-  nodes.push(point);syncNodeBoundaryContext(point);render();selectPort(point.id,'self');scheduleHistoryCapture();statusEl.textContent='Point added to Wire';
+  nodes.push(point);invalidateModelIndex();syncNodeBoundaryContext(point);render();selectPort(point.id,'self');scheduleHistoryCapture();statusEl.textContent='Point added to Wire';
 });
 barConnectionLabel.addEventListener('input',()=>{
   const w=mutableSelectedConnection('Edit Wire label');if(!w)return;

@@ -14,7 +14,7 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
   if(id&&focus)activateCanvasKeyboard();
   document.querySelectorAll('.node').forEach(el=>el.classList.toggle('selected',selectedComponentIds.has(el.dataset.id)));
   document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
-  const n=nodes.find(n=>n.id===selected);
+  const n=nodeById(selected);
   document.getElementById('emptyInspector').hidden=!!n;
   hideInspectorKinds();
   if(!n){hideSelectionBar();renderObjectsPanel?.();return}
@@ -65,7 +65,7 @@ function selectPortRef(info,{focus=true}={}){
   showPortBar(info);
 }
 function selectPort(nodeId,pointId){
-  const node=nodes.find(n=>n.id===nodeId);if(!node)return;
+  const node=nodeById(nodeId);if(!node)return;
   const point=Attachment.resolveSpec(node,pointId);if(!point)return;
   const port=componentConfig(node).ports[point.compatId];if(!port)return;
   selectPortRef({ownerKind:'component',owner:node,node,pointId:point.id,portId:point.compatId,port});

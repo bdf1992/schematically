@@ -2,15 +2,18 @@
 // 0.1 Beta concern: Derived signal/voltage activation and diffusion state.
 
 function incomingSignals(componentId,signalState){
-  const colors=[],component=nodes.find(n=>n.id===componentId),placement=component?.placement||{};
+  const colors=[],component=nodeById(componentId),placement=component?.placement||{};
   if(placement.kind==='wire'&&placement.wireId){
-    const host=wires.find(w=>w.id===placement.wireId);
+    const host=wireById(placement.wireId);
     if(host){
       if(wireDirectionActive(host,'forward',signalState))colors.push(signalState.colors.get(host.a));
       if((connectionConfig(host).direction==='duplex'||connectionConfig(host).direction==='reverse')&&wireDirectionActive(host,'reverse',signalState))colors.push(signalState.colors.get(host.b));
     }
   }
-  for(const w of wires){
+  // Only wires with this component at an endpoint can contribute: every branch below
+  // already tests w.a===componentId or w.b===componentId, so the endpoint index is
+  // exactly equivalent to scanning `wires` — at O(degree) instead of O(W).
+  for(const w of wiresAtComponent(componentId)){
     const cfg=connectionConfig(w);
     if(cfg.direction==='forward' && w.b===componentId && wireDirectionActive(w,'forward',signalState)) colors.push(signalState.colors.get(w.a));
     else if(cfg.direction==='reverse' && w.a===componentId && wireDirectionActive(w,'reverse',signalState)) colors.push(signalState.colors.get(w.b));
@@ -38,8 +41,11 @@ function wireDirectionActive(w,direction,signalState){
 function computeSignalState(){
   let active=new Set();
   nodes.forEach(n=>{ if(normalizeSignalMode(componentConfig(n))==='source') active.add(n.id); });
+  // Local colors are constant across activation passes; build the map once instead
+  // of allocating an N-entry Map on every pass.
+  const baseColors=new Map(nodes.map(n=>[n.id,componentConfig(n).color]));
   for(let pass=0;pass<6;pass++){
-    const probe={active,colors:new Map(nodes.map(n=>[n.id,componentConfig(n).color]))};
+    const probe={active,colors:baseColors};
     const next=new Set(active);
     for(const n of nodes){
       const mode=normalizeSignalMode(componentConfig(n));
@@ -49,8 +55,7 @@ function computeSignalState(){
     if(next.size===active.size && [...next].every(id=>active.has(id))) break;
     active=next;
   }
-  let colors=new Map();
-  nodes.forEach(n=>colors.set(n.id,componentConfig(n).color));
+  let colors=new Map(baseColors);
   if(colorEngine.diffuse){
     for(let pass=0;pass<5;pass++){
       const probe={active,colors};

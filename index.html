@@ -1372,7 +1372,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       let dirty=false;
       if(wire.a===componentId){const before=wire.aSide;Attachment.syncWireEndpoint(wire,'a',component,wire.aAttachment?.pointId||wire.aSide);if(before!==wire.aSide)dirty=true}
       if(wire.b===componentId){const before=wire.bSide;Attachment.syncWireEndpoint(wire,'b',component,wire.bAttachment?.pointId||wire.bSide);if(before!==wire.bSide)dirty=true}
-      if(dirty){const reach=connectionReachability(doc,wire.a,wire.aSide,wire.b,wire.bSide);if(reach.ok)wire.canvasId=reach.canvasId;changed.push(wire.id)}
+      if(dirty){const reach=connectionReachability(doc,wire.a,wire.aSide,wire.b,wire.bSide);if(reach.ok){wire.canvasId=reach.canvasId;(typeof invalidateModelIndex==='function'&&invalidateModelIndex())}changed.push(wire.id)}
     }
     return changed;
   }
@@ -1556,12 +1556,12 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const spec=Attachment.resolveSpec(component,pointId);if(!spec)throw new Error(`invalid attachment ${pointId}`);
     const before={a:wire.a,aSide:wire.aSide,b:wire.b,bSide:wire.bSide,aAttachment:clone(wire.aAttachment),bAttachment:clone(wire.bAttachment),canvasId:wire.canvasId};
     wire[end]=component.id;Attachment.syncWireEndpoint(wire,end,component,spec.id);
-    try{wire.canvasId=carrierCanvasId(doc,wire,wire.canvasId)}catch(error){Object.assign(wire,before);throw error}
+    try{wire.canvasId=carrierCanvasId(doc,wire,wire.canvasId);(typeof invalidateModelIndex==='function'&&invalidateModelIndex())}catch(error){Object.assign(wire,before);(typeof invalidateModelIndex==='function'&&invalidateModelIndex());throw error}
     return wire;
   }
   function freeWireEndpoint(doc,wire,end,x,y){
     wire[end+'Attachment']={kind:'free',x:num(x,0),y:num(y,0)};wire[end]=null;wire[end+'Side']=null;
-    wire.canvasId=carrierCanvasId(doc,wire,wire.canvasId);
+    wire.canvasId=carrierCanvasId(doc,wire,wire.canvasId);(typeof invalidateModelIndex==='function'&&invalidateModelIndex());
     return wire;
   }
   function makeWire(doc,value={}){
@@ -1690,7 +1690,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const incoming=makeDocument(clone(input));
     const components=target.components,wires=target.wires,references=target.references;
     components.splice(0,components.length,...incoming.components);
-    wires.splice(0,wires.length,...incoming.wires);
+    wires.splice(0,wires.length,...incoming.wires);(typeof invalidateModelIndex==='function'&&invalidateModelIndex());
     references.splice(0,references.length,...incoming.references);
     target.schema=DOCUMENT_SCHEMA;target.id=incoming.id;target.revision=incoming.revision;target.meta=incoming.meta;target.canvas=incoming.canvas;target.layout=incoming.layout;
     return target;
@@ -2028,6 +2028,103 @@ const BG_PAN_THRESHOLD=6;
 const SNAP_RADIUS=34;
 /* END src/00-state.js */
 </script>
+<script data-beta-module="src/07-index.js">
+/* BEGIN src/07-index.js */
+'use strict';
+// Entity index — O(1) lookup and O(degree) adjacency over `nodes` / `wires`.
+//
+// Why this exists: SCALE-GATE.md §2 requires get(id) in O(1) and wires-at-component
+// in O(degree). Before this module both were linear scans repeated inside per-node
+// loops, which is what made computeSignalState O(passes x N x (N+W)).
+//
+// Validity model (deliberately conservative for now):
+//   Every mutation of `nodes` / `wires`, and every reassignment of an indexed field
+//   (id, canvasId, parentId, wire.a, wire.b), calls invalidateModelIndex(). The maps
+//   are rebuilt lazily on the next read after an invalidation, once per edit batch —
+//   not once per lookup. A length mismatch also forces a rebuild, so a missed
+//   invalidation site degrades to correct-but-slow instead of silently wrong.
+//
+// This satisfies the O(1)/O(degree) read bounds. It does NOT yet satisfy the
+// O(affected) write bound in SCALE-GATE.md §2 — a rebuild is O(n) per edit batch.
+// Incremental maintenance is the follow-up; correctness first.
+
+let modelIndexEpoch = 0;
+let modelIndexBuiltEpoch = -1;
+let modelIndexBuiltCounts = {nodes: -1, wires: -1};
+
+const MODEL_INDEX = {
+  node: new Map(),        // component id   -> component
+  wire: new Map(),        // wire id        -> wire
+  wiresAt: new Map(),     // component id   -> [wire, ...]   (either endpoint)
+  members: new Map(),     // canvas id      -> [component, ...]
+  wireMembers: new Map(), // canvas id      -> [wire, ...]
+  children: new Map(),    // parent id      -> [component, ...]
+};
+
+function invalidateModelIndex(){ modelIndexEpoch++; }
+
+function pushInto(map, key, value){
+  if(key===undefined || key===null) return;
+  const bucket = map.get(key);
+  if(bucket) bucket.push(value); else map.set(key, [value]);
+}
+
+function rebuildModelIndex(){
+  const {node, wire, wiresAt, members, wireMembers, children} = MODEL_INDEX;
+  node.clear(); wire.clear(); wiresAt.clear(); members.clear(); wireMembers.clear(); children.clear();
+  for(const n of nodes){
+    node.set(n.id, n);
+    pushInto(members, n.canvasId || GLOBAL_CANVAS_ID, n);
+    if(n.parentId) pushInto(children, n.parentId, n);
+  }
+  for(const w of wires){
+    wire.set(w.id, w);
+    pushInto(wireMembers, w.canvasId || GLOBAL_CANVAS_ID, w);
+    pushInto(wiresAt, w.a, w);
+    if(w.b !== w.a) pushInto(wiresAt, w.b, w);
+  }
+  modelIndexBuiltEpoch = modelIndexEpoch;
+  modelIndexBuiltCounts = {nodes: nodes.length, wires: wires.length};
+}
+
+function modelIndex(){
+  if(modelIndexBuiltEpoch !== modelIndexEpoch
+     || modelIndexBuiltCounts.nodes !== nodes.length
+     || modelIndexBuiltCounts.wires !== wires.length) rebuildModelIndex();
+  return MODEL_INDEX;
+}
+
+// ---- read API (the shapes the rest of src/ actually asks for) ----
+
+function nodeById(id){ return id==null ? null : (modelIndex().node.get(id) || null) }
+function wireById(id){ return id==null ? null : (modelIndex().wire.get(id) || null) }
+
+// Every wire with `componentId` at either endpoint. O(degree).
+function wiresAtComponent(componentId){ return modelIndex().wiresAt.get(componentId) || [] }
+
+function nodesOnCanvas(canvasId){ return modelIndex().members.get(canvasId || GLOBAL_CANVAS_ID) || [] }
+function wiresOnCanvas(canvasId){ return modelIndex().wireMembers.get(canvasId || GLOBAL_CANVAS_ID) || [] }
+function childNodesOf(parentId){ return parentId==null ? [] : (modelIndex().children.get(parentId) || []) }
+
+// Consistency check for the QA gate: the index must agree with the arrays.
+function verifyModelIndex(){
+  rebuildModelIndex();
+  const problems = [];
+  if(MODEL_INDEX.node.size !== new Set(nodes.map(n=>n.id)).size) problems.push('duplicate component ids');
+  if(MODEL_INDEX.wire.size !== new Set(wires.map(w=>w.id)).size) problems.push('duplicate wire ids');
+  for(const n of nodes) if(MODEL_INDEX.node.get(n.id)!==n) problems.push(`component ${n.id} not indexed`);
+  for(const w of wires){
+    if(MODEL_INDEX.wire.get(w.id)!==w) problems.push(`wire ${w.id} not indexed`);
+    if(!wiresAtComponent(w.a).includes(w)) problems.push(`wire ${w.id} missing at endpoint a`);
+    if(!wiresAtComponent(w.b).includes(w)) problems.push(`wire ${w.id} missing at endpoint b`);
+  }
+  return {ok: problems.length===0, problems: problems.slice(0, 20), counts: {
+    nodes: nodes.length, wires: wires.length,
+    indexedNodes: MODEL_INDEX.node.size, indexedWires: MODEL_INDEX.wire.size,
+  }};
+}
+/* END src/07-index.js */
+</script>
 <script data-beta-module="src/10-model.js">
 /* BEGIN src/10-model.js */
 'use strict';
@@ -2073,7 +2170,7 @@ function canvasOwnerComponentId(canvasId){const d=canvasDescriptorById(canvasId)
 function canvasOwnerWireId(canvasId){const d=canvasDescriptorById(canvasId);return d?.ownerKind==='wire'?d.ownerId:null}
 function canvasParentId(canvasId){
   const d=canvasDescriptorById(canvasId);if(!d||d.scope==='global')return null;
-  if(d.ownerKind==='component'){const owner=nodes.find(n=>n.id===d.ownerId);return owner?.canvasId||GLOBAL_CANVAS_ID}
+  if(d.ownerKind==='component'){const owner=nodeById(d.ownerId);return owner?.canvasId||GLOBAL_CANVAS_ID}
   return GLOBAL_CANVAS_ID;
 }
 function entityCanvasStateLabel(entity,kind){const c=ensureEntityCanvas(entity,kind);return `${c.state==='open'?'Open':'Closed'} · Local · ${c.dimension}D`}
@@ -2215,7 +2312,7 @@ function portCanEmit(port){
 function endpointAttachmentPoint(w,end){
   if(SovSchematicData.isFreeEndpoint(w?.[end+'Attachment']))return null;
   const ref=Attachment.wireEndpointRef(w,end,nodes);if(!ref)return null;
-  const node=nodes.find(n=>n.id===ref.componentId);if(!node)return null;
+  const node=nodeById(ref.componentId);if(!node)return null;
   return {...ref,node,config:componentConfig(node).ports[ref.compatId]};
 }
 // A carrier end is bound to a component's attachment point or free in world space.
@@ -2273,7 +2370,7 @@ function wirePartPortConfig(w,part){
   if(!part.config)part.config={};
   Attachment.normalizeOwnedPoint(part,{ownerKind:'wire',ownerId:w.id,t:part.t??.5});
   part.legacyKind='port';
-  part.canvasId=wireCanvas(w).id;
+  part.canvasId=wireCanvas(w).id;invalidateModelIndex();
 
   // Determine the inherited default channel color directly from the parent
   // Wire's endpoint Port. Do not call connectionConfig()/wireChannelFor()
@@ -2449,7 +2546,7 @@ function wireEndpointMarker(w,end){
   return cfg[key];
 }
 function wireMarkerSummaryForPort(nodeId,pointId){
-  const node=nodes.find(n=>n.id===nodeId),spec=node?Attachment.resolveSpec(node,pointId):null,compatId=spec?.compatId||pointId;
+  const node=nodeById(nodeId),spec=node?Attachment.resolveSpec(node,pointId):null,compatId=spec?.compatId||pointId;
   return wires.filter(w=>(w.a===nodeId&&w.aSide===compatId)||(w.b===nodeId&&w.bSide===compatId)).map(w=>
     (w.a===nodeId&&w.aSide===compatId)?wireEndpointMarker(w,'a'):wireEndpointMarker(w,'b')
   );
@@ -2598,7 +2695,7 @@ function mutationBlocked(entity,label='Edit'){
   if(isEntityLocked(entity)){statusEl.textContent=`Locked · ${label} refused`;return true}
   return false;
 }
-function selectedComponentArray(){return [...selectedComponentIds].map(id=>nodes.find(n=>n.id===id)).filter(Boolean)}
+function selectedComponentArray(){return [...selectedComponentIds].map(id=>nodeById(id)).filter(Boolean)}
 function selectedRootComponents(){
   const ids=new Set(selectedComponentIds);
   return selectedComponentArray().filter(n=>{let p=parentComponent(n);while(p){if(ids.has(p.id))return false;p=parentComponent(p)}return true});
@@ -2694,7 +2791,7 @@ function renderCheckpointList(){
 
 // --- Clipboard -------------------------------------------------------------
 function collectSelectionSubtree(){
-  const roots=selectedRootComponents();if(!roots.length&&typeof selected==='string'&&!selected.startsWith('wire:')&&!isAttachmentSelectionValue(selected)){const n=nodes.find(n=>n.id===selected);if(n)roots.push(n)}
+  const roots=selectedRootComponents();if(!roots.length&&typeof selected==='string'&&!selected.startsWith('wire:')&&!isAttachmentSelectionValue(selected)){const n=nodeById(selected);if(n)roots.push(n)}
   const ids=new Set();for(const root of roots){ids.add(root.id);for(const d of descendantsOf(root.id))ids.add(d.id)}
   return {roots,ids,components:nodes.filter(n=>ids.has(n.id)).map(SovSchematicData.clone),wires:wires.filter(w=>ids.has(w.a)&&ids.has(w.b)).map(SovSchematicData.clone)};
 }
@@ -2711,16 +2808,16 @@ function pasteClipboard({offset=32}={}){
     const value=SovSchematicData.clone(old);delete value.id;
     value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
     if(old.parentId&&idMap.has(old.parentId)){
-      value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
+      value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;invalidateModelIndex();
       // A Point stuck to the copied host's boundary or path stays stuck to the copy.
       if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
-    }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
-    const fresh=SovSchematicData.makeComponent(diagram,value);nodes.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
+    }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};invalidateModelIndex();
+    const fresh=SovSchematicData.makeComponent(diagram,value);nodes.push(fresh);invalidateModelIndex();idMap.set(old.id,fresh.id);created.push(fresh);
   }
   for(const old of semanticClipboard.wires||[]){
     if(!idMap.has(old.a)||!idMap.has(old.b))continue;
-    const value=SovSchematicData.clone(old);delete value.id;value.a=idMap.get(old.a);value.b=idMap.get(old.b);
-    try{wires.push(SovSchematicData.makeWire(diagram,value))}catch(_){ }
+    const value=SovSchematicData.clone(old);delete value.id;value.a=idMap.get(old.a);value.b=idMap.get(old.b);invalidateModelIndex();
+    try{wires.push(SovSchematicData.makeWire(diagram,value));invalidateModelIndex()}catch(_){ }
   }
   syncAllNodeBoundaryContext();setComponentSelection(created.filter(n=>semanticClipboard.rootIds.includes([...idMap.entries()].find(([,v])=>v===n.id)?.[0])).map(n=>n.id),created.at(-1)?.id);routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();statusEl.textContent=`Pasted · ${created.length} Component${created.length===1?'':'s'}`;return created;
 }
@@ -2761,14 +2858,14 @@ function renderObjectsPanel(){
 function globalTimeScale(){diagram.meta=diagram.meta||{};const n=Number(diagram.meta.timeScale);return Math.max(.1,Math.min(8,Number.isFinite(n)?n:1))}
 function setGlobalTimeScale(value){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Math.max(.1,Math.min(8,Number(value)||1));setHistoryHint('Change global rate');render();scheduleHistoryCapture()}
 function packetRateForWire(w,direction='forward'){
-  const source=nodes.find(n=>n.id===(direction==='reverse'?w.b:w.a));return globalTimeScale()*entityEditorState(source).rate*entityEditorState(w).rate;
+  const source=nodeById((direction==='reverse'?w.b:w.a));return globalTimeScale()*entityEditorState(source).rate*entityEditorState(w).rate;
 }
 function resolveAppearanceMode(){if(appearanceMode!=='system')return appearanceMode;return matchMedia?.('(prefers-color-scheme: dark)').matches?'dark':'light'}
 function applyAppearanceMode(){const resolved=resolveAppearanceMode();document.documentElement.dataset.appearance=resolved;document.documentElement.style.setProperty('--canvas-tone',canvasTone(colorEngine.theme,resolved));const input=document.getElementById('appearanceMode');if(input)input.value=appearanceMode;try{localStorage.setItem('soveraeign.schematic.appearance',appearanceMode)}catch(_){}refreshPaletteDerivedColors?.();renderPalettePreview?.();render?.();restoreSelectedSurface?.();statusEl.textContent=`View · ${resolved}`}
 
 // --- Utility settings ------------------------------------------------------
 function selectedUtilityEntity(kind=selectedSurfaceKind()){
-  if(kind==='component')return nodes.find(n=>n.id===selected)||null;
+  if(kind==='component')return nodeById(selected)||null;
   if(kind==='wire')return selectedConnection?.()||null;
   if(kind==='port'){const info=selectedPortInfo();return info?.owner||null}
   return null;
@@ -2852,10 +2949,10 @@ function openColorSlotPanel(kind){
   slotEditTarget=kind;
   let current=6;
   if(kind==='component'){
-    const n=nodes.find(n=>n.id===selected);if(!n)return;
+    const n=nodeById(selected);if(!n)return;
     current=componentConfig(n).colorSlot;
   }else if(kind==='component-interior'){
-    const n=nodes.find(n=>n.id===selected);if(!n)return;
+    const n=nodeById(selected);if(!n)return;
     current=componentConfig(n).presentation.interiorColorSlot;
   }else if(kind==='port'){
     const info=selectedPortInfo();if(!info)return;
@@ -2892,9 +2989,9 @@ function openColorSlotPanel(kind){
 function applySelectedColorSlot(slot){
   slot=normalizeSlot(slot);const entity=selectedUtilityEntity?.();if(entity&&mutationBlocked(entity,'color edit')){closeColorSlotPanel();return}setHistoryHint?.('Change color');
   if(slotEditTarget==='component'){
-    const n=nodes.find(n=>n.id===selected);if(n)componentConfig(n).colorSlot=slot;
+    const n=nodeById(selected);if(n)componentConfig(n).colorSlot=slot;
   }else if(slotEditTarget==='component-interior'){
-    const n=nodes.find(n=>n.id===selected);if(n)componentConfig(n).presentation.interiorColorSlot=slot;
+    const n=nodeById(selected);if(n)componentConfig(n).presentation.interiorColorSlot=slot;
   }else if(slotEditTarget==='port'){
     const info=selectedPortInfo();
     if(info){
@@ -2972,7 +3069,7 @@ function selectedCanvasContextId(){
       return exposed[0]||info.owner.canvasId||GLOBAL_CANVAS_ID;
     }
   }
-  const n=nodes.find(n=>n.id===selected);return n?.canvasId||GLOBAL_CANVAS_ID;
+  const n=nodeById(selected);return n?.canvasId||GLOBAL_CANVAS_ID;
 }
 function canvasContextLabel(canvasId){
   const d=canvasDescriptorById(canvasId)||canvasDescriptorById(GLOBAL_CANVAS_ID);
@@ -3012,7 +3109,7 @@ function syncSelectionSettings(kind){
   wireSettingsFields.hidden=kind!=='wire';
   portSettingsFields.hidden=kind!=='port';
   if(kind==='component'){
-    const n=nodes.find(n=>n.id===selected);if(n){barComponentSignalMode.value=normalizeSignalMode(componentConfig(n));syncComponentVisualPanel(n)}
+    const n=nodeById(selected);if(n){barComponentSignalMode.value=normalizeSignalMode(componentConfig(n));syncComponentVisualPanel(n)}
   }
 }
 function openSelectionSettings(kind){
@@ -3088,13 +3185,13 @@ function selectedPortInfo(){
   const parts=selected.split(':');
   const offset=parts[0]==='point'?1:1;
   if(parts[offset]==='component'){
-    const node=nodes.find(n=>n.id===parts[offset+1]);if(!node)return null;
+    const node=nodeById(parts[offset+1]);if(!node)return null;
     const point=Attachment.resolveSpec(node,parts[offset+2]);if(!point)return null;
     const port=componentConfig(node).ports[point.compatId];if(!port)return null;
     return {ownerKind:'component',owner:node,node,pointId:point.id,portId:point.compatId,point,port};
   }
   // Legacy selection format: port:<componentId>:<compatPortId>
-  const node=nodes.find(n=>n.id===parts[1]);
+  const node=nodeById(parts[1]);
   if(node){const point=Attachment.resolveSpec(node,parts[2]);if(!point)return null;const port=componentConfig(node).ports[point.compatId];return port?{ownerKind:'component',owner:node,node,pointId:point.id,portId:point.compatId,point,port}:null}
   return null;
 }
@@ -3133,7 +3230,7 @@ function restoreSelectedSurface(){
   }else if(isAttachmentSelectionValue(selected)){
     const info=selectedPortInfo();if(info)selectPortRef(info);
   }else{
-    const n=nodes.find(n=>n.id===selected);if(n)selectNode(n.id);
+    const n=nodeById(selected);if(n)selectNode(n.id);
   }
 }
 function positionSelectionBar(){
@@ -3145,7 +3242,7 @@ function positionSelectionBar(){
     const info=selectedPortInfo();
     if(info)p=portPos(info.node,info.pointId||info.portId);
   }else{
-    const n=nodes.find(n=>n.id===selected);if(n){const size=componentSize(n);p={x:n.x,y:n.y-size.h/2-10}}
+    const n=nodeById(selected);if(n){const size=componentSize(n);p={x:n.x,y:n.y-size.h/2-10}}
   }
   if(!p){hideSelectionBar();return}
   const q=svgToWorkspacePixel(p.x,p.y);
@@ -3162,15 +3259,18 @@ function positionSelectionBar(){
 // 0.1 Beta concern: Derived signal/voltage activation and diffusion state.
 
 function incomingSignals(componentId,signalState){
-  const colors=[],component=nodes.find(n=>n.id===componentId),placement=component?.placement||{};
+  const colors=[],component=nodeById(componentId),placement=component?.placement||{};
   if(placement.kind==='wire'&&placement.wireId){
-    const host=wires.find(w=>w.id===placement.wireId);
+    const host=wireById(placement.wireId);
     if(host){
       if(wireDirectionActive(host,'forward',signalState))colors.push(signalState.colors.get(host.a));
       if((connectionConfig(host).direction==='duplex'||connectionConfig(host).direction==='reverse')&&wireDirectionActive(host,'reverse',signalState))colors.push(signalState.colors.get(host.b));
     }
   }
-  for(const w of wires){
+  // Only wires with this component at an endpoint can contribute: every branch below
+  // already tests w.a===componentId or w.b===componentId, so the endpoint index is
+  // exactly equivalent to scanning `wires` — at O(degree) instead of O(W).
+  for(const w of wiresAtComponent(componentId)){
     const cfg=connectionConfig(w);
     if(cfg.direction==='forward' && w.b===componentId && wireDirectionActive(w,'forward',signalState)) colors.push(signalState.colors.get(w.a));
     else if(cfg.direction==='reverse' && w.a===componentId && wireDirectionActive(w,'reverse',signalState)) colors.push(signalState.colors.get(w.b));
@@ -3198,8 +3298,11 @@ function wireDirectionActive(w,direction,signalState){
 function computeSignalState(){
   let active=new Set();
   nodes.forEach(n=>{ if(normalizeSignalMode(componentConfig(n))==='source') active.add(n.id); });
+  // Local colors are constant across activation passes; build the map once instead
+  // of allocating an N-entry Map on every pass.
+  const baseColors=new Map(nodes.map(n=>[n.id,componentConfig(n).color]));
   for(let pass=0;pass<6;pass++){
-    const probe={active,colors:new Map(nodes.map(n=>[n.id,componentConfig(n).color]))};
+    const probe={active,colors:baseColors};
     const next=new Set(active);
     for(const n of nodes){
       const mode=normalizeSignalMode(componentConfig(n));
@@ -3209,8 +3312,7 @@ function computeSignalState(){
     if(next.size===active.size && [...next].every(id=>active.has(id))) break;
     active=next;
   }
-  let colors=new Map();
-  nodes.forEach(n=>colors.set(n.id,componentConfig(n).color));
+  let colors=new Map(baseColors);
   if(colorEngine.diffuse){
     for(let pass=0;pass<5;pass++){
       const probe={active,colors};
@@ -3550,7 +3652,7 @@ function activeCanvasNodeIds(canvasId=selectedCanvasContextId()){
   if(canvasId===GLOBAL_CANVAS_ID)return new Set(nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===GLOBAL_CANVAS_ID).map(n=>n.id));
   const d=canvasDescriptorById(canvasId);if(!d)return new Set();
   if(d.ownerKind==='component')return new Set(nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===canvasId).map(n=>n.id));
-  if(d.ownerKind==='wire'){const w=wires.find(w=>w.id===d.ownerId);return new Set(w?[w.a,w.b].filter(Boolean):[])}
+  if(d.ownerKind==='wire'){const w=wireById(d.ownerId);return new Set(w?[w.a,w.b].filter(Boolean):[])}
   return new Set();
 }
 function activeCanvasWireSet(canvasId=selectedCanvasContextId()){
@@ -3565,7 +3667,7 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   const nodeIds=activeCanvasNodeIds(canvasId),scopedNodes=nodes.filter(n=>nodeIds.has(n.id));
   const d=canvasDescriptorById(canvasId);
   if(d?.ownerKind==='component'){
-    const owner=nodes.find(n=>n.id===d.ownerId);if(owner&&!scopedNodes.includes(owner))scopedNodes.unshift(owner);
+    const owner=nodeById(d.ownerId);if(owner&&!scopedNodes.includes(owner))scopedNodes.unshift(owner);
   }
   if(!scopedNodes.length&&canvasId===GLOBAL_CANVAS_ID)return null;
   let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
@@ -3641,7 +3743,7 @@ function applyNodeDragPosition(state){
   statusEl.textContent = `Held freely · ${snapModeLabel(step)} on release`;
 }
 function settleActiveComponent(mods=null){
-  const node = activeNodeDragState?.node || nodes.find(n=>n.id===activeNodeDrag);
+  const node = activeNodeDragState?.node || nodeById(activeNodeDrag);
   if(!node) return;
 
   const effective = modifierSnapshot(mods || activeNodeDragState?.modifiers || {});
@@ -3718,7 +3820,7 @@ function beginKeyboardMove(node){
 }
 function moveSelectedByArrow(e){
   if(typeof selected!=='string' || selected.startsWith('wire:')) return false;
-  const node=nodes.find(n=>n.id===selected);
+  const node=nodeById(selected);
   if(!node) return false;
   if(isEntityLocked(node)||isEntityPinned(node)){statusEl.textContent=isEntityLocked(node)?'Locked · move refused':'Pinned · move refused';return true}
 
@@ -3749,7 +3851,7 @@ function finishKeyboardMove(mods){
   // Arrow-key steps are intentionally aligned to the selected grid unless Alt
   // was used. Settling still applies the same rule for consistency.
   settleActiveComponent(mods);
-  const movedNode=nodes.find(n=>n.id===keyboardMoveNodeId);if(movedNode)updateContainmentFor(movedNode);
+  const movedNode=nodeById(keyboardMoveNodeId);if(movedNode)updateContainmentFor(movedNode);
   settleDraggedRoutes();
 
   keyboardMoveNodeId=null;
@@ -3777,7 +3879,7 @@ function pointInsideComponent(x,y,n,pad=0){
   return x>R.l&&x<R.r&&y>R.t&&y<R.b;
 }
 function componentAcceptsChildren(n){return formHostsChildren(n)}
-function parentComponent(node){const ownerId=canvasOwnerComponentId(node?.canvasId||GLOBAL_CANVAS_ID);return ownerId?nodes.find(n=>n.id===ownerId)||null:null}
+function parentComponent(node){const ownerId=canvasOwnerComponentId(node?.canvasId||GLOBAL_CANVAS_ID);return ownerId?nodeById(ownerId)||null:null}
 function componentDisplayName(node){
   if(!node)return '—';
   return componentConfig(node).label||byId(node.symbolId).name||node.id;
@@ -3790,7 +3892,7 @@ function componentScopePath(node){
 function syncNodeBoundaryContext(node){
   if(!node)return;
   ensureComponentStructure(node);
-  if(!node.canvasId)node.canvasId=node.parentId?localCanvasId('component',node.parentId):GLOBAL_CANVAS_ID;
+  if(!node.canvasId){node.canvasId=node.parentId?localCanvasId('component',node.parentId):GLOBAL_CANVAS_ID;invalidateModelIndex()}
   const parent=parentComponent(node),host=canvasDescriptorById(node.canvasId||GLOBAL_CANVAS_ID);
   node.parentId=parent?.id||null;node.boundary.inside.type=node.symbolId==='blank'?null:node.symbolId;node.type=node.boundary.inside.type;
   node.boundary.outside.type=parent?(parent.boundary.inside.type||parent.symbolId||'component'):host?.ownerKind==='wire'?'wire':'world';componentPlacement(node);
@@ -3805,7 +3907,7 @@ function setActiveCanvas(){
 function clearActiveCanvas(){
   const canvasId=selectedCanvasContextId(),d=canvasDescriptorById(canvasId)||canvasDescriptorById(GLOBAL_CANVAS_ID);
   if(d.scope==='global'){
-    nodes.splice(0,nodes.length);wires.splice(0,wires.length);diagram.references.splice(0,diagram.references.length);
+    nodes.splice(0,nodes.length);wires.splice(0,wires.length);diagram.references.splice(0,diagram.references.length);invalidateModelIndex();
   }else if(d.ownerKind==='component'){
     const removeIds=new Set(nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===canvasId).map(n=>n.id));
     for(let i=wires.length-1;i>=0;i--)if((wires[i].canvasId||GLOBAL_CANVAS_ID)===canvasId||removeIds.has(wires[i].a)||removeIds.has(wires[i].b))wires.splice(i,1);
@@ -3813,7 +3915,7 @@ function clearActiveCanvas(){
   }else if(d.ownerKind==='wire'){
     const hostedIds=nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===d.id).map(n=>n.id);
     for(const id of hostedIds)SovSchematicData.remove(diagram,'component',id);
-    const w=wires.find(w=>w.id===d.ownerId);if(w&&Array.isArray(w.attachments))w.attachments.splice(0,w.attachments.length);
+    const w=wireById(d.ownerId);if(w&&Array.isArray(w.attachments))w.attachments.splice(0,w.attachments.length);
   }
   routeCache.clear();arrowPoseCache.clear();dragRouteSnapshots.clear();selected=null;hideSelectionBar();refreshCanvasScopeControl();render();selectNode(null);
 }
@@ -3832,7 +3934,7 @@ function descendantsOf(parentId){
   return out;
 }
 function isDescendantOf(nodeId,parentId){
-  let cur=nodes.find(n=>n.id===nodeId),seen=new Set();
+  let cur=nodeById(nodeId),seen=new Set();
   while(cur){const parent=parentComponent(cur);if(!parent||seen.has(parent.id))break;if(parent.id===parentId)return true;seen.add(parent.id);cur=parent}
 
   return false;
@@ -3906,7 +4008,7 @@ function nearestPointOnComponentEdge(host,x,y){
   let best=null;for(const c of candidates){const d=Math.hypot(lx-c.x,ly-c.y);if(!best||d<best.distance)best={...c,distance:d}}const world=rotateVectorByDegrees(best.x,best.y,angle);return {...best,x:host.x+world.x,y:host.y+world.y,angle:angle+best.angle};
 }
 function syncComponentAttachedPose(node){
-  const placement=componentPlacement(node);if(!['path','edge'].includes(placement.kind))return;const host=nodes.find(n=>n.id===placement.hostId)||parentComponent(node);if(!host)return;let q=null;
+  const placement=componentPlacement(node);if(!['path','edge'].includes(placement.kind))return;const host=nodeById(placement.hostId)||parentComponent(node);if(!host)return;let q=null;
   if(placement.kind==='path'){const half=Math.max(24,componentSize(host).w/2),local=-half+half*2*placement.t,world=rotateVectorByDegrees(local,0,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)}}
   else{const {w,h}=componentSize(host),side=placement.side||'top',u=Math.max(0,Math.min(1,placement.t));let lx=0,ly=0,a=0;if(side==='top'||side==='bottom'){lx=-w/2+w*u;ly=side==='top'?-h/2:h/2}else{lx=side==='left'?-w/2:w/2;ly=-h/2+h*u;a=90}const world=rotateVectorByDegrees(lx,ly,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)+a}}
   node.x=q.x;node.y=q.y;wireHostPoseCache.set(node.id,{...q,hostId:host.id,t:placement.t});
@@ -3931,16 +4033,16 @@ function componentHostCandidateAtPoint(node,x=node.x,y=node.y){
 function applyComponentHost(node,candidate){
   if(!node)return null;
   if(candidate?.kind==='component'){
-    node.canvasId=candidate.canvasId;node.parentId=candidate.entity.id;node.placement={kind:'surface',x:node.x,y:node.y};wireHostPoseCache.delete(node.id)
+    node.canvasId=candidate.canvasId;node.parentId=candidate.entity.id;invalidateModelIndex();node.placement={kind:'surface',x:node.x,y:node.y};wireHostPoseCache.delete(node.id)
   }else if(candidate?.kind==='wire'){
-    node.canvasId=candidate.canvasId;node.parentId=null;node.placement={kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t};node.x=candidate.placement.x;node.y=candidate.placement.y;
+    node.canvasId=candidate.canvasId;node.parentId=null;invalidateModelIndex();node.placement={kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t};node.x=candidate.placement.x;node.y=candidate.placement.y;
     wireHostPoseCache.set(node.id,{x:node.x,y:node.y,angle:Number(candidate.placement.angle)||0,wireId:candidate.entity.id,t:node.placement.t})
   }else if(candidate?.kind==='path'){
     node.canvasId=candidate.canvasId;node.parentId=candidate.entity.id;node.placement={kind:'path',hostId:candidate.entity.id,t:candidate.placement.t};node.x=candidate.placement.x;node.y=candidate.placement.y;wireHostPoseCache.set(node.id,{x:node.x,y:node.y,angle:Number(candidate.placement.angle)||0,hostId:candidate.entity.id,t:node.placement.t})
   }else if(candidate?.kind==='edge'){
     node.canvasId=candidate.canvasId;node.parentId=candidate.entity.id;node.placement={kind:'edge',hostId:candidate.entity.id,side:candidate.placement.side,t:candidate.placement.t};node.x=candidate.placement.x;node.y=candidate.placement.y;wireHostPoseCache.set(node.id,{x:node.x,y:node.y,angle:Number(candidate.placement.angle)||0,hostId:candidate.entity.id,t:node.placement.t,side:node.placement.side})
   }else{
-    node.canvasId=GLOBAL_CANVAS_ID;node.parentId=null;node.placement={kind:'surface',x:node.x,y:node.y};wireHostPoseCache.delete(node.id)
+    node.canvasId=GLOBAL_CANVAS_ID;node.parentId=null;invalidateModelIndex();node.placement={kind:'surface',x:node.x,y:node.y};wireHostPoseCache.delete(node.id)
   }
   syncNodeBoundaryContext(node);for(const child of descendantsOf(node.id))syncNodeBoundaryContext(child);return candidate;
 }
@@ -3973,7 +4075,7 @@ function stubPos(P,portId,d=26,node=null,inward=null){
   const placement=node?componentPlacement(node):null;
   if(placement?.kind==='edge'){
     // A Point stuck to a boundary leaves along that boundary's normal, into whichever surface carries the Wire.
-    const host=nodes.find(h=>h.id===placement.hostId);
+    const host=nodeById(placement.hostId);
     const normal=rotateVectorByDegrees(portNormal(placement.side).x,portNormal(placement.side).y,host?componentHostAngle(host):0);
     const sign=(inward==null?face==='internal':inward)?-1:1;return{x:P.x+normal.x*d*sign,y:P.y+normal.y*d*sign};
   }
@@ -3983,7 +4085,7 @@ function stubPos(P,portId,d=26,node=null,inward=null){
 // True when a Wire runs on the interior surface of the host that a boundary-hosted Point sticks to.
 function wireEndpointInward(w,node){
   if(!w||!node)return null;const placement=componentPlacement(node);if(placement.kind!=='edge')return null;
-  const host=nodes.find(h=>h.id===placement.hostId);return !!host&&(w.canvasId||GLOBAL_CANVAS_ID)===componentCanvas(host).id;
+  const host=nodeById(placement.hostId);return !!host&&(w.canvasId||GLOBAL_CANVAS_ID)===componentCanvas(host).id;
 }
 /* END src/30-canvas.js */
 </script>
@@ -4265,7 +4367,16 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   // A free end has no boundary to leave; the route starts exactly there.
   const SA=sourceNode?stubPos(A,aSide,26,sourceNode,wireEndpointInward(routedWire,sourceNode)):A, SB=targetNode?stubPos(B,bSide,26,targetNode,wireEndpointInward(routedWire,targetNode)):B;
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
-  const otherRects=nodes
+  // Obstacles come from the wire's own canvas. A component sealed inside another
+  // container cannot obstruct a route on the parent canvas — the container is the
+  // obstacle. This is O(result) via the canvas-membership index, not a full scan.
+  const routeCanvasId=(routedWire&&(routedWire.canvasId||GLOBAL_CANVAS_ID))
+    ||(sourceNode&&(sourceNode.canvasId||GLOBAL_CANVAS_ID))
+    ||(targetNode&&(targetNode.canvasId||GLOBAL_CANVAS_ID))
+    ||null;
+  const obstaclePool=routeCanvasId?nodesOnCanvas(routeCanvasId):nodes;
+
+  const otherRects=obstaclePool
     .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
     .map(n=>rectForNode(n,12));
 
@@ -4276,7 +4387,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   if(endpointNeedsOuterObstacle(targetNode,bSide))endpointRects.push(rectForNode(targetNode,8));
   const obstacles=[...otherRects,...endpointRects];
 
-  const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
+  const allRects=obstaclePool.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
   const xs=[SA.x,SB.x,(SA.x+SB.x)/2];
   const ys=[SA.y,SB.y,(SA.y+SB.y)/2];
 
@@ -4521,7 +4632,7 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
   if(id&&focus)activateCanvasKeyboard();
   document.querySelectorAll('.node').forEach(el=>el.classList.toggle('selected',selectedComponentIds.has(el.dataset.id)));
   document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
-  const n=nodes.find(n=>n.id===selected);
+  const n=nodeById(selected);
   document.getElementById('emptyInspector').hidden=!!n;
   hideInspectorKinds();
   if(!n){hideSelectionBar();renderObjectsPanel?.();return}
@@ -4572,7 +4683,7 @@ function selectPortRef(info,{focus=true}={}){
   showPortBar(info);
 }
 function selectPort(nodeId,pointId){
-  const node=nodes.find(n=>n.id===nodeId);if(!node)return;
+  const node=nodeById(nodeId);if(!node)return;
   const point=Attachment.resolveSpec(node,pointId);if(!point)return;
   const port=componentConfig(node).ports[point.compatId];if(!port)return;
   selectPortRef({ownerKind:'component',owner:node,node,pointId:point.id,portId:point.compatId,port});
@@ -5278,7 +5389,7 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     settleActiveComponent(e||state.modifiers);
     for(const id of state.groupRootIds||[state.node.id]){
-      const root=nodes.find(n=>n.id===id);if(!root)continue;const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID;
+      const root=nodeById(id);if(!root)continue;const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID;
       let candidate;
       if(root.id===state.node.id){
         candidate=state.hostReady?state.hostCandidate:null;
@@ -5329,7 +5440,7 @@ window.addEventListener('error',()=>{if(activeNodeDragState)finishActiveNodeDrag
 window.addEventListener('unhandledrejection',()=>{if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'runtime rejection recovered'})});
 
 function growBlankFromConnection(sourceNode,sourcePointId,P,mods){
-  const source=nodes.find(n=>n.id===sourceNode),sourceSpec=source?Attachment.resolveSpec(source,sourcePointId):null;
+  const source=nodeById(sourceNode),sourceSpec=source?Attachment.resolveSpec(source,sourcePointId):null;
   if(!source||!sourceSpec){statusEl.textContent='Attachment no longer exists';return null}
   const sourceCompat=sourceSpec.compatId;
 
@@ -5347,7 +5458,7 @@ function growBlankFromConnection(sourceNode,sourcePointId,P,mods){
     connected=addConnection(blank.id,'right',sourceNode,sourceSpec.id);
   }
   if(!connected){
-    const i=nodes.findIndex(n=>n.id===blank.id);if(i>=0)nodes.splice(i,1);
+    const i=nodes.findIndex(n=>n.id===blank.id);if(i>=0){nodes.splice(i,1);invalidateModelIndex()}
     render();statusEl.textContent='Boundary blocks growth onto another surface';return null;
   }
 
@@ -5486,7 +5597,7 @@ function updateWireDrag(e){
   let B=P, bSide='in';
   if(snap){
     clearWireBlankCandidate();
-    const target=nodes.find(n=>n.id===snap.node); B=portPos(target,snap.side); bSide=snap.side;
+    const target=nodeById(snap.node); B=portPos(target,snap.side); bSide=snap.side;
     const hit=document.querySelector(`.node[data-id="${snap.node}"] .port-hit[data-side="${snap.side}"]`);
     if(hit) hit.classList.add('snap-target');
     statusEl.textContent=`Release → ${target.label||byId(target.symbolId).name}`;
@@ -5580,7 +5691,7 @@ function carrierEndPointerMove(e){
   e.preventDefault();
   const w=wires[d.i];if(!w){finishCarrierEndDrag();return}
   const P=svgPoint(e.clientX,e.clientY),snap=findCarrierSnapTarget(w,d.end,P);d.snap=snap;clearSnapTargets();
-  const B=snap?portPos(nodes.find(n=>n.id===snap.node),snap.side):P;
+  const B=snap?portPos(nodeById(snap.node),snap.side):P;
   if(snap)document.querySelector(`.node[data-id="${snap.node}"] .port-hit[data-point="${snap.side}"]`)?.classList.add('snap-target');
   const otherEp=carrierEndpoint(w,d.other);
   if(otherEp){
@@ -5590,7 +5701,7 @@ function carrierEndPointerMove(e){
     d.ghost.setAttribute('d',routePath(A,Z,from?(otherEp.compatId||null):(snap?.side||null),from?(snap?.side||null):(otherEp.compatId||null),from?(otherEp.node?.id||null):(snap?.node||null),from?(snap?.node||null):(otherEp.node?.id||null),d.i,occupied));
   }
   d.dot.setAttribute('cx',B.x);d.dot.setAttribute('cy',B.y);
-  statusEl.textContent=snap?`Release → bind to ${componentDisplayName(nodes.find(n=>n.id===snap.node))}`:'Release → free end';
+  statusEl.textContent=snap?`Release → bind to ${componentDisplayName(nodeById(snap.node))}`:'Release → free end';
 }
 function carrierEndPointerUp(e){
   const d=carrierEndDrag;if(!d||e.pointerId!==d.pointerId)return;e.preventDefault();
@@ -5638,7 +5749,7 @@ window.addEventListener('blur',()=>finishPanGesture());
 
 workspace.addEventListener('pointerdown',e=>{if(e.target===workspace && !panDrag&&!e.shiftKey&&!marqueeGesture){selected=null;selectNode(null)}});
 barComponentType.addEventListener('change',()=>{
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'type change'))return;setHistoryHint('Change Component type');
+  const n=nodeById(selected);if(!n||mutationBlocked(n,'type change'))return;setHistoryHint('Change Component type');
   const next=barComponentType.value;
   if(!GROUPS.Components.includes(next)&&!GROUPS.Primitives.includes(next)){barComponentType.value=n.symbolId;return}
 
@@ -5673,12 +5784,12 @@ barComponentType.addEventListener('change',()=>{
   selectNode(n.id);scheduleHistoryCapture();
 });
 barComponentLabel.addEventListener('input',()=>{
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'label edit'))return;setHistoryHint('Edit Component label');
+  const n=nodeById(selected);if(!n||mutationBlocked(n,'label edit'))return;setHistoryHint('Edit Component label');
   const cfg=componentConfig(n);cfg.label=barComponentLabel.value;
   refreshCanvasScopeControl();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 });
 barComponentSignalMode.addEventListener('change',()=>{
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'signal change'))return;setHistoryHint('Change signal mode');
+  const n=nodeById(selected);if(!n||mutationBlocked(n,'signal change'))return;setHistoryHint('Change signal mode');
   const cfg=componentConfig(n);cfg.signalMode=barComponentSignalMode.value;
   render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 });
@@ -5691,7 +5802,7 @@ barComponentColorSlot.addEventListener('click',()=>openColorSlotPanel('component
 // 0.1 Beta concern: Contextual editor mutations and selected-surface control bindings.
 
 function mutateSelectedPresentation(mutator,{reroute=false}={}){
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'settings edit'))return;setHistoryHint('Edit Component settings');
+  const n=nodeById(selected);if(!n||mutationBlocked(n,'settings edit'))return;setHistoryHint('Edit Component settings');
   const preserveEditorFocus=isEditableTarget(document.activeElement);
   const p=componentConfig(n).presentation;mutator(p,n);componentConfig(n);
   if(reroute){routeCache.clear();arrowPoseCache.clear()}
@@ -5757,7 +5868,7 @@ function deleteSelected(){
     return;
   }else{
     const ids=selectedComponentIds.size?[...selectedComponentIds]:[selected];
-    const targets=ids.map(id=>nodes.find(n=>n.id===id)).filter(Boolean);
+    const targets=ids.map(id=>nodeById(id)).filter(Boolean);
     if(targets.some(isEntityLocked)){statusEl.textContent='Locked · delete refused';return}
     setHistoryHint(targets.length>1?'Delete selection':'Delete Component');
     for(const root of targets.filter(n=>!targets.some(other=>other.id!==n.id&&isDescendantOf(n.id,other.id))))SovSchematicData.remove(diagram,'component',root.id);
@@ -5773,7 +5884,7 @@ barFormState.addEventListener('click',()=>{
   openSelectionSettings('component');formSettings.open=true;formSettings.scrollIntoView({block:'nearest'});
 });
 function updateSelectedComponentForm(mutator){
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Form edit'))return;setHistoryHint('Edit Component Form');
+  const n=nodeById(selected);if(!n||mutationBlocked(n,'Form edit'))return;setHistoryHint('Edit Component Form');
   const f=componentForm(n),beforeOpen=f.regions.interior.state==='open',beforeDimension=f.dimension;mutator(f,n);
   if(f.dimension<2)f.regions.interior.state='closed';componentForm(n);
   if(beforeOpen&&f.regions.interior.state==='closed'){
@@ -5788,7 +5899,7 @@ formDimension.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.di
 formAttachments.addEventListener('change',()=>{
   // Built-in 2D points are template defaults. Turning them off is refused while a Wire
   // still ends on one, so the change never silently orphans a carrier.
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Attachment defaults edit'))return;
+  const n=nodeById(selected);if(!n||mutationBlocked(n,'Attachment defaults edit'))return;
   const next=formAttachments.value==='none'?'none':'standard';
   if(next==='none'&&Attachment.attachmentDefaults(n)!=='none'&&wiresOnBuiltinPoints(n).length){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent='Detach Wires from built-in points first';return}
   setHistoryHint('Change attachment defaults');
@@ -5848,7 +5959,7 @@ barAddWirePortBtn.addEventListener('click',()=>{
   const ports={out:{side:'point',face:'external',label:'',connectionCount:1,activeConnection:0,connections:[{id:'connection-1',colorSlot:channel.colorSlot,flow:cfg.direction==='duplex'?'duplex':'out',access:'read-write'}]}};
   // A Wire tap is an ordinary Point primitive hosted by the Wire; the preset supplies its 0D Form.
   const point=SovSchematicData.makeComponent(diagram,{symbolId:'point',x,y,canvasId:wireCanvas(w).id,placement:{kind:'wire',wireId:w.id,t},config:{colorSlot:channel.colorSlot,ports}});
-  nodes.push(point);syncNodeBoundaryContext(point);render();selectPort(point.id,'self');scheduleHistoryCapture();statusEl.textContent='Point added to Wire';
+  nodes.push(point);invalidateModelIndex();syncNodeBoundaryContext(point);render();selectPort(point.id,'self');scheduleHistoryCapture();statusEl.textContent='Point added to Wire';
 });
 barConnectionLabel.addEventListener('input',()=>{
   const w=mutableSelectedConnection('Edit Wire label');if(!w)return;
@@ -6300,7 +6411,7 @@ function setUtilityMenu(which,open){for(const [btn,menu] of [[editBtn,editMenu],
 editBtn?.addEventListener('click',e=>{e.stopPropagation();setUtilityMenu(editMenu,editMenu.hidden)});viewBtn?.addEventListener('click',e=>{e.stopPropagation();setUtilityMenu(viewMenu,viewMenu.hidden)});editMenu?.addEventListener('click',e=>e.stopPropagation());viewMenu?.addEventListener('click',e=>e.stopPropagation());helpBtn?.addEventListener('click',e=>{e.stopPropagation();shortcutHelp.hidden=!shortcutHelp.hidden;setUtilityMenu(null,false);helpBtn.setAttribute('aria-expanded',String(!shortcutHelp.hidden))});shortcutHelp?.addEventListener('click',e=>e.stopPropagation());
 // Capture phase: canvas/palette gestures stopPropagation on pointerdown, which must not veto menu dismissal.
 document.addEventListener('pointerdown',e=>{if(editMenu&&!editMenu.hidden&&!editMenu.contains(e.target)&&!editBtn?.contains(e.target))setUtilityMenu(editMenu,false);if(viewMenu&&!viewMenu.hidden&&!viewMenu.contains(e.target)&&!viewBtn?.contains(e.target))setUtilityMenu(viewMenu,false);if(shortcutHelp&&!shortcutHelp.hidden&&!shortcutHelp.contains(e.target)&&e.target!==helpBtn){shortcutHelp.hidden=true;helpBtn?.setAttribute('aria-expanded','false')}},true);
-document.getElementById('editUndoBtn')?.addEventListener('click',undoHistory);document.getElementById('editRedoBtn')?.addEventListener('click',redoHistory);document.getElementById('editCutBtn')?.addEventListener('click',cutSelection);document.getElementById('editCopyBtn')?.addEventListener('click',copySelection);document.getElementById('editPasteBtn')?.addEventListener('click',()=>pasteClipboard());document.getElementById('editDuplicateBtn')?.addEventListener('click',duplicateSelection);document.getElementById('checkpointCreateBtn')?.addEventListener('click',()=>createCheckpoint());document.getElementById('viewObjectsBtn')?.addEventListener('click',()=>{selectNode(null);document.querySelector('.inspector')?.scrollTo({top:0,behavior:'smooth'})});document.getElementById('viewFocusBtn')?.addEventListener('click',()=>{const n=nodes.find(n=>n.id===selected);if(n)focusComponent(n)});
+document.getElementById('editUndoBtn')?.addEventListener('click',undoHistory);document.getElementById('editRedoBtn')?.addEventListener('click',redoHistory);document.getElementById('editCutBtn')?.addEventListener('click',cutSelection);document.getElementById('editCopyBtn')?.addEventListener('click',copySelection);document.getElementById('editPasteBtn')?.addEventListener('click',()=>pasteClipboard());document.getElementById('editDuplicateBtn')?.addEventListener('click',duplicateSelection);document.getElementById('checkpointCreateBtn')?.addEventListener('click',()=>createCheckpoint());document.getElementById('viewObjectsBtn')?.addEventListener('click',()=>{selectNode(null);document.querySelector('.inspector')?.scrollTo({top:0,behavior:'smooth'})});document.getElementById('viewFocusBtn')?.addEventListener('click',()=>{const n=nodeById(selected);if(n)focusComponent(n)});
 document.getElementById('quickUndoBtn')?.addEventListener('click',undoHistory);document.getElementById('quickRedoBtn')?.addEventListener('click',redoHistory);document.getElementById('quickCheckpointBtn')?.addEventListener('click',()=>createCheckpoint());
 
 paletteBtn.addEventListener('click',e=>{
@@ -6424,7 +6535,7 @@ function handleCanvasKeydown(e){
     return;
   }
 
-  if(code==='Enter'){const n=nodes.find(n=>n.id===selected);if(n){e.preventDefault();focusComponent(n)}return}
+  if(code==='Enter'){const n=nodeById(selected);if(n){e.preventDefault();focusComponent(n)}return}
 
   if(code==='Home'){
     e.preventDefault();e.stopPropagation();

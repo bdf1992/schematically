@@ -34,7 +34,7 @@ function mutationBlocked(entity,label='Edit'){
   if(isEntityLocked(entity)){statusEl.textContent=`Locked · ${label} refused`;return true}
   return false;
 }
-function selectedComponentArray(){return [...selectedComponentIds].map(id=>nodes.find(n=>n.id===id)).filter(Boolean)}
+function selectedComponentArray(){return [...selectedComponentIds].map(id=>nodeById(id)).filter(Boolean)}
 function selectedRootComponents(){
   const ids=new Set(selectedComponentIds);
   return selectedComponentArray().filter(n=>{let p=parentComponent(n);while(p){if(ids.has(p.id))return false;p=parentComponent(p)}return true});
@@ -130,7 +130,7 @@ function renderCheckpointList(){
 
 // --- Clipboard -------------------------------------------------------------
 function collectSelectionSubtree(){
-  const roots=selectedRootComponents();if(!roots.length&&typeof selected==='string'&&!selected.startsWith('wire:')&&!isAttachmentSelectionValue(selected)){const n=nodes.find(n=>n.id===selected);if(n)roots.push(n)}
+  const roots=selectedRootComponents();if(!roots.length&&typeof selected==='string'&&!selected.startsWith('wire:')&&!isAttachmentSelectionValue(selected)){const n=nodeById(selected);if(n)roots.push(n)}
   const ids=new Set();for(const root of roots){ids.add(root.id);for(const d of descendantsOf(root.id))ids.add(d.id)}
   return {roots,ids,components:nodes.filter(n=>ids.has(n.id)).map(SovSchematicData.clone),wires:wires.filter(w=>ids.has(w.a)&&ids.has(w.b)).map(SovSchematicData.clone)};
 }
@@ -147,16 +147,16 @@ function pasteClipboard({offset=32}={}){
     const value=SovSchematicData.clone(old);delete value.id;
     value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
     if(old.parentId&&idMap.has(old.parentId)){
-      value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
+      value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;invalidateModelIndex();
       // A Point stuck to the copied host's boundary or path stays stuck to the copy.
       if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
-    }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
-    const fresh=SovSchematicData.makeComponent(diagram,value);nodes.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
+    }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};invalidateModelIndex();
+    const fresh=SovSchematicData.makeComponent(diagram,value);nodes.push(fresh);invalidateModelIndex();idMap.set(old.id,fresh.id);created.push(fresh);
   }
   for(const old of semanticClipboard.wires||[]){
     if(!idMap.has(old.a)||!idMap.has(old.b))continue;
-    const value=SovSchematicData.clone(old);delete value.id;value.a=idMap.get(old.a);value.b=idMap.get(old.b);
-    try{wires.push(SovSchematicData.makeWire(diagram,value))}catch(_){ }
+    const value=SovSchematicData.clone(old);delete value.id;value.a=idMap.get(old.a);value.b=idMap.get(old.b);invalidateModelIndex();
+    try{wires.push(SovSchematicData.makeWire(diagram,value));invalidateModelIndex()}catch(_){ }
   }
   syncAllNodeBoundaryContext();setComponentSelection(created.filter(n=>semanticClipboard.rootIds.includes([...idMap.entries()].find(([,v])=>v===n.id)?.[0])).map(n=>n.id),created.at(-1)?.id);routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();statusEl.textContent=`Pasted · ${created.length} Component${created.length===1?'':'s'}`;return created;
 }
@@ -197,14 +197,14 @@ function renderObjectsPanel(){
 function globalTimeScale(){diagram.meta=diagram.meta||{};const n=Number(diagram.meta.timeScale);return Math.max(.1,Math.min(8,Number.isFinite(n)?n:1))}
 function setGlobalTimeScale(value){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Math.max(.1,Math.min(8,Number(value)||1));setHistoryHint('Change global rate');render();scheduleHistoryCapture()}
 function packetRateForWire(w,direction='forward'){
-  const source=nodes.find(n=>n.id===(direction==='reverse'?w.b:w.a));return globalTimeScale()*entityEditorState(source).rate*entityEditorState(w).rate;
+  const source=nodeById((direction==='reverse'?w.b:w.a));return globalTimeScale()*entityEditorState(source).rate*entityEditorState(w).rate;
 }
 function resolveAppearanceMode(){if(appearanceMode!=='system')return appearanceMode;return matchMedia?.('(prefers-color-scheme: dark)').matches?'dark':'light'}
 function applyAppearanceMode(){const resolved=resolveAppearanceMode();document.documentElement.dataset.appearance=resolved;document.documentElement.style.setProperty('--canvas-tone',canvasTone(colorEngine.theme,resolved));const input=document.getElementById('appearanceMode');if(input)input.value=appearanceMode;try{localStorage.setItem('soveraeign.schematic.appearance',appearanceMode)}catch(_){}refreshPaletteDerivedColors?.();renderPalettePreview?.();render?.();restoreSelectedSurface?.();statusEl.textContent=`View · ${resolved}`}
 
 // --- Utility settings ------------------------------------------------------
 function selectedUtilityEntity(kind=selectedSurfaceKind()){
-  if(kind==='component')return nodes.find(n=>n.id===selected)||null;
+  if(kind==='component')return nodeById(selected)||null;
   if(kind==='wire')return selectedConnection?.()||null;
   if(kind==='port'){const info=selectedPortInfo();return info?.owner||null}
   return null;

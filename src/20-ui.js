@@ -33,10 +33,10 @@ function openColorSlotPanel(kind){
   slotEditTarget=kind;
   let current=6;
   if(kind==='component'){
-    const n=nodes.find(n=>n.id===selected);if(!n)return;
+    const n=nodeById(selected);if(!n)return;
     current=componentConfig(n).colorSlot;
   }else if(kind==='component-interior'){
-    const n=nodes.find(n=>n.id===selected);if(!n)return;
+    const n=nodeById(selected);if(!n)return;
     current=componentConfig(n).presentation.interiorColorSlot;
   }else if(kind==='port'){
     const info=selectedPortInfo();if(!info)return;
@@ -73,9 +73,9 @@ function openColorSlotPanel(kind){
 function applySelectedColorSlot(slot){
   slot=normalizeSlot(slot);const entity=selectedUtilityEntity?.();if(entity&&mutationBlocked(entity,'color edit')){closeColorSlotPanel();return}setHistoryHint?.('Change color');
   if(slotEditTarget==='component'){
-    const n=nodes.find(n=>n.id===selected);if(n)componentConfig(n).colorSlot=slot;
+    const n=nodeById(selected);if(n)componentConfig(n).colorSlot=slot;
   }else if(slotEditTarget==='component-interior'){
-    const n=nodes.find(n=>n.id===selected);if(n)componentConfig(n).presentation.interiorColorSlot=slot;
+    const n=nodeById(selected);if(n)componentConfig(n).presentation.interiorColorSlot=slot;
   }else if(slotEditTarget==='port'){
     const info=selectedPortInfo();
     if(info){
@@ -153,7 +153,7 @@ function selectedCanvasContextId(){
       return exposed[0]||info.owner.canvasId||GLOBAL_CANVAS_ID;
     }
   }
-  const n=nodes.find(n=>n.id===selected);return n?.canvasId||GLOBAL_CANVAS_ID;
+  const n=nodeById(selected);return n?.canvasId||GLOBAL_CANVAS_ID;
 }
 function canvasContextLabel(canvasId){
   const d=canvasDescriptorById(canvasId)||canvasDescriptorById(GLOBAL_CANVAS_ID);
@@ -193,7 +193,7 @@ function syncSelectionSettings(kind){
   wireSettingsFields.hidden=kind!=='wire';
   portSettingsFields.hidden=kind!=='port';
   if(kind==='component'){
-    const n=nodes.find(n=>n.id===selected);if(n){barComponentSignalMode.value=normalizeSignalMode(componentConfig(n));syncComponentVisualPanel(n)}
+    const n=nodeById(selected);if(n){barComponentSignalMode.value=normalizeSignalMode(componentConfig(n));syncComponentVisualPanel(n)}
   }
 }
 function openSelectionSettings(kind){
@@ -269,13 +269,13 @@ function selectedPortInfo(){
   const parts=selected.split(':');
   const offset=parts[0]==='point'?1:1;
   if(parts[offset]==='component'){
-    const node=nodes.find(n=>n.id===parts[offset+1]);if(!node)return null;
+    const node=nodeById(parts[offset+1]);if(!node)return null;
     const point=Attachment.resolveSpec(node,parts[offset+2]);if(!point)return null;
     const port=componentConfig(node).ports[point.compatId];if(!port)return null;
     return {ownerKind:'component',owner:node,node,pointId:point.id,portId:point.compatId,point,port};
   }
   // Legacy selection format: port:<componentId>:<compatPortId>
-  const node=nodes.find(n=>n.id===parts[1]);
+  const node=nodeById(parts[1]);
   if(node){const point=Attachment.resolveSpec(node,parts[2]);if(!point)return null;const port=componentConfig(node).ports[point.compatId];return port?{ownerKind:'component',owner:node,node,pointId:point.id,portId:point.compatId,point,port}:null}
   return null;
 }
@@ -314,7 +314,7 @@ function restoreSelectedSurface(){
   }else if(isAttachmentSelectionValue(selected)){
     const info=selectedPortInfo();if(info)selectPortRef(info);
   }else{
-    const n=nodes.find(n=>n.id===selected);if(n)selectNode(n.id);
+    const n=nodeById(selected);if(n)selectNode(n.id);
   }
 }
 function positionSelectionBar(){
@@ -326,7 +326,7 @@ function positionSelectionBar(){
     const info=selectedPortInfo();
     if(info)p=portPos(info.node,info.pointId||info.portId);
   }else{
-    const n=nodes.find(n=>n.id===selected);if(n){const size=componentSize(n);p={x:n.x,y:n.y-size.h/2-10}}
+    const n=nodeById(selected);if(n){const size=componentSize(n);p={x:n.x,y:n.y-size.h/2-10}}
   }
   if(!p){hideSelectionBar();return}
   const q=svgToWorkspacePixel(p.x,p.y);
