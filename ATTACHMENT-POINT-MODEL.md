@@ -2,6 +2,13 @@
 
 Port is no longer an independent geometry subsystem. The canonical primitive is a **0D attachment point**.
 
+Nor are the built-in points of each dimension enumerated separately. They are derived, in
+`src/04-form-core.js`, from the single boundary relation described in `FORM-MODEL.md`: the
+boundary of a dimension-N Form is an ordered set of dimension-(N-1) Forms. A Path's `start`
+and `end` are its 0D boundary; a Plane's `left`, `right` and `top` are points on the 1D edges
+that bound it, each carrying its provenance in `via`. `06-attachment-core.js` adds only the
+legacy per-side `in`/`out`/`control` contract on top of that projection.
+
 ## Cardinality
 
 Connectivity uses the effective dimension of a Component in its current host surface. Dimension constrains host geometry; it does **not** impose a universal attachment-count maximum:

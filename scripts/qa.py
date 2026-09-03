@@ -10,6 +10,7 @@ import time
 ROOT=Path(__file__).resolve().parents[1]
 
 STATIC=[
+    'tests/form_spine_qa.py',
     'tests/dimensional_form_qa.py',
     'tests/pre_repo_hardening_qa.py',
     'tests/author_offline_qa.py',

@@ -1,5 +1,6 @@
 # Module ownership — 0.1
 
+- `04-form-core.js` — the Form spine: dimension, the boundary relation, and Mode. Loads before every other module and depends on none.
 - `00-state.js` — runtime state and DOM references.
 - `05-data-core.js` — transport-neutral documents, packages, validation, CRUD, reachability, primitive template presets, and compact serialization (`compactDocument`).
 - `10-model.js` — Component/Wire/Port semantic normalization.
@@ -21,5 +22,8 @@ The desktop shell lives under `desktop/` (a Tauri crate wrapping the same standa
 
 - `src/15-editor-kernel.js` — history, checkpoints, semantic clipboard, multi-selection, settle hosting, Pin/Lock/Hidden/Opacity, search/Objects, appearance and rate.
 
+### `src/04-form-core.js`
+The dimensional spine. Owns one relation — the boundary of a dimension-N Form is an ordered set of dimension-(N-1) Forms — and the Mode vocabulary that says how an instance is configured where it sits. Every built-in attachment point in the editor is that relation projected down to 0D, so a Path's endpoints, a Plane's edges and a Plane's boundary points are one system at three depths rather than three systems. Pure: no DOM, routing, rendering, or editor state, and no dependency on any other module.
+
 ### `src/06-attachment-core.js`
-Pure 0D attachment-point topology, dimensional cardinality, host-dimensional projection, and legacy Port/Wire endpoint compatibility mapping. No DOM or rendering authority.
+Pure 0D attachment-point topology, dimensional cardinality, host-dimensional projection, and legacy Port/Wire endpoint compatibility mapping. Built-in point specs are derived from `04-form-core.js`; this module adds only the legacy per-side `in`/`out`/`control` contract and the authored 2D extras. No DOM or rendering authority.

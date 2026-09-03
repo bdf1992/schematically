@@ -2,10 +2,15 @@
 // 0.1 Beta concern: canonical 0D attachment-point topology and compatibility mapping.
 // This module is intentionally pure: no DOM, routing, rendering, or editor state.
 (function(root,factory){
-  const api=factory();
+  let Form=root.SovSchematicForm;
+  if(!Form&&typeof module!=='undefined'&&module.exports)Form=require('./04-form-core.js');
+  const api=factory(Form);
   root.SovSchematicAttachment=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(){
+})(typeof globalThis!=='undefined'?globalThis:this,function(Form){
+  if(!Form)throw new Error('SovSchematicForm core is required');
+  // Connectivity is authored for 0D..2D in 0.1; the Form spine already carries 3D, so the
+  // ceiling here is a release gate, not a claim about the model.
   const VALID_DIMENSIONS=new Set([0,1,2]);
   function intrinsicDimension(entity){
     const d=Number(entity?.form?.dimension);
@@ -28,18 +33,31 @@
   // Connectivity follows the lower-dimensional host when a richer form is settled onto it.
   // A 2D ACT hosted by a Wire therefore exposes only the Wire-aligned 1D endpoints.
   function effectiveDimension(entity){return Math.min(intrinsicDimension(entity),hostDimension(entity))}
+  // The legacy in/out/control contract is a property of the side a point sits on, not of the
+  // dimension it came from. Keeping it here leaves the Form spine free of file-format history.
+  const SIDE_CONTRACT={
+    point:{compatId:'out',defaultFlow:'duplex'},
+    left:{compatId:'in',defaultFlow:'in'},
+    right:{compatId:'out',defaultFlow:'out'},
+    top:{compatId:'control',defaultFlow:'control'},
+    bottom:{compatId:'aux',defaultFlow:'duplex'}
+  };
+  // Which bounding elements a dimension exposes by default. A 2D surface is bounded by four
+  // edges; exposing three of them is a template default, not a statement about its geometry.
+  const DEFAULT_SIDES={2:['left','right','top']};
+  // Every built-in point is the 0D projection of a bounding element: for a 1D Path its two
+  // ends, for a 2D Plane the midpoint of each bounding 1D edge. Nothing is enumerated per
+  // dimension here — `Form.terminalPoints` applies the one boundary relation, and this adds
+  // only the legacy per-side contract.
   function basePointSpecs(d,entity=null){
-    if(d===0)return [{id:'self',compatId:'out',side:'point',role:'self',defaultFlow:'duplex',t:.5}];
-    if(d===1)return [
-      {id:'start',compatId:'in',side:'left',role:'endpoint',defaultFlow:'in',t:0},
-      {id:'end',compatId:'out',side:'right',role:'endpoint',defaultFlow:'out',t:1}
-    ];
-    if(attachmentDefaults(entity)==='none')return [];
-    return [
-      {id:'left',compatId:'in',side:'left',role:'boundary',defaultFlow:'in',t:.5},
-      {id:'right',compatId:'out',side:'right',role:'boundary',defaultFlow:'out',t:.5},
-      {id:'top',compatId:'control',side:'top',role:'boundary',defaultFlow:'control',t:.5}
-    ];
+    if(d===2&&attachmentDefaults(entity)==='none')return [];
+    return Form.terminalPoints(d,{sides:DEFAULT_SIDES[d]||null}).map(point=>{
+      const contract=SIDE_CONTRACT[point.side]||SIDE_CONTRACT.point;
+      return {
+        id:point.id,compatId:contract.compatId,side:point.side,role:point.role,
+        defaultFlow:contract.defaultFlow,t:point.t,mode:point.mode,via:point.via||null
+      };
+    });
   }
   function customPointSpecs(entity,d,base){
     // 0.1 RC seam: built-in dimensional points are defaults, not a permanent
@@ -58,7 +76,7 @@
       if(usedCompat.has(compatId))continue;
       const t=Math.max(0,Math.min(1,Number.isFinite(Number(raw.t))?Number(raw.t):.5));
       const defaultFlow=['in','out','control','duplex','trigger'].includes(raw.defaultFlow)?raw.defaultFlow:'duplex';
-      out.push({id,compatId,side,role:'boundary',defaultFlow,t,authored:true});
+      out.push({id,compatId,side,role:'boundary',mode:'boundary',via:null,defaultFlow,t,authored:true});
       usedIds.add(id);usedCompat.add(compatId);
     }
     return out;

@@ -6,6 +6,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 // Absolute paths are not valid ESM specifiers on Windows; import by file:// URL everywhere.
+await import(pathToFileURL(path.join(HERE,'../src/04-form-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/06-attachment-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/05-data-core.js')).href);
 const Data=globalThis.SovSchematicData;

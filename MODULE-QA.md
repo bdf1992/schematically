@@ -4,6 +4,7 @@ Engineering release estimate grounded in the current automated suite and manual 
 
 | Concern | LOC | Risk | Status | Owns | Current evidence | Residual concern |
 |---|---:|---|---|---|---|---|
+| `04-form-core.js` | 104 | High | **GREEN** | dimension, the boundary relation, Mode vocabulary | form spine + mutation (`points-re-enumerated-per-dimension`) | 3D is modelled but not yet authored in the editor |
 | `00-state.js` | 288 | Medium | **GREEN** | runtime state + palette/color kernel | theme + performance + mutation | — |
 | `05-data-core.js` | 446 | High | **GREEN** | formats, canonical CRUD, boundary/lock legality | file, boundary, Browser/HTTP/MCP golden, mutation | compatibility projections remain for 0.1 |
 | `06-attachment-core.js` | 102 | High | **GREEN** | canonical 0D topology + aliases + data-declared 2D attachment defaults | point/parity/cardinality/mutation | full cell/facet grammar is post-RC |

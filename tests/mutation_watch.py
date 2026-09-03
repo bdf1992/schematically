@@ -69,9 +69,18 @@ MUTANTS=[
     {
       'name':'plane-attachment-defaults-ignored',
       'file':'src/06-attachment-core.js',
-      'old':"if(attachmentDefaults(entity)==='none')return [];",
+      'old':"if(d===2&&attachmentDefaults(entity)==='none')return [];",
       'new':"if(false)return [];",
       'test':'tests/primitive_forms_qa.py'
+    },
+    {
+      # Built-in points must stay derived from the Form boundary relation. Re-enumerating
+      # one dimension by hand is the exact regression the Form spine exists to prevent.
+      'name':'points-re-enumerated-per-dimension',
+      'file':'src/06-attachment-core.js',
+      'old':"return Form.terminalPoints(d,{sides:DEFAULT_SIDES[d]||null}).map(point=>{",
+      'new':"return [{id:'left',side:'left',role:'boundary',t:.5,mode:'boundary'}].map(point=>{",
+      'test':'tests/form_spine_qa.py'
     },
     {
       'name':'point-cannot-settle-into-interior',
