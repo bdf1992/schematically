@@ -1,0 +1,52 @@
+Step 2, revised: no npm-installable "GLSP standalone workflow example" exists.
+==============================================================================
+
+An earlier session recorded (evidence/toolchain-refusal.log) that npm/npx/node
+were refused entirely in a prior session shape. In THIS session npm works
+normally (npm --version -> 11.6.2; node --version -> v24.11.1), confirmed by
+evidence/npm-install.log from the same day: @eclipse-glsp/{client,server,
+protocol,graph,layout-elk,sprotty} 2.8.0 and their build tooling installed
+cleanly under spikes/glsp-projection/node_modules (~92 MB).
+
+What step 2 actually asks for -- "build GLSP's own standalone workflow
+example first, unchanged" -- does not exist as an npm-installable unit at
+2.8.0. Checked via `npm search @eclipse-glsp-examples` and `npm view` against
+the real registry:
+
+  @eclipse-glsp-examples/workflow-glsp             -- diagram DI module (client-side
+                                                       library; needs a host app to run)
+  @eclipse-glsp-examples/workflow-server            -- Node GLSP server, TypeScript source
+                                                       + prebuilt lib/, no tsconfig.json
+                                                       shipped (tsc -b fails: TS5083,
+                                                       tsconfig.json not found -- expected,
+                                                       npm packages don't ship monorepo
+                                                       project-reference configs)
+  @eclipse-glsp-examples/workflow-server-bundled    -- Node GLSP server, prebundled,
+                                                       runs standalone
+  @eclipse-glsp-examples/workflow-server-bundled-web -- same, web target
+
+None of these is a runnable browser standalone app. The actual runnable
+example (a webpack project wiring workflow-glsp's DI module into a page,
+`examples/workflow-standalone` in the eclipse-glsp/glsp-client GitHub repo)
+is not published to npm at all -- only obtainable by cloning that repository,
+which is outside this contract's permitted commands (git worktree list,
+checkout, branch, stash, rev-parse, show -- no clone of an external remote)
+and outside what npm install can reach.
+
+What WAS run, unchanged, as the closest available "upstream reference build":
+the bundled Node server confirmed real and runnable in this environment:
+
+  $ node evidence/upstream-reference/node_modules/@eclipse-glsp-examples/workflow-server-bundled/wf-glsp-server-node.js --port 8799
+  9:24:09 PM info -  [SocketServerLauncher] The GLSP server is ready to accept new client requests on port: 8799
+  [GLSP-Server]:Startup completed. Accepting requests on port:8799
+
+(A first attempt on port 8791 hit EADDRINUSE from an unrelated stray process
+on this machine; retried on 8799, which started cleanly and was stopped by
+hand a few seconds later -- it has no self-exit.)
+
+So: the Node-server half of "GLSP 2.8.0, unchanged" is confirmed real and
+startable in this environment -- the toolchain is not the fault. The
+browser-client half of step 2's premise (a standalone example buildable from
+an npm install) does not exist to build. This is the fact behind the BLOCKED
+transition for steps 5, 7 and 8, which all need a real bundled GLSP client to
+drive with Playwright, export SVG through, or load a scale fixture into.
