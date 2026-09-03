@@ -12,6 +12,28 @@ the editor from growing a new subsystem each time someone wants a new kind of th
 | **Model** | what is it, what does it do | `boundary.inside.type`, `symbolId`, `config.signalMode` |
 | **Mode** | how is this instance configured here | `self` · `endpoint` · `boundary` · `carrier` · `port` · `edge` · `face` |
 
+### Field is one thing
+
+A canvas and a gradient are the same primitive. A canvas is a Field whose value is membership —
+you are in it or you are not. A gradient is a Field whose value falls off from a source Form. A
+field of fields on a field: the global canvas is a Field, the things in it source their own, and
+those sit inside it.
+
+They are not split, and the reason is worth keeping: telling them apart would mean making space
+itself an authored thing, which is the 3D commitment and not paid for yet. One Field, different
+Models, costs nothing now.
+
+The discipline that comes with that: membership decides whether a Wire may connect
+(`connectionReachability`). A falloff decides nothing. Reachability must keep reading only the
+membership kind, or a gradient silently starts governing what can connect to what.
+
+Standing: only the membership kind is built. A Field carrying a value with a falloff from a
+source Form is not implemented. When it is, it should absorb the influence radii that are
+currently written out one at a time — `SNAP_RADIUS`, the 24-unit reach for snapping a Point to a
+carrier, the 20-unit reach for a Plane edge.
+
+### Mode
+
 Mode is the one that keeps the others small. A Point is one Form. Standing alone it is in
 `self` Mode; terminating a Path it is in `endpoint` Mode; sitting on a Plane's boundary it is
 in `boundary` Mode. These are not three kinds of object with three implementations — they are
