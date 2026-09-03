@@ -25,6 +25,23 @@ const FILE = path.resolve(arg('--file', path.join(REPO_ROOT, 'examples/08-gated-
 
 let document = Data.documentFromFilePayload(JSON.parse(fs.readFileSync(FILE, 'utf8')));
 
+// Reported to a connecting client as InitializeResult.serverActions['schematic-diagram']:
+// GLSPModelSource registers its local ActionDispatcher to forward exactly these action
+// kinds to this server (see @eclipse-glsp/client's GLSPModelSource.configureServeActions).
+const NODE_TYPES = ['node:authority', 'node:act', 'node:plane', 'node:gate', 'node:hold', 'node:receipt', 'port'];
+
+const HANDLER_KINDS = {
+  requestModel: true,
+  requestMarkers: true,
+  requestTypeHints: true,
+  requestContextActions: true,
+  changeBounds: true,
+  createEdge: true,
+  createNode: true,
+  deleteElement: true,
+  applyLabelEdit: true
+};
+
 function currentRevision() { return document.revision; }
 
 function processAction(action) {
@@ -34,6 +51,23 @@ function processAction(action) {
   }
   if (action.kind === 'requestMarkers') {
     return { kind: 'setMarkers', markers: markersFor(document, action.elementsIDs), reason: action.reason || 'batch' };
+  }
+  // The client's startup sequence requests these two before the model is
+  // considered ready. Neither carries a legality decision: type hints just
+  // say every projected type is repositionable/deletable (validateDocument,
+  // via requestMarkers, is what actually refuses a move or delete), and no
+  // context actions (palette items) are offered -- this spike drives GLSP
+  // operations directly through the action dispatcher (see client/app.mjs),
+  // not through a palette the server would need to populate.
+  if (action.kind === 'requestTypeHints') {
+    return {
+      kind: 'setTypeHints', responseId: action.requestId,
+      shapeHints: NODE_TYPES.map(type => ({ elementTypeId: type, repositionable: true, deletable: true, resizable: false, reparentable: false })),
+      edgeHints: [{ elementTypeId: 'edge', repositionable: false, deletable: true, routable: false }]
+    };
+  }
+  if (action.kind === 'requestContextActions') {
+    return { kind: 'setContextActions', responseId: action.requestId, actions: [] };
   }
   if (['changeBounds', 'createEdge', 'createNode', 'deleteElement', 'applyLabelEdit'].includes(action.kind)) {
     const { receipt, gmodel, counts } = routeOperation(document, action, action.ifRevision);
@@ -61,7 +95,10 @@ function startServer({ port = PORT, host = HOST } = {}) {
       let message;
       try { message = JSON.parse(raw.toString('utf8')); } catch { return; }
       if (message.method === 'initialize') {
-        return respond(ws, message.id, { protocolVersion: '2.8.0' });
+        return respond(ws, message.id, {
+          protocolVersion: '2.8.0',
+          serverActions: { 'schematic-diagram': Object.keys(HANDLER_KINDS) }
+        });
       }
       if (message.method === 'initializeClientSession') {
         clientId = message.params?.clientSessionId || `client-${Date.now()}`;

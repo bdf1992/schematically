@@ -6,7 +6,8 @@
   "description": "Spike: project a .sov document through src/05-data-core.js into a GLSP 2.8.0 GModel.",
   "scripts": {
     "test": "node test.mjs",
-    "server": "node server.mjs"
+    "server": "node server.mjs",
+    "build:client": "webpack --config client/webpack.config.cjs"
   },
   "dependencies": {
     "@eclipse-glsp/client": "2.8.0",

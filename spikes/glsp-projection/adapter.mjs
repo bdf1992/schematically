@@ -33,27 +33,33 @@ function projectDocument(document) {
   let portCount = 0;
   let nestedCount = 0;
 
-  function portFor(component) {
+  // GLSP/sprotty compose a child's position relative to its parent's own
+  // origin (the parent <g> carries a translate(parent.position) transform);
+  // the document stores every component's x,y in one absolute space. hostX/
+  // hostY convert on the way out so nested elements land where the document
+  // says they are -- a coordinate transform for rendering, not a document
+  // change (routeOperation still patches the document's own absolute x,y).
+  function portFor(component, hostX, hostY) {
     portCount++;
     nestedCount++;
-    return { id: component.id, type: 'port', position: { x: component.x, y: component.y } };
+    return { id: component.id, type: 'port', position: { x: component.x - hostX, y: component.y - hostY } };
   }
 
-  function nodeFor(component, nested) {
+  function nodeFor(component, nested, hostX, hostY) {
     if (nested) nestedCount++;
     const kids = childrenOfHost(component.id);
-    const children = kids.map(kid => (isHostedAttachment(kid) ? portFor(kid) : nodeFor(kid, true)));
+    const children = kids.map(kid => (isHostedAttachment(kid) ? portFor(kid, component.x, component.y) : nodeFor(kid, true, component.x, component.y)));
     return {
       id: component.id,
       type: `node:${component.symbolId}`,
-      position: { x: component.x, y: component.y },
+      position: { x: component.x - hostX, y: component.y - hostY },
       size: sizeOf(component),
       children
     };
   }
 
   const topLevel = childrenOfHost(null).filter(component => !isHostedAttachment(component));
-  const nodes = topLevel.map(component => nodeFor(component, false));
+  const nodes = topLevel.map(component => nodeFor(component, false, 0, 0));
   const edges = wires.map(wire => ({
     id: wire.id,
     type: 'edge',
