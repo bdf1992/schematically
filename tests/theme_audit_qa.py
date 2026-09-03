@@ -34,7 +34,7 @@ REPORT = '--report' in sys.argv
 
 # Theme debt, held at a ceiling. Every literal is a color that cannot follow an
 # appearance change; lower this number when the count comes down, never raise it.
-MAX_LITERAL_COLORS = 41
+MAX_LITERAL_COLORS = 35
 # Each of these is a rule that patches one surface for one appearance instead of
 # building it from tokens. Same rule: it goes down.
 MAX_DARK_OVERRIDE_RULES = 11

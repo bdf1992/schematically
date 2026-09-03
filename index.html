@@ -12,6 +12,7 @@
      dropdown opens white over a dark editor. */
   color-scheme:light;
   --bg:#f4f4f1; --panel:#fff; --ink:#171715; --muted:#6c6c65;
+  --accent:#4E86BE;
   --line:#d8d8d1; --grid:#F1F1ED; --hover:#f4f4f0; --canvas-tone:#FEFEFC; --canvas-ink:#42423E; --canvas-muted:#73736D; --canvas-halo:#FEFEFC;
   --canvas-grid-size:24px;
 }
@@ -385,6 +386,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .file-menu-item:disabled:hover{background:transparent}
 :root[data-appearance="dark"]{
   color-scheme:dark;
+  --accent:#6FA8DC;
   --bg:#111315;--panel:#1C1F21;--ink:#EEEFEA;--muted:#A8AAA4;--line:#3B3F42;--hover:#292D30;--grid:#2B2E31;--canvas-tone:#17191B;--canvas-ink:#E7E8E3;--canvas-muted:#AEB0AA;--canvas-halo:#17191B;
 }
 :root[data-appearance="dark"] #workspace{background-color:var(--canvas-tone);box-shadow:inset 0 0 0 1px #303438}
@@ -445,7 +447,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .path-endpoint-halo{fill:transparent;stroke:none;cursor:grab;pointer-events:all}
 .path-endpoint-handle{
   fill:var(--surface,#fff);
-  stroke:var(--accent,#4E86BE);
+  stroke:var(--accent);
   stroke-width:2;
   pointer-events:none;
 }
@@ -464,8 +466,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .points-row span{flex:1 1 auto;opacity:.72;font-size:.92em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 button.points-row{cursor:pointer}
 button.points-row:hover{background:color-mix(in srgb,currentColor 8%,transparent)}
-button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-offset:1px}
-.points-row.current{border-color:var(--accent,#4E86BE)}
+button.points-row:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.points-row.current{border-color:var(--accent)}
 .points-actions{display:flex;gap:6px;margin-top:8px}
 
 /* The palette is the dimensional ladder: one rung per row, read top to bottom.
@@ -520,8 +522,29 @@ button.points-row:focus-visible{outline:2px solid var(--accent,#4E86BE);outline-
   border-radius:7px;padding:0 8px;height:26px;cursor:pointer;
   font:600 9.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.10em;
 }
-.bar-pattern-open:hover,.bar-pattern-release:hover{border-color:var(--accent,#4E86BE)}
-.bar-pattern-open[aria-pressed="true"]{background:var(--accent,#4E86BE);border-color:var(--accent,#4E86BE);color:var(--panel)}
+.bar-pattern-open:hover,.bar-pattern-release:hover{border-color:var(--accent)}
+.bar-pattern-open[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+
+/* The editor draws its own dropdown list, so the one control that used to leave the
+   theme now sits inside it: same tokens, same type, same spacing as everything else. */
+.select-menu{
+  position:fixed;z-index:60;overflow:auto;padding:4px;
+  background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  box-shadow:0 10px 28px rgba(0,0,0,.28);
+}
+.select-menu-group{
+  padding:7px 9px 3px;color:var(--muted);
+  font:600 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;
+}
+.select-menu-item{
+  display:block;width:100%;text-align:left;border:0;border-radius:6px;
+  padding:6px 9px;background:transparent;color:var(--ink);cursor:pointer;
+  font:13px/1.3 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;white-space:nowrap;
+}
+.select-menu-item:hover:not(:disabled),.select-menu-item:focus-visible{background:var(--hover);outline:none}
+.select-menu-item.current{background:var(--hover);font-weight:600}
+.select-menu-item:disabled{color:var(--muted);opacity:.5;cursor:not-allowed}
+select.menu-open{border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -3640,6 +3663,140 @@ function positionSelectionBar(){
   selectionBar.style.left=`${x}px`;selectionBar.style.top=`${y}px`;
 }
 /* END src/20-ui.js */
+</script>
+<script data-beta-module="src/22-select-menu.js">
+/* BEGIN src/22-select-menu.js */
+'use strict';
+// 0.1 concern: the editor draws its own dropdown lists.
+//
+// A `<select>` popup is a window the browser opens, not part of the page. `color-scheme`
+// tells the browser which way to paint it and that is as far as the page's say goes:
+// the list is drawn outside the document, it cannot carry the app's type, spacing or
+// tokens, and on some platforms it stays light over a dark editor whatever the page
+// declares. In an editor whose whole job is a dark canvas, that one control is where the
+// theme visibly stops.
+//
+// So the list is drawn here instead. The `<select>` stays exactly where it is and stays
+// the source of truth - it holds the value, it fires `change`, every existing listener
+// is untouched - and this only replaces the picture of the list. Nothing else in the
+// editor knows the difference.
+//
+// It works by delegation rather than by wiring each control, so a `<select>` whose
+// options are built at runtime (the Pattern list) is covered without being registered.
+
+const selectMenu=document.createElement('div');
+selectMenu.className='select-menu';
+selectMenu.setAttribute('role','listbox');
+selectMenu.hidden=true;
+document.body.appendChild(selectMenu);
+
+let selectMenuOwner=null;
+
+function closeSelectMenu(){
+  if(!selectMenuOwner)return;
+  selectMenu.hidden=true;
+  selectMenu.replaceChildren();
+  selectMenuOwner.classList.remove('menu-open');
+  selectMenuOwner=null;
+}
+
+function commitSelectMenu(option){
+  const owner=selectMenuOwner;
+  if(!owner||option.disabled)return;
+  closeSelectMenu();
+  if(owner.value===option.value){owner.focus({preventScroll:true});return}
+  owner.value=option.value;
+  // The same events the browser's own list would have fired, so nothing downstream has
+  // to know the list was drawn here.
+  owner.dispatchEvent(new Event('input',{bubbles:true}));
+  owner.dispatchEvent(new Event('change',{bubbles:true}));
+  owner.focus({preventScroll:true});
+}
+
+function buildSelectMenu(select){
+  selectMenu.replaceChildren();
+  for(const child of select.children){
+    if(child.tagName==='OPTGROUP'){
+      const heading=document.createElement('div');
+      heading.className='select-menu-group';
+      heading.textContent=child.label;
+      selectMenu.appendChild(heading);
+      for(const option of child.children)selectMenu.appendChild(selectMenuRow(select,option));
+      continue;
+    }
+    if(child.tagName==='OPTION')selectMenu.appendChild(selectMenuRow(select,child));
+  }
+}
+
+function selectMenuRow(select,option){
+  const row=document.createElement('button');
+  row.type='button';
+  row.className='select-menu-item'+(option.value===select.value?' current':'');
+  row.setAttribute('role','option');
+  row.setAttribute('aria-selected',option.value===select.value?'true':'false');
+  row.disabled=option.disabled;
+  row.textContent=option.textContent;
+  if(option.title)row.title=option.title;
+  row.addEventListener('click',()=>commitSelectMenu(option));
+  return row;
+}
+
+// Placed under its control, flipped above when there is no room below, and never off
+// the right or bottom edge - the same rules the browser's own list follows.
+function positionSelectMenu(select){
+  const anchor=select.getBoundingClientRect();
+  selectMenu.style.visibility='hidden';
+  selectMenu.hidden=false;
+  selectMenu.style.minWidth=`${Math.round(anchor.width)}px`;
+  const menu=selectMenu.getBoundingClientRect();
+  const gap=4;
+  const below=window.innerHeight-anchor.bottom-gap;
+  const flip=menu.height>below&&anchor.top-gap>below;
+  const top=flip?Math.max(gap,anchor.top-gap-menu.height):anchor.bottom+gap;
+  const left=Math.max(gap,Math.min(window.innerWidth-menu.width-gap,anchor.left));
+  selectMenu.style.top=`${Math.round(top)}px`;
+  selectMenu.style.left=`${Math.round(left)}px`;
+  selectMenu.style.maxHeight=`${Math.round(Math.max(120,(flip?anchor.top:window.innerHeight-anchor.bottom)-gap*2))}px`;
+  selectMenu.style.visibility='visible';
+}
+
+function openSelectMenu(select){
+  closeSelectMenu();
+  if(!select.options.length)return;
+  selectMenuOwner=select;
+  select.classList.add('menu-open');
+  buildSelectMenu(select);
+  positionSelectMenu(select);
+  (selectMenu.querySelector('.select-menu-item.current')||selectMenu.querySelector('.select-menu-item:not(:disabled)'))
+    ?.focus({preventScroll:true});
+}
+
+// Pointer down rather than click: the browser opens its own list on pointer down, so
+// this has to get there first or both lists appear.
+document.addEventListener('pointerdown',event=>{
+  const select=event.target instanceof Element?event.target.closest('select'):null;
+  if(!select||select.disabled){if(!selectMenu.contains(event.target))closeSelectMenu();return}
+  event.preventDefault();
+  if(selectMenuOwner===select){closeSelectMenu();return}
+  openSelectMenu(select);
+},true);
+
+// A keyboard user still gets the native list, which is the one their screen reader and
+// their platform already know. Only the pointer path is replaced.
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&selectMenuOwner){
+    const owner=selectMenuOwner;
+    closeSelectMenu();
+    owner.focus({preventScroll:true});
+    event.stopPropagation();
+  }
+},true);
+
+window.addEventListener('resize',closeSelectMenu);
+window.addEventListener('blur',closeSelectMenu);
+// Any scroll under an open list, including the palette and the inspector.
+document.addEventListener('scroll',closeSelectMenu,true);
+/* END src/22-select-menu.js */
 </script>
 <script data-beta-module="src/25-signal.js">
 /* BEGIN src/25-signal.js */
