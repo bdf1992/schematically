@@ -5,8 +5,8 @@
     "id": "schematic-1-package",
     "title": "Soveraeign Schematic",
     "entry": "document",
-    "createdAt": "2026-09-01T06:02:51.593Z",
-    "updatedAt": "2026-09-01T06:02:51.593Z",
+    "createdAt": "2026-09-04T14:30:52.644Z",
+    "updatedAt": "2026-09-04T14:30:52.644Z",
     "generator": "SOV Schematic 0.1 Beta.24"
   },
   "document": {
@@ -14,7 +14,7 @@
     "id": "schematic-1",
     "revision": 1,
     "meta": {
-      "updatedAt": "2026-09-01T06:02:51.477Z",
+      "updatedAt": "2026-09-04T14:30:52.504Z",
       "checkpoints": [],
       "title": "Soveraeign Schematic"
     },
@@ -61,6 +61,96 @@
     }
   },
   "templates": [
+    {
+      "id": "component:point",
+      "kind": "component",
+      "symbolId": "point",
+      "name": "POINT",
+      "family": "PRIMITIVE",
+      "role": "attachment",
+      "meaning": "0D attachment. Sticks to a Path, a Plane boundary, or a Wire; Wires end on Points.",
+      "properties": [
+        "addressable",
+        "0d"
+      ],
+      "preset": {
+        "form": {
+          "dimension": 0
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "none",
+          "backdrop": "none"
+        },
+        "signalMode": "relay"
+      }
+    },
+    {
+      "id": "component:path",
+      "kind": "component",
+      "symbolId": "path",
+      "name": "PATH",
+      "family": "PRIMITIVE",
+      "role": "carrier",
+      "meaning": "1D route with start and end. Hosts Points along its length. It does not imply permission or success.",
+      "properties": [
+        "direction-neutral",
+        "1d"
+      ],
+      "preset": {
+        "carrier": true,
+        "form": {
+          "dimension": 1
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "none",
+          "size": {
+            "w": 240,
+            "h": 64
+          }
+        }
+      }
+    },
+    {
+      "id": "component:plane",
+      "kind": "component",
+      "symbolId": "plane",
+      "name": "PLANE",
+      "family": "PRIMITIVE",
+      "role": "surface",
+      "meaning": "Bounded 2D region. Hosts Points on its boundary and Components in its interior. A typed Plane is a Component.",
+      "properties": [
+        "bounded",
+        "hosts",
+        "2d"
+      ],
+      "preset": {
+        "form": {
+          "dimension": 2,
+          "regions": {
+            "interior": {
+              "state": "open"
+            }
+          }
+        },
+        "attachmentDefaults": "none",
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "none",
+          "size": {
+            "w": 320,
+            "h": 220
+          }
+        }
+      }
+    },
     {
       "id": "component:blank",
       "kind": "component",

@@ -1,0 +1,16 @@
+{
+  "reviews": {
+    "README.md": {
+      "artifact_digest": "sha256:bea8c702bd7127cf6d8a1b503a721bdb43013233f7f9e995bfa3e22c8de28264",
+      "basis": [
+        {
+          "digest": "sha256:b0ba0e7e7ef84f0faf6f2a6172e32dee8a14f78bbf5819b12289b0bc31cf5074",
+          "path": "AGENTS.md"
+        }
+      ],
+      "changed": false
+    }
+  },
+  "schema": "soveraeign-clarity-coverage/v1",
+  "skill": "clarity/v1"
+}
