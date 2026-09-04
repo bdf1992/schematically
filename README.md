@@ -67,3 +67,20 @@ The current line stabilizes primitives so future work adds definitions and rules
 - prompt/instruction compilation and richer agent authoring.
 
 Historical acceptance records (`BETA-0.1.md`, `QA-0.1.md`, `RC-0.1.md`, `RC-FINISH-LINE.md`, `PUBLIC-BETA-FREEZE.md`, `MODULE-QA.md`, `contrast-audit.md`) document how past lines were tested and remain as records rather than living documentation.
+
+<!-- lineage:begin — generated from system-cartographer lineage/lineage.yaml. Do not hand-edit. -->
+
+## Where this sits
+
+This is one of 20 repositories on this account whose relations are recorded, with the evidence for each, in [`lineage.yaml`](https://github.com/bdf1992/system-cartographer/blob/claude/access-requirements-zbl1s7/lineage/lineage.yaml). What that record says about this one:
+
+**Claim.** A schematic editor whose document is a semantic model of components, parts and wires rather than a drawing.
+
+**Checked.** `python scripts/qa.py` — exit 0, 37 suites + 17 JS syntax checks, 14 mutants killed 0 survived, observed 2026-09-04.
+
+**Relations.**
+
+- This repository **implements the document format of** `soveraeign`. schematically's document format is namespaced under Soveraeign: DATA-FORMATS.md:5 defines .sov as soveraeign.schematic/document@0.1, DATA-FORMATS.md:18 gives the MIME type application/vnd.soveraeign.schematic+json, and API.md:34 returns a soveraeign.schematic/package@0.1 payload. index.html titles itself "Soveraeign Schematic Lab 0.1 Beta.24".
+- This repository **supersedes** `canvas`. Stated by the owner, 2026-09-04. No textual link exists between the two repositories, and their vocabularies are disjoint: Canvas uses Board, Frame, Card and Grounded Field; schematically uses Component, Wire, Part and signal. What corroborates the claim is overlapping purpose — both arrange things in space and wire them together — and relative activity: schematically has 59 commits and is current, Canvas has 20. schematically's CANVAS-MODEL.md is not evidence; it uses "canvas" as a model property and names none of Canvas's terms.
+
+<!-- lineage:end -->
