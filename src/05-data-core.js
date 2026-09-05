@@ -51,6 +51,8 @@
   function effectiveLabelMode(component){
     const config=isObject(component?.config)?component.config:{},authored=config.presentation?.labelMode;
     if(LABEL_MODES.includes(authored))return authored;
+    // A typed Component always has something to show: its type caption when no label is set.
+    if(!isPrimitiveSymbol(component?.symbolId))return 'boundary';
     return cleanString(config.label,'').trim()?defaultLabelMode(component?.form):'none';
   }
   // When a label first appears on a record that authored 'none' (every primitive saved by
@@ -289,38 +291,61 @@
     if(dimension<2)form.regions.interior.state='closed';
     return form;
   }
+  // One implementation types a component: creation, the bar retype, and `update` over
+  // API, HTTP and MCP all pass through it, so a retyped record is the record a creation
+  // would have made. A primitive applies its whole preset (Form, presentation, signal mode,
+  // attachment defaults); a Component type restores the standard 2D Form and its symbol
+  // glyph. Identity, position, placement, label, colour, editor state, authored attachment
+  // points, the annotation, and a custom glyph on a Component stay. Creating a record
+  // with the carrier preset (`symbolId:'path'`, the static 1D rail) is admissible here;
+  // retyping an existing Component into a carrier is refused by `update` and the bar.
+  function applySymbol(component,symbolId){
+    const next=normalizeSymbolId(symbolId),preset=templatePreset(next)||{};
+    if(!isObject(component.config))component.config={};
+    const config=component.config,before=isObject(config.presentation)?config.presentation:{};
+    component.symbolId=next;component.type=next==='blank'?null:next;component.incomplete=next==='blank';
+    component.form=normalizeComponentForm(preset.form||{dimension:2});
+    config.signalMode=preset.signalMode||'source';
+    const presentation=preset.presentation?clone(preset.presentation):{graphic:{kind:'symbol',ref:`sym-${next}`,svg:''}};
+    if(!preset.form&&before.graphic?.kind==='custom')presentation.graphic=clone(before.graphic);
+    if(cleanString(before.text,''))presentation.text=before.text;
+    if(Number.isInteger(before.interiorColorSlot))presentation.interiorColorSlot=before.interiorColorSlot;
+    config.presentation=presentation;
+    if(preset.attachmentDefaults==='none')config.attachmentDefaults='none';else delete config.attachmentDefaults;
+    if(isObject(component.boundary?.inside))component.boundary.inside.type=component.type;
+    if(isObject(component.canvas)){component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state}
+    return ensureAttachmentPortConfigs(component);
+  }
   function makeComponent(doc,value={}){
     const symbolId=normalizeSymbolId(value.symbolId||value.type);
     const preset=templatePreset(symbolId)||{};
     const id=cleanString(value.id,nextId(doc.components,'c'));
     const canvasId=cleanString(value.canvasId,GLOBAL_CANVAS_ID);
-    const form=normalizeComponentForm(isObject(value.form)?value.form:preset.form,value.canvas);
-    const config={
-      label:cleanString(value.config?.label||value.label,''),
-      colorSlot:Math.max(0,Math.trunc(num(value.config?.colorSlot,0))),
-      signalMode:['source','relay','passive'].includes(value.config?.signalMode)?value.config.signalMode:(preset.signalMode||'source'),
-      presentation:isObject(value.config?.presentation)?clone(value.config.presentation):(preset.presentation?clone(preset.presentation):{}),
-      ports:isObject(value.config?.ports)?clone(value.config.ports):{}
-    };
-    // An authored choice stays on the runtime record either way, so a later normalization
-    // pass cannot replace a Plane's authored 'standard' with its preset 'none'.
-    const attachmentDefaults=['standard','none'].includes(value.config?.attachmentDefaults)?value.config.attachmentDefaults:preset.attachmentDefaults;
-    if(attachmentDefaults==='none'||value.config?.attachmentDefaults==='standard')config.attachmentDefaults=attachmentDefaults;
-    if(Array.isArray(value.config?.attachmentPoints)&&value.config.attachmentPoints.length)config.attachmentPoints=clone(value.config.attachmentPoints);
     const component={
-      id,
-      type:symbolId==='blank'?null:symbolId,
-      symbolId,
+      id,type:null,symbolId:'blank',
       x:num(value.x,120),y:num(value.y,120),
       canvasId,
-      canvas:{id:`canvas:component:${id}`,scope:'local',dimension:form.dimension,state:form.regions.interior.state,ownerKind:'component',ownerId:id},
-      form,
-      config,
+      canvas:{id:`canvas:component:${id}`,scope:'local',dimension:2,state:'closed',ownerKind:'component',ownerId:id},
+      form:{},
+      config:{label:cleanString(value.config?.label||value.label,''),colorSlot:Math.max(0,Math.trunc(num(value.config?.colorSlot,0))),ports:{}},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       parentId:value.parentId??null,
       placement:isObject(value.placement)?clone(value.placement):{kind:canvasId.startsWith('canvas:wire:')?'wire':'surface',...(canvasId.startsWith('canvas:wire:')?{wireId:canvasId.slice('canvas:wire:'.length),t:.5}:{x:num(value.x,120),y:num(value.y,120)})},
-      incomplete:symbolId==='blank'
+      incomplete:true
     };
+    applySymbol(component,symbolId);
+    // Authored fields win over the preset, field by field. A preset field fills in only
+    // where the caller supplied nothing.
+    const config=component.config;
+    component.form=normalizeComponentForm(isObject(value.form)?value.form:preset.form,value.canvas);
+    if(['source','relay','passive'].includes(value.config?.signalMode))config.signalMode=value.config.signalMode;
+    if(isObject(value.config?.presentation))config.presentation=clone(value.config.presentation);
+    // An authored choice stays on the runtime record either way, so a later normalization
+    // pass cannot replace a Plane's authored 'standard' with its preset 'none'.
+    if(['standard','none'].includes(value.config?.attachmentDefaults))config.attachmentDefaults=value.config.attachmentDefaults;
+    if(Array.isArray(value.config?.attachmentPoints)&&value.config.attachmentPoints.length)config.attachmentPoints=clone(value.config.attachmentPoints);
+    config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
+    component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
     if(isObject(value.parts))component.parts=clone(value.parts);
     return ensureAttachmentPortConfigs(component);
@@ -517,6 +542,13 @@
     const current=arr[index];assertUnlocked(current,resource);
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource==='component'){
+      const nextSymbol=patch?.symbolId??patch?.type;
+      if(nextSymbol!==undefined&&normalizeSymbolId(nextSymbol)!==normalizeSymbolId(current.symbolId)){
+        // A Path is a carrier drawn from the palette; a Component is not retyped into one (#19).
+        if(templatePreset(nextSymbol)?.carrier)throw new Error(`CARRIER_SYMBOL: ${normalizeSymbolId(nextSymbol)} is a carrier drawn from the palette, not a type a Component takes`);
+        applySymbol(candidate,nextSymbol);
+        const rest=clone(patch);delete rest.symbolId;delete rest.type;deepMerge(candidate,rest);
+      }
       normalizeComponentIdentity(candidate);
       adoptLabelMode(candidate,current.config?.label);
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
@@ -624,5 +656,5 @@
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
