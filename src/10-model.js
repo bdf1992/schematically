@@ -322,7 +322,8 @@ function componentConfig(n){
   if(!presentation.size)presentation.size={w:112,h:84};
   presentation.size.w=Math.max(80,Math.min(520,Number(presentation.size.w)||112));
   presentation.size.h=Math.max(64,Math.min(420,Number(presentation.size.h)||84));
-  if(!['boundary','inside','outside','none'].includes(presentation.labelMode))presentation.labelMode='boundary';
+  // The label mode is read through SovSchematicData.effectiveLabelMode; an absent one is derived, never written.
+  if(presentation.labelMode!==undefined&&!['boundary','inside','outside','none'].includes(presentation.labelMode))delete presentation.labelMode;
   if(!Number.isInteger(presentation.interiorColorSlot))presentation.interiorColorSlot=n.config.colorSlot??0;
   presentation.interiorColorSlot=normalizeSlot(presentation.interiorColorSlot,0);
   if(typeof presentation.text!=='string')presentation.text='';

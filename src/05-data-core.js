@@ -20,11 +20,11 @@
   // supplied nothing, so authored records always win over the preset.
   const LEGACY_SYMBOL_IDS={port:'point'};
   const TEMPLATE_PRESETS={
-    point:{form:{dimension:0},presentation:{graphic:{kind:'none'},labelMode:'none',backdrop:'none'},signalMode:'relay'},
+    point:{form:{dimension:0},presentation:{graphic:{kind:'none'},backdrop:'none'},signalMode:'relay'},
     // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
     // component record is the static 1D role (a rail that hosts Points).
-    path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
-    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:320,h:220}}}
+    path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},size:{w:240,h:64}}},
+    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}}
   };
   // Loading a file applies the same preset rule as makeComponent: a preset field fills in
   // only where the record supplied nothing, so a sparse authored Plane or Point loads the
@@ -42,6 +42,26 @@
   function normalizeSymbolId(value){const id=String(value||'blank')||'blank';return LEGACY_SYMBOL_IDS[id]||id}
   function templatePreset(symbolId){return clone(TEMPLATE_PRESETS[normalizeSymbolId(symbolId)]||null)}
   function isPrimitiveSymbol(symbolId){return Object.prototype.hasOwnProperty.call(TEMPLATE_PRESETS,normalizeSymbolId(symbolId))}
+  // A label mode is read, never written by a preset: an authored mode is used as written;
+  // otherwise a label under a 0D or 1D form sits outside it, under a 2D form on its
+  // boundary, and while there is no label the mode reads 'none'. Nothing here touches the
+  // record, so a loaded record stays exactly as it was saved.
+  const LABEL_MODES=['boundary','inside','outside','none'];
+  function defaultLabelMode(form){return num(form?.dimension,2)>=2?'boundary':'outside'}
+  function effectiveLabelMode(component){
+    const config=isObject(component?.config)?component.config:{},authored=config.presentation?.labelMode;
+    if(LABEL_MODES.includes(authored))return authored;
+    return cleanString(config.label,'').trim()?defaultLabelMode(component?.form):'none';
+  }
+  // When a label first appears on a record that authored 'none' (every primitive saved by
+  // an earlier build did), the mode follows the form so the label is shown. A label edited
+  // under 'none' while one already existed stays hidden: that 'none' was a choice.
+  function adoptLabelMode(component,previousLabel){
+    const config=component.config;if(!isObject(config)||!isObject(config.presentation))return component;
+    const now=cleanString(config.label,'').trim(),before=cleanString(previousLabel,'').trim();
+    if(now&&!before&&config.presentation.labelMode==='none')config.presentation.labelMode=defaultLabelMode(component.form);
+    return component;
+  }
 
   const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
   const isObject=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
@@ -498,6 +518,7 @@
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource==='component'){
       normalizeComponentIdentity(candidate);
+      adoptLabelMode(candidate,current.config?.label);
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
       candidate.form=normalizeComponentForm(candidate.form,candidate.canvas);candidate.canvas.state=candidate.form.regions.interior.state;
       ensureAttachmentPortConfigs(candidate);
@@ -603,5 +624,5 @@
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });

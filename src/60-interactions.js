@@ -533,7 +533,7 @@ barComponentType.addEventListener('change',()=>{
 });
 barComponentLabel.addEventListener('input',()=>{
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'label edit'))return;setHistoryHint('Edit Component label');
-  const cfg=componentConfig(n);cfg.label=barComponentLabel.value;
+  const cfg=componentConfig(n),before=cfg.label;cfg.label=barComponentLabel.value;SovSchematicData.adoptLabelMode(n,before);
   refreshCanvasScopeControl();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 });
 barComponentSignalMode.addEventListener('change',()=>{

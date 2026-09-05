@@ -176,7 +176,7 @@ function syncSelectionFormState(kind,entity){
 }
 function syncComponentVisualPanel(n){
   const p=componentConfig(n).presentation;
-  visualGraphicMode.value=p.graphic.kind;visualLabelMode.value=p.labelMode;
+  visualGraphicMode.value=p.graphic.kind;visualLabelMode.value=SovSchematicData.effectiveLabelMode(n);
   visualWidth.value=String(p.size.w);visualHeight.value=String(p.size.h);
   visualText.value=p.text;visualSvgMarkup.value=p.graphic.svg;visualSvgRow.hidden=p.graphic.kind!=='custom';
   setSlotChip(visualInteriorColor,p.interiorColorSlot);
