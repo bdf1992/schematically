@@ -232,6 +232,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   box-shadow:0 8px 22px rgba(0,0,0,.12);white-space:normal
 }
 .selection-settings-panel[hidden]{display:none}
+/* left/top/transform are set inline by placeSelectionSettingsPanel (20-ui.js) so the panel stays clear of the entity it edits (#22). */
 .settings-surface[hidden]{display:none}
 .form-settings{border:1px solid var(--line);border-radius:8px;background:var(--panel);margin:0 0 7px;overflow:hidden}
 .form-settings>summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;padding:7px 9px;background:var(--panel);font-size:10px}
