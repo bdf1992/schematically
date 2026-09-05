@@ -1,6 +1,6 @@
 # Post-RC vision: data-driven schematic language
 
-> **Non-authoritative horizon.** This document records product direction after the current RC. It does not widen 0.1 acceptance criteria. See `RC-FINISH-LINE.md` and `ROADMAP.md` for the release boundary; see Issue #4 for the root agenda.
+> **Non-authoritative horizon.** This document records product direction after the current RC. It does not widen 0.1 acceptance criteria. See `../acceptance/RC-FINISH-LINE.md` and `ROADMAP.md` for the release boundary; see Issue #4 for the root agenda.
 
 ## Thesis
 
@@ -212,7 +212,7 @@ The architecture is succeeding when a useful unfamiliar domain can be added main
 ## Roadmap classification
 
 ### Now
-Current RC commitments are defined only by `RC-FINISH-LINE.md` and summarized in `ROADMAP.md`.
+Current RC commitments are defined only by `../acceptance/RC-FINISH-LINE.md` and summarized in `ROADMAP.md`.
 
 ### Next
 After RC merge: topology/cell-incidence grammar, `Wire → Path` semantic collapse, technical-shape research, first domain-pack schema, data-backed built-ins, pack/glyph authoring skills, user favorites, the small logic machine, constrained Space admission, agent authoring benchmarks, and instruction compilation.

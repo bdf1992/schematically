@@ -60,7 +60,7 @@ Test: `tests/editor_kernel_extended_qa.py`.
 ## Reference/freeze corpus
 
 - Author / Operator / Reviewer skills present: PASS
-- `AGENTS.md` invariant contract present: PASS
+- `../../AGENTS.md` invariant contract present: PASS
 - five classic `.sov` examples validate: PASS
 - classic `.sovpak` validates: PASS
 - public-beta freeze contract present: PASS

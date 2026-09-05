@@ -2,7 +2,7 @@
 
 This file answers one question: **what belongs in the current RC, and what starts only after the RC merges?**
 
-`RC-FINISH-LINE.md` is authoritative for release acceptance. `docs/vision/` and NEXT issues preserve post-RC direction without widening the release candidate.
+`docs/acceptance/RC-FINISH-LINE.md` is authoritative for release acceptance. `docs/vision/` and NEXT issues preserve post-RC direction without widening the release candidate.
 
 ## NOW — `rc/0.1.0-rc1`
 
@@ -47,7 +47,7 @@ Only stabilization, primitive correction, compatibility, QA, and repository sett
 
 The RC merges only when:
 
-1. `RC-FINISH-LINE.md` is satisfied;
+1. `docs/acceptance/RC-FINISH-LINE.md` is satisfied;
 2. repository CI reproduces the candidate being manually tested;
 3. no known blocker remains open without an explicit acceptance decision;
 4. the RC PR contains the exact runtime, docs, schemas, examples, skills, and tests used for acceptance.

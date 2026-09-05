@@ -50,4 +50,4 @@ Port Connections may carry `access: none | read | write | read-write`. Wire conf
 
 ## Beta.24 final engineering gate
 
-Regression, performance regression, boundary legality, Read/Write, and targeted mutation gates pass. Remaining pre-repository gate: human manual QA plus license/repository creation. See `MODULE-QA.md` and `PERFORMANCE.md`.
+Regression, performance regression, boundary legality, Read/Write, and targeted mutation gates pass. Remaining pre-repository gate: human manual QA plus license/repository creation. See `MODULE-QA.md` and `../../PERFORMANCE.md`.

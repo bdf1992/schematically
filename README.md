@@ -66,4 +66,4 @@ The current line stabilizes primitives so future work adds definitions and rules
 - generalized Spaces — admitted grammars beyond the current 2D canvas, including eventual 3D volume semantics;
 - prompt/instruction compilation and richer agent authoring.
 
-Historical acceptance records (`BETA-0.1.md`, `QA-0.1.md`, `RC-0.1.md`, `RC-FINISH-LINE.md`, `PUBLIC-BETA-FREEZE.md`, `MODULE-QA.md`, `contrast-audit.md`) document how past lines were tested and remain as records rather than living documentation.
+Historical acceptance records (`docs/acceptance/BETA-0.1.md`, `docs/acceptance/QA-0.1.md`, `docs/acceptance/RC-0.1.md`, `docs/acceptance/RC-FINISH-LINE.md`, `docs/acceptance/PUBLIC-BETA-FREEZE.md`, `docs/acceptance/MODULE-QA.md`, `docs/acceptance/contrast-audit.md`) document how past lines were tested and remain as records rather than living documentation.

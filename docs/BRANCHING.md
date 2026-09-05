@@ -5,7 +5,7 @@
 `rc/0.1.0-rc1` is the only implementation line for the current RC. It accepts:
 
 - release-blocking defect fixes;
-- primitive refactors required by `RC-FINISH-LINE.md`;
+- primitive refactors required by `acceptance/RC-FINISH-LINE.md`;
 - regression/golden/performance/mutation tests;
 - docs/schema/example/API/MCP changes required to keep the tested RC coherent.
 
