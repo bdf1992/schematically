@@ -200,6 +200,7 @@ function currentZoom(){
 }
 function applyCamera(){
   workspace.setAttribute('viewBox',`${camera.x} ${camera.y} ${camera.w} ${camera.h}`);
+  workspace.style.setProperty('--zoom',String(currentZoom())); // labels clamp their screen size against this (app.css)
   zoomReadout.textContent=`${Math.round(currentZoom()*100)}%`;
   requestAnimationFrame(positionSelectionBar);
 }
