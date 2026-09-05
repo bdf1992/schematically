@@ -24,6 +24,7 @@ BROWSER=[
     'tests/primitive_label_qa.py',
     'tests/retype_qa.py',
     'tests/label_zoom_qa.py',
+    'tests/palette_point_settle_qa.py',
     'tests/document_compaction_qa.py',
     'tests/carrier_path_qa.py',
     'tests/attachment_interaction_parity_qa.py',

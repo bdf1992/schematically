@@ -83,6 +83,10 @@ window.addEventListener('pointercancel',finishComponentTransform,true);
 
 const HOST_ADOPT_DWELL=280;
 function hostCandidateKey(candidate){return candidate?`${candidate.kind}:${candidate.entity?.id||''}`:''}
+// The dwell keeps a Component from settling into a surprise host while it crosses one. A
+// Point over a carrier, path or edge is the exception: attaching is the Point's only
+// purpose, so that candidate is shown at once (#24).
+function hostCandidateNeedsNoDwell(node,candidate){return !!candidate&&componentForm(node).dimension===0&&['wire','path','edge'].includes(candidate.kind)}
 function clearHostCandidateArm(state,{keepGhost=false}={}){
   if(!state)return;if(state.hostDwellTimer){clearTimeout(state.hostDwellTimer);state.hostDwellTimer=null}
   state.hostCandidate=null;state.hostCandidateKey='';state.hostReady=false;if(!keepGhost)clearSettleHostGhost();
@@ -93,7 +97,7 @@ function armHostCandidate(state,candidate){
   if(state.hostDwellTimer){clearTimeout(state.hostDwellTimer);state.hostDwellTimer=null}
   state.hostCandidate=candidate||null;state.hostCandidateKey=key;state.hostReady=false;clearSettleHostGhost();
   if(!candidate)return;
-  if(candidate.canvasId===state.originCanvasId){state.hostReady=true;showSettleHostGhost(candidate,state.node);return}
+  if(candidate.canvasId===state.originCanvasId||hostCandidateNeedsNoDwell(state.node,candidate)){state.hostReady=true;showSettleHostGhost(candidate,state.node);statusEl.textContent='Release → settle';return}
   state.hostDwellTimer=setTimeout(()=>{
     state.hostDwellTimer=null;if(activeNodeDragState!==state||state.hostCandidateKey!==key)return;
     state.hostReady=true;showSettleHostGhost(state.hostCandidate,state.node);statusEl.textContent='Release → settle';
