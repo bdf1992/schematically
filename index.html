@@ -98,15 +98,20 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .node.dragging{cursor:grabbing}
 .node .body{fill:var(--component-interior-fill,var(--component-signal-fill,#fff));stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:1.4}
 .node.selected .body{stroke-width:2.8}
-.node text{font-size:10px;fill:var(--component-boundary-color,var(--component-color,#171715));font-weight:700;letter-spacing:.04em;pointer-events:none;user-select:none}
+/* Labels are SVG text in world units while strokes are non-scaling, so text would grow and
+   shrink with the camera. `--zoom` is set on #workspace by applyCamera; every label's
+   font-size is clamped to 8 to 14 screen pixels and expressed back in world units. At
+   zoom 1 each label keeps its base size, so an export at zoom 1 is unchanged. */
+#workspace{--zoom:1}
+.node text{font-size:calc(clamp(8px,10px * var(--zoom,1),14px) / var(--zoom,1));fill:var(--component-boundary-color,var(--component-color,#171715));font-weight:700;letter-spacing:.04em;pointer-events:none;user-select:none}
 .node .glyph{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .custom-graphic{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .custom-graphic [fill="currentColor"]{fill:currentColor}
 .node .custom-graphic [stroke="currentColor"]{stroke:currentColor}
 .node .container-guide{fill:none;stroke:var(--component-boundary-color,#777);stroke-width:1;stroke-dasharray:4 5;opacity:.22;pointer-events:none}
 .node.is-container>.body{stroke-width:1.8}
-.node .internal-text{font-size:9px;font-weight:600;opacity:.78}
-.node .outside-label{font-size:9px;opacity:.8}
+.node .internal-text{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:600;opacity:.78}
+.node .outside-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));opacity:.8}
 .port-hit{fill:transparent;stroke:none;cursor:pointer;pointer-events:all;touch-action:none}
 .port{fill:var(--panel);stroke:var(--port-color,var(--component-color,var(--canvas-ink)));stroke-width:2;cursor:pointer;opacity:.18;transition:opacity .1s,transform .1s;pointer-events:none;transform-box:fill-box;transform-origin:center}
 .node:hover .port,.node.wiring-source .port{opacity:1}
@@ -133,7 +138,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 #workspace.dragging-node .wire-packet{display:none!important}
 .wire-packet-tag{font-size:7px;font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:2px;letter-spacing:.03em}
 .wire-packet-operation{font-size:6.5px;font-weight:900;fill:var(--packet-op-ink,var(--canvas-ink));pointer-events:none;dominant-baseline:middle}
-.endpoint-channel-tag,.port-label-text{font-size:9px;font-weight:700;fill:var(--canvas-muted);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:3px;letter-spacing:.03em;pointer-events:none}
+.endpoint-channel-tag,.port-label-text{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:700;fill:var(--canvas-muted);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:3px;letter-spacing:.03em;pointer-events:none}
 .endpoint-channel-tag{font-size:8px}
 .flow-chevron{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;opacity:0}
 #workspace.show-flow .flow-chevron{opacity:1}
@@ -176,7 +181,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .config-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;margin:8px 0}
 .palette-drag-float{position:fixed;z-index:1000;width:112px;height:84px;pointer-events:none;border:1.5px dashed var(--muted);border-radius:8px;background:var(--panel);transform:translate(-56px,-42px);opacity:.72}
 .palette-drag-float svg{position:absolute;left:16px;top:11px;width:80px;height:54px;color:#171715}.palette-drag-float b{position:absolute;left:0;right:0;bottom:5px;text-align:center;font-size:10px;letter-spacing:.04em;color:#171715}
-.component-drop-ghost{pointer-events:none;opacity:.48}.component-drop-ghost .body{fill:var(--panel);stroke:var(--canvas-ink);stroke-width:1.5;stroke-dasharray:5 4}.component-drop-ghost .glyph{color:var(--canvas-ink)}.component-drop-ghost text{font-size:10px;fill:var(--canvas-ink);font-weight:700;letter-spacing:.04em}
+.component-drop-ghost{pointer-events:none;opacity:.48}.component-drop-ghost .body{fill:var(--panel);stroke:var(--canvas-ink);stroke-width:1.5;stroke-dasharray:5 4}.component-drop-ghost .glyph{color:var(--canvas-ink)}.component-drop-ghost text{font-size:calc(clamp(8px,10px * var(--zoom,1),14px) / var(--zoom,1));fill:var(--canvas-ink);font-weight:700;letter-spacing:.04em}
 
 .selection-bar{
   position:absolute;z-index:30;
@@ -234,6 +239,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   box-shadow:0 8px 22px rgba(0,0,0,.12);white-space:normal
 }
 .selection-settings-panel[hidden]{display:none}
+/* left/top/transform are set inline by placeSelectionSettingsPanel (20-ui.js) so the panel stays clear of the entity it edits (#22). */
 .settings-surface[hidden]{display:none}
 .form-settings{border:1px solid var(--line);border-radius:8px;background:var(--panel);margin:0 0 7px;overflow:hidden}
 .form-settings>summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;padding:7px 9px;background:var(--panel);font-size:10px}
@@ -302,7 +308,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .node.blank text{font-style:italic}
 .node.blank.selected .body{stroke-dasharray:5 4}
 
-.connection-label{font-size:9px;font-weight:700;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}.reciprocity-mark{font-size:10px;font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}
+.connection-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:700;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}.reciprocity-mark{font-size:calc(clamp(8px,10px * var(--zoom,1),14px) / var(--zoom,1));font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}
 
 @media(max-width:900px){
   .app{grid-template-columns:210px minmax(0,1fr);}
@@ -366,7 +372,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .quick-search{position:absolute;left:50%;top:62px;transform:translateX(-50%);z-index:70;width:min(520px,calc(100% - 40px));border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 18px 50px rgba(0,0,0,.18);padding:8px}.quick-search[hidden]{display:none}.quick-search input{width:100%;height:38px;border:1px solid var(--line);border-radius:8px;padding:0 11px;background:var(--panel);color:var(--ink);outline:none}.quick-search-results{display:flex;flex-direction:column;gap:3px;margin-top:6px;max-height:300px;overflow:auto}.search-result{border:0;border-radius:7px;background:transparent;color:var(--ink);padding:7px 9px;text-align:left;cursor:pointer}.search-result:hover{background:var(--hover)}.search-result b,.search-result small{display:block}.search-result small{font-size:9px;color:var(--muted)}.search-empty{padding:10px;color:var(--muted);font-size:10px}.node.search-dim,.wire-group.search-dim{opacity:.12!important;filter:grayscale(1)}.node.search-match .body{stroke-width:3.4}
 .objects-empty{display:block}.objects-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}.objects-head b{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}#hiddenObjectCount:not(:empty)::before{content:"Hidden ";font-size:9px;color:var(--muted)}.objects-list{display:flex;flex-direction:column;gap:2px}.object-row{border:0;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;border-radius:6px;text-align:left;cursor:pointer}.object-row:hover{background:var(--hover)}.object-row small{font-size:8px;color:var(--muted)}.object-row.is-hidden{opacity:.55}.object-row.is-locked small{font-weight:800}.objects-tip{border-top:1px solid var(--line);margin-top:8px;padding-top:7px;font-size:9px;color:var(--muted)}
 .utility-settings{border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:10px}.utility-toggle-row{display:flex;gap:12px;align-items:center;padding:4px 0 7px;font-size:10px}.utility-toggle-row label{display:flex;gap:5px;align-items:center}.utility-settings input[type="range"]{width:100%}
-.node.is-pinned>.body{stroke-dasharray:2 2}.node.is-locked>.body{stroke-dasharray:6 3}.node.is-locked{cursor:not-allowed}.node.is-pinned{cursor:default}.marquee-rect{fill:rgba(90,110,140,.08);stroke:#5c718c;stroke-width:1.5;stroke-dasharray:5 4;pointer-events:none}.settle-host-ghost{pointer-events:none;opacity:0;animation:settleHostGhostIn .16s ease-out forwards}@keyframes settleHostGhostIn{to{opacity:1}}.settle-host-ghost rect{fill:rgba(80,110,140,.08);stroke:#627b99;stroke-width:2;stroke-dasharray:6 4}.settle-host-ghost text{font-size:9px;font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:3px}
+.node.is-pinned>.body{stroke-dasharray:2 2}.node.is-locked>.body{stroke-dasharray:6 3}.node.is-locked{cursor:not-allowed}.node.is-pinned{cursor:default}.marquee-rect{fill:rgba(90,110,140,.08);stroke:#5c718c;stroke-width:1.5;stroke-dasharray:5 4;pointer-events:none}.settle-host-ghost{pointer-events:none;opacity:0;animation:settleHostGhostIn .16s ease-out forwards}@keyframes settleHostGhostIn{to{opacity:1}}.settle-host-ghost rect{fill:rgba(80,110,140,.08);stroke:#627b99;stroke-width:2;stroke-dasharray:6 4}.settle-host-ghost text{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:3px}
 .component-body-depth,.component-frame-depth{fill:none;stroke:var(--component-boundary-color,#555);opacity:.22;pointer-events:none}.component-body-depth{fill:var(--component-interior-fill,#eee);opacity:.28}.node[data-material="glass"]>.body{fill-opacity:.5}.node[data-material="metal"]>.body{filter:brightness(.94)}.node[data-material="wood"]>.body{filter:sepia(.22)}.node[data-material="canvas"]>.body{stroke-dasharray:1.5 .6}.node[data-material="paper"]>.body{stroke-width:1}.node[data-material="panel"]>.body{stroke-width:2}
 
 
@@ -375,11 +381,12 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .wire-blank-ghost{pointer-events:none;opacity:0;animation:wireBlankGhostIn .18s ease-out forwards}
 .wire-blank-ghost .body{fill:var(--panel);stroke:var(--muted);stroke-width:1.6;stroke-dasharray:5 4}
 .wire-blank-ghost .plus{stroke:var(--muted);stroke-width:2.6;stroke-linecap:round}
-.wire-blank-ghost text{font-size:8px;font-weight:800;fill:var(--muted);letter-spacing:.05em;paint-order:stroke;stroke:var(--panel);stroke-width:2px}
+.wire-blank-ghost text{font-size:calc(clamp(8px,8px * var(--zoom,1),14px) / var(--zoom,1));font-weight:800;fill:var(--muted);letter-spacing:.05em;paint-order:stroke;stroke:var(--panel);stroke-width:2px}
 @keyframes wireBlankGhostIn{to{opacity:.62}}
 .file-menu-item:disabled{color:var(--muted);opacity:.52;cursor:not-allowed}
 .file-menu-item:disabled:hover{background:transparent}
 :root[data-appearance="dark"]{
+  color-scheme:dark;
   --bg:#111315;--panel:#1C1F21;--ink:#EEEFEA;--muted:#A8AAA4;--line:#3B3F42;--hover:#292D30;--grid:#2B2E31;--canvas-tone:#17191B;--canvas-ink:#E7E8E3;--canvas-muted:#AEB0AA;--canvas-halo:#17191B;
 }
 :root[data-appearance="dark"] #workspace{background-color:var(--canvas-tone);box-shadow:inset 0 0 0 1px #303438}
@@ -393,6 +400,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 :root[data-appearance="dark"] .connection-label,:root[data-appearance="dark"] .reciprocity-mark{fill:var(--ink);stroke:var(--canvas-tone)}
 :root[data-appearance="dark"] .settle-host-ghost text{stroke:var(--canvas-tone)}
 
+:root[data-appearance="light"]{color-scheme:light}
 :root[data-appearance="light"] #workspace{background-color:var(--canvas-tone)}
 #workspace.grid-hidden{background-image:none}
 
@@ -1164,11 +1172,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // supplied nothing, so authored records always win over the preset.
   const LEGACY_SYMBOL_IDS={port:'point'};
   const TEMPLATE_PRESETS={
-    point:{form:{dimension:0},presentation:{graphic:{kind:'none'},labelMode:'none',backdrop:'none'},signalMode:'relay'},
+    point:{form:{dimension:0},presentation:{graphic:{kind:'none'},backdrop:'none'},signalMode:'relay'},
     // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
     // component record is the static 1D role (a rail that hosts Points).
-    path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:240,h:64}}},
-    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},labelMode:'none',size:{w:320,h:220}}}
+    path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},size:{w:240,h:64}}},
+    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}}
   };
   // Loading a file applies the same preset rule as makeComponent: a preset field fills in
   // only where the record supplied nothing, so a sparse authored Plane or Point loads the
@@ -1186,6 +1194,28 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   function normalizeSymbolId(value){const id=String(value||'blank')||'blank';return LEGACY_SYMBOL_IDS[id]||id}
   function templatePreset(symbolId){return clone(TEMPLATE_PRESETS[normalizeSymbolId(symbolId)]||null)}
   function isPrimitiveSymbol(symbolId){return Object.prototype.hasOwnProperty.call(TEMPLATE_PRESETS,normalizeSymbolId(symbolId))}
+  // A label mode is read, never written by a preset: an authored mode is used as written;
+  // otherwise a label under a 0D or 1D form sits outside it, under a 2D form on its
+  // boundary, and while there is no label the mode reads 'none'. Nothing here touches the
+  // record, so a loaded record stays exactly as it was saved.
+  const LABEL_MODES=['boundary','inside','outside','none'];
+  function defaultLabelMode(form){return num(form?.dimension,2)>=2?'boundary':'outside'}
+  function effectiveLabelMode(component){
+    const config=isObject(component?.config)?component.config:{},authored=config.presentation?.labelMode;
+    if(LABEL_MODES.includes(authored))return authored;
+    // A typed Component always has something to show: its type caption when no label is set.
+    if(!isPrimitiveSymbol(component?.symbolId))return 'boundary';
+    return cleanString(config.label,'').trim()?defaultLabelMode(component?.form):'none';
+  }
+  // When a label first appears on a record that authored 'none' (every primitive saved by
+  // an earlier build did), the mode follows the form so the label is shown. A label edited
+  // under 'none' while one already existed stays hidden: that 'none' was a choice.
+  function adoptLabelMode(component,previousLabel){
+    const config=component.config;if(!isObject(config)||!isObject(config.presentation))return component;
+    const now=cleanString(config.label,'').trim(),before=cleanString(previousLabel,'').trim();
+    if(now&&!before&&config.presentation.labelMode==='none')config.presentation.labelMode=defaultLabelMode(component.form);
+    return component;
+  }
 
   const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
   const isObject=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
@@ -1413,38 +1443,61 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(dimension<2)form.regions.interior.state='closed';
     return form;
   }
+  // One implementation types a component: creation, the bar retype, and `update` over
+  // API, HTTP and MCP all pass through it, so a retyped record is the record a creation
+  // would have made. A primitive applies its whole preset (Form, presentation, signal mode,
+  // attachment defaults); a Component type restores the standard 2D Form and its symbol
+  // glyph. Identity, position, placement, label, colour, editor state, authored attachment
+  // points, the annotation, and a custom glyph on a Component stay. Creating a record
+  // with the carrier preset (`symbolId:'path'`, the static 1D rail) is admissible here;
+  // retyping an existing Component into a carrier is refused by `update` and the bar.
+  function applySymbol(component,symbolId){
+    const next=normalizeSymbolId(symbolId),preset=templatePreset(next)||{};
+    if(!isObject(component.config))component.config={};
+    const config=component.config,before=isObject(config.presentation)?config.presentation:{};
+    component.symbolId=next;component.type=next==='blank'?null:next;component.incomplete=next==='blank';
+    component.form=normalizeComponentForm(preset.form||{dimension:2});
+    config.signalMode=preset.signalMode||'source';
+    const presentation=preset.presentation?clone(preset.presentation):{graphic:{kind:'symbol',ref:`sym-${next}`,svg:''}};
+    if(!preset.form&&before.graphic?.kind==='custom')presentation.graphic=clone(before.graphic);
+    if(cleanString(before.text,''))presentation.text=before.text;
+    if(Number.isInteger(before.interiorColorSlot))presentation.interiorColorSlot=before.interiorColorSlot;
+    config.presentation=presentation;
+    if(preset.attachmentDefaults==='none')config.attachmentDefaults='none';else delete config.attachmentDefaults;
+    if(isObject(component.boundary?.inside))component.boundary.inside.type=component.type;
+    if(isObject(component.canvas)){component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state}
+    return ensureAttachmentPortConfigs(component);
+  }
   function makeComponent(doc,value={}){
     const symbolId=normalizeSymbolId(value.symbolId||value.type);
     const preset=templatePreset(symbolId)||{};
     const id=cleanString(value.id,nextId(doc.components,'c'));
     const canvasId=cleanString(value.canvasId,GLOBAL_CANVAS_ID);
-    const form=normalizeComponentForm(isObject(value.form)?value.form:preset.form,value.canvas);
-    const config={
-      label:cleanString(value.config?.label||value.label,''),
-      colorSlot:Math.max(0,Math.trunc(num(value.config?.colorSlot,0))),
-      signalMode:['source','relay','passive'].includes(value.config?.signalMode)?value.config.signalMode:(preset.signalMode||'source'),
-      presentation:isObject(value.config?.presentation)?clone(value.config.presentation):(preset.presentation?clone(preset.presentation):{}),
-      ports:isObject(value.config?.ports)?clone(value.config.ports):{}
-    };
-    // An authored choice stays on the runtime record either way, so a later normalization
-    // pass cannot replace a Plane's authored 'standard' with its preset 'none'.
-    const attachmentDefaults=['standard','none'].includes(value.config?.attachmentDefaults)?value.config.attachmentDefaults:preset.attachmentDefaults;
-    if(attachmentDefaults==='none'||value.config?.attachmentDefaults==='standard')config.attachmentDefaults=attachmentDefaults;
-    if(Array.isArray(value.config?.attachmentPoints)&&value.config.attachmentPoints.length)config.attachmentPoints=clone(value.config.attachmentPoints);
     const component={
-      id,
-      type:symbolId==='blank'?null:symbolId,
-      symbolId,
+      id,type:null,symbolId:'blank',
       x:num(value.x,120),y:num(value.y,120),
       canvasId,
-      canvas:{id:`canvas:component:${id}`,scope:'local',dimension:form.dimension,state:form.regions.interior.state,ownerKind:'component',ownerId:id},
-      form,
-      config,
+      canvas:{id:`canvas:component:${id}`,scope:'local',dimension:2,state:'closed',ownerKind:'component',ownerId:id},
+      form:{},
+      config:{label:cleanString(value.config?.label||value.label,''),colorSlot:Math.max(0,Math.trunc(num(value.config?.colorSlot,0))),ports:{}},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       parentId:value.parentId??null,
       placement:isObject(value.placement)?clone(value.placement):{kind:canvasId.startsWith('canvas:wire:')?'wire':'surface',...(canvasId.startsWith('canvas:wire:')?{wireId:canvasId.slice('canvas:wire:'.length),t:.5}:{x:num(value.x,120),y:num(value.y,120)})},
-      incomplete:symbolId==='blank'
+      incomplete:true
     };
+    applySymbol(component,symbolId);
+    // Authored fields win over the preset, field by field. A preset field fills in only
+    // where the caller supplied nothing.
+    const config=component.config;
+    component.form=normalizeComponentForm(isObject(value.form)?value.form:preset.form,value.canvas);
+    if(['source','relay','passive'].includes(value.config?.signalMode))config.signalMode=value.config.signalMode;
+    if(isObject(value.config?.presentation))config.presentation=clone(value.config.presentation);
+    // An authored choice stays on the runtime record either way, so a later normalization
+    // pass cannot replace a Plane's authored 'standard' with its preset 'none'.
+    if(['standard','none'].includes(value.config?.attachmentDefaults))config.attachmentDefaults=value.config.attachmentDefaults;
+    if(Array.isArray(value.config?.attachmentPoints)&&value.config.attachmentPoints.length)config.attachmentPoints=clone(value.config.attachmentPoints);
+    config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
+    component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
     if(isObject(value.parts))component.parts=clone(value.parts);
     return ensureAttachmentPortConfigs(component);
@@ -1641,7 +1694,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const current=arr[index];assertUnlocked(current,resource);
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource==='component'){
+      const nextSymbol=patch?.symbolId??patch?.type;
+      if(nextSymbol!==undefined&&normalizeSymbolId(nextSymbol)!==normalizeSymbolId(current.symbolId)){
+        // A Path is a carrier drawn from the palette; a Component is not retyped into one (#19).
+        if(templatePreset(nextSymbol)?.carrier)throw new Error(`CARRIER_SYMBOL: ${normalizeSymbolId(nextSymbol)} is a carrier drawn from the palette, not a type a Component takes`);
+        applySymbol(candidate,nextSymbol);
+        const rest=clone(patch);delete rest.symbolId;delete rest.type;deepMerge(candidate,rest);
+      }
       normalizeComponentIdentity(candidate);
+      adoptLabelMode(candidate,current.config?.label);
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
       candidate.form=normalizeComponentForm(candidate.form,candidate.canvas);candidate.canvas.state=candidate.form.regions.interior.state;
       ensureAttachmentPortConfigs(candidate);
@@ -1747,7 +1808,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
 /* END src/05-data-core.js */
 </script>
@@ -2373,7 +2434,8 @@ function componentConfig(n){
   if(!presentation.size)presentation.size={w:112,h:84};
   presentation.size.w=Math.max(80,Math.min(520,Number(presentation.size.w)||112));
   presentation.size.h=Math.max(64,Math.min(420,Number(presentation.size.h)||84));
-  if(!['boundary','inside','outside','none'].includes(presentation.labelMode))presentation.labelMode='boundary';
+  // The label mode is read through SovSchematicData.effectiveLabelMode; an absent one is derived, never written.
+  if(presentation.labelMode!==undefined&&!['boundary','inside','outside','none'].includes(presentation.labelMode))delete presentation.labelMode;
   if(!Number.isInteger(presentation.interiorColorSlot))presentation.interiorColorSlot=n.config.colorSlot??0;
   presentation.interiorColorSlot=normalizeSlot(presentation.interiorColorSlot,0);
   if(typeof presentation.text!=='string')presentation.text='';
@@ -3014,7 +3076,7 @@ function syncSelectionFormState(kind,entity){
 }
 function syncComponentVisualPanel(n){
   const p=componentConfig(n).presentation;
-  visualGraphicMode.value=p.graphic.kind;visualLabelMode.value=p.labelMode;
+  visualGraphicMode.value=p.graphic.kind;visualLabelMode.value=SovSchematicData.effectiveLabelMode(n);
   visualWidth.value=String(p.size.w);visualHeight.value=String(p.size.h);
   visualText.value=p.text;visualSvgMarkup.value=p.graphic.svg;visualSvgRow.hidden=p.graphic.kind!=='custom';
   setSlotChip(visualInteriorColor,p.interiorColorSlot);
@@ -3038,6 +3100,40 @@ function openSelectionSettings(kind){
   syncSelectionSettings(kind);
   selectionSettingsPanel.hidden=false;
   barSelectionSettings.setAttribute('aria-expanded','true');
+  placeSelectionSettingsPanel();
+}
+// The bar sits just above the selected entity, so a panel that always drops below the bar
+// lands on the entity being edited (#22). Place the panel above, below, or beside the bar,
+// beside meaning clear of the entity's own edge, clamped inside the workspace, choosing the
+// placement that covers the least of the selected entity's screen rectangle and, among
+// equals, the one with the most free space.
+function selectedEntityScreenRect(){
+  if(typeof selected==='string'&&selected.startsWith('wire:')){const w=wires[Number(selected.split(':')[1])];return w?workspace.querySelector(`.wire-group[data-wire-id="${w.id}"]`)?.getBoundingClientRect()||null:null}
+  if(isAttachmentSelectionValue(selected)){const info=selectedPortInfo();return info?document.querySelector(`.node[data-id="${info.node.id}"]`)?.getBoundingClientRect()||null:null}
+  return document.querySelector(`.node[data-id="${selected}"]`)?.getBoundingClientRect()||null;
+}
+function rectOverlapArea(a,b){if(!a||!b)return 0;const w=Math.min(a.right,b.right)-Math.max(a.left,b.left),h=Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top);return w>0&&h>0?w*h:0}
+function placeSelectionSettingsPanel(){
+  const panel=selectionSettingsPanel;if(panel.hidden||selectionBar.hidden)return;
+  const bar=selectionBar.getBoundingClientRect(),wrap=document.querySelector('.workspace-wrap').getBoundingClientRect();
+  const w=panel.offsetWidth||360,h=panel.offsetHeight||240,gap=6,margin=8,entity=selectedEntityScreenRect();
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  const anchorRight=Math.max(bar.right,entity?.right??bar.right),anchorLeft=Math.min(bar.left,entity?.left??bar.left);
+  const candidates={
+    above:{left:bar.left+bar.width/2-w/2,top:bar.top-gap-h,free:bar.top-wrap.top},
+    below:{left:bar.left+bar.width/2-w/2,top:bar.bottom+gap,free:wrap.bottom-bar.bottom},
+    right:{left:anchorRight+gap,top:bar.top,free:wrap.right-anchorRight},
+    left:{left:anchorLeft-gap-w,top:bar.top,free:anchorLeft-wrap.left}
+  };
+  let pick=null;
+  for(const [place,c] of Object.entries(candidates)){
+    const left=clamp(c.left,wrap.left+margin,Math.max(wrap.left+margin,wrap.right-margin-w));
+    const top=clamp(c.top,wrap.top+margin,Math.max(wrap.top+margin,wrap.bottom-margin-h));
+    const covered=rectOverlapArea({left,top,right:left+w,bottom:top+h},entity);
+    if(!pick||covered<pick.covered||(covered===pick.covered&&c.free>pick.free))pick={place,left,top,covered,free:c.free};
+  }
+  panel.dataset.place=pick.place;panel.style.transform='none';
+  panel.style.left=`${pick.left-bar.left}px`;panel.style.top=`${pick.top-bar.top}px`;
 }
 function selectedSurfaceKind(){
   if(typeof selected==='string'&&selected.startsWith('wire:'))return 'wire';
@@ -3172,6 +3268,7 @@ function positionSelectionBar(){
   const x=Math.max(90,Math.min(wrap.width-90,q.x));
   const y=Math.max(44,Math.min(wrap.height-10,q.y-6));
   selectionBar.style.left=`${x}px`;selectionBar.style.top=`${y}px`;
+  placeSelectionSettingsPanel();
 }
 /* END src/20-ui.js */
 </script>
@@ -3299,6 +3396,9 @@ function cleanupPaletteGesture({status='Select'}={}){
     clearTimeout(paletteDrag.holdTimer);
     paletteDrag.holdTimer=null;
   }
+  if(paletteDrag?.hostDwellTimer){clearTimeout(paletteDrag.hostDwellTimer);paletteDrag.hostDwellTimer=null}
+  clearPaletteHostTargets();
+  clearSettleHostGhost();
   removePaletteFloat();
   clearPaletteDropGhost();
   document.querySelectorAll('.symbol-card.drag-source').forEach(el=>el.classList.remove('drag-source'));
@@ -3328,6 +3428,26 @@ function drawPaletteDropGhost(symbolId,p){
     <text x="0" y="${h/2-10}" text-anchor="middle">${escapeXML(s.name)}</text>`}
   paletteDropLayer.appendChild(g);
 }
+// The palette drag runs the same host candidate a node drag runs (#24). The probe is a
+// transient record of what the drop would create; it is never pushed into the document.
+function paletteHostProbe(session,x,y){
+  if(SovSchematicData.templatePreset(session.symbolId)?.carrier)return null;
+  if(!session.probe)session.probe=SovSchematicData.makeComponent(diagram,{id:'palette-probe',symbolId:session.symbolId,x,y,canvasId:GLOBAL_CANVAS_ID});
+  session.probe.x=x;session.probe.y=y;return session.probe;
+}
+function clearPaletteHostTargets(){document.querySelectorAll('.node.scope-drop-target,.wire-group.scope-drop-target').forEach(el=>el.classList.remove('scope-drop-target'))}
+function armPaletteHostCandidate(session,candidate){
+  const key=hostCandidateKey(candidate);
+  if(key===session.hostCandidateKey){if(session.hostReady&&candidate)showSettleHostGhost(candidate,session.probe);return}
+  if(session.hostDwellTimer){clearTimeout(session.hostDwellTimer);session.hostDwellTimer=null}
+  session.hostCandidate=candidate||null;session.hostCandidateKey=key;session.hostReady=false;clearSettleHostGhost();
+  if(!candidate)return;
+  if(hostCandidateNeedsNoDwell(session.probe,candidate)){session.hostReady=true;showSettleHostGhost(candidate,session.probe);return}
+  session.hostDwellTimer=setTimeout(()=>{
+    session.hostDwellTimer=null;if(paletteDrag!==session||session.hostCandidateKey!==key)return;
+    session.hostReady=true;showSettleHostGhost(session.hostCandidate,session.probe);clearPaletteDropGhost();statusEl.textContent='Release → settle';
+  },HOST_ADOPT_DWELL);
+}
 function updatePaletteDrag(x,y){
   if(!paletteDrag?.active)return;
   paletteDrag.lastClient={x,y};
@@ -3337,10 +3457,18 @@ function updatePaletteDrag(x,y){
   if(over){
     removePaletteFloat();
     // Held/ghost position is raw pointer position. Grid is release-only.
-    drawPaletteDropGhost(paletteDrag.symbolId,svgPoint(x,y));
-    statusEl.textContent='Ghost free · release to settle';
+    const q=svgPoint(x,y),probe=paletteHostProbe(paletteDrag,q.x,q.y);
+    const target=probe?componentHostCandidateAtPoint(probe,q.x,q.y):null;
+    clearPaletteHostTargets();
+    if(target?.kind==='component')document.querySelector(`.node[data-id="${target.entity.id}"]`)?.classList.add('scope-drop-target');
+    if(target?.kind==='wire')workspace.querySelector(`.wire-group[data-wire-id="${target.entity.id}"]`)?.classList.add('scope-drop-target');
+    armPaletteHostCandidate(paletteDrag,target);
+    if(paletteDrag.hostReady&&paletteDrag.hostCandidate){clearPaletteDropGhost();statusEl.textContent='Release → settle'}
+    else{drawPaletteDropGhost(paletteDrag.symbolId,q);statusEl.textContent='Ghost free · release to settle'}
   }else{
     clearPaletteDropGhost();
+    clearPaletteHostTargets();
+    armPaletteHostCandidate(paletteDrag,null);
     if(!paletteDrag.floatEl)paletteDrag.floatEl=makePaletteFloat(paletteDrag.symbolId);
     paletteDrag.floatEl.style.left=`${x}px`;
     paletteDrag.floatEl.style.top=`${y}px`;
@@ -3365,6 +3493,7 @@ function finishPaletteGesture(e,cancelled=false){
   const active=session.active;
   const symbolId=session.symbolId;
   const over=active&&session.overCanvas&&canvasContainsClientPoint(e.clientX,e.clientY);
+  const armed=over&&session.hostReady?session.hostCandidate:null;
 
   // Clear visual/session state before creation causes any synchronous UI work.
   cleanupPaletteGesture({status:null});
@@ -3373,7 +3502,14 @@ function finishPaletteGesture(e,cancelled=false){
     if(!cancelled&&!canPlaceComponentOnActiveCanvas()){statusEl.textContent='1D canvas accepts Wire Parts, not Components';return}
     if(!cancelled&&over){
       const q=svgPoint(e.clientX,e.clientY);
-      addNode(symbolId,q.x,q.y,e);
+      if(armed&&!SovSchematicData.templatePreset(symbolId)?.carrier){
+        // The ghost promised a host; the drop keeps that promise even when grid snapping
+        // would have carried the raw drop point out of reach.
+        const n=addNode(symbolId,q.x,q.y,e,{render:false,select:false});
+        const fresh=componentHostCandidateAtPoint(n,q.x,q.y);
+        applyComponentHost(n,fresh&&hostCandidateKey(fresh)===hostCandidateKey(armed)?fresh:armed);
+        render();selectNode(n.id);
+      }else addNode(symbolId,q.x,q.y,e);
     }else if(!cancelled&&!active){
       addNode(symbolId);
     }
@@ -3402,7 +3538,8 @@ function bindPaletteComponent(button,symbolId){
       active:false,
       overCanvas:false,
       floatEl:null,
-      holdTimer:null
+      holdTimer:null,
+      probe:null,hostCandidate:null,hostCandidateKey:'',hostReady:false,hostDwellTimer:null
     };
 
     paletteDrag.holdTimer=setTimeout(()=>{
@@ -3478,6 +3615,7 @@ function currentZoom(){
 }
 function applyCamera(){
   workspace.setAttribute('viewBox',`${camera.x} ${camera.y} ${camera.w} ${camera.h}`);
+  workspace.style.setProperty('--zoom',String(currentZoom())); // labels clamp their screen size against this (app.css)
   zoomReadout.textContent=`${Math.round(currentZoom()*100)}%`;
   requestAnimationFrame(positionSelectionBar);
 }
@@ -4700,14 +4838,14 @@ function appendComponentGraphic(g,n,cfg){
   g.appendChild(use);
 }
 function appendComponentText(g,n,cfg,s){
-  const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s);
-  if(p.labelMode!=='none'&&label){
+  const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s),labelMode=SovSchematicData.effectiveLabelMode(n);
+  if(labelMode!=='none'&&label){
     const t=document.createElementNS('http://www.w3.org/2000/svg','text');
-    t.setAttribute('text-anchor','middle');t.setAttribute('class',p.labelMode==='outside'?'outside-label':'component-label');
+    t.setAttribute('text-anchor','middle');t.setAttribute('class',labelMode==='outside'?'outside-label':'component-label');
     if(componentHostedOnWire(n)&&componentBackdropMode(n)==='none'){
       const box=componentInlineGraphicBox(n);t.setAttribute('x','0');t.setAttribute('y',String(box.y+box.h+11));
-    }else if(p.labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
-    else if(p.labelMode==='outside'){t.setAttribute('x','0');t.setAttribute('y',String(size.h/2+18))}
+    }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
+    else if(labelMode==='outside'){t.setAttribute('x','0');t.setAttribute('y',String(size.h/2+18))}
     else {t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-8))}
     t.textContent=label;g.appendChild(t);
   }
@@ -5261,6 +5399,10 @@ window.addEventListener('pointercancel',finishComponentTransform,true);
 
 const HOST_ADOPT_DWELL=280;
 function hostCandidateKey(candidate){return candidate?`${candidate.kind}:${candidate.entity?.id||''}`:''}
+// The dwell keeps a Component from settling into a surprise host while it crosses one. A
+// Point over a carrier, path or edge is the exception: attaching is the Point's only
+// purpose, so that candidate is shown at once (#24).
+function hostCandidateNeedsNoDwell(node,candidate){return !!candidate&&componentForm(node).dimension===0&&['wire','path','edge'].includes(candidate.kind)}
 function clearHostCandidateArm(state,{keepGhost=false}={}){
   if(!state)return;if(state.hostDwellTimer){clearTimeout(state.hostDwellTimer);state.hostDwellTimer=null}
   state.hostCandidate=null;state.hostCandidateKey='';state.hostReady=false;if(!keepGhost)clearSettleHostGhost();
@@ -5271,7 +5413,7 @@ function armHostCandidate(state,candidate){
   if(state.hostDwellTimer){clearTimeout(state.hostDwellTimer);state.hostDwellTimer=null}
   state.hostCandidate=candidate||null;state.hostCandidateKey=key;state.hostReady=false;clearSettleHostGhost();
   if(!candidate)return;
-  if(candidate.canvasId===state.originCanvasId){state.hostReady=true;showSettleHostGhost(candidate,state.node);return}
+  if(candidate.canvasId===state.originCanvasId||hostCandidateNeedsNoDwell(state.node,candidate)){state.hostReady=true;showSettleHostGhost(candidate,state.node);statusEl.textContent='Release → settle';return}
   state.hostDwellTimer=setTimeout(()=>{
     state.hostDwellTimer=null;if(activeNodeDragState!==state||state.hostCandidateKey!==key)return;
     state.hostReady=true;showSettleHostGhost(state.hostCandidate,state.node);statusEl.textContent='Release → settle';
@@ -5679,28 +5821,20 @@ barComponentType.addEventListener('change',()=>{
   const next=barComponentType.value;
   if(!GROUPS.Components.includes(next)&&!GROUPS.Primitives.includes(next)){barComponentType.value=n.symbolId;return}
 
-  // Retyping to a primitive applies that primitive's Form preset. Refuse when a
-  // Wire already ends on a built-in point the preset would remove.
+  // A Path is a carrier drawn from the palette; a Component is not retyped into one (#19).
   const preset=SovSchematicData.templatePreset(next);
-  if(preset){
-    const f=componentForm(n),nextDefaults=preset.attachmentDefaults||'standard';
-    const wouldRemoveBuiltins=f.dimension!==preset.form.dimension||(nextDefaults==='none'&&Attachment.attachmentDefaults(n)!=='none');
-    if(wouldRemoveBuiltins&&wiresOnBuiltinPoints(n).length){barComponentType.value=n.symbolId;statusEl.textContent='Detach Wires from built-in points first';return}
-    const beforeOpen=formHostsChildren(n);
-    f.dimension=preset.form.dimension;f.body.kind=['point','path','surface'][f.dimension];
-    if(preset.form.regions?.interior?.state)f.regions.interior.state=preset.form.regions.interior.state;
-    if(f.dimension<2)f.regions.interior.state='closed';
-    if(nextDefaults==='none')n.config.attachmentDefaults='none';else delete n.config.attachmentDefaults;
-    if(beforeOpen&&!formHostsChildren(n)){const fallback=n.canvasId||GLOBAL_CANVAS_ID;for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}}
-    SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
-  }
+  if(preset?.carrier){barComponentType.value=n.symbolId;statusEl.textContent='Draw a Path from the palette';return}
 
+  // Retyping applies the whole target preset (or the standard Component Form). Refuse
+  // when a Wire already ends on a built-in point the new attachment set would remove.
+  const f=componentForm(n),nextDimension=preset?.form?.dimension??2,nextDefaults=preset?.attachmentDefaults||'standard';
+  const wouldRemoveBuiltins=f.dimension!==nextDimension||(nextDefaults==='none'&&Attachment.attachmentDefaults(n)!=='none');
+  if(wouldRemoveBuiltins&&wiresOnBuiltinPoints(n).length){barComponentType.value=n.symbolId;statusEl.textContent='Detach Wires from built-in points first';return}
+  const beforeOpen=formHostsChildren(n);
+  SovSchematicData.applySymbol(n,next);
+  if(beforeOpen&&!formHostsChildren(n)){const fallback=n.canvasId||GLOBAL_CANVAS_ID;for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}}
+  SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
   ensureComponentStructure(n);
-  n.boundary.inside.type=next==='blank'?null:next;
-  n.type=n.boundary.inside.type;
-  n.symbolId=n.type||'blank';
-  n.incomplete=n.type==null;
-  if(n.config?.presentation?.graphic?.kind==='symbol')n.config.presentation.graphic.ref=`sym-${n.symbolId}`;
 
   // Type changes type the INSIDE of the existing boundary. Identity,
   // boundary, owned Parts, position, configuration, and topology remain.
@@ -5711,7 +5845,7 @@ barComponentType.addEventListener('change',()=>{
 });
 barComponentLabel.addEventListener('input',()=>{
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'label edit'))return;setHistoryHint('Edit Component label');
-  const cfg=componentConfig(n);cfg.label=barComponentLabel.value;
+  const cfg=componentConfig(n),before=cfg.label;cfg.label=barComponentLabel.value;SovSchematicData.adoptLabelMode(n,before);
   refreshCanvasScopeControl();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 });
 barComponentSignalMode.addEventListener('change',()=>{
