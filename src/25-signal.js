@@ -25,6 +25,7 @@ function hasValidIncoming(componentId,signalState){
   return incomingSignals(componentId,signalState).length>0;
 }
 function wireDirectionActive(w,direction,signalState){
+  if(typeof logicWireValue==='function'){const value=logicWireValue(w,direction);if(value!==null)return value}
   const sourceEnd=direction==='forward'?'a':'b';
   const targetEnd=direction==='forward'?'b':'a';
   const sourceComponent=sourceEnd==='a'?w.a:w.b;
@@ -36,9 +37,11 @@ function wireDirectionActive(w,direction,signalState){
   return true;
 }
 function computeSignalState(){
+  if(typeof prepareLogicProjection==='function')prepareLogicProjection();
   let active=new Set();
   nodes.forEach(n=>{ if(normalizeSignalMode(componentConfig(n))==='source') active.add(n.id); });
-  for(let pass=0;pass<6;pass++){
+  // Activation is monotone: each pass adds a node or reaches the fixed point.
+  for(let pass=0;pass<nodes.length;pass++){
     const probe={active,colors:new Map(nodes.map(n=>[n.id,componentConfig(n).color]))};
     const next=new Set(active);
     for(const n of nodes){

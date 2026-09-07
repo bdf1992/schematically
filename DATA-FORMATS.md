@@ -1,5 +1,15 @@
 # Data formats — 0.1
 
+## Experimental `.sovrun`
+
+`soveraeign.schematic/run-file@0.1` contains `document` (authored `.sov`) and
+`session` (`soveraeign.schematic/run@0.1`). The session contains its exact compiled
+program, logical time, current inputs/outputs/memory, pending events, trace and
+canonical command history. Restore replays the command history and checks the
+entire snapshot before admitting it. Ordinary `.sov` files never embed this state.
+Definitions live in `document.meta.logic`, Component bindings in `config.logic`,
+and carrier delay in `wire.config.logic.delay`. See [LOGIC-RUNTIME.md](LOGIC-RUNTIME.md).
+
 The editor now distinguishes a normal schematic file, a portable package, local workspace state, and CRUD envelopes.
 
 ## `.sov` — `soveraeign.schematic/document@0.1`

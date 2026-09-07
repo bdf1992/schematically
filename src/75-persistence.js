@@ -250,6 +250,7 @@ function applyPackage(bundle){
 function parseFilePayload(text){
   let parsed;
   try{parsed=JSON.parse(text)}catch(_){throw new Error('File is not valid SOV/JSON data')}
+  if(parsed?.schema===SovSchematicLogic.FILE_SCHEMA)return {format:'run',payload:parsed};
   if(parsed?.schema===SovSchematicData.PACKAGE_SCHEMA)return {format:'package',payload:parsed};
   if(parsed?.schema===SovSchematicData.DOCUMENT_SCHEMA)return {format:'document',payload:parsed};
   if(parsed?.schema===SovSchematicData.WORKSPACE_SCHEMA)return {format:'workspace',payload:parsed};
@@ -257,6 +258,7 @@ function parseFilePayload(text){
 }
 function applyOpenedPayload(parsed,name='Untitled.sov',handle=null){
   const {format,payload}=parsed;
+  if(format==='run')return openLogicRun(payload,name);
   if(format==='package')applyPackage(payload);
   else if(format==='workspace')applyWorkspace(payload);
   else replaceRuntimeDocument(payload);
@@ -266,6 +268,27 @@ function applyOpenedPayload(parsed,name='Untitled.sov',handle=null){
   lastFileFingerprint=semanticFingerprint();
   saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false});
   updateFileReadout();
+  return snapshotDocument();
+}
+function snapshotLogicRun(){
+  const result=executeLogic({action:'get'});
+  if(!result.ok)throw new Error(result.receipt.error.message);
+  return {schema:SovSchematicLogic.FILE_SCHEMA,document:snapshotDocument(),session:result.session};
+}
+function saveLogicRun(){
+  const payload=snapshotLogicRun();
+  triggerDownload(JSON.stringify(payload,null,2),`${fileBaseName()}.sovrun`,'application/json');
+  return payload;
+}
+function openLogicRun(payload,name='Run.sovrun'){
+  const checked=SovSchematicLogic.execute(payload.document,null,{action:'restore',session:payload.session});
+  if(!checked.ok)throw new Error(checked.receipt.error.message);
+  replaceRuntimeDocument(payload.document);
+  logicSession=checked.session;
+  render();
+  currentFileName=name.replace(/\.sovrun$/i,'.sov');currentFileFormat='document';currentFileHandle=null;
+  lastFileFingerprint=null;updateFileReadout();
+  window.dispatchEvent(new CustomEvent('schematic-runtime',{detail:checked}));
   return snapshotDocument();
 }
 async function openFileObject(file,handle=null){

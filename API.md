@@ -1,5 +1,17 @@
 # Browser API — 0.1
 
+## Experimental logic runner
+
+`SovSchematicAPI.runtime.execute({action:'start'})` compiles the diagram's
+`meta.logic` definitions. Actions also include `input` (`component`, Boolean bit
+`value`, optional logical `time`), `step`, `run` (`budget`, default 100), `get`,
+`replay` and `restore` (`session`). Every response includes `ok`, `session` and
+`receipt`. Refused commands leave the prior session intact. `runtime.file()` gives
+the portable run envelope; `runtime.save()` downloads it. `file.open()` accepts
+that envelope and validates replay before replacing the diagram.
+
+See [LOGIC-RUNTIME.md](LOGIC-RUNTIME.md) for execution semantics and limits.
+
 The browser exposes `window.SovSchematicAPI`. UI actions and API mutations share the same document/CRUD core.
 
 ## Formats

@@ -1,5 +1,20 @@
 # SOV Schematic
 
+## Try a diagram with memory
+
+Open `index.html`, then File → Open `examples/logic-memory.sov`. Expand **Logic
+runner** in the inspector and select **Start new run**, then **Run 100 events**.
+Set **Enable / retain** to 1 and **Request** to 1, running after each change.
+The retained result becomes 1. Set Enable to 0, run, then Request to 0 and run:
+the result stays 1. Re-enable and run to let it return to 0.
+
+**Step** consumes one logical event. **Save run** preserves memory, pending events
+and trace in a `.sovrun`; **Open run** validates replay before resuming. Plain `.sov`
+files keep only the authored diagram. The same commands work over the Browser API,
+HTTP and MCP. Table definitions and delays are authored through files/API in this
+first slice; the panel operates them. [LOGIC-RUNTIME.md](LOGIC-RUNTIME.md) defines
+the experimental runtime and its SOV integration boundary. Tracks [issue #6](https://github.com/bdf1992/schematically/issues/6).
+
 A compact, AI-native schematic editor. A document is a semantic model — Components, Parts, Wires, Form, boundaries, signals, containment — projected to SVG, not a drawing that pretends to be one. People edit it in the browser; agents edit it through the same data core over a Browser API, HTTP, and MCP.
 
 ## The model
