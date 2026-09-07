@@ -1,10 +1,75 @@
-# Schematically roadmap boundary
+# Schematically product roadmap
 
-This file answers one question: **what belongs in the current RC, and what starts only after the RC merges?**
+This file owns product milestones and development priorities. `RC-FINISH-LINE.md`
+continues to own release acceptance; `docs/vision/` holds the broader language horizon.
 
-`RC-FINISH-LINE.md` is authoritative for release acceptance. `docs/vision/` and NEXT issues preserve post-RC direction without widening the release candidate.
+## Current baseline · 2026-09-07
 
-## NOW — `rc/0.1.0-rc1`
+The RC has merged to `main` through [PR #28](https://github.com/bdf1992/schematically/pull/28),
+and `dev` exists. New feature work branches from `dev` and returns through PRs.
+The inspected baseline is `dev` at `30b9edf` and `main` at `5622888`.
+[PR #33](https://github.com/bdf1992/schematically/pull/33) proposes the deterministic
+logic and memory runner. Its draft branch passed 40 Python QA suites and 19
+JavaScript tests, plus the pinned-browser CI verification. That evidence applies
+to its tested revision `3cc6e0c`, not to a merged release or completed product.
+
+The immediate product direction is an executable system notebook: a person can
+state a small requirement, model it, run it, inspect state and history, revise a
+rule, and share a resumable example. The runtime proposal is a foundation for
+this loop. Richer payloads, usable rule authoring, and a SOV adapter still need work.
+
+## Product milestone scenarios · 2026-09-07
+
+Prepared at Bdo's request. These assistant estimates are planning hypotheses for
+review, not measured velocity or delivery commitments. Windows start on
+**2026-09-07**, overlap, and assume continued development intensity with AI
+assistance, one stable initial workflow, and time reserved for user trials and
+repair. Weekly effort and paying-customer demand have not been established.
+
+| Milestone | Planning window | Scope and observable exit |
+| --- | --- | --- |
+| Private alpha | 4–8 weeks | Review and land the runner; provide a small set of validated examples, approachable rule/state controls, and clear errors. An unfamiliar technical user completes a model/run/inspect/save/resume loop and reports the points where help was needed. |
+| Focused schematically product | 2–4 months | Choose one audience and workflow from alpha evidence; support the required payloads and rules, reliable sharing/migration, onboarding, and recovery. Users repeat the workflow without Bdo guiding each step, and a trial establishes whether they value the result enough to keep using or pay for it. |
+| Combined SOV pilot | 4–8 months | Depends on the focused workflow and a SOV adapter with identity, grants, versioned inputs, durable records, refusal, and safe retry/resume. A pilot user can trace diagram revision through execution and resulting evidence. The SOV roadmap owns the broader deployment forecast. |
+
+**90-day candidate proof, by 2026-12-06:** an unfamiliar technical person models
+a small workflow, runs it, inspects its memory and history, changes a rule, and
+shares a resumable example without Bdo's guidance. Record task outcome, time,
+assistance, and recovery failures. This is a proposed product test, not a release
+acceptance rule or a promise that every horizon feature will be ready.
+
+### Development sequence and boundaries
+
+1. Review the proposed runner and preserve deterministic browser/API/MCP behavior.
+2. Complete the human authoring and inspection loop around one worked example;
+   extend payload and rule semantics only where that workflow requires them.
+3. Trial with unfamiliar users, repair observed failures, and settle a focused
+   product scope before expanding packs, Space, or instruction compilation.
+4. Specify and exercise the SOV adapter against SOV's admitted interfaces and
+   authority. Keep local execution usable independently of the integration.
+
+Schematically owns diagrams, validated rules, deterministic local runs, and saved
+state. [SOV's roadmap](https://github.com/bdf1992/Soveraeign/blob/main/ROADMAP.md)
+owns governed execution and its node/team/federation forecasts. A `.sovrun` trace
+from the proposal does not confer a SOV grant, independent findings, or settlement.
+The integration should identify model/rule revisions, bound memory crossings,
+link execution records, and prevent retries from duplicating external effects.
+Product readiness does not open SOV Phase II or satisfy Phase 1.5 exit custodies.
+
+### Forecast review
+
+Review on **2026-10-05**, or earlier after the first external-user trial, a material
+runner change, or a failed dependency. Bdo owns scope and acceptance. Each revision
+should name its author/date, source revisions, range, assumptions, dependencies,
+observable exit, next review trigger, and evidence of actual outcomes. Calibrate
+from completed workflows and rework; do not infer delivery pace from commit count.
+
+## Historical RC boundary
+
+The following stabilization scope and gate preserve the release boundary that
+preceded the current `dev` work. They are not the current implementation queue.
+
+### Original NOW — `rc/0.1.0-rc1`
 
 Only stabilization, primitive correction, compatibility, QA, and repository settlement belong here.
 
@@ -43,7 +108,7 @@ Only stabilization, primitive correction, compatibility, QA, and repository sett
 - license + release metadata chosen;
 - RC PR reviewed and merged to `main`.
 
-## MERGE GATE
+### Original merge gate
 
 The RC merges only when:
 
@@ -54,9 +119,9 @@ The RC merges only when:
 
 Merging the RC means **the 0.1 primitive foundation is accepted**, not that Beta is finished or bug-free.
 
-## AFTER RC MERGE — `dev`
+## Development after the RC — `dev`
 
-Create `dev` from the newly merged `main`. Do **not** create post-RC implementation branches from the pre-merge RC candidate; this avoids carrying a speculative fork across release settlement.
+`dev` was created after the RC merged to `main`. Continue feature work from `dev`; do not branch new work from the historical RC candidate.
 
 Post-RC work may then proceed on feature branches from `dev`, returning to `dev` through PRs. A later stabilization cut branches from `dev` into the next RC.
 
@@ -136,7 +201,7 @@ These are needs to account for, not an implementation sequence:
 - do not call something 3D until the runtime has actual 3D semantics;
 - do not widen an RC because a future idea is compelling.
 
-## Issue classification
+## Historical RC issue classification
 
 ### RC NOW
 - #1 — dimensional/form/history/label correctness
@@ -149,4 +214,4 @@ These are needs to account for, not an implementation sequence:
 - #6 — data-driven logic machine for particle routing
 - #7 — Point / Path / Surface cell grammar and `Wire → Path`
 
-Post-RC issues may refine the horizon now, but implementation begins from `dev` after the accepted RC is merged.
+These labels record the RC split. Current development follows the baseline and product sequence above; they do not assert current issue status.
