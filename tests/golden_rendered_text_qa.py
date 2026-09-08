@@ -6,16 +6,22 @@ wire labels, channel tags, packet tags, reciprocity marks. The reading is compar
 `tests/golden-rendered-text.json`.
 
 The corpus records what a document *says*. Until this suite existed nothing compared
-what a document *shows*, so a renderer change could silently stop drawing text and
+the text a document *draws*, so a renderer change could silently stop drawing text and
 every other suite stayed green. That is how the typed-Component caption regression at
 1f213c7 reached the tree: `effectiveLabelMode` returned 'none' for a typed Component
 carrying no label of its own, the ACT / GATE / HOLD captions stopped being drawn, and
 nothing failed until a human looked at the picture.
 
+This compares text, not visibility. A caption rendered at `opacity: 0` leaves its text
+in the DOM and passes here while a viewer sees nothing - the same symptom as the
+regression above. An independent reading confirmed that hole; closing it needs a
+computed-style or visual comparison, which is a different suite. Do not read a pass here
+as "the picture is right".
+
 `examples/09-typed-captions.sov` is the corpus document that exercises that path: its
-Components author no label and no labelMode, so the only text they can show is the type
-caption. CAPTION_ANCHOR below asserts those captions by hand as well, so the suite still
-refuses the regression even if the expectation file is regenerated from a broken build.
+Components author no label and no presentation.labelMode, so the only text they show is
+the type caption. CAPTION_ANCHOR asserts those captions by hand as well, so the suite
+still refuses the regression if the expectation is regenerated from a broken build.
 
 Run with --update to rewrite the expectation file after an intended rendering change.
 """
@@ -60,11 +66,22 @@ CAPTION_ANCHOR = {
 def check_anchor_documents_stay_unauthored() -> list[str]:
     """Refuse an anchor document that has acquired an authored labelMode.
 
-    The anchor only proves anything while its Components author no labelMode: a
-    component writing "labelMode": "boundary" draws its caption at 1f213c7 too, so the
-    demonstration would pass on a broken build and say nothing. src/10-model.js
-    normalises labelMode on load, so any open-and-resave of the corpus writes one in and
-    silently disarms this suite. Guarded here rather than trusted to a comment.
+    The anchor only proves anything while its Components author no label mode: a
+    component writing "boundary" draws its caption at 1f213c7 too, so the demonstration
+    would pass on a broken build and say nothing.
+
+    The mode lives at config.presentation.labelMode, which is what 05-data-core.js
+    writes, 55-render.js reads, and normalizeDocument validates. A first version of this
+    guard read a top-level config.labelMode that nothing in the product uses, so it
+    refused a key no document carries and stayed silent on the one that disarms the
+    anchor. An independent reading caught it by setting the real key at 1f213c7 and
+    watching the suite pass.
+
+    Whether a loader can write the mode back into a saved document is a separate
+    question from whether the guard should check it. It could at e51b999; on this
+    lineage 10-model.js derives an absent mode rather than writing one, so the hazard is
+    presently reachable only by hand or by a future loader change. The guard does not
+    depend on that answer.
     """
     failures: list[str] = []
     for name, required in CAPTION_ANCHOR.items():
@@ -75,10 +92,12 @@ def check_anchor_documents_stay_unauthored() -> list[str]:
             if component is None:
                 failures.append(f'{name}: anchor names {owner} and the document has no such component')
                 continue
-            authored = (component.get('config') or {}).get('labelMode')
+            presentation = (component.get('config') or {}).get('presentation') or {}
+            authored = presentation.get('labelMode')
             if authored is not None:
                 failures.append(
-                    f'{name}: {owner} authors labelMode {authored!r}; the anchor is disarmed '
+                    f'{name}: {owner} authors presentation.labelMode {authored!r}; the anchor '
+                    'is disarmed '
                     'because a component with an authored mode draws its caption on a broken '
                     'build too. Re-author the document without it rather than blessing this.'
                 )
