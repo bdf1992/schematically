@@ -21,6 +21,9 @@ function cleanupPaletteGesture({status='Select'}={}){
     clearTimeout(paletteDrag.holdTimer);
     paletteDrag.holdTimer=null;
   }
+  if(paletteDrag?.hostDwellTimer){clearTimeout(paletteDrag.hostDwellTimer);paletteDrag.hostDwellTimer=null}
+  clearPaletteHostTargets();
+  clearSettleHostGhost();
   removePaletteFloat();
   clearPaletteDropGhost();
   document.querySelectorAll('.symbol-card.drag-source').forEach(el=>el.classList.remove('drag-source'));
@@ -50,6 +53,26 @@ function drawPaletteDropGhost(symbolId,p){
     <text x="0" y="${h/2-10}" text-anchor="middle">${escapeXML(s.name)}</text>`}
   paletteDropLayer.appendChild(g);
 }
+// The palette drag runs the same host candidate a node drag runs (#24). The probe is a
+// transient record of what the drop would create; it is never pushed into the document.
+function paletteHostProbe(session,x,y){
+  if(SovSchematicData.templatePreset(session.symbolId)?.carrier)return null;
+  if(!session.probe)session.probe=SovSchematicData.makeComponent(diagram,{id:'palette-probe',symbolId:session.symbolId,x,y,canvasId:GLOBAL_CANVAS_ID});
+  session.probe.x=x;session.probe.y=y;return session.probe;
+}
+function clearPaletteHostTargets(){document.querySelectorAll('.node.scope-drop-target,.wire-group.scope-drop-target').forEach(el=>el.classList.remove('scope-drop-target'))}
+function armPaletteHostCandidate(session,candidate){
+  const key=hostCandidateKey(candidate);
+  if(key===session.hostCandidateKey){if(session.hostReady&&candidate)showSettleHostGhost(candidate,session.probe);return}
+  if(session.hostDwellTimer){clearTimeout(session.hostDwellTimer);session.hostDwellTimer=null}
+  session.hostCandidate=candidate||null;session.hostCandidateKey=key;session.hostReady=false;clearSettleHostGhost();
+  if(!candidate)return;
+  if(hostCandidateNeedsNoDwell(session.probe,candidate)){session.hostReady=true;showSettleHostGhost(candidate,session.probe);return}
+  session.hostDwellTimer=setTimeout(()=>{
+    session.hostDwellTimer=null;if(paletteDrag!==session||session.hostCandidateKey!==key)return;
+    session.hostReady=true;showSettleHostGhost(session.hostCandidate,session.probe);clearPaletteDropGhost();statusEl.textContent='Release → settle';
+  },HOST_ADOPT_DWELL);
+}
 function updatePaletteDrag(x,y){
   if(!paletteDrag?.active)return;
   paletteDrag.lastClient={x,y};
@@ -59,10 +82,18 @@ function updatePaletteDrag(x,y){
   if(over){
     removePaletteFloat();
     // Held/ghost position is raw pointer position. Grid is release-only.
-    drawPaletteDropGhost(paletteDrag.symbolId,svgPoint(x,y));
-    statusEl.textContent='Ghost free · release to settle';
+    const q=svgPoint(x,y),probe=paletteHostProbe(paletteDrag,q.x,q.y);
+    const target=probe?componentHostCandidateAtPoint(probe,q.x,q.y):null;
+    clearPaletteHostTargets();
+    if(target?.kind==='component')document.querySelector(`.node[data-id="${target.entity.id}"]`)?.classList.add('scope-drop-target');
+    if(target?.kind==='wire')workspace.querySelector(`.wire-group[data-wire-id="${target.entity.id}"]`)?.classList.add('scope-drop-target');
+    armPaletteHostCandidate(paletteDrag,target);
+    if(paletteDrag.hostReady&&paletteDrag.hostCandidate){clearPaletteDropGhost();statusEl.textContent='Release → settle'}
+    else{drawPaletteDropGhost(paletteDrag.symbolId,q);statusEl.textContent='Ghost free · release to settle'}
   }else{
     clearPaletteDropGhost();
+    clearPaletteHostTargets();
+    armPaletteHostCandidate(paletteDrag,null);
     if(!paletteDrag.floatEl)paletteDrag.floatEl=makePaletteFloat(paletteDrag.symbolId);
     paletteDrag.floatEl.style.left=`${x}px`;
     paletteDrag.floatEl.style.top=`${y}px`;
@@ -87,6 +118,7 @@ function finishPaletteGesture(e,cancelled=false){
   const active=session.active;
   const symbolId=session.symbolId;
   const over=active&&session.overCanvas&&canvasContainsClientPoint(e.clientX,e.clientY);
+  const armed=over&&session.hostReady?session.hostCandidate:null;
 
   // Clear visual/session state before creation causes any synchronous UI work.
   cleanupPaletteGesture({status:null});
@@ -95,7 +127,14 @@ function finishPaletteGesture(e,cancelled=false){
     if(!cancelled&&!canPlaceComponentOnActiveCanvas()){statusEl.textContent='1D canvas accepts Wire Parts, not Components';return}
     if(!cancelled&&over){
       const q=svgPoint(e.clientX,e.clientY);
-      addNode(symbolId,q.x,q.y,e);
+      if(armed&&!SovSchematicData.templatePreset(symbolId)?.carrier){
+        // The ghost promised a host; the drop keeps that promise even when grid snapping
+        // would have carried the raw drop point out of reach.
+        const n=addNode(symbolId,q.x,q.y,e,{render:false,select:false});
+        const fresh=componentHostCandidateAtPoint(n,q.x,q.y);
+        applyComponentHost(n,fresh&&hostCandidateKey(fresh)===hostCandidateKey(armed)?fresh:armed);
+        render();selectNode(n.id);
+      }else addNode(symbolId,q.x,q.y,e);
     }else if(!cancelled&&!active){
       addNode(symbolId);
     }
@@ -124,7 +163,8 @@ function bindPaletteComponent(button,symbolId){
       active:false,
       overCanvas:false,
       floatEl:null,
-      holdTimer:null
+      holdTimer:null,
+      probe:null,hostCandidate:null,hostCandidateKey:'',hostReady:false,hostDwellTimer:null
     };
 
     paletteDrag.holdTimer=setTimeout(()=>{
@@ -200,6 +240,7 @@ function currentZoom(){
 }
 function applyCamera(){
   workspace.setAttribute('viewBox',`${camera.x} ${camera.y} ${camera.w} ${camera.h}`);
+  workspace.style.setProperty('--zoom',String(currentZoom())); // labels clamp their screen size against this (app.css)
   zoomReadout.textContent=`${Math.round(currentZoom()*100)}%`;
   requestAnimationFrame(positionSelectionBar);
 }

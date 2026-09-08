@@ -59,14 +59,14 @@ function appendComponentGraphic(g,n,cfg){
   g.appendChild(use);
 }
 function appendComponentText(g,n,cfg,s){
-  const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s);
-  if(p.labelMode!=='none'&&label){
+  const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s),labelMode=SovSchematicData.effectiveLabelMode(n);
+  if(labelMode!=='none'&&label){
     const t=document.createElementNS('http://www.w3.org/2000/svg','text');
-    t.setAttribute('text-anchor','middle');t.setAttribute('class',p.labelMode==='outside'?'outside-label':'component-label');
+    t.setAttribute('text-anchor','middle');t.setAttribute('class',labelMode==='outside'?'outside-label':'component-label');
     if(componentHostedOnWire(n)&&componentBackdropMode(n)==='none'){
       const box=componentInlineGraphicBox(n);t.setAttribute('x','0');t.setAttribute('y',String(box.y+box.h+11));
-    }else if(p.labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
-    else if(p.labelMode==='outside'){t.setAttribute('x','0');t.setAttribute('y',String(size.h/2+18))}
+    }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
+    else if(labelMode==='outside'){t.setAttribute('x','0');t.setAttribute('y',String(size.h/2+18))}
     else {t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-8))}
     t.textContent=label;g.appendChild(t);
   }
