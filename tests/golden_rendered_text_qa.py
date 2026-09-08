@@ -56,6 +56,35 @@ CAPTION_ANCHOR = {
 }
 
 
+
+def check_anchor_documents_stay_unauthored() -> list[str]:
+    """Refuse an anchor document that has acquired an authored labelMode.
+
+    The anchor only proves anything while its Components author no labelMode: a
+    component writing "labelMode": "boundary" draws its caption at 1f213c7 too, so the
+    demonstration would pass on a broken build and say nothing. src/10-model.js
+    normalises labelMode on load, so any open-and-resave of the corpus writes one in and
+    silently disarms this suite. Guarded here rather than trusted to a comment.
+    """
+    failures: list[str] = []
+    for name, required in CAPTION_ANCHOR.items():
+        document = json.loads((ROOT / 'examples' / name).read_text(encoding='utf-8'))
+        by_id = {c.get('id'): c for c in document.get('components') or []}
+        for owner, _class, _text in required:
+            component = by_id.get(owner.split(':', 1)[-1])
+            if component is None:
+                failures.append(f'{name}: anchor names {owner} and the document has no such component')
+                continue
+            authored = (component.get('config') or {}).get('labelMode')
+            if authored is not None:
+                failures.append(
+                    f'{name}: {owner} authors labelMode {authored!r}; the anchor is disarmed '
+                    'because a component with an authored mode draws its caption on a broken '
+                    'build too. Re-author the document without it rather than blessing this.'
+                )
+    return failures
+
+
 def read_corpus_text() -> dict[str, list[list[str]]]:
     """Open each corpus document in the build and return the text it renders."""
     html_path = ROOT / 'index.html'
@@ -104,7 +133,11 @@ def main() -> int:
     expected = json.loads(EXPECTED.read_text(encoding='utf-8'))
     failures: list[str] = []
 
-    # The anchor first: it does not depend on the expectation file, so a regenerated
+    # The anchor's own precondition first: an anchor document that has acquired an
+    # authored labelMode proves nothing, and would pass on the broken build too.
+    failures.extend(check_anchor_documents_stay_unauthored())
+
+    # Then the anchor: it does not depend on the expectation file, so a regenerated
     # expectation cannot hide a caption that stopped rendering.
     for name, required in CAPTION_ANCHOR.items():
         actual = rendered.get(name)
