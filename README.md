@@ -1,6 +1,18 @@
 # SOV Schematic
 
-A compact, AI-native schematic editor. A document is a semantic model — Components, Parts, Wires, Form, boundaries, signals, containment — projected to SVG, not a drawing that pretends to be one. People edit it in the browser; agents edit it through the same data core over a Browser API, HTTP, and MCP.
+A browser editor for building schematic models from connected components, attachment points, and wires. People edit the model visually; agents use the same data core through the Browser API, HTTP, or MCP. Documents save as `.sov` files and export to SVG.
+
+**State: working 0.1 editor baseline, under active development.** The initial RC and subsequent Point / Path / Plane work are on `main`. The deterministic logic runner with retained memory is [proposed in PR #33](https://github.com/bdf1992/schematically/pull/33); it is not part of this checkout. See [development work](https://github.com/bdf1992/schematically/pulls) and the [roadmap](ROADMAP.md) for what comes next.
+
+## Try it
+
+Clone or download this repository and open `index.html` in a browser. No server or build step is needed for the checked-in editor. Use **File → Open** to load a document from [`examples/`](examples/), edit it, and save it as `.sov`.
+
+- [Example documents](examples/README.md) — models to open and inspect.
+- [Local setup and QA](LOCAL-SETUP.md) — build, test, and run the agent interfaces.
+- [API](API.md) · [MCP](MCP.md) · [File formats](DATA-FORMATS.md) — integrate with the editor.
+
+The model and interface details follow. Historical beta and RC records are listed under [Direction](#direction).
 
 ## The model
 
