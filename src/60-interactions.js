@@ -83,6 +83,10 @@ window.addEventListener('pointercancel',finishComponentTransform,true);
 
 const HOST_ADOPT_DWELL=280;
 function hostCandidateKey(candidate){return candidate?`${candidate.kind}:${candidate.entity?.id||''}`:''}
+// The dwell keeps a Component from settling into a surprise host while it crosses one. A
+// Point over a carrier, path or edge is the exception: attaching is the Point's only
+// purpose, so that candidate is shown at once (#24).
+function hostCandidateNeedsNoDwell(node,candidate){return !!candidate&&componentForm(node).dimension===0&&['wire','path','edge'].includes(candidate.kind)}
 function clearHostCandidateArm(state,{keepGhost=false}={}){
   if(!state)return;if(state.hostDwellTimer){clearTimeout(state.hostDwellTimer);state.hostDwellTimer=null}
   state.hostCandidate=null;state.hostCandidateKey='';state.hostReady=false;if(!keepGhost)clearSettleHostGhost();
@@ -93,7 +97,7 @@ function armHostCandidate(state,candidate){
   if(state.hostDwellTimer){clearTimeout(state.hostDwellTimer);state.hostDwellTimer=null}
   state.hostCandidate=candidate||null;state.hostCandidateKey=key;state.hostReady=false;clearSettleHostGhost();
   if(!candidate)return;
-  if(candidate.canvasId===state.originCanvasId){state.hostReady=true;showSettleHostGhost(candidate,state.node);return}
+  if(candidate.canvasId===state.originCanvasId||hostCandidateNeedsNoDwell(state.node,candidate)){state.hostReady=true;showSettleHostGhost(candidate,state.node);statusEl.textContent='Release → settle';return}
   state.hostDwellTimer=setTimeout(()=>{
     state.hostDwellTimer=null;if(activeNodeDragState!==state||state.hostCandidateKey!==key)return;
     state.hostReady=true;showSettleHostGhost(state.hostCandidate,state.node);statusEl.textContent='Release → settle';
@@ -501,28 +505,20 @@ barComponentType.addEventListener('change',()=>{
   const next=barComponentType.value;
   if(!GROUPS.Components.includes(next)&&!GROUPS.Primitives.includes(next)){barComponentType.value=n.symbolId;return}
 
-  // Retyping to a primitive applies that primitive's Form preset. Refuse when a
-  // Wire already ends on a built-in point the preset would remove.
+  // A Path is a carrier drawn from the palette; a Component is not retyped into one (#19).
   const preset=SovSchematicData.templatePreset(next);
-  if(preset){
-    const f=componentForm(n),nextDefaults=preset.attachmentDefaults||'standard';
-    const wouldRemoveBuiltins=f.dimension!==preset.form.dimension||(nextDefaults==='none'&&Attachment.attachmentDefaults(n)!=='none');
-    if(wouldRemoveBuiltins&&wiresOnBuiltinPoints(n).length){barComponentType.value=n.symbolId;statusEl.textContent='Detach Wires from built-in points first';return}
-    const beforeOpen=formHostsChildren(n);
-    f.dimension=preset.form.dimension;f.body.kind=['point','path','surface'][f.dimension];
-    if(preset.form.regions?.interior?.state)f.regions.interior.state=preset.form.regions.interior.state;
-    if(f.dimension<2)f.regions.interior.state='closed';
-    if(nextDefaults==='none')n.config.attachmentDefaults='none';else delete n.config.attachmentDefaults;
-    if(beforeOpen&&!formHostsChildren(n)){const fallback=n.canvasId||GLOBAL_CANVAS_ID;for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}}
-    SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
-  }
+  if(preset?.carrier){barComponentType.value=n.symbolId;statusEl.textContent='Draw a Path from the palette';return}
 
+  // Retyping applies the whole target preset (or the standard Component Form). Refuse
+  // when a Wire already ends on a built-in point the new attachment set would remove.
+  const f=componentForm(n),nextDimension=preset?.form?.dimension??2,nextDefaults=preset?.attachmentDefaults||'standard';
+  const wouldRemoveBuiltins=f.dimension!==nextDimension||(nextDefaults==='none'&&Attachment.attachmentDefaults(n)!=='none');
+  if(wouldRemoveBuiltins&&wiresOnBuiltinPoints(n).length){barComponentType.value=n.symbolId;statusEl.textContent='Detach Wires from built-in points first';return}
+  const beforeOpen=formHostsChildren(n);
+  SovSchematicData.applySymbol(n,next);
+  if(beforeOpen&&!formHostsChildren(n)){const fallback=n.canvasId||GLOBAL_CANVAS_ID;for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}}
+  SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
   ensureComponentStructure(n);
-  n.boundary.inside.type=next==='blank'?null:next;
-  n.type=n.boundary.inside.type;
-  n.symbolId=n.type||'blank';
-  n.incomplete=n.type==null;
-  if(n.config?.presentation?.graphic?.kind==='symbol')n.config.presentation.graphic.ref=`sym-${n.symbolId}`;
 
   // Type changes type the INSIDE of the existing boundary. Identity,
   // boundary, owned Parts, position, configuration, and topology remain.
@@ -533,7 +529,7 @@ barComponentType.addEventListener('change',()=>{
 });
 barComponentLabel.addEventListener('input',()=>{
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'label edit'))return;setHistoryHint('Edit Component label');
-  const cfg=componentConfig(n);cfg.label=barComponentLabel.value;
+  const cfg=componentConfig(n),before=cfg.label;cfg.label=barComponentLabel.value;SovSchematicData.adoptLabelMode(n,before);
   refreshCanvasScopeControl();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 });
 barComponentSignalMode.addEventListener('change',()=>{

@@ -176,7 +176,7 @@ function syncSelectionFormState(kind,entity){
 }
 function syncComponentVisualPanel(n){
   const p=componentConfig(n).presentation;
-  visualGraphicMode.value=p.graphic.kind;visualLabelMode.value=p.labelMode;
+  visualGraphicMode.value=p.graphic.kind;visualLabelMode.value=SovSchematicData.effectiveLabelMode(n);
   visualWidth.value=String(p.size.w);visualHeight.value=String(p.size.h);
   visualText.value=p.text;visualSvgMarkup.value=p.graphic.svg;visualSvgRow.hidden=p.graphic.kind!=='custom';
   setSlotChip(visualInteriorColor,p.interiorColorSlot);
@@ -200,6 +200,40 @@ function openSelectionSettings(kind){
   syncSelectionSettings(kind);
   selectionSettingsPanel.hidden=false;
   barSelectionSettings.setAttribute('aria-expanded','true');
+  placeSelectionSettingsPanel();
+}
+// The bar sits just above the selected entity, so a panel that always drops below the bar
+// lands on the entity being edited (#22). Place the panel above, below, or beside the bar,
+// beside meaning clear of the entity's own edge, clamped inside the workspace, choosing the
+// placement that covers the least of the selected entity's screen rectangle and, among
+// equals, the one with the most free space.
+function selectedEntityScreenRect(){
+  if(typeof selected==='string'&&selected.startsWith('wire:')){const w=wires[Number(selected.split(':')[1])];return w?workspace.querySelector(`.wire-group[data-wire-id="${w.id}"]`)?.getBoundingClientRect()||null:null}
+  if(isAttachmentSelectionValue(selected)){const info=selectedPortInfo();return info?document.querySelector(`.node[data-id="${info.node.id}"]`)?.getBoundingClientRect()||null:null}
+  return document.querySelector(`.node[data-id="${selected}"]`)?.getBoundingClientRect()||null;
+}
+function rectOverlapArea(a,b){if(!a||!b)return 0;const w=Math.min(a.right,b.right)-Math.max(a.left,b.left),h=Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top);return w>0&&h>0?w*h:0}
+function placeSelectionSettingsPanel(){
+  const panel=selectionSettingsPanel;if(panel.hidden||selectionBar.hidden)return;
+  const bar=selectionBar.getBoundingClientRect(),wrap=document.querySelector('.workspace-wrap').getBoundingClientRect();
+  const w=panel.offsetWidth||360,h=panel.offsetHeight||240,gap=6,margin=8,entity=selectedEntityScreenRect();
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  const anchorRight=Math.max(bar.right,entity?.right??bar.right),anchorLeft=Math.min(bar.left,entity?.left??bar.left);
+  const candidates={
+    above:{left:bar.left+bar.width/2-w/2,top:bar.top-gap-h,free:bar.top-wrap.top},
+    below:{left:bar.left+bar.width/2-w/2,top:bar.bottom+gap,free:wrap.bottom-bar.bottom},
+    right:{left:anchorRight+gap,top:bar.top,free:wrap.right-anchorRight},
+    left:{left:anchorLeft-gap-w,top:bar.top,free:anchorLeft-wrap.left}
+  };
+  let pick=null;
+  for(const [place,c] of Object.entries(candidates)){
+    const left=clamp(c.left,wrap.left+margin,Math.max(wrap.left+margin,wrap.right-margin-w));
+    const top=clamp(c.top,wrap.top+margin,Math.max(wrap.top+margin,wrap.bottom-margin-h));
+    const covered=rectOverlapArea({left,top,right:left+w,bottom:top+h},entity);
+    if(!pick||covered<pick.covered||(covered===pick.covered&&c.free>pick.free))pick={place,left,top,covered,free:c.free};
+  }
+  panel.dataset.place=pick.place;panel.style.transform='none';
+  panel.style.left=`${pick.left-bar.left}px`;panel.style.top=`${pick.top-bar.top}px`;
 }
 function selectedSurfaceKind(){
   if(typeof selected==='string'&&selected.startsWith('wire:'))return 'wire';
@@ -334,4 +368,5 @@ function positionSelectionBar(){
   const x=Math.max(90,Math.min(wrap.width-90,q.x));
   const y=Math.max(44,Math.min(wrap.height-10,q.y-6));
   selectionBar.style.left=`${x}px`;selectionBar.style.top=`${y}px`;
+  placeSelectionSettingsPanel();
 }
