@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "soveraeign.schematic/run-file@0.1",
+  "title": "SOV Schematic local logic run",
+  "description": "Structural envelope only. The shared logic runtime also compiles the document and replays every command before admitting a snapshot.",
+  "type": "object",
+  "required": ["schema", "document", "session"],
+  "properties": {
+    "schema": {"const": "soveraeign.schematic/run-file@0.1"},
+    "document": {"$ref": "schematic.document.schema.json"},
+    "session": {
+      "type": "object",
+      "required": ["schema", "program", "time", "sequence", "processed", "status", "values", "queue", "trace", "commands"],
+      "properties": {
+        "schema": {"const": "soveraeign.schematic/run@0.1"},
+        "program": {"type": "object"},
+        "time": {"type": "integer", "minimum": 0},
+        "sequence": {"type": "integer", "minimum": 0},
+        "processed": {"type": "integer", "minimum": 0, "maximum": 20000},
+        "status": {"enum": ["READY", "QUIESCENT", "PAUSED_BUDGET"]},
+        "values": {"type": "object"},
+        "queue": {"type": "array", "maxItems": 5000, "items": {"type": "object"}},
+        "trace": {"type": "array", "maxItems": 20000, "items": {"type": "object"}},
+        "commands": {"type": "array", "maxItems": 20000, "items": {"type": "object"}}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

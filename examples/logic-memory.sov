@@ -1,0 +1,841 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "logic-memory",
+  "revision": 0,
+  "meta": {
+    "title": "Request → condition → retained result",
+    "updatedAt": "2026-09-07T00:00:00Z",
+    "logic": {
+      "schema": "soveraeign.schematic/logic@0.1",
+      "definitions": {
+        "source": {
+          "kind": "source",
+          "inputs": [],
+          "outputs": [
+            "out"
+          ],
+          "state": [],
+          "initial": [
+            0
+          ]
+        },
+        "and": {
+          "kind": "table",
+          "inputs": [
+            "in",
+            "control"
+          ],
+          "outputs": [
+            "out"
+          ],
+          "state": [],
+          "initial": [],
+          "table": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1
+            ]
+          ]
+        },
+        "latch": {
+          "kind": "table",
+          "inputs": [
+            "in",
+            "control"
+          ],
+          "outputs": [
+            "out"
+          ],
+          "state": [
+            "held"
+          ],
+          "initial": [
+            0
+          ],
+          "table": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              1,
+              1,
+              1
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              1,
+              0,
+              0
+            ],
+            [
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              0,
+              1,
+              1,
+              1
+            ],
+            [
+              1,
+              1,
+              0,
+              1,
+              1
+            ],
+            [
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          ]
+        },
+        "sink": {
+          "kind": "table",
+          "inputs": [
+            "in"
+          ],
+          "outputs": [],
+          "state": [],
+          "initial": [],
+          "table": [
+            [
+              0
+            ],
+            [
+              1
+            ]
+          ]
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "request",
+      "symbolId": "act",
+      "x": 170,
+      "y": 260,
+      "canvasId": "canvas:global",
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
+        }
+      },
+      "config": {
+        "label": "Request",
+        "colorSlot": 0,
+        "signalMode": "source",
+        "presentation": {},
+        "ports": {
+          "in": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          },
+          "control": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "control",
+                "access": "read-write"
+              }
+            ]
+          }
+        },
+        "logic": {
+          "definition": "source",
+          "delay": 0
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "parentId": null
+    },
+    {
+      "id": "enable",
+      "symbolId": "switch",
+      "x": 400,
+      "y": 100,
+      "canvasId": "canvas:global",
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
+        }
+      },
+      "config": {
+        "label": "Enable / retain",
+        "colorSlot": 0,
+        "signalMode": "source",
+        "presentation": {},
+        "ports": {
+          "in": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          },
+          "control": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "control",
+                "access": "read-write"
+              }
+            ]
+          }
+        },
+        "logic": {
+          "definition": "source",
+          "delay": 0
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "parentId": null
+    },
+    {
+      "id": "condition",
+      "symbolId": "gate",
+      "x": 430,
+      "y": 300,
+      "canvasId": "canvas:global",
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
+        }
+      },
+      "config": {
+        "label": "Condition AND",
+        "colorSlot": 0,
+        "signalMode": "source",
+        "presentation": {},
+        "ports": {
+          "in": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          },
+          "control": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "control",
+                "access": "read-write"
+              }
+            ]
+          }
+        },
+        "logic": {
+          "definition": "and",
+          "delay": 2
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "parentId": null
+    },
+    {
+      "id": "memory",
+      "symbolId": "hold",
+      "x": 690,
+      "y": 300,
+      "canvasId": "canvas:global",
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
+        }
+      },
+      "config": {
+        "label": "Retained result",
+        "colorSlot": 0,
+        "signalMode": "source",
+        "presentation": {},
+        "ports": {
+          "in": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          },
+          "control": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "control",
+                "access": "read-write"
+              }
+            ]
+          }
+        },
+        "logic": {
+          "definition": "latch",
+          "delay": 0
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "parentId": null
+    },
+    {
+      "id": "result",
+      "symbolId": "receipt",
+      "x": 940,
+      "y": 300,
+      "canvasId": "canvas:global",
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
+        }
+      },
+      "config": {
+        "label": "Result",
+        "colorSlot": 0,
+        "signalMode": "source",
+        "presentation": {},
+        "ports": {
+          "in": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          },
+          "control": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "control",
+                "access": "read-write"
+              }
+            ]
+          }
+        },
+        "logic": {
+          "definition": "sink",
+          "delay": 0
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "parentId": null
+    }
+  ],
+  "wires": [
+    {
+      "id": "request-condition",
+      "a": "request",
+      "b": "condition",
+      "aSide": "out",
+      "bSide": "in",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "request",
+        "pointId": "right"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "condition",
+        "pointId": "left"
+      },
+      "canvasId": "canvas:global",
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "lane": 0,
+      "net": 0,
+      "config": {
+        "direction": "forward",
+        "reciprocity": "none",
+        "forwardOperation": "none",
+        "reverseOperation": "none",
+        "aConnectionIndex": 0,
+        "bConnectionIndex": 0,
+        "aChannelMarker": "1",
+        "bChannelMarker": "1",
+        "label": "",
+        "logic": {
+          "delay": 1
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "role": "carrier"
+    },
+    {
+      "id": "enable-condition",
+      "a": "enable",
+      "b": "condition",
+      "aSide": "out",
+      "bSide": "control",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "enable",
+        "pointId": "right"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "condition",
+        "pointId": "top"
+      },
+      "canvasId": "canvas:global",
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "lane": 1,
+      "net": 1,
+      "config": {
+        "direction": "forward",
+        "reciprocity": "none",
+        "forwardOperation": "none",
+        "reverseOperation": "none",
+        "aConnectionIndex": 0,
+        "bConnectionIndex": 0,
+        "aChannelMarker": "1",
+        "bChannelMarker": "1",
+        "label": "",
+        "logic": {
+          "delay": 1
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "role": "carrier"
+    },
+    {
+      "id": "condition-memory",
+      "a": "condition",
+      "b": "memory",
+      "aSide": "out",
+      "bSide": "in",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "condition",
+        "pointId": "right"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "memory",
+        "pointId": "left"
+      },
+      "canvasId": "canvas:global",
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "lane": 2,
+      "net": 2,
+      "config": {
+        "direction": "forward",
+        "reciprocity": "none",
+        "forwardOperation": "none",
+        "reverseOperation": "none",
+        "aConnectionIndex": 0,
+        "bConnectionIndex": 0,
+        "aChannelMarker": "1",
+        "bChannelMarker": "1",
+        "label": "",
+        "logic": {
+          "delay": 1
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "role": "carrier"
+    },
+    {
+      "id": "enable-memory",
+      "a": "enable",
+      "b": "memory",
+      "aSide": "out",
+      "bSide": "control",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "enable",
+        "pointId": "right"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "memory",
+        "pointId": "top"
+      },
+      "canvasId": "canvas:global",
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "lane": 3,
+      "net": 3,
+      "config": {
+        "direction": "forward",
+        "reciprocity": "none",
+        "forwardOperation": "none",
+        "reverseOperation": "none",
+        "aConnectionIndex": 0,
+        "bConnectionIndex": 0,
+        "aChannelMarker": "1",
+        "bChannelMarker": "1",
+        "label": "",
+        "logic": {
+          "delay": 1
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "role": "carrier"
+    },
+    {
+      "id": "memory-result",
+      "a": "memory",
+      "b": "result",
+      "aSide": "out",
+      "bSide": "in",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "memory",
+        "pointId": "right"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "result",
+        "pointId": "left"
+      },
+      "canvasId": "canvas:global",
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "lane": 4,
+      "net": 4,
+      "config": {
+        "direction": "forward",
+        "reciprocity": "none",
+        "forwardOperation": "none",
+        "reverseOperation": "none",
+        "aConnectionIndex": 0,
+        "bConnectionIndex": 0,
+        "aChannelMarker": "1",
+        "bChannelMarker": "1",
+        "label": "",
+        "logic": {
+          "delay": 1
+        }
+      },
+      "editor": {
+        "pinned": false,
+        "locked": false,
+        "hidden": false,
+        "opacity": 1,
+        "rate": 1
+      },
+      "role": "carrier"
+    }
+  ],
+  "references": [],
+  "layout": {}
+}

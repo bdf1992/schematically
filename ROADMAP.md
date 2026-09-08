@@ -158,6 +158,7 @@ rc/<next>
    - validators and golden examples.
 
 3. **Logic machine — Issue #6**
+   - experimental first slice on `feature/logic-memory-runner`: table-defined Boolean logic and finite memory, ordered events and delays, budgeted stepping, replay-validated `.sovrun`, browser/HTTP/MCP parity; see `LOGIC-RUNTIME.md`. This is not SOV Phase 2 qualification. Remaining: gate-authoring UI, routing pack, richer payload memory and a governed SOV adapter;
    - signal state distinct from moving particle/event;
    - deterministic `(logicalTime, sequence)` scheduler;
    - data-defined combinational gates;

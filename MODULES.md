@@ -5,6 +5,8 @@
 - `10-model.js` — Component/Wire/Port semantic normalization.
 - `20-ui.js` — panels, palette/grid UI helpers.
 - `25-signal.js` — derived signal state.
+- `07-logic-core.js` — shared logic compilation, ordered events, finite memory, run receipts and replay validation; owns no file I/O or external effects.
+- `90-logic-panel.js` — human controls and read-only projections of the shared logic runtime.
 - `30-canvas.js` — camera, spatial movement and Form-region containment.
 - `40-routing.js` — Wire geometry.
 - `50-selection.js` — selection projection.

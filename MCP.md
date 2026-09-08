@@ -1,5 +1,14 @@
 # MCP + HTTP surface — 0.1
 
+## Experimental logic execution
+
+MCP tool `schematic.runtime` accepts `action: start | input | step | run | get |
+restore | replay` and the same arguments as the browser runtime. HTTP exposes
+`POST /api/v1/runtime` with that request and `GET /api/v1/runtime` for inspection.
+Successful mutating commands atomically replace `<file>.run.json`. Restart loads
+the saved run through replay verification; a corrupt or incompatible run refuses.
+The authored `.sov` file is unchanged by execution. See [LOGIC-RUNTIME.md](LOGIC-RUNTIME.md).
+
 `mcp/server.mjs` is restored to the distributable package and imports the same `src/05-data-core.js` used by the browser.
 
 Default durable server file: `data/schematic.sov`.

@@ -434,6 +434,18 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .carrier-end-handle.free{stroke-width:2;stroke-dasharray:2 2}
 .wire-group.has-free-end .wire{stroke-dasharray:7 5}
 .endpoint-halo.free-end{stroke-dasharray:2 3}
+/* Logic runner: compact inspector controls and read-only state projection. */
+.logic-panel { padding: 12px; border-bottom: 1px solid #667085; font-size: 12px; }
+.logic-panel summary { cursor: pointer; font-weight: 600; }
+.logic-actions { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+.logic-panel button, .logic-panel select { font: inherit; padding: 5px 7px; }
+#logicStatus { display: block; margin: 10px 0; overflow-wrap: anywhere; }
+#logicValues { overflow-x: auto; }
+.logic-value { border-top: 1px solid #9995; padding: 7px 0; overflow-wrap: anywhere; }
+#logicValues td, #logicValues th { padding: 4px; text-align: left; }
+#logicTrace { white-space: pre-wrap; overflow-wrap: anywhere; }
+.logic-high { filter: drop-shadow(0 0 4px #39c99a); }
+.logic-pending { filter: drop-shadow(0 0 4px #e9ae45); }
 </style>
 </head>
 <body>
@@ -1424,7 +1436,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       colorSlot:Math.max(0,Math.trunc(num(value.config?.colorSlot,0))),
       signalMode:['source','relay','passive'].includes(value.config?.signalMode)?value.config.signalMode:(preset.signalMode||'source'),
       presentation:isObject(value.config?.presentation)?clone(value.config.presentation):(preset.presentation?clone(preset.presentation):{}),
-      ports:isObject(value.config?.ports)?clone(value.config.ports):{}
+      ports:isObject(value.config?.ports)?clone(value.config.ports):{},
+      ...(isObject(value.config?.logic)?{logic:clone(value.config.logic)}:{})
     };
     // An authored choice stays on the runtime record either way, so a later normalization
     // pass cannot replace a Plane's authored 'standard' with its preset 'none'.
@@ -1596,7 +1609,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       form:isObject(value.form)?clone(value.form):{dimension:1,body:{kind:'path',material:'generic',thickness:0}},
       lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
       net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
-      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,'')},
+      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.logic?{logic:clone(value.config.logic)}:{})},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
     });
@@ -1759,6 +1772,177 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,normalizeSymbolId,templatePreset,isPrimitiveSymbol,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
 /* END src/05-data-core.js */
+</script>
+<script data-beta-module="src/07-logic-core.js">
+/* BEGIN src/07-logic-core.js */
+'use strict';
+// Transport-neutral Boolean/finite-state execution. See LOGIC-RUNTIME.md.
+(function(root){
+  const D=root.SovSchematicData;
+  const SCHEMA='soveraeign.schematic/run@0.1';
+  const FILE_SCHEMA='soveraeign.schematic/run-file@0.1';
+  const LIMIT=20000, PENDING=5000;
+  const clone=D.clone;
+  const fail=(code,message)=>{const e=new Error(message);e.code=code;throw e};
+  const need=(ok,code,message)=>{if(!ok)fail(code,message)};
+  const canonical=x=>JSON.stringify(sort(x));
+  function sort(x){
+    if(Array.isArray(x))return x.map(sort);
+    if(x&&typeof x==='object')return Object.fromEntries(Object.keys(x).sort().map(k=>[k,sort(x[k])]));
+    return x;
+  }
+  const bit=x=>x===0||x===1;
+  function integer(x,min,max,name){need(Number.isSafeInteger(x)&&x>=min&&x<=max,'INVALID_NUMBER',name);return x}
+  function names(xs){
+    need(Array.isArray(xs)&&xs.every(x=>typeof x==='string'&&/^[A-Za-z][\w.-]{0,63}$/.test(x)&&!['__proto__','constructor','prototype'].includes(x))&&new Set(xs).size===xs.length,'INVALID_NAMES','Unique bounded identifiers required');return xs;
+  }
+  function definition(raw){
+    need(raw&&['source','table'].includes(raw.kind),'INVALID_DEFINITION','Expected source or table definition');
+    const d=clone(raw);d.inputs=names(d.inputs||[]);d.outputs=names(d.outputs||[]);d.state=names(d.state||[]);
+    need(new Set([...d.inputs,...d.outputs]).size===d.inputs.length+d.outputs.length,'INVALID_DEFINITION','Input/output names overlap');
+    need(d.outputs.length<=8&&d.inputs.length+d.state.length<=8,'CAPACITY','Definition exceeds eight bits');
+    need(Array.isArray(d.initial)&&d.initial.every(bit),'INVALID_DEFINITION','Initial bits required');
+    if(d.kind==='source'){
+      need(!d.inputs.length&&!d.state.length&&d.outputs.length===1&&d.initial.length===1,'INVALID_DEFINITION','Source needs one output and initial bit');
+    }else{
+      const width=d.inputs.length+d.state.length, rows=2**width;
+      need(d.initial.length===d.state.length&&Array.isArray(d.table)&&d.table.length===rows,'INVALID_TABLE','Complete table and initial memory required');
+      const seen=new Set();
+      for(const row of d.table){
+        need(Array.isArray(row)&&row.length===width+d.outputs.length+d.state.length&&row.every(bit),'INVALID_TABLE','Wrong row width or non-bit');
+        const key=row.slice(0,width).join('');need(!seen.has(key),'INVALID_TABLE','Duplicate input/state row');seen.add(key);
+      }
+    }
+    return d;
+  }
+  function compile(input){
+    const doc=D.makeDocument(clone(input)),valid=D.validateDocument(doc);
+    need(valid.ok,'INVALID_DOCUMENT',valid.errors.join('; '));
+    const spec=doc.meta?.logic;
+    need(spec?.schema==='soveraeign.schematic/logic@0.1'&&spec.definitions,'NO_LOGIC','Document has no logic definitions');
+    const components=doc.components.filter(c=>c.config?.logic);
+    need(components.length>0&&components.length<=256&&doc.wires.length<=4096,'CAPACITY','Expected 1–256 runtime components and at most 4096 carriers');
+    const nodes=components.map(c=>{
+      names([c.id]);const d=definition(spec.definitions[c.config.logic.definition]);
+      const ports={};
+      for(const p of [...d.inputs,...d.outputs]){
+        need([...D.canonicalAttachmentPointIdsForComponent(c),...D.canonicalPortIdsForComponent(c)].includes(p),'INVALID_PORT',`${c.id}.${p} is not an attachment`);
+        const compat=D.canonicalPortIdForComponent(c,p);
+        need(compat&&D.attachmentPointConfig(doc,c.id,compat),'INVALID_PORT',`${c.id}.${p} is not an attachment`);
+        need(!Object.values(ports).includes(compat),'INVALID_PORT','Aliases share one attachment');ports[p]=compat;
+      }
+      return {id:c.id,definition:d,ports,delay:integer(c.config.logic.delay??0,0,1000000,'component delay')};
+    }).sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);
+    const byId=new Map(nodes.map(n=>[n.id,n])),edges=[],drivers=new Set();
+    for(const w of [...doc.wires].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0)){
+      if(!byId.has(w.a)&&!byId.has(w.b))continue;
+      const cfg=w.config||{},direction=cfg.direction||'forward';
+      if(direction==='none')continue;
+      need(['forward','reverse'].includes(direction),'UNSUPPORTED_DIRECTION',`Runtime carrier ${w.id} must be one-way`);
+      const from=direction==='forward'?'a':'b',to=from==='a'?'b':'a';
+      const source=byId.get(w[from]),target=byId.get(w[to]);
+      need(source&&target,'UNBOUND_RUNTIME_PATH',`Both ends of ${w.id} must name runtime components`);
+      const output=source.definition.outputs.find(p=>source.ports[p]===w[from+'Side']);
+      const inputName=target.definition.inputs.find(p=>target.ports[p]===w[to+'Side']);
+      need(output&&inputName,'INVALID_DIRECTION',`${w.id} must connect a declared output to input`);
+      for(const [end,isSource] of [[from,true],[to,false]]){
+        const port=D.attachmentPointConfig(doc,w[end],w[end+'Side']);
+        need((cfg[end+'ConnectionIndex']||0)===0&&port?.connections?.length===1,'UNSUPPORTED_CHANNEL','Runtime uses one connection per attachment');
+        const flow=port.connections[0].flow;
+        need((isSource?['out','duplex']:['in','control','duplex']).includes(flow),'FLOW_REFUSED',`${w.id} endpoint flow refuses propagation`);
+      }
+      need(!cfg[direction+'Operation']||cfg[direction+'Operation']==='none','EXTERNAL_EFFECT_REFUSED','Logic does not execute read/write operations');
+      need(D.connectionReachability(doc,w.a,w.aSide,w.b,w.bSide).ok,'BOUNDARY_REFUSED',w.id);
+      const driver=canonical([target.id,inputName]);need(!drivers.has(driver),'MULTIPLE_DRIVERS',driver);drivers.add(driver);
+      edges.push({id:w.id,from:source.id,output,to:target.id,input:inputName,delay:integer(cfg.logic?.delay??1,0,1000000,'carrier delay')});
+    }
+    return {schema:'soveraeign.schematic/program@0.1',documentId:doc.id,nodes,edges};
+  }
+  function rowFor(node,state){
+    const d=node.definition,key=[...d.inputs.map(p=>state.inputs[p]),...state.memory];
+    return d.table.find(row=>key.every((v,i)=>v===row[i])).slice(key.length);
+  }
+  function enqueue(s,event){
+    need(s.queue.length<PENDING,'CAPACITY','Pending event capacity reached');
+    integer(event.time,0,Number.MAX_SAFE_INTEGER,'logical time');
+    s.queue.push({...event,sequence:s.sequence++});
+    s.queue.sort((a,b)=>a.time-b.time||a.sequence-b.sequence);
+  }
+  function emit(s,node,output,value){
+    for(const edge of s.program.edges)if(edge.from===node.id&&edge.output===output)
+      enqueue(s,{kind:'arrival',time:s.time+node.delay+edge.delay,component:edge.to,port:edge.input,value,wire:edge.id});
+  }
+  function evaluate(s,node,initial=false){
+    const state=s.values[node.id],d=node.definition;
+    const row=d.kind==='source'?d.initial:rowFor(node,state);
+    if(d.kind==='table'&&!initial)state.memory=row.slice(d.outputs.length);
+    d.outputs.forEach((p,i)=>{if(initial||state.outputs[p]!==row[i]){state.outputs[p]=row[i];emit(s,node,p,row[i])}});
+  }
+  function start(program){
+    const s={schema:SCHEMA,program:clone(program),time:0,sequence:0,processed:0,status:'READY',values:{},queue:[],trace:[],commands:[]};
+    for(const n of program.nodes)s.values[n.id]={inputs:Object.fromEntries(n.definition.inputs.map(p=>[p,0])),outputs:{},memory:n.definition.kind==='table'?[...n.definition.initial]:[]};
+    for(const n of program.nodes)evaluate(s,n,true);
+    s.status=s.queue.length?'READY':'QUIESCENT';return s;
+  }
+  function advance(s,budget){
+    let count=0;
+    while(s.queue.length&&count<budget){
+      need(s.processed<LIMIT,'CAPACITY','Run event capacity reached; export and start a new run');
+      const event=s.queue.shift(),node=s.program.nodes.find(n=>n.id===event.component),state=s.values[node.id];
+      s.time=event.time;const before=clone(state);
+      if(event.kind==='source'){
+        if(state.outputs[event.port]!==event.value){state.outputs[event.port]=event.value;emit(s,node,event.port,event.value)}
+      }else{
+        const changed=state.inputs[event.port]!==event.value;state.inputs[event.port]=event.value;
+        if(changed)evaluate(s,node);
+      }
+      s.trace.push({index:s.processed++,event,before,after:clone(state)});count++;
+    }
+    s.status=s.queue.length?'PAUSED_BUDGET':'QUIESCENT';
+  }
+  function command(s,request){
+    need(s.commands.length<LIMIT,'CAPACITY','Command capacity reached');
+    let cmd;
+    if(request.action==='input'){
+      const node=s.program.nodes.find(n=>n.id===request.component);
+      need(node?.definition.kind==='source','NOT_SOURCE','Input must name a source component');
+      need(bit(request.value),'INVALID_VALUE','Input must be 0 or 1');
+      const time=integer(request.time??s.time,s.time,Number.MAX_SAFE_INTEGER,'input time');
+      cmd={action:'input',component:node.id,value:request.value,time};
+      enqueue(s,{kind:'source',time,component:node.id,port:node.definition.outputs[0],value:request.value,wire:null});s.status='READY';
+    }else{
+      need(['step','run'].includes(request.action),'UNKNOWN_ACTION','Unknown runtime command');
+      const budget=request.action==='step'?1:integer(request.budget??100,1,1000,'event budget');
+      cmd={action:request.action,...(request.action==='run'?{budget}:{})};advance(s,budget);
+    }
+    s.commands.push(cmd);return s;
+  }
+  function restore(program,snapshot){
+    need(snapshot?.schema===SCHEMA&&canonical(snapshot.program)===canonical(program),'STALE_DEFINITION','Run does not match this executable diagram');
+    need(Array.isArray(snapshot.commands)&&snapshot.commands.length<=LIMIT,'INVALID_SNAPSHOT','Invalid command history');
+    const rebuilt=start(program);
+    for(const cmd of snapshot.commands)command(rebuilt,cmd);
+    need(canonical(rebuilt)===canonical(snapshot),'REPLAY_MISMATCH','Saved state, queue or trace differs from replay');return rebuilt;
+  }
+  function execute(doc,current,request={}){
+    request=request||{};
+    try{
+      const program=compile(doc);let session;
+      if(request.action==='start')session=start(program);
+      else if(request.action==='restore')session=restore(program,request.session);
+      else{
+        need(current?.schema===SCHEMA,'NO_RUN','Start or restore a run first');
+        need(canonical(current.program)===canonical(program),'STALE_DEFINITION','Executable diagram changed; start a new run');
+        if(request.action==='replay')session=restore(program,current);
+        else{session=clone(current);if(request.action!=='get')command(session,request)}
+      }
+      return {ok:true,session,receipt:{schema:'soveraeign.schematic/run-receipt@0.1',action:request.action,status:session.status,time:session.time,processed:session.processed,pending:session.queue.length,error:null}};
+    }catch(error){return {ok:false,session:current,receipt:{schema:'soveraeign.schematic/run-receipt@0.1',action:request.action,error:{code:error.code||'INVALID_RUNTIME',message:error.message}}}}
+  }
+  function tools(){return [{name:'schematic.runtime',description:'Start, inspect, input, step, run, replay or restore a deterministic local logic run. No external effects.',inputSchema:{type:'object',properties:{action:{enum:['start','get','input','step','run','replay','restore']},component:{type:'string'},value:{enum:[0,1]},time:{type:'integer',minimum:0},budget:{type:'integer',minimum:1,maximum:1000},session:{type:'object'}},required:['action'],additionalProperties:false}}]}
+  root.SovSchematicLogic={SCHEMA,FILE_SCHEMA,compile,execute,canonical,tools};
+})(typeof globalThis!=='undefined'?globalThis:this);
+/* END src/07-logic-core.js */
 </script>
 <script data-beta-module="src/00-state.js">
 /* BEGIN src/00-state.js */
@@ -3213,6 +3397,7 @@ function hasValidIncoming(componentId,signalState){
   return incomingSignals(componentId,signalState).length>0;
 }
 function wireDirectionActive(w,direction,signalState){
+  if(typeof logicWireValue==='function'){const value=logicWireValue(w,direction);if(value!==null)return value}
   const sourceEnd=direction==='forward'?'a':'b';
   const targetEnd=direction==='forward'?'b':'a';
   const sourceComponent=sourceEnd==='a'?w.a:w.b;
@@ -3224,9 +3409,11 @@ function wireDirectionActive(w,direction,signalState){
   return true;
 }
 function computeSignalState(){
+  if(typeof prepareLogicProjection==='function')prepareLogicProjection();
   let active=new Set();
   nodes.forEach(n=>{ if(normalizeSignalMode(componentConfig(n))==='source') active.add(n.id); });
-  for(let pass=0;pass<6;pass++){
+  // Activation is monotone: each pass adds a node or reaches the fixed point.
+  for(let pass=0;pass<nodes.length;pass++){
     const probe={active,colors:new Map(nodes.map(n=>[n.id,componentConfig(n).color]))};
     const next=new Set(active);
     for(const n of nodes){
@@ -4850,6 +5037,7 @@ function render(){
     bindNode(g,n); nodesG.appendChild(g);
   });
   renderWires(signalState);
+  if(typeof renderLogicProjection==='function')renderLogicProjection();
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
 }
@@ -6177,6 +6365,7 @@ function applyPackage(bundle){
 function parseFilePayload(text){
   let parsed;
   try{parsed=JSON.parse(text)}catch(_){throw new Error('File is not valid SOV/JSON data')}
+  if(parsed?.schema===SovSchematicLogic.FILE_SCHEMA)return {format:'run',payload:parsed};
   if(parsed?.schema===SovSchematicData.PACKAGE_SCHEMA)return {format:'package',payload:parsed};
   if(parsed?.schema===SovSchematicData.DOCUMENT_SCHEMA)return {format:'document',payload:parsed};
   if(parsed?.schema===SovSchematicData.WORKSPACE_SCHEMA)return {format:'workspace',payload:parsed};
@@ -6184,6 +6373,7 @@ function parseFilePayload(text){
 }
 function applyOpenedPayload(parsed,name='Untitled.sov',handle=null){
   const {format,payload}=parsed;
+  if(format==='run')return openLogicRun(payload,name);
   if(format==='package')applyPackage(payload);
   else if(format==='workspace')applyWorkspace(payload);
   else replaceRuntimeDocument(payload);
@@ -6193,6 +6383,27 @@ function applyOpenedPayload(parsed,name='Untitled.sov',handle=null){
   lastFileFingerprint=semanticFingerprint();
   saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false});
   updateFileReadout();
+  return snapshotDocument();
+}
+function snapshotLogicRun(){
+  const result=executeLogic({action:'get'});
+  if(!result.ok)throw new Error(result.receipt.error.message);
+  return {schema:SovSchematicLogic.FILE_SCHEMA,document:snapshotDocument(),session:result.session};
+}
+function saveLogicRun(){
+  const payload=snapshotLogicRun();
+  triggerDownload(JSON.stringify(payload,null,2),`${fileBaseName()}.sovrun`,'application/json');
+  return payload;
+}
+function openLogicRun(payload,name='Run.sovrun'){
+  const checked=SovSchematicLogic.execute(payload.document,null,{action:'restore',session:payload.session});
+  if(!checked.ok)throw new Error(checked.receipt.error.message);
+  replaceRuntimeDocument(payload.document);
+  logicSession=checked.session;
+  render();
+  currentFileName=name.replace(/\.sovrun$/i,'.sov');currentFileFormat='document';currentFileHandle=null;
+  lastFileFingerprint=null;updateFileReadout();
+  window.dispatchEvent(new CustomEvent('schematic-runtime',{detail:checked}));
   return snapshotDocument();
 }
 async function openFileObject(file,handle=null){
@@ -6599,6 +6810,33 @@ function runtimeCrud(operation){
 }
 function apiOperation(op,resource,resourceId,value,patch,query){return runtimeCrud({schema:SovSchematicData.OPERATION_SCHEMA,id:`browser-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,op,resource,resourceId,value,patch,query})}
 
+let logicSession=null;
+let logicVisualSession=null;
+function prepareLogicProjection(){
+  logicVisualSession=null;
+  if(!logicSession)return;
+  try{if(SovSchematicLogic.canonical(SovSchematicLogic.compile(diagram))===SovSchematicLogic.canonical(logicSession.program))logicVisualSession=logicSession}catch(_){ }
+}
+function logicWireValue(w,direction){
+  if(!nodes.some(n=>(n.id===w.a||n.id===w.b)&&n.config?.logic))return null;
+  const edge=logicVisualSession?.program.edges.find(e=>e.id===w.id);
+  if(!edge)return false;
+  const expected=edge.from===w.a?'forward':'reverse';
+  return direction===expected&&logicVisualSession.values[edge.from].outputs[edge.output]===1;
+}
+function renderLogicProjection(){
+  for(const g of nodesG.querySelectorAll('[data-id]')){
+    const state=logicVisualSession?.values[g.dataset.id];g.classList.toggle('logic-high',!!state&&[...Object.values(state.outputs),...Object.values(state.inputs)].some(Boolean));
+  }
+  for(const g of wiresG.querySelectorAll('[data-wire-id]'))g.classList.toggle('logic-pending',!!logicVisualSession?.queue.some(e=>e.wire===g.dataset.wireId));
+}
+function executeLogic(request){
+  const result=SovSchematicLogic.execute(snapshotDocument(),logicSession,request);
+  if(result.ok){logicSession=result.session;if(!['get','replay'].includes(request.action))render()}
+  window.dispatchEvent(new CustomEvent('schematic-runtime',{detail:result}));
+  return SovSchematicData.clone(result);
+}
+
 const SovSchematicAPI={
   version:'0.1',
   formats:()=>({document:SovSchematicData.DOCUMENT_SCHEMA,workspace:SovSchematicData.WORKSPACE_SCHEMA,package:SovSchematicData.PACKAGE_SCHEMA,operation:SovSchematicData.OPERATION_SCHEMA,receipt:SovSchematicData.RECEIPT_SCHEMA}),
@@ -6613,7 +6851,7 @@ const SovSchematicAPI={
     document:()=>snapshotDocument(),
     package:()=>snapshotPackage(),
     parse:(text)=>parseFilePayload(text),
-    open:(payload,name='API.sov')=>applyOpenedPayload(typeof payload==='string'?parseFilePayload(payload):{format:payload?.schema===SovSchematicData.PACKAGE_SCHEMA?'package':payload?.schema===SovSchematicData.WORKSPACE_SCHEMA?'workspace':'document',payload},name,null)
+    open:(payload,name='API.sov')=>applyOpenedPayload(typeof payload==='string'?parseFilePayload(payload):{format:payload?.schema===SovSchematicLogic.FILE_SCHEMA?'run':payload?.schema===SovSchematicData.PACKAGE_SCHEMA?'package':payload?.schema===SovSchematicData.WORKSPACE_SCHEMA?'workspace':'document',payload},name,null)
   },
   list:(resource,query={})=>apiOperation('list',resource,null,null,null,query),
   get:(resource,id)=>apiOperation('read',resource,id),
@@ -6621,14 +6859,68 @@ const SovSchematicAPI={
   update:(resource,id,patch)=>apiOperation('update',resource,id,null,patch),
   delete:(resource,id)=>apiOperation('delete',resource,id),
   execute:(operation)=>runtimeCrud(operation),
+  runtime:{execute:executeLogic,get:()=>executeLogic({action:'get'}),file:()=>snapshotLogicRun(),save:()=>saveLogicRun()},
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
-  tools:()=>SovSchematicData.operationTools()
+  tools:()=>[...SovSchematicData.operationTools(),...SovSchematicLogic.tools()]
 };
 window.SovSchematicAPI=SovSchematicAPI;
 /* END src/85-api.js */
+</script>
+<script data-beta-module="src/90-logic-panel.js">
+/* BEGIN src/90-logic-panel.js */
+'use strict';
+// Human runtime binding. The event runner owns all execution semantics.
+(function(){
+  const panel=document.createElement('details');panel.id='logicPanel';panel.className='logic-panel';
+  panel.innerHTML=`<summary>Logic runner</summary>
+    <p>Step through the diagram. Save a run to keep its memory and pending events.</p>
+    <div class="logic-actions"><button id="logicStart">Start new run</button><button id="logicStep">Step</button><button id="logicRun">Run 100 events</button><button id="logicReplay">Check replay</button></div>
+    <div class="logic-actions"><label>Source <select id="logicSource" aria-label="Logic source"></select></label><button id="logicLow">Set 0</button><button id="logicHigh">Set 1</button></div>
+    <div class="logic-actions"><button id="logicSave">Save run</button><button id="logicOpen">Open run</button><input id="logicRunFile" type="file" accept=".sovrun,application/json" hidden></div>
+    <output id="logicStatus" aria-live="polite">Open a logic diagram, then start a run.</output>
+    <div id="logicValues"></div><details><summary>Recent events</summary><pre id="logicTrace"></pre></details>`;
+  document.querySelector('.inspector').prepend(panel);
+  const el=id=>document.getElementById(id);
+  const showError=e=>{el('logicStatus').textContent=e.message||String(e)};
+  function act(action,extra={}){return executeLogic({action,...extra})}
+  el('logicStart').onclick=()=>act('start');el('logicStep').onclick=()=>act('step');
+  el('logicRun').onclick=()=>act('run',{budget:100});el('logicReplay').onclick=()=>act('replay');
+  el('logicLow').onclick=()=>act('input',{component:el('logicSource').value,value:0});
+  el('logicHigh').onclick=()=>act('input',{component:el('logicSource').value,value:1});
+  el('logicSave').onclick=()=>{try{saveLogicRun()}catch(e){showError(e)}};
+  el('logicOpen').onclick=()=>el('logicRunFile').click();
+  el('logicRunFile').onchange=async event=>{
+    try{await openFileObject(event.target.files[0]);panel.open=true}catch(e){showError(e)}
+    event.target.value='';
+  };
+  window.addEventListener('schematic-runtime',event=>{
+    const result=event.detail;
+    if(!result.ok){showError(result.receipt.error);return}
+    const s=result.session;
+    el('logicStatus').textContent=`${s.status} · tick ${s.time} · ${s.processed} events · ${s.queue.length} pending`;
+    const chosen=el('logicSource').value;
+    el('logicSource').replaceChildren(...s.program.nodes.filter(n=>n.definition.kind==='source').map(n=>{
+      const option=document.createElement('option');option.value=n.id;option.textContent=nodes.find(c=>c.id===n.id)?.config?.label||n.id;return option;
+    }));
+    if([...el('logicSource').options].some(o=>o.value===chosen))el('logicSource').value=chosen;
+    const table=document.createElement('div');
+    for(const n of s.program.nodes){
+      const state=s.values[n.id],row=document.createElement('div');row.className='logic-value';
+      row.appendChild(Object.assign(document.createElement('strong'),{textContent:nodes.find(c=>c.id===n.id)?.config?.label||n.id}));
+      const bits=value=>Object.entries(value).map(([key,bit])=>`${key}=${bit}`).join(' · ');
+      for(const [label,value] of [['Input',bits(state.inputs)],['Output',bits(state.outputs)],['Memory',state.memory.join('')]])if(value)row.appendChild(Object.assign(document.createElement('div'),{textContent:`${label}: ${value}`}));
+      table.appendChild(row);
+    }
+    el('logicValues').replaceChildren(table);
+    el('logicTrace').textContent=s.trace.slice(-12).map(t=>`${t.event.time}:${t.event.sequence} ${t.event.wire||'input'} → ${t.event.component}.${t.event.port} = ${t.event.value}`).join('\n');
+    // Visible emphasis is a transient projection; never writes the diagram or history.
+    prepareLogicProjection();renderLogicProjection();
+  });
+})();
+/* END src/90-logic-panel.js */
 </script>
 </body>
 </html>

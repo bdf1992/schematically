@@ -3,3 +3,5 @@ __pycache__/
 _site/
 tests/journey/
 .venv/
+*.sov.run.json
+*.sov.run.json.tmp

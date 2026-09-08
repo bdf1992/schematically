@@ -200,6 +200,7 @@ function render(){
     bindNode(g,n); nodesG.appendChild(g);
   });
   renderWires(signalState);
+  if(typeof renderLogicProjection==='function')renderLogicProjection();
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
 }

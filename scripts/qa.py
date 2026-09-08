@@ -10,6 +10,7 @@ import time
 ROOT=Path(__file__).resolve().parents[1]
 
 STATIC=[
+    'tests/logic_runtime_qa.py',
     'tests/dimensional_form_qa.py',
     'tests/pre_repo_hardening_qa.py',
     'tests/author_offline_qa.py',
@@ -19,6 +20,7 @@ STATIC=[
     'tests/revision_guard_qa.py',
 ]
 BROWSER=[
+    'tests/logic_bindings_qa.py',
     'tests/attachment_point_refactor_qa.py',
     'tests/configurable_attachment_defaults_qa.py',
     'tests/primitive_forms_qa.py',

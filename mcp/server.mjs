@@ -8,6 +8,7 @@ const HERE=path.dirname(fileURLToPath(import.meta.url));
 // Absolute paths are not valid ESM specifiers on Windows; import by file:// URL everywhere.
 await import(pathToFileURL(path.join(HERE,'../src/06-attachment-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/05-data-core.js')).href);
+await import(pathToFileURL(path.join(HERE,'../src/07-logic-core.js')).href);
 const Data=globalThis.SovSchematicData;
 if(!Data)throw new Error('SovSchematicData core failed to load');
 
@@ -22,6 +23,30 @@ function loadDocument(){
   try{return Data.documentFromFilePayload(JSON.parse(fs.readFileSync(FILE,'utf8')))}catch(_){return Data.makeDocument({id:'schematic-1'})}
 }
 let documentState=loadDocument();
+let runtimeSession=null,runtimeLoaded=false;
+function executeRuntime(request){
+  const Logic=globalThis.SovSchematicLogic;
+  if(!runtimeLoaded&&request.action!=='start'&&request.action!=='restore'){
+    try{
+      const snapshot=JSON.parse(fs.readFileSync(FILE+'.run.json','utf8'));
+      const result=Logic.execute(documentState,null,{action:'restore',session:snapshot});
+      if(!result.ok)return result;
+      runtimeSession=result.session;runtimeLoaded=true;
+    }catch(error){
+      if(error.code!=='ENOENT')return {ok:false,session:null,receipt:{error:{code:'INVALID_SNAPSHOT',message:error.message}}};
+      runtimeLoaded=true;
+    }
+  }
+  const result=Logic.execute(documentState,runtimeSession,request);
+  if(result.ok){
+    if(!['get','replay'].includes(request.action)){
+      fs.mkdirSync(path.dirname(FILE),{recursive:true});
+      const tmp=FILE+'.run.json.tmp';fs.writeFileSync(tmp,JSON.stringify(result.session));fs.renameSync(tmp,FILE+'.run.json');
+    }
+    runtimeSession=result.session;runtimeLoaded=true;
+  }
+  return result;
+}
 let historyUndo=[],historyRedo=[];
 const cloneDoc=()=>Data.makeDocument(Data.clone(documentState));
 function recordHistory(snapshot){historyUndo.push(snapshot);if(historyUndo.length>120)historyUndo.shift();historyRedo=[]}
@@ -40,6 +65,7 @@ function rpcResult(id,result){return {jsonrpc:'2.0',id,result}}
 function rpcError(id,code,message,data){return {jsonrpc:'2.0',id,error:{code,message,...(data===undefined?{}:{data})}}}
 function toolPayload(value,isError=false){return {content:[{type:'text',text:JSON.stringify(value,null,2)}],structuredContent:value,isError}}
 function executeTool(name,args={}){
+  if(name==='schematic.runtime'){const value=executeRuntime(args);return {ok:value.ok,value,mutates:false}}
   if(name==='schematic.history.undo'){const prev=historyUndo.pop();if(!prev)return {ok:false,value:{error:'Nothing to undo'},mutates:false};historyRedo.push(cloneDoc());Data.replaceDocument(documentState,prev);return {ok:true,value:Data.clone(documentState),mutates:true}}
   if(name==='schematic.history.redo'){const next=historyRedo.pop();if(!next)return {ok:false,value:{error:'Nothing to redo'},mutates:false};historyUndo.push(cloneDoc());Data.replaceDocument(documentState,next);return {ok:true,value:Data.clone(documentState),mutates:true}}
   if(name==='schematic.checkpoint.list')return {ok:true,value:checkpointStore().map(({document,...meta})=>meta),mutates:false};
@@ -64,7 +90,7 @@ async function handleMcp(req,res){
   let rpc;try{rpc=await bodyJson(req)}catch(e){return json(res,400,rpcError(null,-32700,'Parse error',e.message),{'MCP-Protocol-Version':MCP_VERSION})}
   const id=rpc.id??null,method=rpc.method;
   if(method==='server/discover')return json(res,200,rpcResult(id,{protocolVersion:MCP_VERSION,serverInfo:{name:'soveraeign-schematic',version:'0.1.24'},capabilities:{tools:{listChanged:false}},instructions:'CRUD against SOV Schematic document@0.1. File packages use package@0.1.'}),{'MCP-Protocol-Version':MCP_VERSION});
-  if(method==='tools/list'){const extra=[{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}}];return json(res,200,rpcResult(id,{tools:[...Data.operationTools(),...extra]}),{'MCP-Protocol-Version':MCP_VERSION});}
+  if(method==='tools/list'){const extra=[{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}}];return json(res,200,rpcResult(id,{tools:[...Data.operationTools(),...globalThis.SovSchematicLogic.tools(),...extra]}),{'MCP-Protocol-Version':MCP_VERSION});}
   if(method==='tools/call'){
     const name=rpc.params?.name,args=rpc.params?.arguments||{};
     const result=executeTool(name,args);if(result.mutates)saveDocument();
@@ -75,6 +101,10 @@ async function handleMcp(req,res){
 function resourceFromPath(segment){return ({components:'component',wires:'wire',references:'reference'})[segment]||null}
 async function handleApi(req,res,url){
   const parts=url.pathname.split('/').filter(Boolean);
+  if(url.pathname==='/api/v1/runtime'&&['GET','POST'].includes(req.method)){
+    const result=executeRuntime(req.method==='GET'?{action:'get'}:await bodyJson(req));
+    return json(res,result.ok?200:400,result);
+  }
   if(url.pathname==='/api/v1/formats'&&req.method==='GET')return json(res,200,{document:Data.DOCUMENT_SCHEMA,package:Data.PACKAGE_SCHEMA,workspace:Data.WORKSPACE_SCHEMA,operation:Data.OPERATION_SCHEMA,receipt:Data.RECEIPT_SCHEMA,resources:Object.keys(Data.RESOURCE_KEYS)});
   if(url.pathname==='/api/v1/document'){
     if(req.method==='GET')return json(res,200,Data.clone(documentState));
