@@ -19,8 +19,11 @@ Tools:
 - `schematic.delete`
 - `schematic.document.get`
 - `schematic.document.replace`
+- `schematic.markers`
 
 Resources: `component`, `wire`, `reference`.
+
+`schematic.markers` returns `{id, severity, message, rule}` for each current validation finding, delegating to the same `Data.markersFor` the browser API uses — the tool invents no legality of its own.
 
 ## HTTP
 
