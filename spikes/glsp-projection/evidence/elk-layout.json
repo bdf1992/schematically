@@ -1,0 +1,273 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "layered"
+  },
+  "children": [
+    {
+      "id": "grant",
+      "width": 112,
+      "height": 84,
+      "$H": 277,
+      "x": 12,
+      "y": 116
+    },
+    {
+      "id": "req",
+      "width": 112,
+      "height": 84,
+      "$H": 279,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "id": "svc",
+      "width": 268,
+      "height": 108,
+      "children": [
+        {
+          "id": "check",
+          "width": 112,
+          "height": 84,
+          "$H": 287,
+          "x": 12,
+          "y": 12
+        },
+        {
+          "id": "store",
+          "width": 112,
+          "height": 84,
+          "$H": 289,
+          "x": 144,
+          "y": 12
+        }
+      ],
+      "ports": [
+        {
+          "id": "permit",
+          "width": 8,
+          "height": 8,
+          "x": -8,
+          "y": 64
+        },
+        {
+          "id": "ingress",
+          "width": 8,
+          "height": 8,
+          "x": -8,
+          "y": 36
+        },
+        {
+          "id": "egress",
+          "width": 8,
+          "height": 8,
+          "x": 268,
+          "y": 50
+        }
+      ],
+      "$H": 281,
+      "x": 152,
+      "y": 14
+    },
+    {
+      "id": "log",
+      "width": 112,
+      "height": 84,
+      "$H": 291,
+      "x": 448,
+      "y": 26
+    }
+  ],
+  "edges": [
+    {
+      "id": "k1",
+      "sources": [
+        "grant"
+      ],
+      "targets": [
+        "permit"
+      ],
+      "sections": [
+        {
+          "id": "k1_s0",
+          "startPoint": {
+            "x": 124,
+            "y": 158
+          },
+          "endPoint": {
+            "x": 144,
+            "y": 82
+          },
+          "bendPoints": [
+            {
+              "x": 134,
+              "y": 158
+            },
+            {
+              "x": 134,
+              "y": 82
+            }
+          ],
+          "incomingShape": "grant",
+          "outgoingShape": "permit"
+        }
+      ],
+      "container": "root"
+    },
+    {
+      "id": "k2",
+      "sources": [
+        "permit"
+      ],
+      "targets": [
+        "check"
+      ],
+      "sections": [
+        {
+          "id": "k2_s0",
+          "startPoint": {
+            "x": 0,
+            "y": 68
+          },
+          "endPoint": {
+            "x": 12,
+            "y": 68
+          },
+          "incomingShape": "permit",
+          "outgoingShape": "check"
+        }
+      ],
+      "container": "svc"
+    },
+    {
+      "id": "k3",
+      "sources": [
+        "req"
+      ],
+      "targets": [
+        "ingress"
+      ],
+      "sections": [
+        {
+          "id": "k3_s0",
+          "startPoint": {
+            "x": 124,
+            "y": 54
+          },
+          "endPoint": {
+            "x": 144,
+            "y": 54
+          },
+          "incomingShape": "req",
+          "outgoingShape": "ingress"
+        }
+      ],
+      "container": "root"
+    },
+    {
+      "id": "k4",
+      "sources": [
+        "ingress"
+      ],
+      "targets": [
+        "check"
+      ],
+      "sections": [
+        {
+          "id": "k4_s0",
+          "startPoint": {
+            "x": 0,
+            "y": 40
+          },
+          "endPoint": {
+            "x": 12,
+            "y": 40
+          },
+          "incomingShape": "ingress",
+          "outgoingShape": "check"
+        }
+      ],
+      "container": "svc"
+    },
+    {
+      "id": "k5",
+      "sources": [
+        "check"
+      ],
+      "targets": [
+        "store"
+      ],
+      "sections": [
+        {
+          "id": "k5_s0",
+          "startPoint": {
+            "x": 124,
+            "y": 54
+          },
+          "endPoint": {
+            "x": 144,
+            "y": 54
+          },
+          "incomingShape": "check",
+          "outgoingShape": "store"
+        }
+      ],
+      "container": "svc"
+    },
+    {
+      "id": "k6",
+      "sources": [
+        "store"
+      ],
+      "targets": [
+        "egress"
+      ],
+      "sections": [
+        {
+          "id": "k6_s0",
+          "startPoint": {
+            "x": 256,
+            "y": 54
+          },
+          "endPoint": {
+            "x": 268,
+            "y": 54
+          },
+          "incomingShape": "store",
+          "outgoingShape": "egress"
+        }
+      ],
+      "container": "svc"
+    },
+    {
+      "id": "k7",
+      "sources": [
+        "egress"
+      ],
+      "targets": [
+        "log"
+      ],
+      "sections": [
+        {
+          "id": "k7_s0",
+          "startPoint": {
+            "x": 428,
+            "y": 68
+          },
+          "endPoint": {
+            "x": 448,
+            "y": 68
+          },
+          "incomingShape": "egress",
+          "outgoingShape": "log"
+        }
+      ],
+      "container": "root"
+    }
+  ],
+  "$H": 13,
+  "x": 0,
+  "y": 0,
+  "width": 572,
+  "height": 212
+}

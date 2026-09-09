@@ -1,0 +1,63 @@
+{
+  "checks": [
+    [
+      "9 graphical nodes render (6 typed + 3 ports)",
+      true
+    ],
+    [
+      "7 edges render",
+      true
+    ],
+    [
+      "initial model carries grant's authored position",
+      true
+    ],
+    [
+      "move: server's re-projection reflects the new position (document was patched)",
+      true
+    ],
+    [
+      "move: the DOM element itself re-renders at the new position",
+      true
+    ],
+    [
+      "boundary-crossing create refused, not applied (server answered setMarkers, not setModel)",
+      true
+    ],
+    [
+      "boundary-crossing create left the rendered document at 7 edges",
+      true
+    ],
+    [
+      "legal create added an 8th wire",
+      true
+    ],
+    [
+      "the new wire carries a schematically id (server's own k<N> scheme, not a GLSP-minted id)",
+      true
+    ],
+    [
+      "the 8th edge actually rendered",
+      true
+    ],
+    [
+      "no console errors during the whole sequence",
+      true
+    ],
+    [
+      "GLSP's ExportSvgAction produced a real SVG document",
+      true
+    ]
+  ],
+  "counts": {
+    "nodes": 6,
+    "ports": 3,
+    "edges": 7
+  },
+  "undo": {
+    "action_kind_dispatched": "glspUndo",
+    "dispatcher_error": "Page.evaluate: Error: Missing handler for action 'glspUndo'\n    at GLSPActionDispatcher.handleActionWithoutHandler (http://127.0.0.1:63566/bundle.js:151:23)\n    at GLSPActionDispatcher.doHandleAction (http://127.0.0.1:63566/bundle.js:144:45)\n    at GLSPActionDispatcher.handleAction (http://127.0.0.1:63566/bundle.js:118:111)\n    at http://127.0.0.1:63566/bundle.js:39265:29\n    at async GLSPActionDispatcher.dispatch (http://127.0.0.1:63566/bundle.js:113:24)\n    at async <anonymous>:329:30",
+    "produced_server_round_trip": false,
+    "rendered_edges_after_undo": 8
+  }
+}
