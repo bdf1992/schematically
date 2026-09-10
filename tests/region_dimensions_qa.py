@@ -1,7 +1,7 @@
 """Real file Open/Save and projection parity for large authored regions (#38).
 
 These synthetic documents exercise the sizes reported in the handoff; they are
-not substitutes for the owner's missing architecture fixtures.
+not substitutes for the original-file coverage in swarm_originals_qa.py.
 """
 import json
 import subprocess

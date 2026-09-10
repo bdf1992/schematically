@@ -1,0 +1,692 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "swarm-commons",
+  "revision": 0,
+  "meta": {
+    "title": "03 \u2014 Collaboration through governed services",
+    "status": "PROPOSED \u2014 architecture for review; no live execution",
+    "notes": [
+      "Contributors and reviewers are participants operating the same platform. Discovery may be subscription-driven or explicitly assigned.",
+      "Publish problems, inspect evidence, reserve work, submit versioned artifacts, review, and settle through services.",
+      "Claims are atomic reservations with deadlines and fencing. An expired worker cannot overwrite a newer owner.",
+      "A review attaches evidence; acceptance is a separately authorized service transition. Reputation never grants authority by itself.",
+      "Accepted work and unresolved findings become discoverable for later participants. Disagreement can produce revision or an explicit unresolved outcome.",
+      "A participant may represent a nested team. Child authority and resources stay within the parent allocation, with traceable outcomes."
+    ],
+    "source": "https://github.com/bdf1992/schematically",
+    "timeScale": 0,
+    "originalLabels": {
+      "contributor": "Contributor / team",
+      "reviewer": "Reviewer / witness",
+      "commons": "Shared collaboration services",
+      "proposal": "Publish",
+      "review-input": "Review",
+      "feed": "Discover",
+      "work": "Published work",
+      "claim": "Claim / reserve",
+      "artifact": "Versioned artifact",
+      "review": "Review evidence",
+      "accept": "Accept / settle",
+      "discovery": "Findings / discovery"
+    },
+    "originalWireLabels": {
+      "w1": "propose",
+      "w2": "",
+      "w3": "available",
+      "w4": "submit",
+      "w5": "inspect",
+      "w6": "findings",
+      "w7": "",
+      "w8": "evidence",
+      "w9": "publish outcome",
+      "w10": "",
+      "w11": "discover"
+    },
+    "presentationReview": "C5 requests/actions; C6 authority/control; C4 evidence; C1 breaker/refusal. Host and persistence fills use M1. Pin holds the host and authority/capacity reference geometry; drafts remain movable. Original captions retained in metadata; topology and authored geometry unchanged."
+  },
+  "components": [
+    {
+      "id": "contributor",
+      "symbolId": "act",
+      "x": 110,
+      "y": 380,
+      "config": {
+        "label": "Team",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "custom",
+            "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 64\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"><circle cx=\"34\" cy=\"19\" r=\"10\"/><circle cx=\"67\" cy=\"23\" r=\"8\"/><path d=\"M14 55v-8c0-18 40-18 40 0v8M59 38c17-5 23 6 23 17\"/></g></svg>"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 10,
+        "ports": {
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "reviewer",
+      "symbolId": "act",
+      "x": 1390,
+      "y": 170,
+      "config": {
+        "label": "Reviewer",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "custom",
+            "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 64\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"><circle cx=\"34\" cy=\"19\" r=\"10\"/><circle cx=\"67\" cy=\"23\" r=\"8\"/><path d=\"M14 55v-8c0-18 40-18 40 0v8M59 38c17-5 23 6 23 17\"/></g></svg>"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 9,
+        "ports": {
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "commons",
+      "symbolId": "plane",
+      "x": 810,
+      "y": 440,
+      "config": {
+        "label": "COLLABORATION",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 1010,
+            "h": 620
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "interiorColorSlot": 0
+        },
+        "attachmentDefaults": "none",
+        "colorSlot": 0
+      },
+      "form": {
+        "dimension": 2,
+        "regions": {
+          "interior": {
+            "state": "open"
+          }
+        }
+      },
+      "editor": {
+        "pinned": true
+      }
+    },
+    {
+      "id": "proposal",
+      "symbolId": "point",
+      "x": 305.0,
+      "y": 378.0,
+      "config": {
+        "label": "Publish",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 24,
+            "h": 24
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none",
+          "interiorColorSlot": 0
+        },
+        "ports": {
+          "out": {
+            "face": "both",
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          }
+        },
+        "colorSlot": 10
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons",
+      "placement": {
+        "kind": "edge",
+        "hostId": "commons",
+        "side": "left",
+        "t": 0.4
+      }
+    },
+    {
+      "id": "review-input",
+      "symbolId": "point",
+      "x": 1315.0,
+      "y": 316.0,
+      "config": {
+        "label": "Review",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 24,
+            "h": 24
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none",
+          "interiorColorSlot": 0
+        },
+        "ports": {
+          "out": {
+            "face": "both",
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        },
+        "colorSlot": 10
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons",
+      "placement": {
+        "kind": "edge",
+        "hostId": "commons",
+        "side": "right",
+        "t": 0.3
+      }
+    },
+    {
+      "id": "feed",
+      "symbolId": "point",
+      "x": 305.0,
+      "y": 626.0,
+      "config": {
+        "label": "Discover",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 24,
+            "h": 24
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none",
+          "interiorColorSlot": 0
+        },
+        "ports": {
+          "out": {
+            "face": "both",
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        },
+        "colorSlot": 10
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons",
+      "placement": {
+        "kind": "edge",
+        "hostId": "commons",
+        "side": "left",
+        "t": 0.8
+      }
+    },
+    {
+      "id": "work",
+      "symbolId": "hold",
+      "x": 505,
+      "y": 380,
+      "config": {
+        "label": "Work",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "custom",
+            "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 64\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"><ellipse cx=\"48\" cy=\"12\" rx=\"30\" ry=\"9\"/><path d=\"M18 12v38c0 12 60 12 60 0V12M18 30c0 12 60 12 60 0M18 46c0 12 60 12 60 0\"/></g></svg>"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 0,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons"
+    },
+    {
+      "id": "claim",
+      "symbolId": "gate",
+      "x": 805,
+      "y": 380,
+      "config": {
+        "label": "Reserve",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 10,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons"
+    },
+    {
+      "id": "artifact",
+      "symbolId": "hold",
+      "x": 1105,
+      "y": 380,
+      "config": {
+        "label": "Artifact",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "custom",
+            "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 64\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"><ellipse cx=\"48\" cy=\"12\" rx=\"30\" ry=\"9\"/><path d=\"M18 12v38c0 12 60 12 60 0V12M18 30c0 12 60 12 60 0M18 46c0 12 60 12 60 0\"/></g></svg>"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 0,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons"
+    },
+    {
+      "id": "review",
+      "symbolId": "observe",
+      "x": 1105,
+      "y": 620,
+      "config": {
+        "label": "Evidence",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 9,
+        "ports": {
+          "control": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          },
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons"
+    },
+    {
+      "id": "accept",
+      "symbolId": "gate",
+      "x": 805,
+      "y": 620,
+      "config": {
+        "label": "Settle",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 10,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons"
+    },
+    {
+      "id": "discovery",
+      "symbolId": "hold",
+      "x": 505,
+      "y": 620,
+      "config": {
+        "label": "Discovery",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "custom",
+            "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 64\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"><ellipse cx=\"48\" cy=\"12\" rx=\"30\" ry=\"9\"/><path d=\"M18 12v38c0 12 60 12 60 0V12M18 30c0 12 60 12 60 0M18 46c0 12 60 12 60 0\"/></g></svg>"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 0,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "contributor",
+      "aSide": "out",
+      "b": "proposal",
+      "bSide": "out",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w2",
+      "a": "proposal",
+      "aSide": "out",
+      "b": "work",
+      "bSide": "in",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "work",
+      "aSide": "out",
+      "b": "claim",
+      "bSide": "in",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "available",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "claim",
+      "aSide": "out",
+      "b": "artifact",
+      "bSide": "in",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "submit",
+        "direction": "forward",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w5",
+      "a": "artifact",
+      "aSide": "out",
+      "b": "review",
+      "bSide": "control",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "inspect",
+        "direction": "forward",
+        "forwardOperation": "read"
+      }
+    },
+    {
+      "id": "w6",
+      "a": "reviewer",
+      "aSide": "out",
+      "b": "review-input",
+      "bSide": "out",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "findings",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w7",
+      "a": "review-input",
+      "aSide": "out",
+      "b": "review",
+      "bSide": "in",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w8",
+      "a": "review",
+      "aSide": "out",
+      "b": "accept",
+      "bSide": "in",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "evidence",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w9",
+      "a": "accept",
+      "aSide": "out",
+      "b": "discovery",
+      "bSide": "in",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "publish",
+        "direction": "forward",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w10",
+      "a": "discovery",
+      "aSide": "out",
+      "b": "feed",
+      "bSide": "out",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w11",
+      "a": "feed",
+      "aSide": "out",
+      "b": "contributor",
+      "bSide": "in",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "read"
+      }
+    }
+  ],
+  "references": []
+}

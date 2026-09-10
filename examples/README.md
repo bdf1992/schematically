@@ -19,3 +19,8 @@ All `.sov` examples pass `SovSchematicData.validateDocument()`.
 - `07-plane-with-points.sov` — a Plane with two boundary-hosted Points (face `both`) carrying a Source → Stage → Record chain across its boundary; written in the compact record form.
 
 Render any of these to a standalone SVG with `python scripts/export_svg.py examples/<name>.sov`.
+
+The [reviewed swarm diagrams](swarm/README.md) preserve the supplied platform, service
+and collaboration topology while adding concise captions, palette roles, pins and
+portable graphics. Read the narrow-view guidance and package rate caveat in the
+[acceptance report](../docs/qa/authoring-38/original-review/README.md).

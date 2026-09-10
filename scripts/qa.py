@@ -54,7 +54,10 @@ BROWSER=[
     'tests/skills_conformance_qa.py',
     'tests/render_idempotence_qa.py',
     'tests/region_dimensions_qa.py',
+    'tests/swarm_originals_qa.py',
+    'tests/swarm_review_qa.py',
     'tests/authoring_review_qa.py',
+    'tests/wire_label_clearance_qa.py',
     'tests/drag_lifecycle_stress_qa.py',
     'tests/performance_regression_qa.py',
 ]
