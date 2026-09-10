@@ -1,5 +1,6 @@
 """Original review regressions: measured labels preserve model and rendered routes."""
 from pathlib import Path
+import re
 from playwright.sync_api import sync_playwright
 from browser_runtime import chromium_launch_kwargs
 
@@ -30,9 +31,42 @@ COLLISIONS = """ids=>{
 }"""
 
 
+def startup_resize_check(browser):
+    # Yield between the canvas and later inline modules, as the HTML parser can
+    # on a slow CI machine. Execute the remaining standalone scripts verbatim.
+    html = (ROOT / 'index.html').read_text(encoding='utf-8')
+    end = html.index('</script>', html.index('/* END src/30-canvas.js */')) + len('</script>')
+    page = browser.new_page(viewport={'width': 1440, 'height': 900})
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    page.on('dialog', lambda dialog: dialog.accept())
+    page.set_content(html[:end])
+    frames = '()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))'
+    page.evaluate(frames)
+    page.set_viewport_size({'width': 1200, 'height': 900})
+    page.evaluate(frames)
+    assert not errors, ('resize before renderer loaded', errors)
+    for script in re.findall(r'<script[^>]*>(.*?)</script>', html[end:], re.DOTALL):
+        page.add_script_tag(content=script)
+    page.locator('#fileOpenInput').set_input_files(str(FIXTURES / '02-service-circuit.sov'))
+    page.wait_for_function("diagram.id==='swarm-service-circuit'&&wires.length>8")
+    page.evaluate('fitDiagram()')
+    page.evaluate(frames)
+    before = page.evaluate(LABELS)
+    geometry = page.evaluate(STATE)
+    page.set_viewport_size({'width': 768, 'height': 900})
+    page.evaluate(frames)
+    assert page.evaluate(LABELS) != before, 'ResizeObserver did not reposition labels after startup'
+    assert page.evaluate(STATE) == geometry, 'ResizeObserver changed model/routes'
+    assert page.evaluate('''()=>Math.abs(Number(workspace.style.getPropertyValue('--zoom'))-Math.hypot(workspace.getScreenCTM().a,workspace.getScreenCTM().b))<1e-6'''), 'ResizeObserver did not update screen scale'
+    assert not errors, errors
+    page.close()
+
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(**chromium_launch_kwargs())
+        startup_resize_check(browser)
         for name, ids in [('02-service-circuit.sov', ['w10', 'w13']), ('03-collaboration.sov', ['w11'])]:
             for theme in ('light', 'dark'):
                 page = browser.new_page(viewport={'width': 1440, 'height': 900})
