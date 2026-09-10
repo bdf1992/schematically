@@ -150,7 +150,7 @@
             "connections": [
               {
                 "id": "connection-1",
-                "colorSlot": 10,
+                "colorSlot": 11,
                 "flow": "control",
                 "access": "read-write"
               }

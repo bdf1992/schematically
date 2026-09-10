@@ -38,6 +38,8 @@ def main():
                 page.evaluate('(theme)=>{SovSchematicAPI.view.setAppearance(theme);fitDiagram()}',theme)
                 original=page.evaluate('snapshotDocument()')
                 assert page.locator('.node .custom-graphic').count()==2
+                slots=page.evaluate("wires.map(w=>[w.id,endpointConnection(w,'a').colorSlot,endpointConnection(w,'b').colorSlot])")
+                assert slots==[['request',10,10],['admit',10,10],['control',11,11],['record',9,9]],slots
                 assert page.locator('#objectsList .is-pinned').count()==2
                 # Screen pixels, not the nominal zoom readout. Check independently
                 # that essential labels neither clip nor overlap other labels/nodes.
