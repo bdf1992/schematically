@@ -246,7 +246,6 @@ function syncLabelScale(){
   workspace.style.setProperty('--zoom',String(scale>0?scale:1));
   placeWireLabels();
 }
-new ResizeObserver(syncLabelScale).observe(workspace);
 function applyCamera(){
   workspace.setAttribute('viewBox',`${camera.x} ${camera.y} ${camera.w} ${camera.h}`);
   syncLabelScale();

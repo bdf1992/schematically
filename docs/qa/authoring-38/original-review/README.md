@@ -77,14 +77,24 @@ commands through `ws contract audit` before integration.
 
 - Original fixture carrier: `0748d9798ba60f949b0ebe27dbc46eeb2b170309`.
 - Wire label carrier: `e62b934c388140d9cee78d9dea9e00803a1187f5`.
+- Startup correction carrier: `1c7f730c60afcbc8cdd42eaf9044643d42f4b8c9`.
 - Contract corrections: raw package representation may include derived defaults,
   while authored fields and reopened records must match; a local `.gitattributes`
   rule preserves the original fixture bytes on Windows checkout. Neither
   correction weakens a geometry or topology assertion.
 
-The combined final gate passed **50 suites and 17 JavaScript syntax checks**
-(121.92 seconds); see [the complete log](qa.log). Both independent contract audits
-passed with zero files outside their declared paths.
+The combined gate passed **50 suites and 17 JavaScript syntax checks**; see
+[the complete log](qa.log). Both independent contract audits passed with zero
+files outside their declared paths.
+
+The first CI branch run on `024ee95` exposed a startup race even though the
+parallel PR run passed: the resize observer could call label placement before
+the renderer module loaded. A deterministic regression pauses the standalone
+load after the canvas module and forces rendering frames and a resize; it
+reproduced the missing-function error before the fix. Observer registration
+now belongs to bootstrap after the renderer loads. The same test verifies
+that subsequent resizing still updates screen scale and label placement while
+keeping model and route geometry unchanged.
 
 Reproduce the focused checks:
 
