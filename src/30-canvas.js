@@ -244,6 +244,7 @@ function syncLabelScale(){
   const matrix=workspace.getScreenCTM();
   const scale=matrix?Math.hypot(matrix.a,matrix.b):1;
   workspace.style.setProperty('--zoom',String(scale>0?scale:1));
+  placeWireLabels();
 }
 new ResizeObserver(syncLabelScale).observe(workspace);
 function applyCamera(){
