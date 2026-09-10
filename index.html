@@ -99,19 +99,19 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .node .body{fill:var(--component-interior-fill,var(--component-signal-fill,#fff));stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:1.4}
 .node.selected .body{stroke-width:2.8}
 /* Labels are SVG text in world units while strokes are non-scaling, so text would grow and
-   shrink with the camera. `--zoom` is set on #workspace by applyCamera; every label's
-   font-size is clamped to 8 to 14 screen pixels and expressed back in world units. At
-   zoom 1 each label keeps its base size, so an export at zoom 1 is unchanged. */
+   shrink with the camera. `--zoom` is the actual screen scale of #workspace; every label's
+   essential text stays at 12 to 16 screen pixels, expressed back in world units.
+   Small endpoint tags retain their separate 8 to 14 pixel hierarchy. */
 #workspace{--zoom:1}
-.node text{font-size:calc(clamp(8px,10px * var(--zoom,1),14px) / var(--zoom,1));fill:var(--component-boundary-color,var(--component-color,#171715));font-weight:700;letter-spacing:.04em;pointer-events:none;user-select:none}
+.node text{font-size:calc(clamp(12px,10px * var(--zoom,1),16px) / var(--zoom,1));fill:var(--component-boundary-color,var(--component-color,#171715));font-weight:700;letter-spacing:.04em;pointer-events:none;user-select:none}
 .node .glyph{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .custom-graphic{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .custom-graphic [fill="currentColor"]{fill:currentColor}
 .node .custom-graphic [stroke="currentColor"]{stroke:currentColor}
 .node .container-guide{fill:none;stroke:var(--component-boundary-color,#777);stroke-width:1;stroke-dasharray:4 5;opacity:.22;pointer-events:none}
 .node.is-container>.body{stroke-width:1.8}
-.node .internal-text{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:600;opacity:.78}
-.node .outside-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));opacity:.8}
+.node .internal-text{font-size:calc(clamp(12px,9px * var(--zoom,1),16px) / var(--zoom,1));font-weight:600;opacity:.78}
+.node .outside-label{font-size:calc(clamp(12px,9px * var(--zoom,1),16px) / var(--zoom,1));opacity:.8}
 .port-hit{fill:transparent;stroke:none;cursor:pointer;pointer-events:all;touch-action:none}
 .port{fill:var(--panel);stroke:var(--port-color,var(--component-color,var(--canvas-ink)));stroke-width:2;cursor:pointer;opacity:.18;transition:opacity .1s,transform .1s;pointer-events:none;transform-box:fill-box;transform-origin:center}
 .node:hover .port,.node.wiring-source .port{opacity:1}
@@ -308,7 +308,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .node.blank text{font-style:italic}
 .node.blank.selected .body{stroke-dasharray:5 4}
 
-.connection-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:700;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}.reciprocity-mark{font-size:calc(clamp(8px,10px * var(--zoom,1),14px) / var(--zoom,1));font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}
+.connection-label{font-size:calc(clamp(12px,9px * var(--zoom,1),16px) / var(--zoom,1));font-weight:700;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}.reciprocity-mark{font-size:calc(clamp(12px,10px * var(--zoom,1),16px) / var(--zoom,1));font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}
 
 @media(max-width:900px){
   .app{grid-template-columns:210px minmax(0,1fr);}
@@ -863,8 +863,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
               <option value="none">Hidden</option>
             </select>
           </label>
-          <label data-dims="12">Width <input id="visualWidth" type="number" min="80" max="520" step="8"></label>
-          <label data-dims="2">Height <input id="visualHeight" type="number" min="64" max="420" step="8"></label>
+          <label data-dims="12">Width <input id="visualWidth" type="number" min="80" step="8"></label>
+          <label data-dims="2">Height <input id="visualHeight" type="number" min="64" step="8"></label>
           <label data-dims="2">Interior <button id="visualInteriorColor" class="color-slot-chip" type="button" aria-label="Interior palette slot"></button></label>
           <label data-dims="2">Material
             <select id="formMaterial">
@@ -1223,6 +1223,17 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   const cleanString=(value,fallback='')=>typeof value==='string'?value:fallback;
   const num=(value,fallback=0)=>Number.isFinite(Number(value))?Number(value):fallback;
 
+  // One dimension policy for files, CRUD and browser projection. Finite authored
+  // extents above the minima have no editor-only ceiling (large hosts are valid).
+  function normalizePresentationSize(size={}){
+    return {w:Math.max(80,num(size?.w,112)),h:Math.max(64,num(size?.h,84))};
+  }
+  function normalizeComponentSize(component){
+    const presentation=component.config?.presentation;
+    if(presentation?.size)presentation.size=normalizePresentationSize(presentation.size);
+    return component;
+  }
+
   function nextId(items,prefix){
     let max=0;
     for(const item of items||[]){
@@ -1262,6 +1273,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const component of doc.components){
       normalizeComponentIdentity(component);
       applyTemplatePreset(component);
+      normalizeComponentSize(component);
       component.form=normalizeComponentForm(component.form,component.canvas);
       if(!isObject(component.canvas))component.canvas={};
       component.canvas.id=`canvas:component:${component.id||'unknown'}`;component.canvas.scope='local';component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
@@ -1492,6 +1504,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     component.form=normalizeComponentForm(isObject(value.form)?value.form:preset.form,value.canvas);
     if(['source','relay','passive'].includes(value.config?.signalMode))config.signalMode=value.config.signalMode;
     if(isObject(value.config?.presentation))config.presentation=clone(value.config.presentation);
+    normalizeComponentSize(component);
     // An authored choice stays on the runtime record either way, so a later normalization
     // pass cannot replace a Plane's authored 'standard' with its preset 'none'.
     if(['standard','none'].includes(value.config?.attachmentDefaults))config.attachmentDefaults=value.config.attachmentDefaults;
@@ -1706,7 +1719,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
       candidate.form=normalizeComponentForm(candidate.form,candidate.canvas);candidate.canvas.state=candidate.form.regions.interior.state;
       ensureAttachmentPortConfigs(candidate);
-      if(candidate.config?.presentation?.size){candidate.config.presentation.size.w=Math.max(80,num(candidate.config.presentation.size.w,112));candidate.config.presentation.size.h=Math.max(64,num(candidate.config.presentation.size.h,84));}
+      normalizeComponentSize(candidate);
     }else if(resource==='wire'){
       // A patch may rebind an end (a/aSide or aAttachment ref) or free it (aAttachment {kind:'free'}).
       for(const end of ['a','b']){
@@ -1841,7 +1854,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,markersFor,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,normalizePresentationSize,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,markersFor,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
 /* END src/05-data-core.js */
 </script>
@@ -2464,9 +2477,7 @@ function componentConfig(n){
   if(!['symbol','custom','none'].includes(presentation.graphic.kind))presentation.graphic.kind='symbol';
   if(typeof presentation.graphic.ref!=='string')presentation.graphic.ref=`sym-${n.symbolId||'blank'}`;
   if(typeof presentation.graphic.svg!=='string')presentation.graphic.svg='';
-  if(!presentation.size)presentation.size={w:112,h:84};
-  presentation.size.w=Math.max(80,Math.min(520,Number(presentation.size.w)||112));
-  presentation.size.h=Math.max(64,Math.min(420,Number(presentation.size.h)||84));
+  presentation.size=SovSchematicData.normalizePresentationSize(presentation.size);
   // The label mode is read through SovSchematicData.effectiveLabelMode; an absent one is derived, never written.
   if(presentation.labelMode!==undefined&&!['boundary','inside','outside','none'].includes(presentation.labelMode))delete presentation.labelMode;
   if(!Number.isInteger(presentation.interiorColorSlot))presentation.interiorColorSlot=n.config.colorSlot??0;
@@ -3646,9 +3657,17 @@ function svgPoint(cx,cy){
 function currentZoom(){
   return BASE_VIEW.w / camera.w;
 }
+function syncLabelScale(){
+  // The viewBox is also fitted into the actual workspace between the panels.
+  // Nominal camera zoom alone misses this scale, especially on narrow screens.
+  const matrix=workspace.getScreenCTM();
+  const scale=matrix?Math.hypot(matrix.a,matrix.b):1;
+  workspace.style.setProperty('--zoom',String(scale>0?scale:1));
+}
+new ResizeObserver(syncLabelScale).observe(workspace);
 function applyCamera(){
   workspace.setAttribute('viewBox',`${camera.x} ${camera.y} ${camera.w} ${camera.h}`);
-  workspace.style.setProperty('--zoom',String(currentZoom())); // labels clamp their screen size against this (app.css)
+  syncLabelScale();
   zoomReadout.textContent=`${Math.round(currentZoom()*100)}%`;
   requestAnimationFrame(positionSelectionBar);
 }
@@ -3752,16 +3771,31 @@ function activeCanvasWireSet(canvasId=selectedCanvasContextId()){
 function nodeVisibleInActiveCanvas(){return true}
 function wireVisibleInActiveCanvas(){return true}
 function diagramBounds(canvasId=selectedCanvasContextId()){
-  const nodeIds=activeCanvasNodeIds(canvasId),scopedNodes=nodes.filter(n=>nodeIds.has(n.id));
+  const nodeIds=activeCanvasNodeIds(canvasId);
+  for(const id of [...nodeIds])for(const child of descendantsOf(id))nodeIds.add(child.id);
+  const scopedNodes=nodes.filter(n=>nodeIds.has(n.id)&&!entityEditorState(n).hidden);
   const d=canvasDescriptorById(canvasId);
   if(d?.ownerKind==='component'){
-    const owner=nodes.find(n=>n.id===d.ownerId);if(owner&&!scopedNodes.includes(owner))scopedNodes.unshift(owner);
+    const owner=nodes.find(n=>n.id===d.ownerId);if(owner&&!scopedNodes.includes(owner)){scopedNodes.unshift(owner);nodeIds.add(owner.id)}
   }
   if(!scopedNodes.length&&canvasId===GLOBAL_CANVAS_ID)return null;
   let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
   for(const n of scopedNodes){const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
   const wireIds=activeCanvasWireSet(canvasId),occupied=[];
+  for(const w of wires)if(nodeIds.has((w.canvasId||'').replace('canvas:component:','')))wireIds.add(w.id);
   wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
+  // Text and custom graphics can extend beyond a Component's body. Measure their
+  // actual projection in workspace coordinates, excluding selection/drag chrome.
+  const inverse=workspace.getScreenCTM()?.inverse();
+  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text')){
+    const node=el.closest('.node'),wire=el.closest('[data-wire-id]');
+    if(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId)))continue;
+    if(!el.getClientRects().length||getComputedStyle(el).display==='none')continue;
+    const rect=el.getBBox(),matrix=inverse.multiply(el.getScreenCTM());
+    for(const [x,y] of [[rect.x,rect.y],[rect.x+rect.width,rect.y],[rect.x,rect.y+rect.height],[rect.x+rect.width,rect.y+rect.height]]){
+      const q=new DOMPoint(x,y).matrixTransform(matrix);l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y);
+    }
+  }
   return Number.isFinite(l)?{l,r,t,b}:null;
 }
 function fitDiagram(){
@@ -3842,8 +3876,13 @@ function settleActiveComponent(mods=null){
     node.y=snapCoord(node.y,step);
   }
   const settleDx=node.x-before.x,settleDy=node.y-before.y;
-  if((settleDx||settleDy)&&activeNodeDragState){
-    for(const item of [...(activeNodeDragState.descendantOrigins||[]),...(activeNodeDragState.groupOrigins||[])]){item.node.x+=settleDx;item.node.y+=settleDy;const cel=document.querySelector(`.node[data-id=\"${item.node.id}\"]`);if(cel)cel.setAttribute('transform',`translate(${item.node.x} ${item.node.y})`)}
+  if(settleDx||settleDy){
+    // Keyboard moves have no pointer state, but the same parent-relative geometry
+    // must survive snapping, including pinned descendants carried by their host.
+    const moved=activeNodeDragState
+      ? [...(activeNodeDragState.descendantOrigins||[]),...(activeNodeDragState.groupOrigins||[])].map(item=>item.node)
+      : descendantsOf(node.id);
+    for(const child of moved){child.x+=settleDx;child.y+=settleDy;const cel=document.querySelector(`.node[data-id="${child.id}"]`);if(cel)cel.setAttribute('transform',`translate(${child.x} ${child.y})`)}
   }
 
   const el=document.querySelector(`.node[data-id="${node.id}"]`);
@@ -5411,7 +5450,7 @@ function transformMinimumSize(node){
     minW=Math.max(minW,2*(Math.abs(child.x-node.x)+size.w/2+p.padding));
     minH=Math.max(minH,2*(Math.abs(child.y-node.y)+size.h/2+p.padding));
   }
-  return {w:Math.min(520,minW),h:Math.min(420,minH)};
+  return SovSchematicData.normalizePresentationSize({w:minW,h:minH});
 }
 function scheduleComponentTransformProjection(){
   if(componentTransformFrame)return;
@@ -5441,12 +5480,12 @@ function updateComponentTransform(e){
   const q=svgPoint(e.clientX,e.clientY),dx=q.x-t.start.x,dy=q.y-t.start.y;
   const p=componentConfig(t.node).presentation,min=transformMinimumSize(t.node);
   let w=t.startSize.w,h=t.startSize.h;
-  if(t.kind==='x'||t.kind==='xy')w=Math.max(min.w,Math.min(520,t.startSize.w+dx*2));
-  if(t.kind==='y'||t.kind==='xy')h=Math.max(min.h,Math.min(420,t.startSize.h+dy*2));
+  if(t.kind==='x'||t.kind==='xy')w=Math.max(min.w,t.startSize.w+dx*2);
+  if(t.kind==='y'||t.kind==='xy')h=Math.max(min.h,t.startSize.h+dy*2);
   if(t.kind==='xy'&&e.shiftKey){
     const byW=w/t.ratio,byH=h*t.ratio;
-    if(Math.abs(dx)>=Math.abs(dy))h=Math.max(min.h,Math.min(420,byW));
-    else w=Math.max(min.w,Math.min(520,byH));
+    if(Math.abs(dx)>=Math.abs(dy))h=Math.max(min.h,byW);
+    else w=Math.max(min.w,byH);
   }
   p.size.w=w;p.size.h=h;
   scheduleComponentTransformProjection();
@@ -5940,8 +5979,8 @@ function mutateSelectedPresentation(mutator,{reroute=false}={}){
 }
 visualGraphicMode.addEventListener('change',()=>mutateSelectedPresentation(p=>{p.graphic.kind=visualGraphicMode.value;visualSvgRow.hidden=p.graphic.kind!=='custom'}));
 visualLabelMode.addEventListener('change',()=>mutateSelectedPresentation(p=>p.labelMode=visualLabelMode.value));
-visualWidth.addEventListener('change',()=>mutateSelectedPresentation(p=>p.size.w=Number(visualWidth.value)||112,{reroute:true}));
-visualHeight.addEventListener('change',()=>mutateSelectedPresentation(p=>p.size.h=Number(visualHeight.value)||84,{reroute:true}));
+visualWidth.addEventListener('change',()=>mutateSelectedPresentation(p=>p.size.w=visualWidth.value,{reroute:true}));
+visualHeight.addEventListener('change',()=>mutateSelectedPresentation(p=>p.size.h=visualHeight.value,{reroute:true}));
 visualInteriorColor.addEventListener('click',()=>openColorSlotPanel('component-interior'));
 visualText.addEventListener('input',()=>mutateSelectedPresentation(p=>p.text=visualText.value));
 visualSvgMarkup.addEventListener('input',()=>mutateSelectedPresentation(p=>{p.graphic.svg=visualSvgMarkup.value;p.graphic.kind='custom';visualGraphicMode.value='custom'}));
@@ -6433,13 +6472,84 @@ function restoreRecovery(){
   statusEl.textContent='Recovery restored · save to keep it';
   return true;
 }
+function snapshotSvg(opts={}){
+  if (typeof cancelWireDrag === 'function') cancelWireDrag();
+  const live = workspace;
+  const INHERITED = ['fill','fill-opacity','fill-rule','stroke','stroke-width','stroke-opacity','stroke-dasharray',
+    'stroke-dashoffset','stroke-linecap','stroke-linejoin','color','font-family','font-size','font-weight','font-style',
+    'letter-spacing','text-anchor','dominant-baseline','visibility','paint-order','text-rendering','shape-rendering'];
+  const OWN = {opacity:'1', filter:'none', 'mix-blend-mode':'normal', transform:'none'};
+  const VISUAL = new Set(['svg','g','path','rect','circle','ellipse','line','polyline','polygon','text','tspan','use','foreignObject','image']);
+  const styleOf = new Map();
+  const walk = (el, parentStyle) => {
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none') { styleOf.set(el, null); return; }
+    const out = {};
+    for (const p of INHERITED) {
+      const v = cs.getPropertyValue(p);
+      if (!v) continue;
+      if (!parentStyle || parentStyle[p] !== v) out[p] = v;
+    }
+    for (const p in OWN) {
+      const v = cs.getPropertyValue(p);
+      if (v && v !== OWN[p]) out[p] = v;
+    }
+    if (out.transform) {
+      out['transform-box'] = cs.getPropertyValue('transform-box');
+      out['transform-origin'] = cs.getPropertyValue('transform-origin');
+    }
+    const merged = Object.assign({}, parentStyle || {});
+    for (const p of INHERITED) merged[p] = cs.getPropertyValue(p);
+    styleOf.set(el, out);
+    for (const child of el.children) walk(child, merged);
+  };
+  walk(live, null);
+
+  const clone = live.cloneNode(true);
+  const liveEls = [live, ...live.querySelectorAll('*')];
+  const cloneEls = [clone, ...clone.querySelectorAll('*')];
+  const drop = [];
+  for (let i = 0; i < liveEls.length; i++) {
+    const src = liveEls[i], dst = cloneEls[i];
+    const st = styleOf.get(src);
+    if (st === null) { drop.push(dst); continue; }
+    if (st === undefined || !VISUAL.has(dst.tagName)) continue;
+    const parts = [];
+    for (const p in st) parts.push(`${p}:${st[p]}`);
+    dst.removeAttribute('tabindex');
+    if (parts.length) dst.setAttribute('style', parts.join(';'));
+  }
+  for (const el of drop) el.remove();
+  clone.querySelector('#ghostLayer')?.replaceChildren();
+  clone.querySelector('#paletteDropLayer')?.replaceChildren();
+  clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
+  clone.querySelectorAll('.port-hit,.wire-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
+
+  // A wire on a local surface already sits just after its host in the node layer
+  // (renderWires), so the picture shows it above the host body with no lifting here.
+
+  const defs = document.querySelector('.hidden-symbols defs').cloneNode(true);
+  clone.insertBefore(defs, clone.firstChild);
+
+  const pad = opts.pad ?? 48;
+  const b = typeof diagramBounds === 'function' ? diagramBounds() : null;
+  if (b) {
+    const w = Math.max(160, b.r - b.l + pad * 2), h = Math.max(120, b.b - b.t + pad * 2);
+    clone.setAttribute('viewBox', `${b.l - pad} ${b.t - pad} ${w} ${h}`);
+    clone.setAttribute('width', String(Math.round(w)));
+    clone.setAttribute('height', String(Math.round(h)));
+  }
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+  clone.removeAttribute('tabindex');
+  clone.removeAttribute('aria-label');
+  const bg = getComputedStyle(live).backgroundColor;
+  const own = clone.getAttribute('style') || '';
+  clone.setAttribute('style', `${own}${own && !own.endsWith(';') ? ';' : ''}background-color:${bg}`);
+  return new XMLSerializer().serializeToString(clone);
+}
 function exportSvgFile(){
-  cancelWireDrag();
-  const clone=workspace.cloneNode(true);
-  clone.querySelector('#ghostLayer')?.replaceChildren();clone.querySelector('#paletteDropLayer')?.replaceChildren();
-  clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x=>x.classList.remove('selected','snap-target','wiring-source'));
-  const defs=document.querySelector('.hidden-symbols defs').cloneNode(true);clone.insertBefore(defs,clone.firstChild);
-  triggerDownload(new XMLSerializer().serializeToString(clone),`${fileBaseName()}.svg`,'image/svg+xml');
+  triggerDownload(snapshotSvg(),`${fileBaseName()}.svg`,'image/svg+xml');
 }
 function setFileMenu(open){
   if(!fileMenu)return;
@@ -6806,6 +6916,7 @@ const SovSchematicAPI={
     info:()=>({name:currentFileName,format:currentFileFormat,dirty:isFileDirty(),revision:diagram.revision}),
     document:()=>snapshotDocument(),
     package:()=>snapshotPackage(),
+    svg:(options={})=>snapshotSvg(options),
     parse:(text)=>parseFilePayload(text),
     open:(payload,name='API.sov')=>applyOpenedPayload(typeof payload==='string'?parseFilePayload(payload):{format:payload?.schema===SovSchematicData.PACKAGE_SCHEMA?'package':payload?.schema===SovSchematicData.WORKSPACE_SCHEMA?'workspace':'document',payload},name,null)
   },

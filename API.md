@@ -27,11 +27,16 @@ Recovery is browser-local and separate from normal `.sov` File Save behavior.
 SovSchematicAPI.file.info()
 SovSchematicAPI.file.document()
 SovSchematicAPI.file.package()
+SovSchematicAPI.file.svg({pad: 48})
 SovSchematicAPI.file.parse(text)
 SovSchematicAPI.file.open(payload, name)
 ```
 
 `file.package()` returns the same `soveraeign.schematic/package@0.1` payload used by File → Export Package.
+
+`file.svg()` returns standalone SVG with computed theme styles, embedded graphics and content bounds. File → Export SVG and `scripts/export_svg.py` use this same persistence implementation.
+
+Component presentation sizes share one admission policy across file loading, browser CRUD, HTTP and MCP: missing width/height default to 112/84, finite numeric values normalize to minima 80/64, and admitted larger sizes have no editor-only ceiling. Plane presets remain 320/220 and a Point retains its fixed footprint. Resize gestures additionally preserve the space required by hosted children.
 
 ## CRUD
 

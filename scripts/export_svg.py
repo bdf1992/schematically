@@ -23,88 +23,9 @@ sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'scripts'))
 from browser_runtime import chromium_launch_kwargs  # noqa: E402
 
-# Runs inside the page. Mirrors exportSvgFile() in src/75-persistence.js, plus:
-#  - a content-fitted viewBox with explicit width/height so the file is self-sizing;
-#  - computed styles inlined as attributes, because the exported file cannot see app.css;
-#  - display:none subtrees dropped instead of carried invisibly.
-EXPORT_JS = r"""
-(opts) => {
-  if (typeof cancelWireDrag === 'function') cancelWireDrag();
-  const live = workspace;
-  const INHERITED = ['fill','fill-opacity','fill-rule','stroke','stroke-width','stroke-opacity','stroke-dasharray',
-    'stroke-dashoffset','stroke-linecap','stroke-linejoin','color','font-family','font-size','font-weight','font-style',
-    'letter-spacing','text-anchor','dominant-baseline','visibility','paint-order','text-rendering','shape-rendering'];
-  const OWN = {opacity:'1', filter:'none', 'mix-blend-mode':'normal', transform:'none'};
-  const VISUAL = new Set(['svg','g','path','rect','circle','ellipse','line','polyline','polygon','text','tspan','use','foreignObject','image']);
-  const styleOf = new Map();
-  const walk = (el, parentStyle) => {
-    const cs = getComputedStyle(el);
-    if (cs.display === 'none') { styleOf.set(el, null); return; }
-    const out = {};
-    for (const p of INHERITED) {
-      const v = cs.getPropertyValue(p);
-      if (!v) continue;
-      if (!parentStyle || parentStyle[p] !== v) out[p] = v;
-    }
-    for (const p in OWN) {
-      const v = cs.getPropertyValue(p);
-      if (v && v !== OWN[p]) out[p] = v;
-    }
-    if (out.transform) {
-      out['transform-box'] = cs.getPropertyValue('transform-box');
-      out['transform-origin'] = cs.getPropertyValue('transform-origin');
-    }
-    const merged = Object.assign({}, parentStyle || {});
-    for (const p of INHERITED) merged[p] = cs.getPropertyValue(p);
-    styleOf.set(el, out);
-    for (const child of el.children) walk(child, merged);
-  };
-  walk(live, null);
+# File-menu, browser API and headless export share the persistence implementation.
+EXPORT_JS = "(opts) => window.SovSchematicAPI.file.svg(opts)"
 
-  const clone = live.cloneNode(true);
-  const liveEls = [live, ...live.querySelectorAll('*')];
-  const cloneEls = [clone, ...clone.querySelectorAll('*')];
-  const drop = [];
-  for (let i = 0; i < liveEls.length; i++) {
-    const src = liveEls[i], dst = cloneEls[i];
-    const st = styleOf.get(src);
-    if (st === null) { drop.push(dst); continue; }
-    if (st === undefined || !VISUAL.has(dst.tagName)) continue;
-    const parts = [];
-    for (const p in st) parts.push(`${p}:${st[p]}`);
-    dst.removeAttribute('tabindex');
-    if (parts.length) dst.setAttribute('style', parts.join(';'));
-  }
-  for (const el of drop) el.remove();
-  clone.querySelector('#ghostLayer')?.replaceChildren();
-  clone.querySelector('#paletteDropLayer')?.replaceChildren();
-  clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
-  clone.querySelectorAll('.port-hit,.wire-hit').forEach(x => x.remove());
-
-  // A wire on a local surface already sits just after its host in the node layer
-  // (renderWires), so the picture shows it above the host body with no lifting here.
-
-  const defs = document.querySelector('.hidden-symbols defs').cloneNode(true);
-  clone.insertBefore(defs, clone.firstChild);
-
-  const pad = opts.pad ?? 48;
-  const b = typeof diagramBounds === 'function' ? diagramBounds() : null;
-  if (b) {
-    const w = Math.max(160, b.r - b.l + pad * 2), h = Math.max(120, b.b - b.t + pad * 2);
-    clone.setAttribute('viewBox', `${b.l - pad} ${b.t - pad} ${w} ${h}`);
-    clone.setAttribute('width', String(Math.round(w)));
-    clone.setAttribute('height', String(Math.round(h)));
-  }
-  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-  clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-  clone.removeAttribute('tabindex');
-  clone.removeAttribute('aria-label');
-  const bg = getComputedStyle(live).backgroundColor;
-  const own = clone.getAttribute('style') || '';
-  clone.setAttribute('style', `${own}${own && !own.endsWith(';') ? ';' : ''}background-color:${bg}`);
-  return new XMLSerializer().serializeToString(clone);
-}
-"""
 
 
 def export_documents(paths: list[Path], out_dir: Path | None = None, appearance: str = 'light', pad: int = 48, loop: float | None = None) -> list[dict]:

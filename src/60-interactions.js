@@ -26,7 +26,7 @@ function transformMinimumSize(node){
     minW=Math.max(minW,2*(Math.abs(child.x-node.x)+size.w/2+p.padding));
     minH=Math.max(minH,2*(Math.abs(child.y-node.y)+size.h/2+p.padding));
   }
-  return {w:Math.min(520,minW),h:Math.min(420,minH)};
+  return SovSchematicData.normalizePresentationSize({w:minW,h:minH});
 }
 function scheduleComponentTransformProjection(){
   if(componentTransformFrame)return;
@@ -56,12 +56,12 @@ function updateComponentTransform(e){
   const q=svgPoint(e.clientX,e.clientY),dx=q.x-t.start.x,dy=q.y-t.start.y;
   const p=componentConfig(t.node).presentation,min=transformMinimumSize(t.node);
   let w=t.startSize.w,h=t.startSize.h;
-  if(t.kind==='x'||t.kind==='xy')w=Math.max(min.w,Math.min(520,t.startSize.w+dx*2));
-  if(t.kind==='y'||t.kind==='xy')h=Math.max(min.h,Math.min(420,t.startSize.h+dy*2));
+  if(t.kind==='x'||t.kind==='xy')w=Math.max(min.w,t.startSize.w+dx*2);
+  if(t.kind==='y'||t.kind==='xy')h=Math.max(min.h,t.startSize.h+dy*2);
   if(t.kind==='xy'&&e.shiftKey){
     const byW=w/t.ratio,byH=h*t.ratio;
-    if(Math.abs(dx)>=Math.abs(dy))h=Math.max(min.h,Math.min(420,byW));
-    else w=Math.max(min.w,Math.min(520,byH));
+    if(Math.abs(dx)>=Math.abs(dy))h=Math.max(min.h,byW);
+    else w=Math.max(min.w,byH);
   }
   p.size.w=w;p.size.h=h;
   scheduleComponentTransformProjection();

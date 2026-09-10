@@ -319,9 +319,7 @@ function componentConfig(n){
   if(!['symbol','custom','none'].includes(presentation.graphic.kind))presentation.graphic.kind='symbol';
   if(typeof presentation.graphic.ref!=='string')presentation.graphic.ref=`sym-${n.symbolId||'blank'}`;
   if(typeof presentation.graphic.svg!=='string')presentation.graphic.svg='';
-  if(!presentation.size)presentation.size={w:112,h:84};
-  presentation.size.w=Math.max(80,Math.min(520,Number(presentation.size.w)||112));
-  presentation.size.h=Math.max(64,Math.min(420,Number(presentation.size.h)||84));
+  presentation.size=SovSchematicData.normalizePresentationSize(presentation.size);
   // The label mode is read through SovSchematicData.effectiveLabelMode; an absent one is derived, never written.
   if(presentation.labelMode!==undefined&&!['boundary','inside','outside','none'].includes(presentation.labelMode))delete presentation.labelMode;
   if(!Number.isInteger(presentation.interiorColorSlot))presentation.interiorColorSlot=n.config.colorSlot??0;

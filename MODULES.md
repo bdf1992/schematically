@@ -11,7 +11,7 @@
 - `55-render.js` — SVG projection.
 - `60-interactions.js` — pointer/drag gestures.
 - `70-editor-controls.js` — selection/form editing controls.
-- `75-persistence.js` — File lifecycle, `.sov`/`.sovpak`, recovery, rehydration.
+- `75-persistence.js` — File lifecycle, `.sov`/`.sovpak`, shared standalone SVG serialization, recovery, rehydration. The headless SVG script delegates here through the browser API.
 - `80-bootstrap.js` — global controls/keyboard/startup.
 - `85-api.js` — browser API adapter.
 

@@ -10,6 +10,7 @@ These files are executable reference material for the 0.1 contract.
 | `04-boundary-port.sov` | Explicit boundary crossing through an inside-facing parent Port |
 | `05-rate-chain.sov` | Global × source Component × Wire rate composition |
 | `08-gated-service.sov` | Authored by hand in the `skills/author-offline` form: a Plane with three boundary Points, an authority into a gate's control, a receipt |
+| `09-proposed-service-review.sov` | Proposed request/control/evidence lanes, palette slots, pinned host/reference, team/history custom SVG. Describes an architecture; does not execute authority. |
 | `classic-reference.sovpak` | Portable reference package containing metadata and embedded copies of the classic examples |
 
 All `.sov` examples pass `SovSchematicData.validateDocument()`.
