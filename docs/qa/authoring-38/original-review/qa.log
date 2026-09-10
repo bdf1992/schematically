@@ -1,122 +1,122 @@
-C:\Users\bdf19\workstation\worktrees\schematically\sandbox-codex-sc\index.html
-DIMENSIONAL FORM PASS
-QA PASS tests/dimensional_form_qa.py (0.03s)
-PASS 26 checks
-QA PASS tests/pre_repo_hardening_qa.py (0.53s)
-PASS offline author skill QA (7 json, 0 sov, 2 refused fences; 10 examples)
-QA PASS tests/author_offline_qa.py (0.24s)
-PASS file load presets QA
-QA PASS tests/file_load_presets_qa.py (0.07s)
-PASS file load wire canvas QA
-QA PASS tests/file_load_wire_canvas_qa.py (0.08s)
-PASS desktop shell QA
-QA PASS tests/desktop_shell_qa.py (0.03s)
-PASS in-process revision guard (create/update/delete core)
-PASS HTTP revision guard (mcp/server.mjs tools/call)
-QA PASS tests/revision_guard_qa.py (0.75s)
-PASS Beta.24 0D attachment-point refactor QA
-QA PASS tests/attachment_point_refactor_qa.py (1.19s)
-PASS Beta.24 configurable attachment-default seam QA
-QA PASS tests/configurable_attachment_defaults_qa.py (0.80s)
-PASS Point / Path / Plane primitive forms QA
-QA PASS tests/primitive_forms_qa.py (1.46s)
-PASS primitive label QA
-QA PASS tests/primitive_label_qa.py (2.00s)
-PASS retype QA
-QA PASS tests/retype_qa.py (3.21s)
-PASS label zoom QA
-QA PASS tests/label_zoom_qa.py (1.31s)
-PASS palette point settle QA
-QA PASS tests/palette_point_settle_qa.py (2.46s)
-PASS settings panel placement QA
-QA PASS tests/settings_panel_placement_qa.py (1.86s)
-PASS document compaction QA
-QA PASS tests/document_compaction_qa.py (0.72s)
-PASS carrier Path (Wire → Path) QA
-QA PASS tests/carrier_path_qa.py (1.83s)
-PASS Beta.24 1D/2D attachment interaction parity QA
-QA PASS tests/attachment_interaction_parity_qa.py (0.95s)
-PASS canonical attachment growth direction QA
-QA PASS tests/attachment_growth_direction_qa.py (0.76s)
-PASS canonical/legacy terminal identity QA
-QA PASS tests/attachment_terminal_identity_qa.py (0.75s)
-PASS boundary legality QA
-QA PASS tests/boundary_legality_qa.py (0.72s)
-PASS markers QA
-QA PASS tests/markers_qa.py (0.72s)
-PASS read/write access QA
-QA PASS tests/read_write_access_qa.py (1.59s)
-PASS wire host inline QA
-QA PASS tests/wire_host_inline_qa.py (0.94s)
-PASS host surface QA
-QA PASS tests/host_surface_qa.py (1.06s)
-PASS local-surface wires QA
-QA PASS tests/local_surface_wires_qa.py (1.21s)
-PASS Plane boundary routing QA
-QA PASS tests/plane_boundary_routing_qa.py (0.77s)
-PASS tray settle QA
-QA PASS tests/tray_settle_qa.py (1.26s)
-PASS Beta.24 dimensional ports + history QA
-QA PASS tests/beta20_ports_history_qa.py (1.76s)
-PASS grid visibility QA
-QA PASS tests/grid_visibility_qa.py (1.47s)
-PASS editor kernel QA
-QA PASS tests/editor_kernel_qa.py (2.40s)
-PASS editor kernel extended QA
-QA PASS tests/editor_kernel_extended_qa.py (2.12s)
-PASS file surface QA
-QA PASS tests/file_surface_qa.py (1.53s)
-PASS SVG export QA (10 documents)
-QA PASS tests/svg_export_qa.py (4.19s)
-PASS looping SVG export QA (2 looped document(s))
-QA PASS tests/loop_svg_qa.py (2.41s)
-PASS header menu dismissal QA
-QA PASS tests/menu_dismissal_qa.py (4.69s)
-PASS appearance/history separation QA
-QA PASS tests/appearance_history_qa.py (2.59s)
-PASS appearance color-scheme QA
-QA PASS tests/appearance_color_scheme_qa.py (2.68s)
-PASS Browser/API/MCP agent golden parity QA
-QA PASS tests/agent_api_mcp_golden_qa.py (1.33s)
-PASS skills conformance + agent-surface coverage QA
-QA PASS tests/skills_conformance_qa.py (1.38s)
-PASS render semantic idempotence QA
-QA PASS tests/render_idempotence_qa.py (0.71s)
-PASS large region browser/headless Open/Save/reopen parity (three sizes)
-QA PASS tests/region_dimensions_qa.py (2.40s)
-PASS 01-platform.sov: authored sizes, painted rectangles, containment, topology, ports, Save/package/reopen
-PASS 02-service-circuit.sov: authored sizes, painted rectangles, containment, topology, ports, Save/package/reopen
-PASS 03-collaboration.sov: authored sizes, painted rectangles, containment, topology, ports, Save/package/reopen
-PASS all three original swarm fixtures; source bytes unchanged
-QA PASS tests/swarm_originals_qa.py (4.12s)
-PASS reviewed swarm fixtures: topology, captions, palette, pins, graphics, file/package/SVG, both widths/themes
-QA PASS tests/swarm_review_qa.py (11.20s)
-ok  C:\Users\bdf19\workstation\worktrees\schematically\sandbox-codex-sc\examples\09-proposed-service-review.sov -> C:\Users\bdf19\AppData\Local\Temp\tmprzepka0c\light\09-proposed-service-review.svg (21555 bytes)
-ok  C:\Users\bdf19\workstation\worktrees\schematically\sandbox-codex-sc\examples\09-proposed-service-review.sov -> C:\Users\bdf19\AppData\Local\Temp\tmprzepka0c\dark\09-proposed-service-review.svg (21514 bytes)
-PASS fresh authoring review: two themes, two widths, graphics, ports, pins, file/package/SVG
-QA PASS tests/authoring_review_qa.py (9.16s)
-wire label clearance QA PASS: original labels, deterministic projection, routes, resize/zoom/pan, fallback
-QA PASS tests/wire_label_clearance_qa.py (3.32s)
-PASS Beta.24 drag lifecycle stress QA: 46 repeated drags, no stranded gesture state
-QA PASS tests/drag_lifecycle_stress_qa.py (5.68s)
-PASS performance regression QA {"small": {"nodes": 5, "wires": 4, "cold": 17.5, "signal": 2.100000001490116, "wiresOnly": 6.5, "warm": 6.700000002980232, "svgElements": 159}, "medium": {"nodes": 10, "wires": 9, "cold": 15.899999998509884, "signal": 5.600000001490116, "wiresOnly": 13.5, "warm": 15.5, "svgElements": 336}}
-QA PASS tests/performance_regression_qa.py (0.80s)
-KILLED model-access-always-allows
-KILLED signal-skips-access-check
-KILLED boundary-becomes-porous
-KILLED palette-cache-removed
-KILLED terminal-identity-uses-raw-alias
-KILLED growth-skips-canonical-attachment-alias
-KILLED locked-update-delete-policy-removed
-KILLED locked-endpoint-admission-removed
-KILLED attachment-defaults-become-hard-cardinality
-KILLED plane-attachment-defaults-ignored
-KILLED point-cannot-settle-into-interior
-KILLED saved-records-keep-runtime-projections
-KILLED carrier-both-ends-bound-skips-reachability
-KILLED carrier-end-snap-ignores-surface
-PASS mutation watch [('model-access-always-allows', 'test-killed'), ('signal-skips-access-check', 'test-killed'), ('boundary-becomes-porous', 'test-killed'), ('palette-cache-removed', 'test-killed'), ('terminal-identity-uses-raw-alias', 'test-killed'), ('growth-skips-canonical-attachment-alias', 'test-killed'), ('locked-update-delete-policy-removed', 'test-killed'), ('locked-endpoint-admission-removed', 'test-killed'), ('attachment-defaults-become-hard-cardinality', 'test-killed'), ('plane-attachment-defaults-ignored', 'test-killed'), ('point-cannot-settle-into-interior', 'test-killed'), ('saved-records-keep-runtime-projections', 'test-killed'), ('carrier-both-ends-bound-skips-reachability', 'test-killed'), ('carrier-end-snap-ignores-surface', 'test-killed')]
-QA PASS tests/mutation_watch.py (24.42s)
-GOLDEN PASS: 10 documents
-QA PASS scripts/golden_run.py (0.58s)
-RC QA PASS: 50 suites + 17 JS syntax checks (120.23s test time)
+C:\Users\bdf19\workstation\worktrees\schematically\sandbox-codex-sc\index.html
+DIMENSIONAL FORM PASS
+QA PASS tests/dimensional_form_qa.py (0.03s)
+PASS 26 checks
+QA PASS tests/pre_repo_hardening_qa.py (0.53s)
+PASS offline author skill QA (7 json, 0 sov, 2 refused fences; 10 examples)
+QA PASS tests/author_offline_qa.py (0.24s)
+PASS file load presets QA
+QA PASS tests/file_load_presets_qa.py (0.07s)
+PASS file load wire canvas QA
+QA PASS tests/file_load_wire_canvas_qa.py (0.08s)
+PASS desktop shell QA
+QA PASS tests/desktop_shell_qa.py (0.03s)
+PASS in-process revision guard (create/update/delete core)
+PASS HTTP revision guard (mcp/server.mjs tools/call)
+QA PASS tests/revision_guard_qa.py (0.75s)
+PASS Beta.24 0D attachment-point refactor QA
+QA PASS tests/attachment_point_refactor_qa.py (1.19s)
+PASS Beta.24 configurable attachment-default seam QA
+QA PASS tests/configurable_attachment_defaults_qa.py (0.80s)
+PASS Point / Path / Plane primitive forms QA
+QA PASS tests/primitive_forms_qa.py (1.46s)
+PASS primitive label QA
+QA PASS tests/primitive_label_qa.py (2.00s)
+PASS retype QA
+QA PASS tests/retype_qa.py (3.21s)
+PASS label zoom QA
+QA PASS tests/label_zoom_qa.py (1.31s)
+PASS palette point settle QA
+QA PASS tests/palette_point_settle_qa.py (2.46s)
+PASS settings panel placement QA
+QA PASS tests/settings_panel_placement_qa.py (1.86s)
+PASS document compaction QA
+QA PASS tests/document_compaction_qa.py (0.72s)
+PASS carrier Path (Wire → Path) QA
+QA PASS tests/carrier_path_qa.py (1.83s)
+PASS Beta.24 1D/2D attachment interaction parity QA
+QA PASS tests/attachment_interaction_parity_qa.py (0.95s)
+PASS canonical attachment growth direction QA
+QA PASS tests/attachment_growth_direction_qa.py (0.76s)
+PASS canonical/legacy terminal identity QA
+QA PASS tests/attachment_terminal_identity_qa.py (0.75s)
+PASS boundary legality QA
+QA PASS tests/boundary_legality_qa.py (0.72s)
+PASS markers QA
+QA PASS tests/markers_qa.py (0.72s)
+PASS read/write access QA
+QA PASS tests/read_write_access_qa.py (1.59s)
+PASS wire host inline QA
+QA PASS tests/wire_host_inline_qa.py (0.94s)
+PASS host surface QA
+QA PASS tests/host_surface_qa.py (1.06s)
+PASS local-surface wires QA
+QA PASS tests/local_surface_wires_qa.py (1.21s)
+PASS Plane boundary routing QA
+QA PASS tests/plane_boundary_routing_qa.py (0.77s)
+PASS tray settle QA
+QA PASS tests/tray_settle_qa.py (1.26s)
+PASS Beta.24 dimensional ports + history QA
+QA PASS tests/beta20_ports_history_qa.py (1.76s)
+PASS grid visibility QA
+QA PASS tests/grid_visibility_qa.py (1.47s)
+PASS editor kernel QA
+QA PASS tests/editor_kernel_qa.py (2.40s)
+PASS editor kernel extended QA
+QA PASS tests/editor_kernel_extended_qa.py (2.12s)
+PASS file surface QA
+QA PASS tests/file_surface_qa.py (1.53s)
+PASS SVG export QA (10 documents)
+QA PASS tests/svg_export_qa.py (4.19s)
+PASS looping SVG export QA (2 looped document(s))
+QA PASS tests/loop_svg_qa.py (2.41s)
+PASS header menu dismissal QA
+QA PASS tests/menu_dismissal_qa.py (4.69s)
+PASS appearance/history separation QA
+QA PASS tests/appearance_history_qa.py (2.59s)
+PASS appearance color-scheme QA
+QA PASS tests/appearance_color_scheme_qa.py (2.68s)
+PASS Browser/API/MCP agent golden parity QA
+QA PASS tests/agent_api_mcp_golden_qa.py (1.33s)
+PASS skills conformance + agent-surface coverage QA
+QA PASS tests/skills_conformance_qa.py (1.38s)
+PASS render semantic idempotence QA
+QA PASS tests/render_idempotence_qa.py (0.71s)
+PASS large region browser/headless Open/Save/reopen parity (three sizes)
+QA PASS tests/region_dimensions_qa.py (2.40s)
+PASS 01-platform.sov: authored sizes, painted rectangles, containment, topology, ports, Save/package/reopen
+PASS 02-service-circuit.sov: authored sizes, painted rectangles, containment, topology, ports, Save/package/reopen
+PASS 03-collaboration.sov: authored sizes, painted rectangles, containment, topology, ports, Save/package/reopen
+PASS all three original swarm fixtures; source bytes unchanged
+QA PASS tests/swarm_originals_qa.py (4.12s)
+PASS reviewed swarm fixtures: topology, captions, palette, pins, graphics, file/package/SVG, both widths/themes
+QA PASS tests/swarm_review_qa.py (11.20s)
+ok  C:\Users\bdf19\workstation\worktrees\schematically\sandbox-codex-sc\examples\09-proposed-service-review.sov -> C:\Users\bdf19\AppData\Local\Temp\tmprzepka0c\light\09-proposed-service-review.svg (21555 bytes)
+ok  C:\Users\bdf19\workstation\worktrees\schematically\sandbox-codex-sc\examples\09-proposed-service-review.sov -> C:\Users\bdf19\AppData\Local\Temp\tmprzepka0c\dark\09-proposed-service-review.svg (21514 bytes)
+PASS fresh authoring review: two themes, two widths, graphics, ports, pins, file/package/SVG
+QA PASS tests/authoring_review_qa.py (9.16s)
+wire label clearance QA PASS: original labels, deterministic projection, routes, resize/zoom/pan, fallback
+QA PASS tests/wire_label_clearance_qa.py (3.32s)
+PASS Beta.24 drag lifecycle stress QA: 46 repeated drags, no stranded gesture state
+QA PASS tests/drag_lifecycle_stress_qa.py (5.68s)
+PASS performance regression QA {"small": {"nodes": 5, "wires": 4, "cold": 17.5, "signal": 2.100000001490116, "wiresOnly": 6.5, "warm": 6.700000002980232, "svgElements": 159}, "medium": {"nodes": 10, "wires": 9, "cold": 15.899999998509884, "signal": 5.600000001490116, "wiresOnly": 13.5, "warm": 15.5, "svgElements": 336}}
+QA PASS tests/performance_regression_qa.py (0.80s)
+KILLED model-access-always-allows
+KILLED signal-skips-access-check
+KILLED boundary-becomes-porous
+KILLED palette-cache-removed
+KILLED terminal-identity-uses-raw-alias
+KILLED growth-skips-canonical-attachment-alias
+KILLED locked-update-delete-policy-removed
+KILLED locked-endpoint-admission-removed
+KILLED attachment-defaults-become-hard-cardinality
+KILLED plane-attachment-defaults-ignored
+KILLED point-cannot-settle-into-interior
+KILLED saved-records-keep-runtime-projections
+KILLED carrier-both-ends-bound-skips-reachability
+KILLED carrier-end-snap-ignores-surface
+PASS mutation watch [('model-access-always-allows', 'test-killed'), ('signal-skips-access-check', 'test-killed'), ('boundary-becomes-porous', 'test-killed'), ('palette-cache-removed', 'test-killed'), ('terminal-identity-uses-raw-alias', 'test-killed'), ('growth-skips-canonical-attachment-alias', 'test-killed'), ('locked-update-delete-policy-removed', 'test-killed'), ('locked-endpoint-admission-removed', 'test-killed'), ('attachment-defaults-become-hard-cardinality', 'test-killed'), ('plane-attachment-defaults-ignored', 'test-killed'), ('point-cannot-settle-into-interior', 'test-killed'), ('saved-records-keep-runtime-projections', 'test-killed'), ('carrier-both-ends-bound-skips-reachability', 'test-killed'), ('carrier-end-snap-ignores-surface', 'test-killed')]
+QA PASS tests/mutation_watch.py (24.42s)
+GOLDEN PASS: 10 documents
+QA PASS scripts/golden_run.py (0.58s)
+RC QA PASS: 50 suites + 17 JS syntax checks (120.23s test time)
