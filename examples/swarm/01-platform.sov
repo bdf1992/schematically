@@ -1,0 +1,523 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "swarm-platform",
+  "revision": 0,
+  "meta": {
+    "title": "01 \u2014 Participants and the authoritative platform",
+    "status": "PROPOSED \u2014 architecture for review; no live execution",
+    "notes": [
+      "Participants include humans, controllers, workers, and reviewers. Models and clients are replaceable.",
+      "All participant queries and commands enter service ports. Only services have custody of authoritative data.",
+      "The kernel is shared contract evaluation enforced by each service; it need not be a single deployment.",
+      "Commit state and its event record atomically within the owning service. Cross-service effects require recorded outcomes.",
+      "Observation delivery is filtered by identity, authority, relevance, and freshness. Messages do not grant authority.",
+      "Replay reconstructs committed history using recorded outcomes and versioned rules; it does not regenerate identical model decisions."
+    ],
+    "source": "https://github.com/bdf1992/schematically",
+    "timeScale": 0,
+    "originalLabels": {
+      "participants": "Participants / clients",
+      "platform": "Authoritative platform",
+      "request": "Service ports",
+      "view": "Observations",
+      "service": "Service operations",
+      "kernel": "Contract kernel",
+      "world": "State + event history",
+      "authority": "Scoped authority",
+      "observe": "Views / subscriptions"
+    },
+    "originalWireLabels": {
+      "w1": "requests",
+      "w2": "",
+      "w3": "evaluate",
+      "w4": "",
+      "w5": "commit",
+      "w6": "evidence",
+      "w7": "project",
+      "w8": "observe"
+    },
+    "presentationReview": "C5 requests/actions; C6 authority/control; C4 evidence; C1 breaker/refusal. Host and persistence fills use M1. Pin holds the host and authority/capacity reference geometry; drafts remain movable. Original captions retained in metadata; topology and authored geometry unchanged."
+  },
+  "components": [
+    {
+      "id": "participants",
+      "symbolId": "act",
+      "x": 120,
+      "y": 360,
+      "config": {
+        "label": "Participants",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "custom",
+            "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 64\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"><circle cx=\"34\" cy=\"19\" r=\"10\"/><circle cx=\"67\" cy=\"23\" r=\"8\"/><path d=\"M14 55v-8c0-18 40-18 40 0v8M59 38c17-5 23 6 23 17\"/></g></svg>"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 10,
+        "ports": {
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "platform",
+      "symbolId": "plane",
+      "x": 800,
+      "y": 430,
+      "config": {
+        "label": "PLATFORM",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 940,
+            "h": 650
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "interiorColorSlot": 0
+        },
+        "attachmentDefaults": "none",
+        "colorSlot": 0
+      },
+      "form": {
+        "dimension": 2,
+        "regions": {
+          "interior": {
+            "state": "open"
+          }
+        }
+      },
+      "editor": {
+        "pinned": true
+      }
+    },
+    {
+      "id": "request",
+      "symbolId": "point",
+      "x": 330.0,
+      "y": 365.0,
+      "config": {
+        "label": "Request",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 24,
+            "h": 24
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none",
+          "interiorColorSlot": 0
+        },
+        "ports": {
+          "out": {
+            "face": "both",
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          }
+        },
+        "colorSlot": 10
+      },
+      "parentId": "platform",
+      "canvasId": "canvas:component:platform",
+      "placement": {
+        "kind": "edge",
+        "hostId": "platform",
+        "side": "left",
+        "t": 0.4
+      }
+    },
+    {
+      "id": "view",
+      "symbolId": "point",
+      "x": 330.0,
+      "y": 625.0,
+      "config": {
+        "label": "Views",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 24,
+            "h": 24
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none",
+          "interiorColorSlot": 0
+        },
+        "ports": {
+          "out": {
+            "face": "both",
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        },
+        "colorSlot": 10
+      },
+      "parentId": "platform",
+      "canvasId": "canvas:component:platform",
+      "placement": {
+        "kind": "edge",
+        "hostId": "platform",
+        "side": "left",
+        "t": 0.8
+      }
+    },
+    {
+      "id": "service",
+      "symbolId": "gate",
+      "x": 535,
+      "y": 365,
+      "config": {
+        "label": "Services",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 10,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "platform",
+      "canvasId": "canvas:component:platform"
+    },
+    {
+      "id": "kernel",
+      "symbolId": "act",
+      "x": 800,
+      "y": 365,
+      "config": {
+        "label": "Contracts",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 10,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "control": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 11
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "platform",
+      "canvasId": "canvas:component:platform"
+    },
+    {
+      "id": "world",
+      "symbolId": "hold",
+      "x": 1065,
+      "y": 365,
+      "config": {
+        "label": "History",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "custom",
+            "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 64\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"><ellipse cx=\"48\" cy=\"12\" rx=\"30\" ry=\"9\"/><path d=\"M18 12v38c0 12 60 12 60 0V12M18 30c0 12 60 12 60 0M18 46c0 12 60 12 60 0\"/></g></svg>"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 0,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "platform",
+      "canvasId": "canvas:component:platform"
+    },
+    {
+      "id": "authority",
+      "symbolId": "authority",
+      "x": 800,
+      "y": 190,
+      "config": {
+        "label": "Authority",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 11,
+        "ports": {
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 11
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "platform",
+      "canvasId": "canvas:component:platform",
+      "editor": {
+        "pinned": true
+      }
+    },
+    {
+      "id": "observe",
+      "symbolId": "observe",
+      "x": 800,
+      "y": 625,
+      "config": {
+        "label": "Subscriptions",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 9,
+        "ports": {
+          "control": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "platform",
+      "canvasId": "canvas:component:platform"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "participants",
+      "aSide": "out",
+      "b": "request",
+      "bSide": "out",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w2",
+      "a": "request",
+      "aSide": "out",
+      "b": "service",
+      "bSide": "in",
+      "canvasId": "canvas:component:platform",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "service",
+      "aSide": "out",
+      "b": "kernel",
+      "bSide": "in",
+      "canvasId": "canvas:component:platform",
+      "config": {
+        "label": "evaluate",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "authority",
+      "aSide": "out",
+      "b": "kernel",
+      "bSide": "control",
+      "canvasId": "canvas:component:platform",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w5",
+      "a": "kernel",
+      "aSide": "out",
+      "b": "world",
+      "bSide": "in",
+      "canvasId": "canvas:component:platform",
+      "config": {
+        "label": "commit",
+        "direction": "forward",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w6",
+      "a": "world",
+      "aSide": "out",
+      "b": "observe",
+      "bSide": "control",
+      "canvasId": "canvas:component:platform",
+      "config": {
+        "label": "evidence",
+        "direction": "forward",
+        "forwardOperation": "read"
+      }
+    },
+    {
+      "id": "w7",
+      "a": "observe",
+      "aSide": "out",
+      "b": "view",
+      "bSide": "out",
+      "canvasId": "canvas:component:platform",
+      "config": {
+        "label": "project",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w8",
+      "a": "view",
+      "aSide": "out",
+      "b": "participants",
+      "bSide": "in",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "observe",
+        "direction": "forward",
+        "forwardOperation": "read"
+      }
+    }
+  ],
+  "references": []
+}

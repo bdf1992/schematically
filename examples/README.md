@@ -10,6 +10,7 @@ These files are executable reference material for the 0.1 contract.
 | `04-boundary-port.sov` | Explicit boundary crossing through an inside-facing parent Port |
 | `05-rate-chain.sov` | Global × source Component × Wire rate composition |
 | `08-gated-service.sov` | Authored by hand in the `skills/author-offline` form: a Plane with three boundary Points, an authority into a gate's control, a receipt |
+| `09-proposed-service-review.sov` | Proposed request/control/evidence lanes, palette slots, pinned host/reference, team/history custom SVG. Describes an architecture; does not execute authority. |
 | `classic-reference.sovpak` | Portable reference package containing metadata and embedded copies of the classic examples |
 
 All `.sov` examples pass `SovSchematicData.validateDocument()`.
@@ -18,3 +19,8 @@ All `.sov` examples pass `SovSchematicData.validateDocument()`.
 - `07-plane-with-points.sov` — a Plane with two boundary-hosted Points (face `both`) carrying a Source → Stage → Record chain across its boundary; written in the compact record form.
 
 Render any of these to a standalone SVG with `python scripts/export_svg.py examples/<name>.sov`.
+
+The [reviewed swarm diagrams](swarm/README.md) preserve the supplied platform, service
+and collaboration topology while adding concise captions, palette roles, pins and
+portable graphics. Read the narrow-view guidance and package rate caveat in the
+[acceptance report](../docs/qa/authoring-38/original-review/README.md).

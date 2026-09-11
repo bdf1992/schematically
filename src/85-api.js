@@ -41,6 +41,7 @@ const SovSchematicAPI={
     info:()=>({name:currentFileName,format:currentFileFormat,dirty:isFileDirty(),revision:diagram.revision}),
     document:()=>snapshotDocument(),
     package:()=>snapshotPackage(),
+    svg:(options={})=>snapshotSvg(options),
     parse:(text)=>parseFilePayload(text),
     open:(payload,name='API.sov')=>applyOpenedPayload(typeof payload==='string'?parseFilePayload(payload):{format:payload?.schema===SovSchematicData.PACKAGE_SCHEMA?'package':payload?.schema===SovSchematicData.WORKSPACE_SCHEMA?'workspace':'document',payload},name,null)
   },

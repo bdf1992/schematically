@@ -238,9 +238,17 @@ function svgPoint(cx,cy){
 function currentZoom(){
   return BASE_VIEW.w / camera.w;
 }
+function syncLabelScale(){
+  // The viewBox is also fitted into the actual workspace between the panels.
+  // Nominal camera zoom alone misses this scale, especially on narrow screens.
+  const matrix=workspace.getScreenCTM();
+  const scale=matrix?Math.hypot(matrix.a,matrix.b):1;
+  workspace.style.setProperty('--zoom',String(scale>0?scale:1));
+  placeWireLabels();
+}
 function applyCamera(){
   workspace.setAttribute('viewBox',`${camera.x} ${camera.y} ${camera.w} ${camera.h}`);
-  workspace.style.setProperty('--zoom',String(currentZoom())); // labels clamp their screen size against this (app.css)
+  syncLabelScale();
   zoomReadout.textContent=`${Math.round(currentZoom()*100)}%`;
   requestAnimationFrame(positionSelectionBar);
 }
@@ -344,16 +352,31 @@ function activeCanvasWireSet(canvasId=selectedCanvasContextId()){
 function nodeVisibleInActiveCanvas(){return true}
 function wireVisibleInActiveCanvas(){return true}
 function diagramBounds(canvasId=selectedCanvasContextId()){
-  const nodeIds=activeCanvasNodeIds(canvasId),scopedNodes=nodes.filter(n=>nodeIds.has(n.id));
+  const nodeIds=activeCanvasNodeIds(canvasId);
+  for(const id of [...nodeIds])for(const child of descendantsOf(id))nodeIds.add(child.id);
+  const scopedNodes=nodes.filter(n=>nodeIds.has(n.id)&&!entityEditorState(n).hidden);
   const d=canvasDescriptorById(canvasId);
   if(d?.ownerKind==='component'){
-    const owner=nodes.find(n=>n.id===d.ownerId);if(owner&&!scopedNodes.includes(owner))scopedNodes.unshift(owner);
+    const owner=nodes.find(n=>n.id===d.ownerId);if(owner&&!scopedNodes.includes(owner)){scopedNodes.unshift(owner);nodeIds.add(owner.id)}
   }
   if(!scopedNodes.length&&canvasId===GLOBAL_CANVAS_ID)return null;
   let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
   for(const n of scopedNodes){const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
   const wireIds=activeCanvasWireSet(canvasId),occupied=[];
+  for(const w of wires)if(nodeIds.has((w.canvasId||'').replace('canvas:component:','')))wireIds.add(w.id);
   wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
+  // Text and custom graphics can extend beyond a Component's body. Measure their
+  // actual projection in workspace coordinates, excluding selection/drag chrome.
+  const inverse=workspace.getScreenCTM()?.inverse();
+  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text')){
+    const node=el.closest('.node'),wire=el.closest('[data-wire-id]');
+    if(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId)))continue;
+    if(!el.getClientRects().length||getComputedStyle(el).display==='none')continue;
+    const rect=el.getBBox(),matrix=inverse.multiply(el.getScreenCTM());
+    for(const [x,y] of [[rect.x,rect.y],[rect.x+rect.width,rect.y],[rect.x,rect.y+rect.height],[rect.x+rect.width,rect.y+rect.height]]){
+      const q=new DOMPoint(x,y).matrixTransform(matrix);l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y);
+    }
+  }
   return Number.isFinite(l)?{l,r,t,b}:null;
 }
 function fitDiagram(){
@@ -434,8 +457,13 @@ function settleActiveComponent(mods=null){
     node.y=snapCoord(node.y,step);
   }
   const settleDx=node.x-before.x,settleDy=node.y-before.y;
-  if((settleDx||settleDy)&&activeNodeDragState){
-    for(const item of [...(activeNodeDragState.descendantOrigins||[]),...(activeNodeDragState.groupOrigins||[])]){item.node.x+=settleDx;item.node.y+=settleDy;const cel=document.querySelector(`.node[data-id=\"${item.node.id}\"]`);if(cel)cel.setAttribute('transform',`translate(${item.node.x} ${item.node.y})`)}
+  if(settleDx||settleDy){
+    // Keyboard moves have no pointer state, but the same parent-relative geometry
+    // must survive snapping, including pinned descendants carried by their host.
+    const moved=activeNodeDragState
+      ? [...(activeNodeDragState.descendantOrigins||[]),...(activeNodeDragState.groupOrigins||[])].map(item=>item.node)
+      : descendantsOf(node.id);
+    for(const child of moved){child.x+=settleDx;child.y+=settleDy;const cel=document.querySelector(`.node[data-id="${child.id}"]`);if(cel)cel.setAttribute('transform',`translate(${child.x} ${child.y})`)}
   }
 
   const el=document.querySelector(`.node[data-id="${node.id}"]`);
