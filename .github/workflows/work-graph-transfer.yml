@@ -1,0 +1,27 @@
+name: work-graph-transfer
+on:
+  push:
+    branches: [astra/work-graph-foundation]
+    paths: [.github/workflows/work-graph-transfer.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fd4a10245c21dbabecc3c919da5f0fbb38bcb3bf
+          persist-credentials: false
+      - name: Archive exact public source
+        run: |
+          mkdir -p /tmp/work-graph-source
+          git archive --format=tar HEAD > /tmp/work-graph-source/source.tar
+          git rev-parse HEAD > /tmp/work-graph-source/COMMIT
+          git rev-parse HEAD^{tree} > /tmp/work-graph-source/TREE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: work-graph-pinned-source
+          path: /tmp/work-graph-source/
+          retention-days: 3
