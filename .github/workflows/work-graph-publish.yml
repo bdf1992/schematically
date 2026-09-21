@@ -69,8 +69,11 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/graph-candidate"
-          # Existing QA writes these fixture artifacts. They are not product changes.
-          git restore -- tests/beta17-read-write.png tests/beta18-inline-wire.png tests/file-menu.png tests/saved-test.sov tests/saved-test.sovpak
+          # Existing QA writes these six tracked artifacts. Preserve its measurements;
+          # restore only these outputs, then refuse any other source drift.
+          cp tests/performance-results.json "$RUNNER_TEMP/graph-evidence/performance-results.json"
+          git diff --binary > "$RUNNER_TEMP/graph-evidence/qa-generated-artifacts.patch"
+          git restore -- tests/beta17-read-write.png tests/beta18-inline-wire.png tests/file-menu.png tests/saved-test.sov tests/saved-test.sovpak tests/performance-results.json
           git diff --exit-code
           test "$(git write-tree)" = "$EXPECTED_TREE"
           git config user.name 'Work Graph build verification'
