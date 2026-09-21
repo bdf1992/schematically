@@ -1,0 +1,15 @@
+diff --git a/tests/work_graph_browser_qa.py b/tests/work_graph_browser_qa.py
+index 9e834c2..7ada39b 100644
+--- a/tests/work_graph_browser_qa.py
++++ b/tests/work_graph_browser_qa.py
+@@ -175,2 +175,8 @@ with sync_playwright() as playwright:
+-                # Startup recovery may already restore. Explicit restore uses the same seam.
+-                page.evaluate('SovSchematicAPI.document.restoreRecovery()')
++                # Recovery deliberately asks before replacing the unsaved startup file.
++                # Playwright dismisses unhandled dialogs: exercise both real choices.
++                page.once('dialog',lambda dialog:dialog.dismiss())
++                assert page.evaluate('SovSchematicAPI.document.restoreRecovery()') is False
++                assert page.evaluate('SovSchematicAPI.file.package().meta.graph || null') is None
++                passed('cancelling recovery leaves the current file and its metadata unchanged')
++                page.once('dialog',lambda dialog:dialog.accept())
++                assert page.evaluate('SovSchematicAPI.document.restoreRecovery()') is True
