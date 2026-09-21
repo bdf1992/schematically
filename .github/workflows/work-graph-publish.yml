@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      EXPECTED_TREE: e2fb3e9ce8d7a531400309b5418431486ffdb0ba
+      EXPECTED_TREE: 18502a076f33db32955d4bdbffc2db115a682771
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Reconstruct the exact locally tested public source
+      - name: Reconstruct the exact source and recovery test correction
         shell: bash
         run: |
           set -euo pipefail
@@ -30,8 +30,7 @@ jobs:
           import base64, hashlib, lzma, os
           from pathlib import Path
           parts = [''.join(Path(f'.github/work-graph-transfer/part-{i}.txt').read_text().split()) for i in range(5)]
-          # Repair one known transcription typo in the transport, never in source.
-          # The pinned SHA-256 below must still agree before any patch is applied.
+          # One known transcription typo; exact compressed and Git-tree digests still bind.
           if len(parts[2]) == 8000 and parts[2][5021] == 'n':
               parts[2] = parts[2][:5021] + 'N' + parts[2][5022:]
           out = Path(os.environ['RUNNER_TEMP']) / 'graph-evidence'
@@ -41,10 +40,14 @@ jobs:
           digest = hashlib.sha256(packed).hexdigest()
           assert digest == '65ab22e4a495d5e17a0f74007463d0e94ca6bedcff4ad3092e2728e2229fe098', digest
           (out / 'candidate.patch').write_bytes(lzma.decompress(packed))
+          correction = Path('.github/work-graph-transfer/recovery-consent.patch').read_bytes()
+          assert hashlib.sha256(correction).hexdigest() == '34f054a6b37a2da7596d8922bda2155b5a9b13e7701a429b3df1746d17136419'
+          (out / 'recovery-consent.patch').write_bytes(correction)
           PY
           git worktree add --detach "$RUNNER_TEMP/graph-candidate" fd4a10245c21dbabecc3c919da5f0fbb38bcb3bf
           cd "$RUNNER_TEMP/graph-candidate"
           git apply --index --unidiff-zero "$RUNNER_TEMP/graph-evidence/candidate.patch"
+          git apply --index --unidiff-zero "$RUNNER_TEMP/graph-evidence/recovery-consent.patch"
           python build.py
           git add index.html
           test "$(git write-tree)" = "$EXPECTED_TREE"
