@@ -188,8 +188,32 @@ function markerCountEl(){
   }
   return el;
 }
+function graphRenderReadings(){
+  const rows=new Map();
+  if(!document.querySelector('.app')?.classList.contains('graph-view')||!currentPackageMeta.graph)return rows;
+  try{
+    SovSchematicGraph.validate(snapshotDocument(),currentPackageMeta.graph);
+    const readings=new Map(currentPackageMeta.graph.readings.map(r=>[r.address,r]));
+    for(const b of diagram.meta.graph.bindings)if(b.resource==='component')rows.set(b.id,{...b,fields:readings.get(b.address).fields});
+  }catch(_){/* Detached readings are reported in the inspector, never painted as current. */}
+  return rows;
+}
+function appendGraphReading(g,n,reading){
+  if(!reading)return;
+  g.classList.add('graph-bound');g.dataset.graphKind=reading.kind;
+  const size=componentSize(n),full=String(n.config.label||reading.address);
+  const max=Math.max(12,Math.floor((size.w-32)/7));
+  const label=full.length>max?full.slice(0,max-1)+'…':full;
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+  t.setAttribute('class','graph-node-heading');t.setAttribute('x',String(-size.w/2+16));t.setAttribute('y',String(-size.h/2+23));t.textContent=label;g.append(t);
+  const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=full;t.append(title);
+  const axes=reading.fields.filter(f=>['workstation_state','lifecycle','standing'].includes(f.axis)&&f.status==='present'&&typeof f.value==='string');
+  const line=axes.length?axes.map(f=>f.value).join(' · '):reading.kind;
+  const sub=document.createElementNS('http://www.w3.org/2000/svg','text');sub.setAttribute('class','graph-node-state');sub.setAttribute('x',String(-size.w/2+16));sub.setAttribute('y',String(-size.h/2+43));sub.textContent=line;g.append(sub);
+}
 function render(){
   syncAllNodeBoundaryContext();
+  const graphReadings=graphRenderReadings();
   const signalState=computeSignalState();
   const componentSignals=signalState.colors;
   const markers=markersById();
@@ -203,6 +227,7 @@ function render(){
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
     renderComponentVisual(g,n,cfg,s,signalColor);
+    appendGraphReading(g,n,graphReadings.get(n.id));
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
@@ -232,6 +257,7 @@ function render(){
   renderWires(signalState,markers);
   {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
+  if(typeof renderGraphInspector==='function')renderGraphInspector();
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
 }
 function clearEndpointFocus(){

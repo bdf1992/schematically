@@ -1,4 +1,5 @@
 'use strict';
+document.getElementById('graphInspector')?.addEventListener('focusin',()=>setCanvasKeyboardActive(false));
 // 0.1 Beta concern: Global focus, palette/grid/zoom, deletion, keyboard commands, and startup.
 
 selectionBar.addEventListener('keydown',e=>{
@@ -79,6 +80,7 @@ gridSizeInput.addEventListener('change',()=>{
 zoomOutBtn.addEventListener('click',()=>{zoomAt(1/1.25);setCanvasKeyboardActive(true)});
 zoomInBtn.addEventListener('click',()=>{zoomAt(1.25);setCanvasKeyboardActive(true)});
 resetZoomBtn.addEventListener('click',()=>{resetZoom();setCanvasKeyboardActive(true)});
+document.getElementById('graphViewBtn')?.addEventListener('click',()=>setGraphView(!document.querySelector('.app')?.classList.contains('graph-view')));
 fitBtn.addEventListener('click',()=>{fitDiagram();setCanvasKeyboardActive(true)});
 
 workspace.addEventListener('wheel',e=>{

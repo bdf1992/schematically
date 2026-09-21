@@ -1,0 +1,1343 @@
+{
+  "schema": "soveraeign.schematic/package@0.1",
+  "version": 1,
+  "manifest": {
+    "id": "ws:mission:candidate-review-snapshot",
+    "title": "A candidate reaches an evidenced review",
+    "entry": "document",
+    "createdAt": "2026-09-21T00:00:00Z",
+    "updatedAt": "2026-09-21T00:00:00Z",
+    "generator": "SOV Workstation graph profile 0.1"
+  },
+  "document": {
+    "schema": "soveraeign.schematic/document@0.1",
+    "id": "ws:mission:candidate-review",
+    "revision": 0,
+    "meta": {
+      "title": "A candidate reaches an evidenced review",
+      "updatedAt": "2026-09-21T00:00:00Z",
+      "graph": {
+        "schema": "soveraeign.schematic/graph-definition@0.1",
+        "bindings": [
+          {
+            "resource": "component",
+            "id": "mission",
+            "kind": "system",
+            "address": "ws:mission:candidate-review"
+          },
+          {
+            "resource": "component",
+            "id": "task-build-candidate",
+            "kind": "node",
+            "address": "ws:task:build-candidate"
+          },
+          {
+            "resource": "component",
+            "id": "held-build-candidate-contract",
+            "kind": "charge",
+            "address": "ws:task:build-candidate/contract"
+          },
+          {
+            "resource": "component",
+            "id": "held-build-candidate-candidate",
+            "kind": "charge",
+            "address": "ws:task:build-candidate/candidate"
+          },
+          {
+            "resource": "component",
+            "id": "task-check-evidence",
+            "kind": "node",
+            "address": "ws:task:check-evidence"
+          },
+          {
+            "resource": "component",
+            "id": "held-check-evidence-evidence",
+            "kind": "charge",
+            "address": "ws:task:check-evidence/evidence"
+          },
+          {
+            "resource": "component",
+            "id": "held-check-evidence-residuals",
+            "kind": "charge",
+            "address": "ws:task:check-evidence/residuals"
+          },
+          {
+            "resource": "component",
+            "id": "task-review-outcome",
+            "kind": "node",
+            "address": "ws:task:review-outcome"
+          },
+          {
+            "resource": "component",
+            "id": "held-review-outcome-residuals",
+            "kind": "charge",
+            "address": "ws:task:review-outcome/residuals"
+          },
+          {
+            "resource": "wire",
+            "id": "dependency-%5B%22build-candidate%22%2C%22check-evidence%22%5D",
+            "kind": "dependency",
+            "address": "ws:dependency:%5B%22build-candidate%22%2C%22check-evidence%22%5D"
+          },
+          {
+            "resource": "wire",
+            "id": "dependency-%5B%22check-evidence%22%2C%22review-outcome%22%5D",
+            "kind": "dependency",
+            "address": "ws:dependency:%5B%22check-evidence%22%2C%22review-outcome%22%5D"
+          }
+        ]
+      }
+    },
+    "components": [
+      {
+        "id": "mission",
+        "symbolId": "plane",
+        "x": 770,
+        "y": 350,
+        "canvasId": "canvas:global",
+        "form": {
+          "dimension": 2,
+          "regions": {
+            "interior": {
+              "state": "open"
+            }
+          },
+          "body": {
+            "kind": "surface",
+            "material": "generic",
+            "thickness": 0
+          },
+          "frame": {
+            "mode": "none",
+            "thickness": 0,
+            "depth": 0
+          }
+        },
+        "config": {
+          "label": "A candidate reaches an evidenced review",
+          "colorSlot": 0,
+          "ports": {},
+          "signalMode": "passive",
+          "presentation": {
+            "graphic": {
+              "kind": "none"
+            },
+            "labelMode": "boundary",
+            "backdrop": "solid",
+            "size": {
+              "w": 1380,
+              "h": 580
+            }
+          },
+          "attachmentDefaults": "none"
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "parentId": null
+      },
+      {
+        "id": "task-build-candidate",
+        "symbolId": "plane",
+        "x": 350,
+        "y": 290,
+        "canvasId": "canvas:component:mission",
+        "form": {
+          "dimension": 2,
+          "regions": {
+            "interior": {
+              "state": "open"
+            }
+          },
+          "body": {
+            "kind": "surface",
+            "material": "generic",
+            "thickness": 0
+          },
+          "frame": {
+            "mode": "none",
+            "thickness": 0,
+            "depth": 0
+          }
+        },
+        "config": {
+          "label": "Build the candidate",
+          "colorSlot": 0,
+          "ports": {
+            "in": {
+              "face": "external",
+              "connections": [
+                {
+                  "flow": "in",
+                  "access": "none"
+                }
+              ]
+            },
+            "out": {
+              "face": "external",
+              "connections": [
+                {
+                  "flow": "out",
+                  "access": "none"
+                }
+              ]
+            },
+            "control": {
+              "face": "external",
+              "connections": [
+                {
+                  "flow": "control",
+                  "access": "none"
+                }
+              ]
+            }
+          },
+          "signalMode": "passive",
+          "presentation": {
+            "graphic": {
+              "kind": "none"
+            },
+            "labelMode": "boundary",
+            "backdrop": "solid",
+            "size": {
+              "w": 340,
+              "h": 280
+            }
+          },
+          "attachmentDefaults": "standard"
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "parentId": "mission"
+      },
+      {
+        "id": "held-build-candidate-contract",
+        "symbolId": "plane",
+        "x": 270,
+        "y": 260,
+        "canvasId": "canvas:component:task-build-candidate",
+        "form": {
+          "dimension": 2,
+          "regions": {
+            "interior": {
+              "state": "open"
+            }
+          },
+          "body": {
+            "kind": "surface",
+            "material": "generic",
+            "thickness": 0
+          },
+          "frame": {
+            "mode": "none",
+            "thickness": 0,
+            "depth": 0
+          }
+        },
+        "config": {
+          "label": "Work contract",
+          "colorSlot": 0,
+          "ports": {},
+          "signalMode": "passive",
+          "presentation": {
+            "graphic": {
+              "kind": "none"
+            },
+            "labelMode": "boundary",
+            "backdrop": "solid",
+            "size": {
+              "w": 140,
+              "h": 68
+            }
+          },
+          "attachmentDefaults": "none"
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "parentId": "task-build-candidate"
+      },
+      {
+        "id": "held-build-candidate-candidate",
+        "symbolId": "plane",
+        "x": 430,
+        "y": 260,
+        "canvasId": "canvas:component:task-build-candidate",
+        "form": {
+          "dimension": 2,
+          "regions": {
+            "interior": {
+              "state": "open"
+            }
+          },
+          "body": {
+            "kind": "surface",
+            "material": "generic",
+            "thickness": 0
+          },
+          "frame": {
+            "mode": "none",
+            "thickness": 0,
+            "depth": 0
+          }
+        },
+        "config": {
+          "label": "Candidate reference",
+          "colorSlot": 0,
+          "ports": {},
+          "signalMode": "passive",
+          "presentation": {
+            "graphic": {
+              "kind": "none"
+            },
+            "labelMode": "boundary",
+            "backdrop": "solid",
+            "size": {
+              "w": 140,
+              "h": 68
+            }
+          },
+          "attachmentDefaults": "none"
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "parentId": "task-build-candidate"
+      },
+      {
+        "id": "task-check-evidence",
+        "symbolId": "plane",
+        "x": 770,
+        "y": 290,
+        "canvasId": "canvas:component:mission",
+        "form": {
+          "dimension": 2,
+          "regions": {
+            "interior": {
+              "state": "open"
+            }
+          },
+          "body": {
+            "kind": "surface",
+            "material": "generic",
+            "thickness": 0
+          },
+          "frame": {
+            "mode": "none",
+            "thickness": 0,
+            "depth": 0
+          }
+        },
+        "config": {
+          "label": "Check the evidence",
+          "colorSlot": 0,
+          "ports": {
+            "in": {
+              "face": "external",
+              "connections": [
+                {
+                  "flow": "in",
+                  "access": "none"
+                }
+              ]
+            },
+            "out": {
+              "face": "external",
+              "connections": [
+                {
+                  "flow": "out",
+                  "access": "none"
+                }
+              ]
+            },
+            "control": {
+              "face": "external",
+              "connections": [
+                {
+                  "flow": "control",
+                  "access": "none"
+                }
+              ]
+            }
+          },
+          "signalMode": "passive",
+          "presentation": {
+            "graphic": {
+              "kind": "none"
+            },
+            "labelMode": "boundary",
+            "backdrop": "solid",
+            "size": {
+              "w": 340,
+              "h": 280
+            }
+          },
+          "attachmentDefaults": "standard"
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "parentId": "mission"
+      },
+      {
+        "id": "held-check-evidence-evidence",
+        "symbolId": "plane",
+        "x": 690,
+        "y": 260,
+        "canvasId": "canvas:component:task-check-evidence",
+        "form": {
+          "dimension": 2,
+          "regions": {
+            "interior": {
+              "state": "open"
+            }
+          },
+          "body": {
+            "kind": "surface",
+            "material": "generic",
+            "thickness": 0
+          },
+          "frame": {
+            "mode": "none",
+            "thickness": 0,
+            "depth": 0
+          }
+        },
+        "config": {
+          "label": "Evidence references",
+          "colorSlot": 0,
+          "ports": {},
+          "signalMode": "passive",
+          "presentation": {
+            "graphic": {
+              "kind": "none"
+            },
+            "labelMode": "boundary",
+            "backdrop": "solid",
+            "size": {
+              "w": 140,
+              "h": 68
+            }
+          },
+          "attachmentDefaults": "none"
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "parentId": "task-check-evidence"
+      },
+      {
+        "id": "held-check-evidence-residuals",
+        "symbolId": "plane",
+        "x": 850,
+        "y": 260,
+        "canvasId": "canvas:component:task-check-evidence",
+        "form": {
+          "dimension": 2,
+          "regions": {
+            "interior": {
+              "state": "open"
+            }
+          },
+          "body": {
+            "kind": "surface",
+            "material": "generic",
+            "thickness": 0
+          },
+          "frame": {
+            "mode": "none",
+            "thickness": 0,
+            "depth": 0
+          }
+        },
+        "config": {
+          "label": "Unresolved obligations",
+          "colorSlot": 0,
+          "ports": {},
+          "signalMode": "passive",
+          "presentation": {
+            "graphic": {
+              "kind": "none"
+            },
+            "labelMode": "boundary",
+            "backdrop": "solid",
+            "size": {
+              "w": 140,
+              "h": 68
+            }
+          },
+          "attachmentDefaults": "none"
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "parentId": "task-check-evidence"
+      },
+      {
+        "id": "task-review-outcome",
+        "symbolId": "plane",
+        "x": 1190,
+        "y": 290,
+        "canvasId": "canvas:component:mission",
+        "form": {
+          "dimension": 2,
+          "regions": {
+            "interior": {
+              "state": "open"
+            }
+          },
+          "body": {
+            "kind": "surface",
+            "material": "generic",
+            "thickness": 0
+          },
+          "frame": {
+            "mode": "none",
+            "thickness": 0,
+            "depth": 0
+          }
+        },
+        "config": {
+          "label": "Review the outcome",
+          "colorSlot": 0,
+          "ports": {
+            "in": {
+              "face": "external",
+              "connections": [
+                {
+                  "flow": "in",
+                  "access": "none"
+                }
+              ]
+            },
+            "out": {
+              "face": "external",
+              "connections": [
+                {
+                  "flow": "out",
+                  "access": "none"
+                }
+              ]
+            },
+            "control": {
+              "face": "external",
+              "connections": [
+                {
+                  "flow": "control",
+                  "access": "none"
+                }
+              ]
+            }
+          },
+          "signalMode": "passive",
+          "presentation": {
+            "graphic": {
+              "kind": "none"
+            },
+            "labelMode": "boundary",
+            "backdrop": "solid",
+            "size": {
+              "w": 340,
+              "h": 280
+            }
+          },
+          "attachmentDefaults": "standard"
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "parentId": "mission"
+      },
+      {
+        "id": "held-review-outcome-residuals",
+        "symbolId": "plane",
+        "x": 1110,
+        "y": 260,
+        "canvasId": "canvas:component:task-review-outcome",
+        "form": {
+          "dimension": 2,
+          "regions": {
+            "interior": {
+              "state": "open"
+            }
+          },
+          "body": {
+            "kind": "surface",
+            "material": "generic",
+            "thickness": 0
+          },
+          "frame": {
+            "mode": "none",
+            "thickness": 0,
+            "depth": 0
+          }
+        },
+        "config": {
+          "label": "Unresolved obligations",
+          "colorSlot": 0,
+          "ports": {},
+          "signalMode": "passive",
+          "presentation": {
+            "graphic": {
+              "kind": "none"
+            },
+            "labelMode": "boundary",
+            "backdrop": "solid",
+            "size": {
+              "w": 140,
+              "h": 68
+            }
+          },
+          "attachmentDefaults": "none"
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "parentId": "task-review-outcome"
+      }
+    ],
+    "wires": [
+      {
+        "id": "dependency-%5B%22build-candidate%22%2C%22check-evidence%22%5D",
+        "a": "task-build-candidate",
+        "b": "task-check-evidence",
+        "aSide": "out",
+        "bSide": "in",
+        "aAttachment": {
+          "kind": "attachment-ref",
+          "componentId": "task-build-candidate",
+          "pointId": "right"
+        },
+        "bAttachment": {
+          "kind": "attachment-ref",
+          "componentId": "task-check-evidence",
+          "pointId": "left"
+        },
+        "canvasId": "canvas:component:mission",
+        "form": {
+          "dimension": 1,
+          "body": {
+            "kind": "path",
+            "material": "generic",
+            "thickness": 0
+          }
+        },
+        "lane": 0,
+        "net": 0,
+        "config": {
+          "direction": "forward",
+          "reciprocity": "none",
+          "forwardOperation": "none",
+          "reverseOperation": "none",
+          "aConnectionIndex": 0,
+          "bConnectionIndex": 0,
+          "aChannelMarker": "1",
+          "bChannelMarker": "1",
+          "label": "requires"
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "role": "carrier"
+      },
+      {
+        "id": "dependency-%5B%22check-evidence%22%2C%22review-outcome%22%5D",
+        "a": "task-check-evidence",
+        "b": "task-review-outcome",
+        "aSide": "out",
+        "bSide": "in",
+        "aAttachment": {
+          "kind": "attachment-ref",
+          "componentId": "task-check-evidence",
+          "pointId": "right"
+        },
+        "bAttachment": {
+          "kind": "attachment-ref",
+          "componentId": "task-review-outcome",
+          "pointId": "left"
+        },
+        "canvasId": "canvas:component:mission",
+        "form": {
+          "dimension": 1,
+          "body": {
+            "kind": "path",
+            "material": "generic",
+            "thickness": 0
+          }
+        },
+        "lane": 1,
+        "net": 1,
+        "config": {
+          "direction": "forward",
+          "reciprocity": "none",
+          "forwardOperation": "none",
+          "reverseOperation": "none",
+          "aConnectionIndex": 0,
+          "bConnectionIndex": 0,
+          "aChannelMarker": "1",
+          "bChannelMarker": "1",
+          "label": "requires"
+        },
+        "editor": {
+          "pinned": false,
+          "locked": false,
+          "hidden": false,
+          "opacity": 1,
+          "rate": 1
+        },
+        "role": "carrier"
+      }
+    ],
+    "references": [],
+    "layout": {}
+  },
+  "workspace": {
+    "view": {
+      "showFlow": false
+    }
+  },
+  "templates": [],
+  "assets": [],
+  "meta": {
+    "graph": {
+      "schema": "soveraeign.schematic/graph-snapshot@0.1",
+      "source": {
+        "system": "workstation:example",
+        "revision": "fixture-1",
+        "capturedAt": "2026-09-21T00:00:00Z",
+        "consistency": "fixture",
+        "coverage": "Three synthetic tasks, not production work. No live observations or grants."
+      },
+      "definition": "{\"id\":\"ws:mission:candidate-review\",\"schema\":\"soveraeign.schematic/graph-definition@0.1\",\"subjects\":[{\"address\":\"ws:dependency:%5B%22build-candidate%22%2C%22check-evidence%22%5D\",\"connections\":[0,0],\"direction\":\"forward\",\"ends\":[{\"componentId\":\"task-build-candidate\",\"kind\":\"attachment-ref\",\"pointId\":\"right\"},{\"componentId\":\"task-check-evidence\",\"kind\":\"attachment-ref\",\"pointId\":\"left\"}],\"id\":\"dependency-%5B%22build-candidate%22%2C%22check-evidence%22%5D\",\"kind\":\"dependency\",\"label\":\"requires\",\"operations\":[\"none\",\"none\"],\"parent\":\"ws:mission:candidate-review\",\"resource\":\"wire\"},{\"address\":\"ws:dependency:%5B%22check-evidence%22%2C%22review-outcome%22%5D\",\"connections\":[0,0],\"direction\":\"forward\",\"ends\":[{\"componentId\":\"task-check-evidence\",\"kind\":\"attachment-ref\",\"pointId\":\"right\"},{\"componentId\":\"task-review-outcome\",\"kind\":\"attachment-ref\",\"pointId\":\"left\"}],\"id\":\"dependency-%5B%22check-evidence%22%2C%22review-outcome%22%5D\",\"kind\":\"dependency\",\"label\":\"requires\",\"operations\":[\"none\",\"none\"],\"parent\":\"ws:mission:candidate-review\",\"resource\":\"wire\"},{\"address\":\"ws:mission:candidate-review\",\"dimension\":2,\"id\":\"mission\",\"interior\":\"open\",\"kind\":\"system\",\"label\":\"A candidate reaches an evidenced review\",\"parent\":null,\"ports\":[],\"resource\":\"component\"},{\"address\":\"ws:task:build-candidate\",\"dimension\":2,\"id\":\"task-build-candidate\",\"interior\":\"open\",\"kind\":\"node\",\"label\":\"Build the candidate\",\"parent\":\"ws:mission:candidate-review\",\"ports\":[{\"connections\":[{\"access\":\"none\",\"flow\":\"control\"}],\"face\":\"external\",\"id\":\"control\"},{\"connections\":[{\"access\":\"none\",\"flow\":\"in\"}],\"face\":\"external\",\"id\":\"in\"},{\"connections\":[{\"access\":\"none\",\"flow\":\"out\"}],\"face\":\"external\",\"id\":\"out\"}],\"resource\":\"component\"},{\"address\":\"ws:task:build-candidate/candidate\",\"dimension\":2,\"id\":\"held-build-candidate-candidate\",\"interior\":\"open\",\"kind\":\"charge\",\"label\":\"Candidate reference\",\"parent\":\"ws:task:build-candidate\",\"ports\":[],\"resource\":\"component\"},{\"address\":\"ws:task:build-candidate/contract\",\"dimension\":2,\"id\":\"held-build-candidate-contract\",\"interior\":\"open\",\"kind\":\"charge\",\"label\":\"Work contract\",\"parent\":\"ws:task:build-candidate\",\"ports\":[],\"resource\":\"component\"},{\"address\":\"ws:task:check-evidence\",\"dimension\":2,\"id\":\"task-check-evidence\",\"interior\":\"open\",\"kind\":\"node\",\"label\":\"Check the evidence\",\"parent\":\"ws:mission:candidate-review\",\"ports\":[{\"connections\":[{\"access\":\"none\",\"flow\":\"control\"}],\"face\":\"external\",\"id\":\"control\"},{\"connections\":[{\"access\":\"none\",\"flow\":\"in\"}],\"face\":\"external\",\"id\":\"in\"},{\"connections\":[{\"access\":\"none\",\"flow\":\"out\"}],\"face\":\"external\",\"id\":\"out\"}],\"resource\":\"component\"},{\"address\":\"ws:task:check-evidence/evidence\",\"dimension\":2,\"id\":\"held-check-evidence-evidence\",\"interior\":\"open\",\"kind\":\"charge\",\"label\":\"Evidence references\",\"parent\":\"ws:task:check-evidence\",\"ports\":[],\"resource\":\"component\"},{\"address\":\"ws:task:check-evidence/residuals\",\"dimension\":2,\"id\":\"held-check-evidence-residuals\",\"interior\":\"open\",\"kind\":\"charge\",\"label\":\"Unresolved obligations\",\"parent\":\"ws:task:check-evidence\",\"ports\":[],\"resource\":\"component\"},{\"address\":\"ws:task:review-outcome\",\"dimension\":2,\"id\":\"task-review-outcome\",\"interior\":\"open\",\"kind\":\"node\",\"label\":\"Review the outcome\",\"parent\":\"ws:mission:candidate-review\",\"ports\":[{\"connections\":[{\"access\":\"none\",\"flow\":\"control\"}],\"face\":\"external\",\"id\":\"control\"},{\"connections\":[{\"access\":\"none\",\"flow\":\"in\"}],\"face\":\"external\",\"id\":\"in\"},{\"connections\":[{\"access\":\"none\",\"flow\":\"out\"}],\"face\":\"external\",\"id\":\"out\"}],\"resource\":\"component\"},{\"address\":\"ws:task:review-outcome/residuals\",\"dimension\":2,\"id\":\"held-review-outcome-residuals\",\"interior\":\"open\",\"kind\":\"charge\",\"label\":\"Unresolved obligations\",\"parent\":\"ws:task:review-outcome\",\"ports\":[],\"resource\":\"component\"}]}",
+      "readings": [
+        {
+          "address": "ws:mission:candidate-review",
+          "fields": [
+            {
+              "axis": "repository",
+              "basis": "declared",
+              "status": "present",
+              "value": "example",
+              "source": "control/missions/candidate-review.json#/repository"
+            },
+            {
+              "axis": "lifecycle",
+              "basis": "declared",
+              "status": "present",
+              "value": "OPEN",
+              "source": "control/missions/candidate-review.json#/lifecycle"
+            },
+            {
+              "axis": "standing",
+              "basis": "declared",
+              "status": "present",
+              "value": "available",
+              "source": "control/missions/candidate-review.json#/standing"
+            },
+            {
+              "axis": "summary",
+              "basis": "declared",
+              "status": "present",
+              "value": "Follow a candidate, its terms and the review that still needs evidence.",
+              "source": "control/missions/candidate-review.json#/summary"
+            },
+            {
+              "axis": "description",
+              "basis": "declared",
+              "status": "present",
+              "value": "An illustrative WS-shaped record set. This graph performs no work.",
+              "source": "control/missions/candidate-review.json#/description"
+            },
+            {
+              "axis": "waiting_on",
+              "basis": "declared",
+              "status": "present",
+              "value": null,
+              "source": "control/missions/candidate-review.json#/waiting_on"
+            },
+            {
+              "axis": "estimates",
+              "basis": "declared",
+              "status": "present",
+              "value": [],
+              "source": "control/missions/candidate-review.json#/estimates"
+            },
+            {
+              "axis": "updated",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/missions/candidate-review.json#/updated"
+            }
+          ]
+        },
+        {
+          "address": "ws:task:build-candidate",
+          "fields": [
+            {
+              "axis": "objective",
+              "basis": "declared",
+              "status": "present",
+              "value": "Produce a revision-bound candidate under the work contract.",
+              "source": "control/tasks/build-candidate.json#/objective"
+            },
+            {
+              "axis": "standing",
+              "basis": "declared",
+              "status": "present",
+              "value": "available",
+              "source": "control/tasks/build-candidate.json#/standing"
+            },
+            {
+              "axis": "workstation_state",
+              "basis": "declared",
+              "status": "present",
+              "value": "ACTIVE",
+              "source": "control/tasks/build-candidate.json#/workstation_state"
+            },
+            {
+              "axis": "repository_state",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/build-candidate.json#/repository_state"
+            },
+            {
+              "axis": "waiting_on",
+              "basis": "declared",
+              "status": "present",
+              "value": null,
+              "source": "control/tasks/build-candidate.json#/waiting_on"
+            },
+            {
+              "axis": "serves",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/build-candidate.json#/serves"
+            },
+            {
+              "axis": "dependencies",
+              "basis": "declared",
+              "status": "present",
+              "value": [],
+              "source": "control/tasks/build-candidate.json#/dependencies"
+            },
+            {
+              "axis": "claim",
+              "basis": "declared",
+              "status": "present",
+              "value": {
+                "holder": "example-builder",
+                "session": "example-session"
+              },
+              "source": "control/tasks/build-candidate.json#/claim"
+            },
+            {
+              "axis": "branch",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/build-candidate.json#/branch"
+            },
+            {
+              "axis": "base_ref",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/build-candidate.json#/base_ref"
+            },
+            {
+              "axis": "worktree",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/build-candidate.json#/worktree"
+            },
+            {
+              "axis": "environment",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/build-candidate.json#/environment"
+            },
+            {
+              "axis": "candidate_id",
+              "basis": "declared",
+              "status": "present",
+              "value": "candidate-example",
+              "source": "control/tasks/build-candidate.json#/candidate_id"
+            },
+            {
+              "axis": "evidence",
+              "basis": "declared",
+              "status": "present",
+              "value": [],
+              "source": "control/tasks/build-candidate.json#/evidence"
+            },
+            {
+              "axis": "residuals",
+              "basis": "declared",
+              "status": "present",
+              "value": [],
+              "source": "control/tasks/build-candidate.json#/residuals"
+            },
+            {
+              "axis": "promoted_from",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/build-candidate.json#/promoted_from"
+            },
+            {
+              "axis": "updated",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/build-candidate.json#/updated"
+            }
+          ]
+        },
+        {
+          "address": "ws:task:build-candidate/contract",
+          "fields": [
+            {
+              "axis": "acceptance",
+              "basis": "declared",
+              "status": "present",
+              "value": [
+                "python scripts/qa.py"
+              ],
+              "source": "control/tasks/build-candidate.json#/contract/acceptance"
+            },
+            {
+              "axis": "ceiling",
+              "basis": "declared",
+              "status": "present",
+              "value": "tested",
+              "source": "control/tasks/build-candidate.json#/contract/ceiling"
+            },
+            {
+              "axis": "forbidden",
+              "basis": "declared",
+              "status": "present",
+              "value": [
+                "Change source-system authority"
+              ],
+              "source": "control/tasks/build-candidate.json#/contract/forbidden"
+            },
+            {
+              "axis": "paths",
+              "basis": "declared",
+              "status": "present",
+              "value": [
+                "src/**",
+                "tests/**"
+              ],
+              "source": "control/tasks/build-candidate.json#/contract/paths"
+            },
+            {
+              "axis": "steps",
+              "basis": "declared",
+              "status": "present",
+              "value": [
+                "Implement the agreed behavior",
+                "Retain the changed revision"
+              ],
+              "source": "control/tasks/build-candidate.json#/contract/steps"
+            }
+          ]
+        },
+        {
+          "address": "ws:task:build-candidate/candidate",
+          "fields": [
+            {
+              "axis": "candidate_id",
+              "basis": "declared",
+              "status": "present",
+              "value": "candidate-example",
+              "source": "control/tasks/build-candidate.json#/candidate_id"
+            },
+            {
+              "axis": "revision",
+              "basis": "observed",
+              "status": "absent",
+              "source": "control/tasks/build-candidate.json#/candidate_id"
+            }
+          ]
+        },
+        {
+          "address": "ws:task:check-evidence",
+          "fields": [
+            {
+              "axis": "objective",
+              "basis": "declared",
+              "status": "present",
+              "value": "Read the recorded evidence against the exact candidate.",
+              "source": "control/tasks/check-evidence.json#/objective"
+            },
+            {
+              "axis": "standing",
+              "basis": "declared",
+              "status": "present",
+              "value": "next",
+              "source": "control/tasks/check-evidence.json#/standing"
+            },
+            {
+              "axis": "workstation_state",
+              "basis": "declared",
+              "status": "present",
+              "value": "QUEUED",
+              "source": "control/tasks/check-evidence.json#/workstation_state"
+            },
+            {
+              "axis": "repository_state",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/check-evidence.json#/repository_state"
+            },
+            {
+              "axis": "waiting_on",
+              "basis": "declared",
+              "status": "present",
+              "value": "reviewer: confirm the evidence belongs to this candidate",
+              "source": "control/tasks/check-evidence.json#/waiting_on"
+            },
+            {
+              "axis": "serves",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/check-evidence.json#/serves"
+            },
+            {
+              "axis": "dependencies",
+              "basis": "declared",
+              "status": "present",
+              "value": [
+                "build-candidate"
+              ],
+              "source": "control/tasks/check-evidence.json#/dependencies"
+            },
+            {
+              "axis": "claim",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/check-evidence.json#/claim"
+            },
+            {
+              "axis": "branch",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/check-evidence.json#/branch"
+            },
+            {
+              "axis": "base_ref",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/check-evidence.json#/base_ref"
+            },
+            {
+              "axis": "worktree",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/check-evidence.json#/worktree"
+            },
+            {
+              "axis": "environment",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/check-evidence.json#/environment"
+            },
+            {
+              "axis": "candidate_id",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/check-evidence.json#/candidate_id"
+            },
+            {
+              "axis": "evidence",
+              "basis": "declared",
+              "status": "present",
+              "value": [
+                "test-report-reference:example"
+              ],
+              "source": "control/tasks/check-evidence.json#/evidence"
+            },
+            {
+              "axis": "residuals",
+              "basis": "declared",
+              "status": "present",
+              "value": [
+                "The candidate revision is not supplied in this snapshot."
+              ],
+              "source": "control/tasks/check-evidence.json#/residuals"
+            },
+            {
+              "axis": "promoted_from",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/check-evidence.json#/promoted_from"
+            },
+            {
+              "axis": "updated",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/check-evidence.json#/updated"
+            }
+          ]
+        },
+        {
+          "address": "ws:task:check-evidence/evidence",
+          "fields": [
+            {
+              "axis": "evidence",
+              "basis": "declared",
+              "status": "present",
+              "value": [
+                "test-report-reference:example"
+              ],
+              "source": "control/tasks/check-evidence.json#/evidence"
+            }
+          ]
+        },
+        {
+          "address": "ws:task:check-evidence/residuals",
+          "fields": [
+            {
+              "axis": "residuals",
+              "basis": "declared",
+              "status": "present",
+              "value": [
+                "The candidate revision is not supplied in this snapshot."
+              ],
+              "source": "control/tasks/check-evidence.json#/residuals"
+            }
+          ]
+        },
+        {
+          "address": "ws:task:review-outcome",
+          "fields": [
+            {
+              "axis": "objective",
+              "basis": "declared",
+              "status": "present",
+              "value": "Assess the requested outcome; this is not merge permission.",
+              "source": "control/tasks/review-outcome.json#/objective"
+            },
+            {
+              "axis": "standing",
+              "basis": "declared",
+              "status": "present",
+              "value": "next",
+              "source": "control/tasks/review-outcome.json#/standing"
+            },
+            {
+              "axis": "workstation_state",
+              "basis": "declared",
+              "status": "present",
+              "value": "BLOCKED",
+              "source": "control/tasks/review-outcome.json#/workstation_state"
+            },
+            {
+              "axis": "repository_state",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/review-outcome.json#/repository_state"
+            },
+            {
+              "axis": "waiting_on",
+              "basis": "declared",
+              "status": "present",
+              "value": "owner: outcome review",
+              "source": "control/tasks/review-outcome.json#/waiting_on"
+            },
+            {
+              "axis": "serves",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/review-outcome.json#/serves"
+            },
+            {
+              "axis": "dependencies",
+              "basis": "declared",
+              "status": "present",
+              "value": [
+                "check-evidence",
+                "external-observation"
+              ],
+              "source": "control/tasks/review-outcome.json#/dependencies"
+            },
+            {
+              "axis": "claim",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/review-outcome.json#/claim"
+            },
+            {
+              "axis": "branch",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/review-outcome.json#/branch"
+            },
+            {
+              "axis": "base_ref",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/review-outcome.json#/base_ref"
+            },
+            {
+              "axis": "worktree",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/review-outcome.json#/worktree"
+            },
+            {
+              "axis": "environment",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/review-outcome.json#/environment"
+            },
+            {
+              "axis": "candidate_id",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/review-outcome.json#/candidate_id"
+            },
+            {
+              "axis": "evidence",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/review-outcome.json#/evidence"
+            },
+            {
+              "axis": "residuals",
+              "basis": "declared",
+              "status": "present",
+              "value": [
+                "An external observation is outside this snapshot."
+              ],
+              "source": "control/tasks/review-outcome.json#/residuals"
+            },
+            {
+              "axis": "promoted_from",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/review-outcome.json#/promoted_from"
+            },
+            {
+              "axis": "updated",
+              "basis": "declared",
+              "status": "absent",
+              "source": "control/tasks/review-outcome.json#/updated"
+            }
+          ]
+        },
+        {
+          "address": "ws:task:review-outcome/residuals",
+          "fields": [
+            {
+              "axis": "residuals",
+              "basis": "declared",
+              "status": "present",
+              "value": [
+                "An external observation is outside this snapshot."
+              ],
+              "source": "control/tasks/review-outcome.json#/residuals"
+            }
+          ]
+        },
+        {
+          "address": "ws:dependency:%5B%22build-candidate%22%2C%22check-evidence%22%5D",
+          "fields": [
+            {
+              "axis": "required_task",
+              "basis": "declared",
+              "status": "present",
+              "value": "build-candidate",
+              "source": "control/tasks/check-evidence.json#/dependencies"
+            },
+            {
+              "axis": "delivery",
+              "basis": "observed",
+              "status": "absent",
+              "source": "not-a-transport-observation"
+            }
+          ]
+        },
+        {
+          "address": "ws:dependency:%5B%22check-evidence%22%2C%22review-outcome%22%5D",
+          "fields": [
+            {
+              "axis": "required_task",
+              "basis": "declared",
+              "status": "present",
+              "value": "check-evidence",
+              "source": "control/tasks/review-outcome.json#/dependencies"
+            },
+            {
+              "axis": "delivery",
+              "basis": "observed",
+              "status": "absent",
+              "source": "not-a-transport-observation"
+            }
+          ]
+        }
+      ],
+      "gaps": [
+        {
+          "address": "ws:task:check-evidence",
+          "code": "UNRESOLVED_WAIT",
+          "message": "reviewer: confirm the evidence belongs to this candidate"
+        },
+        {
+          "address": "ws:task:review-outcome",
+          "code": "UNRESOLVED_WAIT",
+          "message": "owner: outcome review"
+        },
+        {
+          "address": "ws:task:review-outcome",
+          "code": "DEPENDENCY_OUTSIDE_SNAPSHOT",
+          "message": "Dependency external-observation is outside this snapshot."
+        }
+      ]
+    },
+    "coverage": {
+      "tasks": 3,
+      "missingDependencies": [
+        "external-observation"
+      ]
+    }
+  }
+}

@@ -86,7 +86,7 @@ function commitHistoryCapture(label=null){
 }
 function restoreHistoryDocument(doc){
   historyState.replaying=true;
-  try{replaceRuntimeDocument(doc)}finally{historyState.replaying=false}
+  try{replaceRuntimeDocument(doc,{preservePackageMeta:true})}finally{historyState.replaying=false}
   historyState.baseline=historyDocument();persistenceFingerprint=semanticFingerprint();updateHistoryUI();renderObjectsPanel();
 }
 function undoHistory(){
@@ -117,7 +117,7 @@ function listCheckpoints(){return checkpointStore().map(({document,...meta})=>So
 function restoreCheckpoint(id){
   const store=checkpointStore(),cp=store.find(x=>x.id===id);if(!cp)throw new Error('Checkpoint not found');
   commitHistoryCapture();const preserved=SovSchematicData.clone(store);setHistoryHint(`Restore checkpoint · ${cp.name}`);
-  historyState.replaying=true;try{replaceRuntimeDocument(cp.document);diagram.meta=diagram.meta||{};diagram.meta.checkpoints=preserved}finally{historyState.replaying=false}
+  historyState.replaying=true;try{replaceRuntimeDocument(cp.document,{preservePackageMeta:true});diagram.meta=diagram.meta||{};diagram.meta.checkpoints=preserved}finally{historyState.replaying=false}
   historyState.baseline=historyDocument();scheduleHistoryCapture();renderCheckpointList();statusEl.textContent=`Restored · ${cp.name}`;return snapshotDocument();
 }
 function renderCheckpointList(){

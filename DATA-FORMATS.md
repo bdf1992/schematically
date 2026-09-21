@@ -139,3 +139,11 @@ carries `form.dimension: 1` and `role: 'carrier'`. `wire.create` accepts any mix
 bound (`a`/`aSide` or an `aAttachment` ref) and free ends; `wire.update` rebinds an end
 with `a`/`aSide` or frees it with `aAttachment: {kind:'free',x,y}`. Validation requires
 bound ends to exist and two bound ends to share a surface; free ends are always valid.
+
+## Work graph profile
+
+[Work Graph](docs/WORK-GRAPH.md) adds stateless source projection, inspection and
+snapshot comparison. `document.meta.graph` holds bindings over native topology;
+`package.meta.graph` separately holds source-bound readings. Recovery may retain
+`packageMeta`; ordinary `.sov` files do not gain runtime observations. Graph tools
+never mutate the server document or workstation records.

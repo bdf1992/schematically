@@ -1,0 +1,69 @@
+{
+  "source": {
+    "system": "workstation:example",
+    "revision": "fixture-1",
+    "capturedAt": "2026-09-21T00:00:00Z",
+    "consistency": "fixture",
+    "coverage": "Three synthetic tasks, not production work. No live observations or grants."
+  },
+  "mission": {
+    "id": "candidate-review",
+    "repository": "example",
+    "title": "A candidate reaches an evidenced review",
+    "lifecycle": "OPEN",
+    "standing": "available",
+    "summary": "Follow a candidate, its terms and the review that still needs evidence.",
+    "description": "An illustrative WS-shaped record set. This graph performs no work.",
+    "waiting_on": null,
+    "estimates": []
+  },
+  "tasks": [
+    {
+      "id": "build-candidate",
+      "mission": "candidate-review",
+      "repository": "example",
+      "title": "Build the candidate",
+      "objective": "Produce a revision-bound candidate under the work contract.",
+      "standing": "available",
+      "workstation_state": "ACTIVE",
+      "dependencies": [],
+      "candidate_id": "candidate-example",
+      "waiting_on": null,
+      "contract": {
+        "steps": ["Implement the agreed behavior", "Retain the changed revision"],
+        "paths": ["src/**", "tests/**"],
+        "acceptance": ["python scripts/qa.py"],
+        "ceiling": "tested",
+        "forbidden": ["Change source-system authority"]
+      },
+      "evidence": [],
+      "residuals": [],
+      "claim": {"holder": "example-builder", "session": "example-session"}
+    },
+    {
+      "id": "check-evidence",
+      "mission": "candidate-review",
+      "repository": "example",
+      "title": "Check the evidence",
+      "objective": "Read the recorded evidence against the exact candidate.",
+      "standing": "next",
+      "workstation_state": "QUEUED",
+      "dependencies": ["build-candidate"],
+      "evidence": ["test-report-reference:example"],
+      "residuals": ["The candidate revision is not supplied in this snapshot."],
+      "waiting_on": "reviewer: confirm the evidence belongs to this candidate"
+    },
+    {
+      "id": "review-outcome",
+      "mission": "candidate-review",
+      "repository": "example",
+      "title": "Review the outcome",
+      "objective": "Assess the requested outcome; this is not merge permission.",
+      "standing": "next",
+      "workstation_state": "BLOCKED",
+      "dependencies": ["check-evidence", "external-observation"],
+      "waiting_on": "owner: outcome review",
+      "residuals": ["An external observation is outside this snapshot."]
+    }
+  ]
+}

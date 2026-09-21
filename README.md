@@ -34,6 +34,15 @@ Schemas live in `formats/`; `DATA-FORMATS.md` explains them.
 
 `python scripts/export_svg.py [file.sov ...] [--out DIR] [--appearance light|dark] [--loop]` renders documents to standalone `.svg` files headlessly (defaults to every example). Computed styles are inlined, so the files render outside the editor, for example as images in markdown. Packet travel times come from path length and rate, so an export animates without ever repeating; `--loop` snaps every animation to a divisor of one period so the file returns to where it began, moving no travel time further than a stated budget. `python scripts/loop_svg.py file.svg --record file.gif` writes one loop as a GIF, animated WebP, or APNG, stepping the SVG clock rather than sleeping between frames. `tests/svg_export_qa.py` keeps the examples exporting and `tests/loop_svg_qa.py` checks that a looped export is actually back at its start after its period. `node scripts/validate_sov.mjs file.sov` validates documents headlessly with the same data core.
 
+## Work graph snapshots
+
+Open `examples/workstation-review.sovpak` and choose **Graph view** to inspect a
+mission, tasks, structured held records and dependencies in the native editor.
+The WS projector and read-only file exporter retain source readings separately from
+the diagram. Browser, HTTP and MCP share projection, inspection and comparison.
+This is a bounded snapshot foundation, not workflow execution or live WS state.
+See [the Work Graph contract and integration guide](docs/WORK-GRAPH.md).
+
 ## Agent surfaces
 
 `window.SovSchematicAPI` (browser), a REST surface, and an MCP server (`mcp/server.mjs`) all delegate to the same transport-neutral data core — agent-created records cannot bypass editor legality, refusals return receipts without entering history, and history/checkpoints are operable over MCP. See `API.md` and `MCP.md`.

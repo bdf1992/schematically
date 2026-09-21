@@ -49,3 +49,11 @@ Port Connections may carry `access: none | read | write | read-write`. Wire conf
 Agent calls may author Wire endpoints with canonical 0D point IDs or legacy Port IDs. The shared data core validates both through the same attachment-point concern; MCP does not have a separate Port legality implementation.
 
 Wire ends may be free: create with `aAttachment: {kind:'free',x,y}` (and/or `bAttachment`), rebind with `a`/`aSide`, free again with a free attachment. Two bound ends must share an exposed surface.
+
+## Work graph profile
+
+[Work Graph](docs/WORK-GRAPH.md) adds stateless source projection, inspection and
+snapshot comparison. `document.meta.graph` holds bindings over native topology;
+`package.meta.graph` separately holds source-bound readings. Recovery may retain
+`packageMeta`; ordinary `.sov` files do not gain runtime observations. Graph tools
+never mutate the server document or workstation records.
