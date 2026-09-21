@@ -215,6 +215,7 @@
     <button class="btn" id="zoomOutBtn" title="Zoom out (−)">−</button>
     <button class="btn zoom-readout" id="zoomReadout" title="Current zoom">100%</button>
     <button class="btn" id="zoomInBtn" title="Zoom in (+)">+</button>
+    <button class="btn" id="graphViewBtn" aria-pressed="false" hidden>Graph view</button>
     <button class="btn" id="fitBtn" title="Fit diagram (Home)">Fit</button>
     <button class="btn" id="resetZoomBtn" title="Reset zoom (Shift+Home or 0)">Reset</button>
     <button class="btn" id="paletteBtn" title="Palette and color theme" aria-expanded="false">Palette</button>
@@ -528,6 +529,7 @@
 </main>
 
 <aside class="inspector">
+  <section id="graphInspector" class="section graph-inspector" aria-label="Source graph" hidden></section>
   <div class="section">
     <h2>Inspector</h2>
     <div id="emptyInspector" class="objects-empty">
@@ -594,6 +596,8 @@
 
 <script src="src/06-attachment-core.js"></script>
 <script src="src/05-data-core.js"></script>
+<script src="src/07-graph-core.js"></script>
+<script src="src/08-workstation-graph.js"></script>
 <script src="src/00-state.js"></script>
 <script src="src/10-model.js"></script>
 <script src="src/15-editor-kernel.js"></script>
@@ -606,6 +610,7 @@
 <script src="src/60-interactions.js"></script>
 <script src="src/70-editor-controls.js"></script>
 <script src="src/75-persistence.js"></script>
+<script src="src/76-graph-inspector.js"></script>
 <script src="src/80-bootstrap.js"></script>
 <script src="src/85-api.js"></script>
 </body>

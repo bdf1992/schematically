@@ -17,7 +17,7 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
   const n=nodes.find(n=>n.id===selected);
   document.getElementById('emptyInspector').hidden=!!n;
   hideInspectorKinds();
-  if(!n){hideSelectionBar();renderObjectsPanel?.();return}
+  if(!n){hideSelectionBar();renderObjectsPanel?.();renderGraphInspector();return}
 
   componentDetail.hidden=false;
   ensureComponentStructure(n);
@@ -32,6 +32,7 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
   iProps.innerHTML=s.properties.map(v=>`<span class="pill">${v}</span>`).join('');
   {const f=componentForm(n);iForm.textContent=formDimensionLabel(f);iBody.textContent=`${f.body.material} · thickness ${f.body.thickness}`;iFrame.textContent=f.frame.mode==='none'?'None':`${f.frame.mode} · thickness ${f.frame.thickness} · depth ${f.frame.depth}`;iContains.textContent=f.regions.interior.state==='open'?'Open · hosts Components':'Closed';}
   showComponentBar(n);
+  renderGraphInspector();
 }
 function selectPortRef(info,{focus=true}={}){
   if(!info)return;clearComponentSelectionSet();
@@ -63,6 +64,7 @@ function selectPortRef(info,{focus=true}={}){
   pAccess.textContent=portAccessLabel(ch.access);
   pColor.textContent=`${slotLabel(ch.colorSlot)} · ${ch.color}`;
   showPortBar(info);
+  renderGraphInspector();
 }
 function selectPort(nodeId,pointId){
   const node=nodes.find(n=>n.id===nodeId);if(!node)return;
@@ -98,5 +100,6 @@ function selectWire(i,{focus=true}={}){
   cWireParts.textContent=String((w.attachments?.length||0)+nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&componentForm(n).dimension===0).length);
   cLabel.textContent=cfg.label||'—';
   focusWireEndpoints(w);
+  renderGraphInspector();
   showConnectionBar(w,i);
 }

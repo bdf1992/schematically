@@ -56,6 +56,16 @@ const SovSchematicAPI={
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
-  tools:()=>SovSchematicData.operationTools()
+  graph:{
+    projectWorkstation:(input)=>SovWorkstationGraph.project(input),
+    openWorkstation:(input)=>{const pack=SovWorkstationGraph.project(input);applyOpenedPayload({format:'package',payload:pack},'Workstation.sovpak');setGraphView(true);fitDiagram();return pack},
+    inspect:(address=null)=>SovSchematicGraph.inspect(snapshotDocument(),currentPackageMeta.graph,address),
+    compare:(before,after)=>SovSchematicGraph.compare(before,after),
+    execute:(name,args)=>SovWorkstationGraph.execute(name,args),
+    focus:(address)=>graphGo(address),
+    setView:(enabled)=>setGraphView(enabled),
+    tools:()=>SovWorkstationGraph.tools()
+  },
+  tools:()=>[...SovSchematicData.operationTools(),...SovWorkstationGraph.tools()]
 };
 window.SovSchematicAPI=SovSchematicAPI;

@@ -23,3 +23,14 @@ The desktop shell lives under `desktop/` (a Tauri crate wrapping the same standa
 
 ### `src/06-attachment-core.js`
 Pure 0D attachment-point topology, dimensional cardinality, host-dimensional projection, and legacy Port/Wire endpoint compatibility mapping. No DOM or rendering authority.
+
+### Work graph profile
+
+- `src/07-graph-core.js` — source snapshot validation, native-topology bindings, bounded inspection and comparison. No separate CRUD, renderer or scheduler.
+- `src/08-workstation-graph.js` — pure WS record-to-native-document projection and shared stateless tool dispatch.
+- `src/76-graph-inspector.js` — readable source-value inspection through existing selection and file state.
+- `src/55-render.js` also owns graph-state annotations over its native Component projection.
+- `src/75-persistence.js` also owns separate package/recovery metadata custody; history restores retain it without treating it as undoable WS state.
+- `scripts/export_workstation_mission.py` — explicit read-only file collector, not a WS kernel integration.
+
+The contract and integration surface are in `docs/WORK-GRAPH.md`.

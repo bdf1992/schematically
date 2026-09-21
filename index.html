@@ -442,6 +442,45 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .carrier-end-handle.free{stroke-width:2;stroke-dasharray:2 2}
 .wire-group.has-free-end .wire{stroke-dasharray:7 5}
 .endpoint-halo.free-end{stroke-dasharray:2 3}
+
+/* Source graph inspection reuses the native canvas; only the surrounding view changes. */
+.graph-view.app{grid-template-columns:minmax(0,1fr) 360px}
+.graph-view .palette{display:none}
+.graph-view .inspector>.section:not(.graph-inspector){display:none}
+.graph-view .inspector{display:block}
+.graph-inspector{font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.graph-heading,.graph-field-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.graph-heading h2{margin:0}
+.graph-frontier{font-size:12px;color:var(--muted);margin:12px 0}
+.graph-frontier p{margin:6px 0}
+.graph-inspector h3{font-size:18px;line-height:1.3;margin:14px 0 6px}
+.graph-inspector h2{margin-top:18px}
+.graph-address{display:block;color:var(--muted);margin-bottom:14px}
+.graph-card{display:flex;flex-direction:column;width:100%;text-align:left;gap:4px;min-height:48px;margin:6px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);cursor:pointer}
+.graph-card:hover,.graph-crumb:hover{background:var(--hover)}
+.graph-card small,.graph-field-heading small{color:var(--muted)}
+.graph-trail{display:flex;flex-wrap:wrap;gap:4px;margin:10px 0}
+.graph-crumb{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);min-height:36px;padding:6px 8px;cursor:pointer;text-align:left}
+.graph-field{border-top:1px solid var(--line);padding:10px 0}
+.graph-field-heading{margin-bottom:5px}
+.graph-source{display:block;font-size:10px;color:var(--muted);margin-top:6px}
+.graph-value{white-space:pre-wrap}
+.graph-value-item{padding:6px 0 6px 10px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
+.graph-value-item b{font-size:11px;color:var(--muted)}
+.graph-value-tree summary{cursor:pointer;min-height:28px}
+.graph-null,.graph-absent{font-style:italic;color:var(--muted)}
+.graph-gap{border-left:3px solid var(--muted);padding:8px 10px;margin:10px 0;background:var(--hover);font-size:12px}
+.graph-gap p{margin:5px 0 0}
+@media(max-width:700px){.graph-view.app{grid-template-columns:minmax(0,1fr) 280px}.graph-view header .brand,.graph-view .toolbar-separator{display:none}}
+.graph-view .node.graph-bound>.component-label{display:none}
+.graph-node-heading{fill:var(--canvas-ink);font-size:14px;font-weight:700;pointer-events:none}
+.graph-node-state{fill:var(--canvas-muted);font-size:11px;pointer-events:none}
+.graph-view .node.graph-bound>.body{fill:var(--panel)}
+.graph-view .node[data-graph-kind="system"]>.body{fill:var(--canvas-tone);stroke:var(--line)}
+.graph-view .node[data-graph-kind="charge"]>.body{fill:var(--hover)}
+
+.graph-view .selection-bar{display:none!important}
+@media(max-width:900px){.graph-view header{overflow-x:auto;justify-content:flex-start}.graph-view header .brand,.graph-view header .version,.graph-view header .status{display:none}.graph-view .canvas-toolbar{flex-shrink:0}}
 </style>
 </head>
 <body>
@@ -653,6 +692,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     <button class="btn" id="zoomOutBtn" title="Zoom out (−)">−</button>
     <button class="btn zoom-readout" id="zoomReadout" title="Current zoom">100%</button>
     <button class="btn" id="zoomInBtn" title="Zoom in (+)">+</button>
+    <button class="btn" id="graphViewBtn" aria-pressed="false" hidden>Graph view</button>
     <button class="btn" id="fitBtn" title="Fit diagram (Home)">Fit</button>
     <button class="btn" id="resetZoomBtn" title="Reset zoom (Shift+Home or 0)">Reset</button>
     <button class="btn" id="paletteBtn" title="Palette and color theme" aria-expanded="false">Palette</button>
@@ -966,6 +1006,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 </main>
 
 <aside class="inspector">
+  <section id="graphInspector" class="section graph-inspector" aria-label="Source graph" hidden></section>
   <div class="section">
     <h2>Inspector</h2>
     <div id="emptyInspector" class="objects-empty">
@@ -1857,6 +1898,252 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,normalizePresentationSize,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,markersFor,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
 /* END src/05-data-core.js */
+</script>
+<script data-beta-module="src/07-graph-core.js">
+/* BEGIN src/07-graph-core.js */
+'use strict';
+// Read-only graph observations over native Component/Wire topology. No scheduler,
+// authority evaluator, CRUD implementation, or network access lives here.
+(function(root,factory){
+  const Data=root.SovSchematicData||(typeof module!=='undefined'&&module.exports?require('./05-data-core.js'):null);
+  const api=factory(Data);root.SovSchematicGraph=api;
+  if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof globalThis!=='undefined'?globalThis:this,function(Data){
+  const DEFINITION='soveraeign.schematic/graph-definition@0.1';
+  const SNAPSHOT='soveraeign.schematic/graph-snapshot@0.1';
+  const BASES=['declared','observed','derived','judged'];
+  const KINDS=['system','node','charge','reference','dependency','transport','provenance'];
+  const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
+  const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+  function refuse(code,message){const e=new Error(message);e.code=code;throw e;}
+  function demand(test,code,message){if(!test)refuse(code,message);}
+  function text(x,label){demand(typeof x==='string'&&x.length>0&&x.length<=4096,'GRAPH_SHAPE',`${label} must be nonempty text (at most 4096 characters)`);return x;}
+  function jsonValue(value,depth=0,budget={n:0,characters:0}){
+    demand(depth<=24&&++budget.n<=50000,'GRAPH_LIMIT','Graph value exceeds the depth or item budget');
+    if(typeof value==='string'){budget.characters+=value.length;demand(budget.characters<=2_000_000,'GRAPH_LIMIT','Graph text exceeds two million characters');return;}
+    if(value===null||typeof value==='boolean')return;
+    if(typeof value==='number'){demand(Number.isFinite(value),'GRAPH_SHAPE','Non-finite graph number');return;}
+    demand(Array.isArray(value)||object(value),'GRAPH_SHAPE','Graph values must be JSON values');
+    for(const [key,v] of Object.entries(value)){
+      budget.characters+=key.length;demand(budget.characters<=2_000_000,'GRAPH_LIMIT','Graph text exceeds two million characters');
+      demand(!['__proto__','prototype','constructor'].includes(key),'GRAPH_SHAPE','Reserved graph object key');
+      jsonValue(v,depth+1,budget);
+    }
+  }
+  // Canonical content is a compatibility binding, not an authentication claim.
+  function canonical(value){
+    if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';
+    if(object(value))return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}';
+    return JSON.stringify(value);
+  }
+  function source(value){
+    demand(object(value),'GRAPH_SOURCE','A source frontier is required');
+    text(value.system,'source.system');text(value.revision,'source.revision');text(value.coverage,'source.coverage');
+    demand(typeof value.capturedAt==='string'&&/T.*(?:Z|[+-]\d\d:\d\d)$/.test(value.capturedAt)&&Number.isFinite(Date.parse(value.capturedAt)),'GRAPH_SOURCE','source.capturedAt must include a timezone');
+    demand(['repository-snapshot','sampled-files','provided-snapshot','fixture'].includes(value.consistency),'GRAPH_SOURCE','Name the source consistency; a set of file reads is not a live atomic snapshot');
+    return value;
+  }
+  function index(document){
+    jsonValue(document);
+    let doc;
+    try{doc=Data.makeDocument(Data.clone(document));const check=Data.validateDocument(doc);demand(check.ok,'GRAPH_TOPOLOGY',check.errors.join('; '));}
+    catch(error){refuse(error.code||'GRAPH_TOPOLOGY',error.message);}
+    const graph=doc.meta?.graph;
+    demand(graph?.schema===DEFINITION&&Array.isArray(graph.bindings),'GRAPH_DEFINITION','Missing graph definition');
+    demand(graph.bindings.length<=1500,'GRAPH_LIMIT','At most 1500 graph subjects');
+    const byRef=new Map(),byAddress=new Map();
+    for(const binding of graph.bindings){
+      demand(object(binding),'GRAPH_SHAPE','Invalid graph binding');
+      text(binding.id,'binding.id');text(binding.address,'binding.address');
+      demand(['component','wire'].includes(binding.resource)&&KINDS.includes(binding.kind),'GRAPH_SHAPE','Unknown graph resource or kind');
+      const ref=binding.resource+':'+binding.id;
+      demand(!byRef.has(ref)&&!byAddress.has(binding.address),'GRAPH_DUPLICATE','Duplicate graph reference or address');
+      const entity=Data.read(doc,binding.resource,binding.id);
+      demand(entity,'GRAPH_BINDING',`Missing bound ${ref}`);
+      const row={...Data.clone(binding),entity,parent:null};byRef.set(ref,row);byAddress.set(binding.address,row);
+    }
+    demand(byRef.size===doc.components.length+doc.wires.length,'GRAPH_BINDING','Every Component and Wire needs a graph binding');
+    for(const row of byRef.values()){
+      const canvas=row.entity.canvasId||Data.GLOBAL_CANVAS_ID;
+      if(canvas!==Data.GLOBAL_CANVAS_ID){
+        const match=/^canvas:(component|wire):(.+)$/.exec(canvas);
+        demand(match,'GRAPH_SCOPE',`Unknown surface for ${row.address}`);
+        const parent=byRef.get(match[1]+':'+match[2]);
+        demand(parent,'GRAPH_SCOPE',`Missing surface owner for ${row.address}`);
+        if(parent.resource==='component')demand(parent.entity.form.regions.interior.state==='open','GRAPH_SCOPE','A closed Component cannot host graph subjects');
+        row.parent=parent.address;
+      }
+      if(row.resource==='component'&&row.entity.parentId!=null)demand(row.parent===byRef.get('component:'+row.entity.parentId)?.address,'GRAPH_SCOPE','parentId disagrees with the hosting surface');
+    }
+    for(const row of byRef.values()){
+      const seen=new Set([row.address]);let parent=row.parent;
+      while(parent){demand(!seen.has(parent),'GRAPH_SCOPE','Cyclic graph containment');seen.add(parent);parent=byAddress.get(parent).parent;}
+    }
+    return {doc,byRef,byAddress};
+  }
+  function definition(document){
+    const idx=index(document);
+    const subjects=[...idx.byAddress.values()].map(row=>{
+      const e=row.entity;
+      const common={address:row.address,id:row.id,resource:row.resource,kind:row.kind,parent:row.parent,label:e.config?.label||''};
+      if(row.resource==='wire')return {...common,ends:[e.aAttachment,e.bAttachment],direction:e.config.direction,connections:[e.config.aConnectionIndex||0,e.config.bConnectionIndex||0],operations:[e.config.forwardOperation,e.config.reverseOperation]};
+      const ports=Data.canonicalPortIdsForComponent(e).sort().map(id=>{
+        const p=Data.attachmentPointConfig(idx.doc,e.id,id);
+        return {id,face:p.face||'external',connections:(p.connections||[]).map(c=>({flow:c.flow,access:c.access}))};
+      });
+      return {...common,dimension:e.form.dimension,interior:e.form.regions.interior.state,ports};
+    }).sort((a,b)=>a.address<b.address?-1:a.address>b.address?1:0);
+    return canonical({schema:DEFINITION,id:idx.doc.id,subjects});
+  }
+  function snapshot(document,frontier,readings,gaps=[]){
+    const state={schema:SNAPSHOT,source:Data.clone(frontier),definition:definition(document),readings:Data.clone(readings),gaps:Data.clone(gaps)};
+    validate(document,state);return state;
+  }
+  function validate(document,state){
+    jsonValue(state);demand(state?.schema===SNAPSHOT,'GRAPH_SNAPSHOT','Missing graph snapshot');source(state.source);
+    const idx=index(document);
+    demand(state.definition===definition(document),'GRAPH_DEFINITION_CHANGED','Diagram meaning changed; these source readings are detached. Re-project the source or restore the diagram.');
+    demand(Array.isArray(state.readings)&&state.readings.length===idx.byAddress.size,'GRAPH_READINGS','One reading per bound subject is required');
+    const seen=new Set();
+    for(const reading of state.readings){
+      demand(object(reading)&&idx.byAddress.has(reading.address)&&!seen.has(reading.address),'GRAPH_READINGS','Duplicate or unknown reading subject');seen.add(reading.address);
+      demand(Array.isArray(reading.fields)&&reading.fields.length<=128,'GRAPH_LIMIT','A reading has at most 128 fields');
+      const fields=new Set();
+      for(const field of reading.fields){
+        demand(object(field),'GRAPH_SHAPE','Invalid field');text(field.axis,'field.axis');text(field.source,'field.source');
+        demand(!fields.has(field.axis),'GRAPH_DUPLICATE','Duplicate reading axis');fields.add(field.axis);
+        demand(BASES.includes(field.basis)&&['present','absent'].includes(field.status),'GRAPH_READING','Invalid basis or presence state');
+        demand(own(field,'value')===(field.status==='present'),'GRAPH_READING','Absent is not null, zero, false or an empty collection');
+      }
+    }
+    demand(Array.isArray(state.gaps)&&state.gaps.length<=3000,'GRAPH_LIMIT','Invalid gap list');
+    for(const gap of state.gaps){demand(object(gap)&&idx.byAddress.has(gap.address),'GRAPH_BINDING','Unknown gap subject');text(gap.code,'gap.code');text(gap.message,'gap.message');}
+    return {ok:true,subjects:idx.byAddress.size};
+  }
+  function inspect(document,state,address=null){
+    validate(document,state);const idx=index(document);
+    if(address===null)return {source:Data.clone(state.source),roots:[...idx.byAddress.values()].filter(x=>!x.parent).map(summary),gaps:Data.clone(state.gaps),subjects:idx.byAddress.size};
+    const row=idx.byAddress.get(address)||idx.byRef.get(address);
+    demand(row,'GRAPH_SUBJECT','No such graph subject');
+    const ancestors=[];let parent=row.parent;
+    while(parent){const p=idx.byAddress.get(parent);ancestors.unshift(summary(p));parent=p.parent;}
+    return {...summary(row),source:Data.clone(state.source),ancestors,
+      endpoints:row.resource==='wire'?['a','b'].map(end=>{const subject=idx.byRef.get('component:'+row.entity[end]);return subject?{end,...summary(subject)}:{end,free:true};}):[],children:[...idx.byAddress.values()].filter(x=>x.parent===row.address).map(summary),
+      fields:Data.clone(state.readings.find(x=>x.address===row.address).fields),gaps:Data.clone(state.gaps.filter(x=>x.address===row.address)),
+      relations:[...idx.byAddress.values()].filter(x=>x.resource==='wire'&&(x.entity.a===row.id||x.entity.b===row.id)).map(summary)};
+  }
+  function summary(row){return {address:row.address,id:row.id,resource:row.resource,kind:row.kind,parent:row.parent,label:row.entity.config?.label||row.address};}
+  function compare(before,after){
+    validate(before.document,before.meta?.graph);validate(after.document,after.meta?.graph);
+    const a=before.meta.graph,b=after.meta.graph;
+    demand(a.source.system===b.source.system&&before.document.id===after.document.id,'GRAPH_SCOPE','Compare snapshots of the same system and mission');
+    const rows=s=>new Map(s.readings.map(x=>[x.address,x.fields]));const left=rows(a),right=rows(b),changes=[];
+    for(const address of [...new Set([...left.keys(),...right.keys()])].sort()){
+      if(!left.has(address)||!right.has(address)){changes.push({address,kind:left.has(address)?'removed':'added'});continue;}
+      const fields=x=>new Map(x.map(f=>[f.axis,f]));const l=fields(left.get(address)),r=fields(right.get(address));
+      for(const axis of [...new Set([...l.keys(),...r.keys()])].sort()){
+        if(canonical(l.get(axis)||null)!==canonical(r.get(axis)||null))changes.push({address,axis,before:Data.clone(l.get(axis)||null),after:Data.clone(r.get(axis)||null)});
+      }
+    }
+    return {before:Data.clone(a.source),after:Data.clone(b.source),definitionChanged:a.definition!==b.definition,changes};
+  }
+  return {DEFINITION,SNAPSHOT,BASES,KINDS,canonical,jsonValue,refuse,demand,text,source,index,definition,snapshot,validate,inspect,compare};
+});
+/* END src/07-graph-core.js */
+</script>
+<script data-beta-module="src/08-workstation-graph.js">
+/* BEGIN src/08-workstation-graph.js */
+'use strict';
+// WS record projection only. Workstation owns these records; no status inference,
+// command execution, permission expansion, or network collection occurs here.
+(function(root,factory){
+  const node=typeof module!=='undefined'&&module.exports;
+  const api=factory(root.SovSchematicData||(node?require('./05-data-core.js'):null),root.SovSchematicGraph||(node?require('./07-graph-core.js'):null));
+  root.SovWorkstationGraph=api;if(node)module.exports=api;
+})(typeof globalThis!=='undefined'?globalThis:this,function(Data,Graph){
+  const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
+  const address=(kind,id)=>`ws:${kind}:${encodeURIComponent(id)}`;
+  const compareId=(a,b)=>a.id<b.id?-1:a.id>b.id?1:0;
+  function project(input){
+    Graph.jsonValue(input);Graph.demand(input&&input.mission&&Array.isArray(input.tasks),'WS_GRAPH_INPUT','Provide mission, tasks, and source');
+    const {mission,source}=input;Graph.source(source);
+    Graph.text(mission.id,'mission.id');Graph.text(mission.repository,'mission.repository');Graph.text(mission.title,'mission.title');
+    Graph.demand(input.tasks.length<=100,'GRAPH_LIMIT','This profile admits at most 100 tasks per mission');
+    const tasks=Data.clone(input.tasks).sort(compareId),ids=new Set();
+    for(const task of tasks){
+      Graph.text(task.id,'task.id');Graph.demand(!ids.has(task.id),'GRAPH_DUPLICATE','Duplicate WS task id');ids.add(task.id);
+      Graph.demand(task.mission===mission.id&&task.repository===mission.repository,'WS_GRAPH_SCOPE','Every supplied task must name this mission and repository');
+      if(own(task,'dependencies'))Graph.demand(Array.isArray(task.dependencies)&&task.dependencies.every(d=>typeof d==='string'&&d.length>0)&&new Set(task.dependencies).size===task.dependencies.length,'WS_GRAPH_INPUT','Dependencies must be distinct task IDs');
+      Graph.demand(task.contract==null||(typeof task.contract==='object'&&!Array.isArray(task.contract)),'WS_GRAPH_INPUT','Contract must be an object or null');
+    }
+    const doc=Data.makeDocument({id:address('mission',mission.id),meta:{title:mission.title,updatedAt:source.capturedAt,graph:{schema:Graph.DEFINITION,bindings:[]}}});
+    const readings=[],gaps=[],taskNodes=new Map();
+    const columns=Math.min(3,Math.max(1,tasks.length)),rows=Math.ceil(Math.max(1,tasks.length)/columns);
+    const width=columns*420+120,height=rows*380+200;
+    function field(record,key,path,basis='declared'){
+      return {axis:key,basis,status:own(record,key)?'present':'absent',...(own(record,key)?{value:Data.clone(record[key])}:{}),source:`${path}${path.includes('#')?'/':'#/'}${key.replaceAll('~','~0').replaceAll('/','~1')}`};
+    }
+    function add(id,label,kind,addr,parent,x,y,w,h,fields,ports=false){
+      const component=Data.makeComponent(doc,{id,symbolId:'plane',x,y,parentId:parent?.id||null,canvasId:parent?Data.componentCanvasId(parent):Data.GLOBAL_CANVAS_ID,
+        form:{dimension:2,regions:{interior:{state:'open'}}},
+        config:{label,signalMode:'passive',attachmentDefaults:ports?'standard':'none',presentation:{graphic:{kind:'none'},labelMode:'boundary',backdrop:'solid',size:{w,h}},
+          ...(ports?{ports:{in:{face:'external',connections:[{flow:'in',access:'none'}]},out:{face:'external',connections:[{flow:'out',access:'none'}]},control:{face:'external',connections:[{flow:'control',access:'none'}]}}}:{})}});
+      doc.components.push(component);doc.meta.graph.bindings.push({resource:'component',id,kind,address:addr});readings.push({address:addr,fields});return component;
+    }
+    const missionPath=`control/missions/${mission.id}.json`;
+    const root=add('mission',mission.title,'system',address('mission',mission.id),null,width/2+80,height/2+60,width,height,
+      ['repository','lifecycle','standing','summary','description','waiting_on','estimates','updated'].map(k=>field(mission,k,missionPath)));
+    tasks.forEach((task,i)=>{
+      const x=80+270+(i%columns)*420,y=60+230+Math.floor(i/columns)*380,path=`control/tasks/${task.id}.json`;
+      const addr=address('task',task.id);
+      const node=add(`task-${encodeURIComponent(task.id)}`,task.title||task.id,'node',addr,root,x,y,340,280,
+        ['objective','standing','workstation_state','repository_state','waiting_on','serves','dependencies','claim','branch','base_ref','worktree','environment','candidate_id','evidence','residuals','promoted_from','updated'].map(k=>field(task,k,path)),true);
+      taskNodes.set(task.id,node);
+      if(task.waiting_on&&task.waiting_on!=='nobody')gaps.push({address:addr,code:'UNRESOLVED_WAIT',message:task.waiting_on});
+      if(!own(task,'dependencies'))gaps.push({address:addr,code:'DEPENDENCIES_ABSENT',message:'Dependency field absent; do not infer that this task is independent.'});
+      const held=[];
+      if(task.contract)held.push({key:'contract',label:'Work contract',fields:Object.keys(task.contract).sort().map(k=>field(task.contract,k,path+'#/contract'))});
+      if(task.candidate_id)held.push({key:'candidate',label:'Candidate reference',fields:[field(task,'candidate_id',path),{axis:'revision',basis:'observed',status:'absent',source:path+'#/candidate_id'}]});
+      if(Array.isArray(task.evidence)&&task.evidence.length)held.push({key:'evidence',label:'Evidence references',fields:[field(task,'evidence',path)]});
+      if(Array.isArray(task.residuals)&&task.residuals.length)held.push({key:'residuals',label:'Unresolved obligations',fields:[field(task,'residuals',path)]});
+      held.forEach((charge,j)=>add(`held-${encodeURIComponent(task.id)}-${charge.key}`,charge.label,'charge',addr+'/'+charge.key,node,x+(j%2===0?-80:80),y-30+Math.floor(j/2)*90,140,68,charge.fields));
+    });
+    const missing=[...new Set(tasks.flatMap(t=>t.dependencies||[]).filter(id=>!ids.has(id)))].sort();
+    // Missing endpoints remain explicit gaps, never invented tasks or default state.
+    for(const task of tasks)for(const dependency of task.dependencies||[]){
+      const target=taskNodes.get(task.id),predecessor=taskNodes.get(dependency),addr=address('dependency',JSON.stringify([dependency,task.id]));
+      if(!predecessor){gaps.push({address:address('task',task.id),code:'DEPENDENCY_OUTSIDE_SNAPSHOT',message:`Dependency ${dependency} is outside this snapshot.`});continue;}
+      const wire=Data.makeWire(doc,{id:`dependency-${encodeURIComponent(JSON.stringify([dependency,task.id]))}`,a:predecessor.id,aSide:'out',b:target.id,bSide:'in',config:{label:'requires',direction:'forward',forwardOperation:'none',reverseOperation:'none'}});
+      doc.wires.push(wire);doc.meta.graph.bindings.push({resource:'wire',id:wire.id,kind:'dependency',address:addr});
+      readings.push({address:addr,fields:[{axis:'required_task',basis:'declared',status:'present',value:dependency,source:`control/tasks/${task.id}.json#/dependencies`},{axis:'delivery',basis:'observed',status:'absent',source:'not-a-transport-observation'}]});
+    }
+    const document=Data.compactDocument(doc),state=Graph.snapshot(document,source,readings,gaps);
+    // An existing package holds the observation separately from the .sov definition.
+    // Supplied timestamps make repeated projections byte-identical.
+    return {schema:Data.PACKAGE_SCHEMA,version:1,manifest:{id:doc.id+'-snapshot',title:mission.title,entry:'document',createdAt:source.capturedAt,updatedAt:source.capturedAt,generator:'SOV Workstation graph profile 0.1'},
+      document,workspace:{view:{showFlow:false}},templates:[],assets:[],meta:{graph:state,coverage:{tasks:tasks.length,missingDependencies:missing}}};
+  }
+  function tools(){
+    const object={type:'object'};
+    return [
+      {name:'schematic.graph.project-workstation',description:'Project supplied WS mission records to a native .sovpak with separate source readings. No network calls, task writes, or authority.',inputSchema:{type:'object',properties:{input:object},required:['input'],additionalProperties:false}},
+      {name:'schematic.graph.inspect',description:'Inspect a source-bound graph snapshot or one address. Refuses detached readings. Does not mutate the server document.',inputSchema:{type:'object',properties:{package:object,address:{type:'string'}},required:['package'],additionalProperties:false}},
+      {name:'schematic.graph.compare',description:'Compare two source snapshots of the same mission. Reports readings, not execution history or progress.',inputSchema:{type:'object',properties:{before:object,after:object},required:['before','after'],additionalProperties:false}}
+    ];
+  }
+  function execute(name,args={}){
+    try{
+      let value;
+      if(name==='schematic.graph.project-workstation')value=project(args.input);
+      else if(name==='schematic.graph.inspect')value=Graph.inspect(args.package?.document,args.package?.meta?.graph,args.address??null);
+      else if(name==='schematic.graph.compare')value=Graph.compare(args.before,args.after);
+      else Graph.refuse('GRAPH_OPERATION','Unknown graph operation');
+      return {ok:true,value,mutates:false};
+    }catch(e){return {ok:false,value:{error:{code:e.code||'GRAPH_INPUT',message:String(e.message||e)}},mutates:false};}
+  }
+  return {project,address,tools,execute};
+});
+/* END src/08-workstation-graph.js */
 </script>
 <script data-beta-module="src/00-state.js">
 /* BEGIN src/00-state.js */
@@ -2775,7 +3062,7 @@ function commitHistoryCapture(label=null){
 }
 function restoreHistoryDocument(doc){
   historyState.replaying=true;
-  try{replaceRuntimeDocument(doc)}finally{historyState.replaying=false}
+  try{replaceRuntimeDocument(doc,{preservePackageMeta:true})}finally{historyState.replaying=false}
   historyState.baseline=historyDocument();persistenceFingerprint=semanticFingerprint();updateHistoryUI();renderObjectsPanel();
 }
 function undoHistory(){
@@ -2806,7 +3093,7 @@ function listCheckpoints(){return checkpointStore().map(({document,...meta})=>So
 function restoreCheckpoint(id){
   const store=checkpointStore(),cp=store.find(x=>x.id===id);if(!cp)throw new Error('Checkpoint not found');
   commitHistoryCapture();const preserved=SovSchematicData.clone(store);setHistoryHint(`Restore checkpoint · ${cp.name}`);
-  historyState.replaying=true;try{replaceRuntimeDocument(cp.document);diagram.meta=diagram.meta||{};diagram.meta.checkpoints=preserved}finally{historyState.replaying=false}
+  historyState.replaying=true;try{replaceRuntimeDocument(cp.document,{preservePackageMeta:true});diagram.meta=diagram.meta||{};diagram.meta.checkpoints=preserved}finally{historyState.replaying=false}
   historyState.baseline=historyDocument();scheduleHistoryCapture();renderCheckpointList();statusEl.textContent=`Restored · ${cp.name}`;return snapshotDocument();
 }
 function renderCheckpointList(){
@@ -4762,7 +5049,7 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
   const n=nodes.find(n=>n.id===selected);
   document.getElementById('emptyInspector').hidden=!!n;
   hideInspectorKinds();
-  if(!n){hideSelectionBar();renderObjectsPanel?.();return}
+  if(!n){hideSelectionBar();renderObjectsPanel?.();renderGraphInspector();return}
 
   componentDetail.hidden=false;
   ensureComponentStructure(n);
@@ -4777,6 +5064,7 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
   iProps.innerHTML=s.properties.map(v=>`<span class="pill">${v}</span>`).join('');
   {const f=componentForm(n);iForm.textContent=formDimensionLabel(f);iBody.textContent=`${f.body.material} · thickness ${f.body.thickness}`;iFrame.textContent=f.frame.mode==='none'?'None':`${f.frame.mode} · thickness ${f.frame.thickness} · depth ${f.frame.depth}`;iContains.textContent=f.regions.interior.state==='open'?'Open · hosts Components':'Closed';}
   showComponentBar(n);
+  renderGraphInspector();
 }
 function selectPortRef(info,{focus=true}={}){
   if(!info)return;clearComponentSelectionSet();
@@ -4808,6 +5096,7 @@ function selectPortRef(info,{focus=true}={}){
   pAccess.textContent=portAccessLabel(ch.access);
   pColor.textContent=`${slotLabel(ch.colorSlot)} · ${ch.color}`;
   showPortBar(info);
+  renderGraphInspector();
 }
 function selectPort(nodeId,pointId){
   const node=nodes.find(n=>n.id===nodeId);if(!node)return;
@@ -4843,6 +5132,7 @@ function selectWire(i,{focus=true}={}){
   cWireParts.textContent=String((w.attachments?.length||0)+nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&componentForm(n).dimension===0).length);
   cLabel.textContent=cfg.label||'—';
   focusWireEndpoints(w);
+  renderGraphInspector();
   showConnectionBar(w,i);
 }
 /* END src/50-selection.js */
@@ -5039,8 +5329,32 @@ function markerCountEl(){
   }
   return el;
 }
+function graphRenderReadings(){
+  const rows=new Map();
+  if(!document.querySelector('.app')?.classList.contains('graph-view')||!currentPackageMeta.graph)return rows;
+  try{
+    SovSchematicGraph.validate(snapshotDocument(),currentPackageMeta.graph);
+    const readings=new Map(currentPackageMeta.graph.readings.map(r=>[r.address,r]));
+    for(const b of diagram.meta.graph.bindings)if(b.resource==='component')rows.set(b.id,{...b,fields:readings.get(b.address).fields});
+  }catch(_){/* Detached readings are reported in the inspector, never painted as current. */}
+  return rows;
+}
+function appendGraphReading(g,n,reading){
+  if(!reading)return;
+  g.classList.add('graph-bound');g.dataset.graphKind=reading.kind;
+  const size=componentSize(n),full=String(n.config.label||reading.address);
+  const max=Math.max(12,Math.floor((size.w-32)/7));
+  const label=full.length>max?full.slice(0,max-1)+'…':full;
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+  t.setAttribute('class','graph-node-heading');t.setAttribute('x',String(-size.w/2+16));t.setAttribute('y',String(-size.h/2+23));t.textContent=label;g.append(t);
+  const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=full;t.append(title);
+  const axes=reading.fields.filter(f=>['workstation_state','lifecycle','standing'].includes(f.axis)&&f.status==='present'&&typeof f.value==='string');
+  const line=axes.length?axes.map(f=>f.value).join(' · '):reading.kind;
+  const sub=document.createElementNS('http://www.w3.org/2000/svg','text');sub.setAttribute('class','graph-node-state');sub.setAttribute('x',String(-size.w/2+16));sub.setAttribute('y',String(-size.h/2+43));sub.textContent=line;g.append(sub);
+}
 function render(){
   syncAllNodeBoundaryContext();
+  const graphReadings=graphRenderReadings();
   const signalState=computeSignalState();
   const componentSignals=signalState.colors;
   const markers=markersById();
@@ -5054,6 +5368,7 @@ function render(){
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
     renderComponentVisual(g,n,cfg,s,signalColor);
+    appendGraphReading(g,n,graphReadings.get(n.id));
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
@@ -5083,6 +5398,7 @@ function render(){
   renderWires(signalState,markers);
   {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
+  if(typeof renderGraphInspector==='function')renderGraphInspector();
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
 }
 function clearEndpointFocus(){
@@ -6243,6 +6559,8 @@ let currentFileHandle=null;
 let currentFileName='Untitled.sov';
 let currentFileFormat='document';
 let lastFileFingerprint=null;
+// Package-owned observations must never enter authored .sov state.
+let currentPackageMeta={};
 
 function snapshotDocument(){
   // Files and API snapshots carry authored truth only; runtime projections are rebuilt on load.
@@ -6261,6 +6579,7 @@ function captureWorkspace(){
   return {
     schema:SovSchematicData.WORKSPACE_SCHEMA,
     document:snapshotDocument(),
+    ...(Object.keys(currentPackageMeta).length?{packageMeta:SovSchematicData.clone(currentPackageMeta)}:{}),
     view:{
       camera:{...camera},
       grid:{visible:canvasGridVisible,snap:canvasSnapEnabled,size:canvasGridSize},
@@ -6322,18 +6641,22 @@ function syncRuntimeAfterDocumentReplace(){
   updateRevisionReadout();
   render();selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
 }
-function replaceRuntimeDocument(input){
+function replaceRuntimeDocument(input,{preservePackageMeta=false}={}){
   const doc=input?.schema===SovSchematicData.WORKSPACE_SCHEMA?input.document:input;
   const normalized=SovSchematicData.makeDocument(SovSchematicData.clone(doc));
   const valid=SovSchematicData.validateDocument(normalized);
   if(!valid.ok)throw new Error(valid.errors.join('; '));
+  if(!preservePackageMeta)currentPackageMeta={};
   SovSchematicData.replaceDocument(diagram,normalized);
   syncRuntimeAfterDocumentReplace();
   return snapshotDocument();
 }
 function applyWorkspace(bundle){
   if(!bundle||bundle.schema!==SovSchematicData.WORKSPACE_SCHEMA)return replaceRuntimeDocument(bundle);
+  // Validate source binding before replacing any live document or recovery state.
+  if(bundle.packageMeta?.graph)SovSchematicGraph.validate(bundle.document,bundle.packageMeta.graph);
   replaceRuntimeDocument(bundle.document);
+  currentPackageMeta=SovSchematicData.clone(bundle.packageMeta||{});
   const view=bundle.view||{};
   if(view.camera){camera={...BASE_VIEW,...view.camera};applyCamera()}
   if(view.grid){
@@ -6409,7 +6732,9 @@ function collectPackageAssets(){
 function snapshotPackage(){
   commitDocumentRevisionIfChanged();
   const workspace=captureWorkspace();
+  if(currentPackageMeta.graph)SovSchematicGraph.validate(workspace.document,currentPackageMeta.graph);
   return SovSchematicData.makePackage({
+    meta:SovSchematicData.clone(currentPackageMeta),
     document:workspace.document,
     workspace:{view:workspace.view},
     templates:collectPackageTemplates(),
@@ -6478,7 +6803,7 @@ async function saveSchematicFile({saveAs=false,format=currentFileFormat}={}){
 function applyPackage(bundle){
   const check=SovSchematicData.validatePackage(bundle);
   if(!check.ok)throw new Error(check.errors.join('; '));
-  const workspace={schema:SovSchematicData.WORKSPACE_SCHEMA,document:bundle.document,view:bundle.workspace?.view||{}};
+  const workspace={schema:SovSchematicData.WORKSPACE_SCHEMA,document:bundle.document,view:bundle.workspace?.view||{},packageMeta:bundle.meta||{}};
   return applyWorkspace(workspace);
 }
 function parseFilePayload(text){
@@ -6541,7 +6866,7 @@ function restoreRecovery(){
   if(!confirmDiscardIfDirty('Restore browser recovery'))return false;
   const raw=localStorage.getItem(LOCAL_RECOVERY_KEY)||localStorage.getItem(LEGACY_LOCAL_SAVE_KEY);if(!raw)throw new Error('No recovery snapshot found');
   applyWorkspace(JSON.parse(raw));
-  currentFileHandle=null;currentFileName='Recovered.sov';currentFileFormat='document';lastFileFingerprint=null;
+  currentFileHandle=null;currentFileName=currentPackageMeta.graph?'Recovered.sovpak':'Recovered.sov';currentFileFormat=currentPackageMeta.graph?'package':'document';lastFileFingerprint=null;
   updateFileReadout();
   statusEl.textContent='Recovery restored · save to keep it';
   return true;
@@ -6703,9 +7028,96 @@ document.addEventListener('keydown',event=>{
 });
 /* END src/75-persistence.js */
 </script>
+<script data-beta-module="src/76-graph-inspector.js">
+/* BEGIN src/76-graph-inspector.js */
+'use strict';
+// Human inspection of the same graph readings returned by HTTP/MCP. Geometry,
+// selection and file lifecycle stay with their existing owning modules.
+function graphElement(tag,text,cls){const e=document.createElement(tag);if(text!=null)e.textContent=String(text);if(cls)e.className=cls;return e;}
+function graphSubject(){
+  const bindings=diagram.meta?.graph?.bindings||[];
+  if(typeof selected==='string'&&selected.startsWith('wire:'))return bindings.find(b=>b.resource==='wire'&&b.id===wires[Number(selected.slice(5))]?.id)?.address||null;
+  if(typeof selected==='string'&&selected.startsWith('point:component:'))return bindings.find(b=>selected.startsWith('point:component:'+b.id+':'))?.address||null;
+  return bindings.find(b=>b.resource==='component'&&b.id===selected)?.address||null;
+}
+function graphGo(address){
+  const binding=diagram.meta?.graph?.bindings?.find(b=>b.address===address);if(!binding)return;
+  if(binding.resource==='component')focusComponent(nodes.find(n=>n.id===binding.id));
+  else selectWire(wires.findIndex(w=>w.id===binding.id),{focus:false});
+  renderGraphInspector();
+}
+function graphCard(row){
+  const b=graphElement('button',null,'graph-card');b.type='button';b.dataset.address=row.address;
+  b.append(graphElement('strong',row.label),graphElement('small',row.kind));
+  if(row.resource==='wire'){const wire=wires.find(w=>w.id===row.id);if(wire){const names=[wire.a,wire.b].map(id=>nodes.find(n=>n.id===id)?.config?.label||id||'Free end');b.append(graphElement('small',names.join(' → ')));}}
+  b.addEventListener('click',()=>graphGo(row.address));return b;
+}
+function graphValue(value,depth=0){
+  if(value===null)return graphElement('span','Null (recorded)','graph-null');
+  if(typeof value!=='object')return graphElement('span',typeof value==='string'?(value===''?'Empty text':value):String(value),'graph-value');
+  const entries=Object.entries(value);
+  if(!entries.length)return graphElement('span',Array.isArray(value)?'Empty list':'Empty object','graph-null');
+  const group=graphElement('details',null,'graph-value-tree');group.open=depth===0;
+  group.append(graphElement('summary',`${entries.length} ${Array.isArray(value)?'items':'fields'}`));
+  for(const [key,v] of entries){const item=graphElement('div',null,'graph-value-item');item.append(graphElement('b',Array.isArray(value)?Number(key)+1:key),graphValue(v,depth+1));group.append(item);}
+  return group;
+}
+function graphSourceLink(field,source){
+  const label=graphElement('small',field.source,'graph-source');
+  if(!source.baseUrl)return label;
+  try{
+    const url=new URL(field.source,source.baseUrl);
+    if(!['http:','https:'].includes(url.protocol))return label;
+    const link=graphElement('a','Source','graph-source');link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';link.title=field.source;return link;
+  }catch(_){return label;}
+}
+function setGraphView(enabled){
+  const on=!!enabled&&!!currentPackageMeta.graph;
+  document.querySelector('.app')?.classList.toggle('graph-view',on);
+  document.getElementById('graphViewBtn')?.setAttribute('aria-pressed',String(on));
+  render();return on;
+}
+function renderGraphInspector(){
+  const panel=document.getElementById('graphInspector'),toggle=document.getElementById('graphViewBtn');if(!panel)return;
+  const state=currentPackageMeta.graph;panel.hidden=!state;if(toggle)toggle.hidden=!state;
+  if(!state){document.querySelector('.app')?.classList.remove('graph-view');panel.replaceChildren();delete panel.dataset.reading;return;}
+  // Preserve expanded nested values across render/auto-save; selection or source changes
+  // create a fresh view, but ordinary re-rendering never closes a user's inspection.
+  let reading;
+  try{reading=SovSchematicGraph.inspect(snapshotDocument(),state,graphSubject());}
+  catch(error){delete panel.dataset.reading;panel.replaceChildren(graphElement('h2','Graph readings detached'),graphElement('p',error.message,'graph-gap'));return;}
+  const key=JSON.stringify(reading);if(panel.dataset.reading===key)return;panel.dataset.reading=key;
+  panel.replaceChildren();
+  const head=graphElement('div',null,'graph-heading');head.append(graphElement('h2','Source graph'));
+  const all=graphElement('button','Mission','btn');all.type='button';all.addEventListener('click',()=>{selectNode(null,{focus:false});fitDiagram();});head.append(all);panel.append(head);
+  panel.append(graphElement('div',reading.source.consistency==='fixture'?'Fixture · not live work':'Source snapshot · not live state','graph-frontier'));
+  const frontier=graphElement('details',null,'graph-frontier');frontier.append(graphElement('summary',reading.source.capturedAt),graphElement('p',reading.source.revision),graphElement('p',reading.source.coverage));panel.append(frontier);
+  if(!reading.address){
+    panel.append(graphElement('p',`${reading.subjects} addressable subjects`));
+    for(const row of reading.roots)panel.append(graphCard(row));
+  }else{
+    const trail=graphElement('nav',null,'graph-trail');trail.setAttribute('aria-label','Containing systems');
+    for(const row of reading.ancestors){const b=graphElement('button',row.label,'graph-crumb');b.type='button';b.addEventListener('click',()=>graphGo(row.address));trail.append(b);}panel.append(trail);
+    panel.append(graphElement('h3',reading.label),graphElement('small',reading.address,'graph-address'));
+    if(reading.children.length){panel.append(graphElement('h2','Holds'));for(const row of reading.children)panel.append(graphCard(row));}
+    if(reading.endpoints?.length){panel.append(graphElement('h2','Endpoints'));for(const endpoint of reading.endpoints){panel.append(graphElement('small',endpoint.end==='a'?'A endpoint':'B endpoint','graph-source'));panel.append(endpoint.free?graphElement('p','Free end'):graphCard(endpoint));}}
+    if(reading.relations.length){panel.append(graphElement('h2','Relations'));for(const row of reading.relations)panel.append(graphCard(row));}
+    if(reading.kind==='dependency')panel.append(graphElement('p','Declared requirement, not a delivery channel.','graph-frontier'));
+    for(const field of reading.fields){
+      const block=graphElement('section',null,'graph-field'),label=graphElement('div',null,'graph-field-heading');
+      label.append(graphElement('b',field.axis.replaceAll('_',' ')),graphElement('small',field.basis));block.append(label);
+      block.append(field.status==='absent'?graphElement('span','Not supplied','graph-absent'):graphValue(field.value));
+      block.append(graphSourceLink(field,reading.source));panel.append(block);
+    }
+  }
+  if(reading.gaps.length){panel.append(graphElement('h2','Unresolved'));for(const gap of reading.gaps){const block=graphElement('div',null,'graph-gap');block.append(graphElement('b',gap.code.replaceAll('_',' ')),graphElement('p',gap.message));panel.append(block);}}
+}
+/* END src/76-graph-inspector.js */
+</script>
 <script data-beta-module="src/80-bootstrap.js">
 /* BEGIN src/80-bootstrap.js */
 'use strict';
+document.getElementById('graphInspector')?.addEventListener('focusin',()=>setCanvasKeyboardActive(false));
 // 0.1 Beta concern: Global focus, palette/grid/zoom, deletion, keyboard commands, and startup.
 
 selectionBar.addEventListener('keydown',e=>{
@@ -6786,6 +7198,7 @@ gridSizeInput.addEventListener('change',()=>{
 zoomOutBtn.addEventListener('click',()=>{zoomAt(1/1.25);setCanvasKeyboardActive(true)});
 zoomInBtn.addEventListener('click',()=>{zoomAt(1.25);setCanvasKeyboardActive(true)});
 resetZoomBtn.addEventListener('click',()=>{resetZoom();setCanvasKeyboardActive(true)});
+document.getElementById('graphViewBtn')?.addEventListener('click',()=>setGraphView(!document.querySelector('.app')?.classList.contains('graph-view')));
 fitBtn.addEventListener('click',()=>{fitDiagram();setCanvasKeyboardActive(true)});
 
 workspace.addEventListener('wheel',e=>{
@@ -7008,7 +7421,17 @@ const SovSchematicAPI={
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
-  tools:()=>SovSchematicData.operationTools()
+  graph:{
+    projectWorkstation:(input)=>SovWorkstationGraph.project(input),
+    openWorkstation:(input)=>{const pack=SovWorkstationGraph.project(input);applyOpenedPayload({format:'package',payload:pack},'Workstation.sovpak');setGraphView(true);fitDiagram();return pack},
+    inspect:(address=null)=>SovSchematicGraph.inspect(snapshotDocument(),currentPackageMeta.graph,address),
+    compare:(before,after)=>SovSchematicGraph.compare(before,after),
+    execute:(name,args)=>SovWorkstationGraph.execute(name,args),
+    focus:(address)=>graphGo(address),
+    setView:(enabled)=>setGraphView(enabled),
+    tools:()=>SovWorkstationGraph.tools()
+  },
+  tools:()=>[...SovSchematicData.operationTools(),...SovWorkstationGraph.tools()]
 };
 window.SovSchematicAPI=SovSchematicAPI;
 /* END src/85-api.js */

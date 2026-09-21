@@ -9,6 +9,8 @@ let currentFileHandle=null;
 let currentFileName='Untitled.sov';
 let currentFileFormat='document';
 let lastFileFingerprint=null;
+// Package-owned observations must never enter authored .sov state.
+let currentPackageMeta={};
 
 function snapshotDocument(){
   // Files and API snapshots carry authored truth only; runtime projections are rebuilt on load.
@@ -27,6 +29,7 @@ function captureWorkspace(){
   return {
     schema:SovSchematicData.WORKSPACE_SCHEMA,
     document:snapshotDocument(),
+    ...(Object.keys(currentPackageMeta).length?{packageMeta:SovSchematicData.clone(currentPackageMeta)}:{}),
     view:{
       camera:{...camera},
       grid:{visible:canvasGridVisible,snap:canvasSnapEnabled,size:canvasGridSize},
@@ -88,18 +91,22 @@ function syncRuntimeAfterDocumentReplace(){
   updateRevisionReadout();
   render();selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
 }
-function replaceRuntimeDocument(input){
+function replaceRuntimeDocument(input,{preservePackageMeta=false}={}){
   const doc=input?.schema===SovSchematicData.WORKSPACE_SCHEMA?input.document:input;
   const normalized=SovSchematicData.makeDocument(SovSchematicData.clone(doc));
   const valid=SovSchematicData.validateDocument(normalized);
   if(!valid.ok)throw new Error(valid.errors.join('; '));
+  if(!preservePackageMeta)currentPackageMeta={};
   SovSchematicData.replaceDocument(diagram,normalized);
   syncRuntimeAfterDocumentReplace();
   return snapshotDocument();
 }
 function applyWorkspace(bundle){
   if(!bundle||bundle.schema!==SovSchematicData.WORKSPACE_SCHEMA)return replaceRuntimeDocument(bundle);
+  // Validate source binding before replacing any live document or recovery state.
+  if(bundle.packageMeta?.graph)SovSchematicGraph.validate(bundle.document,bundle.packageMeta.graph);
   replaceRuntimeDocument(bundle.document);
+  currentPackageMeta=SovSchematicData.clone(bundle.packageMeta||{});
   const view=bundle.view||{};
   if(view.camera){camera={...BASE_VIEW,...view.camera};applyCamera()}
   if(view.grid){
@@ -175,7 +182,9 @@ function collectPackageAssets(){
 function snapshotPackage(){
   commitDocumentRevisionIfChanged();
   const workspace=captureWorkspace();
+  if(currentPackageMeta.graph)SovSchematicGraph.validate(workspace.document,currentPackageMeta.graph);
   return SovSchematicData.makePackage({
+    meta:SovSchematicData.clone(currentPackageMeta),
     document:workspace.document,
     workspace:{view:workspace.view},
     templates:collectPackageTemplates(),
@@ -244,7 +253,7 @@ async function saveSchematicFile({saveAs=false,format=currentFileFormat}={}){
 function applyPackage(bundle){
   const check=SovSchematicData.validatePackage(bundle);
   if(!check.ok)throw new Error(check.errors.join('; '));
-  const workspace={schema:SovSchematicData.WORKSPACE_SCHEMA,document:bundle.document,view:bundle.workspace?.view||{}};
+  const workspace={schema:SovSchematicData.WORKSPACE_SCHEMA,document:bundle.document,view:bundle.workspace?.view||{},packageMeta:bundle.meta||{}};
   return applyWorkspace(workspace);
 }
 function parseFilePayload(text){
@@ -307,7 +316,7 @@ function restoreRecovery(){
   if(!confirmDiscardIfDirty('Restore browser recovery'))return false;
   const raw=localStorage.getItem(LOCAL_RECOVERY_KEY)||localStorage.getItem(LEGACY_LOCAL_SAVE_KEY);if(!raw)throw new Error('No recovery snapshot found');
   applyWorkspace(JSON.parse(raw));
-  currentFileHandle=null;currentFileName='Recovered.sov';currentFileFormat='document';lastFileFingerprint=null;
+  currentFileHandle=null;currentFileName=currentPackageMeta.graph?'Recovered.sovpak':'Recovered.sov';currentFileFormat=currentPackageMeta.graph?'package':'document';lastFileFingerprint=null;
   updateFileReadout();
   statusEl.textContent='Recovery restored · save to keep it';
   return true;

@@ -435,3 +435,42 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .carrier-end-handle.free{stroke-width:2;stroke-dasharray:2 2}
 .wire-group.has-free-end .wire{stroke-dasharray:7 5}
 .endpoint-halo.free-end{stroke-dasharray:2 3}
+
+/* Source graph inspection reuses the native canvas; only the surrounding view changes. */
+.graph-view.app{grid-template-columns:minmax(0,1fr) 360px}
+.graph-view .palette{display:none}
+.graph-view .inspector>.section:not(.graph-inspector){display:none}
+.graph-view .inspector{display:block}
+.graph-inspector{font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.graph-heading,.graph-field-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.graph-heading h2{margin:0}
+.graph-frontier{font-size:12px;color:var(--muted);margin:12px 0}
+.graph-frontier p{margin:6px 0}
+.graph-inspector h3{font-size:18px;line-height:1.3;margin:14px 0 6px}
+.graph-inspector h2{margin-top:18px}
+.graph-address{display:block;color:var(--muted);margin-bottom:14px}
+.graph-card{display:flex;flex-direction:column;width:100%;text-align:left;gap:4px;min-height:48px;margin:6px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);cursor:pointer}
+.graph-card:hover,.graph-crumb:hover{background:var(--hover)}
+.graph-card small,.graph-field-heading small{color:var(--muted)}
+.graph-trail{display:flex;flex-wrap:wrap;gap:4px;margin:10px 0}
+.graph-crumb{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);min-height:36px;padding:6px 8px;cursor:pointer;text-align:left}
+.graph-field{border-top:1px solid var(--line);padding:10px 0}
+.graph-field-heading{margin-bottom:5px}
+.graph-source{display:block;font-size:10px;color:var(--muted);margin-top:6px}
+.graph-value{white-space:pre-wrap}
+.graph-value-item{padding:6px 0 6px 10px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
+.graph-value-item b{font-size:11px;color:var(--muted)}
+.graph-value-tree summary{cursor:pointer;min-height:28px}
+.graph-null,.graph-absent{font-style:italic;color:var(--muted)}
+.graph-gap{border-left:3px solid var(--muted);padding:8px 10px;margin:10px 0;background:var(--hover);font-size:12px}
+.graph-gap p{margin:5px 0 0}
+@media(max-width:700px){.graph-view.app{grid-template-columns:minmax(0,1fr) 280px}.graph-view header .brand,.graph-view .toolbar-separator{display:none}}
+.graph-view .node.graph-bound>.component-label{display:none}
+.graph-node-heading{fill:var(--canvas-ink);font-size:14px;font-weight:700;pointer-events:none}
+.graph-node-state{fill:var(--canvas-muted);font-size:11px;pointer-events:none}
+.graph-view .node.graph-bound>.body{fill:var(--panel)}
+.graph-view .node[data-graph-kind="system"]>.body{fill:var(--canvas-tone);stroke:var(--line)}
+.graph-view .node[data-graph-kind="charge"]>.body{fill:var(--hover)}
+
+.graph-view .selection-bar{display:none!important}
+@media(max-width:900px){.graph-view header{overflow-x:auto;justify-content:flex-start}.graph-view header .brand,.graph-view header .version,.graph-view header .status{display:none}.graph-view .canvas-toolbar{flex-shrink:0}}
