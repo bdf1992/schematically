@@ -19,4 +19,4 @@ All `.sov` examples pass `SovSchematicData.validateDocument()`.
 
 Render any of these to a standalone SVG with `python scripts/export_svg.py examples/<name>.sov`.
 
-`optimization/workshop.sov` with its sidecar `workshop.opt.json` is the worked example for `scripts/optimize_sov.py`: a Shop floor Plane that scopes a labor budget, with congestion on the saw and a saturating chair market. See `docs/vision/LINEAR-NONLINEAR-SYSTEMS.md`.
+`optimization/workshop.sov` with its sidecar `workshop.opt.json` is the worked example for `scripts/optimize_sov.py`: a Shop floor Plane that scopes a labor budget, with congestion on the saw and a saturating chair market. See `docs/vision/LINEAR-NONLINEAR-SYSTEMS.md`. `optimization/workshop.learning.opt.json` is a second sidecar for the same document: a learning curve on chairs (cheaper at scale, nonconvex), solved globally with ordered segments.

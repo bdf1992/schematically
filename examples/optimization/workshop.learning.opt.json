@@ -1,0 +1,80 @@
+{
+  "document": "workshop.sov",
+  "flows": {
+    "w-chair-blanks": {
+      "per": 4
+    },
+    "w-chair-sales": {
+      "note": "a wider market: every chair sells at the same price",
+      "value": 45
+    },
+    "w-stock": {
+      "note": "board-ft per blank, a fifth lost to kerf and knots",
+      "per": 1.25
+    },
+    "w-table-blanks": {
+      "per": 10
+    },
+    "w-table-sales": {
+      "value": 120
+    }
+  },
+  "horizon": "one week",
+  "note": "The workshop again, with a learning curve on chairs in place of a saturating chair market. Cheaper at scale is nonconvex; the solver orders the curve with binaries and searches them.",
+  "objective": "maximize",
+  "resources": {
+    "labor": {
+      "limit": 40,
+      "scope": "floor",
+      "unit": "h"
+    }
+  },
+  "schema": "soveraeign.schematic/optimization@0.0-draft",
+  "stages": {
+    "chairs": {
+      "capacity": 20,
+      "effects": {
+        "labor": {
+          "kind": "economies",
+          "note": "a learning curve: the n-th chair of a batch takes less time than the first",
+          "power": 0.7
+        }
+      },
+      "integer": true,
+      "unit": "chair",
+      "uses": {
+        "labor": 1.5
+      }
+    },
+    "cut": {
+      "capacity": 90,
+      "effects": {
+        "labor": {
+          "kind": "congestion",
+          "power": 2
+        }
+      },
+      "unit": "blank",
+      "uses": {
+        "labor": 0.2
+      }
+    },
+    "market": {
+      "role": "sink"
+    },
+    "tables": {
+      "capacity": 8,
+      "integer": true,
+      "unit": "table",
+      "uses": {
+        "labor": 4
+      }
+    },
+    "timber": {
+      "role": "source",
+      "supply": 90,
+      "unit": "board-ft"
+    }
+  },
+  "unit": "USD"
+}

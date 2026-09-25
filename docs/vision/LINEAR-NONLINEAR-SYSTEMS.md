@@ -68,7 +68,7 @@ The core is a linear program. Nonlinear effects bend one term each:
 - `congestion` on a resource use: x · (1 + (x / cap)^p). A stage near capacity costs more per unit. **Convex.**
 - `economies` (x^p): cheaper at scale, or accelerating value. **Nonconvex in the direction that matters.**
 
-Concave value and convex cost together form the **convex case**. There the solver turns each bent term into linear segments; because the slopes are ordered, the simplex fills them in order without integer variables, and the error shrinks as segments are added. The nonconvex case (economies of scale, setup costs, minimum batch sizes) needs integer choice. The solver **refuses** it with a reason (`NONCONVEX`) and does not return a plausible-looking wrong answer.
+Concave value and convex cost together form the **convex case**. There the solver turns each bent term into linear segments; because the slopes are ordered, the simplex fills them in order without integer variables, and the error shrinks as segments are added. The nonconvex case (economies of scale, accelerating value) needs integer choice: the solver orders the segments with binaries and searches them by branch and bound (see *Cheaper at scale* below). Setup costs and minimum batch sizes are not modelled yet.
 
 Every run returns:
 
@@ -128,6 +128,43 @@ Two things change once units are whole:
 
 The QA checks the result against a path branch and bound did not choose: it enumerates every (chairs, tables) pair in the workshop, solves the rest of the LP for each, and requires the same optimum. It also checks a knapsack, a general integer program, an infeasible one (2x = 1), and that a search stopped early reports a bound that is still an upper bound.
 
+### Cheaper at scale: ordered segments (SOS2)
+
+A learning curve makes the twentieth chair of a batch quicker than the first. Labor use becomes x^0.7: concave, cheaper at scale. Split into segments, the late segments are the cheap ones. An LP free to choose would fill them first and claim a curve that does not exist: chairs at their cheapest rate from the very first one.
+
+The fix forces order. For each boundary between segment k and k + 1 there is a binary z_k, meaning "segment k is full":
+
+```
+s_k     ≥ w · z_k        z_k = 1 only if segment k is full
+s_{k+1} ≤ w · z_k        segment k+1 may hold anything only if z_k = 1
+```
+
+This is the incremental form of SOS2 (special ordered sets of type 2): at most two adjacent breakpoints are active, so the plan stays on the curve. The binaries go to the same branch and bound as whole units. The ordering binaries are never relaxed, even with `--relax`, because without them the curve is not the one declared. The result is global to the breakpoint error, not a local optimum.
+
+`examples/optimization/workshop.learning.opt.json` is a second sidecar for the **same** `workshop.sov`. Only the quantities change: a learning curve on chairs, and a wider chair market in place of the saturating one. It demonstrates the separation of topology and quantity.
+
+```
+$ python scripts/optimize_sov.py examples/optimization/workshop.sov \
+      --model examples/optimization/workshop.learning.opt.json --segments 20 --compare
+
+linear model (no learning curve)          chairs 12  tables 2   780.00 USD  labor 37.90 / 40
+nonlinear model                           chairs 18  tables 0   810.00 USD  labor 34.96 / 40
+  nonconvex bends: 19 ordering binaries, optimal after 8 nodes;
+    without ordering the LP would claim 826.35 USD
+  whole units: optimal after 16 nodes; relaxation 823.26
+    one more labor gains 15.00 USD (measured)
+```
+
+What this shows:
+
+- **The global answer commits to scale.** Eighteen chairs and no tables: once chairs get cheap, the workshop should specialise. The model that ignores learning splits production and leaves $30 a week on the table.
+- **The landscape really has local optima.** The QA enumerates every whole plan under the true curves and finds six where no single step (one more or fewer of either product, or a swap) improves: (18, 0) at $810, then (15, 1), (12, 2), (9, 3), (5, 4) and (2, 5) down to $690. A hill-climber stops at whichever it reaches first. The linear model lands on (12, 2), one of them. Branch and bound over the ordering finds (18, 0) and proves it.
+- **Without ordering the LP lies.** It claims $826.35, a value no plan can reach.
+- **Marginal value is not local.** The chosen plan leaves 5 hours of labor unused, so the local shadow price of labor is small ($2.68). Yet one more hour is worth $15: at 41 hours a different plan (13 chairs, 2 tables, 40.65 h) becomes reachable and is worth $825. A shadow price cannot see a better plan in another valley. The measured marginal can. Both are reported, and the shadow price is labelled `local`.
+- **Error direction.** For the convex bends, straight segments err on the safe side: chords over-state congestion and under-state saturating value. For the nonconvex ones they err optimistically: chords under-state cheaper-at-scale use and over-state accelerating value. The solver always re-evaluates the plan under the true curves, and that is where an optimistic error shows up. Choosing `--segments` so the breakpoints fall on whole units (20 segments over 20 chairs here) makes the pieces exact at every whole plan.
+
+The QA checks all of this against paths the solver did not choose: the brute-force landscape, the count of local optima, the segment order in the solution, and a mutation check (with ordering switched off the test fails, picking (13, 2)). An accelerating-value case (table price rising as x^1.3) is also checked against enumeration.
+
 ## 3. How this fits the direction
 
 - **Data-driven language (Issue #4).** Quantities belong in data, not code. The sidecar is a draft of what a domain pack's quantitative layer could look like: `uses`, `per`, `yield`, `capacity`, `effects`. A production-planning pack would supply the vocabulary; the kernel keeps the solver.
@@ -151,7 +188,7 @@ Every term in the model already declares its shape: `curve()` classifies each ef
 | Convex separable: concave value, convex cost | saturation, congestion | **Piecewise-linear LP**: segments filled in order | global to a stated breakpoint error | **built** |
 | Linear or convex + whole units | integer stages | **Branch and bound** over the LP | global, or a stated gap at the node limit | **built** |
 | Convex smooth, not separable, or needing exact curves | interacting stages; a queue delay ρ/(1 − ρ) | **Interior point / barrier**, **Frank–Wolfe**, **projected gradient** | global (convexity makes every local optimum global) | next, small |
-| Nonconvex separable: economies of scale, accelerating value | `economies` with the wrong bend (refused today) | **SOS2 piecewise + branch and bound**: binary variables force the segments to fill in order | **global** to breakpoint error | next: the branch and bound it needs now exists |
+| Nonconvex separable: economies of scale, accelerating value | `economies`: a learning curve, a volume price | **SOS2 piecewise + branch and bound**: binary variables force the segments to fill in order | **global** to breakpoint error | **built** |
 | Fixed costs, setup, minimum batch | "if a stage runs at all, it costs S" | **MILP**: an on/off binary per stage, x ≤ cap·z | global | next, same machinery |
 | General nonconvex smooth | products of decisions, e.g. rate × rate on a Wire chain | **Gradient descent / SQP / augmented Lagrangian** | **local** | later |
 | … the same, needing confidence | | **Multistart**, **basin hopping**, **simulated annealing** around the local solver | heuristic: better odds, no proof | later |
@@ -167,7 +204,7 @@ Gradient descent follows the slope downhill (or uphill, for a maximum). On a con
 
 Three responses, in order of preference here:
 
-1. **Avoid needing it.** Most effects a schematic declares are *separable*: each bends one stage's term. Separable nonconvex curves are exactly solvable, to breakpoint error, by SOS2 piecewise + branch and bound, now that branch and bound exists. That is a global answer, not a hope.
+1. **Avoid needing it.** Most effects a schematic declares are *separable*: each bends one stage's term. Separable nonconvex curves are exactly solvable, to breakpoint error, by SOS2 piecewise + branch and bound. That is now built, and the learning-curve example shows it finding the global plan in a landscape with six local optima.
 2. **When the problem is truly nonconvex and not separable**, run a local method (projected gradient, SQP) and label the result `local`. Run it from several starting points (multistart) and report how many distinct optima were found and how far apart they are. That spread is the honest measure of how rough the landscape is.
 3. **Use the exact methods as a witness.** On problems small enough for both, compare the local answer with the global one. The difference is the measured cost of the local method on that shape, which is the evidence for when it is safe to use.
 
@@ -177,8 +214,9 @@ The same typing applies to efficiency measurements. A shadow price is exact for 
 
 | Gap | Kind | What closes it |
 | --- | --- | --- |
-| Economies of scale, setup cost, minimum batch | nonconvex | SOS2 segments and on/off binaries over the existing branch and bound (section 4); refused today |
-| Branch and bound at scale | performance | every node re-solves the dense LP from scratch. Warm-starting from the parent's basis (dual simplex), cutting planes and a rounding heuristic are the usual next steps |
+| Setup cost, minimum batch | nonconvex, discontinuous | an on/off binary per stage (x ≤ cap·z, cost S·z, x ≥ min·z) over the existing branch and bound |
+| Optimistic error on nonconvex bends | approximation | segments whose breakpoints fall on whole units (exact there), or refine until the true-curve check passes; an automatic refinement loop could do this |
+| Branch and bound at scale | performance | every node re-solves the dense LP from scratch; 32 segments per nonconvex bend with measured marginals takes about 7 s on the example. Warm-starting from the parent's basis (dual simplex), cutting planes and a rounding heuristic are the usual next steps |
 | Local methods for nonconvex, non-separable problems | local optima | projected gradient or SQP with multistart, labelled `local`, checked against the exact methods where both run |
 | Time as sequence, not just a budget: makespan, precedence, a stage that cannot start until another finishes | scheduling | a time-indexed or event-based model. The `(logicalTime, sequence)` scheduler in Issue #6 is the natural host |
 | Rate and travel time as decision variables: choosing Wire rates under a latency target | hyperbolic (1/rate) | a geometric program: in log space the rate product and 1/rate both become linear |
@@ -202,6 +240,7 @@ These came out of the inventory. None is changed here.
 python scripts/optimize_sov.py examples/optimization/workshop.sov             # the nonlinear plan
 python scripts/optimize_sov.py examples/optimization/workshop.sov --compare   # linear vs nonlinear
 python scripts/optimize_sov.py examples/optimization/workshop.sov --relax      # allow fractional units
+python scripts/optimize_sov.py examples/optimization/workshop.sov --model examples/optimization/workshop.learning.opt.json --segments 20 --compare
 python scripts/optimize_sov.py examples/optimization/workshop.sov --segments 128 --json
 python tests/optimize_sov_qa.py                                              # the gate's check
 ```

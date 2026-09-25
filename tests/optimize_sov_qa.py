@@ -10,6 +10,10 @@ solver did not choose:
     (finite difference, not the tableau reading back its own number);
   - branch and bound returns the same whole-unit optimum as enumerating every whole-unit plan
     (a knapsack and the workshop), and says `node_limit` with an honest bound when stopped early;
+  - a nonconvex bend (cheaper at scale, accelerating value) is solved globally: the plan
+    matches enumeration of every whole plan under the true curves, even though that landscape
+    has several local optima; the segments fill in order; and the same LP without ordering
+    claims a value no plan can reach;
   - on the workshop example, the nonlinear plan is feasible under the true curves, the linear
     plan is not, refining the breakpoints only raises the value and converges, and the
     refusals fire for an out-of-scope resource, a nonconvex bend and a missing recipe.
@@ -26,9 +30,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from optimize_sov import Refusal, branch_and_bound, build, load, simplex, solve  # noqa: E402
+from optimize_sov import Refusal, branch_and_bound, build, load, simplex, solve, true_value  # noqa: E402
 
 DOC = ROOT / 'examples' / 'optimization' / 'workshop.sov'
+LEARNING = ROOT / 'examples' / 'optimization' / 'workshop.learning.opt.json'
 
 
 def close(a: float, b: float, tol: float = 1e-6) -> bool:
@@ -143,6 +148,83 @@ def check_whole_units() -> None:
         assert bb['objective'] <= full['objective'] + 1e-9
 
 
+def landscape(doc: dict, model: dict) -> dict[tuple[int, int], float]:
+    """Every whole (chairs, tables) plan the workshop can run, valued under the true curves.
+
+    Independent of the solver's LP: the cut follows from the recipe, feasibility is checked
+    against the true curves, timber and the saw's capacity.
+    """
+    stages, per = model['stages'], model['flows']
+    out = {}
+    for a in range(int(stages['chairs']['capacity']) + 1):
+        for b in range(int(stages['tables']['capacity']) + 1):
+            cut = per['w-chair-blanks']['per'] * a + per['w-table-blanks']['per'] * b
+            if cut > stages['cut']['capacity'] or cut * per['w-stock']['per'] > stages['timber']['supply'] + 1e-9:
+                continue
+            plan = {'activity': {'chairs': a, 'tables': b, 'cut': cut},
+                    'flows': {'w-chair-sales': a, 'w-table-sales': b}}
+            ev = true_value(doc, model, plan)
+            if ev['feasible']:
+                out[(a, b)] = ev['value']
+    return out
+
+
+def local_optima(values: dict[tuple[int, int], float]) -> list[tuple[int, int]]:
+    """Plans no single step (one more or less of either, or a swap) improves."""
+    steps = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
+    return [p for p, v in values.items()
+            if all(values.get((p[0] + da, p[1] + db), -math.inf) <= v + 1e-9 for da, db in steps)]
+
+
+def check_nonconvex() -> None:
+    doc, _ = load(DOC)
+    _, learning = load(DOC, LEARNING)
+
+    # Learning curve on chairs (labor use x^0.7). Twenty segments put a breakpoint on every
+    # whole chair, so at whole units the pieces are the curve and the answer is exact.
+    values = landscape(doc, learning)
+    best = max(values, key=values.get)
+    optima = local_optima(values)
+    assert len(optima) >= 3, ('the example should be genuinely nonconvex', optima)
+    got = solve(doc, learning, segments=20, marginals=False)
+    plan = (round(got['plan']['activity']['chairs']), round(got['plan']['activity']['tables']))
+    assert plan == best, (plan, best, values[best])
+    assert close(got['evaluated']['value'], values[best]) and got['evaluated']['feasible'], got['evaluated']
+    assert got['nonconvex']['status'] == 'optimal' and got['whole_units']['status'] == 'optimal', got
+    assert got['shadow_price']['kind'] == 'local'
+
+    # The model that ignores learning lands on a local optimum that is not the global one.
+    naive = solve(doc, learning, linear=True, marginals=False)
+    naive_plan = (round(naive['plan']['activity']['chairs']), round(naive['plan']['activity']['tables']))
+    assert naive_plan in optima and naive_plan != best, (naive_plan, optima)
+
+    # Without the ordering binaries the LP fills the cheap late segments first and claims more
+    # than any plan can deliver; with them each segment fills only after the one before.
+    relaxed = solve(doc, learning, segments=20, relax=True, marginals=False)
+    assert relaxed['nonconvex']['lp_claims'] > relaxed['objective'] + 1e-6, relaxed['nonconvex']
+    lp = build(doc, learning, segments=20)
+    loose = simplex(lp['c'], lp['A_ub'], lp['b_ub'], lp['A_eq'], lp['b_eq'], lp['upper'])
+    assert close(loose['objective'], relaxed['nonconvex']['lp_claims']), loose['objective']
+    bb = branch_and_bound(lp['c'], lp['A_ub'], lp['b_ub'], lp['A_eq'], lp['b_eq'], lp['upper'], lp['ordering'])
+    width = lp['bends'][[b['label'] for b in lp['bends']].index('chairs:labor')]['width']
+    segs = [bb['x'][j] for j, name in enumerate(lp['names']) if name.startswith('segment:chairs:labor:')]
+    for k in range(len(segs) - 1):
+        assert segs[k + 1] <= 1e-7 or segs[k] >= width - 1e-7, ('segment filled out of order', k, segs)
+
+    # Accelerating value on tables (price rises with volume, x^1.3) on the base workshop: eight
+    # segments over the eight-table capacity, a breakpoint on every whole table.
+    _, base = load(DOC)
+    accel = copy.deepcopy(base)
+    accel['flows']['w-table-sales']['effect'] = {'kind': 'economies', 'power': 1.3}
+    got = solve(doc, accel, segments=8, marginals=False)
+    values = landscape(doc, accel)
+    best = max(values, key=values.get)
+    plan = (round(got['plan']['activity']['chairs']), round(got['plan']['activity']['tables']))
+    # Chair saturation is still approximated between breakpoints, so compare values, not plans.
+    assert got['evaluated']['feasible'] and got['evaluated']['value'] >= values[best] - 0.01 * values[best], \
+        (plan, got['evaluated']['value'], best, values[best])
+
+
 def refused(doc: dict, model: dict, code: str) -> None:
     try:
         solve(doc, model)
@@ -159,10 +241,6 @@ def check_refusals() -> None:
                 c.pop('parentId')
                 c.pop('canvasId')
     refused(*with_model(leave_floor), 'OUT_OF_SCOPE')
-    refused(*with_model(lambda d, m: m['flows']['w-table-sales'].update(effect={'kind': 'economies', 'power': 1.3})),
-            'NONCONVEX')
-    refused(*with_model(lambda d, m: m['stages']['cut']['effects'].update(labor={'kind': 'economies', 'power': 0.8})),
-            'NONCONVEX')
     refused(*with_model(lambda d, m: m['flows']['w-chair-blanks'].pop('per')), 'NO_RECIPE')
     refused(*with_model(lambda d, m: m['stages'].pop('tables')), 'UNQUANTIFIED_STAGE')
     with tempfile.TemporaryDirectory() as tmp:
@@ -186,6 +264,7 @@ def main() -> int:
     check_simplex()
     check_workshop()
     check_whole_units()
+    check_nonconvex()
     check_refusals()
     check_document_valid()
     print('optimize_sov QA PASS')

@@ -20,8 +20,11 @@ The model is a Leontief production network (the linear core) with separable effe
 
 Concave value and convex use are the convex case, and the convex case is solved exactly up
 to a stated breakpoint error by turning each bent term into linear segments that the simplex
-fills in order. A bend the other way (economies of scale, setup costs) makes the problem
-nonconvex; it is refused with a reason rather than solved badly.
+fills in order. A bend the other way (economies of scale, accelerating value) makes the
+problem nonconvex. There the segments are forced to fill in order by binaries (the
+incremental form of SOS2), and branch and bound over those binaries makes the answer global
+to the breakpoint error. Shadow prices are then labelled local, and the value of one more
+unit of each limit is measured by solving again.
 
 A stage marked `integer` is held to whole units by branch and bound over the same simplex.
 The result says whether that search proved its plan optimal or stopped at the node limit
@@ -373,6 +376,7 @@ def build(doc: dict, model: dict, segments: int = 32, linear: bool = False) -> d
            if role(cid) == 'stage'}
     A_eq, b_eq, A_ub, b_ub, rows_ub, rows_eq = [], [], [], [], [], []
     bends: list[dict] = []
+    ordering: list[int] = []
 
     def eq(coefs: dict[int, float], rhs: float, label: str) -> None:
         A_eq.append(coefs)
@@ -384,8 +388,16 @@ def build(doc: dict, model: dict, segments: int = 32, linear: bool = False) -> d
         b_ub.append(rhs)
         rows_ub.append(label)
 
-    def piecewise(x_index: int, fn, shape: str, hi: float, label: str) -> list[tuple[int, float]]:
-        """Split x into `segments` pieces on [0, hi]; returns (segment var, slope) pairs."""
+    def piecewise(x_index: int, fn, shape: str, hi: float, label: str, ordered: bool = False) -> list[tuple[int, float]]:
+        """Split x into `segments` pieces on [0, hi]; returns (segment var, slope) pairs.
+
+        When the bend runs the wrong way for the simplex (value that accelerates, use that
+        gets cheaper), the LP would fill the most attractive segment first and claim a curve
+        that does not exist. `ordered` forbids that: a binary z_k per boundary says segment k
+        is full, and s_k >= w z_k, s_{k+1} <= w z_k, so a segment may hold anything only once
+        every segment before it is full. This is the incremental form of SOS2; branch and
+        bound over the z's makes the answer global to the breakpoint error.
+        """
         if hi is None or not math.isfinite(hi) or hi <= 0:
             raise Refusal('UNBOUNDED_BEND', f'{label} bends but has no bound to bend over',
                           'declare a capacity or supply on the stage')
@@ -400,7 +412,13 @@ def build(doc: dict, model: dict, segments: int = 32, linear: bool = False) -> d
             parts.append((j, slope))
             coefs[j] = -1.0
         eq(coefs, 0.0, f'split:{label}')
-        bends.append({'label': label, 'shape': shape, 'segments': segments, 'width': width})
+        if ordered:
+            for k in range(segments - 1):
+                z = var(f'order:{label}:{k}', 1.0)
+                ordering.append(z)
+                ub({parts[k][0]: -1.0, z: width}, 0.0, f'order:{label}:{k}:full')
+                ub({parts[k + 1][0]: 1.0, z: -width}, 0.0, f'order:{label}:{k}:next')
+        bends.append({'label': label, 'shape': shape, 'segments': segments, 'width': width, 'ordered': ordered})
         return parts
 
     # Relays conserve flow.
@@ -448,11 +466,9 @@ def build(doc: dict, model: dict, segments: int = 32, linear: bool = False) -> d
         if shape == 'linear':
             c[flow[w['id']]] += value
             continue
-        if shape != 'concave':
-            raise Refusal('NONCONVEX', f'value on {w["id"]} grows faster than linear; the optimum may sit at a corner the simplex cannot see',
-                          'model it as integer choice (MILP) or drop the effect')
+        # Concave value fills in order on its own; accelerating value has to be made to.
         hi = f.get('effect', {}).get('over') or _flow_bound(w, stages, wires, model)
-        for j, slope in piecewise(flow[w['id']], fn, shape, hi, w['id']):
+        for j, slope in piecewise(flow[w['id']], fn, shape, hi, w['id'], ordered=shape != 'concave'):
             c[j] += value * slope
 
     # Resources: limit, optional Plane scope, per-unit use by each stage, optional bend.
@@ -476,10 +492,9 @@ def build(doc: dict, model: dict, segments: int = 32, linear: bool = False) -> d
             if shape == 'linear':
                 coefs[act[cid]] = coefs.get(act[cid], 0.0) + float(use)
                 continue
-            if shape != 'convex':
-                raise Refusal('NONCONVEX', f'{cid} uses {rname!r} less per unit as it grows; cheaper-at-scale needs integer choice',
-                              'model it as MILP or drop the effect')
-            for j, slope in piecewise(act[cid], fn, shape, spec.get('capacity'), f'{cid}:{rname}'):
+            # Convex use fills in order on its own; cheaper-at-scale has to be made to.
+            for j, slope in piecewise(act[cid], fn, shape, spec.get('capacity'), f'{cid}:{rname}',
+                                      ordered=shape != 'convex'):
                 coefs[j] = coefs.get(j, 0.0) + float(use) * slope
         ub(coefs, float(res['limit']), f'resource:{rname}')
 
@@ -487,7 +502,8 @@ def build(doc: dict, model: dict, segments: int = 32, linear: bool = False) -> d
     dense = lambda rows: [[r.get(j, 0.0) for j in range(n)] for r in rows]  # noqa: E731
     return {'c': c, 'A_ub': dense(A_ub), 'b_ub': b_ub, 'A_eq': dense(A_eq), 'b_eq': b_eq, 'upper': upper,
             'names': var_names, 'rows_ub': rows_ub, 'rows_eq': rows_eq, 'act': act, 'flow': flow,
-            'bends': bends, 'integer': [act[cid] for cid in act if stages[cid].get('integer')]}
+            'bends': bends, 'integer': [act[cid] for cid in act if stages[cid].get('integer')],
+            'ordering': ordering}
 
 
 def _flow_bound(w: dict, stages: dict, wires: list[dict], model: dict) -> float | None:
@@ -526,42 +542,71 @@ def true_value(doc: dict, model: dict, plan: dict) -> dict:
 
 def solve(doc: dict, model: dict, segments: int = 32, linear: bool = False, relax: bool = False,
           node_limit: int = 5000, marginals: bool = True) -> dict:
-    """Solve the model. Stages marked `integer` are held to whole units unless `relax`."""
+    """Solve the model.
+
+    Three layers, each only when needed: the LP; branch and bound over the ordering binaries
+    of any nonconvex bend (never relaxed: without them the curve is not the declared one);
+    branch and bound over whole units for `integer` stages, unless `relax`.
+    """
     lp = build(doc, model, segments, linear)
-    res = simplex(lp['c'], lp['A_ub'], lp['b_ub'], lp['A_eq'], lp['b_eq'], lp['upper'])
-    if res['status'] != 'optimal':
-        raise Refusal(res['status'].upper(), f'the model is {res["status"]}',
-                      'loosen a limit' if res['status'] == 'infeasible' else 'bound a value-bearing flow')
-    shadow = {label[len('resource:'):]: d for label, d in zip(lp['rows_ub'], res['duals_ub'])
-              if label.startswith('resource:')}
-    shadow_supply = {label[len('supply:'):]: d for label, d in zip(lp['rows_ub'], res['duals_ub'])
-                     if label.startswith('supply:')}
-    capacity = {cid: res['duals_bound'][j] for cid, j in lp['act'].items() if j in res['duals_bound']}
-    x, objective, whole = res['x'], res['objective'], None
+    args = (lp['c'], lp['A_ub'], lp['b_ub'], lp['A_eq'], lp['b_eq'])
+
+    def search(integer: list[int]) -> dict:
+        bb = branch_and_bound(*args, lp['upper'], integer, node_limit=node_limit)
+        if 'x' not in bb:
+            if bb['status'] in ('infeasible', 'unbounded') and bb['nodes'] <= 1:
+                raise Refusal(bb['status'].upper(), f'the model is {bb["status"]}',
+                              'loosen a limit' if bb['status'] == 'infeasible' else 'bound a value-bearing flow')
+            raise Refusal('NO_PLAN_FOUND', f'no plan found ({bb["status"]} after {bb["nodes"]} nodes)',
+                          'raise --node-limit, use fewer --segments, or solve with --relax')
+        return bb
+
+    base = search(lp['ordering'])        # with no ordering binaries this is one LP
+    x, objective = base['x'], base['objective']
+    nonconvex = None
+    if lp['ordering']:
+        nonconvex = {'binaries': len(lp['ordering']), 'status': base['status'], 'nodes': base['nodes'],
+                     'bound': base['bound'], 'lp_claims': base['relaxation']}
+
+    # Prices: an LP's duals. With ordering, the duals of the LP with every z fixed where the
+    # search put it: exact for the chosen pieces of each curve, a local slope for the curve.
+    up = list(lp['upper'])
+    extra_rows, extra_rhs = [], []
+    for j in lp['ordering']:
+        z = round(x[j])
+        up[j] = z
+        if z:
+            extra_rows.append([-1.0 if i == j else 0.0 for i in range(len(lp['c']))])
+            extra_rhs.append(-1.0)
+    priced = simplex(lp['c'], lp['A_ub'] + extra_rows, lp['b_ub'] + extra_rhs, lp['A_eq'], lp['b_eq'], up)
+    duals_ub = priced['duals_ub'][:len(lp['rows_ub'])]
+    shadow = {label[len('resource:'):]: d for label, d in zip(lp['rows_ub'], duals_ub) if label.startswith('resource:')}
+    shadow_supply = {label[len('supply:'):]: d for label, d in zip(lp['rows_ub'], duals_ub) if label.startswith('supply:')}
+    capacity = {cid: priced['duals_bound'][j] for cid, j in lp['act'].items() if j in priced['duals_bound']}
+
+    whole = None
     if lp['integer'] and not relax:
-        bb = branch_and_bound(lp['c'], lp['A_ub'], lp['b_ub'], lp['A_eq'], lp['b_eq'], lp['upper'],
-                              lp['integer'], node_limit=node_limit)
-        if bb['status'] == 'infeasible' or 'x' not in bb:
-            raise Refusal('NO_WHOLE_PLAN', f'no whole-unit plan found ({bb["status"]} after {bb["nodes"]} nodes)',
-                          'raise --node-limit, loosen a limit, or solve with --relax')
-        x, objective = bb['x'], bb['objective']
-        whole = {'status': bb['status'], 'nodes': bb['nodes'], 'relaxation': res['objective'],
-                 'bound': bb['bound'], 'price_of_whole_units': res['objective'] - bb['objective'],
+        bb = search(lp['ordering'] + lp['integer'])
+        whole = {'status': bb['status'], 'nodes': bb['nodes'], 'relaxation': objective, 'bound': bb['bound'],
+                 'price_of_whole_units': objective - bb['objective'],
                  'stages': [cid for cid, j in lp['act'].items() if j in lp['integer']]}
-        if marginals:
-            # Shadow prices belong to the relaxation. With whole units the value of one more
-            # unit of a limit is lumpy, so it is measured: solve again with the limit raised by one.
-            whole['marginal'] = {}
-            for rname, r in model.get('resources', {}).items():
-                more = json.loads(json.dumps(model))
-                more['resources'][rname]['limit'] = float(r['limit']) + 1
-                whole['marginal'][rname] = solve(doc, more, segments, linear, node_limit=node_limit,
-                                                 marginals=False)['objective'] - objective
+        x, objective = bb['x'], bb['objective']
+    if (whole or nonconvex) and marginals:
+        # Where prices are not exact (whole units, or a curve that bends the wrong way), the
+        # value of one more unit of a limit is measured: solve again with the limit raised by one.
+        measured = {}
+        for rname, r in model.get('resources', {}).items():
+            more = json.loads(json.dumps(model))
+            more['resources'][rname]['limit'] = float(r['limit']) + 1
+            measured[rname] = solve(doc, more, segments, linear, relax, node_limit, marginals=False)['objective'] - objective
+        (whole if whole else nonconvex)['marginal'] = measured
     plan = {'activity': {cid: x[j] for cid, j in lp['act'].items()},
             'flows': {wid: x[j] for wid, j in lp['flow'].items()}}
     return {'model': 'linear' if linear else 'nonlinear', 'segments': segments, 'objective': objective,
-            'plan': plan, 'shadow_price': {'resource': shadow, 'supply': shadow_supply, 'capacity': capacity},
-            'whole_units': whole, 'bends': lp['bends'], 'evaluated': true_value(doc, model, plan),
+            'plan': plan, 'shadow_price': {'resource': shadow, 'supply': shadow_supply, 'capacity': capacity,
+                                           'kind': 'local' if lp['ordering'] else 'exact'},
+            'whole_units': whole, 'nonconvex': nonconvex, 'bends': lp['bends'],
+            'evaluated': true_value(doc, model, plan),
             'variables': len(lp['names']), 'rows': len(lp['rows_ub']) + len(lp['rows_eq'])}
 
 
@@ -580,12 +625,21 @@ def report(result: dict, unit: str) -> str:
     for r, u in ev['usage'].items():
         price = result['shadow_price']['resource'].get(r, 0.0)
         mark = '' if u['feasible'] else '  OVER'
-        out.append(f"    {r:<14} {u['used']:8.2f} / {u['limit']:<8.2f} shadow {price:7.2f} {unit} per unit{mark}")
+        kind = '' if result['shadow_price'].get('kind', 'exact') == 'exact' else ' (local)'
+        out.append(f"    {r:<14} {u['used']:8.2f} / {u['limit']:<8.2f} shadow {price:7.2f} {unit} per unit{kind}{mark}")
     for s, p in result['shadow_price']['supply'].items():
         out.append(f'    supply:{s:<7} shadow {p:7.2f} {unit} per unit')
     for s, p in result['shadow_price']['capacity'].items():
         if abs(p) > 1e-9:
             out.append(f'    capacity:{s:<5} shadow {p:7.2f} {unit} per unit')
+    nc = result.get('nonconvex')
+    if nc:
+        out.append(f"  nonconvex bends: {nc['binaries']} ordering binaries, {nc['status']} after {nc['nodes']} nodes;"
+                   f" without ordering the LP would claim {nc['lp_claims']:.2f} {unit}")
+        if nc['status'] != 'optimal':
+            out.append(f"    best bound {nc['bound']:.2f}: the plan may be short of the global optimum")
+        for r, m in nc.get('marginal', {}).items():
+            out.append(f'    one more {r:<8} gains {m:7.2f} {unit} (measured)')
     whole = result.get('whole_units')
     if whole:
         out.append(f"  whole units ({', '.join(whole['stages'])}): {whole['status']} after {whole['nodes']} nodes;"
