@@ -99,6 +99,13 @@ function updateSelectedComponentForm(mutator){
   componentConfig(n);
   routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 }
+formSection.addEventListener('change',()=>updateSelectedComponentForm(f=>{const v=formSection.value;if(v==='derived')delete f.section;else if(v!=='custom')f.section=SovSchematicData.sectionPreset(v,2)}));
+barWireSection?.addEventListener('change',()=>{
+  const w=mutableSelectedConnection('Wire section');if(!w)return;const v=barWireSection.value;
+  if(!w.form||typeof w.form!=='object')w.form={dimension:1};
+  if(v==='line')delete w.form.section;else if(v!=='custom')w.form.section=SovSchematicData.sectionPreset(v,1);
+  routeCache.clear();renderWires();const i=wires.indexOf(w);selectWire(i,{focus:false});scheduleHistoryCapture();
+});
 formDimension.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.dimension=Number(formDimension.value);f.body.kind=['point','path','surface'][f.dimension]}));
 formAttachments.addEventListener('change',()=>{
   // Built-in 2D points are template defaults. Turning them off is refused while a Wire

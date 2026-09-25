@@ -1,6 +1,23 @@
 # Section Model · proposed (2026-09-25)
 
-Status: **proposed**. Nothing here is implemented yet. It refines `FORM-MODEL.md` and
+**Built so far (v1, 2026-09-25):**
+- the record (`form.section`)
+- presets
+- validation
+- the legacy projection
+- drawing
+- settings controls
+
+**Not yet built:**
+- exposure by position
+- hosting in bands
+- span ends
+- carriers in lanes
+
+See "As built" at the end of this doc.
+
+Status: **v1 built**. The record, the presets, the drawing and the settings controls
+exist; exposure by position, band hosting and span ends are still proposed. It refines `FORM-MODEL.md` and
 changes parts of `ATTACHMENT-POINT-MODEL.md`, `CANVAS-MODEL.md` and
 `HOST-SURFACE-MODEL.md`. Those changes are listed under "What this changes" below.
 
@@ -230,3 +247,62 @@ is the same on all of them.
    band `role`. If shell meant something else, it needs saying.
 4. **Naming**: "strip" and "lane" are proposed words for 2-line carriers. Plane is
    already the 2D primitive, so a two-line edge is not called a plane.
+
+
+## As built (v1, 2026-09-25)
+
+### Record and validation (data core, shared by every surface)
+
+- `form.section = {lines, bands, core?}` is **authored or derived**.
+  - `componentSection(c)` reads an authored section, or derives one from the legacy
+    `frame` / `regions.interior` fields without writing anything.
+  - An authored section is the authority. `frame.mode`, `frame.thickness`,
+    `frame.depth` and `regions.interior.state` are written as its projection, so
+    document@0.1 readers keep working.
+- A band count other than `lines − 1` is **refused** by `validateDocument` for components
+  and wires alike. It is never repaired.
+
+### Presets
+
+`sectionPreset(name, dimension)`:
+
+| For | Preset | Structure |
+| --- | --- | --- |
+| cards | `disk` | one line, solid |
+| cards | `circle` | one line, space |
+| cards | `section` | a solid skin around space |
+| cards | `coated` | a solid skin around solid |
+| cards | `double-wall` | 4 lines: solid · space · solid, around space |
+| wires | `line` | one line |
+| wires | `strip` | a solid band |
+| wires | `lanes` | a space band |
+| wires | `pipe` | 4 lines: wall · bore · wall |
+
+### Drawing
+
+**Cards.** A closed section draws each inner line as an inset boundary.
+- Each region is filled as what it is: solid is the material, space is a wash.
+- A band's `depth` keeps the frame's bevel.
+- A label and the container guide sit inside the innermost line.
+
+**Wires.** An open section is drawn as nested strokes along the route, outside in, so a
+strip or pipe follows every bend. It is drawn symmetric about the route. A wire label is
+lifted clear of the section.
+
+### Editing
+
+- The Form settings have a **Section** select for 2D cards.
+- The wire settings have a **Section** select for wires.
+- Each change is one history step.
+
+`examples/11-sections.sov` shows every preset. `tests/sections_qa.py` covers the whole
+of v1.
+
+### Not yet built
+
+- **Exposure by position** (points on inner lines, through-points in a skin).
+  Face-based exposure still applies on every form.
+- **Hosting in bands.**
+- **Span ends** (`span-ref`) and mouths.
+- **Carriers routed inside lanes.**
+- **Asymmetric open sections.**

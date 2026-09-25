@@ -1,0 +1,403 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "example-sections",
+  "revision": 0,
+  "meta": {
+    "title": "Classic 11 — Sections: lines and the regions between them"
+  },
+  "components": [
+    {
+      "id": "disk",
+      "symbolId": "plane",
+      "x": 160,
+      "y": 140,
+      "form": {
+        "dimension": 2,
+        "section": {
+          "lines": [
+            {
+              "id": "L0"
+            }
+          ],
+          "bands": [],
+          "core": {
+            "fill": "solid"
+          }
+        }
+      },
+      "config": {
+        "label": "Disk · solid",
+        "attachmentDefaults": "standard",
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "boundary",
+          "size": {
+            "w": 200,
+            "h": 150
+          }
+        }
+      }
+    },
+    {
+      "id": "circle",
+      "symbolId": "plane",
+      "x": 440,
+      "y": 140,
+      "form": {
+        "dimension": 2,
+        "section": {
+          "lines": [
+            {
+              "id": "L0"
+            }
+          ],
+          "bands": [],
+          "core": {
+            "fill": "space"
+          }
+        }
+      },
+      "config": {
+        "label": "Circle · space",
+        "attachmentDefaults": "standard",
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "boundary",
+          "size": {
+            "w": 200,
+            "h": 150
+          }
+        }
+      }
+    },
+    {
+      "id": "cell",
+      "symbolId": "plane",
+      "x": 730,
+      "y": 150,
+      "form": {
+        "dimension": 2,
+        "section": {
+          "lines": [
+            {
+              "id": "L0"
+            },
+            {
+              "id": "L1"
+            }
+          ],
+          "bands": [
+            {
+              "id": "B1",
+              "fill": "solid",
+              "thickness": 12,
+              "role": "skin"
+            }
+          ],
+          "core": {
+            "fill": "space"
+          }
+        }
+      },
+      "config": {
+        "label": "Section · skin around space",
+        "attachmentDefaults": "standard",
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "boundary",
+          "size": {
+            "w": 260,
+            "h": 200
+          }
+        }
+      }
+    },
+    {
+      "id": "coated",
+      "symbolId": "plane",
+      "x": 1000,
+      "y": 140,
+      "form": {
+        "dimension": 2,
+        "section": {
+          "lines": [
+            {
+              "id": "L0"
+            },
+            {
+              "id": "L1"
+            }
+          ],
+          "bands": [
+            {
+              "id": "B1",
+              "fill": "solid",
+              "thickness": 12,
+              "role": "skin"
+            }
+          ],
+          "core": {
+            "fill": "solid"
+          }
+        }
+      },
+      "config": {
+        "label": "Coated · skin around solid",
+        "attachmentDefaults": "standard",
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "boundary",
+          "size": {
+            "w": 200,
+            "h": 150
+          }
+        }
+      }
+    },
+    {
+      "id": "double",
+      "symbolId": "plane",
+      "x": 1280,
+      "y": 140,
+      "form": {
+        "dimension": 2,
+        "section": {
+          "lines": [
+            {
+              "id": "L0"
+            },
+            {
+              "id": "L1"
+            },
+            {
+              "id": "L2"
+            },
+            {
+              "id": "L3"
+            }
+          ],
+          "bands": [
+            {
+              "id": "B1",
+              "fill": "solid",
+              "thickness": 8,
+              "role": "skin"
+            },
+            {
+              "id": "B2",
+              "fill": "space",
+              "thickness": 14,
+              "role": "gap"
+            },
+            {
+              "id": "B3",
+              "fill": "solid",
+              "thickness": 8,
+              "role": "skin"
+            }
+          ],
+          "core": {
+            "fill": "space"
+          }
+        }
+      },
+      "config": {
+        "label": "Double wall",
+        "attachmentDefaults": "standard",
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "boundary",
+          "size": {
+            "w": 220,
+            "h": 170
+          }
+        }
+      }
+    },
+    {
+      "id": "src",
+      "symbolId": "act",
+      "x": 160,
+      "y": 420,
+      "config": {
+        "label": "Source"
+      }
+    },
+    {
+      "id": "a1",
+      "symbolId": "act",
+      "x": 460,
+      "y": 420,
+      "config": {
+        "label": "Line"
+      }
+    },
+    {
+      "id": "a2",
+      "symbolId": "act",
+      "x": 760,
+      "y": 420,
+      "config": {
+        "label": "Strip"
+      }
+    },
+    {
+      "id": "a3",
+      "symbolId": "act",
+      "x": 1060,
+      "y": 420,
+      "config": {
+        "label": "Lanes"
+      }
+    },
+    {
+      "id": "a4",
+      "symbolId": "act",
+      "x": 1360,
+      "y": 420,
+      "config": {
+        "label": "Pipe"
+      }
+    },
+    {
+      "id": "inside",
+      "symbolId": "act",
+      "x": 730,
+      "y": 122,
+      "config": {
+        "label": "Inside",
+        "signalMode": "relay"
+      },
+      "canvasId": "canvas:component:cell",
+      "parentId": "cell"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "src",
+      "aSide": "out",
+      "b": "a1",
+      "bSide": "in"
+    },
+    {
+      "id": "w2",
+      "a": "a1",
+      "aSide": "out",
+      "b": "a2",
+      "bSide": "in",
+      "form": {
+        "section": {
+          "lines": [
+            {
+              "id": "L0"
+            },
+            {
+              "id": "L1"
+            }
+          ],
+          "bands": [
+            {
+              "id": "B1",
+              "fill": "solid",
+              "thickness": 10,
+              "role": "band"
+            }
+          ]
+        }
+      },
+      "config": {
+        "label": "strip"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "a2",
+      "aSide": "out",
+      "b": "a3",
+      "bSide": "in",
+      "form": {
+        "section": {
+          "lines": [
+            {
+              "id": "L0"
+            },
+            {
+              "id": "L1"
+            }
+          ],
+          "bands": [
+            {
+              "id": "B1",
+              "fill": "space",
+              "thickness": 18,
+              "role": "lane"
+            }
+          ]
+        }
+      },
+      "config": {
+        "label": "lanes"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "a3",
+      "aSide": "out",
+      "b": "a4",
+      "bSide": "in",
+      "form": {
+        "section": {
+          "lines": [
+            {
+              "id": "L0"
+            },
+            {
+              "id": "L1"
+            },
+            {
+              "id": "L2"
+            },
+            {
+              "id": "L3"
+            }
+          ],
+          "bands": [
+            {
+              "id": "B1",
+              "fill": "solid",
+              "thickness": 4,
+              "role": "wall"
+            },
+            {
+              "id": "B2",
+              "fill": "space",
+              "thickness": 12,
+              "role": "bore"
+            },
+            {
+              "id": "B3",
+              "fill": "solid",
+              "thickness": 4,
+              "role": "wall"
+            }
+          ]
+        }
+      },
+      "config": {
+        "label": "pipe"
+      }
+    }
+  ],
+  "references": []
+}

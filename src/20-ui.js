@@ -182,6 +182,7 @@ function syncComponentVisualPanel(n){
   setSlotChip(visualInteriorColor,p.interiorColorSlot);
   const f=componentForm(n);
   formDimension.value=String(f.dimension);formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
+  formSection.value=sectionPresetName(f,2);
   formInteriorState.value=f.regions.interior.state;formFrameMode.value=f.frame.mode;formFrameThickness.value=String(f.frame.thickness);formFrameDepth.value=String(f.frame.depth);
   formAttachments.value=Attachment.attachmentDefaults(n);
   // Settings are shown per dimension: a Point has no size or frame, a Path no height or interior.
@@ -260,6 +261,7 @@ function showConnectionBar(w,i){
   componentBarFields.hidden=true;connectionBarFields.hidden=false;portBarFields.hidden=true;
   barConnectionDirection.value=cfg.direction;
   barConnectionReciprocity.value=cfg.reciprocity;
+  if(barWireSection)barWireSection.value=sectionPresetName(w.form,1);
 
   const io=wireIOEnds(w);
   const outConnection=endpointConnection(w,io.out);

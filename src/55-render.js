@@ -102,7 +102,7 @@ function appendTerminalMarks(g,n){
 }
 function fitComponentLabels(g,n){
   if(componentForm(n).dimension!==2)return;
-  const size=componentSize(n),max=size.w-12;
+  const size=componentSize(n),max=size.w-12-componentSectionInset(n)*2;
   for(const t of g.querySelectorAll(':scope > text.component-label,:scope > text.outside-label')){
     const full=t.textContent;if(!full||t.getComputedTextLength()<=max)continue;
     const words=full.split(/\s+/),lines=[''];
@@ -123,6 +123,7 @@ function fitComponentLabels(g,n){
     const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=full;t.appendChild(title);
   }
 }
+function componentSectionInset(n){const s=componentForm(n).dimension===2?SovSchematicData.componentSection(n):null;return s&&s.lines.length>=2?s.bands.reduce((a,b)=>a+b.thickness,0):0}
 function appendComponentText(g,n,cfg,s){
   const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s),labelMode=SovSchematicData.effectiveLabelMode(n);
   if(labelMode!=='none'&&label){
@@ -132,7 +133,8 @@ function appendComponentText(g,n,cfg,s){
       const box=componentInlineGraphicBox(n);t.setAttribute('x','0');t.setAttribute('y',String(box.y+box.h+11));
     }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
     else if(labelMode==='outside'){t.setAttribute('x','0');t.setAttribute('y',String(size.h/2+18))}
-    else {t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-8))}
+    // Inside the innermost line: a label never straddles a section's own boundary.
+    else {t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-8-componentSectionInset(n)))}
     t.textContent=label;g.appendChild(t);
   }
   const annotation=String(p.text||'').trim();
@@ -192,6 +194,9 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   // A card is a light tint of its slot, so ink and accents carry the picture, not a gray mass;
   // a container is lighter still, a wash that holds its children without competing with them.
   const materialFill=materialFillColor(componentSurfaceFill(mixedInterior,componentAcceptsChildren(n)?.975:.955),form.body.material);
+  // A section fills its regions by what they are: solid is the card's material, space is a wash.
+  g.style.setProperty('--section-solid',materialFillColor(componentSurfaceFill(mixedInterior,.93),form.body.material));
+  g.style.setProperty('--section-space',componentSurfaceFill(mixedInterior,.985));
   g.dataset.material=form.body.material;g.dataset.dimension=String(form.dimension);
   g.style.setProperty('--component-color',boundaryColor);
   g.style.setProperty('--component-boundary-color',boundaryColor);
@@ -223,12 +228,29 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     const depth=Math.min(12,Math.max(0,form.body.thickness*.18));
     if(depth>0){const back=document.createElementNS('http://www.w3.org/2000/svg','rect');back.setAttribute('class','component-body-depth');back.setAttribute('x',String(-size.w/2+depth));back.setAttribute('y',String(-size.h/2+depth));back.setAttribute('width',String(size.w));back.setAttribute('height',String(size.h));back.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(back)}
     const body=document.createElementNS('http://www.w3.org/2000/svg','rect');body.setAttribute('class','body');body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(body);
-    if(form.frame.mode!=='none'||backdrop==='frame'){
+    // A section's lines inside the outline: each line an inset boundary, each region filled as
+    // what it is (solid material, or space). The outline is line L0.
+    const section=SovSchematicData.componentSection(n);
+    if(section&&section.lines.length>=2){
+      let inset=0;
+      for(let i=1;i<section.lines.length;i++){
+        inset+=section.bands[i-1]?.thickness||0;const w=size.w-inset*2,h=size.h-inset*2;if(w<=4||h<=4)break;
+        // A band's depth is drawn as the bevel the frame always drew, offset inside the line.
+        const depth=i===1?Math.min(14,Math.max(0,Number(section.bands[0]?.depth||0)*.16)):0;
+        if(depth>0){const fd=document.createElementNS('http://www.w3.org/2000/svg','rect');fd.setAttribute('class','component-frame-depth');fd.setAttribute('x',String(-w/2+depth));fd.setAttribute('y',String(-h/2+depth));fd.setAttribute('width',String(w));fd.setAttribute('height',String(h));fd.setAttribute('rx','6');g.appendChild(fd)}
+        const fill=(section.bands[i]?.fill)||section.core?.fill||'solid';
+        const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('class',`section-line fill-${fill}`);
+        r.setAttribute('x',String(-w/2));r.setAttribute('y',String(-h/2));r.setAttribute('width',String(w));r.setAttribute('height',String(h));
+        r.setAttribute('rx',String(Math.max(2,Math.min(12,Math.max(4,size.h*.095))-inset*.5)));r.dataset.line=section.lines[i].id;g.appendChild(r);
+      }
+      body.classList.add(`fill-${section.bands[0]?.fill||'solid'}`);
+    }else if(form.section&&section){body.classList.add(`fill-${section.core?.fill||'solid'}`)}
+    if(section&&section.lines.length>=2){}else if(form.frame.mode!=='none'||backdrop==='frame'){
       const inset=Math.max(4,Math.min(Math.min(size.w,size.h)/3,form.frame.thickness||12));const frameDepth=Math.min(14,Math.max(0,form.frame.depth*.16));
       if(frameDepth>0){const fd=document.createElementNS('http://www.w3.org/2000/svg','rect');fd.setAttribute('class','component-frame-depth');fd.setAttribute('x',String(-size.w/2+inset+frameDepth));fd.setAttribute('y',String(-size.h/2+inset+frameDepth));fd.setAttribute('width',String(Math.max(1,size.w-inset*2)));fd.setAttribute('height',String(Math.max(1,size.h-inset*2)));fd.setAttribute('rx','6');g.appendChild(fd)}
       const inner=document.createElementNS('http://www.w3.org/2000/svg','rect');inner.setAttribute('class','component-frame-inner');inner.setAttribute('x',String(-size.w/2+inset));inner.setAttribute('y',String(-size.h/2+inset));inner.setAttribute('width',String(Math.max(1,size.w-inset*2)));inner.setAttribute('height',String(Math.max(1,size.h-inset*2)));inner.setAttribute('rx',String(Math.max(2,Math.min(9,(size.h-inset*2)*.08))));g.appendChild(inner);
     }
-    if(componentAcceptsChildren(n)){const guide=document.createElementNS('http://www.w3.org/2000/svg','rect');guide.setAttribute('class','container-guide');guide.setAttribute('x',String(-size.w/2+p.padding));guide.setAttribute('y',String(-size.h/2+p.padding));guide.setAttribute('width',String(Math.max(1,size.w-p.padding*2)));guide.setAttribute('height',String(Math.max(1,size.h-p.padding*2)));guide.setAttribute('rx','6');g.appendChild(guide)}
+    if(componentAcceptsChildren(n)){const guidePad=Math.max(p.padding,(section&&section.lines.length>=2?section.bands.reduce((a,b)=>a+b.thickness,0):0)+6);const guide=document.createElementNS('http://www.w3.org/2000/svg','rect');guide.setAttribute('class','container-guide');guide.setAttribute('x',String(-size.w/2+guidePad));guide.setAttribute('y',String(-size.h/2+guidePad));guide.setAttribute('width',String(Math.max(1,size.w-guidePad*2)));guide.setAttribute('height',String(Math.max(1,size.h-guidePad*2)));guide.setAttribute('rx','6');g.appendChild(guide)}
   }else if(componentHostedOnWire(n)){
     const half=componentInlineTerminalHalfSpan(n);
     if(half>0){const cut=document.createElementNS('http://www.w3.org/2000/svg','rect');cut.setAttribute('class','inline-wire-cut');cut.setAttribute('x',String(-half));cut.setAttribute('y','-8');cut.setAttribute('width',String(half*2));cut.setAttribute('height','16');cut.setAttribute('rx','2');g.appendChild(cut)}
@@ -548,6 +570,16 @@ function renderWires(signalState=computeSignalState()){
     const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
     hit.setAttribute('d',d); hit.setAttribute('class','wire-hit');
 
+    // A multi-line wire (strip, lanes, pipe): its lines and bands drawn as nested strokes along the
+    // route, outside in, so the section follows every bend. Symmetric about the route.
+    const wsec=SovSchematicData.normalizeSection(w.form?.section,1);
+    if(wsec&&wsec.lines.length>=2){
+      group.classList.add('sectioned');group.dataset.lines=String(wsec.lines.length);
+      const lw=1.6;let r=wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+lw;
+      const layer=(width,cls)=>{const q=document.createElementNS('http://www.w3.org/2000/svg','path');q.setAttribute('d',d);q.setAttribute('class','wire-section '+cls);q.setAttribute('stroke-width',String(width));group.appendChild(q)};
+      layer(2*r,'line');r-=lw;
+      for(const b of wsec.bands){if(r<=0)break;layer(2*r,'band-'+b.fill);r-=b.thickness;if(r<=0)break;layer(2*r,'line');r-=lw}
+    }
     group.appendChild(voltage);
     group.appendChild(base);
     {const L=base.getTotalLength();for(const hosted of nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&n.id!==activeNodeDrag)){
@@ -597,7 +629,7 @@ function renderWires(signalState=computeSignalState()){
     }
 
     if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'RETURN!':'RETURN?';group.appendChild(mark)}
-    if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13);label.setAttribute('text-anchor','middle');label.textContent=(cfg.direction==='duplex'?'↔ ':'')+cfg.label;group.appendChild(label)}
+    if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13-(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0));label.setAttribute('text-anchor','middle');label.textContent=(cfg.direction==='duplex'?'↔ ':'')+cfg.label;group.appendChild(label)}
     // Channel markers belong to bound ends; a free end has no port to mark.
     if(a&&endpointShowsChannelTag(w,'a')){
       const markerA=document.createElementNS('http://www.w3.org/2000/svg','text');

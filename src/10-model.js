@@ -256,6 +256,16 @@ function wirePartPortConfig(w,part){
   if(!['external','internal','both'].includes(part.config.face))part.config.face='external';
   return part.config;
 }
+// Which preset a section is, by structure; 'derived' when nothing is authored.
+function sectionPresetName(form,dimension){
+  if(!form?.section)return dimension===1?'line':'derived';
+  const s=SovSchematicData.normalizeSection(form.section,dimension);if(!s)return dimension===1?'line':'derived';
+  for(const name of Object.keys(SovSchematicData.SECTION_PRESETS)){
+    const p=SovSchematicData.sectionPreset(name,dimension);if(!p||p.lines.length!==s.lines.length||p.bands.length!==s.bands.length)continue;
+    if(p.bands.every((b,i)=>b.fill===s.bands[i].fill&&b.thickness===s.bands[i].thickness)&&(!p.core||p.core.fill===s.core?.fill))return name;
+  }
+  return 'custom';
+}
 function componentForm(n){
   if(!n.form)n.form={};
   const f=n.form,legacy=componentCanvas(n),dim=Number(f.dimension);
@@ -272,6 +282,8 @@ function componentForm(n){
   if(!f.regions)f.regions={};if(!f.regions.interior)f.regions.interior={};
   if(!['open','closed'].includes(f.regions.interior.state))f.regions.interior.state=legacy.state==='open'?'open':'closed';
   if(f.dimension<2)f.regions.interior.state='closed';
+  // An authored section is the authority; frame and interior are its projection.
+  if(f.section!==undefined){const s=SovSchematicData.normalizeSection(f.section,f.dimension);if(s&&f.dimension>0){f.section=s;SovSchematicData.projectSection(f)}else delete f.section}
   legacy.state=f.regions.interior.state;legacy.dimension=f.dimension; // compatibility projection only
   return f;
 }

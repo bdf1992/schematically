@@ -428,6 +428,17 @@
                 <option value="2">2D · Plane</option>
               </select>
             </label>
+            <label data-dims="2" title="The lines of the boundary and the regions between them (SECTION-MODEL.md)">Section
+              <select id="formSection">
+                <option value="derived">From frame &amp; interior</option>
+                <option value="disk">Disk · one line, solid</option>
+                <option value="circle">Circle · one line, space</option>
+                <option value="section">Section · skin around space</option>
+                <option value="coated">Coated · skin around solid</option>
+                <option value="double-wall">Double wall · 4 lines</option>
+                <option value="custom" disabled>Custom (authored)</option>
+              </select>
+            </label>
             <label data-dims="2">Interior
               <select id="formInteriorState">
                 <option value="closed">Closed</option>
@@ -521,6 +532,15 @@
       <div id="wireSettingsFields" class="settings-surface" hidden>
         <div class="settings-head"><b>Wire settings</b><span>Endpoint mapping and return semantics</span></div>
         <div class="settings-grid settings-grid-compact">
+          <label title="Lines across the wire (SECTION-MODEL.md)">Section
+            <select id="barWireSection" aria-label="Wire section">
+              <option value="line">Line · one line</option>
+              <option value="strip">Strip · two lines, solid</option>
+              <option value="lanes">Lanes · two lines, space</option>
+              <option value="pipe">Pipe · four lines</option>
+              <option value="custom" disabled>Custom (authored)</option>
+            </select>
+          </label>
           <label>Return
             <select id="barConnectionReciprocity" aria-label="Connection reciprocity" title="Return rule">
               <option value="none">No return rule</option>

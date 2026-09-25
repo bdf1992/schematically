@@ -178,6 +178,13 @@ MUTANTS=[
       'new':"",
       'test':'tests/layouts_qa.py'
     },
+    {
+      'name':'section-band-count-repaired-silently',
+      'file':'src/05-data-core.js',
+      'old':"for(const c of input.components||[]){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)",
+      'new':"for(const c of []){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)",
+      'test':'tests/sections_qa.py'
+    },
 ]
 
 killed=[]

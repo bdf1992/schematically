@@ -10,7 +10,7 @@
   --bg:#f4f4f1; --panel:#fff; --ink:#171715; --muted:#6c6c65;
   --line:#d8d8d1; --grid:#EAE8E0; --hover:#f4f4f0; --canvas-tone:#F6F5F0; --canvas-ink:#42423E; --canvas-muted:#73736D; --canvas-halo:#F6F5F0;
   /* Two accents carry meaning, never decoration: amber is out and rising (+), blue is in and falling (−). */
-  --accent-out:#C0661F; --accent-in:#2F6FB3; --card-shadow:rgba(40,36,28,.10);
+  --accent-out:#C0661F; --accent-in:#2F6FB3; --card-shadow:rgba(40,36,28,.10); --section-wire-solid:#D6D1C4;
   --canvas-grid-size:24px;
 }
 *{box-sizing:border-box}
@@ -105,6 +105,12 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .terminal-mark.in{fill:var(--accent-in)}.terminal-mark.out{fill:var(--accent-out)}
 .terminal-mark.control{fill:var(--canvas-muted)}
 #junctionLayer{pointer-events:none}
+/* Sections: lines are ink; solid regions are material, space regions a wash. */
+.node .section-line{stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:1.2}
+.node .fill-solid{fill:var(--section-solid)}.node .fill-space{fill:var(--section-space)}
+.wire-section{fill:none;stroke-linecap:butt;stroke-linejoin:round;pointer-events:none}
+.wire-section.line{stroke:var(--canvas-ink)}.wire-section.band-solid{stroke:var(--section-wire-solid)}.wire-section.band-space{stroke:var(--canvas-tone)}
+.wire-group.sectioned .wire{stroke:transparent}.wire-group.sectioned .wire-voltage{display:none}
 /* Unplaced in the layout on screen: shown where the default has it, until arranged or moved. */
 .node.unplaced{opacity:.42}.node.unplaced .body{stroke-dasharray:6 4}
 #layoutSelect{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 6px;max-width:15em}
@@ -443,7 +449,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 :root[data-appearance="dark"]{
   color-scheme:dark;
   --bg:#111315;--panel:#1C1F21;--ink:#EEEFEA;--muted:#A8AAA4;--line:#3B3F42;--hover:#292D30;--grid:#2B2E31;--canvas-tone:#17191B;--canvas-ink:#E7E8E3;--canvas-muted:#AEB0AA;--canvas-halo:#17191B;
-  --accent-out:#E9A15A;--accent-in:#74A9E3;--card-shadow:rgba(0,0,0,.35);
+  --accent-out:#E9A15A;--accent-in:#74A9E3;--card-shadow:rgba(0,0,0,.35);--section-wire-solid:#4A4D50;
 }
 :root[data-appearance="dark"] #workspace{background-color:var(--canvas-tone);box-shadow:inset 0 0 0 1px #303438}
 :root[data-appearance="dark"] .port{fill:var(--panel)}
@@ -924,6 +930,17 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
                 <option value="2">2D · Plane</option>
               </select>
             </label>
+            <label data-dims="2" title="The lines of the boundary and the regions between them (SECTION-MODEL.md)">Section
+              <select id="formSection">
+                <option value="derived">From frame &amp; interior</option>
+                <option value="disk">Disk · one line, solid</option>
+                <option value="circle">Circle · one line, space</option>
+                <option value="section">Section · skin around space</option>
+                <option value="coated">Coated · skin around solid</option>
+                <option value="double-wall">Double wall · 4 lines</option>
+                <option value="custom" disabled>Custom (authored)</option>
+              </select>
+            </label>
             <label data-dims="2">Interior
               <select id="formInteriorState">
                 <option value="closed">Closed</option>
@@ -1017,6 +1034,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       <div id="wireSettingsFields" class="settings-surface" hidden>
         <div class="settings-head"><b>Wire settings</b><span>Endpoint mapping and return semantics</span></div>
         <div class="settings-grid settings-grid-compact">
+          <label title="Lines across the wire (SECTION-MODEL.md)">Section
+            <select id="barWireSection" aria-label="Wire section">
+              <option value="line">Line · one line</option>
+              <option value="strip">Strip · two lines, solid</option>
+              <option value="lanes">Lanes · two lines, space</option>
+              <option value="pipe">Pipe · four lines</option>
+              <option value="custom" disabled>Custom (authored)</option>
+            </select>
+          </label>
           <label>Return
             <select id="barConnectionReciprocity" aria-label="Connection reciprocity" title="Return rule">
               <option value="none">No return rule</option>
@@ -1553,6 +1579,50 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     }
     return changed;
   }
+  // ---- Section (SECTION-MODEL.md): the lines of a form and the regions between them. -------
+  // An authored form.section is the authority and the legacy frame / interior fields are its
+  // projection; without one, a section is derived from those fields and nothing is written.
+  const FILLS=['solid','space'];
+  const SECTION_PRESETS={
+    disk:{lines:1,bands:[],core:'solid'},circle:{lines:1,bands:[],core:'space'},
+    section:{lines:2,bands:[['solid',12,'skin']],core:'space'},coated:{lines:2,bands:[['solid',12,'skin']],core:'solid'},
+    'double-wall':{lines:4,bands:[['solid',8,'skin'],['space',14,'gap'],['solid',8,'skin']],core:'space'},
+    line:{lines:1,bands:[]},strip:{lines:2,bands:[['solid',10,'band']]},lanes:{lines:2,bands:[['space',18,'lane']]},
+    pipe:{lines:4,bands:[['solid',4,'wall'],['space',12,'bore'],['solid',4,'wall']]}
+  };
+  function sectionPreset(name,dimension){
+    const p=SECTION_PRESETS[name];if(!p)return null;
+    if((dimension===2)!==('core' in p))return null; // closed presets for 2D, open for 1D
+    const s={lines:Array.from({length:p.lines},(_,i)=>({id:`L${i}`})),bands:p.bands.map(([fill,thickness,role],i)=>({id:`B${i+1}`,fill,thickness,role}))};
+    if('core' in p)s.core={fill:p.core};
+    return s;
+  }
+  function sectionFromLegacy(form){
+    const d=Number(form?.dimension??2);
+    if(d===2){const open=form?.regions?.interior?.state==='open',mode=form?.frame?.mode;
+      if(!mode||mode==='none')return {lines:[{id:'L0'}],bands:[],core:{fill:open?'space':'solid'},derived:true};
+      return {lines:[{id:'L0'},{id:'L1'}],bands:[{id:'B1',fill:'solid',thickness:Math.max(1,num(form.frame.thickness,12)),role:mode,depth:Math.max(0,num(form.frame.depth,0))}],core:{fill:open?'space':'solid'},derived:true}}
+    if(d===1)return {lines:[{id:'L0',weight:Math.max(0,num(form?.body?.thickness,0))}],bands:[],derived:true};
+    return null;
+  }
+  function normalizeSection(section,dimension){
+    if(!isObject(section)||!Array.isArray(section.lines)||!section.lines.length)return null;
+    const lines=section.lines.map((l,i)=>({...(isObject(l)?l:{}),id:cleanString(l?.id,`L${i}`)||`L${i}`}));
+    const bands=(Array.isArray(section.bands)?section.bands:[]).map((b,i)=>({...(isObject(b)?b:{}),id:cleanString(b?.id,`B${i+1}`)||`B${i+1}`,fill:FILLS.includes(b?.fill)?b.fill:'solid',thickness:Math.max(1,Math.min(256,num(b?.thickness,10)))}));
+    const out={lines,bands};
+    if(dimension===2)out.core={fill:FILLS.includes(section.core?.fill)?section.core.fill:'space'};
+    return out;
+  }
+  // The section a form has: authored, or derived from its legacy fields.
+  function componentSection(c){const f=c?.form||{},d=Number(f.dimension??2);if(d===0)return null;return normalizeSection(f.section,d)||sectionFromLegacy(f)}
+  function projectSection(form){
+    const s=form.section;if(!s)return;
+    if(form.dimension===2){
+      form.regions=form.regions||{};form.regions.interior=form.regions.interior||{};form.regions.interior.state=s.core.fill==='space'?'open':'closed';
+      form.frame=form.frame||{};const b=s.bands[0];
+      form.frame.mode=s.lines.length>=2?(['frame','shell'].includes(b?.role)?b.role:'frame'):'none';form.frame.thickness=b?b.thickness:0;form.frame.depth=b?Math.max(0,num(b.depth,0)):0;
+    }
+  }
   function normalizeComponentForm(value={},legacyCanvas=null){
     const form=isObject(value)?clone(value):{};
     const legacyOpen=legacyCanvas?.state==='open';
@@ -1572,6 +1642,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!isObject(form.regions.interior))form.regions.interior={};
     if(!['open','closed'].includes(form.regions.interior.state))form.regions.interior.state=legacyOpen?'open':'closed';
     if(dimension<2)form.regions.interior.state='closed';
+    if(form.section!==undefined){const s=normalizeSection(form.section,dimension);if(s&&dimension>0){form.section=s;projectSection(form)}else if(!s)delete form.section}
     return form;
   }
   // One implementation types a component: creation, the bar retype, and `update` over
@@ -1916,6 +1987,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const ids=new Set();
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]],['reference',input.references||[]]])for(const item of items){if(!item?.id)errors.push(`${kind} missing id`);else if(ids.has(`${kind}:${item.id}`))errors.push(`duplicate ${kind} id: ${item.id}`);else ids.add(`${kind}:${item.id}`)}
     const componentIds=new Set((input.components||[]).map(x=>x.id));
+    // A section's regions sit between its lines: n lines bound exactly n-1 bands. Never repaired.
+    for(const c of input.components||[]){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)errors.push(`component ${c.id||'?'} section: bands must be one fewer than lines (${s.lines.length} lines, ${s.bands.length} bands)`)}
     for(const wire of input.wires||[]){
       const aFree=isFreeEndpoint(wire.aAttachment),bFree=isFreeEndpoint(wire.bAttachment);
       if(!aFree&&!componentIds.has(wire.a))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.a}`);
@@ -1923,6 +1996,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(!aFree&&!bFree&&componentIds.has(wire.a)&&componentIds.has(wire.b)){
         const reach=connectionReachability(input,wire.a,wire.aSide,wire.b,wire.bSide);if(!reach.ok)errors.push(`wire ${wire.id||'?'}: ${reach.reason}`);
       }
+      const ws=wire.form?.section;if(ws&&Array.isArray(ws.lines)&&Array.isArray(ws.bands)&&ws.bands.length!==ws.lines.length-1)errors.push(`wire ${wire.id||'?'} section: bands must be one fewer than lines (${ws.lines.length} lines, ${ws.bands.length} bands)`);
       for(const key of ['forwardOperation','reverseOperation'])if(wire.config?.[key]!=null&&!['none','read','write'].includes(wire.config[key]))errors.push(`wire ${wire.id||'?'} invalid ${key}: ${wire.config[key]}`);
     }
     return {ok:errors.length===0,errors};
@@ -1939,7 +2013,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
 /* END src/05-data-core.js */
 </script>
@@ -3036,7 +3110,7 @@ const formAttachments=document.getElementById('formAttachments');
 const formMaterial=document.getElementById('formMaterial');
 const formBodyThickness=document.getElementById('formBodyThickness');
 const formInteriorState=document.getElementById('formInteriorState');
-const formFrameMode=document.getElementById('formFrameMode');
+const formFrameMode=document.getElementById('formFrameMode'),formSection=document.getElementById('formSection'),barWireSection=document.getElementById('barWireSection');
 const accessPrincipal=document.getElementById('accessPrincipal'),accessAclBlock=document.getElementById('accessAclBlock'),accessAclMode=document.getElementById('accessAclMode'),accessEntries=document.getElementById('accessEntries'),accessAddEntry=document.getElementById('accessAddEntry');
 const formFrameThickness=document.getElementById('formFrameThickness');
 const formFrameDepth=document.getElementById('formFrameDepth');
@@ -3547,6 +3621,16 @@ function wirePartPortConfig(w,part){
   if(!['external','internal','both'].includes(part.config.face))part.config.face='external';
   return part.config;
 }
+// Which preset a section is, by structure; 'derived' when nothing is authored.
+function sectionPresetName(form,dimension){
+  if(!form?.section)return dimension===1?'line':'derived';
+  const s=SovSchematicData.normalizeSection(form.section,dimension);if(!s)return dimension===1?'line':'derived';
+  for(const name of Object.keys(SovSchematicData.SECTION_PRESETS)){
+    const p=SovSchematicData.sectionPreset(name,dimension);if(!p||p.lines.length!==s.lines.length||p.bands.length!==s.bands.length)continue;
+    if(p.bands.every((b,i)=>b.fill===s.bands[i].fill&&b.thickness===s.bands[i].thickness)&&(!p.core||p.core.fill===s.core?.fill))return name;
+  }
+  return 'custom';
+}
 function componentForm(n){
   if(!n.form)n.form={};
   const f=n.form,legacy=componentCanvas(n),dim=Number(f.dimension);
@@ -3563,6 +3647,8 @@ function componentForm(n){
   if(!f.regions)f.regions={};if(!f.regions.interior)f.regions.interior={};
   if(!['open','closed'].includes(f.regions.interior.state))f.regions.interior.state=legacy.state==='open'?'open':'closed';
   if(f.dimension<2)f.regions.interior.state='closed';
+  // An authored section is the authority; frame and interior are its projection.
+  if(f.section!==undefined){const s=SovSchematicData.normalizeSection(f.section,f.dimension);if(s&&f.dimension>0){f.section=s;SovSchematicData.projectSection(f)}else delete f.section}
   legacy.state=f.regions.interior.state;legacy.dimension=f.dimension; // compatibility projection only
   return f;
 }
@@ -4271,6 +4357,7 @@ function syncComponentVisualPanel(n){
   setSlotChip(visualInteriorColor,p.interiorColorSlot);
   const f=componentForm(n);
   formDimension.value=String(f.dimension);formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
+  formSection.value=sectionPresetName(f,2);
   formInteriorState.value=f.regions.interior.state;formFrameMode.value=f.frame.mode;formFrameThickness.value=String(f.frame.thickness);formFrameDepth.value=String(f.frame.depth);
   formAttachments.value=Attachment.attachmentDefaults(n);
   // Settings are shown per dimension: a Point has no size or frame, a Path no height or interior.
@@ -4349,6 +4436,7 @@ function showConnectionBar(w,i){
   componentBarFields.hidden=true;connectionBarFields.hidden=false;portBarFields.hidden=true;
   barConnectionDirection.value=cfg.direction;
   barConnectionReciprocity.value=cfg.reciprocity;
+  if(barWireSection)barWireSection.value=sectionPresetName(w.form,1);
 
   const io=wireIOEnds(w);
   const outConnection=endpointConnection(w,io.out);
@@ -6132,7 +6220,7 @@ function appendTerminalMarks(g,n){
 }
 function fitComponentLabels(g,n){
   if(componentForm(n).dimension!==2)return;
-  const size=componentSize(n),max=size.w-12;
+  const size=componentSize(n),max=size.w-12-componentSectionInset(n)*2;
   for(const t of g.querySelectorAll(':scope > text.component-label,:scope > text.outside-label')){
     const full=t.textContent;if(!full||t.getComputedTextLength()<=max)continue;
     const words=full.split(/\s+/),lines=[''];
@@ -6153,6 +6241,7 @@ function fitComponentLabels(g,n){
     const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=full;t.appendChild(title);
   }
 }
+function componentSectionInset(n){const s=componentForm(n).dimension===2?SovSchematicData.componentSection(n):null;return s&&s.lines.length>=2?s.bands.reduce((a,b)=>a+b.thickness,0):0}
 function appendComponentText(g,n,cfg,s){
   const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s),labelMode=SovSchematicData.effectiveLabelMode(n);
   if(labelMode!=='none'&&label){
@@ -6162,7 +6251,8 @@ function appendComponentText(g,n,cfg,s){
       const box=componentInlineGraphicBox(n);t.setAttribute('x','0');t.setAttribute('y',String(box.y+box.h+11));
     }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
     else if(labelMode==='outside'){t.setAttribute('x','0');t.setAttribute('y',String(size.h/2+18))}
-    else {t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-8))}
+    // Inside the innermost line: a label never straddles a section's own boundary.
+    else {t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-8-componentSectionInset(n)))}
     t.textContent=label;g.appendChild(t);
   }
   const annotation=String(p.text||'').trim();
@@ -6222,6 +6312,9 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   // A card is a light tint of its slot, so ink and accents carry the picture, not a gray mass;
   // a container is lighter still, a wash that holds its children without competing with them.
   const materialFill=materialFillColor(componentSurfaceFill(mixedInterior,componentAcceptsChildren(n)?.975:.955),form.body.material);
+  // A section fills its regions by what they are: solid is the card's material, space is a wash.
+  g.style.setProperty('--section-solid',materialFillColor(componentSurfaceFill(mixedInterior,.93),form.body.material));
+  g.style.setProperty('--section-space',componentSurfaceFill(mixedInterior,.985));
   g.dataset.material=form.body.material;g.dataset.dimension=String(form.dimension);
   g.style.setProperty('--component-color',boundaryColor);
   g.style.setProperty('--component-boundary-color',boundaryColor);
@@ -6253,12 +6346,29 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     const depth=Math.min(12,Math.max(0,form.body.thickness*.18));
     if(depth>0){const back=document.createElementNS('http://www.w3.org/2000/svg','rect');back.setAttribute('class','component-body-depth');back.setAttribute('x',String(-size.w/2+depth));back.setAttribute('y',String(-size.h/2+depth));back.setAttribute('width',String(size.w));back.setAttribute('height',String(size.h));back.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(back)}
     const body=document.createElementNS('http://www.w3.org/2000/svg','rect');body.setAttribute('class','body');body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(body);
-    if(form.frame.mode!=='none'||backdrop==='frame'){
+    // A section's lines inside the outline: each line an inset boundary, each region filled as
+    // what it is (solid material, or space). The outline is line L0.
+    const section=SovSchematicData.componentSection(n);
+    if(section&&section.lines.length>=2){
+      let inset=0;
+      for(let i=1;i<section.lines.length;i++){
+        inset+=section.bands[i-1]?.thickness||0;const w=size.w-inset*2,h=size.h-inset*2;if(w<=4||h<=4)break;
+        // A band's depth is drawn as the bevel the frame always drew, offset inside the line.
+        const depth=i===1?Math.min(14,Math.max(0,Number(section.bands[0]?.depth||0)*.16)):0;
+        if(depth>0){const fd=document.createElementNS('http://www.w3.org/2000/svg','rect');fd.setAttribute('class','component-frame-depth');fd.setAttribute('x',String(-w/2+depth));fd.setAttribute('y',String(-h/2+depth));fd.setAttribute('width',String(w));fd.setAttribute('height',String(h));fd.setAttribute('rx','6');g.appendChild(fd)}
+        const fill=(section.bands[i]?.fill)||section.core?.fill||'solid';
+        const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('class',`section-line fill-${fill}`);
+        r.setAttribute('x',String(-w/2));r.setAttribute('y',String(-h/2));r.setAttribute('width',String(w));r.setAttribute('height',String(h));
+        r.setAttribute('rx',String(Math.max(2,Math.min(12,Math.max(4,size.h*.095))-inset*.5)));r.dataset.line=section.lines[i].id;g.appendChild(r);
+      }
+      body.classList.add(`fill-${section.bands[0]?.fill||'solid'}`);
+    }else if(form.section&&section){body.classList.add(`fill-${section.core?.fill||'solid'}`)}
+    if(section&&section.lines.length>=2){}else if(form.frame.mode!=='none'||backdrop==='frame'){
       const inset=Math.max(4,Math.min(Math.min(size.w,size.h)/3,form.frame.thickness||12));const frameDepth=Math.min(14,Math.max(0,form.frame.depth*.16));
       if(frameDepth>0){const fd=document.createElementNS('http://www.w3.org/2000/svg','rect');fd.setAttribute('class','component-frame-depth');fd.setAttribute('x',String(-size.w/2+inset+frameDepth));fd.setAttribute('y',String(-size.h/2+inset+frameDepth));fd.setAttribute('width',String(Math.max(1,size.w-inset*2)));fd.setAttribute('height',String(Math.max(1,size.h-inset*2)));fd.setAttribute('rx','6');g.appendChild(fd)}
       const inner=document.createElementNS('http://www.w3.org/2000/svg','rect');inner.setAttribute('class','component-frame-inner');inner.setAttribute('x',String(-size.w/2+inset));inner.setAttribute('y',String(-size.h/2+inset));inner.setAttribute('width',String(Math.max(1,size.w-inset*2)));inner.setAttribute('height',String(Math.max(1,size.h-inset*2)));inner.setAttribute('rx',String(Math.max(2,Math.min(9,(size.h-inset*2)*.08))));g.appendChild(inner);
     }
-    if(componentAcceptsChildren(n)){const guide=document.createElementNS('http://www.w3.org/2000/svg','rect');guide.setAttribute('class','container-guide');guide.setAttribute('x',String(-size.w/2+p.padding));guide.setAttribute('y',String(-size.h/2+p.padding));guide.setAttribute('width',String(Math.max(1,size.w-p.padding*2)));guide.setAttribute('height',String(Math.max(1,size.h-p.padding*2)));guide.setAttribute('rx','6');g.appendChild(guide)}
+    if(componentAcceptsChildren(n)){const guidePad=Math.max(p.padding,(section&&section.lines.length>=2?section.bands.reduce((a,b)=>a+b.thickness,0):0)+6);const guide=document.createElementNS('http://www.w3.org/2000/svg','rect');guide.setAttribute('class','container-guide');guide.setAttribute('x',String(-size.w/2+guidePad));guide.setAttribute('y',String(-size.h/2+guidePad));guide.setAttribute('width',String(Math.max(1,size.w-guidePad*2)));guide.setAttribute('height',String(Math.max(1,size.h-guidePad*2)));guide.setAttribute('rx','6');g.appendChild(guide)}
   }else if(componentHostedOnWire(n)){
     const half=componentInlineTerminalHalfSpan(n);
     if(half>0){const cut=document.createElementNS('http://www.w3.org/2000/svg','rect');cut.setAttribute('class','inline-wire-cut');cut.setAttribute('x',String(-half));cut.setAttribute('y','-8');cut.setAttribute('width',String(half*2));cut.setAttribute('height','16');cut.setAttribute('rx','2');g.appendChild(cut)}
@@ -6578,6 +6688,16 @@ function renderWires(signalState=computeSignalState()){
     const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
     hit.setAttribute('d',d); hit.setAttribute('class','wire-hit');
 
+    // A multi-line wire (strip, lanes, pipe): its lines and bands drawn as nested strokes along the
+    // route, outside in, so the section follows every bend. Symmetric about the route.
+    const wsec=SovSchematicData.normalizeSection(w.form?.section,1);
+    if(wsec&&wsec.lines.length>=2){
+      group.classList.add('sectioned');group.dataset.lines=String(wsec.lines.length);
+      const lw=1.6;let r=wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+lw;
+      const layer=(width,cls)=>{const q=document.createElementNS('http://www.w3.org/2000/svg','path');q.setAttribute('d',d);q.setAttribute('class','wire-section '+cls);q.setAttribute('stroke-width',String(width));group.appendChild(q)};
+      layer(2*r,'line');r-=lw;
+      for(const b of wsec.bands){if(r<=0)break;layer(2*r,'band-'+b.fill);r-=b.thickness;if(r<=0)break;layer(2*r,'line');r-=lw}
+    }
     group.appendChild(voltage);
     group.appendChild(base);
     {const L=base.getTotalLength();for(const hosted of nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&n.id!==activeNodeDrag)){
@@ -6627,7 +6747,7 @@ function renderWires(signalState=computeSignalState()){
     }
 
     if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'RETURN!':'RETURN?';group.appendChild(mark)}
-    if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13);label.setAttribute('text-anchor','middle');label.textContent=(cfg.direction==='duplex'?'↔ ':'')+cfg.label;group.appendChild(label)}
+    if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13-(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0));label.setAttribute('text-anchor','middle');label.textContent=(cfg.direction==='duplex'?'↔ ':'')+cfg.label;group.appendChild(label)}
     // Channel markers belong to bound ends; a free end has no port to mark.
     if(a&&endpointShowsChannelTag(w,'a')){
       const markerA=document.createElementNS('http://www.w3.org/2000/svg','text');
@@ -6738,6 +6858,11 @@ function layoutMetrics(options={}){
     if(n&&is2D(n)&&/component-label|internal-text/.test(t.cls)){
       const R=body.get(n.id);if(R&&(t.box.l<R.l-1||t.box.r>R.r+1||t.box.t<R.t-1||t.box.b>R.b+1))add('text-overflow',[n.id],`"${t.text}" is ${Math.round((t.box.r-t.box.l)-(R.r-R.l))}px wider than its body`);
     }
+  }
+  // A label across one of its own card's inner lines is as unreadable as one across another card.
+  for(const t of texts){
+    if(!t.owner)continue;const lines=nodeEl(t.owner)?.querySelectorAll(':scope > .section-line')||[];
+    for(const l of lines){const L=layoutWorldBox(l);if(L&&layoutOverlap(t.box,L)&&!(t.box.l>L.l&&t.box.r<L.r&&t.box.t>L.t&&t.box.b<L.b)){add('text-collision',[t.owner],`"${t.text}" crosses its own section line`);break}}
   }
   for(const t of texts)if(t.el.dataset.truncated)add('text-truncated',[t.owner],`"${t.el.querySelector('title')?.textContent||t.text}" is cut to fit`);
   for(let i=0;i<texts.length;i++)for(let j=i+1;j<texts.length;j++)if(layoutOverlap(texts[i].box,texts[j].box,1))add('text-collision',[texts[i].owner||texts[i].wire,texts[j].owner||texts[j].wire],`"${texts[i].text}" overlaps "${texts[j].text}"`);
@@ -7630,6 +7755,13 @@ function updateSelectedComponentForm(mutator){
   componentConfig(n);
   routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 }
+formSection.addEventListener('change',()=>updateSelectedComponentForm(f=>{const v=formSection.value;if(v==='derived')delete f.section;else if(v!=='custom')f.section=SovSchematicData.sectionPreset(v,2)}));
+barWireSection?.addEventListener('change',()=>{
+  const w=mutableSelectedConnection('Wire section');if(!w)return;const v=barWireSection.value;
+  if(!w.form||typeof w.form!=='object')w.form={dimension:1};
+  if(v==='line')delete w.form.section;else if(v!=='custom')w.form.section=SovSchematicData.sectionPreset(v,1);
+  routeCache.clear();renderWires();const i=wires.indexOf(w);selectWire(i,{focus:false});scheduleHistoryCapture();
+});
 formDimension.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.dimension=Number(formDimension.value);f.body.kind=['point','path','surface'][f.dimension]}));
 formAttachments.addEventListener('change',()=>{
   // Built-in 2D points are template defaults. Turning them off is refused while a Wire

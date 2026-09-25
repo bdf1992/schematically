@@ -3,7 +3,7 @@
   --bg:#f4f4f1; --panel:#fff; --ink:#171715; --muted:#6c6c65;
   --line:#d8d8d1; --grid:#EAE8E0; --hover:#f4f4f0; --canvas-tone:#F6F5F0; --canvas-ink:#42423E; --canvas-muted:#73736D; --canvas-halo:#F6F5F0;
   /* Two accents carry meaning, never decoration: amber is out and rising (+), blue is in and falling (−). */
-  --accent-out:#C0661F; --accent-in:#2F6FB3; --card-shadow:rgba(40,36,28,.10);
+  --accent-out:#C0661F; --accent-in:#2F6FB3; --card-shadow:rgba(40,36,28,.10); --section-wire-solid:#D6D1C4;
   --canvas-grid-size:24px;
 }
 *{box-sizing:border-box}
@@ -98,6 +98,12 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .terminal-mark.in{fill:var(--accent-in)}.terminal-mark.out{fill:var(--accent-out)}
 .terminal-mark.control{fill:var(--canvas-muted)}
 #junctionLayer{pointer-events:none}
+/* Sections: lines are ink; solid regions are material, space regions a wash. */
+.node .section-line{stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:1.2}
+.node .fill-solid{fill:var(--section-solid)}.node .fill-space{fill:var(--section-space)}
+.wire-section{fill:none;stroke-linecap:butt;stroke-linejoin:round;pointer-events:none}
+.wire-section.line{stroke:var(--canvas-ink)}.wire-section.band-solid{stroke:var(--section-wire-solid)}.wire-section.band-space{stroke:var(--canvas-tone)}
+.wire-group.sectioned .wire{stroke:transparent}.wire-group.sectioned .wire-voltage{display:none}
 /* Unplaced in the layout on screen: shown where the default has it, until arranged or moved. */
 .node.unplaced{opacity:.42}.node.unplaced .body{stroke-dasharray:6 4}
 #layoutSelect{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 6px;max-width:15em}
@@ -436,7 +442,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 :root[data-appearance="dark"]{
   color-scheme:dark;
   --bg:#111315;--panel:#1C1F21;--ink:#EEEFEA;--muted:#A8AAA4;--line:#3B3F42;--hover:#292D30;--grid:#2B2E31;--canvas-tone:#17191B;--canvas-ink:#E7E8E3;--canvas-muted:#AEB0AA;--canvas-halo:#17191B;
-  --accent-out:#E9A15A;--accent-in:#74A9E3;--card-shadow:rgba(0,0,0,.35);
+  --accent-out:#E9A15A;--accent-in:#74A9E3;--card-shadow:rgba(0,0,0,.35);--section-wire-solid:#4A4D50;
 }
 :root[data-appearance="dark"] #workspace{background-color:var(--canvas-tone);box-shadow:inset 0 0 0 1px #303438}
 :root[data-appearance="dark"] .port{fill:var(--panel)}

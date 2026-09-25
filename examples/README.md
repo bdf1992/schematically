@@ -11,6 +11,7 @@ These files are executable reference material for the 0.1 contract.
 | `05-rate-chain.sov` | Global × source Component × Wire rate composition |
 | `09-print-ai-proof-run.sov` | The Print AI proof-resolution run: an adopted AI step, an eval gate, a monitored fan-out, a human pause, and a mediated effect with replay identity. It carries five saved scenarios; run them with `sim.scenario(id)` (`GRAPH-MODEL.md`) |
 | `10-clocked-signals.sov` | Time and levels: a square clock ANDed with a lever lights a lamp; a continuous sine is thresholded, and each rising crossing starts a job. Three scenarios check the edges (`+` and `−`) |
+| `11-sections.sov` | Sections: disk, circle, a cell with a skin (and a child inside it), coated, double wall; wires as line, strip, lanes and pipe (`SECTION-MODEL.md`) |
 | `08-gated-service.sov` | Authored by hand in the `skills/author-offline` form: a Plane with three boundary Points, an authority into a gate's control, a receipt |
 | `classic-reference.sovpak` | Portable reference package containing metadata and embedded copies of the classic examples |
 

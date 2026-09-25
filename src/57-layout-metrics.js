@@ -71,6 +71,11 @@ function layoutMetrics(options={}){
       const R=body.get(n.id);if(R&&(t.box.l<R.l-1||t.box.r>R.r+1||t.box.t<R.t-1||t.box.b>R.b+1))add('text-overflow',[n.id],`"${t.text}" is ${Math.round((t.box.r-t.box.l)-(R.r-R.l))}px wider than its body`);
     }
   }
+  // A label across one of its own card's inner lines is as unreadable as one across another card.
+  for(const t of texts){
+    if(!t.owner)continue;const lines=nodeEl(t.owner)?.querySelectorAll(':scope > .section-line')||[];
+    for(const l of lines){const L=layoutWorldBox(l);if(L&&layoutOverlap(t.box,L)&&!(t.box.l>L.l&&t.box.r<L.r&&t.box.t>L.t&&t.box.b<L.b)){add('text-collision',[t.owner],`"${t.text}" crosses its own section line`);break}}
+  }
   for(const t of texts)if(t.el.dataset.truncated)add('text-truncated',[t.owner],`"${t.el.querySelector('title')?.textContent||t.text}" is cut to fit`);
   for(let i=0;i<texts.length;i++)for(let j=i+1;j<texts.length;j++)if(layoutOverlap(texts[i].box,texts[j].box,1))add('text-collision',[texts[i].owner||texts[i].wire,texts[j].owner||texts[j].wire],`"${texts[i].text}" overlaps "${texts[j].text}"`);
   for(const t of texts){
