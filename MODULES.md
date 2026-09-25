@@ -1,5 +1,6 @@
 # Module ownership — 0.1
 
+- `03-canonical.js` — canonical JSON encoding (RFC 8785 / JCS), synchronous pure-JS SHA-256, and the seeded draw used by merges and QA. Pure; loaded before `06-attachment-core.js` and `05-data-core.js`.
 - `00-state.js` — runtime state and DOM references.
 - `05-data-core.js` — transport-neutral documents, packages, validation, CRUD, reachability, primitive template presets, and compact serialization (`compactDocument`).
 - `10-model.js` — Component/Wire/Port semantic normalization.

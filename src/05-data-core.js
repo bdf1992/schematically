@@ -4,11 +4,14 @@
 (function(root,factory){
   let Attachment=root.SovSchematicAttachment;
   if(!Attachment&&typeof module!=='undefined'&&module.exports)Attachment=require('./06-attachment-core.js');
-  const api=factory(Attachment);
+  let Canonical=root.SovSchematicCanonical;
+  if(!Canonical&&typeof module!=='undefined'&&module.exports)Canonical=require('./03-canonical.js');
+  const api=factory(Attachment,Canonical);
   root.SovSchematicData=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(Attachment){
+})(typeof globalThis!=='undefined'?globalThis:this,function(Attachment,Canonical){
   if(!Attachment)throw new Error('SovSchematicAttachment core is required');
+  if(!Canonical)throw new Error('SovSchematicCanonical core is required');
   const DOCUMENT_SCHEMA='soveraeign.schematic/document@0.1';
   const WORKSPACE_SCHEMA='soveraeign.schematic/workspace@0.1';
   const PACKAGE_SCHEMA='soveraeign.schematic/package@0.1';
@@ -390,6 +393,19 @@
     if(isObject(doc.meta)&&Array.isArray(doc.meta.checkpoints))doc.meta.checkpoints=doc.meta.checkpoints.map(cp=>isObject(cp)&&isObject(cp.document)?{...cp,document:compactDocument(cp.document)}:cp);
     return doc;
   }
+  // Document identity is content, not revision (STATE-SPACE.md "Document identity is content"):
+  // the replay key hashes compactDocument() with revision and timestamps/checkpoints removed,
+  // so undo restoring older content with an older revision still hashes by what it contains.
+  function documentHash(doc){
+    const x=compactDocument(doc);
+    delete x.revision;
+    if(isObject(x.meta)){
+      delete x.meta.updatedAt;
+      delete x.meta.savedAt;
+      delete x.meta.checkpoints;
+    }
+    return Canonical.sha256Hex(Canonical.canonicalize(x));
+  }
   function attachmentPointConfig(doc,componentId,pointId){
     const component=doc.components.find(c=>c.id===componentId);if(!component)return null;
     const spec=Attachment.resolveSpec(component,pointId);if(!spec)return null;
@@ -656,5 +672,5 @@
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
