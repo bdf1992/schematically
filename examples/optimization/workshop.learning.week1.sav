@@ -1,0 +1,3734 @@
+{
+  "clock": {
+    "horizon": 1,
+    "sequence": 335,
+    "time": 37.13038856757945
+  },
+  "counts": {
+    "w-chair-sales": 14,
+    "w-table-sales": 1
+  },
+  "document": {
+    "id": "example-optimization-workshop",
+    "path": "workshop.sov",
+    "revision": 0,
+    "sha256": "f8dd3c92aa71ecb8ee04787a8586b6ca5e61f9b1246352eef756a7ced10177f4"
+  },
+  "events": [
+    {
+      "horizon": 1,
+      "kind": "horizon",
+      "seq": 1,
+      "supply": {
+        "timber": 90
+      },
+      "t": 0.0,
+      "targets": {
+        "chairs": 14,
+        "cut": 76,
+        "tables": 2
+      }
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 2,
+      "stage": "cut",
+      "t": 0.0,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 1,
+      "kind": "start",
+      "need": {
+        "labor": 0.200024691
+      },
+      "seq": 3,
+      "stage": "cut",
+      "t": 0.0,
+      "unit": 1
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 4,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 0.200024691,
+      "unit": 1
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 5,
+      "stage": "chairs",
+      "t": 0.200024691,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 6,
+      "stage": "cut",
+      "t": 0.200024691,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 2,
+      "kind": "start",
+      "need": {
+        "labor": 0.20017284
+      },
+      "seq": 7,
+      "stage": "cut",
+      "t": 0.200024691,
+      "unit": 2
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 8,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 0.400197531,
+      "unit": 2
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 9,
+      "stage": "chairs",
+      "t": 0.400197531,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 10,
+      "stage": "cut",
+      "t": 0.400197531,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 3,
+      "kind": "start",
+      "need": {
+        "labor": 0.200469136
+      },
+      "seq": 11,
+      "stage": "cut",
+      "t": 0.400197531,
+      "unit": 3
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 12,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 0.600666667,
+      "unit": 3
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 13,
+      "stage": "chairs",
+      "t": 0.600666667,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 14,
+      "stage": "cut",
+      "t": 0.600666667,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 4,
+      "kind": "start",
+      "need": {
+        "labor": 0.20091358
+      },
+      "seq": 15,
+      "stage": "cut",
+      "t": 0.600666667,
+      "unit": 4
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 16,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 0.801580247,
+      "unit": 4
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 17,
+      "stage": "chairs",
+      "t": 0.801580247,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 1,
+      "kind": "start",
+      "need": {
+        "labor": 1.5
+      },
+      "seq": 18,
+      "stage": "chairs",
+      "t": 0.801580247,
+      "unit": 1
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 19,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 2.301580247,
+      "unit": 1
+    },
+    {
+      "count": 1,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 20,
+      "t": 2.301580247,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 21,
+      "stage": "cut",
+      "t": 2.301580247,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 5,
+      "kind": "start",
+      "need": {
+        "labor": 0.201506173
+      },
+      "seq": 22,
+      "stage": "cut",
+      "t": 2.301580247,
+      "unit": 5
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 23,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 2.50308642,
+      "unit": 5
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 24,
+      "stage": "chairs",
+      "t": 2.50308642,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 25,
+      "stage": "cut",
+      "t": 2.50308642,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 6,
+      "kind": "start",
+      "need": {
+        "labor": 0.202246914
+      },
+      "seq": 26,
+      "stage": "cut",
+      "t": 2.50308642,
+      "unit": 6
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 27,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 2.705333333,
+      "unit": 6
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 28,
+      "stage": "chairs",
+      "t": 2.705333333,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 29,
+      "stage": "cut",
+      "t": 2.705333333,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 7,
+      "kind": "start",
+      "need": {
+        "labor": 0.203135802
+      },
+      "seq": 30,
+      "stage": "cut",
+      "t": 2.705333333,
+      "unit": 7
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 31,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 2.908469136,
+      "unit": 7
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 32,
+      "stage": "chairs",
+      "t": 2.908469136,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 33,
+      "stage": "cut",
+      "t": 2.908469136,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 8,
+      "kind": "start",
+      "need": {
+        "labor": 0.20417284
+      },
+      "seq": 34,
+      "stage": "cut",
+      "t": 2.908469136,
+      "unit": 8
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 35,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 3.112641975,
+      "unit": 8
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 36,
+      "stage": "chairs",
+      "t": 3.112641975,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 2,
+      "kind": "start",
+      "need": {
+        "labor": 0.936757189
+      },
+      "seq": 37,
+      "stage": "chairs",
+      "t": 3.112641975,
+      "unit": 2
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 38,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 4.049399164,
+      "unit": 2
+    },
+    {
+      "count": 2,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 39,
+      "t": 4.049399164,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 40,
+      "stage": "cut",
+      "t": 4.049399164,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 9,
+      "kind": "start",
+      "need": {
+        "labor": 0.205358025
+      },
+      "seq": 41,
+      "stage": "cut",
+      "t": 4.049399164,
+      "unit": 9
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 42,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 4.254757189,
+      "unit": 9
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 43,
+      "stage": "chairs",
+      "t": 4.254757189,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 44,
+      "stage": "cut",
+      "t": 4.254757189,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 10,
+      "kind": "start",
+      "need": {
+        "labor": 0.206691358
+      },
+      "seq": 45,
+      "stage": "cut",
+      "t": 4.254757189,
+      "unit": 10
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 46,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 4.461448547,
+      "unit": 10
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 47,
+      "stage": "chairs",
+      "t": 4.461448547,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 48,
+      "stage": "cut",
+      "t": 4.461448547,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 11,
+      "kind": "start",
+      "need": {
+        "labor": 0.20817284
+      },
+      "seq": 49,
+      "stage": "cut",
+      "t": 4.461448547,
+      "unit": 11
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 50,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 4.669621387,
+      "unit": 11
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 51,
+      "stage": "chairs",
+      "t": 4.669621387,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 52,
+      "stage": "cut",
+      "t": 4.669621387,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 12,
+      "kind": "start",
+      "need": {
+        "labor": 0.209802469
+      },
+      "seq": 53,
+      "stage": "cut",
+      "t": 4.669621387,
+      "unit": 12
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 54,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 4.879423856,
+      "unit": 12
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 55,
+      "stage": "chairs",
+      "t": 4.879423856,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 3,
+      "kind": "start",
+      "need": {
+        "labor": 0.799746731
+      },
+      "seq": 56,
+      "stage": "chairs",
+      "t": 4.879423856,
+      "unit": 3
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 57,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 5.679170587,
+      "unit": 3
+    },
+    {
+      "count": 3,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 58,
+      "t": 5.679170587,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 59,
+      "stage": "cut",
+      "t": 5.679170587,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 13,
+      "kind": "start",
+      "need": {
+        "labor": 0.211580247
+      },
+      "seq": 60,
+      "stage": "cut",
+      "t": 5.679170587,
+      "unit": 13
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 61,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 5.890750834,
+      "unit": 13
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 62,
+      "stage": "chairs",
+      "t": 5.890750834,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 63,
+      "stage": "cut",
+      "t": 5.890750834,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 14,
+      "kind": "start",
+      "need": {
+        "labor": 0.213506173
+      },
+      "seq": 64,
+      "stage": "cut",
+      "t": 5.890750834,
+      "unit": 14
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 65,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 6.104257006,
+      "unit": 14
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 66,
+      "stage": "chairs",
+      "t": 6.104257006,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 67,
+      "stage": "cut",
+      "t": 6.104257006,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 15,
+      "kind": "start",
+      "need": {
+        "labor": 0.215580247
+      },
+      "seq": 68,
+      "stage": "cut",
+      "t": 6.104257006,
+      "unit": 15
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 69,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 6.319837253,
+      "unit": 15
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 70,
+      "stage": "chairs",
+      "t": 6.319837253,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 71,
+      "stage": "cut",
+      "t": 6.319837253,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 16,
+      "kind": "start",
+      "need": {
+        "labor": 0.217802469
+      },
+      "seq": 72,
+      "stage": "cut",
+      "t": 6.319837253,
+      "unit": 16
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 73,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 6.537639722,
+      "unit": 16
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 74,
+      "stage": "chairs",
+      "t": 6.537639722,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 4,
+      "kind": "start",
+      "need": {
+        "labor": 0.722019812
+      },
+      "seq": 75,
+      "stage": "chairs",
+      "t": 6.537639722,
+      "unit": 4
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 76,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 7.259659535,
+      "unit": 4
+    },
+    {
+      "count": 4,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 77,
+      "t": 7.259659535,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 78,
+      "stage": "cut",
+      "t": 7.259659535,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 17,
+      "kind": "start",
+      "need": {
+        "labor": 0.22017284
+      },
+      "seq": 79,
+      "stage": "cut",
+      "t": 7.259659535,
+      "unit": 17
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 80,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 7.479832374,
+      "unit": 17
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 81,
+      "stage": "chairs",
+      "t": 7.479832374,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 82,
+      "stage": "cut",
+      "t": 7.479832374,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 18,
+      "kind": "start",
+      "need": {
+        "labor": 0.222691358
+      },
+      "seq": 83,
+      "stage": "cut",
+      "t": 7.479832374,
+      "unit": 18
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 84,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 7.702523732,
+      "unit": 18
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 85,
+      "stage": "chairs",
+      "t": 7.702523732,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 86,
+      "stage": "cut",
+      "t": 7.702523732,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 19,
+      "kind": "start",
+      "need": {
+        "labor": 0.225358025
+      },
+      "seq": 87,
+      "stage": "cut",
+      "t": 7.702523732,
+      "unit": 19
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 88,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 7.927881757,
+      "unit": 19
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 89,
+      "stage": "chairs",
+      "t": 7.927881757,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 90,
+      "stage": "cut",
+      "t": 7.927881757,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 20,
+      "kind": "start",
+      "need": {
+        "labor": 0.22817284
+      },
+      "seq": 91,
+      "stage": "cut",
+      "t": 7.927881757,
+      "unit": 20
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 92,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 8.156054597,
+      "unit": 20
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 93,
+      "stage": "chairs",
+      "t": 8.156054597,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 5,
+      "kind": "start",
+      "need": {
+        "labor": 0.669230238
+      },
+      "seq": 94,
+      "stage": "chairs",
+      "t": 8.156054597,
+      "unit": 5
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 95,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 8.825284835,
+      "unit": 5
+    },
+    {
+      "count": 5,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 96,
+      "t": 8.825284835,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 97,
+      "stage": "cut",
+      "t": 8.825284835,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 21,
+      "kind": "start",
+      "need": {
+        "labor": 0.231135802
+      },
+      "seq": 98,
+      "stage": "cut",
+      "t": 8.825284835,
+      "unit": 21
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 99,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 9.056420637,
+      "unit": 21
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 100,
+      "stage": "chairs",
+      "t": 9.056420637,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 101,
+      "stage": "cut",
+      "t": 9.056420637,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 22,
+      "kind": "start",
+      "need": {
+        "labor": 0.234246914
+      },
+      "seq": 102,
+      "stage": "cut",
+      "t": 9.056420637,
+      "unit": 22
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 103,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 9.290667551,
+      "unit": 22
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 104,
+      "stage": "chairs",
+      "t": 9.290667551,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 105,
+      "stage": "cut",
+      "t": 9.290667551,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 23,
+      "kind": "start",
+      "need": {
+        "labor": 0.237506173
+      },
+      "seq": 106,
+      "stage": "cut",
+      "t": 9.290667551,
+      "unit": 23
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 107,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 9.528173723,
+      "unit": 23
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 108,
+      "stage": "chairs",
+      "t": 9.528173723,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 109,
+      "stage": "cut",
+      "t": 9.528173723,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 24,
+      "kind": "start",
+      "need": {
+        "labor": 0.24091358
+      },
+      "seq": 110,
+      "stage": "cut",
+      "t": 9.528173723,
+      "unit": 24
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 111,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 9.769087304,
+      "unit": 24
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 112,
+      "stage": "chairs",
+      "t": 9.769087304,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 6,
+      "kind": "start",
+      "need": {
+        "labor": 0.629962159
+      },
+      "seq": 113,
+      "stage": "chairs",
+      "t": 9.769087304,
+      "unit": 6
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 114,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 10.399049463,
+      "unit": 6
+    },
+    {
+      "count": 6,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 115,
+      "t": 10.399049463,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 116,
+      "stage": "cut",
+      "t": 10.399049463,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 25,
+      "kind": "start",
+      "need": {
+        "labor": 0.244469136
+      },
+      "seq": 117,
+      "stage": "cut",
+      "t": 10.399049463,
+      "unit": 25
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 118,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 10.643518599,
+      "unit": 25
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 119,
+      "stage": "chairs",
+      "t": 10.643518599,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 120,
+      "stage": "cut",
+      "t": 10.643518599,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 26,
+      "kind": "start",
+      "need": {
+        "labor": 0.24817284
+      },
+      "seq": 121,
+      "stage": "cut",
+      "t": 10.643518599,
+      "unit": 26
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 122,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 10.891691438,
+      "unit": 26
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 123,
+      "stage": "chairs",
+      "t": 10.891691438,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 124,
+      "stage": "cut",
+      "t": 10.891691438,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 27,
+      "kind": "start",
+      "need": {
+        "labor": 0.252024691
+      },
+      "seq": 125,
+      "stage": "cut",
+      "t": 10.891691438,
+      "unit": 27
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 126,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 11.14371613,
+      "unit": 27
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 127,
+      "stage": "chairs",
+      "t": 11.14371613,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 128,
+      "stage": "cut",
+      "t": 11.14371613,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 28,
+      "kind": "start",
+      "need": {
+        "labor": 0.256024691
+      },
+      "seq": 129,
+      "stage": "cut",
+      "t": 11.14371613,
+      "unit": 28
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 130,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 11.399740821,
+      "unit": 28
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 131,
+      "stage": "chairs",
+      "t": 11.399740821,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 7,
+      "kind": "start",
+      "need": {
+        "labor": 0.599077036
+      },
+      "seq": 132,
+      "stage": "chairs",
+      "t": 11.399740821,
+      "unit": 7
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 133,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 11.998817857,
+      "unit": 7
+    },
+    {
+      "count": 7,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 134,
+      "t": 11.998817857,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 135,
+      "stage": "cut",
+      "t": 11.998817857,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 29,
+      "kind": "start",
+      "need": {
+        "labor": 0.26017284
+      },
+      "seq": 136,
+      "stage": "cut",
+      "t": 11.998817857,
+      "unit": 29
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 137,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 12.258990697,
+      "unit": 29
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 138,
+      "stage": "chairs",
+      "t": 12.258990697,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 139,
+      "stage": "cut",
+      "t": 12.258990697,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 30,
+      "kind": "start",
+      "need": {
+        "labor": 0.264469136
+      },
+      "seq": 140,
+      "stage": "cut",
+      "t": 12.258990697,
+      "unit": 30
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 141,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 12.523459832,
+      "unit": 30
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 142,
+      "stage": "chairs",
+      "t": 12.523459832,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 143,
+      "stage": "cut",
+      "t": 12.523459832,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 31,
+      "kind": "start",
+      "need": {
+        "labor": 0.26891358
+      },
+      "seq": 144,
+      "stage": "cut",
+      "t": 12.523459832,
+      "unit": 31
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 145,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 12.792373413,
+      "unit": 31
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 146,
+      "stage": "chairs",
+      "t": 12.792373413,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 147,
+      "stage": "cut",
+      "t": 12.792373413,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 32,
+      "kind": "start",
+      "need": {
+        "labor": 0.273506173
+      },
+      "seq": 148,
+      "stage": "cut",
+      "t": 12.792373413,
+      "unit": 32
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 149,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 13.065879585,
+      "unit": 32
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 150,
+      "stage": "chairs",
+      "t": 13.065879585,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 8,
+      "kind": "start",
+      "need": {
+        "labor": 0.57384761
+      },
+      "seq": 151,
+      "stage": "chairs",
+      "t": 13.065879585,
+      "unit": 8
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 152,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 13.639727195,
+      "unit": 8
+    },
+    {
+      "count": 8,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 153,
+      "t": 13.639727195,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 154,
+      "stage": "cut",
+      "t": 13.639727195,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 33,
+      "kind": "start",
+      "need": {
+        "labor": 0.278246914
+      },
+      "seq": 155,
+      "stage": "cut",
+      "t": 13.639727195,
+      "unit": 33
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 156,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 13.917974109,
+      "unit": 33
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 157,
+      "stage": "chairs",
+      "t": 13.917974109,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 158,
+      "stage": "cut",
+      "t": 13.917974109,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 34,
+      "kind": "start",
+      "need": {
+        "labor": 0.283135802
+      },
+      "seq": 159,
+      "stage": "cut",
+      "t": 13.917974109,
+      "unit": 34
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 160,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 14.201109911,
+      "unit": 34
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 161,
+      "stage": "chairs",
+      "t": 14.201109911,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 162,
+      "stage": "cut",
+      "t": 14.201109911,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 35,
+      "kind": "start",
+      "need": {
+        "labor": 0.28817284
+      },
+      "seq": 163,
+      "stage": "cut",
+      "t": 14.201109911,
+      "unit": 35
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 164,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 14.489282751,
+      "unit": 35
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 165,
+      "stage": "chairs",
+      "t": 14.489282751,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 166,
+      "stage": "cut",
+      "t": 14.489282751,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 36,
+      "kind": "start",
+      "need": {
+        "labor": 0.293358025
+      },
+      "seq": 167,
+      "stage": "cut",
+      "t": 14.489282751,
+      "unit": 36
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 168,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 14.782640775,
+      "unit": 36
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 169,
+      "stage": "chairs",
+      "t": 14.782640775,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 9,
+      "kind": "start",
+      "need": {
+        "labor": 0.552664307
+      },
+      "seq": 170,
+      "stage": "chairs",
+      "t": 14.782640775,
+      "unit": 9
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 171,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 15.335305083,
+      "unit": 9
+    },
+    {
+      "count": 9,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 172,
+      "t": 15.335305083,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 173,
+      "stage": "cut",
+      "t": 15.335305083,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 37,
+      "kind": "start",
+      "need": {
+        "labor": 0.298691358
+      },
+      "seq": 174,
+      "stage": "cut",
+      "t": 15.335305083,
+      "unit": 37
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 175,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 15.633996441,
+      "unit": 37
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 176,
+      "stage": "chairs",
+      "t": 15.633996441,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 177,
+      "stage": "cut",
+      "t": 15.633996441,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 38,
+      "kind": "start",
+      "need": {
+        "labor": 0.30417284
+      },
+      "seq": 178,
+      "stage": "cut",
+      "t": 15.633996441,
+      "unit": 38
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 179,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 15.93816928,
+      "unit": 38
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 180,
+      "stage": "chairs",
+      "t": 15.93816928,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 181,
+      "stage": "cut",
+      "t": 15.93816928,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 39,
+      "kind": "start",
+      "need": {
+        "labor": 0.309802469
+      },
+      "seq": 182,
+      "stage": "cut",
+      "t": 15.93816928,
+      "unit": 39
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 183,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 16.247971749,
+      "unit": 39
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 184,
+      "stage": "chairs",
+      "t": 16.247971749,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 185,
+      "stage": "cut",
+      "t": 16.247971749,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 40,
+      "kind": "start",
+      "need": {
+        "labor": 0.315580247
+      },
+      "seq": 186,
+      "stage": "cut",
+      "t": 16.247971749,
+      "unit": 40
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 187,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 16.563551996,
+      "unit": 40
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 188,
+      "stage": "chairs",
+      "t": 16.563551996,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 10,
+      "kind": "start",
+      "need": {
+        "labor": 0.534503422
+      },
+      "seq": 189,
+      "stage": "chairs",
+      "t": 16.563551996,
+      "unit": 10
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 190,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 17.098055418,
+      "unit": 10
+    },
+    {
+      "count": 10,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 191,
+      "t": 17.098055418,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 192,
+      "stage": "cut",
+      "t": 17.098055418,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 41,
+      "kind": "start",
+      "need": {
+        "labor": 0.321506173
+      },
+      "seq": 193,
+      "stage": "cut",
+      "t": 17.098055418,
+      "unit": 41
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 194,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 17.419561591,
+      "unit": 41
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 195,
+      "stage": "chairs",
+      "t": 17.419561591,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 196,
+      "stage": "cut",
+      "t": 17.419561591,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 42,
+      "kind": "start",
+      "need": {
+        "labor": 0.327580247
+      },
+      "seq": 197,
+      "stage": "cut",
+      "t": 17.419561591,
+      "unit": 42
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 198,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 17.747141838,
+      "unit": 42
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 199,
+      "stage": "chairs",
+      "t": 17.747141838,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 200,
+      "stage": "cut",
+      "t": 17.747141838,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 43,
+      "kind": "start",
+      "need": {
+        "labor": 0.333802469
+      },
+      "seq": 201,
+      "stage": "cut",
+      "t": 17.747141838,
+      "unit": 43
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 202,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 18.080944307,
+      "unit": 43
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 203,
+      "stage": "chairs",
+      "t": 18.080944307,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 204,
+      "stage": "cut",
+      "t": 18.080944307,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 44,
+      "kind": "start",
+      "need": {
+        "labor": 0.34017284
+      },
+      "seq": 205,
+      "stage": "cut",
+      "t": 18.080944307,
+      "unit": 44
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 206,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 18.421117146,
+      "unit": 44
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 207,
+      "stage": "chairs",
+      "t": 18.421117146,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 11,
+      "kind": "start",
+      "need": {
+        "labor": 0.5186765
+      },
+      "seq": 208,
+      "stage": "chairs",
+      "t": 18.421117146,
+      "unit": 11
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 209,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 18.939793646,
+      "unit": 11
+    },
+    {
+      "count": 11,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 210,
+      "t": 18.939793646,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 211,
+      "stage": "cut",
+      "t": 18.939793646,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 45,
+      "kind": "start",
+      "need": {
+        "labor": 0.346691358
+      },
+      "seq": 212,
+      "stage": "cut",
+      "t": 18.939793646,
+      "unit": 45
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 213,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 19.286485004,
+      "unit": 45
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 214,
+      "stage": "chairs",
+      "t": 19.286485004,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 215,
+      "stage": "cut",
+      "t": 19.286485004,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 46,
+      "kind": "start",
+      "need": {
+        "labor": 0.353358025
+      },
+      "seq": 216,
+      "stage": "cut",
+      "t": 19.286485004,
+      "unit": 46
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 217,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 19.639843029,
+      "unit": 46
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 218,
+      "stage": "chairs",
+      "t": 19.639843029,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 219,
+      "stage": "cut",
+      "t": 19.639843029,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 47,
+      "kind": "start",
+      "need": {
+        "labor": 0.36017284
+      },
+      "seq": 220,
+      "stage": "cut",
+      "t": 19.639843029,
+      "unit": 47
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 221,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 20.000015868,
+      "unit": 47
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 222,
+      "stage": "chairs",
+      "t": 20.000015868,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 223,
+      "stage": "cut",
+      "t": 20.000015868,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 48,
+      "kind": "start",
+      "need": {
+        "labor": 0.367135802
+      },
+      "seq": 224,
+      "stage": "cut",
+      "t": 20.000015868,
+      "unit": 48
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 225,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 20.367151671,
+      "unit": 48
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 226,
+      "stage": "chairs",
+      "t": 20.367151671,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 12,
+      "kind": "start",
+      "need": {
+        "labor": 0.504700047
+      },
+      "seq": 227,
+      "stage": "chairs",
+      "t": 20.367151671,
+      "unit": 12
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 228,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 20.871851718,
+      "unit": 12
+    },
+    {
+      "count": 12,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 229,
+      "t": 20.871851718,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 230,
+      "stage": "cut",
+      "t": 20.871851718,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 49,
+      "kind": "start",
+      "need": {
+        "labor": 0.374246914
+      },
+      "seq": 231,
+      "stage": "cut",
+      "t": 20.871851718,
+      "unit": 49
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 232,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 21.246098632,
+      "unit": 49
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 233,
+      "stage": "chairs",
+      "t": 21.246098632,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 234,
+      "stage": "cut",
+      "t": 21.246098632,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 50,
+      "kind": "start",
+      "need": {
+        "labor": 0.381506173
+      },
+      "seq": 235,
+      "stage": "cut",
+      "t": 21.246098632,
+      "unit": 50
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 236,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 21.627604804,
+      "unit": 50
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 237,
+      "stage": "chairs",
+      "t": 21.627604804,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 238,
+      "stage": "cut",
+      "t": 21.627604804,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 51,
+      "kind": "start",
+      "need": {
+        "labor": 0.38891358
+      },
+      "seq": 239,
+      "stage": "cut",
+      "t": 21.627604804,
+      "unit": 51
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 240,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 22.016518385,
+      "unit": 51
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 241,
+      "stage": "chairs",
+      "t": 22.016518385,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 242,
+      "stage": "cut",
+      "t": 22.016518385,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 52,
+      "kind": "start",
+      "need": {
+        "labor": 0.396469136
+      },
+      "seq": 243,
+      "stage": "cut",
+      "t": 22.016518385,
+      "unit": 52
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 244,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 22.41298752,
+      "unit": 52
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 245,
+      "stage": "chairs",
+      "t": 22.41298752,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 13,
+      "kind": "start",
+      "need": {
+        "labor": 0.492222528
+      },
+      "seq": 246,
+      "stage": "chairs",
+      "t": 22.41298752,
+      "unit": 13
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 247,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 22.905210049,
+      "unit": 13
+    },
+    {
+      "count": 13,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 248,
+      "t": 22.905210049,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 249,
+      "stage": "cut",
+      "t": 22.905210049,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 53,
+      "kind": "start",
+      "need": {
+        "labor": 0.40417284
+      },
+      "seq": 250,
+      "stage": "cut",
+      "t": 22.905210049,
+      "unit": 53
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 251,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 23.309382888,
+      "unit": 53
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.25,
+      "seq": 252,
+      "stage": "chairs",
+      "t": 23.309382888,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 253,
+      "stage": "cut",
+      "t": 23.309382888,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 54,
+      "kind": "start",
+      "need": {
+        "labor": 0.412024691
+      },
+      "seq": 254,
+      "stage": "cut",
+      "t": 23.309382888,
+      "unit": 54
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 255,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 23.72140758,
+      "unit": 54
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 256,
+      "stage": "chairs",
+      "t": 23.72140758,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 257,
+      "stage": "cut",
+      "t": 23.72140758,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 55,
+      "kind": "start",
+      "need": {
+        "labor": 0.420024691
+      },
+      "seq": 258,
+      "stage": "cut",
+      "t": 23.72140758,
+      "unit": 55
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 259,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 24.141432271,
+      "unit": 55
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.75,
+      "seq": 260,
+      "stage": "chairs",
+      "t": 24.141432271,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 261,
+      "stage": "cut",
+      "t": 24.141432271,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 56,
+      "kind": "start",
+      "need": {
+        "labor": 0.42817284
+      },
+      "seq": 262,
+      "stage": "cut",
+      "t": 24.141432271,
+      "unit": 56
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 263,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 24.56960511,
+      "unit": 56
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 264,
+      "stage": "chairs",
+      "t": 24.56960511,
+      "wire": "w-chair-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 14,
+      "kind": "start",
+      "need": {
+        "labor": 0.480980988
+      },
+      "seq": 265,
+      "stage": "chairs",
+      "t": 24.56960511,
+      "unit": 14
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 266,
+      "signals": {
+        "material:w-chair-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "chairs",
+      "t": 25.050586098,
+      "unit": 14
+    },
+    {
+      "count": 14,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 267,
+      "t": 25.050586098,
+      "wire": "w-chair-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 268,
+      "stage": "cut",
+      "t": 25.050586098,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 57,
+      "kind": "start",
+      "need": {
+        "labor": 0.436469136
+      },
+      "seq": 269,
+      "stage": "cut",
+      "t": 25.050586098,
+      "unit": 57
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 270,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 25.487055234,
+      "unit": 57
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.1,
+      "seq": 271,
+      "stage": "tables",
+      "t": 25.487055234,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 272,
+      "stage": "cut",
+      "t": 25.487055234,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 58,
+      "kind": "start",
+      "need": {
+        "labor": 0.44491358
+      },
+      "seq": 273,
+      "stage": "cut",
+      "t": 25.487055234,
+      "unit": 58
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 274,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 25.931968814,
+      "unit": 58
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.2,
+      "seq": 275,
+      "stage": "tables",
+      "t": 25.931968814,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 276,
+      "stage": "cut",
+      "t": 25.931968814,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 59,
+      "kind": "start",
+      "need": {
+        "labor": 0.453506173
+      },
+      "seq": 277,
+      "stage": "cut",
+      "t": 25.931968814,
+      "unit": 59
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 278,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 26.385474987,
+      "unit": 59
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.3,
+      "seq": 279,
+      "stage": "tables",
+      "t": 26.385474987,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 280,
+      "stage": "cut",
+      "t": 26.385474987,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 60,
+      "kind": "start",
+      "need": {
+        "labor": 0.462246914
+      },
+      "seq": 281,
+      "stage": "cut",
+      "t": 26.385474987,
+      "unit": 60
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 282,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 26.847721901,
+      "unit": 60
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.4,
+      "seq": 283,
+      "stage": "tables",
+      "t": 26.847721901,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 284,
+      "stage": "cut",
+      "t": 26.847721901,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 61,
+      "kind": "start",
+      "need": {
+        "labor": 0.471135802
+      },
+      "seq": 285,
+      "stage": "cut",
+      "t": 26.847721901,
+      "unit": 61
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 286,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 27.318857703,
+      "unit": 61
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 287,
+      "stage": "tables",
+      "t": 27.318857703,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 288,
+      "stage": "cut",
+      "t": 27.318857703,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 62,
+      "kind": "start",
+      "need": {
+        "labor": 0.48017284
+      },
+      "seq": 289,
+      "stage": "cut",
+      "t": 27.318857703,
+      "unit": 62
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 290,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 27.799030543,
+      "unit": 62
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.6,
+      "seq": 291,
+      "stage": "tables",
+      "t": 27.799030543,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 292,
+      "stage": "cut",
+      "t": 27.799030543,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 63,
+      "kind": "start",
+      "need": {
+        "labor": 0.489358025
+      },
+      "seq": 293,
+      "stage": "cut",
+      "t": 27.799030543,
+      "unit": 63
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 294,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 28.288388568,
+      "unit": 63
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.7,
+      "seq": 295,
+      "stage": "tables",
+      "t": 28.288388568,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 296,
+      "stage": "cut",
+      "t": 28.288388568,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 64,
+      "kind": "start",
+      "need": {
+        "labor": 0.498691358
+      },
+      "seq": 297,
+      "stage": "cut",
+      "t": 28.288388568,
+      "unit": 64
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 298,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 28.787079926,
+      "unit": 64
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.8,
+      "seq": 299,
+      "stage": "tables",
+      "t": 28.787079926,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 300,
+      "stage": "cut",
+      "t": 28.787079926,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 65,
+      "kind": "start",
+      "need": {
+        "labor": 0.50817284
+      },
+      "seq": 301,
+      "stage": "cut",
+      "t": 28.787079926,
+      "unit": 65
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 302,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 29.295252765,
+      "unit": 65
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.9,
+      "seq": 303,
+      "stage": "tables",
+      "t": 29.295252765,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 304,
+      "stage": "cut",
+      "t": 29.295252765,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 66,
+      "kind": "start",
+      "need": {
+        "labor": 0.517802469
+      },
+      "seq": 305,
+      "stage": "cut",
+      "t": 29.295252765,
+      "unit": 66
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 306,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 29.813055234,
+      "unit": 66
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 307,
+      "stage": "tables",
+      "t": 29.813055234,
+      "wire": "w-table-blanks"
+    },
+    {
+      "horizon": 1,
+      "index": 1,
+      "kind": "start",
+      "need": {
+        "labor": 4.0
+      },
+      "seq": 308,
+      "stage": "tables",
+      "t": 29.813055234,
+      "unit": 1
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 309,
+      "signals": {
+        "material:w-table-blanks": 1,
+        "work:labor": 1
+      },
+      "stage": "tables",
+      "t": 33.813055234,
+      "unit": 1
+    },
+    {
+      "count": 1,
+      "horizon": 1,
+      "kind": "counted",
+      "seq": 310,
+      "t": 33.813055234,
+      "wire": "w-table-sales"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 311,
+      "stage": "cut",
+      "t": 33.813055234,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 67,
+      "kind": "start",
+      "need": {
+        "labor": 0.527580247
+      },
+      "seq": 312,
+      "stage": "cut",
+      "t": 33.813055234,
+      "unit": 67
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 313,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 34.340635481,
+      "unit": 67
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.1,
+      "seq": 314,
+      "stage": "tables",
+      "t": 34.340635481,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 315,
+      "stage": "cut",
+      "t": 34.340635481,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 68,
+      "kind": "start",
+      "need": {
+        "labor": 0.537506173
+      },
+      "seq": 316,
+      "stage": "cut",
+      "t": 34.340635481,
+      "unit": 68
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 317,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 34.878141654,
+      "unit": 68
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.2,
+      "seq": 318,
+      "stage": "tables",
+      "t": 34.878141654,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 319,
+      "stage": "cut",
+      "t": 34.878141654,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 69,
+      "kind": "start",
+      "need": {
+        "labor": 0.547580247
+      },
+      "seq": 320,
+      "stage": "cut",
+      "t": 34.878141654,
+      "unit": 69
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 321,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 35.425721901,
+      "unit": 69
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.3,
+      "seq": 322,
+      "stage": "tables",
+      "t": 35.425721901,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 323,
+      "stage": "cut",
+      "t": 35.425721901,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 70,
+      "kind": "start",
+      "need": {
+        "labor": 0.557802469
+      },
+      "seq": 324,
+      "stage": "cut",
+      "t": 35.425721901,
+      "unit": 70
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 325,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 35.98352437,
+      "unit": 70
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.4,
+      "seq": 326,
+      "stage": "tables",
+      "t": 35.98352437,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 327,
+      "stage": "cut",
+      "t": 35.98352437,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 71,
+      "kind": "start",
+      "need": {
+        "labor": 0.56817284
+      },
+      "seq": 328,
+      "stage": "cut",
+      "t": 35.98352437,
+      "unit": 71
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 329,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 36.55169721,
+      "unit": 71
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.5,
+      "seq": 330,
+      "stage": "tables",
+      "t": 36.55169721,
+      "wire": "w-table-blanks"
+    },
+    {
+      "amount": 1.25,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 1.0,
+      "seq": 331,
+      "stage": "cut",
+      "t": 36.55169721,
+      "wire": "w-stock"
+    },
+    {
+      "horizon": 1,
+      "index": 72,
+      "kind": "start",
+      "need": {
+        "labor": 0.578691358
+      },
+      "seq": 332,
+      "stage": "cut",
+      "t": 36.55169721,
+      "unit": 72
+    },
+    {
+      "horizon": 1,
+      "kind": "completed",
+      "seq": 333,
+      "signals": {
+        "material:w-stock": 1,
+        "work:labor": 1
+      },
+      "stage": "cut",
+      "t": 37.130388568,
+      "unit": 72
+    },
+    {
+      "amount": 1.0,
+      "horizon": 1,
+      "kind": "material",
+      "progress": 0.6,
+      "seq": 334,
+      "stage": "tables",
+      "t": 37.130388568,
+      "wire": "w-table-blanks"
+    },
+    {
+      "horizon": 1,
+      "kind": "stalled",
+      "reasons": {
+        "cut": "waiting on materials",
+        "tables": "waiting on materials"
+      },
+      "seq": 335,
+      "short": {
+        "cut": 4,
+        "tables": 1
+      },
+      "t": 37.130388568
+    }
+  ],
+  "model": {
+    "path": "workshop.learning.opt.json",
+    "sha256": "f5b9160cc90f6e8a0c708f634847f564ebfe090a50df54ce9be425483d27302f"
+  },
+  "resources": {
+    "labor": {
+      "limit": 40.0,
+      "used": 37.13038856757945
+    }
+  },
+  "schema": "soveraeign.schematic/state@0.0-draft",
+  "sources": {
+    "timber": 0.0
+  },
+  "stages": {
+    "chairs": {
+      "completed": 14,
+      "horizon_completed": 14,
+      "stock": 0,
+      "wip": null
+    },
+    "cut": {
+      "completed": 72,
+      "horizon_completed": 72,
+      "stock": 0,
+      "wip": null
+    },
+    "tables": {
+      "completed": 1,
+      "horizon_completed": 1,
+      "stock": 0,
+      "wip": {
+        "materials": {
+          "w-table-blanks": 6.0
+        },
+        "work": null
+      }
+    }
+  }
+}
