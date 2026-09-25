@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "soveraeign.schematic/state-record@0.1",
+  "title": "SOV Schematic State Record",
+  "description": "Documentation only: validation is the hand-written validateRecord in src/07-state-space.js. Every state claim has these coordinates (STATE-SPACE.md, The state record). Any other key, at any level, is refused.",
+  "type": "object",
+  "required": [
+    "format",
+    "id",
+    "subject",
+    "vantage",
+    "observable",
+    "kind",
+    "form",
+    "value",
+    "time",
+    "certainty",
+    "observer",
+    "provenance",
+    "perturbation"
+  ],
+  "properties": {
+    "format": {
+      "const": "soveraeign.schematic/state-record@0.1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "subject": {
+      "type": "object",
+      "required": [
+        "entity",
+        "run"
+      ],
+      "properties": {
+        "entity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run": {
+          "type": "string",
+          "minLength": 1
+        },
+        "point": {
+          "type": "string",
+          "minLength": 1,
+          "description": "a port id"
+        },
+        "channel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "vantage": {
+      "enum": [
+        "space",
+        "point",
+        "relative"
+      ]
+    },
+    "reference": {
+      "type": "string",
+      "minLength": 1,
+      "description": "required when vantage is relative, refused otherwise"
+    },
+    "observable": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": [
+        "registered",
+        "measured",
+        "derived",
+        "predicted"
+      ]
+    },
+    "form": {
+      "enum": [
+        "binary",
+        "continuous",
+        "categorical"
+      ]
+    },
+    "value": {
+      "description": "a boolean for binary, a finite number for continuous, a string for categorical",
+      "type": [
+        "boolean",
+        "number",
+        "string"
+      ]
+    },
+    "time": {
+      "type": "object",
+      "required": [
+        "logical",
+        "sequence",
+        "mode"
+      ],
+      "properties": {
+        "logical": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "serialization order only; no outcome depends on it"
+        },
+        "mode": {
+          "enum": [
+            "observed",
+            "predicted"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "certainty": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "exact"
+        }
+      },
+      "additionalProperties": false
+    },
+    "observer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "rule",
+        "inputs"
+      ],
+      "properties": {
+        "rule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "perturbation": {
+      "enum": [
+        "none",
+        "disturbed",
+        "created"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "vantage": {
+            "const": "relative"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "reference"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "reference"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "form": {
+            "const": "binary"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "form": {
+            "const": "continuous"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "form": {
+            "const": "categorical"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

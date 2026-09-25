@@ -313,7 +313,11 @@
           const cid=isObject(channel)?cleanString(channel.id,'').trim():'';
           if(!cid)throw new Error(`PORTS_INVALID: port ${id} has a channel without an id`);
           if(seen.has(cid))throw new Error(`PORTS_INVALID: port ${id} repeats channel ${cid}`);
-          seen.add(cid);channels.push({id:cid});
+          seen.add(cid);
+          if(channel.merge===undefined){channels.push({id:cid});continue}
+          const mergeErrors=validateMerge(channel.merge);
+          if(mergeErrors.length)throw new Error(`MERGE_INVALID: port ${id} channel ${cid}: ${mergeErrors.join('; ')}`);
+          channels.push({id:cid,merge:clone(channel.merge)});
         }
       }
       if(raw.label!==undefined&&typeof raw.label!=='string')throw new Error(`PORTS_INVALID: port ${id} label must be a string`);
@@ -324,11 +328,39 @@
     }
     return out;
   }
+  // merge@1 parameters, the same-tick fan-in rule a port channel may declare
+  // (STATE-SPACE.md "Merge and ordering"). The state space's merge@1 pattern validates
+  // with this function, so an edit here and a load check there refuse the same shapes.
+  const MERGE_ORDER_FREE=['or','and','min','max','sum'],MERGE_ORDER_DEPENDENT=['first','last','queue'];
+  const MERGE_ORDER_KINDS=['declared','stochastic','observed'];
+  function validateMerge(parameters){
+    if(!isObject(parameters))return ['merge must be an object'];
+    const errors=[];
+    for(const key of Object.keys(parameters))if(!['combine','order'].includes(key))errors.push(`unknown merge key ${key}`);
+    const combine=parameters.combine;
+    if(![...MERGE_ORDER_FREE,...MERGE_ORDER_DEPENDENT].includes(combine))errors.push(`combine must be one of ${[...MERGE_ORDER_FREE,...MERGE_ORDER_DEPENDENT].join(', ')}`);
+    if(parameters.order===undefined)return errors;
+    if(MERGE_ORDER_FREE.includes(combine))errors.push(`order is refused on the order-free combine ${combine}`);
+    const order=parameters.order;
+    if(!isObject(order)){errors.push('order must be an object');return errors}
+    if(!MERGE_ORDER_KINDS.includes(order.kind)){errors.push(`order.kind must be one of ${MERGE_ORDER_KINDS.join(', ')}`);return errors}
+    const allowed=order.kind==='declared'?['kind','paths']:['kind'];
+    for(const key of Object.keys(order))if(!allowed.includes(key))errors.push(`unknown order key ${key} for kind ${order.kind}`);
+    if(order.kind==='declared'){
+      const paths=order.paths;
+      if(!Array.isArray(paths)||!paths.length)errors.push('order.paths must be a non-empty array of wire ids');
+      else{
+        if(!paths.every(x=>typeof x==='string'&&x.length>0))errors.push('order.paths must hold non-empty wire ids');
+        else if(new Set(paths).size!==paths.length)errors.push('order.paths repeats a wire id');
+      }
+    }
+    return errors;
+  }
   const samePort=(x,y)=>JSON.stringify([x.id,x.compatId||x.id,x.side,x.t,x.flow,x.channels,x.label||''])===JSON.stringify([y.id,y.compatId||y.id,y.side,y.t,y.flow,y.channels,y.label||'']);
   // A spec in the stored declared-port shape.
   function storedPort(spec){
     const port={id:spec.id};if(spec.compatId&&spec.compatId!==spec.id)port.compatId=spec.compatId;
-    Object.assign(port,{side:spec.side,t:spec.t,flow:spec.flow,channels:(spec.channels||[{id:'main'}]).map(c=>({id:c.id}))});
+    Object.assign(port,{side:spec.side,t:spec.t,flow:spec.flow,channels:(spec.channels||[{id:'main'}]).map(c=>c.merge===undefined?{id:c.id}:{id:c.id,merge:clone(c.merge)})});
     if(spec.label)port.label=spec.label;
     return port;
   }
@@ -653,7 +685,7 @@
       form:isObject(value.form)?clone(value.form):{dimension:1,body:{kind:'path',material:'generic',thickness:0}},
       lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
       net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
-      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,'')},
+      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{})},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
     });
@@ -819,5 +851,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {cleanStoredPorts,assertWiresSurviveEdit,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {validateMerge,cleanStoredPorts,assertWiresSurviveEdit,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });

@@ -33,10 +33,18 @@
     const mode=entity?.config?.attachmentDefaults;
     return ATTACHMENT_DEFAULT_MODES.has(mode)?mode:'standard';
   }
-  // Absent channels read as the one default channel, `main`.
+  // Absent channels read as the one default channel, `main`. A channel's `merge` (the
+  // merge@1 parameters for same-tick fan-in) is carried as written; the data core checks
+  // it on edit and the state space reports it at load.
   function portChannels(port){
-    const list=Array.isArray(port?.channels)?port.channels.map(c=>String(c?.id??'').trim()).filter(Boolean):[];
-    return list.length?[...new Set(list)].map(id=>({id})):DEFAULT_CHANNELS.map(c=>({...c}));
+    const out=[],seen=new Set();
+    for(const c of Array.isArray(port?.channels)?port.channels:[]){
+      const id=String(c?.id??'').trim();if(!id||seen.has(id))continue;
+      seen.add(id);const channel={id};
+      if(c&&typeof c==='object'&&c.merge!==undefined)channel.merge=JSON.parse(JSON.stringify(c.merge));
+      out.push(channel);
+    }
+    return out.length?out:DEFAULT_CHANNELS.map(c=>({...c}));
   }
   function channelIds(spec){return portChannels(spec).map(c=>c.id)}
   // Connectivity follows the lower-dimensional host when a richer form is settled onto it.

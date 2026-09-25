@@ -165,3 +165,51 @@ carries `form.dimension: 1` and `role: 'carrier'`. `wire.create` accepts any mix
 bound (`a`/`aSide` or an `aAttachment` ref) and free ends; `wire.update` rebinds an end
 with `a`/`aSide` or frees it with `aAttachment: {kind:'free',x,y}`. Validation requires
 bound ends to exist and two bound ends to share a surface; free ends are always valid.
+
+
+## State space contracts (slice 1a, `STATE-SPACE.md`)
+
+The contract layer of the state space. Its code is `src/07-state-space.js`; validation is hand-written there, and the
+four schemas below document the shapes (no JSON Schema evaluator is used).
+
+- `soveraeign.schematic/state-record@0.1` — one state claim: `subject {entity, run, point?, channel?, attempt?}`,
+  `vantage` (`relative` requires `reference`), `observable`, `kind`, `form`, `value` (typed by `form`), `time
+  {logical, sequence, mode}`, `certainty {kind: exact}`, `observer`, `provenance {rule, inputs}`, `perturbation`.
+  Any other key, at any level, is refused. Schema: `formats/schematic.state-record.schema.json`.
+- Pattern declaration — `id`, `version`, `class`, `stateful`, `blastRadius`, `validate`, `derive`; the patterns ship
+  with the engine (`truth_table@1`, `merge@1`). Schema, with each pattern's parameters and derived contract:
+  `formats/schematic.pattern.schema.json`.
+- `soveraeign.schematic/definition@0.1` — `id`, `version`, `pattern` (`id@version`), `parameters`, `delay` (default
+  0), `ports` (placement and labels of the generated ports, presentation only), `projection`. A stated `inputs`,
+  `outputs`, `state` or `observables` must equal what the pattern derives (`CONTRACT_MISMATCH` otherwise). Schema:
+  `formats/schematic.definition.schema.json`.
+- `soveraeign.schematic/pack@0.1` — `{format, id, version, definitions[]}`, the minimal envelope until the domain
+  pack format absorbs it. The built-ins are `data/core.logic.pack.json` (`logic.not`, `logic.and`, `logic.or`,
+  `logic.xor`). Schema: `formats/schematic.pack.schema.json`.
+
+A `.sov` carries three pieces of authored state-space data, and nothing a run computes:
+
+- **`config.definition`** on a Component: the definition it is bound to, `id@version` (`"logic.and@1"`). Binding
+  (`bindDefinition`, applied as a component `update`) also sets `attachmentDefaults: none` and exactly the
+  contract's generated ports as `attachmentPoints`: one per input on the left and one per output on the right,
+  spread evenly unless the definition's `ports` places them. The existing Wire checks apply (`PORT_IN_USE`).
+- **`config.delay`** on a Wire: its propagation delay in logical ticks, an integer >= 1. Absent means 1 and is not
+  written.
+- **`merge`** on a declared port's channel: the `merge@1` parameters for same-tick arrivals there.
+
+```json
+{"id": "in", "side": "left", "t": 0.5, "flow": "in",
+ "channels": [{"id": "main", "merge": {"combine": "last", "order": {"kind": "declared", "paths": ["w1", "w2"]}}}]}
+```
+
+`combine` is `or | and | min | max | sum` (order-free; `order` is refused) or `first | last | queue`
+(order-dependent; `order` defaults to `{kind: stochastic}`). `order` is `{kind: declared, paths: [wire ids]}`,
+`{kind: stochastic}` or `{kind: observed}`. A channel without `merge` is stored as `{id}` only. A component `create`
+or `update` whose port list carries an invalid `merge` is refused with `MERGE_INVALID` on every surface; loading
+keeps a stored `merge` as written.
+
+`checkDocument(doc, packs)` reports the load checks without throwing or changing the document: `PATH_DELAY_INVALID`,
+`PATH_DIRECTION_FLOW` (a Wire's direction against its ports' flows: `out` and `duplex` emit; `in`, `duplex`,
+`control` and `trigger` receive), `CHANNEL_MISMATCH`, `DEFINITION_UNRESOLVED`, `DEFINITION_PORTS` and
+`MERGE_INVALID` (including a `declared` order naming a Wire that does not end on the port). A refused document
+still opens.

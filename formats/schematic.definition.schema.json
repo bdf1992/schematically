@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "soveraeign.schematic/definition@0.1",
+  "title": "SOV Schematic Definition",
+  "description": "Documentation only: validation is the hand-written checkDefinition in src/07-state-space.js. A definition instantiates one pattern. Authored members are the only ones a pack writes; the derived members (inputs, outputs, state, observables) may be stated for readability and are refused with CONTRACT_MISMATCH unless they equal what the pattern derives.",
+  "type": "object",
+  "required": [
+    "id",
+    "version",
+    "pattern",
+    "parameters"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "pattern": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*@[0-9]+$",
+      "description": "a registered pattern, pinned: truth_table@1 | merge@1"
+    },
+    "parameters": {
+      "description": "what the pattern's parameter schema asks for (schematic.pattern.schema.json $defs)"
+    },
+    "delay": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "device delay in logical ticks"
+    },
+    "ports": {
+      "type": "object",
+      "description": "presentation only: placement and label of generated ports, keyed by port id",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "side",
+          "t"
+        ],
+        "properties": {
+          "side": {
+            "enum": [
+              "left",
+              "right",
+              "top",
+              "bottom"
+            ]
+          },
+          "t": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "projection": {
+      "type": "object",
+      "description": "presentation only: glyph and labels"
+    },
+    "inputs": {
+      "description": "derived; must equal derive(parameters).inputs when stated"
+    },
+    "outputs": {
+      "description": "derived; must equal derive(parameters).outputs when stated"
+    },
+    "state": {
+      "description": "derived; must equal derive(parameters).state when stated"
+    },
+    "observables": {
+      "description": "derived; must equal derive(parameters).observables when stated"
+    }
+  },
+  "additionalProperties": false
+}
