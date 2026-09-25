@@ -84,3 +84,20 @@ marker.
 Storage: carriers still live in `document.wires` and Components in `document.components`.
 That split is compatibility debt of the same kind as `config.ports` versus `parts.points`;
 folding carriers into one record kind is a file-format transition, not a runtime change.
+
+
+## Declared ports (planned, 2026-09-25)
+
+Decided with the state space design (`STATE-SPACE.md`, *Ports*); not yet implemented.
+
+- Every Component's ports are declared data in `config.attachmentPoints`:
+  `{id, side: left | right | top | bottom, t, flow, channels, label}`. Nothing is implied.
+- The `left` / `right` / `top` trio moves out of `06-attachment-core.js` into template data. Templates that want
+  it declare it; a template may declare any number of ports on any side, or none.
+- `attachmentDefaults: 'standard'` stays readable as a legacy form: at load it expands into the three ports it
+  always meant, with the same ids, so existing Wires stay bound. Nothing new writes it. `none` keeps its meaning.
+- A port carries one or more named channels (default one, `main`). A Wire carries the channels its two ports
+  share; binding two ports that share none is refused on every surface.
+- A Component bound to a state-space definition gets its ports from the definition's generated contract.
+- Ports are added, moved, relabelled and removed through the data core, so gesture, API, HTTP and MCP stay one
+  implementation. Removing a port a Wire ends on is refused, as removing built-ins is today.

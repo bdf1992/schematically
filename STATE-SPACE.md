@@ -66,6 +66,7 @@ Patterns, by the slice that brings them:
 | Pattern | Does | Class | Slice |
 |---|---|---|---|
 | `truth_table` | combinational logic | exact | 1 |
+| `merge` | same-tick arrivals at one port → one value, by a declared combine and order; undeclared order is a recorded seeded draw | exact given the ledger | 1 |
 | `pass`, `route` | identity; selector → output | exact | 2 |
 | `threshold` | enter / exit cut with hysteresis | exact, stateful | 2 |
 | `materialize` | a cache of a fold at a ledger position | exact | 2 |
@@ -114,7 +115,7 @@ Every claim has the same coordinates, whether it is a logic level, a gate verdic
 
 | Coordinate | Answers | Values |
 |---|---|---|
-| `subject` | about what | `{entity, point?, run, attempt?}` |
+| `subject` | about what | `{entity, point?, channel?, run, attempt?}`; `point` is a port id |
 | `vantage` | seen from where | `space` (Eulerian: the whole graph at a time), `point` (Lagrangian: one subject's history), `relative` (against a `reference`) |
 | `observable` | what is measured | a declared observable id, e.g. `logic.level`, `device.state`, `cost` |
 | `kind` | how it became true | `registered`, `measured`, `derived`, `predicted` (`estimated` from slice 4) |
@@ -180,7 +181,7 @@ When a subject's value changes, the state space reports which part moved it: the
 
 Kept exactly as Issue #6 separates them:
 
-- **Signal state** is the current value at an attachment Point or channel. It is a record with `vantage: space`.
+- **Signal state** is the current value on one channel of a port. It is a record with `vantage: space`.
 - **A particle** is a transition moving along a Path: value or change, channel, logical departure and arrival, provenance. It is an event in the log and a `vantage: point` view of it.
 
 A device evaluates signal state, never particles, so an AND gate sees both inputs when only one transition arrives. The rendered packet is a projection of a particle; it is never the source of a value.
@@ -220,7 +221,7 @@ Fields run over the document's connection graph. Write `A` for its weighted adja
 - **`consensus`**: `L = D_in − Aᵀ`. Each node pulls toward what feeds it; values even out along the direction of flow. Risk from a failing Component spreads to what depends on it.
 - **`advection`**: `L = D_out − Aᵀ`. What leaves a node arrives at its successors, so the total is conserved. Budget consumed and taint from an unverified input need this one.
 
-A step is `x ← x − εLx`. It is stable only for small enough ε; `ε ≤ 1 / d_max` (the largest weighted degree in the graph) is sufficient for both operators. The runtime checks ε against the document's graph at load and refuses a field that would diverge.
+A step is `x ← x − εLx`. It is stable only for small enough ε: `ε ≤ 1 / max weighted in-degree` for `consensus` (then `I − εL` is row-stochastic) and `ε ≤ 1 / max weighted out-degree` for `advection` (then it is column-stochastic, so the total is conserved). The runtime checks ε against the document's graph at load and refuses a field that would diverge. `consensus` reaches one agreed value only if the graph has a rooted spanning tree; otherwise each part reachable from a separate root settles on its own value, and the field reports which.
 
 Today's colour mixing in `25-signal.js` is an undeclared diffusion with fixed pass counts. It becomes a declared field, `presentation.signal-color`, operator `consensus`, blast radius `regional`: colour follows direction but is not a conserved quantity. The colour on screen then has a rule, a rate and a provenance, and colour stops standing in for signal value.
 
@@ -235,7 +236,7 @@ Each observer is registered with its **class**, **limits** and **read/write sets
 
 For any record, the state space can answer: observed passively, observed actively, or created by the act of observing.
 
-**Paying for observation.** Active observation is paid relative to the observed run and never from an absolute pool. At run start, a declared share of the run's *initial* budget (default 10%) moves into a reserved **observation account**. Active observations debit it through logged events. When it is empty, further active observation is refused with a typed refusal, and the run itself continues. A per-observation cap on "what remains" was rejected because it never reaches zero yet drains the run: ten observations would take 65% of the budget, twenty 88%.
+**Paying for observation.** Active observation is paid relative to the observed run and never from an absolute pool. At run start, a declared share of the run's *initial* budget (default 10%) moves into a reserved **observation account**. Active observations debit it through logged events. When it is empty, further active observation is refused with a typed refusal, and the run itself continues. A per-observation cap on "what remains" was rejected because it never reaches zero yet drains the run: at a 10% cap, ten observations would take 1 − 0.9¹⁰ ≈ 65% of the budget, twenty 88%.
 
 **Order.** Passive observers commute with everything. Active observers with disjoint write sets commute. Only observers whose write sets overlap need an order, and the document must declare it; the runtime refuses, at load, a document with an undeclared conflict. No run is needed to find one.
 
@@ -303,32 +304,59 @@ From slice 4, transitions are marked **controllable** or **uncontrollable**, as 
 
 ## Execution (the runtime)
 
-A **run** is one replay key (document revision, resolved definitions, runtime version, initial registered values, seed) plus a budget. The engine is deterministic: no wall clock, no randomness except from the declared seed. Anything outside that guarantee enters as a recorded result (see *Generative steps and attempts*).
+A **run** is one replay key (document content hash, resolved definitions, runtime version, initial registered values, seed) plus a budget. The engine is deterministic: no wall clock, no randomness except draws from the declared seed, and every draw is recorded. Anything outside that guarantee enters as a recorded result (see *Generative steps and attempts*).
+
+**Document identity is content, not revision.** The document's `revision` is a counter, and undo restores older content with its older revision, so two different documents can carry the same number. The replay key therefore holds `documentHash`: SHA-256 over the canonical encoding of `compactDocument()` with `revision` and timestamps removed. `revision` stays on the trace as a label for people.
 
 1. A source's registered value changes; the change is an event.
-2. The event enters a Path through a 0D attachment Point.
+2. The event leaves through a declared port (see *Ports*) and enters a Path.
 3. The Path schedules arrival at `logical + path delay`. Path delay is declared on the Path (default 1). Geometry does not set logical delay.
-4. Arrival writes the destination Point's signal state.
+4. Arrival at the destination port is merged with any other same-tick arrivals there (see *Merge and ordering*) and written to that port's signal state.
 5. A device evaluates when one of its inputs changed.
 6. A changed output is emitted at `logical + device delay`, the delay its definition declares (default 0), onto admitted outgoing Paths. Boundary legality is the data core's; the runtime never reaches through a boundary the editor would refuse.
 7. Every step appends to the trace.
 
 Delay lives in both places, as in real circuits: a Path takes time to carry (propagation), a device takes time to respond (device delay). A DELAY or REPEATER is a device whose definition declares a delay and passes its input through. The trace records both delays separately, so a slow run says whether the Path or the device was slow.
 
+**Delay is transport delay.** Every change is carried and delivered, however short the pulse, so every change is visible as a packet. Inertial delay (a pulse shorter than the delay is swallowed, VHDL's default) may later be a parameter of the DELAY pattern; it is not the runtime's default.
+
+### Ports
+
+A port is a declared 0D attachment point on a Component: the only place a Path may carry state into or out of it.
+
+- **Declared, not assumed.** Every Component's ports are data (`config.attachmentPoints`): `{id, side: left | right | top | bottom, t, flow: in | out | control | duplex | trigger, channels, label}`. The built-in `left` / `right` / `top` trio stops being implicit: templates declare the ports they want, and a template may declare none, one, or many on any side. `attachmentDefaults: 'standard'` remains readable only as a legacy form that expands, at load, into the three declared ports it always meant; nothing new writes it. The editor, API, HTTP and MCP add, move, relabel and remove ports through the same data core.
+- **Generated from a definition.** A Component bound to a definition gets its ports from the definition's contract: one port per input and per output, ids and flow taken from the pattern (`a`, `b` in, `q` out for `truth_table` with two inputs). Default placement is inputs spread evenly on the left and outputs on the right. Position (`side`, `t`) is presentation and may be moved; the port id is identity and may not be changed while a definition owns it.
+- **Channels.** A port carries one or more named **channels**, each with its observable and form; the default is one channel, `main`. A Path carries the channels its two bound ports share, matched by channel id; binding two ports that share no channel is refused, with the same refusal over every surface. Several channels on one port let one Path carry several signals.
+- **Direction.** A Path carries only in the direction(s) it declares. `forward` carries a → b; `reverse` carries b → a; `duplex` is two independent channels of the same declared delay, one each way; `none` carries nothing. A port's `flow` must admit the direction: an `in` port receives, an `out` port emits, `duplex` does both. Port `access` (read / write) and a Path's `forwardOperation` / `reverseOperation` stay presentation until a pack gives them meaning.
+
+### Merge and ordering
+
+Several Paths may end on one port, and several arrivals may reach it in the same tick. What happens then is declared, never left to chance, and where it cannot be declared the chance is recorded.
+
+A port (or one of its channels) may declare a **merge**, an instance of the `merge` pattern:
+
+- **combine**: how same-tick arrivals become one value. Order-free: `or`, `and`, `min`, `max`, `sum`. Order-dependent: `first`, `last`, and `queue` (deliver the arrivals one per tick in merge order; the rest wait their turn).
+- **order**: for order-dependent combines, where the order comes from:
+  - `declared`: a priority list of incoming Paths, highest first;
+  - `observed`: the order in which an outside system reported the arrivals (instrument only, slice 4), recorded as a measured record;
+  - `stochastic`: the engine draws an order.
+
+**Undeclared means stochastic, and stochastic means recorded.** A port with same-tick fan-in and no merge declared uses `combine: last, order: stochastic`. A declared list that leaves some incoming Paths out orders the listed ones first and draws the rest. Every draw is written to the ledger as an `order` record (subject: the port and channel at that tick; value: the order drawn; observer `engine:merge@1`; provenance: the seed and the draw key). The draw is keyed by `(run seed, tick, port, channel)`, never by evaluation order, so it is reproducible, and replay reads the recorded order and checks that it re-derives. The trace lists every port that used stochastic order, so a reader knows where order was chance rather than design. Order-free combines need no order and record none.
+
 ### Two-phase ticks
 
-**Path delay is at least 1**, checked at load. A device's output therefore always arrives at a later tick, even with device delay 0, and no zero-time chain can form. The only same-tick hazard is several arrivals at one device, and one rule covers it. Each tick has two phases:
+**Path delay is at least 1**, checked at load. A device's output therefore always arrives at a later tick, even with device delay 0, and no zero-time chain can form. Each tick has two phases:
 
-1. **Update:** apply every arrival scheduled for tick t to signal state, and commit.
+1. **Update:** gather every arrival scheduled for tick t, merge the arrivals at each port by its merge, apply them to signal state, and commit.
 2. **Evaluate:** evaluate every device whose inputs changed, reading only committed state; schedule its outputs; commit its `device.state`.
 
-Within each phase order is irrelevant, which is the VHDL delta-cycle guarantee without the delta machinery. `sequence` is assigned afterwards by sorting on stable ids (target entity, target point, source Path) and serves serialization only.
+Same-tick arrivals at one port are resolved by the merge, and nowhere else; within each phase, the order in which the engine processes ports and devices is irrelevant, which is the VHDL delta-cycle guarantee without the delta machinery. `sequence` is assigned afterwards by sorting on stable ids (target entity, target port, channel, source Path) and serves serialization only.
 
 Zero-delay Paths stay forbidden until a domain pack needs them. Allowing them would require full delta rounds and a static check that every cycle has total delay ≥ 1, refusing an "algebraic loop" otherwise.
 
 ### Components hosted on a Path
 
-A Component may sit inline on a Path (`placement.kind: wire`, `wireId + t`). It splits the Path into segments ordered along it, and the Component is a device between them. The Path's declared delay is the **total** for the whole Path: it is divided across the segments in integer ticks, evenly, with any remainder given to the earliest segments. Every segment keeps at least 1 tick, so a Path whose declared delay is smaller than its segment count is refused at load. Adding a hosted Component therefore never silently changes a Path's end-to-end delay.
+A Component hosted on a Path (`placement.kind: wire`, `wireId + t`) is a **tap**: it reads the value the Path carries and does not interrupt it. This is what the editor does today (`25-signal.js` gives a hosted Component the Path's source value while the Path still delivers end to end). A hosted Component that *interposes*, splitting the Path into segments with the Component as a device between them, needs carriers and Components in one record kind, which is the file-format transition the roadmap already names; it waits for that.
 
 ### Stepping and settling
 
@@ -364,20 +392,22 @@ Behaviour is data, not code. The runtime evaluates **definitions**, each an inst
 
 A definition (`soveraeign.schematic/definition@0.1`, schema `formats/schematic.definition.schema.json`) declares:
 
+Authored members, the only ones a pack writes:
+
 | Member | Holds |
 |---|---|
 | `id`, `version` | `logic.and`, `1`; a document binds `logic.and@1` |
 | `pattern` | the pattern it instantiates, pinned: `truth_table@1` |
-| `parameters` | what the pattern's parameter schema asks for: a truth table, thresholds, conditioning keys |
-| `inputs`, `outputs` | named attachment Points, each with its observable and form |
-| `state` | for stateful patterns: the state observable read and written, and its form |
+| `parameters` | what the pattern's parameter schema asks for: a truth table, thresholds, conditioning keys, input and output names |
 | `delay` | device delay in logical ticks |
-| `observables` | observables it produces: unit, form, update rule, blast radius, staleness tolerance |
 | `observer` | for observer definitions: class (passive / active), cost, limits, read and write sets |
 | `children` | for compositions: the definitions composed, each pinned `id@version` |
+| `ports` | optional placement of the generated ports (`side`, `t`) and labels; presentation only |
 | `projection` | glyph and labels; presentation only |
 
-The definition is validated in two steps: against the definition schema, then its `parameters` against the pattern's parameter schema. Its **contract**, the records it reads and writes and their value types, is derived from the pattern and parameters, never written by hand. A pattern declares whether it reads state: `threshold` and `transition` do, and a definition using them must declare `state`. A new gate, device or domain is a new definition, never a new code path; NAND, NOR, XNOR and larger devices are definitions or compositions.
+Derived members, generated from `pattern` + `parameters` and never written by hand: `inputs` and `outputs` (port ids, flow, channels, observable and form), `state` (for stateful patterns), and `observables` (unit, form, update rule, blast radius, staleness tolerance). A pack may state a derived member for readability; if it does, the loader refuses the definition unless what is stated equals what is derived. There is one source of truth for a contract, and it is the pattern.
+
+Validation is hand-written, like the data core's: each pattern ships its own parameter validator in `07-state-space.js`, and the `formats/*.schema.json` files document the shapes; no JSON Schema evaluator is added. A pattern declares whether it reads state: `threshold` and `transition` do. A new gate, device or domain is a new definition, never a new code path; NAND, NOR, XNOR and larger devices are definitions or compositions.
 
 Compositions pin their children by `id@version`. A run resolves the full set, children included transitively, and the trace records that resolved set; it is part of the replay key.
 
@@ -392,11 +422,13 @@ A document references definitions by `id@version` and records which packs it use
 ## Files
 
 - A `.sov` gains only **authored** state-space data: Path delays, definition references (`id@version`) and the packs they come from, thresholds, device initial states, observable and field declarations, observation-account share and observer order, initial registered values. Nothing a run computes is written to it.
-- **Runs are saved.** A run's trace is its own file, `.sovtrace` (`soveraeign.schematic/trace@0.1`, MIME `application/vnd.soveraeign.schematic-trace+json`): the replay key (document id and revision, resolved definitions, runtime version, trace format version, inputs, seed), the budget, the event log, and optionally the derived records for audit. A trace without derived records is still complete, because they are recomputable. A trace is kept apart from the `.sov` so running a document never changes the document, and so one document can have many runs.
-- File menu: Save Run / Open Run, owned by `75-persistence.js` like every other file. Opening a trace against a document of a different revision opens read-only and says so; it cannot be replayed until the replay key matches.
+- A `.sov` also gains **declared ports** (`config.attachmentPoints`, with channels) on every Component, and **merge** declarations on ports; legacy `attachmentDefaults: 'standard'` is read and expanded, never written.
+- **Runs are saved.** A run's trace is its own file, `.sovtrace` (`soveraeign.schematic/trace@0.1`, MIME `application/vnd.soveraeign.schematic-trace+json`): the replay key (document id, `documentHash`, resolved definitions, runtime version, trace format version, inputs, seed), the document revision as a label, the budget, the event log (including every recorded order draw), and optionally the derived records for audit. A trace without derived records is still complete, because they are recomputable. A trace is kept apart from the `.sov` so running a document never changes the document, and so one document can have many runs.
+- File menu: Save Run / Open Run, owned by `75-persistence.js` like every other file. Opening a trace against a document whose `documentHash` differs opens read-only and says so; it cannot be replayed until the replay key matches.
 - A `.sovpak` may carry traces alongside its document and packs (`traces[]`), so a package can ship with its evidence.
 - Golden traces live beside the examples they run.
-- **Canonical encoding.** `.sovtrace` files and derived records are encoded with RFC 8785 (JSON Canonicalization Scheme), so "byte-identical" has one meaning.
+- **Canonical encoding.** `.sovtrace` files, derived records and `documentHash` use RFC 8785 (JSON Canonicalization Scheme), so "byte-identical" has one meaning. Under the numeric policy (integers, strings, booleans, null) RFC 8785 is sorted keys plus `JSON.stringify` values, which is what the engine implements.
+- **Hashing is synchronous and portable.** The browser's WebCrypto digest is async-only and the engine is synchronous, so SHA-256 is a small pure-JS implementation in `03-canonical.js`, shared by the data core and the engine and checked against published test vectors.
 - The event log is **hash-chained** from slice 1: caches depend on it, and it gives tamper evidence for free. Imported events carry CloudEvents-style `source` + `id` as their dedupe key (slice 4).
 
 ## Surfaces
@@ -406,11 +438,11 @@ The runtime is transport-neutral and headless, like the data core, so the browse
 - `schematic.run.start` (document, registered inputs, budget) → a new run id
 - `schematic.run.step` → one tick's records; `schematic.run.settle` → quiet, oscillating, or budget spent
 - `schematic.run.replay` (trace) → the recomputed run, or a typed refusal naming the first divergence; never acts outside
-- `schematic.state.query` (subject, observable, time, vantage) → records; passive
+- `schematic.state.query` (subject, observable) → records; passive. Time and vantage arguments come when fields and history views need them.
 - `schematic.run.trace` → the trace
 - slice 4: `schematic.state.observe` (import measured records)
 
-Refusals return receipts and do not enter editor history, as for every other operation.
+These are not CRUD: `operation@0.1` covers create / read / update / delete on components, wires and references, and its receipt is about document revisions. Run and state operations are **extra tools**, like `schematic.history.*` and `schematic.checkpoint.*` today, with their own receipt, `soveraeign.schematic/run-receipt@0.1` (run id, tick before and after, result or typed refusal). They are listed in `mcp/tools.json` so the parity suite can enumerate them. Refusals do not enter editor history, as for every other operation.
 
 **Standards live at the edges, never in the core record (slice 4).** Export provenance as PROV-JSON (observer → Agent, rule application → Activity, record → Entity, inputs → wasDerivedFrom). Import measured records from OpenTelemetry, with metrics becoming signal state and spans becoming particles, and CloudEvents for discrete events. Each import adapter pins its semantic-convention version; the GenAI conventions are still pre-stable.
 
@@ -418,7 +450,10 @@ Refusals return receipts and do not enter editor history, as for every other ope
 
 Proposed additions to `MODULES.md`:
 
-- `src/07-state-space.js`: the state record, event log, scheduler, fold, patterns, caches, fields and residuals. Pure; no DOM; loadable by `scripts/`, `mcp/server.mjs` and the editor, like `05-data-core.js` and `06-attachment-core.js`.
+- `src/03-canonical.js`: canonical JSON (RFC 8785 for the value set in use), synchronous pure-JS SHA-256, and the seeded draw used by merges. Pure; loaded before `05`, and by `07`, scripts and the MCP server.
+- `src/05-data-core.js`: gains `documentHash`, declared-port normalization (expanding legacy `standard`), channel matching and the port operations.
+- `src/06-attachment-core.js`: point specs come from declared ports only; the hard-coded trio moves to template data.
+- `src/07-state-space.js`: the state record, event log, scheduler, fold, patterns (including `merge`), caches, fields and residuals. Pure; no DOM; loadable by `scripts/`, `mcp/server.mjs` and the editor, like `05-data-core.js` and `06-attachment-core.js`.
 - `src/25-signal.js`: becomes the projection of settled or current state-space records onto the canvas.
 - `src/55-render.js`: packets are driven from trace particles when a run is live.
 - `src/75-persistence.js`: Save Run / Open Run and `.sovtrace`, the only place a trace is serialized.
@@ -430,15 +465,19 @@ Proposed additions to `MODULES.md`:
 What the runtime checks, and where. Each becomes a QA assertion in the slice that introduces it.
 
 At load (typed refusal, the document still opens):
-- every Path delay ≥ 1, and ≥ its segment count when Components are hosted on it;
-- every referenced definition resolves, children included, and its parameters satisfy its pattern's parameter schema;
+- every Path delay ≥ 1;
+- every Path binds two ports that share at least one channel, in a direction both ports' flow admits;
+- every referenced definition resolves, children included; its parameters pass its pattern's validator; any derived member it states equals what is derived;
+- every port a definition owns exists on its Component with the generated id, flow and channels;
+- every declared merge names a known combine, and a `declared` order names only Paths that end on that port;
 - every stateful device has a declared initial state;
 - every field's ε is within its stability bound;
 - no two active observers with overlapping write sets lack a declared order.
 
 At run time:
 - devices read only committed state;
-- no outcome depends on `sequence`;
+- no outcome depends on `sequence` or on the engine's processing order;
+- arrival order at a port changes an outcome only through a declared order, an observed order, or a recorded stochastic draw;
 - inspection never writes to the event log;
 - the same effect key never carries two payloads;
 - replay under the same replay key is byte-identical under RFC 8785;
@@ -450,11 +489,17 @@ At run time:
 
 Each slice ends with its QA suite inside `python scripts/qa.py`.
 
-1. **Record, patterns, definitions and fold.** State record (subject with optional `attempt`), pattern, definition and trace schemas with validators; definitions as pattern instances with two-step validation and generated contracts; `truth_table@1` as the first pattern; observable declarations with units; the minimal pack envelope and `core.logic` with NOT / AND / OR / XOR as `truth_table` instances; hash-chained event log and replay key; two-phase ticks with Path delay ≥ 1 checked at load; step = one tick; settle with quiet / oscillating / budget spent; numeric policy; RFC 8785 encoding; `run.replay` separate from `run.start`; `A AND B → Q` over all four input vectors with golden `.sovtrace` files; a NOT loop that settles as oscillating; replay identity; API / HTTP / MCP parity; nothing written to `.sov`.
-2. **Visible runtime.** `SOURCE → NOT → DELAY → SWITCH → SINK A / SINK B` from Issue #6; Path and device delays, including Components hosted on a Path; packets rendered from the trace; Save Run / Open Run; the `materialize` pattern with snapshots and chain-hash validity; the `device.state` record; threshold devices with enter / exit hysteresis, declared initial state and margin; effect outcomes with receipt / refused / in-doubt and derived effect keys; inspection-is-passive QA.
+0. **Foundations (editor and data core; no runtime yet).**
+   - **0a Canonical identity:** `03-canonical.js` (canonical JSON, pure SHA-256 against test vectors, seeded draw); `documentHash` in the data core.
+   - **0b Declared ports:** every Component's ports are declared data with side, t, flow and channels; templates declare their ports; legacy `standard` expands at load; port add / move / relabel / remove through the data core on every surface; channel matching and direction checks on binding. Existing documents and the QA gate stay green.
+1. **Record, patterns, definitions and fold**, as three pull requests:
+   - **1a Contracts:** state record (subject with optional `attempt` and `channel`), pattern, definition, trace and run-receipt shapes with hand-written validators; the pattern registry with `truth_table@1` and `merge@1`; derived contracts with the "stated equals derived" check; ports generated from a bound definition; the minimal pack envelope and `core.logic` (NOT / AND / OR / XOR); all load checks.
+   - **1b Ledger and step:** hash-chained event log; replay key with `documentHash`; two-phase ticks with merges; recorded stochastic order draws; numeric policy; RFC 8785 encoding; `run.start`, `run.step` (one tick), `run.trace`, `run.replay`; `A AND B → Q` over all four input vectors with golden `.sovtrace` files; a port fed by two Paths under `declared`, order-free and `stochastic` merges, each with a golden trace; replay identity; nothing written to `.sov`.
+   - **1c Settle and surfaces:** `run.settle` with quiet / oscillating / budget spent and a NOT loop that settles as oscillating; `state.query` (subject, observable); the run tools in `mcp/tools.json`; API / HTTP / MCP parity.
+2. **Visible runtime.** `SOURCE → NOT → DELAY → SWITCH → SINK A / SINK B` from Issue #6; Path and device delays; hosted Components as taps; packets rendered from the trace; Save Run / Open Run; the `materialize` pattern with snapshots and chain-hash validity; the `device.state` record; threshold devices with enter / exit hysteresis, declared initial state and margin; effect outcomes with receipt / refused / in-doubt and derived effect keys; inspection-is-passive QA.
 3. **Fields.** `consensus` and `advection` as declared operators with the ε check; signal colour moved onto `presentation.signal-color`; `25-signal.js` reduced to projection.
 4. **Instrument.** Observer registry with class, limits and read/write sets; observation account; perturbation ledger; instrument coordinates (quality, source and receipt time, GUM certainty) and the `estimated` kind; sensor, structural and drift residuals; controllability; `schematic.state.observe` with the OpenTelemetry adapter first; PROV-JSON export; intent logging and reconciliation for effects that reach outside; generative steps as recorded effects with attempts and their recorded inputs; the `rate` pattern with declared conditioning keys; evidence carried across revisions by identity.
-5. **Later, only when earned.** Latches, clocks and edges (`transition`); the `compose` pattern with per-attempt retries and scored forecasts; possibility sets and ensembles; sensor placement from the uncertainty map; an OPC UA / DTDL adapter if an industrial pack earns it; hash-chained logs.
+5. **Later, only when earned.** Latches, clocks and edges (`transition`); the `compose` pattern with per-attempt retries and scored forecasts; possibility sets and ensembles; sensor placement from the uncertainty map; an OPC UA / DTDL adapter if an industrial pack earns it; inertial delay as a DELAY parameter; interposing hosted Components after the carrier/Component record merge.
 
 ## Non-goals
 
@@ -475,6 +520,12 @@ Analog or electrical simulation; exact Redstone emulation; HDL synthesis; amplit
 11. **Caches** are passive observations of a hash-chained ledger and own nothing; the hash chain lands in slice 1. *(2026-09-25)*
 12. **Generative steps** are effects whose results are recorded; replay reads them, re-run regenerates. The engine stays deterministic given the ledger. *(2026-09-25)*
 13. **Retries** are attempts, each its own subject with its own recorded inputs; prediction uses per-attempt rates, never one rate repeated. *(2026-09-25)*
+14. **Ports are declared.** Every Component declares its ports (side, t, flow, channels); the built-in trio is legacy and expands at load; a bound definition generates its ports. *(2026-09-25, after the Fable review)*
+15. **Merge ships in slice 1.** Same-tick fan-in at a port is resolved by a declared merge; undeclared or undeclarable order is stochastic, drawn from the seed per port and tick, and recorded in the ledger. *(2026-09-25)*
+16. **Document identity** in the replay key is a content hash; revision is a label. *(2026-09-25)*
+17. **Contracts have one source**: patterns derive inputs, outputs, state and observables; stated-but-different is refused. Validation is hand-written. *(2026-09-25)*
+18. **Delay is transport delay**; Paths carry only their declared direction(s); hosted Components are taps until the record merge. *(2026-09-25)*
+19. **Hashing** is synchronous pure-JS SHA-256 in `03-canonical.js`; run operations are extra tools with their own receipt. *(2026-09-25)*
 
 ## Open questions
 
