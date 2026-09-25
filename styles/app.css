@@ -91,17 +91,16 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 
 .node{cursor:grab}
 .node.dragging{cursor:grabbing}
-.node .body{fill:var(--component-interior-fill,var(--component-signal-fill,#fff));stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:1.4}
-.node:not(.is-container)>.body{filter:drop-shadow(0 1px 1.5px var(--card-shadow))}
+.node .body{fill:var(--component-interior-fill,var(--component-signal-fill,#fff));stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:var(--stroke-structure,1.5)}
 /* Terminal marks: where a wire meets a card, coloured by what the point does. */
 .terminal-mark{stroke:none;pointer-events:none}
 .terminal-mark.in{fill:var(--accent-in)}.terminal-mark.out{fill:var(--accent-out)}
 .terminal-mark.control{fill:var(--canvas-muted)}
 #junctionLayer{pointer-events:none}
 /* Sections: lines are ink; solid regions are material, space regions a wash. */
-.node .section-line{stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:1.2}
+.node .section-line{stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:var(--stroke-section,1.25)}
 .node .fill-solid{fill:var(--section-solid)}
-.section-bevel{fill:none;stroke-width:4;stroke-linecap:round;pointer-events:none}.section-bevel.light{stroke:#FFFFFF;opacity:.95}.section-bevel.shade{stroke:var(--component-boundary-color,#3b3b3b);opacity:.32}
+.section-bevel{fill:none;stroke-width:4;stroke-linecap:round;pointer-events:none}.section-bevel.light{stroke:#FFFFFF;opacity:.95}.section-bevel.shade{stroke:var(--component-boundary-color,#3b3b3b);opacity:.32}.section-bevel.recess.shade{opacity:.14}
 :root[data-appearance="dark"] .section-bevel.light{opacity:.2}:root[data-appearance="dark"] .section-bevel.shade{stroke:#000000;opacity:.5}.node .fill-space{fill:var(--section-space)}
 .through-mark{fill:var(--panel);stroke:var(--component-boundary-color,var(--canvas-ink));stroke-width:1.4;pointer-events:none}
 .wire-section{fill:none;stroke-linecap:butt;stroke-linejoin:round;pointer-events:none}
@@ -150,7 +149,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .sim-send:hover circle{fill:var(--accent-out)}.sim-send:hover text{fill:var(--panel)}
 /* While the clock runs, levels are the truth on the canvas; the legacy packet animation stands down. */
 #workspace.sim-live .wire-packet{display:none!important}
-.node.selected .body{stroke-width:2.8}
+.node.selected .body{stroke-width:var(--stroke-structure-selected,2.85px)}
 /* Labels are SVG text in world units while strokes are non-scaling, so text would grow and
    shrink with the camera. `--zoom` is set on #workspace by applyCamera; every label's
    font-size is clamped to 8 to 14 screen pixels and expressed back in world units. At
@@ -166,7 +165,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .node .container-guide{fill:none;stroke:var(--component-boundary-color,#777);stroke-width:1;stroke-dasharray:4 5;opacity:.22;pointer-events:none}
 /* The interior guide is an editing aid: shown while the container is selected or a card is being dragged, never in a picture. */
 .node.is-container:not(.selected)>.container-guide{opacity:0}#workspace.dragging-node .node.is-container>.container-guide{opacity:.22}
-.node.is-container>.body{stroke-width:1.8}
+.node.is-container>.body{stroke-width:var(--stroke-structure-container,1.8px)}
 .node .internal-text{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:600;opacity:.78}
 .node .outside-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));opacity:.8}
 .port-hit{fill:transparent;stroke:none;cursor:pointer;pointer-events:all;touch-action:none}
@@ -183,7 +182,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .wire-group.muted{opacity:.13}
 .wire-group.dormant{opacity:.46}
 .wire-group.dormant .wire-voltage{opacity:.16}
-.wire{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:pointer;transition:stroke-width .1s,opacity .1s}
+.wire{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:var(--stroke-flow,2.25);stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:pointer;transition:stroke-width .1s,opacity .1s}
 .wire-voltage{fill:none;stroke:var(--voltage-ink,var(--wire-ink,var(--canvas-ink)));stroke-width:8;stroke-linecap:round;stroke-linejoin:round;opacity:.10;pointer-events:none}
 .wire-hit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
 .wire.selected{stroke-width:4}

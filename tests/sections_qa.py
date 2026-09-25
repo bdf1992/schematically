@@ -60,7 +60,7 @@ with sync_playwright() as p:
     page.evaluate("""()=>SovSchematicAPI.create('component',{id:'legacy',symbolId:'hold',x:300,y:700,form:{dimension:2,frame:{mode:'frame',thickness:14,depth:30}}})""")
     page.wait_for_timeout(60)
     assert page.evaluate("()=>document.querySelectorAll('.node[data-id=\"legacy\"] > .section-line').length") == 1
-    assert page.evaluate("()=>document.querySelectorAll('.node[data-id=\"legacy\"] .component-frame-depth').length") == 1
+    assert page.evaluate("()=>document.querySelectorAll('.node[data-id=\"legacy\"] .section-bevel.shade').length") == 1
     assert 'section' not in page.evaluate("()=>SovSchematicAPI.file.document().components.find(c=>c.id==='legacy').form"), 'a derived section is never written'
     # Round trip.
     doc = page.evaluate('()=>SovSchematicAPI.file.document()')

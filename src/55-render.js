@@ -123,14 +123,22 @@ function fitComponentLabels(g,n){
     const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=full;t.appendChild(title);
   }
 }
-function appendSolidBevel(g,size,section){
-  const inset=section.lines.length>=2?section.bands.reduce((a,b)=>a+b.thickness,0):0,d=3.5;
-  const w=size.w-inset*2-d*2,h=size.h-inset*2-d*2;if(w<12||h<12)return;
-  const r=Math.max(1,Math.min(10,Math.max(4,size.h*.095))-inset*.5-d),x0=-w/2,y0=-h/2,x1=w/2,y1=h/2;
-  for(const [cls,d] of [['light',`M${x0} ${y1-r}L${x0} ${y0+r}Q${x0} ${y0} ${x0+r} ${y0}L${x1-r} ${y0}`],['shade',`M${x1} ${y0+r}L${x1} ${y1-r}Q${x1} ${y1} ${x1-r} ${y1}L${x0+r} ${y1}`]]){
-    const e=document.createElementNS('http://www.w3.org/2000/svg','path');e.setAttribute('class',`section-bevel ${cls}`);e.setAttribute('d',d);g.appendChild(e);
+// A bevel inside a rounded rectangle w x h: raised (lit from the top left) or recessed.
+function appendBevel(g,w,h,rx,mode='raised'){
+  const d=SovSchematicNotation.tokens(diagram).space.bevel;w-=d*2;h-=d*2;if(w<12||h<12)return;
+  const r=Math.max(0,rx-d),x0=-w/2,y0=-h/2,x1=w/2,y1=h/2;
+  const tl=`M${x0} ${y1-r}L${x0} ${y0+r}Q${x0} ${y0} ${x0+r} ${y0}L${x1-r} ${y0}`,br=`M${x1} ${y0+r}L${x1} ${y1-r}Q${x1} ${y1} ${x1-r} ${y1}L${x0+r} ${y1}`;
+  for(const [cls,path] of mode==='raised'?[['light',tl],['shade',br]]:[['shade',tl],['light',br]]){
+    const e=document.createElementNS('http://www.w3.org/2000/svg','path');e.setAttribute('class',`section-bevel ${mode} ${cls}`);e.setAttribute('d',path);g.appendChild(e);
   }
 }
+function appendSolidBevel(g,size,section){
+  const T=SovSchematicNotation.tokens(diagram),sectioned=section.lines.length>=2,total=sectioned?section.bands.reduce((a,b)=>a+b.thickness,0):0;
+  const w=size.w-total*2,h=size.h-total*2;
+  appendBevel(g,w,h,SovSchematicNotation.cornerRadius(T,{total,inset:total,w,h,sectioned}),'raised');
+}
+// A card's elevation: one above what holds it. Root cards sit at 1.
+function componentElevation(n){let k=1,p=n;const seen=new Set();while(p?.parentId&&!seen.has(p.parentId)){seen.add(p.parentId);p=nodes.find(x=>x.id===p.parentId);if(p)k++}return k}
 function componentSectionInset(n){const s=componentForm(n).dimension===2?SovSchematicData.componentSection(n):null;return s&&s.lines.length>=2?s.bands.reduce((a,b)=>a+b.thickness,0):0}
 function appendComponentText(g,n,cfg,s){
   const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s),labelMode=SovSchematicData.effectiveLabelMode(n);
@@ -239,23 +247,26 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   }
   if(form.dimension===1){const line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('class','dimensional-path-body');line.setAttribute('x1',String(-size.w/2));line.setAttribute('x2',String(size.w/2));line.setAttribute('y1','0');line.setAttribute('y2','0');line.setAttribute('stroke-width',String(Math.max(2,Math.min(14,2+form.body.thickness*.18))));g.appendChild(line);appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);return}
   if(backdrop!=='none'){
-    const depth=Math.min(12,Math.max(0,form.body.thickness*.18));
-    if(depth>0){const back=document.createElementNS('http://www.w3.org/2000/svg','rect');back.setAttribute('class','component-body-depth');back.setAttribute('x',String(-size.w/2+depth));back.setAttribute('y',String(-size.h/2+depth));back.setAttribute('width',String(size.w));back.setAttribute('height',String(size.h));back.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(back)}
-    const body=document.createElementNS('http://www.w3.org/2000/svg','rect');body.setAttribute('class','body');body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(body);
+    // Depth is elevation, a soft shadow by nesting level (NOTATION-MODEL.md §3), never a second outline.
+    const section=SovSchematicData.componentSection(n),T=SovSchematicNotation.tokens(diagram);
+    const sectioned=!!(section&&section.lines.length>=2),total=sectioned?section.bands.reduce((a,b)=>a+b.thickness,0):0;
+    const body=document.createElementNS('http://www.w3.org/2000/svg','rect');body.setAttribute('class','body');body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(SovSchematicNotation.cornerRadius(T,{total,inset:0,w:size.w,h:size.h,sectioned})));
+    // A thicker body stands taller: its shadow falls further.
+    {const E=SovSchematicNotation.elevation(T,componentElevation(n),surfaceAppearance()),th=Math.max(0,Number(form.body.thickness)||0);
+     if(E){const dy=E.dy+Math.min(4,th*.08),blur=E.blur+Math.min(3,th*.06);body.style.filter=`drop-shadow(0 ${+dy.toFixed(2)}px ${+blur.toFixed(2)}px rgba(${surfaceAppearance()==='dark'?'0,0,0':'40,36,28'},${E.opacity}))`;body.dataset.elevation=String(componentElevation(n))}}
+    g.appendChild(body);
     // A section's lines inside the outline: each line an inset boundary, each region filled as
-    // what it is (solid material, or space). The outline is line L0.
-    const section=SovSchematicData.componentSection(n);
-    if(section&&section.lines.length>=2){
+    // what it is (solid material, or space). The outline is line L0. Corners are concentric.
+    if(sectioned){
       let inset=0;
       for(let i=1;i<section.lines.length;i++){
         inset+=section.bands[i-1]?.thickness||0;const w=size.w-inset*2,h=size.h-inset*2;if(w<=4||h<=4)break;
-        // A band's depth is drawn as the bevel the frame always drew, offset inside the line.
-        const depth=i===1?Math.min(14,Math.max(0,Number(section.bands[0]?.depth||0)*.16)):0;
-        if(depth>0){const fd=document.createElementNS('http://www.w3.org/2000/svg','rect');fd.setAttribute('class','component-frame-depth');fd.setAttribute('x',String(-w/2+depth));fd.setAttribute('y',String(-h/2+depth));fd.setAttribute('width',String(w));fd.setAttribute('height',String(h));fd.setAttribute('rx','6');g.appendChild(fd)}
-        const fill=(section.bands[i]?.fill)||section.core?.fill||'solid';
+        const fill=(section.bands[i]?.fill)||section.core?.fill||'solid',rx=SovSchematicNotation.cornerRadius(T,{total,inset,w,h,sectioned:true});
         const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('class',`section-line fill-${fill}`);
         r.setAttribute('x',String(-w/2));r.setAttribute('y',String(-h/2));r.setAttribute('width',String(w));r.setAttribute('height',String(h));
-        r.setAttribute('rx',String(Math.max(2,Math.min(12,Math.max(4,size.h*.095))-inset*.5)));r.dataset.line=section.lines[i].id;g.appendChild(r);
+        r.setAttribute('rx',String(rx));r.dataset.line=section.lines[i].id;g.appendChild(r);
+        // A band's depth sinks what lies inside it: a recess, shaded from the top left.
+        if(i===1&&Number(section.bands[0]?.depth||0)>0)appendBevel(g,w,h,rx,'recess');
       }
       body.classList.add(`fill-${section.bands[0]?.fill||'solid'}`);
     }else if(form.section&&section){body.classList.add(`fill-${section.core?.fill||'solid'}`)}
@@ -263,7 +274,7 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     if(form.section&&section&&(section.core?.fill||'solid')==='solid'&&!componentAcceptsChildren(n))appendSolidBevel(g,size,section);
     if(section&&section.lines.length>=2){}else if(form.frame.mode!=='none'||backdrop==='frame'){
       const inset=Math.max(4,Math.min(Math.min(size.w,size.h)/3,form.frame.thickness||12));const frameDepth=Math.min(14,Math.max(0,form.frame.depth*.16));
-      if(frameDepth>0){const fd=document.createElementNS('http://www.w3.org/2000/svg','rect');fd.setAttribute('class','component-frame-depth');fd.setAttribute('x',String(-size.w/2+inset+frameDepth));fd.setAttribute('y',String(-size.h/2+inset+frameDepth));fd.setAttribute('width',String(Math.max(1,size.w-inset*2)));fd.setAttribute('height',String(Math.max(1,size.h-inset*2)));fd.setAttribute('rx','6');g.appendChild(fd)}
+      if(frameDepth>0)appendBevel(g,size.w-inset*2,size.h-inset*2,SovSchematicNotation.cornerRadius(SovSchematicNotation.tokens(diagram),{total:inset,inset,w:size.w-inset*2,h:size.h-inset*2,sectioned:true}),'recess');
       const inner=document.createElementNS('http://www.w3.org/2000/svg','rect');inner.setAttribute('class','component-frame-inner');inner.setAttribute('x',String(-size.w/2+inset));inner.setAttribute('y',String(-size.h/2+inset));inner.setAttribute('width',String(Math.max(1,size.w-inset*2)));inner.setAttribute('height',String(Math.max(1,size.h-inset*2)));inner.setAttribute('rx',String(Math.max(2,Math.min(9,(size.h-inset*2)*.08))));g.appendChild(inner);
     }
     if(componentAcceptsChildren(n)){const guidePad=Math.max(p.padding,(section&&section.lines.length>=2?section.bands.reduce((a,b)=>a+b.thickness,0):0)+6);const guide=document.createElementNS('http://www.w3.org/2000/svg','rect');guide.setAttribute('class','container-guide');guide.setAttribute('x',String(-size.w/2+guidePad));guide.setAttribute('y',String(-size.h/2+guidePad));guide.setAttribute('width',String(Math.max(1,size.w-guidePad*2)));guide.setAttribute('height',String(Math.max(1,size.h-guidePad*2)));guide.setAttribute('rx','6');g.appendChild(guide)}
@@ -293,7 +304,16 @@ function renderJunctionDots(){
     dot.setAttribute('cx',String(join.x));dot.setAttribute('cy',String(join.y));dot.setAttribute('r','3.6');layer.appendChild(dot);
   }
 }
+// The notation's stroke tokens, as the CSS custom properties the stylesheet draws with.
+function applyNotationTokens(){
+  const T=SovSchematicNotation.tokens(diagram);
+  for(const [k,v] of Object.entries(T.stroke))workspace.style.setProperty(`--stroke-${k}`,`${v}px`);
+  // Derived weights are computed here, not with calc(): a computed calc() is not a length a reader can parse.
+  workspace.style.setProperty('--stroke-structure-container',`${+(T.stroke.structure*1.2).toFixed(2)}px`);
+  workspace.style.setProperty('--stroke-structure-selected',`${+(T.stroke.structure*1.9).toFixed(2)}px`);
+}
 function render(){
+  applyNotationTokens();
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
   const componentSignals=signalState.colors;

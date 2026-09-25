@@ -98,17 +98,16 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 
 .node{cursor:grab}
 .node.dragging{cursor:grabbing}
-.node .body{fill:var(--component-interior-fill,var(--component-signal-fill,#fff));stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:1.4}
-.node:not(.is-container)>.body{filter:drop-shadow(0 1px 1.5px var(--card-shadow))}
+.node .body{fill:var(--component-interior-fill,var(--component-signal-fill,#fff));stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:var(--stroke-structure,1.5)}
 /* Terminal marks: where a wire meets a card, coloured by what the point does. */
 .terminal-mark{stroke:none;pointer-events:none}
 .terminal-mark.in{fill:var(--accent-in)}.terminal-mark.out{fill:var(--accent-out)}
 .terminal-mark.control{fill:var(--canvas-muted)}
 #junctionLayer{pointer-events:none}
 /* Sections: lines are ink; solid regions are material, space regions a wash. */
-.node .section-line{stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:1.2}
+.node .section-line{stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:var(--stroke-section,1.25)}
 .node .fill-solid{fill:var(--section-solid)}
-.section-bevel{fill:none;stroke-width:4;stroke-linecap:round;pointer-events:none}.section-bevel.light{stroke:#FFFFFF;opacity:.95}.section-bevel.shade{stroke:var(--component-boundary-color,#3b3b3b);opacity:.32}
+.section-bevel{fill:none;stroke-width:4;stroke-linecap:round;pointer-events:none}.section-bevel.light{stroke:#FFFFFF;opacity:.95}.section-bevel.shade{stroke:var(--component-boundary-color,#3b3b3b);opacity:.32}.section-bevel.recess.shade{opacity:.14}
 :root[data-appearance="dark"] .section-bevel.light{opacity:.2}:root[data-appearance="dark"] .section-bevel.shade{stroke:#000000;opacity:.5}.node .fill-space{fill:var(--section-space)}
 .through-mark{fill:var(--panel);stroke:var(--component-boundary-color,var(--canvas-ink));stroke-width:1.4;pointer-events:none}
 .wire-section{fill:none;stroke-linecap:butt;stroke-linejoin:round;pointer-events:none}
@@ -157,7 +156,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .sim-send:hover circle{fill:var(--accent-out)}.sim-send:hover text{fill:var(--panel)}
 /* While the clock runs, levels are the truth on the canvas; the legacy packet animation stands down. */
 #workspace.sim-live .wire-packet{display:none!important}
-.node.selected .body{stroke-width:2.8}
+.node.selected .body{stroke-width:var(--stroke-structure-selected,2.85px)}
 /* Labels are SVG text in world units while strokes are non-scaling, so text would grow and
    shrink with the camera. `--zoom` is set on #workspace by applyCamera; every label's
    font-size is clamped to 8 to 14 screen pixels and expressed back in world units. At
@@ -173,7 +172,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .node .container-guide{fill:none;stroke:var(--component-boundary-color,#777);stroke-width:1;stroke-dasharray:4 5;opacity:.22;pointer-events:none}
 /* The interior guide is an editing aid: shown while the container is selected or a card is being dragged, never in a picture. */
 .node.is-container:not(.selected)>.container-guide{opacity:0}#workspace.dragging-node .node.is-container>.container-guide{opacity:.22}
-.node.is-container>.body{stroke-width:1.8}
+.node.is-container>.body{stroke-width:var(--stroke-structure-container,1.8px)}
 .node .internal-text{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:600;opacity:.78}
 .node .outside-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));opacity:.8}
 .port-hit{fill:transparent;stroke:none;cursor:pointer;pointer-events:all;touch-action:none}
@@ -190,7 +189,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .wire-group.muted{opacity:.13}
 .wire-group.dormant{opacity:.46}
 .wire-group.dormant .wire-voltage{opacity:.16}
-.wire{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:pointer;transition:stroke-width .1s,opacity .1s}
+.wire{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:var(--stroke-flow,2.25);stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:pointer;transition:stroke-width .1s,opacity .1s}
 .wire-voltage{fill:none;stroke:var(--voltage-ink,var(--wire-ink,var(--canvas-ink)));stroke-width:8;stroke-linecap:round;stroke-linejoin:round;opacity:.10;pointer-events:none}
 .wire-hit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
 .wire.selected{stroke-width:4}
@@ -1185,6 +1184,68 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 </aside>
 </div>
 
+<script data-beta-module="src/03-notation-core.js">
+/* BEGIN src/03-notation-core.js */
+'use strict';
+// 0.1 concern: notations (NOTATION-MODEL.md). A notation is the declared vocabulary a diagram
+// is drawn in: tokens (radius, stroke, type, spacing, elevation), colour roles, glyphs with
+// terminals, signal shapes. No DOM; shared by the editor, the audits and the server. The
+// editor's own look is the built-in `schematic` notation; a domain extends it.
+(function(root,factory){
+  const api=factory();
+  root.SovSchematicNotation=api;
+  if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof globalThis!=='undefined'?globalThis:this,function(){
+  const SCHEMATIC={
+    id:'schematic',name:'Schematic',version:1,
+    tokens:{
+      // Offset from inside: the core keeps radius.core, each line outward adds its band.
+      radius:{core:6,card:10},
+      // World units. Selected and highlighted states multiply these, never replace them.
+      stroke:{structure:1.5,section:1.25,flow:2.25,symbol:2.6},
+      space:{labelClear:10,bevel:3.5,pin:14},
+      // One soft shadow per level: a root card is lifted 1, a card inside it 2, and so on.
+      elevation:{
+        light:[null,{dy:2,blur:3,opacity:.16},{dy:3,blur:5,opacity:.2},{dy:4.5,blur:7,opacity:.22}],
+        dark:[null,{dy:2,blur:3.5,opacity:.6},{dy:3.2,blur:5.5,opacity:.66},{dy:4.6,blur:7.5,opacity:.7}]
+      }
+    }
+  };
+  const BUILTIN={schematic:SCHEMATIC};
+  const isObject=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
+  function merge(base,over){
+    if(!isObject(over))return over===undefined?base:over;
+    const out={...(isObject(base)?base:{})};
+    for(const [k,v] of Object.entries(over))out[k]=isObject(v)?merge(out[k],v):v;
+    return out;
+  }
+  // The notation a document is drawn in, flattened through `extends`. An unknown name is
+  // refused, never replaced by the default.
+  function resolve(docOrId,extra={}){
+    const id=typeof docOrId==='string'?docOrId:(docOrId?.notation||'schematic');
+    const carried=typeof docOrId==='object'?(docOrId?.references||[]).filter(r=>r?.kind==='notation'&&isObject(r.data)).map(r=>r.data):[];
+    const table={...BUILTIN,...extra};for(const n of carried)if(n.id)table[n.id]=n;
+    const chain=[];let cur=table[id];const seen=new Set();
+    if(!cur)return {ok:false,code:'UNKNOWN_NOTATION',message:`No notation "${id}"`,next_operation:`use one of: ${Object.keys(table).join(', ')}`};
+    while(cur&&!seen.has(cur.id)){chain.unshift(cur);seen.add(cur.id);cur=cur.extends?table[cur.extends]:null}
+    let flat={};for(const n of chain)flat=merge(flat,n);
+    flat.id=id;return {ok:true,notation:flat};
+  }
+  function tokens(docOrId){const r=resolve(docOrId);return (r.ok?r.notation:SCHEMATIC).tokens}
+  // Corner radius of the rectangle at `inset` inside a card whose bands sum to `total`.
+  // Concentric by construction; capped at a quarter of the rectangle's shorter side.
+  function cornerRadius(t,{total=0,inset=0,w=Infinity,h=Infinity,sectioned=false}={}){
+    const r=sectioned?t.radius.core+Math.max(0,total-inset):t.radius.card;
+    return Math.max(0,Math.min(r,Math.min(w,h)/4));
+  }
+  function elevation(t,level,appearance='light'){
+    const L=(t.elevation?.[appearance]||t.elevation?.light||[]);
+    return L[Math.max(0,Math.min(L.length-1,level|0))]||null;
+  }
+  return {BUILTIN,resolve,tokens,cornerRadius,elevation,merge};
+});
+/* END src/03-notation-core.js */
+</script>
 <script data-beta-module="src/06-attachment-core.js">
 /* BEGIN src/06-attachment-core.js */
 'use strict';
@@ -6442,14 +6503,22 @@ function fitComponentLabels(g,n){
     const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=full;t.appendChild(title);
   }
 }
-function appendSolidBevel(g,size,section){
-  const inset=section.lines.length>=2?section.bands.reduce((a,b)=>a+b.thickness,0):0,d=3.5;
-  const w=size.w-inset*2-d*2,h=size.h-inset*2-d*2;if(w<12||h<12)return;
-  const r=Math.max(1,Math.min(10,Math.max(4,size.h*.095))-inset*.5-d),x0=-w/2,y0=-h/2,x1=w/2,y1=h/2;
-  for(const [cls,d] of [['light',`M${x0} ${y1-r}L${x0} ${y0+r}Q${x0} ${y0} ${x0+r} ${y0}L${x1-r} ${y0}`],['shade',`M${x1} ${y0+r}L${x1} ${y1-r}Q${x1} ${y1} ${x1-r} ${y1}L${x0+r} ${y1}`]]){
-    const e=document.createElementNS('http://www.w3.org/2000/svg','path');e.setAttribute('class',`section-bevel ${cls}`);e.setAttribute('d',d);g.appendChild(e);
+// A bevel inside a rounded rectangle w x h: raised (lit from the top left) or recessed.
+function appendBevel(g,w,h,rx,mode='raised'){
+  const d=SovSchematicNotation.tokens(diagram).space.bevel;w-=d*2;h-=d*2;if(w<12||h<12)return;
+  const r=Math.max(0,rx-d),x0=-w/2,y0=-h/2,x1=w/2,y1=h/2;
+  const tl=`M${x0} ${y1-r}L${x0} ${y0+r}Q${x0} ${y0} ${x0+r} ${y0}L${x1-r} ${y0}`,br=`M${x1} ${y0+r}L${x1} ${y1-r}Q${x1} ${y1} ${x1-r} ${y1}L${x0+r} ${y1}`;
+  for(const [cls,path] of mode==='raised'?[['light',tl],['shade',br]]:[['shade',tl],['light',br]]){
+    const e=document.createElementNS('http://www.w3.org/2000/svg','path');e.setAttribute('class',`section-bevel ${mode} ${cls}`);e.setAttribute('d',path);g.appendChild(e);
   }
 }
+function appendSolidBevel(g,size,section){
+  const T=SovSchematicNotation.tokens(diagram),sectioned=section.lines.length>=2,total=sectioned?section.bands.reduce((a,b)=>a+b.thickness,0):0;
+  const w=size.w-total*2,h=size.h-total*2;
+  appendBevel(g,w,h,SovSchematicNotation.cornerRadius(T,{total,inset:total,w,h,sectioned}),'raised');
+}
+// A card's elevation: one above what holds it. Root cards sit at 1.
+function componentElevation(n){let k=1,p=n;const seen=new Set();while(p?.parentId&&!seen.has(p.parentId)){seen.add(p.parentId);p=nodes.find(x=>x.id===p.parentId);if(p)k++}return k}
 function componentSectionInset(n){const s=componentForm(n).dimension===2?SovSchematicData.componentSection(n):null;return s&&s.lines.length>=2?s.bands.reduce((a,b)=>a+b.thickness,0):0}
 function appendComponentText(g,n,cfg,s){
   const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s),labelMode=SovSchematicData.effectiveLabelMode(n);
@@ -6558,23 +6627,26 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   }
   if(form.dimension===1){const line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('class','dimensional-path-body');line.setAttribute('x1',String(-size.w/2));line.setAttribute('x2',String(size.w/2));line.setAttribute('y1','0');line.setAttribute('y2','0');line.setAttribute('stroke-width',String(Math.max(2,Math.min(14,2+form.body.thickness*.18))));g.appendChild(line);appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);return}
   if(backdrop!=='none'){
-    const depth=Math.min(12,Math.max(0,form.body.thickness*.18));
-    if(depth>0){const back=document.createElementNS('http://www.w3.org/2000/svg','rect');back.setAttribute('class','component-body-depth');back.setAttribute('x',String(-size.w/2+depth));back.setAttribute('y',String(-size.h/2+depth));back.setAttribute('width',String(size.w));back.setAttribute('height',String(size.h));back.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(back)}
-    const body=document.createElementNS('http://www.w3.org/2000/svg','rect');body.setAttribute('class','body');body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(body);
+    // Depth is elevation, a soft shadow by nesting level (NOTATION-MODEL.md §3), never a second outline.
+    const section=SovSchematicData.componentSection(n),T=SovSchematicNotation.tokens(diagram);
+    const sectioned=!!(section&&section.lines.length>=2),total=sectioned?section.bands.reduce((a,b)=>a+b.thickness,0):0;
+    const body=document.createElementNS('http://www.w3.org/2000/svg','rect');body.setAttribute('class','body');body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(SovSchematicNotation.cornerRadius(T,{total,inset:0,w:size.w,h:size.h,sectioned})));
+    // A thicker body stands taller: its shadow falls further.
+    {const E=SovSchematicNotation.elevation(T,componentElevation(n),surfaceAppearance()),th=Math.max(0,Number(form.body.thickness)||0);
+     if(E){const dy=E.dy+Math.min(4,th*.08),blur=E.blur+Math.min(3,th*.06);body.style.filter=`drop-shadow(0 ${+dy.toFixed(2)}px ${+blur.toFixed(2)}px rgba(${surfaceAppearance()==='dark'?'0,0,0':'40,36,28'},${E.opacity}))`;body.dataset.elevation=String(componentElevation(n))}}
+    g.appendChild(body);
     // A section's lines inside the outline: each line an inset boundary, each region filled as
-    // what it is (solid material, or space). The outline is line L0.
-    const section=SovSchematicData.componentSection(n);
-    if(section&&section.lines.length>=2){
+    // what it is (solid material, or space). The outline is line L0. Corners are concentric.
+    if(sectioned){
       let inset=0;
       for(let i=1;i<section.lines.length;i++){
         inset+=section.bands[i-1]?.thickness||0;const w=size.w-inset*2,h=size.h-inset*2;if(w<=4||h<=4)break;
-        // A band's depth is drawn as the bevel the frame always drew, offset inside the line.
-        const depth=i===1?Math.min(14,Math.max(0,Number(section.bands[0]?.depth||0)*.16)):0;
-        if(depth>0){const fd=document.createElementNS('http://www.w3.org/2000/svg','rect');fd.setAttribute('class','component-frame-depth');fd.setAttribute('x',String(-w/2+depth));fd.setAttribute('y',String(-h/2+depth));fd.setAttribute('width',String(w));fd.setAttribute('height',String(h));fd.setAttribute('rx','6');g.appendChild(fd)}
-        const fill=(section.bands[i]?.fill)||section.core?.fill||'solid';
+        const fill=(section.bands[i]?.fill)||section.core?.fill||'solid',rx=SovSchematicNotation.cornerRadius(T,{total,inset,w,h,sectioned:true});
         const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('class',`section-line fill-${fill}`);
         r.setAttribute('x',String(-w/2));r.setAttribute('y',String(-h/2));r.setAttribute('width',String(w));r.setAttribute('height',String(h));
-        r.setAttribute('rx',String(Math.max(2,Math.min(12,Math.max(4,size.h*.095))-inset*.5)));r.dataset.line=section.lines[i].id;g.appendChild(r);
+        r.setAttribute('rx',String(rx));r.dataset.line=section.lines[i].id;g.appendChild(r);
+        // A band's depth sinks what lies inside it: a recess, shaded from the top left.
+        if(i===1&&Number(section.bands[0]?.depth||0)>0)appendBevel(g,w,h,rx,'recess');
       }
       body.classList.add(`fill-${section.bands[0]?.fill||'solid'}`);
     }else if(form.section&&section){body.classList.add(`fill-${section.core?.fill||'solid'}`)}
@@ -6582,7 +6654,7 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     if(form.section&&section&&(section.core?.fill||'solid')==='solid'&&!componentAcceptsChildren(n))appendSolidBevel(g,size,section);
     if(section&&section.lines.length>=2){}else if(form.frame.mode!=='none'||backdrop==='frame'){
       const inset=Math.max(4,Math.min(Math.min(size.w,size.h)/3,form.frame.thickness||12));const frameDepth=Math.min(14,Math.max(0,form.frame.depth*.16));
-      if(frameDepth>0){const fd=document.createElementNS('http://www.w3.org/2000/svg','rect');fd.setAttribute('class','component-frame-depth');fd.setAttribute('x',String(-size.w/2+inset+frameDepth));fd.setAttribute('y',String(-size.h/2+inset+frameDepth));fd.setAttribute('width',String(Math.max(1,size.w-inset*2)));fd.setAttribute('height',String(Math.max(1,size.h-inset*2)));fd.setAttribute('rx','6');g.appendChild(fd)}
+      if(frameDepth>0)appendBevel(g,size.w-inset*2,size.h-inset*2,SovSchematicNotation.cornerRadius(SovSchematicNotation.tokens(diagram),{total:inset,inset,w:size.w-inset*2,h:size.h-inset*2,sectioned:true}),'recess');
       const inner=document.createElementNS('http://www.w3.org/2000/svg','rect');inner.setAttribute('class','component-frame-inner');inner.setAttribute('x',String(-size.w/2+inset));inner.setAttribute('y',String(-size.h/2+inset));inner.setAttribute('width',String(Math.max(1,size.w-inset*2)));inner.setAttribute('height',String(Math.max(1,size.h-inset*2)));inner.setAttribute('rx',String(Math.max(2,Math.min(9,(size.h-inset*2)*.08))));g.appendChild(inner);
     }
     if(componentAcceptsChildren(n)){const guidePad=Math.max(p.padding,(section&&section.lines.length>=2?section.bands.reduce((a,b)=>a+b.thickness,0):0)+6);const guide=document.createElementNS('http://www.w3.org/2000/svg','rect');guide.setAttribute('class','container-guide');guide.setAttribute('x',String(-size.w/2+guidePad));guide.setAttribute('y',String(-size.h/2+guidePad));guide.setAttribute('width',String(Math.max(1,size.w-guidePad*2)));guide.setAttribute('height',String(Math.max(1,size.h-guidePad*2)));guide.setAttribute('rx','6');g.appendChild(guide)}
@@ -6612,7 +6684,16 @@ function renderJunctionDots(){
     dot.setAttribute('cx',String(join.x));dot.setAttribute('cy',String(join.y));dot.setAttribute('r','3.6');layer.appendChild(dot);
   }
 }
+// The notation's stroke tokens, as the CSS custom properties the stylesheet draws with.
+function applyNotationTokens(){
+  const T=SovSchematicNotation.tokens(diagram);
+  for(const [k,v] of Object.entries(T.stroke))workspace.style.setProperty(`--stroke-${k}`,`${v}px`);
+  // Derived weights are computed here, not with calc(): a computed calc() is not a length a reader can parse.
+  workspace.style.setProperty('--stroke-structure-container',`${+(T.stroke.structure*1.2).toFixed(2)}px`);
+  workspace.style.setProperty('--stroke-structure-selected',`${+(T.stroke.structure*1.9).toFixed(2)}px`);
+}
 function render(){
+  applyNotationTokens();
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
   const componentSignals=signalState.colors;
