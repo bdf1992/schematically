@@ -8,7 +8,7 @@ Connectivity uses the effective dimension of a Component in its current host sur
 
 - 0D → one `self` point.
 - 1D → `start` + `end` endpoints.
-- 2D → `left` + `right` + `top` as the built-in template defaults; a template may declare additional boundary points by `side + t`.
+- 2D → the ports its template declares (the typed Component template declares `left` + `right` + `top`), plus any authored boundary points by `side + t`; see *Declared ports*.
 - A richer Component settled onto a 1D Wire is connectivity-constrained to 1D and therefore exposes only `start` and `end`.
 
 ## Contract
@@ -86,20 +86,40 @@ That split is compatibility debt of the same kind as `config.ports` versus `part
 folding carriers into one record kind is a file-format transition, not a runtime change.
 
 
-## Declared ports (planned, 2026-09-25)
+## Declared ports (landed, 2026-09-25)
 
-Decided with the state space design (`STATE-SPACE.md`, *Ports*); not yet implemented.
+Decided with the state space design (`STATE-SPACE.md`, *Ports*); the data model landed with contract 0b-1
+(issue #45). The ports UI (0b-2) and definition-generated ports (slice 1a) are still to come.
 
-- Every Component's ports are declared data in `config.attachmentPoints`:
-  `{id, side: left | right | top | bottom, t, flow, channels, label}`. Nothing is implied.
-- The `left` / `right` / `top` trio moves out of `06-attachment-core.js` into template data. Templates that want
-  it declare it; a template may declare any number of ports on any side, or none.
-- The stored forms keep their meaning, so no existing file changes: `attachmentDefaults: 'standard'` (explicit or
-  implied) is the template's declared ports plus the authored `attachmentPoints` as additions; `'none'` is the
-  authored `attachmentPoints` as the complete list. An edit supplies the complete list; the data core stores it as
-  additions when every template port is kept unchanged, otherwise as `'none'` plus the full list.
-- A port carries one or more named channels (default one, `main`). A Wire carries the channels its two ports
-  share; binding two ports that share none is refused on every surface.
-- A Component bound to a state-space definition gets its ports from the definition's generated contract.
-- Ports are added, moved, relabelled and removed through the data core, so gesture, API, HTTP and MCP stay one
-  implementation. Removing a port a Wire ends on is refused, as removing built-ins is today.
+What is implemented:
+
+- **No hard-coded 2D set.** `06-attachment-core.js` holds no port set. A 2D Component's point specs come from
+  declared data only: its template's declared ports, which the data core registers with
+  `Attachment.useTemplatePorts`, and its authored `config.attachmentPoints`. 0D (`self`) and 1D (`start`, `end`)
+  are unchanged.
+- **The trio is template data.** `05-data-core.js` declares `left` (`in`), `right` (`out`) and `top` (`control`),
+  each at `t: .5` with flow equal to its compat id, as the typed Component template (`templatePorts(symbolId)`).
+  The primitives declare no ports of their own; a Plane's default is `'none'`, and an authored `'standard'` on a
+  Plane still means the Component template's ports.
+- **Shape.** `{id, compatId?, side: left | right | top | bottom, t: 0..1, flow: in | out | control | duplex |
+  trigger, channels: [{id}], label?}`. Absent `channels` reads as `[{id: 'main'}]`; an older entry's
+  `defaultFlow` reads as `flow`.
+- **Stored forms keep their meaning.** `'standard'` (explicit or implied) is the template's ports followed by the
+  authored `attachmentPoints` as additions; `'none'` is the authored list as the complete set. Loading and
+  normalizing never write template ports into the stored array, so every existing file loads, binds and saves
+  exactly as before, and `compactDocument` is unchanged.
+- **Edits.** A component `update` whose patch sets `config.attachmentPoints` supplies the complete list (under
+  `'none'`) or the additions (under `'standard'`). `setDeclaredPorts` checks it strictly and stores it in the
+  smallest form: `'standard'` plus additions when every template port is kept unchanged (same id, compat id,
+  side, t, flow, channels, label), otherwise `'none'` plus the full list. It refuses, with a failed receipt and
+  no history entry, a repeated id or compat id, an invalid side, t or flow, a channel id repeated within a port,
+  and removing a port a Wire ends on (`PORT_IN_USE`). Browser API, HTTP and MCP share this one path.
+- **Channels.** `connectionReachability` also requires the two ports to share a channel id
+  (`CHANNEL_MISMATCH`), so binding by gesture, `wire.create`, `wire.update`, carrier rebinding and document
+  validation all refuse the same way. Ports without declared channels share `main`, so no existing document is
+  refused.
+- **Form panel.** The attachments control is unchanged: `standard` restores the template's ports, and `none`
+  removes them, refused while a Wire ends on one.
+
+Still planned: a Wire carrying several channels at run time, ports generated from a bound definition, and the
+editor gestures to add, move, relabel and remove ports.

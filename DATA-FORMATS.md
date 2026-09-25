@@ -95,9 +95,27 @@ Port Connections may carry `access: none | read | write | read-write`. Wire conf
 
 Normalized Components expose `parts.points` with canonical 0D identities. Wire endpoints additionally store `aAttachment` / `bAttachment` records containing canonical `pointId` values. Legacy `config.ports`, `parts.ports`, and `aSide` / `bSide` remain compatibility projections for document@0.1.
 
-## Template attachment seam
+## Declared ports
 
-A 2D Component may declare additional boundary attachment descriptors under `config.attachmentPoints`, e.g. `{id, compatId?, side: left|right|top|bottom, t: 0..1, defaultFlow?}`. Built-in dimensional attachment sets remain defaults. Full Part/facet/cell grammar is intentionally post-RC.
+A 2D Component's ports are declared data. `config.attachmentPoints` holds declared ports:
+
+```json
+{"id": "feed", "compatId": "feed", "side": "left", "t": 0.25, "flow": "in", "channels": [{"id": "main"}], "label": "Feed"}
+```
+
+- `side`: `left | right | top | bottom`; `t`: `0..1` along that side; `flow`: `in | out | control | duplex | trigger`.
+- `channels`: an array of `{id}` with unique ids; absent means `[{"id": "main"}]`. A Wire binds two ports only when
+  they share a channel id; the refusal is the same over UI, API, HTTP and MCP.
+- `compatId` (the key into `config.ports`) defaults to `id`. Older files may omit `t` (read as `0.5`) and write
+  `defaultFlow` in place of `flow`; both still load.
+
+`config.attachmentDefaults` says how the list is read. `standard` (explicit, or implied on a typed Component) is the
+template's declared ports (`left`/`in`, `right`/`out`, `top`/`control` for the typed Component template) followed by
+`attachmentPoints` as additions; `none` makes `attachmentPoints` the complete list. A Plane's default is `none`.
+The loader never writes template ports into the stored array. A component `update` that sets `attachmentPoints` is
+stored in the smallest form (`standard` plus additions when every template port is kept unchanged, else `none` plus
+the full list) and is refused for a repeated id, an invalid side, t or flow, a repeated channel id, or removing a
+port a Wire ends on. See `ATTACHMENT-POINT-MODEL.md`, *Declared ports*.
 
 
 ## Compact records (dev, 2026-09-01)

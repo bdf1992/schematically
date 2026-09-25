@@ -15,6 +15,7 @@ STATIC=[
     'tests/pre_repo_hardening_qa.py',
     'tests/author_offline_qa.py',
     'tests/file_load_presets_qa.py',
+    'tests/declared_ports_qa.py',
     'tests/file_load_wire_canvas_qa.py',
     'tests/desktop_shell_qa.py',
 ]
