@@ -117,11 +117,25 @@ What is implemented:
   MCP share this one path.
 - **Load cleans, never refuses.** Normalization rewrites each stored `attachmentPoints` list into exactly the
   authored ports the loader exposes (`cleanStoredPorts`): `t` coerced and clamped, an invalid flow read as
-  `duplex`, empty channels read as `main`, entries with no valid side or a taken id dropped. After loading, the
-  stored list equals the effective list; files without such lists save exactly as before.
+  `duplex`, empty channels read as `main`, entries with no valid side dropped. After loading, the stored list
+  equals the effective list; files without such lists save exactly as before.
+- **Load cleaning never unbinds a Wire on a collision (#46).** When an entry's id or compat id collides with an
+  earlier one (`customPointSpecs`), it is normally dropped. `cleanStoredPorts` keeps it instead, under a fresh id
+  (`<id>~2`, `<id>~3`, ...: the first not taken), whenever a bound Wire end still refers to it, by the entry's
+  original id or by its declared compat id: that end is rebound to the fresh id by `pointId`, so it never resolves
+  through a different, colliding entry's compat id instead. A collision no bound Wire needs is still dropped, as
+  before. This keeps cleaning idempotent: once ids no longer collide, nothing further moves.
 - **Retype.** `applySymbol` gives the new template's ports in template order, an authored port with the same id
   replacing the template's (keeping its side, t, flow, channels and label), then the remaining authored ports in
   stored order, stored in the smallest form.
+- **A retype never moves a bound Wire to a different port id (#46).** `assertWiresSurviveEdit` refuses a retype
+  (`update` changing `symbolId`, or `applySymbol(component, symbolId, doc)`) that leaves a Wire's end resolving to
+  a different port id than before, with `PORT_IN_USE`, whenever the retype leaves the effective dimension
+  unchanged: for example, a Plane authoring `{id:'in', side:'bottom'}` with a Wire bound to `in`, retyped to a
+  typed Component — `in` has no same-id template port, and the Wire would move to `left` by compat id (`in` is
+  `left`'s compat id), so the retype is refused. The one kept exception is a change of effective dimension, which
+  may still move a bound end by compat id, as reconciliation has always done: retyping a typed Component to a
+  Point keeps a Wire on `out` bound to the Point's `self`.
 - **Paste and Duplicate** build and check every record against a staged copy of the document before inserting
   any: a refusal inserts nothing and leaves history unchanged; success is one history transition.
 - **Wires survive every edit.** `assertWiresSurviveEdit` runs on every component update (port list,
