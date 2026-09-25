@@ -272,6 +272,10 @@ These came out of the inventory. None is changed here.
 - Routing is greedy per wire in index order. A second improvement pass, re-routing each wire against all the others, would lower total crossings without a global solver. `PERFORMANCE.md` already names incremental projection as the first scaling step.
 - `choose_period` scans 2,100 grid points × every duration. Candidate periods only change at P = (k ± ½)·d, so an event-based scan would be exact and cheaper.
 
+## Seeing the runs
+
+`OPTIMIZATION-VISUALIZATION.md` plans how these runs become pictures: the plan drawn on the diagram, each bent curve against its segments, the landscape with its traps and climbs, the branch-and-bound tree, convergence, and marginal value as a step function.
+
 ## Try it
 
 ```
