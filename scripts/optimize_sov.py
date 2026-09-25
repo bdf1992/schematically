@@ -31,8 +31,14 @@ The result says whether that search proved its plan optimal or stopped at the no
 with a bound, what whole units cost against the fractional relaxation, and the measured
 value of one more unit of each resource (shadow prices belong to the relaxation).
 
+`--method gradient` instead climbs the true curves by projected gradient from many starts.
+Its answers are local: it can stop in the wrong valley, and it reports every distinct
+optimum it reached and from how many starts. `--method both` measures it against the exact
+solver.
+
 Usage:
     python scripts/optimize_sov.py examples/optimization/workshop.sov
+    python scripts/optimize_sov.py examples/optimization/workshop.sov --method both   # local vs global
     python scripts/optimize_sov.py examples/optimization/workshop.sov --compare   # linear vs nonlinear
     python scripts/optimize_sov.py examples/optimization/workshop.sov --relax     # fractional units
     python scripts/optimize_sov.py a.sov --model other.opt.json --segments 64 --node-limit 20000 --json
@@ -610,6 +616,234 @@ def solve(doc: dict, model: dict, segments: int = 32, linear: bool = False, rela
             'variables': len(lp['names']), 'rows': len(lp['rows_ub']) + len(lp['rows_eq'])}
 
 
+# --------------------------------------------------------------------------- local search
+
+def _reduce(A_eq: list[list[float]], b_eq: list[float], n: int, order: list[int]) -> tuple[list[float], list[list[float]], list[int]]:
+    """Solve A_eq x = b_eq for as many variables as it fixes, taking columns in `order`.
+
+    Returns (x0, N, free): every solution is x = x0 + N y for the free variables y, and
+    y_k is x[free[k]] itself. Gauss-Jordan with partial pivoting; redundant rows drop out.
+    """
+    R = [list(r) + [b] for r, b in zip(A_eq, b_eq)]
+    pivots: list[int] = []
+    row = 0
+    for col in order:
+        if row >= len(R):
+            break
+        p = max(range(row, len(R)), key=lambda i: abs(R[i][col]))
+        if abs(R[p][col]) < 1e-12:
+            continue
+        R[row], R[p] = R[p], R[row]
+        pv = R[row][col]
+        R[row] = [v / pv for v in R[row]]
+        for i in range(len(R)):
+            if i != row and abs(R[i][col]) > 1e-15:
+                f = R[i][col]
+                R[i] = [a - f * b for a, b in zip(R[i], R[row])]
+        pivots.append(col)
+        row += 1
+    if any(abs(r[-1]) > 1e-9 for r in R[row:]):
+        raise Refusal('INFEASIBLE', 'the recipes contradict each other')
+    free = [j for j in range(n) if j not in pivots]
+    x0 = [0.0] * n
+    N = [[0.0] * len(free) for _ in range(n)]
+    for k, j in enumerate(free):
+        N[j][k] = 1.0
+    for i, col in enumerate(pivots):
+        x0[col] = R[i][-1]
+        for k, j in enumerate(free):
+            N[col][k] = -R[i][j]
+    return x0, N, free
+
+
+def local_search(doc: dict, model: dict, starts: int = 24, seed: int = 0, iterations: int = 400,
+                 tol: float = 1e-6) -> dict:
+    """Projected gradient ascent with multistart, on the true curves.
+
+    No segments and no binaries: the effects are evaluated exactly, so this is the method
+    that works for any smooth curve, separable or not. It is also the method that can stop
+    in the wrong valley, so its answer is labelled `local` and it is run from many starts.
+
+    - The recipes and yields are linear equalities. They are eliminated: every plan is
+      x = x0 + N y over a few free activities y, so every step stays on them exactly.
+    - Each free variable's own bound [0, capacity] is kept by projection (clipping).
+    - Everything else (resource limits on the true curves, supplies, the bounds of the
+      eliminated variables) is an inequality h(x) <= 0 held by an augmented Lagrangian:
+      maximize f(x) - sum (max(0, lam + rho h)^2 - lam^2) / (2 rho), then lam <- max(0, lam + rho h).
+    - Gradients are central differences, one-sided at a bound. Steps backtrack until the
+      penalized objective rises (Armijo).
+
+    Returns every distinct optimum found, with how many starts reached it (its basin share),
+    its value and its worst constraint violation under the true curves.
+    """
+    import random
+
+    lp = build(doc, model, linear=True)
+    n = len(lp['names'])
+    # Eliminate flows first, then stages that feed other stages, so the free variables are
+    # the activities nearest the market: the decisions a person would name.
+    feeds = {w['a'] for w in doc.get('wires', []) if w['b'] in lp['act']}
+    acts = sorted(lp['act'].items(), key=lambda kv: (kv[0] not in feeds, kv[0]))
+    order = sorted(lp['flow'].values()) + [j for _, j in acts]
+    order += [j for j in range(n) if j not in order]
+    x0, N, free = _reduce(lp['A_eq'], lp['b_eq'], n, order)
+    if not free:
+        raise Refusal('NOTHING_TO_CHOOSE', 'the recipes fix every quantity; there is no plan to search')
+    upper = lp['upper']
+    box = [(0.0, upper[j] if upper[j] is not None else None) for j in free]
+    for k, (lo, hi) in enumerate(box):
+        if hi is None:
+            # An unbounded free variable is bounded by what the supplies allow; search needs a box.
+            probe = simplex([1.0 if j == free[k] else 0.0 for j in range(n)], lp['A_ub'], lp['b_ub'],
+                            lp['A_eq'], lp['b_eq'], upper)
+            if probe['status'] != 'optimal':
+                raise Refusal('UNBOUNDED_SEARCH', f'{lp["names"][free[k]]} has no bound to search within',
+                              'declare a capacity')
+            box[k] = (0.0, probe['objective'])
+
+    def expand(y: list[float]) -> list[float]:
+        return [x0[j] + sum(N[j][k] * y[k] for k in range(len(y))) for j in range(n)]
+
+    def plan_of(x: list[float]) -> dict:
+        return {'activity': {cid: max(0.0, x[j]) for cid, j in lp['act'].items()},
+                'flows': {wid: max(0.0, x[j]) for wid, j in lp['flow'].items()}}
+
+    # Linear inequalities, written over y: supplies, and the bounds of the eliminated variables.
+    # These are kept exactly, by projection; only the curved resource limits are penalized.
+    halfspaces: list[tuple[list[float], float]] = []
+
+    def over_y(row: list[float], rhs: float) -> None:
+        a = [sum(row[j] * N[j][k] for j in range(n)) for k in range(len(free))]
+        b = rhs - sum(row[j] * x0[j] for j in range(n))
+        if any(abs(v) > 1e-12 for v in a):
+            norm = math.sqrt(sum(v * v for v in a))
+            halfspaces.append(([v / norm for v in a], b / norm))
+
+    for r, b_, label in zip(lp['A_ub'], lp['b_ub'], lp['rows_ub']):
+        if label.startswith('supply:'):
+            over_y(r, b_)
+    free_set = set(free)
+    for j in range(n):
+        if j in free_set:
+            continue
+        unit = [1.0 if i == j else 0.0 for i in range(n)]
+        over_y([-v for v in unit], 0.0)
+        if upper[j] is not None:
+            over_y(unit, upper[j])
+
+    def clip(y: list[float]) -> list[float]:
+        return [min(hi, max(lo, v)) for v, (lo, hi) in zip(y, box)]
+
+    def project(y: list[float]) -> list[float]:
+        """Euclidean projection onto box and halfspaces, by Dykstra's alternating projections."""
+        sets = len(halfspaces) + 1
+        incr = [[0.0] * len(y) for _ in range(sets)]
+        z = list(y)
+        for _ in range(500):
+            prev = z
+            for i in range(sets):
+                w = [a + b for a, b in zip(z, incr[i])]
+                if i == 0:
+                    p_ = clip(w)
+                else:
+                    a, b = halfspaces[i - 1]
+                    over = sum(u * v for u, v in zip(a, w)) - b
+                    p_ = [v - over * u for u, v in zip(a, w)] if over > 0 else w
+                incr[i] = [a - b for a, b in zip(w, p_)]
+                z = p_
+            if max(abs(a - b) for a, b in zip(z, prev)) < 1e-12:
+                break
+        return z
+
+    def curved(x: list[float]) -> tuple[float, list[float]]:
+        """(true value, scaled resource violations h <= 0)."""
+        ev = true_value(doc, model, plan_of(x))
+        return ev['value'], [(u['used'] - u['limit']) / max(1.0, u['limit']) for u in ev['usage'].values()]
+
+    def violation(x: list[float]) -> float:
+        _, h = curved(x)
+        y = [x[j] for j in free]
+        lin = [sum(u * v for u, v in zip(a, y)) - b for a, b in halfspaces]
+        return max([0.0] + h + lin + [lo - v for v, (lo, _) in zip(y, box)] + [v - hi for v, (_, hi) in zip(y, box)])
+
+    scale = max(1.0, sum(abs(float(f.get('value', 0))) for f in model.get('flows', {}).values()))
+
+    def climb(y: list[float]) -> tuple[list[float], int]:
+        y = project(y)
+        lam = [0.0] * len(curved(expand(y))[1])
+        rho, steps, last = 10.0, 0, math.inf
+        for _outer in range(30):
+            def lagrangian(z: list[float]) -> float:
+                value, h = curved(expand(z))
+                return value / scale - sum(max(0.0, l_ + rho * g) ** 2 - l_ ** 2 for l_, g in zip(lam, h)) / (2 * rho)
+            current, step = lagrangian(y), 1.0
+            for _ in range(iterations):
+                grad = []
+                for k in range(len(y)):
+                    lo, hi = box[k]
+                    d = 1e-7 * max(1.0, hi)
+                    up_, dn_ = list(y), list(y)
+                    up_[k] = min(hi, y[k] + d)
+                    dn_[k] = max(lo, y[k] - d)
+                    span = up_[k] - dn_[k]
+                    grad.append((lagrangian(up_) - lagrangian(dn_)) / span if span > 0 else 0.0)
+                step = min(step * 2.0, max(hi for _, hi in box))
+                moved = False
+                while step > 1e-12:
+                    trial = project([v + step * g for v, g in zip(y, grad)])
+                    gain = lagrangian(trial) - current
+                    # Armijo along the projection arc: the rise must be a fair share of the
+                    # rise the gradient promised for the step actually taken.
+                    if gain > 0 and gain >= 1e-4 * sum(g * (t - v) for g, t, v in zip(grad, trial, y)):
+                        moved = max(abs(t - v) for t, v in zip(trial, y)) > tol * max(hi for _, hi in box)
+                        y, current = trial, current + gain
+                        break
+                    step /= 2.0
+                steps += 1
+                if not moved:
+                    break
+            _, h = curved(expand(y))
+            lam = [max(0.0, l_ + rho * g) for l_, g in zip(lam, h)]
+            worst = max([0.0] + h)
+            if worst < 1e-9:
+                break
+            if worst > 0.25 * last:
+                rho *= 4.0
+            last = worst
+        return y, steps
+
+    rng = random.Random(seed)
+    # Corners of the box first: traps sit on edges (a product at zero whose first unit is
+    # dear), and random starts almost never land exactly on an edge. Then the centre, then
+    # uniform random points.
+    corners = [[box[k][(mask >> k) & 1] for k in range(len(box))] for mask in range(2 ** min(len(box), 6))]
+    seeds = corners + [[(lo + hi) / 2 for lo, hi in box]]
+    seeds += [[rng.uniform(lo, hi) for lo, hi in box] for _ in range(max(0, starts - len(seeds)))]
+    found: list[dict] = []
+    for start in seeds[:max(starts, 1)]:
+        y, steps = climb(start)
+        x = expand(y)
+        value, _ = curved(x)
+        point = {lp['names'][j].split(':', 1)[1]: y[k] for k, j in enumerate(free)}
+        # Two starts reached the same optimum when they stopped within 1% of the search box.
+        for f in found:
+            if all(abs(f['free'][key] - point[key]) <= 1e-2 * max(1.0, box[k][1])
+                   for k, key in enumerate(point)):
+                f['starts'] += 1
+                if value > f['value']:
+                    f.update(free=point, value=value, violation=violation(x), plan=plan_of(x))
+                break
+        else:
+            found.append({'free': point, 'value': value, 'violation': violation(x), 'starts': 1,
+                          'steps': steps, 'plan': plan_of(x)})
+    found.sort(key=lambda f: -f['value'])
+    feasible = [f for f in found if f['violation'] <= 1e-5]
+    best = feasible[0] if feasible else found[0]
+    return {'method': 'projected gradient + augmented Lagrangian, multistart', 'certificate': 'local',
+            'starts': starts, 'seed': seed, 'free': [lp['names'][j].split(':', 1)[1] for j in free],
+            'optima': found, 'best': best, 'evaluated': true_value(doc, model, best['plan'])}
+
+
 # --------------------------------------------------------------------------- report
 
 def report(result: dict, unit: str) -> str:
@@ -652,6 +886,18 @@ def report(result: dict, unit: str) -> str:
     return '\n'.join(out)
 
 
+def report_local(result: dict, unit: str) -> str:
+    total = sum(f['starts'] for f in result['optima'])
+    out = [f"{result['method']}  ({total} starts, seed {result['seed']}; free: {', '.join(result['free'])})",
+           f"  certificate: {result['certificate']} (each answer is where a climb stopped; none is proven best)",
+           f"  distinct optima: {len(result['optima'])}"]
+    for f in result['optima']:
+        point = '  '.join(f'{k} {v:7.2f}' for k, v in f['free'].items())
+        flag = '' if f['violation'] <= 1e-5 else f"   violates a limit by {f['violation']:.1e}"
+        out.append(f"    {f['value']:9.2f} {unit}   {point}   reached from {f['starts']}/{total} starts{flag}")
+    return '\n'.join(out)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('document', type=Path)
@@ -661,21 +907,53 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument('--compare', action='store_true', help='solve linear and nonlinear, and judge both by the true curves')
     ap.add_argument('--relax', action='store_true', help='ignore `integer` stages: fractional units allowed')
     ap.add_argument('--node-limit', type=int, default=5000, help='branch-and-bound nodes before stopping with a gap')
+    ap.add_argument('--method', choices=['exact', 'gradient', 'both'], default='exact',
+                    help='exact: simplex, ordered segments and branch and bound (global); gradient: projected '
+                         'gradient with multistart on the true curves (local); both: measure one against the other')
+    ap.add_argument('--starts', type=int, default=24, help='gradient: number of starting points')
+    ap.add_argument('--seed', type=int, default=0, help='gradient: seed for the random starts')
     ap.add_argument('--json', action='store_true')
     args = ap.parse_args(argv)
     try:
         doc, model = load(args.document, args.model)
-        opts = {'relax': args.relax, 'node_limit': args.node_limit}
-        runs = [solve(doc, model, args.segments, linear=True, **opts), solve(doc, model, args.segments, **opts)] \
-            if args.compare else [solve(doc, model, args.segments, linear=args.linear, **opts)]
+        if args.method != 'exact':
+            local = local_search(doc, model, starts=args.starts, seed=args.seed)
+            # Gradient steps are fractional, so its fair comparison is the exact fractional optimum.
+            exact = solve(doc, model, args.segments, relax=True, marginals=False) if args.method == 'both' else None
+        else:
+            opts = {'relax': args.relax, 'node_limit': args.node_limit}
+            runs = [solve(doc, model, args.segments, linear=True, **opts), solve(doc, model, args.segments, **opts)] \
+                if args.compare else [solve(doc, model, args.segments, linear=args.linear, **opts)]
     except Refusal as r:
         print(json.dumps(r.as_dict(), indent=2, sort_keys=True) if args.json else f'refused {r.code}: {r.reason}'
               + (f'\n  next: {r.next_operation}' if r.next_operation else ''), file=sys.stderr)
         return 2
+    unit = model.get('unit', '')
+    if args.method != 'exact':
+        if args.json:
+            print(json.dumps({'local': local, 'exact': exact}, indent=2, sort_keys=True))
+            return 0
+        print(report_local(local, unit))
+        if exact:
+            best, trapped = local['best']['value'], local['optima'][-1]
+            total = sum(f['starts'] for f in local['optima'])
+            # Both plans are judged by the true curves, so the segments' own error does not count.
+            proven = exact['evaluated']['value']
+            print(f"\nexact (fractional units, {args.segments} segments): plan worth {proven:.2f} {unit} under the true curves;"
+                  f" proven global for the segmented model")
+            gap = proven - best
+            if gap >= 0:
+                print(f"  best local answer is {gap:.2f} {unit} short ({100 * gap / max(1e-9, abs(proven)):.2f}%)")
+            else:
+                print(f"  best local answer is {-gap:.2f} {unit} ahead: the segments approximate the curve the gradient"
+                      f" climbs exactly; more --segments closes it")
+            if len(local['optima']) > 1:
+                print(f"  worst local answer is {proven - trapped['value']:.2f} {unit} short; "
+                      f"{total - local['optima'][0]['starts']}/{total} starts ended below the best")
+        return 0
     if args.json:
         print(json.dumps(runs if args.compare else runs[0], indent=2, sort_keys=True))
     else:
-        unit = model.get('unit', '')
         print('\n\n'.join(report(r, unit) for r in runs))
         if args.compare:
             lin, non = runs[0]['evaluated'], runs[1]['evaluated']

@@ -14,6 +14,10 @@ solver did not choose:
     matches enumeration of every whole plan under the true curves, even though that landscape
     has several local optima; the segments fill in order; and the same LP without ordering
     claims a value no plan can reach;
+  - projected gradient with multistart, climbing the true curves with no segments, agrees
+    with the exact solver where the problem is convex (every start, one optimum), comes within
+    0.1% of it on the learning curve, and also reports the trap there: an all-tables plan that
+    is a genuine local optimum (checked by probing its neighbourhood, not by the climber);
   - on the workshop example, the nonlinear plan is feasible under the true curves, the linear
     plan is not, refining the breakpoints only raises the value and converges, and the
     refusals fire for an out-of-scope resource, a nonconvex bend and a missing recipe.
@@ -30,7 +34,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from optimize_sov import Refusal, branch_and_bound, build, load, simplex, solve, true_value  # noqa: E402
+from optimize_sov import Refusal, branch_and_bound, build, load, local_search, simplex, solve, true_value  # noqa: E402
 
 DOC = ROOT / 'examples' / 'optimization' / 'workshop.sov'
 LEARNING = ROOT / 'examples' / 'optimization' / 'workshop.learning.opt.json'
@@ -225,6 +229,56 @@ def check_nonconvex() -> None:
         (plan, got['evaluated']['value'], best, values[best])
 
 
+def check_local_search() -> None:
+    doc, base = load(DOC)
+    _, learning = load(DOC, LEARNING)
+
+    # Convex: every start reaches the same optimum, and it is the exact one.
+    got = local_search(doc, base, starts=16)
+    assert got['certificate'] == 'local'
+    assert len(got['optima']) == 1 and got['optima'][0]['starts'] == 16, got['optima']
+    exact = solve(doc, base, segments=128, relax=True, marginals=False)['evaluated']
+    assert got['evaluated']['feasible'] and abs(got['best']['value'] - exact['value']) < 1e-3 * exact['value'], \
+        (got['best']['value'], exact['value'])
+    plan = got['best']['plan']
+    assert close(plan['flows']['w-chair-blanks'], 4 * plan['activity']['chairs'], 1e-7), 'recipes must hold exactly'
+    assert close(plan['activity']['cut'] * 1.25, plan['flows']['w-stock'], 1e-7)
+
+    # Nonconvex: the best climb is within 0.1% of the proven optimum, and at least one start
+    # is trapped well below it.
+    got = local_search(doc, learning, starts=24)
+    again = local_search(doc, learning, starts=24)
+    assert [f['value'] for f in got['optima']] == [f['value'] for f in again['optima']], 'same seed, same answer'
+    exact = solve(doc, learning, segments=32, relax=True, marginals=False)['evaluated']
+    assert exact['feasible']
+    best, trapped = got['optima'][0], got['optima'][-1]
+    assert len(got['optima']) >= 2, got['optima']
+    assert abs(best['value'] - exact['value']) < 1e-3 * exact['value'], (best['value'], exact['value'])
+    assert trapped['value'] < best['value'] - 50 and trapped['free']['chairs'] < 1e-6, trapped
+    assert all(f['violation'] <= 1e-5 for f in got['optima']), got['optima']
+    assert best['starts'] > trapped['starts']
+
+    # The trap is a real local optimum, not a climb that gave up: near it, every plan with a
+    # few chairs and as many tables as the true limits allow is worth less, and it cannot
+    # take more tables without breaking a limit.
+    def feasible(chairs: float, tables: float) -> tuple[bool, float]:
+        cut = 4 * chairs + 10 * tables
+        plan = {'activity': {'chairs': chairs, 'tables': tables, 'cut': cut},
+                'flows': {'w-chair-sales': chairs, 'w-table-sales': tables}}
+        ev = true_value(doc, learning, plan)
+        ok = ev['feasible'] and cut <= 90 and cut * 1.25 <= 90 and tables <= 8
+        return ok, ev['value']
+
+    t0 = trapped['free']['tables']
+    assert not feasible(0.0, t0 + 1e-3)[0], 'the trap should sit on the labor limit'
+    for eps in (0.01, 0.05, 0.1, 0.2):
+        lo, hi = 0.0, t0
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if feasible(eps, mid)[0] else (lo, mid)
+        assert feasible(eps, lo)[1] < trapped['value'], ('a nearby plan beats the trap', eps, lo)
+
+
 def refused(doc: dict, model: dict, code: str) -> None:
     try:
         solve(doc, model)
@@ -265,6 +319,7 @@ def main() -> int:
     check_workshop()
     check_whole_units()
     check_nonconvex()
+    check_local_search()
     check_refusals()
     check_document_valid()
     print('optimize_sov QA PASS')

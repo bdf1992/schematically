@@ -165,6 +165,42 @@ What this shows:
 
 The QA checks all of this against paths the solver did not choose: the brute-force landscape, the count of local optima, the segment order in the solution, and a mutation check (with ordering switched off the test fails, picking (13, 2)). An accelerating-value case (table price rising as x^1.3) is also checked against enumeration.
 
+### Projected gradient with multistart
+
+`--method gradient` climbs the **true** curves: no segments, no binaries. That makes it the method that works for any smooth effect, separable or not, and an independent check on the exact solver, since it shares none of its machinery. It is also the method that can stop in the wrong valley, so every answer is labelled `local`.
+
+How a climb works:
+
+1. **Eliminate the recipes.** Recipes, yields and relays are linear equalities. Gauss–Jordan elimination writes every plan as x = x₀ + N·y over a few free activities y, the ones nearest the market (chairs and tables here). Each step stays on the recipes exactly.
+2. **Project onto the linear limits.** Capacities, supplies and the bounds of the eliminated quantities (the cut can't go negative) are linear in y. After each step the point is projected back onto them exactly, using Dykstra's alternating projections.
+3. **Penalize the curved limits.** Resource limits on the true curves (congested saw time, learning-curve labor) are held by an augmented Lagrangian. A multiplier per limit rises while the limit is violated, and the penalty stiffens only if violation stops falling.
+4. **Step uphill** along a central-difference gradient (one-sided at a bound), halving the step until the rise is a fair share of what the gradient promised (Armijo).
+
+Starts go to every corner of the search box first, then the centre, then random points. The corners matter: traps sit on edges, and random points almost never land exactly on one.
+
+```
+$ python scripts/optimize_sov.py examples/optimization/workshop.sov \
+      --model examples/optimization/workshop.learning.opt.json --method both --segments 64
+
+projected gradient + augmented Lagrangian, multistart  (24 starts, seed 0; free: chairs, tables)
+  certificate: local (each answer is where a climb stopped; none is proven best)
+  distinct optima: 2
+       823.07 USD   chairs   13.64  tables    1.74   reached from 23/24 starts
+       701.39 USD   chairs    0.00  tables    5.84   reached from 1/24 starts
+
+exact (fractional units, 64 segments): plan worth 823.25 USD under the true curves
+  best local answer is 0.18 USD short (0.02%)
+  worst local answer is 121.86 USD short; 1/24 starts ended below the best
+```
+
+What this shows:
+
+- **The trap is the all-tables edge.** With no chairs in production, the first chair's labor rate is effectively infinite: x^0.7 has an infinite slope at zero. So from a tables-only plan on the labor limit, every small move toward chairs loses value. It is a true local optimum, $122 below the best. The QA checks that by probing its neighbourhood directly, not by trusting the climber.
+- **Its basin is thin.** Only climbs that start within about 0.4 chairs of zero, on the labor limit, fall in. One start in 24 did: the (0 chairs, 8 tables) corner. **With random starts alone, all 24 climbs agree and the trap is never seen.** The QA's mutation check confirms this: remove the corner starts and the test fails. "Every start agreed" is evidence about the starts, not the landscape.
+- **The good basin is close to exact.** The best climb is 0.02% short of the proven optimum, from stopping tolerances.
+- **On the convex workshop** every start reaches the same optimum, as convexity guarantees. The climb even comes out $0.35 ahead of the 32-segment exact plan, because it climbs the curve the segments approximate. That is the segment error, measured.
+- **Whole units versus fractions give different landscapes.** The six local optima found last round lived in the whole-unit grid, where a step is one chair. With fractions allowed, the same economics leave only one trap. Local optima belong to a problem *and* the moves allowed in it.
+
 ## 3. How this fits the direction
 
 - **Data-driven language (Issue #4).** Quantities belong in data, not code. The sidecar is a draft of what a domain pack's quantitative layer could look like: `uses`, `per`, `yield`, `capacity`, `effects`. A production-planning pack would supply the vocabulary; the kernel keeps the solver.
@@ -187,11 +223,11 @@ Every term in the model already declares its shape: `curve()` classifies each ef
 | Linear | recipes, yields, supplies, linear resources | **Simplex** (two-phase, Bland) | global, with shadow prices | **built** |
 | Convex separable: concave value, convex cost | saturation, congestion | **Piecewise-linear LP**: segments filled in order | global to a stated breakpoint error | **built** |
 | Linear or convex + whole units | integer stages | **Branch and bound** over the LP | global, or a stated gap at the node limit | **built** |
-| Convex smooth, not separable, or needing exact curves | interacting stages; a queue delay ρ/(1 − ρ) | **Interior point / barrier**, **Frank–Wolfe**, **projected gradient** | global (convexity makes every local optimum global) | next, small |
+| Convex smooth, not separable, or needing exact curves | interacting stages; a queue delay ρ/(1 − ρ) | **Projected gradient** (built, below); interior point or Frank–Wolfe at scale | global (convexity makes every local optimum global) | **built** (projected gradient) |
 | Nonconvex separable: economies of scale, accelerating value | `economies`: a learning curve, a volume price | **SOS2 piecewise + branch and bound**: binary variables force the segments to fill in order | **global** to breakpoint error | **built** |
 | Fixed costs, setup, minimum batch | "if a stage runs at all, it costs S" | **MILP**: an on/off binary per stage, x ≤ cap·z | global | next, same machinery |
-| General nonconvex smooth | products of decisions, e.g. rate × rate on a Wire chain | **Gradient descent / SQP / augmented Lagrangian** | **local** | later |
-| … the same, needing confidence | | **Multistart**, **basin hopping**, **simulated annealing** around the local solver | heuristic: better odds, no proof | later |
+| General nonconvex smooth | products of decisions, e.g. rate × rate on a Wire chain | **Projected gradient + augmented Lagrangian** (built); SQP for faster convergence | **local** | **built** |
+| … the same, needing confidence | | **Multistart** from box corners and random points (built); basin hopping, simulated annealing | heuristic: better odds, no proof | **built** (multistart) |
 | … the same, needing proof | | **Spatial branch and bound** with McCormick envelopes | global, slow | only if earned |
 | Rates and latency: products and 1/rate | rate composition, travel time | **Geometric programming**: in log space both become linear or convex | global | fits cleanly: rates are already multiplicative |
 | Sequence in time: precedence, makespan | "B cannot start until A finishes" | **Time-indexed MILP** or **constraint programming** | global or bounded | with the Issue #6 scheduler |
@@ -205,7 +241,7 @@ Gradient descent follows the slope downhill (or uphill, for a maximum). On a con
 Three responses, in order of preference here:
 
 1. **Avoid needing it.** Most effects a schematic declares are *separable*: each bends one stage's term. Separable nonconvex curves are exactly solvable, to breakpoint error, by SOS2 piecewise + branch and bound. That is now built, and the learning-curve example shows it finding the global plan in a landscape with six local optima.
-2. **When the problem is truly nonconvex and not separable**, run a local method (projected gradient, SQP) and label the result `local`. Run it from several starting points (multistart) and report how many distinct optima were found and how far apart they are. That spread is the honest measure of how rough the landscape is.
+2. **When the problem is truly nonconvex and not separable**, run a local method (projected gradient is now built; see below) and label the result `local`. Run it from several starting points (multistart) and report how many distinct optima were found and how far apart they are. That spread is the honest measure of how rough the landscape is.
 3. **Use the exact methods as a witness.** On problems small enough for both, compare the local answer with the global one. The difference is the measured cost of the local method on that shape, which is the evidence for when it is safe to use.
 
 The same typing applies to efficiency measurements. A shadow price is exact for an LP. It is a local slope for a smooth nonconvex problem, and it is not defined at all for whole units, where the solver measures the step instead. The report should say which of the three it is.
@@ -217,7 +253,9 @@ The same typing applies to efficiency measurements. A shadow price is exact for 
 | Setup cost, minimum batch | nonconvex, discontinuous | an on/off binary per stage (x ≤ cap·z, cost S·z, x ≥ min·z) over the existing branch and bound |
 | Optimistic error on nonconvex bends | approximation | segments whose breakpoints fall on whole units (exact there), or refine until the true-curve check passes; an automatic refinement loop could do this |
 | Branch and bound at scale | performance | every node re-solves the dense LP from scratch; 32 segments per nonconvex bend with measured marginals takes about 7 s on the example. Warm-starting from the parent's basis (dual simplex), cutting planes and a rounding heuristic are the usual next steps |
-| Local methods for nonconvex, non-separable problems | local optima | projected gradient or SQP with multistart, labelled `local`, checked against the exact methods where both run |
+| Faster local convergence | local methods | the climber uses finite differences and a first-order step (about 150 steps a climb). Analytic gradients from `curve()` and a quasi-Newton or SQP step would cut that sharply |
+| Whole units in local search | integrality | the climber is fractional; rounding its answer, or a local search over whole-unit moves (the six-optimum grid), would give a local whole-unit method to set against branch and bound |
+| Choosing starts well | heuristic | corners, centre and random points today; Latin hypercube sampling, or starts at the vertices of the linear relaxation, cover more for the same count |
 | Time as sequence, not just a budget: makespan, precedence, a stage that cannot start until another finishes | scheduling | a time-indexed or event-based model. The `(logicalTime, sequence)` scheduler in Issue #6 is the natural host |
 | Rate and travel time as decision variables: choosing Wire rates under a latency target | hyperbolic (1/rate) | a geometric program: in log space the rate product and 1/rate both become linear |
 | Stochastic arrivals, queueing delay ρ/(1 − ρ) | convex in load | fits the convex case now as a `congestion` with a different curve |
@@ -242,5 +280,6 @@ python scripts/optimize_sov.py examples/optimization/workshop.sov --compare   # 
 python scripts/optimize_sov.py examples/optimization/workshop.sov --relax      # allow fractional units
 python scripts/optimize_sov.py examples/optimization/workshop.sov --model examples/optimization/workshop.learning.opt.json --segments 20 --compare
 python scripts/optimize_sov.py examples/optimization/workshop.sov --segments 128 --json
+python scripts/optimize_sov.py examples/optimization/workshop.sov --model examples/optimization/workshop.learning.opt.json --method both   # local vs global
 python tests/optimize_sov_qa.py                                              # the gate's check
 ```
