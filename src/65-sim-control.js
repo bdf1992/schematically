@@ -93,7 +93,7 @@ function paintSim(){
   // An entry node (wires out, none in) can send work: the payload its saved scenario injects, if any.
   for(const n of nodes){
     if(isEffectivelyHidden(n)||componentForm(n).dimension!==2||!wires.some(w=>w.a===n.id)||wires.some(w=>w.b===n.id))continue;
-    const size=componentSize(n),send=simEl('g',{transform:`translate(${n.x-size.w/2+12} ${n.y+size.h/2-12})`},'sim-send');
+    const size=componentSize(n),send=simEl('g',{transform:`translate(${n.x-size.w/2-4} ${n.y+size.h/2+4})`},'sim-send');
     send.appendChild(simEl('circle',{r:8}));const tt=simEl('text',{y:4,'text-anchor':'middle'});tt.textContent='➤';send.appendChild(tt);
     const title=simEl('title',{});title.textContent=`Send a message from ${componentConfig(n).label||n.id}`;send.appendChild(title);
     send.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();simSend(n.id)});simLayer.appendChild(send);
