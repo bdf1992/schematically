@@ -17,6 +17,7 @@ STATIC=[
     'tests/file_load_presets_qa.py',
     'tests/declared_ports_qa.py',
     'tests/state_space_contracts_qa.py',
+    'tests/state_space_run_qa.py',
     'tests/file_load_wire_canvas_qa.py',
     'tests/desktop_shell_qa.py',
 ]
