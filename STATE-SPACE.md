@@ -33,6 +33,47 @@ One concept, one word. The source paper's words collide with words the editor al
 
 **Replay is not re-run.** A *replay* recomputes a recorded run from its trace and never touches anything outside. A *re-run* is a new run, with a new run id and new effect keys.
 
+**A retry is not a repeat.** An attempt is one try at a step. A later attempt carries observations the earlier one did not have (a CI failure log, a review comment), so it is a different trial, not the same one again.
+
+## Ownership and patterns
+
+The state space does not try to imagine every state, schema and contract a domain will need. It owns the **shape** of state and a small set of **patterns**; domains fill the shape by **instantiating** patterns with data.
+
+| Owner | Owns | Changes |
+|---|---|---|
+| **Engine** (`07-state-space.js`) | the ledger, the record envelope, logical time, the fold, the invariants, and a small closed set of patterns | rarely, with review |
+| **Domain pack** | its vocabulary (observables, units, conditioning keys) and definitions that instantiate patterns with parameters | whenever a domain needs something |
+| **Document** | which instances exist, how they are wired, initial values, setpoints | while authoring, often |
+| **Run** | its own ledger | once per run |
+| **Caches and views** | nothing authoritative; every one is rebuildable from the ledger | at will |
+
+Only the engine appends to a ledger, and only through legal operations. Nothing else writes truth.
+
+A **pattern** is a reusable mechanism with parameters. It declares:
+
+- its **parameter schema**: what an instance must supply;
+- its **inputs** and the **state** it reads and writes, if any;
+- its **outputs**: the observables it produces, typed from its parameters;
+- its **class**: exact (recomputable), estimated or predicted;
+- its **blast radius**.
+
+A **definition** instantiates one pattern: "an AND gate is `truth_table` with this table"; "an agent step's pass rate is `rate` over its `pass` observations, conditioned on attempt and feedback"; "a run's chance of success is `compose` over the Path to its goal".
+
+**Contracts are generated, not written.** A definition's contract (the records it reads, the records it writes, and the value type of each) is derived from its pattern and parameters. The engine validates every record's envelope; each observable's declaration types its value. A new domain is new data. Only a new *kind* of mechanism is engine work.
+
+Patterns, by the slice that brings them:
+
+| Pattern | Does | Class | Slice |
+|---|---|---|---|
+| `truth_table` | combinational logic | exact | 1 |
+| `pass`, `route` | identity; selector → output | exact | 2 |
+| `threshold` | enter / exit cut with hysteresis | exact, stateful | 2 |
+| `materialize` | a cache of a fold at a ledger position | exact | 2 |
+| `consensus`, `advection` | field operators | exact | 3 |
+| `rate` | counts of outcomes → a rate with its confidence, per declared conditioning keys | estimated | 4 |
+| `compose` | series, parallel and retry composition of rates | predicted | 5 |
+| `transition` | state machines: latches, clocks, edges | exact, stateful | 5 |
+
 ## Model
 
 ```text
@@ -41,6 +82,7 @@ State space
 ├─ records         every state claim, one shape (the state record)
 ├─ event log       the authoritative, ordered inputs of a run
 ├─ fold            deterministic function: replay key × event log → derived records
+├─ caches          observations of the ledger at a position; never authoritative
 ├─ fields          one observable over all subjects, with a declared operator
 ├─ observers       who or what produced a record, with class, limits, read/write sets
 ├─ residuals       differences the state space can learn from
@@ -54,7 +96,17 @@ The **event log is authoritative; all other state is a fold over it.** This matc
 - Registered values (a lever's position, an input vector) and observations enter the log.
 - Derived records are outputs of the fold and must be recomputable.
 - **The replay key** is everything the fold depends on: document revision, the resolved pack and definition versions, the runtime (fold) version, the initial registered values, and the seed. Replaying the same log under the same replay key yields byte-identical derived records (see *Canonical encoding*). That identity is the first golden test. A runtime change is an input like a document change: it may break identity with no document change at all, which is why the runtime version is in every trace.
-- **Materialized** state is a cached derived value. It is keyed by the hashes of its input records plus the rule's `id@version`, so invalidation is a hash comparison, never a dependency walk.
+- **The fold is deterministic given the ledger**, not given the world. A step that is not deterministic (a generative model, a CI job, a human review) is an effect or an observation, and its result is **recorded** in the ledger. Replay reads the recorded result and never regenerates it; only a re-run generates again (see *Generative steps and attempts*).
+
+### Caching
+
+A cache is a **passive observation of the ledger**: its subject is the ledger itself, and its record says "at this ledger position, under these rule versions, the fold's answer was X".
+
+- **The ledger is hash-chained.** Every entry carries the hash of the entry before it, so a ledger position is identified by one hash.
+- **Validity is one comparison.** A cache records the chain hash at its position and the `id@version` of the rules it applied. It is valid exactly while the ledger up to that position still hashes the same and the rules are unchanged.
+- **Snapshots are caches of the whole state** at one tick. Rebuilding state is "latest valid snapshot + the entries after it", never a replay from the start unless no snapshot is valid.
+- **Materialized values** (one derived value held for speed) are the same thing at a smaller scope: keyed by the hashes of their input records plus the rule's `id@version`.
+- **A cache owns nothing.** Deleting every cache costs speed, never truth.
 
 ### The state record
 
@@ -62,7 +114,7 @@ Every claim has the same coordinates, whether it is a logic level, a gate verdic
 
 | Coordinate | Answers | Values |
 |---|---|---|
-| `subject` | about what | `{entity, point?, run}` |
+| `subject` | about what | `{entity, point?, run, attempt?}` |
 | `vantage` | seen from where | `space` (Eulerian: the whole graph at a time), `point` (Lagrangian: one subject's history), `relative` (against a `reference`) |
 | `observable` | what is measured | a declared observable id, e.g. `logic.level`, `device.state`, `cost` |
 | `kind` | how it became true | `registered`, `measured`, `derived`, `predicted` (`estimated` from slice 4) |
@@ -217,6 +269,26 @@ Everything upstream of a receipt may stay open or uncertain; everything downstre
 
 In the runtime the first residual is a policy one: a golden truth table vs a run's result. Once measured records carry uncertainty, sensor residuals are judged normalized by their expected spread (the normalized innovation squared of Kalman consistency checks), so a residual is compared with what is plausible for that observer.
 
+### Predicted success
+
+Prediction is built from evidence, one pattern at a time, and every link is a record:
+
+```text
+outcomes (measured) → rate per step (estimated) → chance the run succeeds (predicted) → scored against what happened
+```
+
+**Rates come from counts.** The `rate` pattern keeps the count of passes and trials, not just their ratio: 19 of 20 and 950 of 1000 are both 95% and deserve very different confidence. A rate is conditioned on **keys the domain declares**, for example step, attempt number, and the kind of feedback the attempt had. The engine does not know what "feedback" means; the pack names the keys.
+
+**Composition.** The `compose` pattern combines rates over the document's graph: steps in series multiply; alternatives combine as "at least one succeeds"; retries use the rate of *each attempt given the earlier ones failed*, never one rate repeated.
+
+- Ten steps at 95% each, no retries: 0.95¹⁰ ≈ 60%.
+- The same, assuming a retry were an independent repeat: each step 1 − 0.05² = 99.75%; ten steps ≈ 97.5%.
+- Measured attempts instead of assumed ones, for one step: first attempt 80%; a second attempt, given the first failed and with its CI log in hand, 60%; a third, 40%. The step succeeds within three attempts with probability 1 − (0.2 × 0.4 × 0.6) = 95.2%.
+
+The last line is the one the design commits to. Attempts are not independent: a failure that repeats the same way on the same input makes a retry worthless, and feedback can make a retry better than the first try. Only per-attempt rates, measured separately, capture both.
+
+**Forecasts are scored.** When a run finishes, its forecast residual (predicted vs actual) is recorded. A prediction earns trust from its scored history, never from how sure it sounds.
+
 ### Control
 
 ```text
@@ -231,7 +303,7 @@ From slice 4, transitions are marked **controllable** or **uncontrollable**, as 
 
 ## Execution (the runtime)
 
-A **run** is one replay key (document revision, resolved definitions, runtime version, initial registered values, seed) plus a budget. Runs are deterministic: no wall clock, no randomness except from the declared seed.
+A **run** is one replay key (document revision, resolved definitions, runtime version, initial registered values, seed) plus a budget. The engine is deterministic: no wall clock, no randomness except from the declared seed. Anything outside that guarantee enters as a recorded result (see *Generative steps and attempts*).
 
 1. A source's registered value changes; the change is an event.
 2. The event enters a Path through a 0D attachment Point.
@@ -266,6 +338,18 @@ One `schematic.run.step` is **one tick**: the smallest unit whose result is dete
 - **oscillating `{period, subjects}`**: the run has entered a cycle. At each tick the runtime hashes the full state that determines the future: committed signal state, every `device.state`, and the pending queue with arrival times taken relative to the current tick. A repeated hash proves a cycle; committed signal state alone would not, because transitions still in flight can differ between two ticks that look the same. A NOT feeding itself ends here, not in budget exhaustion.
 - **budget spent**: a typed refusal naming what was left in the queue.
 
+### Generative steps and attempts
+
+Some steps will not give the same answer twice: a model generating a change, a CI pipeline, a person reviewing. The engine stays deterministic by treating each such step as an **effect whose result is an observation**:
+
+- The step's **inputs** are recorded when it starts: the context it was given, including every observation it could see.
+- Its **result** is recorded when it ends, with its observer (which model, which pipeline, which reviewer) and its outcome (receipt, refused, in-doubt).
+- **Replay** reads the recorded result. **Re-run** generates a new one.
+
+**Attempts.** Each try at a step is its own subject, `{entity, run, attempt}`. An attempt's recorded inputs include the observations earlier attempts produced (a CI failure log, review comments, a refusal reason). That difference is the point of a retry, so it is recorded, and it is what the `rate` pattern conditions on.
+
+**Revisions.** When CI/CD status and review drive frequent revisions, each revision of a document or of the observed system is a new replay key: a run belongs to exactly one. Evidence is carried across revisions by **identity**: a step's outcomes are keyed by its entity id and its definition's `id@version`. A step whose definition did not change keeps its history across a revision; a step whose definition changed starts a new history. How much weight the old history carries into the new one is open (see *Open questions*).
+
 ### Numeric policy
 
 Byte identity across the browser and `node` fails on floats: sums depend on reduction order, and ECMAScript leaves the precision of `Math.exp`, `Math.sin` and similar functions to the engine. So:
@@ -276,24 +360,24 @@ Byte identity across the browser and `node` fails on floats: sums depend on redu
 
 ### Definitions
 
-Behaviour is data, not code. The runtime evaluates **definitions**; it has no built-in knowledge of AND, DELAY or a threshold device.
+Behaviour is data, not code. The runtime evaluates **definitions**, each an instance of one pattern (see *Ownership and patterns*); it has no built-in knowledge of AND, DELAY or a threshold device.
 
 A definition (`soveraeign.schematic/definition@0.1`, schema `formats/schematic.definition.schema.json`) declares:
 
 | Member | Holds |
 |---|---|
 | `id`, `version` | `logic.and`, `1`; a document binds `logic.and@1` |
-| `kind` | `combinational`, `temporal`, `stateful`, `observer`, `field` |
+| `pattern` | the pattern it instantiates, pinned: `truth_table@1` |
+| `parameters` | what the pattern's parameter schema asks for: a truth table, thresholds, conditioning keys |
 | `inputs`, `outputs` | named attachment Points, each with its observable and form |
-| `rule` | one of a closed set of rule forms: `truth_table`, `threshold` (enter / exit), `pass` (identity), `route` (selector → output); later `transition` (state machine) |
-| `state` | for stateful rules: the state observable the rule reads and writes, and its form |
+| `state` | for stateful patterns: the state observable read and written, and its form |
 | `delay` | device delay in logical ticks |
 | `observables` | observables it produces: unit, form, update rule, blast radius, staleness tolerance |
 | `observer` | for observer definitions: class (passive / active), cost, limits, read and write sets |
 | `children` | for compositions: the definitions composed, each pinned `id@version` |
 | `projection` | glyph and labels; presentation only |
 
-The rule forms are the only runtime code. A rule form declares whether it reads state: `threshold` and `transition` do, and a definition using them must be of kind `stateful` and declare `state`. A new gate, device or domain is a new definition, never a new code path; NAND, NOR, XNOR and larger devices are definitions or compositions.
+The definition is validated in two steps: against the definition schema, then its `parameters` against the pattern's parameter schema. Its **contract**, the records it reads and writes and their value types, is derived from the pattern and parameters, never written by hand. A pattern declares whether it reads state: `threshold` and `transition` do, and a definition using them must declare `state`. A new gate, device or domain is a new definition, never a new code path; NAND, NOR, XNOR and larger devices are definitions or compositions.
 
 Compositions pin their children by `id@version`. A run resolves the full set, children included transitively, and the trace records that resolved set; it is part of the replay key.
 
@@ -313,7 +397,7 @@ A document references definitions by `id@version` and records which packs it use
 - A `.sovpak` may carry traces alongside its document and packs (`traces[]`), so a package can ship with its evidence.
 - Golden traces live beside the examples they run.
 - **Canonical encoding.** `.sovtrace` files and derived records are encoded with RFC 8785 (JSON Canonicalization Scheme), so "byte-identical" has one meaning.
-- *Later:* the event log is hash-chained for tamper evidence; imported events carry CloudEvents-style `source` + `id` as their dedupe key (slice 4).
+- The event log is **hash-chained** from slice 1: caches depend on it, and it gives tamper evidence for free. Imported events carry CloudEvents-style `source` + `id` as their dedupe key (slice 4).
 
 ## Surfaces
 
@@ -334,12 +418,12 @@ Refusals return receipts and do not enter editor history, as for every other ope
 
 Proposed additions to `MODULES.md`:
 
-- `src/07-state-space.js`: the state record, event log, scheduler, fold, rule forms, fields and residuals. Pure; no DOM; loadable by `scripts/`, `mcp/server.mjs` and the editor, like `05-data-core.js` and `06-attachment-core.js`.
+- `src/07-state-space.js`: the state record, event log, scheduler, fold, patterns, caches, fields and residuals. Pure; no DOM; loadable by `scripts/`, `mcp/server.mjs` and the editor, like `05-data-core.js` and `06-attachment-core.js`.
 - `src/25-signal.js`: becomes the projection of settled or current state-space records onto the canvas.
 - `src/55-render.js`: packets are driven from trace particles when a run is live.
 - `src/75-persistence.js`: Save Run / Open Run and `.sovtrace`, the only place a trace is serialized.
 - `data/core.logic.pack.json`: the built-in definitions.
-- `formats/schematic.state-record.schema.json`, `formats/schematic.trace.schema.json`, `formats/schematic.definition.schema.json`.
+- `formats/schematic.state-record.schema.json`, `formats/schematic.trace.schema.json`, `formats/schematic.definition.schema.json`, `formats/schematic.pattern.schema.json` (the shape of a pattern declaration; the patterns themselves ship with the engine).
 
 ## Invariants
 
@@ -347,7 +431,7 @@ What the runtime checks, and where. Each becomes a QA assertion in the slice tha
 
 At load (typed refusal, the document still opens):
 - every Path delay ≥ 1, and ≥ its segment count when Components are hosted on it;
-- every referenced definition resolves, children included;
+- every referenced definition resolves, children included, and its parameters satisfy its pattern's parameter schema;
 - every stateful device has a declared initial state;
 - every field's ε is within its stability bound;
 - no two active observers with overlapping write sets lack a declared order.
@@ -357,17 +441,20 @@ At run time:
 - no outcome depends on `sequence`;
 - inspection never writes to the event log;
 - the same effect key never carries two payloads;
-- replay under the same replay key is byte-identical under RFC 8785.
+- replay under the same replay key is byte-identical under RFC 8785;
+- every ledger entry carries the hash of the one before; a cache is used only while its recorded chain hash matches;
+- replay never regenerates a recorded result;
+- only the engine appends to a ledger.
 
 ## Slices
 
 Each slice ends with its QA suite inside `python scripts/qa.py`.
 
-1. **Record, definitions and fold.** State record, definition and trace schemas with validators; observable declarations with units; the minimal pack envelope and `core.logic` with NOT / AND / OR / XOR as truth-table data; event log and replay key; two-phase ticks with Path delay ≥ 1 checked at load; step = one tick; settle with quiet / oscillating / budget spent; numeric policy; RFC 8785 encoding; `run.replay` separate from `run.start`; `A AND B → Q` over all four input vectors with golden `.sovtrace` files; a NOT loop that settles as oscillating; replay identity; API / HTTP / MCP parity; nothing written to `.sov`.
-2. **Visible runtime.** `SOURCE → NOT → DELAY → SWITCH → SINK A / SINK B` from Issue #6; Path and device delays, including Components hosted on a Path; packets rendered from the trace; Save Run / Open Run; the `device.state` record; threshold devices with enter / exit hysteresis, declared initial state and margin; effect outcomes with receipt / refused / in-doubt and derived effect keys; inspection-is-passive QA.
+1. **Record, patterns, definitions and fold.** State record (subject with optional `attempt`), pattern, definition and trace schemas with validators; definitions as pattern instances with two-step validation and generated contracts; `truth_table@1` as the first pattern; observable declarations with units; the minimal pack envelope and `core.logic` with NOT / AND / OR / XOR as `truth_table` instances; hash-chained event log and replay key; two-phase ticks with Path delay ≥ 1 checked at load; step = one tick; settle with quiet / oscillating / budget spent; numeric policy; RFC 8785 encoding; `run.replay` separate from `run.start`; `A AND B → Q` over all four input vectors with golden `.sovtrace` files; a NOT loop that settles as oscillating; replay identity; API / HTTP / MCP parity; nothing written to `.sov`.
+2. **Visible runtime.** `SOURCE → NOT → DELAY → SWITCH → SINK A / SINK B` from Issue #6; Path and device delays, including Components hosted on a Path; packets rendered from the trace; Save Run / Open Run; the `materialize` pattern with snapshots and chain-hash validity; the `device.state` record; threshold devices with enter / exit hysteresis, declared initial state and margin; effect outcomes with receipt / refused / in-doubt and derived effect keys; inspection-is-passive QA.
 3. **Fields.** `consensus` and `advection` as declared operators with the ε check; signal colour moved onto `presentation.signal-color`; `25-signal.js` reduced to projection.
-4. **Instrument.** Observer registry with class, limits and read/write sets; observation account; perturbation ledger; instrument coordinates (quality, source and receipt time, GUM certainty) and the `estimated` kind; sensor, structural and drift residuals; controllability; `schematic.state.observe` with the OpenTelemetry adapter first; PROV-JSON export; intent logging and reconciliation for effects that reach outside.
-5. **Later, only when earned.** Latches, clocks and edges on the `device.state` mechanism; predicted state, possibility sets and ensembles; sensor placement from the uncertainty map; an OPC UA / DTDL adapter if an industrial pack earns it; hash-chained logs.
+4. **Instrument.** Observer registry with class, limits and read/write sets; observation account; perturbation ledger; instrument coordinates (quality, source and receipt time, GUM certainty) and the `estimated` kind; sensor, structural and drift residuals; controllability; `schematic.state.observe` with the OpenTelemetry adapter first; PROV-JSON export; intent logging and reconciliation for effects that reach outside; generative steps as recorded effects with attempts and their recorded inputs; the `rate` pattern with declared conditioning keys; evidence carried across revisions by identity.
+5. **Later, only when earned.** Latches, clocks and edges (`transition`); the `compose` pattern with per-attempt retries and scored forecasts; possibility sets and ensembles; sensor placement from the uncertainty map; an OPC UA / DTDL adapter if an industrial pack earns it; hash-chained logs.
 
 ## Non-goals
 
@@ -384,7 +471,12 @@ Analog or electrical simulation; exact Redstone emulation; HDL synthesis; amplit
 7. **Scheduling** is two-phase ticks over committed state; `sequence` is serialization only; one step is one tick. *(2026-09-25)*
 8. **Intent logging** waits for effects that reach outside (slice 4); until then replay identity is the divergence check. *(2026-09-25)*
 9. **The first import standard** is OpenTelemetry. *(2026-09-25)*
+10. **Ownership.** The engine owns the shape of state and a small closed set of patterns; domain packs instantiate patterns with data; contracts are generated from pattern and parameters, never hand-written. *(2026-09-25)*
+11. **Caches** are passive observations of a hash-chained ledger and own nothing; the hash chain lands in slice 1. *(2026-09-25)*
+12. **Generative steps** are effects whose results are recorded; replay reads them, re-run regenerates. The engine stays deterministic given the ledger. *(2026-09-25)*
+13. **Retries** are attempts, each its own subject with its own recorded inputs; prediction uses per-attempt rates, never one rate repeated. *(2026-09-25)*
 
 ## Open questions
 
 1. **Connections for the instrument (slice 4).** When schematically watches an outside system, who says what connects to what? (a) A person draws the model, and outside readings only attach to the drawn entities. (b) The outside system also reports its connections, and those arrive as measured records. Current lean: (a) by default; reported connections arrive as measured records shown as proposals and become part of the document only when someone accepts them, so nothing observed silently rewrites what was authored. The structural residual measures the gap either way.
+2. **Evidence across revisions (slice 4).** When a step's definition changes, how much should its old history count? Current lean: an unchanged definition keeps its full history; a changed one starts fresh, with the old rate as a weak prior worth a small, declared number of trials, so the first few new outcomes quickly outweigh it. The drift residual shows whether the change actually moved the rate.
