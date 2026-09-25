@@ -1,7 +1,9 @@
 /* BEGIN styles/app.css */
 :root {
   --bg:#f4f4f1; --panel:#fff; --ink:#171715; --muted:#6c6c65;
-  --line:#d8d8d1; --grid:#F1F1ED; --hover:#f4f4f0; --canvas-tone:#FEFEFC; --canvas-ink:#42423E; --canvas-muted:#73736D; --canvas-halo:#FEFEFC;
+  --line:#d8d8d1; --grid:#EAE8E0; --hover:#f4f4f0; --canvas-tone:#F6F5F0; --canvas-ink:#42423E; --canvas-muted:#73736D; --canvas-halo:#F6F5F0;
+  /* Two accents carry meaning, never decoration: amber is out and rising (+), blue is in and falling (−). */
+  --accent-out:#C0661F; --accent-in:#2F6FB3; --card-shadow:rgba(40,36,28,.10);
   --canvas-grid-size:24px;
 }
 *{box-sizing:border-box}
@@ -90,6 +92,41 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .node{cursor:grab}
 .node.dragging{cursor:grabbing}
 .node .body{fill:var(--component-interior-fill,var(--component-signal-fill,#fff));stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:1.4}
+.node:not(.is-container)>.body{filter:drop-shadow(0 1px 1.5px var(--card-shadow))}
+/* Terminal marks: where a wire meets a card, coloured by what the point does. */
+.terminal-mark{stroke:none;pointer-events:none}
+.terminal-mark.in{fill:var(--accent-in)}.terminal-mark.out{fill:var(--accent-out)}
+.terminal-mark.control{fill:var(--canvas-muted)}
+/* The control plane: transport and live state over the canvas. */
+.sim-transport{display:flex;gap:4px;align-items:center}
+.sim-transport select{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 4px}
+#simTime{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);min-width:9em;max-width:26em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#simLayer{pointer-events:none}
+#simLayer .sim-lever,#simLayer .sim-decide{pointer-events:all;cursor:pointer}
+.sim-level{fill:var(--canvas-tone);stroke:var(--canvas-muted);stroke-width:1.4}
+.sim-level.high{fill:var(--accent-out);stroke:var(--accent-out)}
+.sim-meter{fill:var(--canvas-tone);stroke:var(--canvas-muted);stroke-width:1}
+.sim-meter-fill{fill:var(--accent-out)}
+.sim-point-high{fill:none;stroke:var(--accent-out);stroke-width:2;opacity:.8}
+.sim-lever-track{fill:var(--canvas-tone);stroke:var(--canvas-muted);stroke-width:1.2}
+.sim-lever.high .sim-lever-track{fill:var(--accent-out);stroke:var(--accent-out)}
+.sim-lever-knob{fill:var(--panel);stroke:var(--canvas-ink);stroke-width:1.2}
+.sim-edge{font:800 13px ui-sans-serif,system-ui,sans-serif;animation:sim-edge-fade .7s ease-out forwards}
+.sim-edge.rise{fill:var(--accent-out)}.sim-edge.fall{fill:var(--accent-in)}
+@keyframes sim-edge-fade{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-6px)}}
+.wire-group.level-high .wire{stroke:var(--accent-out)}
+.sim-waiting-bg{fill:var(--panel);stroke:var(--accent-in);stroke-width:1.4}
+.sim-waiting-text{font:700 10px ui-sans-serif,system-ui,sans-serif;fill:var(--accent-in)}
+.sim-decide circle{fill:var(--canvas-tone);stroke:var(--canvas-muted);stroke-width:1}
+.sim-decide.approve text{fill:var(--accent-out);font:800 11px ui-sans-serif,system-ui,sans-serif}
+.sim-decide.reject text{fill:var(--accent-in);font:800 11px ui-sans-serif,system-ui,sans-serif}
+.sim-decide:hover circle{stroke:var(--canvas-ink)}
+#simLayer .sim-send{pointer-events:all;cursor:pointer}
+.sim-send circle{fill:var(--canvas-tone);stroke:var(--accent-out);stroke-width:1.2}
+.sim-send text{fill:var(--accent-out);font:700 9px ui-sans-serif,system-ui,sans-serif}
+.sim-send:hover circle{fill:var(--accent-out)}.sim-send:hover text{fill:var(--panel)}
+/* While the clock runs, levels are the truth on the canvas; the legacy packet animation stands down. */
+#workspace.sim-live .wire-packet{display:none!important}
 .node.selected .body{stroke-width:2.8}
 /* Labels are SVG text in world units while strokes are non-scaling, so text would grow and
    shrink with the camera. `--zoom` is set on #workspace by applyCamera; every label's
@@ -385,6 +422,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 :root[data-appearance="dark"]{
   color-scheme:dark;
   --bg:#111315;--panel:#1C1F21;--ink:#EEEFEA;--muted:#A8AAA4;--line:#3B3F42;--hover:#292D30;--grid:#2B2E31;--canvas-tone:#17191B;--canvas-ink:#E7E8E3;--canvas-muted:#AEB0AA;--canvas-halo:#17191B;
+  --accent-out:#E9A15A;--accent-in:#74A9E3;--card-shadow:rgba(0,0,0,.35);
 }
 :root[data-appearance="dark"] #workspace{background-color:var(--canvas-tone);box-shadow:inset 0 0 0 1px #303438}
 :root[data-appearance="dark"] .port{fill:var(--panel)}

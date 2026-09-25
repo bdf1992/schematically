@@ -205,6 +205,25 @@ Still not measured:
 - label legibility at fit zoom
 - a card crowding its container's interior guide
 
+## As built: presentation (2026-09-25)
+
+**Colour carries meaning, not decoration.** There are two accents:
+- **amber** (`--accent-out`) is out and rising (`+`)
+- **blue** (`--accent-in`) is in and falling (`−`)
+
+Where they are used:
+- A wired point gets a short terminal mark on the card edge: amber where work leaves,
+  blue where it arrives, both halves for a two-way point, muted for control.
+- The live clock uses the same two colours: a high level and a rising edge are amber, a
+  falling edge is blue.
+
+**Surfaces.**
+- The canvas is warm (`#F6F5F0`).
+- A card is a near-white tint of its palette slot (0.955), with a soft shadow.
+- A container is a lighter wash (0.975), so it holds its children without a gray mass.
+
+Dark mode has its own values for the accents and the shadow.
+
 ## 6. Order of work
 
 1. `document.layout.views` with a `main` view migrated from entity geometry. Route

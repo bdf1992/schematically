@@ -122,7 +122,26 @@ Port override on a Component, for access or face. Write the whole port record; t
 | `plane` | Bounded 2D region that hosts Points on its boundary and Components inside. |
 | `point` | 0D attachment on a Path, a Plane boundary, or a Wire. |
 | `path` | 1D route with start and end that hosts Points. |
+| `clock` | Drives time: its level rises and falls on a declared period. Needs `config.signal.clock.periodMs`. |
+| `lever` | An asserted level: it holds the state it was set to until an operation changes it. |
 | `blank` | Incomplete component whose type is still to be chosen. Do not author these. |
+
+## Signals, clocks and access (optional)
+
+All of this is optional data. `GRAPH-MODEL.md` specifies it in full.
+
+- **A level:** `config.signal = {kind: 'binary' | 'continuous', value}`. It is asserted (it
+  holds `value`) unless you write `mode: 'derived'`. A derived level adds
+  `combine: 'or' | 'and' | 'not' | 'max' | 'min' | 'mean' | 'sum'` and a `threshold`.
+- **A clock:** `config.signal.clock = {periodMs, duty, wave: 'square' | 'saw' | 'triangle' | 'sine', sampleMs, cycles}`.
+- **Work on an edge:** `config.signal.on: '+' | '-' | '±'` starts work as a message on
+  each rising or falling edge.
+- **An access list on a plane:**
+  `config.acl = {entries: [{principal: 'svc:*', allow: ['enter', 'exit']}]}`.
+  - The operations are `enter`, `exit`, `read` and `write`.
+  - A deny always wins, and the default is deny.
+- **A participant:** `config.principal: 'ai:ingest'` makes a component act in that name
+  when it forwards work.
 
 ## Layout rules
 

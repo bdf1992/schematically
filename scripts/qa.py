@@ -47,6 +47,7 @@ BROWSER=[
     'tests/svg_export_qa.py',
     'tests/layout_quality_qa.py',
     'tests/boundary_attachment_qa.py',
+    'tests/sim_control_qa.py',
     'tests/loop_svg_qa.py',
     'tests/menu_dismissal_qa.py',
     'tests/appearance_history_qa.py',

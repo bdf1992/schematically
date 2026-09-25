@@ -8,7 +8,9 @@
 /* BEGIN styles/app.css */
 :root {
   --bg:#f4f4f1; --panel:#fff; --ink:#171715; --muted:#6c6c65;
-  --line:#d8d8d1; --grid:#F1F1ED; --hover:#f4f4f0; --canvas-tone:#FEFEFC; --canvas-ink:#42423E; --canvas-muted:#73736D; --canvas-halo:#FEFEFC;
+  --line:#d8d8d1; --grid:#EAE8E0; --hover:#f4f4f0; --canvas-tone:#F6F5F0; --canvas-ink:#42423E; --canvas-muted:#73736D; --canvas-halo:#F6F5F0;
+  /* Two accents carry meaning, never decoration: amber is out and rising (+), blue is in and falling (−). */
+  --accent-out:#C0661F; --accent-in:#2F6FB3; --card-shadow:rgba(40,36,28,.10);
   --canvas-grid-size:24px;
 }
 *{box-sizing:border-box}
@@ -97,6 +99,41 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .node{cursor:grab}
 .node.dragging{cursor:grabbing}
 .node .body{fill:var(--component-interior-fill,var(--component-signal-fill,#fff));stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:1.4}
+.node:not(.is-container)>.body{filter:drop-shadow(0 1px 1.5px var(--card-shadow))}
+/* Terminal marks: where a wire meets a card, coloured by what the point does. */
+.terminal-mark{stroke:none;pointer-events:none}
+.terminal-mark.in{fill:var(--accent-in)}.terminal-mark.out{fill:var(--accent-out)}
+.terminal-mark.control{fill:var(--canvas-muted)}
+/* The control plane: transport and live state over the canvas. */
+.sim-transport{display:flex;gap:4px;align-items:center}
+.sim-transport select{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 4px}
+#simTime{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);min-width:9em;max-width:26em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#simLayer{pointer-events:none}
+#simLayer .sim-lever,#simLayer .sim-decide{pointer-events:all;cursor:pointer}
+.sim-level{fill:var(--canvas-tone);stroke:var(--canvas-muted);stroke-width:1.4}
+.sim-level.high{fill:var(--accent-out);stroke:var(--accent-out)}
+.sim-meter{fill:var(--canvas-tone);stroke:var(--canvas-muted);stroke-width:1}
+.sim-meter-fill{fill:var(--accent-out)}
+.sim-point-high{fill:none;stroke:var(--accent-out);stroke-width:2;opacity:.8}
+.sim-lever-track{fill:var(--canvas-tone);stroke:var(--canvas-muted);stroke-width:1.2}
+.sim-lever.high .sim-lever-track{fill:var(--accent-out);stroke:var(--accent-out)}
+.sim-lever-knob{fill:var(--panel);stroke:var(--canvas-ink);stroke-width:1.2}
+.sim-edge{font:800 13px ui-sans-serif,system-ui,sans-serif;animation:sim-edge-fade .7s ease-out forwards}
+.sim-edge.rise{fill:var(--accent-out)}.sim-edge.fall{fill:var(--accent-in)}
+@keyframes sim-edge-fade{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-6px)}}
+.wire-group.level-high .wire{stroke:var(--accent-out)}
+.sim-waiting-bg{fill:var(--panel);stroke:var(--accent-in);stroke-width:1.4}
+.sim-waiting-text{font:700 10px ui-sans-serif,system-ui,sans-serif;fill:var(--accent-in)}
+.sim-decide circle{fill:var(--canvas-tone);stroke:var(--canvas-muted);stroke-width:1}
+.sim-decide.approve text{fill:var(--accent-out);font:800 11px ui-sans-serif,system-ui,sans-serif}
+.sim-decide.reject text{fill:var(--accent-in);font:800 11px ui-sans-serif,system-ui,sans-serif}
+.sim-decide:hover circle{stroke:var(--canvas-ink)}
+#simLayer .sim-send{pointer-events:all;cursor:pointer}
+.sim-send circle{fill:var(--canvas-tone);stroke:var(--accent-out);stroke-width:1.2}
+.sim-send text{fill:var(--accent-out);font:700 9px ui-sans-serif,system-ui,sans-serif}
+.sim-send:hover circle{fill:var(--accent-out)}.sim-send:hover text{fill:var(--panel)}
+/* While the clock runs, levels are the truth on the canvas; the legacy packet animation stands down. */
+#workspace.sim-live .wire-packet{display:none!important}
 .node.selected .body{stroke-width:2.8}
 /* Labels are SVG text in world units while strokes are non-scaling, so text would grow and
    shrink with the camera. `--zoom` is set on #workspace by applyCamera; every label's
@@ -392,6 +429,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 :root[data-appearance="dark"]{
   color-scheme:dark;
   --bg:#111315;--panel:#1C1F21;--ink:#EEEFEA;--muted:#A8AAA4;--line:#3B3F42;--hover:#292D30;--grid:#2B2E31;--canvas-tone:#17191B;--canvas-ink:#E7E8E3;--canvas-muted:#AEB0AA;--canvas-halo:#17191B;
+  --accent-out:#E9A15A;--accent-in:#74A9E3;--card-shadow:rgba(0,0,0,.35);
 }
 :root[data-appearance="dark"] #workspace{background-color:var(--canvas-tone);box-shadow:inset 0 0 0 1px #303438}
 :root[data-appearance="dark"] .port{fill:var(--panel)}
@@ -725,6 +763,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       <details class="mini-disclosure"><summary><span class="info-dot">i</span> Drag modifiers</summary><div>Shift = half grid · Ctrl/Cmd = double grid · Alt = free.</div></details>
     </div>
     <button class="btn active" id="flowBtn" title="Show circuit direction">Flow</button>
+    <div class="toolbar-separator" aria-hidden="true"></div>
+    <div class="sim-transport" role="group" aria-label="Simulation clock">
+      <button class="btn" id="simPlayBtn" title="Run the clock">▶</button>
+      <button class="btn" id="simStepBtn" title="Next instant">⏭</button>
+      <button class="btn" id="simResetBtn" title="Stop and reset the clock">⟲</button>
+      <select id="simSpeed" title="Clock speed" aria-label="Clock speed"><option value="0.25">¼×</option><option value="1" selected>1×</option><option value="4">4×</option><option value="16">16×</option></select>
+      <output id="simTime" aria-live="polite">clock stopped</output>
+    </div>
   </div>
 </header>
 
@@ -755,6 +801,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     <g id="ghostLayer" aria-hidden="true"></g>
     <g id="paletteDropLayer" aria-hidden="true"></g>
     <g id="nodes"></g>
+    <g id="simLayer"></g>
   </svg>
   <div class="quick-search" id="quickSearch" hidden>
     <input id="quickSearchInput" type="text" autocomplete="off" spellcheck="false" placeholder="Search objects or run a command…" aria-label="Search and commands">
@@ -5643,6 +5690,24 @@ function appendComponentLeads(g,n){
     lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
   }
 }
+// Where a wire meets a card, a short bar on the edge in the point's own colour: amber where
+// work leaves, blue where it arrives, both halves for a two-way point, muted for control.
+function appendTerminalMarks(g,n){
+  if(componentForm(n).dimension!==2)return;
+  for(const point of componentAttachmentPoints(n)){
+    const compat=point.compatId;
+    if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
+    const flow=activePortChannel(point.config||{}).flow||'duplex',side=physicalPortSide(n,point.id),P=componentPortLocalPosition(n,point.id);
+    const vertical=side==='left'||side==='right',len=12,th=3.2;
+    const parts=flow==='duplex'?[['in',-len/2,len/2],['out',0,len/2]]:[[flow==='control'?'control':flow==='in'?'in':'out',-len/2,len]];
+    for(const [cls,off,span] of parts){
+      const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('class','terminal-mark '+cls);
+      if(vertical){r.setAttribute('x',String(P.x-th/2));r.setAttribute('y',String(P.y+off));r.setAttribute('width',String(th));r.setAttribute('height',String(span))}
+      else{r.setAttribute('x',String(P.x+off));r.setAttribute('y',String(P.y-th/2));r.setAttribute('width',String(span));r.setAttribute('height',String(th))}
+      r.setAttribute('rx','1.2');g.appendChild(r);
+    }
+  }
+}
 function fitComponentLabels(g,n){
   if(componentForm(n).dimension!==2)return;
   const size=componentSize(n),max=size.w-12;
@@ -5732,7 +5797,9 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   const p=cfg.presentation,size=p.size,form=componentForm(n);
   const boundaryColor=slotColor(cfg.colorSlot),interiorColor=slotColor(p.interiorColorSlot);
   const mixedInterior=colorEngine.diffuse?mixHex([interiorColor,signalColor],[.66,.34]):interiorColor;
-  const materialFill=materialFillColor(componentSurfaceFill(mixedInterior,.86),form.body.material);
+  // A card is a light tint of its slot, so ink and accents carry the picture, not a gray mass;
+  // a container is lighter still, a wash that holds its children without competing with them.
+  const materialFill=materialFillColor(componentSurfaceFill(mixedInterior,componentAcceptsChildren(n)?.975:.955),form.body.material);
   g.dataset.material=form.body.material;g.dataset.dimension=String(form.dimension);
   g.style.setProperty('--component-color',boundaryColor);
   g.style.setProperty('--component-boundary-color',boundaryColor);
@@ -5813,10 +5880,11 @@ function render(){
         portLabel.setAttribute('x',localX+offsets.dx);portLabel.setAttribute('y',localY+offsets.dy);portLabel.setAttribute('text-anchor',offsets.anchor);portLabel.textContent=pcfg.label;g.appendChild(portLabel);
       }
     }
-    appendComponentLeads(g,n);
+    appendComponentLeads(g,n);appendTerminalMarks(g,n);
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
   });
   renderWires(signalState);
+  if(typeof paintSim==='function')paintSim();
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
 }
@@ -7377,7 +7445,7 @@ function restoreRecovery(){
 function exportSvgFile(){
   cancelWireDrag();
   const clone=workspace.cloneNode(true);
-  clone.querySelector('#ghostLayer')?.replaceChildren();clone.querySelector('#paletteDropLayer')?.replaceChildren();
+  clone.querySelector('#ghostLayer')?.replaceChildren();clone.querySelector('#paletteDropLayer')?.replaceChildren();clone.querySelector('#simLayer')?.replaceChildren();clone.querySelectorAll('.level-high').forEach(x=>x.classList.remove('level-high'));
   clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x=>x.classList.remove('selected','snap-target','wiring-source'));
   const defs=document.querySelector('.hidden-symbols defs').cloneNode(true);clone.insertBefore(defs,clone.firstChild);
   triggerDownload(new XMLSerializer().serializeToString(clone),`${fileBaseName()}.svg`,'image/svg+xml');
@@ -7702,6 +7770,140 @@ if(typeof initializePersistenceTracking==='function')initializePersistenceTracki
 if(typeof initializeEditorKernel==='function')initializeEditorKernel();
 /* END src/80-bootstrap.js */
 </script>
+<script data-beta-module="src/65-sim-control.js">
+/* BEGIN src/65-sim-control.js */
+'use strict';
+// 0.1 concern: the canvas control plane. One clock drives the graph engine
+// (src/07-graph-core.js) over the live document; this module only projects its state onto the
+// canvas (levels, edges, waiting steps) and turns gestures into engine operations. It never
+// writes the document: a simulation reads a snapshot and restarts when the document changes.
+
+const simLayer=document.getElementById('simLayer');
+const simClock={run:null,playing:false,speed:1,frame:null,last:0,edgeMark:0,fingerprint:null,note:'',stubbed:[]};
+
+// Handlers a document names come from its saved scenarios; any other name is stubbed, and
+// the transport says so, so a run in the editor never silently claims a real handler ran.
+function simHandlersFor(doc){
+  const handlers={};
+  for(const r of doc.references||[])if(r.kind==='scenario'&&r.data?.handlers)Object.assign(handlers,r.data.handlers);
+  const stubbed=[];
+  for(const c of doc.components||[])for(const name of [c.config?.behavior?.handler,c.config?.flow?.handler])if(name&&!handlers[name]){handlers[name]={kind:'stub'};stubbed.push(name)}
+  return {handlers,stubbed:[...new Set(stubbed)]};
+}
+function simStart(){
+  const doc=snapshotDocument(),{handlers,stubbed}=simHandlersFor(doc);
+  const made=SovSchematicGraph.createSimulation(doc,{handlers});
+  simClock.fingerprint=semanticFingerprint();simClock.edgeMark=0;simClock.stubbed=stubbed;
+  if(!made.ok){simClock.run=null;simClock.note=made.message;simPause();paintSim();updateSimReadout();return made}
+  simClock.run=made.sim;simClock.note=stubbed.length?`stubbed: ${stubbed.join(', ')}`:'';
+  simClock.run.run({until:0});paintSim();updateSimReadout();
+  return {ok:true};
+}
+function simEnsure(){
+  // The document is the authority: an edit restarts the clock from time 0.
+  if(!simClock.run||simClock.fingerprint!==semanticFingerprint()){const r=simStart();if(simClock.run&&simClock.fingerprint)simClock.note=simClock.note||'';return r.ok!==false}
+  return true;
+}
+function simFrame(now){
+  if(!simClock.playing)return;
+  if(simClock.fingerprint!==semanticFingerprint()){simStart();simClock.note='restarted: the document changed'}
+  const dt=Math.min(100,Math.max(0,now-(simClock.last||now)));simClock.last=now;
+  if(simClock.run)simClock.run.advance(dt*simClock.speed);
+  paintSim();updateSimReadout();
+  simClock.frame=requestAnimationFrame(simFrame);
+}
+function simPlay(){if(!simEnsure())return false;simClock.playing=true;simClock.last=0;simClock.frame=requestAnimationFrame(simFrame);updateSimReadout();return true}
+function simPause(){simClock.playing=false;if(simClock.frame)cancelAnimationFrame(simClock.frame);simClock.frame=null;updateSimReadout()}
+function simStep(){if(!simEnsure())return null;const r=simClock.run.tick();paintSim();updateSimReadout();return r}
+function simAdvance(ms){if(!simEnsure())return null;const r=simClock.run.advance(ms);paintSim();updateSimReadout();return r}
+function simReset(){simPause();simClock.run=null;simClock.note='';paintSim();updateSimReadout()}
+function simToggleLever(id){
+  if(!simEnsure())return null;const current=simClock.run.levels()[id]?.value??0;
+  const r=simClock.run.set(id,current>0?0:1);simClock.run.run({until:simClock.run.state().time});paintSim();updateSimReadout();return r;
+}
+function simSend(id){
+  if(!simEnsure())return null;
+  const doc=snapshotDocument(),saved=(doc.references||[]).filter(r=>r.kind==='scenario').flatMap(r=>r.data?.steps||[]).map(s=>s.inject).find(i=>i&&i.node===id);
+  const message=saved?{channel:saved.channel??null,payload:saved.payload??null,principal:saved.principal??null}:{payload:{from:id}};
+  const r=simClock.run.inject(id,message);simClock.run.run({until:simClock.run.state().time});paintSim();updateSimReadout();return r;
+}
+function simResume(parkId,decision){if(!simClock.run)return null;const r=simClock.run.resume(parkId,{decision});simClock.run.run({until:simClock.run.state().time});paintSim();updateSimReadout();return r}
+
+function updateSimReadout(){
+  const out=document.getElementById('simTime'),play=document.getElementById('simPlayBtn');if(!out||!play)return;
+  const st=simClock.run?.state();
+  const t=st?st.time:0,seconds=t>=1000?`${(t/1000).toFixed(t>=10000?1:2)} s`:`${Math.round(t)} ms`;
+  out.textContent=simClock.run?`t ${seconds} · ${st.high} high · ${st.edges} edges${st.parked?` · ${st.parked} waiting`:''}${simClock.note?` · ${simClock.note}`:''}`:(simClock.note||'clock stopped');
+  play.textContent=simClock.playing?'❚❚':'▶';play.title=simClock.playing?'Pause the clock':'Run the clock';play.classList.toggle('active',simClock.playing);
+}
+
+const SVGNS='http://www.w3.org/2000/svg';
+function simEl(tag,attrs,cls){const e=document.createElementNS(SVGNS,tag);if(cls)e.setAttribute('class',cls);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e}
+// Paint the engine's state over the rendered canvas. Called after every render and every frame.
+function paintSim(){
+  if(!simLayer)return;
+  simLayer.replaceChildren();
+  workspace.classList.toggle('sim-live',!!simClock.run);
+  for(const gEl of workspace.querySelectorAll('.wire-group.level-high'))gEl.classList.remove('level-high');
+  const run=simClock.run;if(!run)return;
+  const levels=run.levels();
+  const wired=new Set(wires.flatMap(w=>[w.a,w.b]));
+  for(const n of nodes){
+    // A level is shown where it can matter: on a wired node, or one that declares a signal.
+    if(isEffectivelyHidden(n)||!(wired.has(n.id)||componentConfig(n).signal))continue;const L=levels[n.id];if(!L)continue;
+    const dim=componentForm(n).dimension,size=componentSize(n);
+    if(dim===2){
+      const x=n.x+size.w/2-10,y=n.y-size.h/2+10;
+      if(L.kind==='binary')simLayer.appendChild(simEl('circle',{cx:x,cy:y,r:4.2},'sim-level binary'+(L.value>0?' high':'')));
+      else{const w=26;simLayer.appendChild(simEl('rect',{x:x-w+4,y:y-2.5,width:w,height:5,rx:2.5},'sim-meter'));simLayer.appendChild(simEl('rect',{x:x-w+4,y:y-2.5,width:Math.max(.01,w*L.value),height:5,rx:2.5},'sim-meter-fill'))}
+      if(L.mode==='asserted'&&n.symbolId==='lever'){
+        const knob=simEl('g',{transform:`translate(${n.x-size.w/2+12} ${n.y-size.h/2+12})`},'sim-lever'+(L.value>0?' high':''));
+        knob.appendChild(simEl('rect',{x:-8,y:-5,width:16,height:10,rx:5},'sim-lever-track'));knob.appendChild(simEl('circle',{cx:L.value>0?4:-4,cy:0,r:3.6},'sim-lever-knob'));
+        knob.dataset.lever=n.id;const title=simEl('title',{});title.textContent=`${componentConfig(n).label||n.id}: ${L.value>0?'up':'down'} — click to toggle`;knob.appendChild(title);
+        knob.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();simToggleLever(n.id)});simLayer.appendChild(knob);
+      }
+    }else if(dim===0&&L.value>0)simLayer.appendChild(simEl('circle',{cx:n.x,cy:n.y,r:7},'sim-point-high'));
+  }
+  // An entry node (wires out, none in) can send work: the payload its saved scenario injects, if any.
+  for(const n of nodes){
+    if(isEffectivelyHidden(n)||componentForm(n).dimension!==2||!wires.some(w=>w.a===n.id)||wires.some(w=>w.b===n.id))continue;
+    const size=componentSize(n),send=simEl('g',{transform:`translate(${n.x-size.w/2+12} ${n.y+size.h/2-12})`},'sim-send');
+    send.appendChild(simEl('circle',{r:8}));const tt=simEl('text',{y:4,'text-anchor':'middle'});tt.textContent='➤';send.appendChild(tt);
+    const title=simEl('title',{});title.textContent=`Send a message from ${componentConfig(n).label||n.id}`;send.appendChild(title);
+    send.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();simSend(n.id)});simLayer.appendChild(send);
+  }
+  // A wire is lit while its source end is high.
+  for(const w of wires){const v=levels[w.a]?.value??0;if(v<=0)continue;const gEl=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"]`);if(gEl){gEl.classList.add('level-high');gEl.style.setProperty('--level',String(v))}}
+  // New edges flash + or − beside their node.
+  const edges=run.edges().edges;
+  for(const e of edges.slice(simClock.edgeMark)){
+    const n=nodes.find(x=>x.id===e.node);if(!n)continue;const size=componentSize(n);
+    const t=simEl('text',{x:n.x-size.w/2+4,y:n.y-size.h/2-6,'text-anchor':'start'},'sim-edge '+(e.polarity==='+'?'rise':'fall'));t.textContent=e.polarity==='+'?'+':'−';
+    simLayer.appendChild(t);setTimeout(()=>t.remove(),700);
+  }
+  simClock.edgeMark=edges.length;
+  // A step waiting on a person shows its decision in place.
+  for(const p of run.parked()){
+    const n=nodes.find(x=>x.id===p.node);if(!n)continue;const size=componentSize(n),x=n.x,y=n.y+size.h/2+14;
+    const chip=simEl('g',{transform:`translate(${x} ${y})`},'sim-waiting');
+    chip.appendChild(simEl('rect',{x:-58,y:-10,width:116,height:20,rx:10},'sim-waiting-bg'));
+    const label=simEl('text',{x:-48,y:4},'sim-waiting-text');label.textContent='waiting';chip.appendChild(label);
+    for(const [dx,decision,glyphText] of [[14,'approve','✓'],[38,'reject','✗']]){
+      const b=simEl('g',{transform:`translate(${dx} 0)`},'sim-decide '+decision);b.appendChild(simEl('circle',{r:8}));const tt=simEl('text',{y:4,'text-anchor':'middle'});tt.textContent=glyphText;b.appendChild(tt);
+      b.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();simResume(p.id,decision)});chip.appendChild(b);
+    }
+    const title=simEl('title',{});title.textContent=p.prompt||'Waiting on a person';chip.appendChild(title);
+    simLayer.appendChild(chip);
+  }
+}
+
+document.getElementById('simPlayBtn')?.addEventListener('click',()=>simClock.playing?simPause():simPlay());
+document.getElementById('simStepBtn')?.addEventListener('click',()=>{simPause();simStep()});
+document.getElementById('simResetBtn')?.addEventListener('click',()=>simReset());
+document.getElementById('simSpeed')?.addEventListener('change',e=>{simClock.speed=Number(e.target.value)||1});
+updateSimReadout();
+/* END src/65-sim-control.js */
+</script>
 <script data-beta-module="src/85-api.js">
 /* BEGIN src/85-api.js */
 'use strict';
@@ -7766,6 +7968,13 @@ const SovSchematicAPI={
   layout:{
     metrics:(options={})=>SovSchematicData.clone(layoutMetrics(options)),
     rubric:()=>SovSchematicData.clone(LAYOUT_RUBRIC)
+  },
+  clock:{
+    play:()=>simPlay(),pause:()=>simPause(),step:()=>SovSchematicData.clone(simStep()),advance:(ms)=>SovSchematicData.clone(simAdvance(ms)),
+    reset:()=>simReset(),setSpeed:(x)=>{simClock.speed=Number(x)||1;const sel=document.getElementById('simSpeed');if(sel)sel.value=String(simClock.speed);return simClock.speed},
+    toggle:(id)=>SovSchematicData.clone(simToggleLever(id)),send:(id)=>SovSchematicData.clone(simSend(id)),
+    inspect:(what,id)=>{const r=simClock.run;if(!r)return {ok:false,code:'NO_SIMULATION',message:'The clock is stopped'};const v={taps:()=>r.taps(id),edges:()=>r.edges({node:id||null}),log:()=>({ok:true,log:r.log()}),refusals:()=>({ok:true,refusals:r.refusals()}),effects:()=>({ok:true,effects:r.effects()})}[what];return v?SovSchematicData.clone(v()):{ok:false,code:'UNKNOWN_VIEW',message:`Unknown view ${what}`}},resume:(parkId,decision='approve')=>SovSchematicData.clone(simResume(parkId,decision)),
+    state:()=>simClock.run?{...SovSchematicData.clone(simClock.run.state()),playing:simClock.playing,speed:simClock.speed,stubbed:[...simClock.stubbed],levels:SovSchematicData.clone(simClock.run.levels()),parked:SovSchematicData.clone(simClock.run.parked())}:{running:false,note:simClock.note}
   },
   graph:{
     query:(verb,args={})=>graphCall('schematic.graph.query',{verb,args}),

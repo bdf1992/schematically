@@ -9,6 +9,8 @@
 - `40-routing.js` — Wire geometry.
 - `50-selection.js` — selection projection.
 - `55-render.js` — SVG projection.
+- `65-sim-control.js` — the canvas control plane: one clock drives the graph engine over the live document; projects levels, edges and waiting steps; never writes the document.
+- `07-graph-core.js` — graph queries, signals and clocks, access control, and the message simulation (DOM-free; shared with the server).
 - `57-layout-metrics.js` — measured quality of the rendered projection (`layout.metrics()`); reads the DOM, mutates nothing.
 - `60-interactions.js` — pointer/drag gestures.
 - `70-editor-controls.js` — selection/form editing controls.

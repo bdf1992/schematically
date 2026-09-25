@@ -281,6 +281,14 @@
       <details class="mini-disclosure"><summary><span class="info-dot">i</span> Drag modifiers</summary><div>Shift = half grid · Ctrl/Cmd = double grid · Alt = free.</div></details>
     </div>
     <button class="btn active" id="flowBtn" title="Show circuit direction">Flow</button>
+    <div class="toolbar-separator" aria-hidden="true"></div>
+    <div class="sim-transport" role="group" aria-label="Simulation clock">
+      <button class="btn" id="simPlayBtn" title="Run the clock">▶</button>
+      <button class="btn" id="simStepBtn" title="Next instant">⏭</button>
+      <button class="btn" id="simResetBtn" title="Stop and reset the clock">⟲</button>
+      <select id="simSpeed" title="Clock speed" aria-label="Clock speed"><option value="0.25">¼×</option><option value="1" selected>1×</option><option value="4">4×</option><option value="16">16×</option></select>
+      <output id="simTime" aria-live="polite">clock stopped</output>
+    </div>
   </div>
 </header>
 
@@ -311,6 +319,7 @@
     <g id="ghostLayer" aria-hidden="true"></g>
     <g id="paletteDropLayer" aria-hidden="true"></g>
     <g id="nodes"></g>
+    <g id="simLayer"></g>
   </svg>
   <div class="quick-search" id="quickSearch" hidden>
     <input id="quickSearchInput" type="text" autocomplete="off" spellcheck="false" placeholder="Search objects or run a command…" aria-label="Search and commands">
@@ -623,6 +632,7 @@
 <script src="src/70-editor-controls.js"></script>
 <script src="src/75-persistence.js"></script>
 <script src="src/80-bootstrap.js"></script>
+<script src="src/65-sim-control.js"></script>
 <script src="src/85-api.js"></script>
 </body>
 </html>

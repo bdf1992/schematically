@@ -365,6 +365,27 @@ process drive the same engine, which makes it the control plane of the canvas.
 **Power on.** At time 0, asserted levels above 0 drive out, and clocks start. A snapshot
 keeps levels, inputs, edges and the clock's schedule.
 
+### The canvas control plane
+
+The editor's transport (▶ / ❚❚, ⏭ next instant, ⟲ reset, speed, time readout) drives one
+engine over the live document (`src/65-sim-control.js`, Browser API `clock.*`).
+
+**What the canvas shows while the clock runs:**
+- Each wired node shows its level: a dot for binary, a meter for continuous.
+- A high wire turns amber.
+- Edges flash `+` in amber and `−` in blue.
+- The legacy packet animation stands down, so the canvas has one source of truth.
+
+**What you can do on the canvas:**
+- Click a lever's switch to toggle it.
+- Press an entry node's ➤ to send the message its saved scenario injects.
+- Approve (✓) or reject (✗) a waiting human step in place.
+
+**Rules it keeps:**
+- The document is the authority: editing it restarts the clock from time 0.
+- The overlay is never saved and never exported.
+- A handler that no saved scenario supplies is stubbed, and the readout names it.
+
 ## Access control on a plane (built 2026-09-25)
 
 A plane (any Component with an open interior) may declare

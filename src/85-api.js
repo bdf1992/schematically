@@ -61,6 +61,13 @@ const SovSchematicAPI={
     metrics:(options={})=>SovSchematicData.clone(layoutMetrics(options)),
     rubric:()=>SovSchematicData.clone(LAYOUT_RUBRIC)
   },
+  clock:{
+    play:()=>simPlay(),pause:()=>simPause(),step:()=>SovSchematicData.clone(simStep()),advance:(ms)=>SovSchematicData.clone(simAdvance(ms)),
+    reset:()=>simReset(),setSpeed:(x)=>{simClock.speed=Number(x)||1;const sel=document.getElementById('simSpeed');if(sel)sel.value=String(simClock.speed);return simClock.speed},
+    toggle:(id)=>SovSchematicData.clone(simToggleLever(id)),send:(id)=>SovSchematicData.clone(simSend(id)),
+    inspect:(what,id)=>{const r=simClock.run;if(!r)return {ok:false,code:'NO_SIMULATION',message:'The clock is stopped'};const v={taps:()=>r.taps(id),edges:()=>r.edges({node:id||null}),log:()=>({ok:true,log:r.log()}),refusals:()=>({ok:true,refusals:r.refusals()}),effects:()=>({ok:true,effects:r.effects()})}[what];return v?SovSchematicData.clone(v()):{ok:false,code:'UNKNOWN_VIEW',message:`Unknown view ${what}`}},resume:(parkId,decision='approve')=>SovSchematicData.clone(simResume(parkId,decision)),
+    state:()=>simClock.run?{...SovSchematicData.clone(simClock.run.state()),playing:simClock.playing,speed:simClock.speed,stubbed:[...simClock.stubbed],levels:SovSchematicData.clone(simClock.run.levels()),parked:SovSchematicData.clone(simClock.run.parked())}:{running:false,note:simClock.note}
+  },
   graph:{
     query:(verb,args={})=>graphCall('schematic.graph.query',{verb,args}),
     verbs:()=>[...SovSchematicGraph.queries]

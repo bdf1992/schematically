@@ -315,7 +315,7 @@ function restoreRecovery(){
 function exportSvgFile(){
   cancelWireDrag();
   const clone=workspace.cloneNode(true);
-  clone.querySelector('#ghostLayer')?.replaceChildren();clone.querySelector('#paletteDropLayer')?.replaceChildren();
+  clone.querySelector('#ghostLayer')?.replaceChildren();clone.querySelector('#paletteDropLayer')?.replaceChildren();clone.querySelector('#simLayer')?.replaceChildren();clone.querySelectorAll('.level-high').forEach(x=>x.classList.remove('level-high'));
   clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x=>x.classList.remove('selected','snap-target','wiring-source'));
   const defs=document.querySelector('.hidden-symbols defs').cloneNode(true);clone.insertBefore(defs,clone.firstChild);
   triggerDownload(new XMLSerializer().serializeToString(clone),`${fileBaseName()}.svg`,'image/svg+xml');

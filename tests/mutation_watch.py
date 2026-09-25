@@ -122,6 +122,20 @@ MUTANTS=[
       'new':'.filter(points=>pathValid(points,obstacles))',
       'test':'tests/layout_quality_qa.py'
     },
+    {
+      'name':'acl-deny-does-not-win',
+      'file':'src/07-graph-core.js',
+      'old':"const denied=matching.find(e=>e.deny.includes(op));",
+      'new':"const denied=null;",
+      'test':'tests/graph_core_qa.py'
+    },
+    {
+      'name':'derived-signal-can-be-set',
+      'file':'src/07-graph-core.js',
+      'old':"if(node.signal.mode!=='asserted')return refusal('DERIVED_SIGNAL',`${node.label||nodeId} is derived from its inputs; only an asserted signal is set`);",
+      'new':"",
+      'test':'tests/graph_core_qa.py'
+    },
 ]
 
 killed=[]

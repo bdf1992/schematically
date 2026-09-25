@@ -73,6 +73,24 @@ function appendComponentLeads(g,n){
     lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
   }
 }
+// Where a wire meets a card, a short bar on the edge in the point's own colour: amber where
+// work leaves, blue where it arrives, both halves for a two-way point, muted for control.
+function appendTerminalMarks(g,n){
+  if(componentForm(n).dimension!==2)return;
+  for(const point of componentAttachmentPoints(n)){
+    const compat=point.compatId;
+    if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
+    const flow=activePortChannel(point.config||{}).flow||'duplex',side=physicalPortSide(n,point.id),P=componentPortLocalPosition(n,point.id);
+    const vertical=side==='left'||side==='right',len=12,th=3.2;
+    const parts=flow==='duplex'?[['in',-len/2,len/2],['out',0,len/2]]:[[flow==='control'?'control':flow==='in'?'in':'out',-len/2,len]];
+    for(const [cls,off,span] of parts){
+      const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('class','terminal-mark '+cls);
+      if(vertical){r.setAttribute('x',String(P.x-th/2));r.setAttribute('y',String(P.y+off));r.setAttribute('width',String(th));r.setAttribute('height',String(span))}
+      else{r.setAttribute('x',String(P.x+off));r.setAttribute('y',String(P.y-th/2));r.setAttribute('width',String(span));r.setAttribute('height',String(th))}
+      r.setAttribute('rx','1.2');g.appendChild(r);
+    }
+  }
+}
 function fitComponentLabels(g,n){
   if(componentForm(n).dimension!==2)return;
   const size=componentSize(n),max=size.w-12;
@@ -162,7 +180,9 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   const p=cfg.presentation,size=p.size,form=componentForm(n);
   const boundaryColor=slotColor(cfg.colorSlot),interiorColor=slotColor(p.interiorColorSlot);
   const mixedInterior=colorEngine.diffuse?mixHex([interiorColor,signalColor],[.66,.34]):interiorColor;
-  const materialFill=materialFillColor(componentSurfaceFill(mixedInterior,.86),form.body.material);
+  // A card is a light tint of its slot, so ink and accents carry the picture, not a gray mass;
+  // a container is lighter still, a wash that holds its children without competing with them.
+  const materialFill=materialFillColor(componentSurfaceFill(mixedInterior,componentAcceptsChildren(n)?.975:.955),form.body.material);
   g.dataset.material=form.body.material;g.dataset.dimension=String(form.dimension);
   g.style.setProperty('--component-color',boundaryColor);
   g.style.setProperty('--component-boundary-color',boundaryColor);
@@ -243,10 +263,11 @@ function render(){
         portLabel.setAttribute('x',localX+offsets.dx);portLabel.setAttribute('y',localY+offsets.dy);portLabel.setAttribute('text-anchor',offsets.anchor);portLabel.textContent=pcfg.label;g.appendChild(portLabel);
       }
     }
-    appendComponentLeads(g,n);
+    appendComponentLeads(g,n);appendTerminalMarks(g,n);
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
   });
   renderWires(signalState);
+  if(typeof paintSim==='function')paintSim();
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
 }
