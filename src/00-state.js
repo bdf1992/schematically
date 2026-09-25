@@ -43,6 +43,7 @@ const formMaterial=document.getElementById('formMaterial');
 const formBodyThickness=document.getElementById('formBodyThickness');
 const formInteriorState=document.getElementById('formInteriorState');
 const formFrameMode=document.getElementById('formFrameMode');
+const accessPrincipal=document.getElementById('accessPrincipal'),accessAclBlock=document.getElementById('accessAclBlock'),accessAclMode=document.getElementById('accessAclMode'),accessEntries=document.getElementById('accessEntries'),accessAddEntry=document.getElementById('accessAddEntry');
 const formFrameThickness=document.getElementById('formFrameThickness');
 const formFrameDepth=document.getElementById('formFrameDepth');
 const iForm=document.getElementById('iForm');

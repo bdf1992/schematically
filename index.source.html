@@ -442,6 +442,22 @@
           </div>
           <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
         </details>
+        <details class="form-settings" id="accessSettings">
+          <summary><b>Access</b><span class="helper-snippet">principal · access list</span></summary>
+          <label class="settings-wide">Acts as <input id="accessPrincipal" type="text" maxlength="64" placeholder="e.g. svc:mailer · empty = inherits" spellcheck="false"></label>
+          <div id="accessAclBlock" data-dims="2">
+            <label class="settings-wide">Access list
+              <select id="accessAclMode">
+                <option value="none">None · anyone crosses</option>
+                <option value="deny">Deny unless allowed</option>
+                <option value="allow">Allow unless denied</option>
+              </select>
+            </label>
+            <div id="accessEntries" class="access-entries"></div>
+            <button class="btn" type="button" id="accessAddEntry">Add principal</button>
+            <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Access rules</summary><div>Checked where work or a level crosses this plane's boundary. Patterns: exact, prefix:*, or *. A deny always wins; no principal is refused.</div></details>
+          </div>
+        </details>
         <details class="form-settings">
           <summary><b>Appearance</b><span class="helper-snippet">graphic · size · material</span></summary>
           <div class="settings-grid settings-grid-compact">

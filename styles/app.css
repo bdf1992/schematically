@@ -98,6 +98,15 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .terminal-mark.in{fill:var(--accent-in)}.terminal-mark.out{fill:var(--accent-out)}
 .terminal-mark.control{fill:var(--canvas-muted)}
 #junctionLayer{pointer-events:none}
+.access-entries{display:grid;gap:6px;margin:6px 0}
+.access-entry{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(0,1fr)) auto;gap:4px;align-items:center}
+.access-entry input,.access-entry select{min-width:0;font-size:12px;padding:3px 4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.access-entry .btn{padding:2px 7px}
+.access-entry select{text-align:center;font-weight:700}
+.access-entry select[data-state="allow"]{color:var(--accent-out);border-color:var(--accent-out)}
+.access-entry select[data-state="deny"]{color:var(--accent-in);border-color:var(--accent-in)}
+.access-head{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.access-head span{text-align:center}.access-head span:first-child{text-align:left}
 .junction-dot{fill:var(--canvas-ink)}
 /* The control plane: transport and live state over the canvas. */
 .sim-transport{display:flex;gap:4px;align-items:center}

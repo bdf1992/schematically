@@ -186,3 +186,48 @@ barWireInMarker.addEventListener('input',()=>{
   renderWires();
   const i=Number(selected.split(':')[1]);selectWire(i,{focus:false});scheduleHistoryCapture();
 });
+
+// Access: who a component acts as, and a plane's access list (GRAPH-MODEL.md, access control).
+// Edits are ordinary config edits: one history step, refused on a locked component.
+const ACL_OPS_UI=['enter','exit','read','write'];
+function updateSelectedComponentConfig(label,mutator){
+  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,label))return;setHistoryHint(label);
+  mutator(componentConfig(n),n);render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
+  openSelectionSettings('component');syncComponentVisualPanel(n);
+}
+function syncAccessPanel(n){
+  const cfg=componentConfig(n),f=componentForm(n),plane=f.dimension===2&&f.regions.interior.state==='open';
+  accessPrincipal.value=typeof cfg.principal==='string'?cfg.principal:'';
+  accessAclBlock.hidden=!plane;
+  const acl=cfg.acl&&typeof cfg.acl==='object'?cfg.acl:null;
+  accessAclMode.value=acl?(acl.default==='allow'?'allow':'deny'):'none';
+  accessAddEntry.hidden=!acl;
+  accessEntries.replaceChildren();
+  if(acl?.entries?.length){
+    const head=document.createElement('div');head.className='access-entry access-head';
+    for(const t of ['principal',...ACL_OPS_UI,'']){const s=document.createElement('span');s.textContent=t;head.appendChild(s)}
+    accessEntries.appendChild(head);
+  }
+  for(const [i,e] of (acl?.entries||[]).entries()){
+    const row=document.createElement('div');row.className='access-entry';
+    const who=document.createElement('input');who.type='text';who.value=e.principal||'';who.placeholder='principal';who.spellcheck=false;who.setAttribute('aria-label','Principal pattern');
+    who.addEventListener('change',()=>updateSelectedComponentConfig('Edit access list',c=>{c.acl.entries[i].principal=who.value.trim()}));
+    row.appendChild(who);
+    for(const op of ACL_OPS_UI){
+      const sel=document.createElement('select');sel.title=op;sel.setAttribute('aria-label',`${op} for ${e.principal||'principal'}`);
+      for(const [v,t,title] of [['','·','not stated'],['allow','✓','allow'],['deny','✗','deny']]){const o=document.createElement('option');o.value=v;o.textContent=t;o.title=`${op}: ${title}`;sel.appendChild(o)}
+      sel.value=(e.deny||[]).includes(op)?'deny':(e.allow||[]).includes(op)?'allow':'';sel.dataset.state=sel.value||'none';
+      sel.addEventListener('change',()=>updateSelectedComponentConfig('Edit access list',c=>{const en=c.acl.entries[i];en.allow=(en.allow||[]).filter(x=>x!==op);en.deny=(en.deny||[]).filter(x=>x!==op);if(sel.value)en[sel.value].push(op)}));
+      row.appendChild(sel);
+    }
+    const del=document.createElement('button');del.type='button';del.className='btn';del.textContent='×';del.title='Remove this principal';
+    del.addEventListener('click',()=>updateSelectedComponentConfig('Edit access list',c=>{c.acl.entries.splice(i,1)}));row.appendChild(del);
+    accessEntries.appendChild(row);
+  }
+}
+accessPrincipal.addEventListener('change',()=>updateSelectedComponentConfig('Edit principal',c=>{const v=accessPrincipal.value.trim();if(v)c.principal=v;else delete c.principal}));
+accessAclMode.addEventListener('change',()=>updateSelectedComponentConfig('Edit access list',c=>{
+  const v=accessAclMode.value;if(v==='none'){delete c.acl;return}
+  c.acl=c.acl&&typeof c.acl==='object'?c.acl:{entries:[]};c.acl.default=v;if(!Array.isArray(c.acl.entries))c.acl.entries=[];
+}));
+accessAddEntry.addEventListener('click',()=>updateSelectedComponentConfig('Edit access list',c=>{c.acl.entries.push({principal:'',allow:['enter'],deny:[]})}));

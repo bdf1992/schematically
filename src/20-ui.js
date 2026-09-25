@@ -186,6 +186,7 @@ function syncComponentVisualPanel(n){
   formAttachments.value=Attachment.attachmentDefaults(n);
   // Settings are shown per dimension: a Point has no size or frame, a Path no height or interior.
   for(const el of componentSettingsFields.querySelectorAll('[data-dims]')){const dims=String(el.dataset.dims).split('').map(Number);el.hidden=!dims.includes(f.dimension)}
+  if(typeof syncAccessPanel==='function')syncAccessPanel(n);
 }
 function syncSelectionSettings(kind){
   if(typeof syncEntityUtilityPanel==='function')syncEntityUtilityPanel(kind);
