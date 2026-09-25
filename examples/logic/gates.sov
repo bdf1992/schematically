@@ -3,7 +3,7 @@
   "id": "logic-gates",
   "revision": 0,
   "meta": {
-    "title": "Every gate in the pack, side by side, on shared inputs A, B, C"
+    "title": "Every combinational gate in the pack, side by side, on shared inputs A, B, C"
   },
   "components": [
     {

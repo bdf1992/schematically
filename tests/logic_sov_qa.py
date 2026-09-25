@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import math
 import random
 import shutil
 import subprocess
@@ -52,6 +53,18 @@ DEFINED = {
 }
 
 
+# Reference models for the stateful gates: (state, inputs, clock edge seen) -> next state.
+# Written from the textbook definitions, not from the pack's tables.
+REFERENCE = {
+    'dff': (['d', 'clk'], lambda q, i, edge: i['d'] if edge else q),
+    'tff': (['t', 'clk'], lambda q, i, edge: q ^ i['t'] if edge else q),
+    'jkff': (['j', 'k', 'clk'], lambda q, i, edge: ((i['j'] and not q) or (not i['k'] and q)) if edge else q),
+    'd-latch': (['d', 'en'], lambda q, i, edge: i['d'] if i['en'] else q),
+    'sr-latch': (['s', 'r'], lambda q, i, edge: 0 if i['r'] else (1 if i['s'] else q)),
+    'c-element': (['a', 'b'], lambda q, i, edge: i['a'] if i['a'] == i['b'] else q),
+}
+
+
 def refused(fn, code: str) -> None:
     try:
         fn()
@@ -63,12 +76,14 @@ def refused(fn, code: str) -> None:
 
 def check_pack() -> None:
     pack = load_pack()
-    assert set(DEFINED) - {'half-adder-s', 'half-adder-c'} | {'half-adder'} == set(pack), sorted(pack)
+    tables = {k for k, g in pack.items() if g['kind'] == 'table'}
+    assert set(DEFINED) - {'half-adder-s', 'half-adder-c'} | {'half-adder'} == tables, sorted(tables)
+    assert set(pack) - tables == set(REFERENCE) | {'threshold', 'compare', 'schmitt'}, sorted(set(pack) - tables)
     # Every function of two inputs, as its output column over ab = 00, 01, 10, 11, is some
     # pack gate with its inputs taken from a and b (either, both, or neither).
     columns = set()
     for g in pack.values():
-        if len(g['inputs']) > 2 or len(g['outputs']) != 1:
+        if g['kind'] != 'table' or len(g['inputs']) > 2 or len(g['outputs']) != 1:
             continue
         for choice in itertools.product((0, 1), repeat=len(g['inputs'])):   # 0 = a, 1 = b
             col = ''
@@ -191,6 +206,147 @@ def check_feedback() -> None:
         refused(lambda: Circuit(path, event_budget=500).apply({}), 'UNSETTLED')
 
 
+def one_gate(tmp: Path, kind: str, pins: list[str], outs: list[str], level: set = frozenset(), **params) -> Circuit:
+    """A document holding one gate, an input per pin and an output per output pin."""
+    doc = circuit_doc([('g', kind)], [(f'in-{p}', f'g.{p}') for p in pins] + [(f'g.{o}', f'out-{o}') for o in outs],
+                      pins, outs)
+    for c in doc['components']:
+        if c['id'] == 'g':
+            c['config']['logic'].update(params)
+        if c['id'].startswith('in-') and c['id'][3:] in level:
+            c['config']['logic']['type'] = 'level'
+    path = tmp / f'{kind}.sov'
+    path.write_text(json.dumps(doc))
+    return Circuit(path, event_budget=5000)
+
+
+def check_sequential_gates() -> None:
+    pack = load_pack()
+    rng = random.Random(6)
+    with tempfile.TemporaryDirectory() as tmp:
+        for kind, (pins, step) in REFERENCE.items():
+            g = pack[kind]
+            c = one_gate(Path(tmp), kind, pins, g['outputs'])
+            q, inputs = 0, {p: 0 for p in pins}
+            assert c.apply(dict(inputs))['outputs']['q'] == 0, kind            # power-on: the declared initial state
+            for _ in range(400):
+                pin = rng.choice(pins)                                          # one input changes at a time
+                before = inputs[pin]
+                inputs[pin] = 1 - before
+                edge = pin == 'clk' and (before, inputs[pin]) == (0, 1)
+                q = int(step(q, inputs, edge))
+                out = c.apply({pin: inputs[pin]})['outputs']
+                assert out['q'] == q, (kind, inputs, out, q)
+                if 'qn' in out:
+                    assert out['qn'] == 1 - q, (kind, out)
+
+
+def check_threshold_and_levels() -> None:
+    rng = random.Random(9)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        for theta, reference in ((2, lambda a, b, c: int(a + b + c >= 2)), (1, lambda a, b, c: a | b | c),
+                                 (3, lambda a, b, c: a & b & c)):
+            c = one_gate(tmp, 'threshold', ['a', 'b', 'c'], ['q'], theta=theta)
+            for a, b, cc in itertools.product((0, 1), repeat=3):
+                assert c.apply({'a': a, 'b': b, 'c': cc})['outputs']['q'] == reference(a, b, cc), (theta, a, b, cc)
+        for _ in range(20):
+            w = [round(rng.uniform(-2, 3), 2) for _ in range(3)]
+            theta = round(rng.uniform(-1, 3), 2)
+            c = one_gate(tmp, 'threshold', ['a', 'b', 'c'], ['q'], level={'a', 'b', 'c'}, weights=w, theta=theta)
+            for _ in range(30):
+                x = [round(rng.uniform(0, 1), 3) for _ in range(3)]
+                q = c.apply(dict(zip('abc', x)))['outputs']['q']
+                assert q == int(sum(wi * xi for wi, xi in zip(w, x)) >= theta), (w, theta, x, q)
+
+        # A noisy level around 0.5: the comparator chatters, the Schmitt trigger switches only
+        # when the level really crosses its band, and matches its reference at every step.
+        cmp_ = one_gate(tmp, 'compare', ['x'], ['q'], level={'x'}, theta=0.5)
+        hys = one_gate(tmp, 'schmitt', ['x'], ['q', 'qn'], level={'x'}, low=0.4, high=0.6)
+        state, flips = {'cmp': 0, 'hys': 0}, {'cmp': 0, 'hys': 0}
+        for k in range(600):
+            trend = 0.5 + 0.3 * math.sin(k / 60)                     # slow swing across the band
+            x = round(trend + rng.uniform(-0.08, 0.08), 4)            # noise smaller than the band
+            q1 = cmp_.apply({'x': x})['outputs']['q']
+            q2 = hys.apply({'x': x})['outputs']['q']
+            expect = 1 if x >= 0.6 else 0 if x <= 0.4 else state['hys']
+            assert q1 == int(x >= 0.5) and q2 == expect, (k, x, q1, q2, expect)
+            flips['cmp'] += q1 != state['cmp']
+            flips['hys'] += q2 != state['hys']
+            state = {'cmp': q1, 'hys': q2}
+        swings = 600 / (math.pi * 60)                                 # half-periods of the trend
+        assert flips['hys'] <= math.ceil(swings) + 1, flips            # once per real crossing
+        assert flips['cmp'] > 4 * flips['hys'], flips                  # chatter
+
+        for doc_change, code in [
+            (lambda: one_gate(tmp, 'schmitt', ['x'], ['q', 'qn'], level={'x'}, low=0.7, high=0.3), 'BAD_PARAMS'),
+            (lambda: one_gate(tmp, 'threshold', ['a', 'b', 'c'], ['q'], weights=[1, 1]), 'BAD_PARAMS'),
+            (lambda: one_gate(tmp, 'and', ['a', 'b'], ['q'], level={'a'}), 'LEVEL_INTO_BINARY'),
+            (lambda: one_gate(tmp, 'dff', ['d', 'clk'], ['q', 'qn'], level={'d'}), 'LEVEL_INTO_BINARY'),
+            (lambda: one_gate(tmp, 'and', ['a', 'b'], ['q']).apply({'a': 0.5}), 'NOT_A_BIT'),
+        ]:
+            refused(doc_change, code)
+
+
+def check_level_examples() -> None:
+    c = Circuit(DIR / 'window.sov')
+    for x in [i / 100 for i in range(0, 101, 5)] + [0.3, 0.7, 0.2999, 0.6999]:
+        assert c.apply({'X': x})['outputs']['IN'] == int(0.3 <= x < 0.7), x
+    c = Circuit(DIR / 'reorder.sov')
+    order = 0
+    for stock in [40, 25, 11, 10, 8, 15, 29, 30, 31, 20, 10.5, 9.99, 12, 30]:
+        order = 1 if stock <= 10 else 0 if stock >= 30 else order
+        assert c.apply({'STOCK': float(stock)})['outputs']['ORDER'] == order, stock
+    # Completion: AND reports "both done now"; the C-element reports "both finished" and holds
+    # it until both have reset, which is what a return-to-zero handshake needs.
+    c = Circuit(DIR / 'completion.sov')
+    for step, (both, done) in [({'MATERIALS': 1}, (0, 0)), ({'WORK': 1}, (1, 1)), ({'MATERIALS': 0}, (0, 1)),
+                               ({'MATERIALS': 1}, (1, 1)), ({'WORK': 0}, (0, 1)), ({'MATERIALS': 0}, (0, 0))]:
+        out = c.apply(step)['outputs']
+        assert (out['BOTH'], out['DONE']) == (both, done), (step, out)
+
+
+def check_sequential_composites() -> None:
+    rng = random.Random(4)
+    reg = Circuit(DIR / 'register4.sov')
+    held = 0
+    for _ in range(60):
+        v = rng.randrange(16)
+        out = reg.apply(bits('D', v, 4))['outputs']
+        assert number(out, 'Q', 4) == held, 'a register must not change without a clock edge'
+        out = reg.pulse('CLK')['outputs']
+        held = v
+        assert number(out, 'Q', 4) == held
+
+    acc = Circuit(DIR / 'accumulator4.sov')
+    total = 0
+    for _ in range(200):
+        x = rng.randrange(16)
+        carry = int(total + x >= 16)
+        before = acc.apply(bits('X', x, 4))['outputs']
+        assert before['Carry'] == carry, 'Carry shows whether this step will wrap'
+        total = (total + x) % 16
+        assert number(acc.pulse('CLK')['outputs'], 'ACC', 4) == total
+
+    ripple, sync = Circuit(DIR / 'ripple-counter4.sov'), Circuit(DIR / 'sync-counter4.sov')
+    assert number(ripple.apply({})['outputs'], 'Q', 4) == 0 and number(sync.apply({})['outputs'], 'Q', 4) == 0
+    for k in range(1, 41):
+        for c in (ripple, sync):
+            c.apply({'CLK': 1}, record=True)
+            outs = [e for e in c.events if e['net'].startswith('out-Q')]
+            seen = set()
+            value = {i: None for i in range(4)}
+            for e in outs:
+                value[int(e['net'][5])] = e['value']
+            c.events.clear()
+            assert number(c.apply({'CLK': 0})['outputs'], 'Q', 4) == k % 16, (c.path.name, k)
+            if c is sync:
+                assert len({e['t'] for e in outs}) <= 1, ('synchronous outputs change together', k, outs)
+            elif k % 16 in (0, 8):
+                # 7 -> 8 and 15 -> 0 ripple through every bit: the outputs pass through wrong counts.
+                assert len({e['t'] for e in outs}) == 4, ('ripple outputs change one after another', k, outs)
+
+
 def circuit_doc(gates: list[tuple[str, str]], wires: list[tuple[str, str]], inputs: list[str],
                 outputs: list[str], extra: list[dict] = ()) -> dict:
     pack = load_pack()
@@ -257,6 +413,10 @@ def main() -> int:
     check_arithmetic()
     check_carry_ripple_is_linear()
     check_feedback()
+    check_sequential_gates()
+    check_threshold_and_levels()
+    check_level_examples()
+    check_sequential_composites()
     check_wiring_refusals()
     check_examples()
     print('logic_sov QA PASS')

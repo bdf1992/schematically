@@ -1,0 +1,173 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "logic-completion",
+  "revision": 0,
+  "meta": {
+    "title": "Completion: AND says both are done now; a C-element says both finished and holds until both reset"
+  },
+  "components": [
+    {
+      "id": "in-MATERIALS",
+      "symbolId": "act",
+      "x": 120,
+      "y": 100,
+      "config": {
+        "label": "MATERIALS",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "MATERIALS"
+        }
+      }
+    },
+    {
+      "id": "in-WORK",
+      "symbolId": "act",
+      "x": 120,
+      "y": 230,
+      "config": {
+        "label": "WORK",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "WORK"
+        }
+      }
+    },
+    {
+      "id": "now",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 100,
+      "config": {
+        "label": "AND",
+        "logic": {
+          "gate": "and"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "done",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 230,
+      "config": {
+        "label": "C-ELEMENT",
+        "logic": {
+          "gate": "c-element"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-BOTH",
+      "symbolId": "observe",
+      "x": 560,
+      "y": 100,
+      "config": {
+        "label": "BOTH",
+        "logic": {
+          "kind": "output",
+          "name": "BOTH"
+        }
+      }
+    },
+    {
+      "id": "out-DONE",
+      "symbolId": "observe",
+      "x": 560,
+      "y": 230,
+      "config": {
+        "label": "DONE",
+        "logic": {
+          "kind": "output",
+          "name": "DONE"
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "in-MATERIALS",
+      "aSide": "out",
+      "b": "now",
+      "bSide": "a"
+    },
+    {
+      "id": "w2",
+      "a": "in-WORK",
+      "aSide": "out",
+      "b": "now",
+      "bSide": "b"
+    },
+    {
+      "id": "w3",
+      "a": "in-MATERIALS",
+      "aSide": "out",
+      "b": "done",
+      "bSide": "a"
+    },
+    {
+      "id": "w4",
+      "a": "in-WORK",
+      "aSide": "out",
+      "b": "done",
+      "bSide": "b"
+    },
+    {
+      "id": "w5",
+      "a": "now",
+      "aSide": "q",
+      "b": "out-BOTH",
+      "bSide": "in"
+    },
+    {
+      "id": "w6",
+      "a": "done",
+      "aSide": "q",
+      "b": "out-DONE",
+      "bSide": "in"
+    }
+  ],
+  "references": []
+}

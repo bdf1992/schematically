@@ -6,6 +6,7 @@
         "a",
         "b"
       ],
+      "kind": "table",
       "meaning": "q = a and b",
       "outputs": [
         "q"
@@ -21,6 +22,7 @@
       "inputs": [
         "a"
       ],
+      "kind": "table",
       "meaning": "q = a, one gate delay later",
       "outputs": [
         "q"
@@ -30,11 +32,41 @@
         "1:1"
       ]
     },
+    "c-element": {
+      "initial": "0",
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "kind": "sequential",
+      "meaning": "Muller C-element: q follows the inputs when they agree and holds when they differ; completion detection in asynchronous logic",
+      "next": [
+        "0|00:0",
+        "0|01:0",
+        "0|10:0",
+        "0|11:1",
+        "1|00:0",
+        "1|01:1",
+        "1|10:1",
+        "1|11:1"
+      ],
+      "output": [
+        "0:0",
+        "1:1"
+      ],
+      "outputs": [
+        "q"
+      ],
+      "state": [
+        "q"
+      ]
+    },
     "cimply": {
       "inputs": [
         "a",
         "b"
       ],
+      "kind": "table",
       "meaning": "q = b implies a = a or not b",
       "outputs": [
         "q"
@@ -46,8 +78,80 @@
         "11:1"
       ]
     },
+    "compare": {
+      "inputs": [
+        "x"
+      ],
+      "kind": "compare",
+      "meaning": "q = 1 when the level x >= theta; no memory, so a noisy x near theta makes q chatter",
+      "outputs": [
+        "q"
+      ],
+      "params": {
+        "theta": 0.5
+      }
+    },
+    "d-latch": {
+      "initial": "0",
+      "inputs": [
+        "d",
+        "en"
+      ],
+      "kind": "sequential",
+      "meaning": "transparent latch: q follows d while en is 1, holds while en is 0",
+      "next": [
+        "0|00:0",
+        "0|01:0",
+        "0|10:0",
+        "0|11:1",
+        "1|00:1",
+        "1|01:0",
+        "1|10:1",
+        "1|11:1"
+      ],
+      "output": [
+        "0:01",
+        "1:10"
+      ],
+      "outputs": [
+        "q",
+        "qn"
+      ],
+      "state": [
+        "q"
+      ]
+    },
+    "dff": {
+      "clock": "clk",
+      "edge": "rising",
+      "initial": "0",
+      "inputs": [
+        "d",
+        "clk"
+      ],
+      "kind": "sequential",
+      "meaning": "D flip-flop: q takes d on the rising edge of clk, holds otherwise",
+      "next": [
+        "0|0:0",
+        "0|1:1",
+        "1|0:0",
+        "1|1:1"
+      ],
+      "output": [
+        "0:01",
+        "1:10"
+      ],
+      "outputs": [
+        "q",
+        "qn"
+      ],
+      "state": [
+        "q"
+      ]
+    },
     "false": {
       "inputs": [],
+      "kind": "table",
       "meaning": "constant 0",
       "outputs": [
         "q"
@@ -61,6 +165,7 @@
         "a",
         "b"
       ],
+      "kind": "table",
       "meaning": "s = a xor b, c = a and b, as one primitive; examples/logic/half-adder.sov builds the same from gates",
       "outputs": [
         "s",
@@ -78,6 +183,7 @@
         "a",
         "b"
       ],
+      "kind": "table",
       "meaning": "q = a implies b = (not a) or b",
       "outputs": [
         "q"
@@ -89,12 +195,46 @@
         "11:1"
       ]
     },
+    "jkff": {
+      "clock": "clk",
+      "edge": "rising",
+      "initial": "0",
+      "inputs": [
+        "j",
+        "k",
+        "clk"
+      ],
+      "kind": "sequential",
+      "meaning": "JK flip-flop: on the rising edge, j sets, k resets, both toggle, neither holds",
+      "next": [
+        "0|00:0",
+        "0|01:0",
+        "0|10:1",
+        "0|11:1",
+        "1|00:1",
+        "1|01:0",
+        "1|10:1",
+        "1|11:0"
+      ],
+      "output": [
+        "0:01",
+        "1:10"
+      ],
+      "outputs": [
+        "q",
+        "qn"
+      ],
+      "state": [
+        "q"
+      ]
+    },
     "majority": {
       "inputs": [
         "a",
         "b",
         "c"
       ],
+      "kind": "table",
       "meaning": "q = 1 when at least two inputs are 1",
       "outputs": [
         "q"
@@ -116,6 +256,7 @@
         "a",
         "b"
       ],
+      "kind": "table",
       "meaning": "q = a when s is 0, b when s is 1",
       "outputs": [
         "q"
@@ -136,6 +277,7 @@
         "a",
         "b"
       ],
+      "kind": "table",
       "meaning": "q = not (a and b); universal",
       "outputs": [
         "q"
@@ -152,6 +294,7 @@
         "a",
         "b"
       ],
+      "kind": "table",
       "meaning": "q = b and not a",
       "outputs": [
         "q"
@@ -168,6 +311,7 @@
         "a",
         "b"
       ],
+      "kind": "table",
       "meaning": "q = a and not b",
       "outputs": [
         "q"
@@ -184,6 +328,7 @@
         "a",
         "b"
       ],
+      "kind": "table",
       "meaning": "q = not (a or b); universal",
       "outputs": [
         "q"
@@ -199,6 +344,7 @@
       "inputs": [
         "a"
       ],
+      "kind": "table",
       "meaning": "q = not a",
       "outputs": [
         "q"
@@ -213,6 +359,7 @@
         "a",
         "b"
       ],
+      "kind": "table",
       "meaning": "q = a or b",
       "outputs": [
         "q"
@@ -224,8 +371,103 @@
         "11:1"
       ]
     },
+    "schmitt": {
+      "initial": "0",
+      "inputs": [
+        "x"
+      ],
+      "kind": "hysteresis",
+      "meaning": "Schmitt trigger: q turns on when x reaches high, off when x falls to low, and holds between them; noise smaller than the band cannot make it chatter",
+      "outputs": [
+        "q",
+        "qn"
+      ],
+      "params": {
+        "high": 0.6,
+        "low": 0.4
+      }
+    },
+    "sr-latch": {
+      "initial": "0",
+      "inputs": [
+        "s",
+        "r"
+      ],
+      "kind": "sequential",
+      "meaning": "set-reset latch: s sets, r resets, both hold when 0; reset wins when both are 1, so q and qn stay complementary",
+      "next": [
+        "0|00:0",
+        "0|01:0",
+        "0|10:1",
+        "0|11:0",
+        "1|00:1",
+        "1|01:0",
+        "1|10:1",
+        "1|11:0"
+      ],
+      "output": [
+        "0:01",
+        "1:10"
+      ],
+      "outputs": [
+        "q",
+        "qn"
+      ],
+      "state": [
+        "q"
+      ]
+    },
+    "tff": {
+      "clock": "clk",
+      "edge": "rising",
+      "initial": "0",
+      "inputs": [
+        "t",
+        "clk"
+      ],
+      "kind": "sequential",
+      "meaning": "T flip-flop: q toggles on the rising edge of clk when t is 1",
+      "next": [
+        "0|0:0",
+        "0|1:1",
+        "1|0:1",
+        "1|1:0"
+      ],
+      "output": [
+        "0:01",
+        "1:10"
+      ],
+      "outputs": [
+        "q",
+        "qn"
+      ],
+      "state": [
+        "q"
+      ]
+    },
+    "threshold": {
+      "inputs": [
+        "a",
+        "b",
+        "c"
+      ],
+      "kind": "threshold",
+      "meaning": "q = 1 when w_a a + w_b b + w_c c >= theta; weights and theta are set per instance. Defaults make majority; theta 1 makes OR, theta 3 AND. Inputs may be levels",
+      "outputs": [
+        "q"
+      ],
+      "params": {
+        "theta": 2,
+        "weights": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
     "true": {
       "inputs": [],
+      "kind": "table",
       "meaning": "constant 1",
       "outputs": [
         "q"
@@ -239,6 +481,7 @@
         "a",
         "b"
       ],
+      "kind": "table",
       "meaning": "q = a equals b",
       "outputs": [
         "q"
@@ -255,6 +498,7 @@
         "a",
         "b"
       ],
+      "kind": "table",
       "meaning": "q = a xor b: exactly one",
       "outputs": [
         "q"
@@ -268,6 +512,6 @@
     }
   },
   "id": "logic.core",
-  "note": "Every gate is a truth table. A row is 'inputs:outputs', bits in the order the pins are listed. With buffer, not, true and false, the ten named two-input gates cover all sixteen Boolean functions of two inputs; majority, mux and half-adder show tables wider than two inputs and more than one output.",
+  "note": "Gates come in kinds. table: combinational, a truth table ('inputs:outputs', bits in pin order). sequential: state bits, a next-state table keyed 'state|inputs' (clock excluded) and an output table keyed by state; with clock and edge it moves only on that edge. threshold, compare and hysteresis read levels as well as bits; their params (weights, theta, low, high) are defaults an instance may override in config.logic. With buffer, not, true and false, the ten named two-input tables cover all sixteen Boolean functions of two inputs.",
   "schema": "soveraeign.schematic/logic-pack@0.0-draft"
 }

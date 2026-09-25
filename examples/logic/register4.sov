@@ -1,0 +1,371 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "logic-register4",
+  "revision": 0,
+  "meta": {
+    "title": "4-bit register: four D flip-flops on one clock"
+  },
+  "components": [
+    {
+      "id": "in-D0",
+      "symbolId": "act",
+      "x": 120,
+      "y": 100,
+      "config": {
+        "label": "D0",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "D0"
+        }
+      }
+    },
+    {
+      "id": "in-D1",
+      "symbolId": "act",
+      "x": 120,
+      "y": 230,
+      "config": {
+        "label": "D1",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "D1"
+        }
+      }
+    },
+    {
+      "id": "in-D2",
+      "symbolId": "act",
+      "x": 120,
+      "y": 360,
+      "config": {
+        "label": "D2",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "D2"
+        }
+      }
+    },
+    {
+      "id": "in-D3",
+      "symbolId": "act",
+      "x": 120,
+      "y": 490,
+      "config": {
+        "label": "D3",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "D3"
+        }
+      }
+    },
+    {
+      "id": "in-CLK",
+      "symbolId": "act",
+      "x": 120,
+      "y": 620,
+      "config": {
+        "label": "CLK",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "CLK"
+        }
+      }
+    },
+    {
+      "id": "ff0",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 100,
+      "config": {
+        "label": "DFF",
+        "logic": {
+          "gate": "dff"
+        },
+        "attachmentPoints": [
+          {
+            "id": "d",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "clk",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "qn",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-Q0",
+      "symbolId": "observe",
+      "x": 560,
+      "y": 100,
+      "config": {
+        "label": "Q0",
+        "logic": {
+          "kind": "output",
+          "name": "Q0"
+        }
+      }
+    },
+    {
+      "id": "ff1",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 230,
+      "config": {
+        "label": "DFF",
+        "logic": {
+          "gate": "dff"
+        },
+        "attachmentPoints": [
+          {
+            "id": "d",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "clk",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "qn",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-Q1",
+      "symbolId": "observe",
+      "x": 560,
+      "y": 230,
+      "config": {
+        "label": "Q1",
+        "logic": {
+          "kind": "output",
+          "name": "Q1"
+        }
+      }
+    },
+    {
+      "id": "ff2",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 360,
+      "config": {
+        "label": "DFF",
+        "logic": {
+          "gate": "dff"
+        },
+        "attachmentPoints": [
+          {
+            "id": "d",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "clk",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "qn",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-Q2",
+      "symbolId": "observe",
+      "x": 560,
+      "y": 360,
+      "config": {
+        "label": "Q2",
+        "logic": {
+          "kind": "output",
+          "name": "Q2"
+        }
+      }
+    },
+    {
+      "id": "ff3",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 490,
+      "config": {
+        "label": "DFF",
+        "logic": {
+          "gate": "dff"
+        },
+        "attachmentPoints": [
+          {
+            "id": "d",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "clk",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "qn",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-Q3",
+      "symbolId": "observe",
+      "x": 560,
+      "y": 490,
+      "config": {
+        "label": "Q3",
+        "logic": {
+          "kind": "output",
+          "name": "Q3"
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "in-D0",
+      "aSide": "out",
+      "b": "ff0",
+      "bSide": "d"
+    },
+    {
+      "id": "w2",
+      "a": "in-CLK",
+      "aSide": "out",
+      "b": "ff0",
+      "bSide": "clk"
+    },
+    {
+      "id": "w3",
+      "a": "ff0",
+      "aSide": "q",
+      "b": "out-Q0",
+      "bSide": "in"
+    },
+    {
+      "id": "w4",
+      "a": "in-D1",
+      "aSide": "out",
+      "b": "ff1",
+      "bSide": "d"
+    },
+    {
+      "id": "w5",
+      "a": "in-CLK",
+      "aSide": "out",
+      "b": "ff1",
+      "bSide": "clk"
+    },
+    {
+      "id": "w6",
+      "a": "ff1",
+      "aSide": "q",
+      "b": "out-Q1",
+      "bSide": "in"
+    },
+    {
+      "id": "w7",
+      "a": "in-D2",
+      "aSide": "out",
+      "b": "ff2",
+      "bSide": "d"
+    },
+    {
+      "id": "w8",
+      "a": "in-CLK",
+      "aSide": "out",
+      "b": "ff2",
+      "bSide": "clk"
+    },
+    {
+      "id": "w9",
+      "a": "ff2",
+      "aSide": "q",
+      "b": "out-Q2",
+      "bSide": "in"
+    },
+    {
+      "id": "w10",
+      "a": "in-D3",
+      "aSide": "out",
+      "b": "ff3",
+      "bSide": "d"
+    },
+    {
+      "id": "w11",
+      "a": "in-CLK",
+      "aSide": "out",
+      "b": "ff3",
+      "bSide": "clk"
+    },
+    {
+      "id": "w12",
+      "a": "ff3",
+      "aSide": "q",
+      "b": "out-Q3",
+      "bSide": "in"
+    }
+  ],
+  "references": []
+}

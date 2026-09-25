@@ -1,0 +1,89 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "logic-reorder",
+  "revision": 0,
+  "meta": {
+    "title": "Reorder control: ORDER turns on when STOCK falls to 10 and off when it reaches 30"
+  },
+  "components": [
+    {
+      "id": "in-STOCK",
+      "symbolId": "act",
+      "x": 120,
+      "y": 100,
+      "config": {
+        "label": "STOCK",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "STOCK",
+          "type": "level"
+        }
+      }
+    },
+    {
+      "id": "band",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 100,
+      "config": {
+        "label": "SCHMITT",
+        "logic": {
+          "gate": "schmitt",
+          "low": 10,
+          "high": 30
+        },
+        "attachmentPoints": [
+          {
+            "id": "x",
+            "side": "left",
+            "t": 0.5,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "qn",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-ORDER",
+      "symbolId": "observe",
+      "x": 560,
+      "y": 100,
+      "config": {
+        "label": "ORDER",
+        "logic": {
+          "kind": "output",
+          "name": "ORDER"
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "in-STOCK",
+      "aSide": "out",
+      "b": "band",
+      "bSide": "x"
+    },
+    {
+      "id": "w2",
+      "a": "band",
+      "aSide": "qn",
+      "b": "out-ORDER",
+      "bSide": "in"
+    }
+  ],
+  "references": []
+}

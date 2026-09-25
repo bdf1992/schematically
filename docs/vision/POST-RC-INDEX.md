@@ -7,7 +7,7 @@ These documents preserve future direction without widening the current release c
 - `LINEAR-NONLINEAR-SYSTEMS.md` — inventory of what the runtime computes by kind (linear, piecewise, nonlinear, combinatorial, fixpoint), and a first throughput optimization model over the same topology (`scripts/optimize_sov.py`).
 - `OPTIMIZATION-VISUALIZATION.md` — plan for picturing optimization runs: a run record, and views for the plan on the diagram, curves, the landscape of local optima, the search, convergence and marginal value.
 - `WHOLE-UNITS-AND-STATE.md` — units with material and work progress, a completion gate (AND over binary completions), and a draft `.sav` saved-state file that points at its `.sov` (`scripts/simulate_sov.py`).
-- `LOGIC-GATES.md` — gates as truth-table data (`packs/logic/gates.json`), composites from other documents, and an event-driven runtime (`scripts/logic_sov.py`) proven on adders, a subtractor and a latch.
+- `LOGIC-GATES.md` — combinational and sequential gates as data (tables, thresholds, comparators, latches, flip-flops, C-element, Schmitt trigger), bits and levels, composites that add and count, and a catalog of further gates.
 - Issue #6 — small data-driven logic machine for particle routing.
 
 Implementation begins from `dev` only after the accepted RC merges to `main`. See root `ROADMAP.md`, `RC-FINISH-LINE.md`, and `docs/BRANCHING.md`.
