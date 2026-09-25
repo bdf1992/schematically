@@ -1,4 +1,4 @@
-# Notation Model · proposed (2026-09-25)
+# Notation Model · built (2026-09-25)
 
 A diagram speaks a notation: the shapes, colours, marks and type its readers already know.
 Electronics has its symbols, logic has IEEE 91 gates, process work has BPMN, plant work has
@@ -169,6 +169,31 @@ It may not add an entry for something it does not use.
 
 Each step is judged by the layout review (`skills/layout-review`) on its pictures, and by
 contrast (`scripts/contrast_audit.py`).
+
+## As built (2026-09-25)
+
+| Part | Where | Test |
+| --- | --- | --- |
+| Notations, tokens, glyphs and terminals, the `logic` notation | `src/03-notation-core.js` (no DOM; the server loads it) | `tests/notation_qa.py` |
+| Symbols generated from the notation; pins, leads, terminal points | `src/10-model.js` (`installNotationSymbols`), `src/30-canvas.js`, `src/06-attachment-core.js` | `tests/notation_qa.py`, `tests/boundary_attachment_qa.py` |
+| Radius offset from inside; elevation shadows; recess and raised bevels | `src/55-render.js` | `tests/notation_qa.py`, `tests/sections_qa.py` |
+| Type roles, sentence case, subtitle, Markdown body | `src/55-render.js`, `styles/app.css` | `tests/typography_qa.py` |
+| Narration track | `src/66-narration.js`; pictures in `src/75-persistence.js` | `tests/typography_qa.py` |
+| Legend | `src/67-legend.js` | `tests/legend_qa.py`, `tests/server_render_qa.py` |
+| Crossings drawn as hops | `src/55-render.js`, `src/40-routing.js` | `tests/wire_crossing_qa.py` |
+
+Notes from building it:
+- A glyph's box leaves room at the card's foot for its title, and one line more for a
+  subtitle. The layout engine uses the same formula (`glyphBox`, `terminalOffset`), so a
+  laid-out wire is straight.
+- An unplaced point on a card with a glyph sits on its own terminal's line, so every lead is
+  straight. A point moved by hand gets a lead with one dogleg.
+- The layered engine levels a card by the terminals its wires use, not by card centres. It
+  widens a gap for the wires crossing it, and levels a source card with its successors.
+- Resolving a notation registers its terminal points before any component is read. The data
+  core resolves it while normalising, so a file, the server and the editor agree.
+- An explicit `set` before the simulation's first step replaces a lever's declared starting
+  value. Found by the half adder's truth table.
 
 ## Open
 

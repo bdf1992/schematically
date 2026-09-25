@@ -60,11 +60,11 @@ function renderDocument(formats,args={}){
     child.stdout.on('data',d=>out+=d);child.stderr.on('data',d=>err+=d);
     child.on('error',e=>{clearTimeout(timer);resolve({ok:false,code:'RENDERER_UNAVAILABLE',message:`cannot start ${RENDER_PYTHON}: ${e.message}`})});
     child.on('close',()=>{clearTimeout(timer);try{resolve(JSON.parse(out.trim().split('\n').pop()))}catch(_){resolve({ok:false,code:'RENDER_FAILED',message:(err||out).trim().split('\n').pop()||'no output'})}});
-    child.stdin.end(JSON.stringify({document:Data.clone(documentState),formats,appearance:args.appearance||'light',scale:args.scale??2,pad:args.pad??48,view:args.view||null}));
+    child.stdin.end(JSON.stringify({document:Data.clone(documentState),formats,appearance:args.appearance||'light',scale:args.scale??2,pad:args.pad??48,view:args.view||null,legend:args.legend===true||args.legend==='true'||args.legend==='1',narration:args.narration!=null&&args.narration!==''&&Number.isInteger(Number(args.narration))?Number(args.narration):null}));
   });
 }
 const RENDER_TOOLS=[
-  {name:'schematic.render',description:'Render the document as the editor exports it: format svg (text) or png (an image, returned as image content for agents that can see). appearance light|dark; scale for png.',inputSchema:{type:'object',properties:{format:{type:'string',enum:['svg','png']},appearance:{type:'string',enum:['light','dark']},scale:{type:'number',minimum:.25,maximum:4},view:{type:'string',description:'A layout id (schematic.layout op list); default: the document\'s default layout'}},additionalProperties:false}},
+  {name:'schematic.render',description:'Render the document as the editor exports it: format svg (text) or png (an image, returned as image content for agents that can see). appearance light|dark; scale for png.',inputSchema:{type:'object',properties:{format:{type:'string',enum:['svg','png']},appearance:{type:'string',enum:['light','dark']},scale:{type:'number',minimum:.25,maximum:4},view:{type:'string',description:'A layout id (schematic.layout op list); default: the document\'s default layout'},legend:{type:'boolean',description:'Put the legend (what the marks, colours, glyphs and shapes used mean) below the picture'},narration:{type:'integer',minimum:0,description:'Put narration line i below the picture'}},additionalProperties:false}},
   {name:'schematic.layout.metrics',description:'Measure how the document presents (LAYOUT-MODEL.md §5): a 0-10 score and every finding (overflow, collisions, route escapes, crossings, jogs, unmarked junctions...), each naming the ids it measured.',inputSchema:{type:'object',properties:{view:{type:'string'}},additionalProperties:false}}
 ];
 async function executeRenderTool(name,args={}){

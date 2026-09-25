@@ -46,7 +46,7 @@ def main() -> int:
                 if not switched.get('ok'):
                     return fail(switched.get('code', 'UNKNOWN_LAYOUT'), switched.get('message', 'no such layout'))
             page.wait_for_timeout(250)
-            opts = {'pad': req.get('pad', 48), 'scale': req.get('scale', 2)}
+            opts = {'pad': req.get('pad', 48), 'scale': req.get('scale', 2), 'legend': bool(req.get('legend')), 'narration': req.get('narration')}
             if 'svg' in formats:
                 out['svg'] = page.evaluate('(o)=>window.SovSchematicAPI.render.svg(o)', opts)
             if 'png' in formats:

@@ -44,6 +44,12 @@ with tempfile.TemporaryDirectory() as td:
         r = rpc(base, 'schematic.render', {'format': 'svg'})
         svg = r['structuredContent']['svg']
         assert svg.startswith('<svg') and 'Proof-resolution' in svg and 'simLayer' in svg and '<text' in svg
+        # The legend rides below the picture when asked, and never otherwise.
+        assert 'picture-legend' not in svg
+        r = rpc(base, 'schematic.render', {'format': 'svg', 'legend': True})
+        assert 'picture-legend' in r['structuredContent']['svg'], 'schematic.render legend: true'
+        legend_http = request.urlopen(base + '/api/v1/render.svg?legend=true', timeout=120).read().decode('utf-8')
+        assert 'picture-legend' in legend_http
         r = rpc(base, 'schematic.layout.metrics', {})
         assert not r['isError'] and r['structuredContent']['score'] >= 9.5 and 'rubric' in r['structuredContent'], r
         res = request.urlopen(base + '/api/v1/render.svg', timeout=120)
