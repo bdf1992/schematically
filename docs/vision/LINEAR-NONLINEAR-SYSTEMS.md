@@ -50,7 +50,7 @@ The palette already has a word for the missing piece: **LIMIT**, "restricts a fl
 
 | Schematic | Optimization |
 | --- | --- |
-| Component (stage) | an activity level x_c, with an optional capacity |
+| Component (stage) | an activity level x_c, with an optional capacity; `integer` holds it to whole units |
 | Component with role `source` | supply bound on its outflow |
 | Component with role `sink` | earns value on its inflow |
 | Wire a → b | a flow x_w |
@@ -81,7 +81,7 @@ Every run returns:
 `examples/optimization/workshop.sov`: timber enters a Shop floor Plane through a boundary Point, is cut into blanks, and becomes chairs (4 blanks, 1.5 h) or tables (10 blanks, 4 h), which leave through two boundary Points to a market. Labor is 40 h a week, scoped to the Shop floor. The saw congests as it nears 90 blanks. Chairs sell into a small market that saturates.
 
 ```
-$ python scripts/optimize_sov.py examples/optimization/workshop.sov --compare
+$ python scripts/optimize_sov.py examples/optimization/workshop.sov --compare --relax   # fractions allowed
 
 linear model  (11 variables, 11 rows)
   plan value (as the model sees it) 1043.48 USD
@@ -103,6 +103,31 @@ The linear model makes two mistakes, one for each effect:
 
 The nonlinear plan mixes products because saturation creates an interior optimum. The shadow prices say what to do next: **one more labor hour is worth about $14; more timber is worth nothing** until labor is relieved. Refining the breakpoints moves the value only from 694 (4 segments) to 706 (8), 710.8 (32) and 711.1 (128). The error is bounded and visible.
 
+### Whole units: branch and bound
+
+A stage marked `"integer": true` in the model is held to whole units. The chairs and tables in the workshop are. The solver runs **branch and bound** on top of the same simplex:
+
+1. Solve the LP with fractions allowed (the *relaxation*). Its value is an upper bound on every whole-unit plan.
+2. Pick the most fractional integer variable, say chairs = 1.25, and split into two sub-problems: chairs ≤ 1 and chairs ≥ 2.
+3. Solve each sub-problem's LP. Keep the best whole plan found so far (the *incumbent*). Discard any sub-problem whose LP bound cannot beat it.
+4. Stop when no open sub-problem's bound beats the incumbent. The plan is then **proven** optimal. If the node limit stops the search first, the answer is labelled `node_limit` and says how far short it may be.
+
+```
+nonlinear model  (whole units)
+  plan value 702.05 USD (under the true curves)
+    chairs 2   cut 58   tables 5
+    labor 39.42 / 40.00
+  whole units (chairs, tables): optimal after 4 nodes; relaxation 710.79, price of whole units 8.96 USD
+    one more labor gains 0.00 USD (measured; the shadow prices are the relaxation's)
+```
+
+Two things change once units are whole:
+
+- **The price of whole units** is the relaxation minus the integer optimum: $8.96 here. It measures what indivisibility costs, and it is a gap you can act on: smaller batches, or a divisible product.
+- **Marginal value becomes lumpy.** The relaxation says an hour of labor is worth $14.18, and it is, *per fraction of a chair*. With whole units, one more hour buys nothing, because the next chair needs 2.3 hours. So the solver *measures* the marginal value by solving again with the limit raised, and reports it next to the shadow price, not in place of it. The gap between the two is information: labor pays only in steps.
+
+The QA checks the result against a path branch and bound did not choose: it enumerates every (chairs, tables) pair in the workshop, solves the rest of the LP for each, and requires the same optimum. It also checks a knapsack, a general integer program, an infeasible one (2x = 1), and that a search stopped early reports a bound that is still an upper bound.
+
 ## 3. How this fits the direction
 
 - **Data-driven language (Issue #4).** Quantities belong in data, not code. The sidecar is a draft of what a domain pack's quantitative layer could look like: `uses`, `per`, `yield`, `capacity`, `effects`. A production-planning pack would supply the vocabulary; the kernel keeps the solver.
@@ -112,12 +137,49 @@ The nonlinear plan mixes products because saturation creates an interior optimum
 
 Guardrails kept: nothing new is exposed in the editor (no inert configuration); SVG is not the source of any number; the `.sov` format is untouched; refusals carry a code and a next operation.
 
-## 4. Residuals: what this does not do yet
+## 4. Which algorithms fit which shape
+
+Every term in the model already declares its shape: `curve()` classifies each effect as linear, concave or convex. So the model can pick a method from the shape of the problem instead of the user choosing it. The more important choice is **what kind of answer each method can certify**. There are three kinds, and a result should always say which it is:
+
+- **global**: proven best, by LP duality or by a branch-and-bound bound meeting the incumbent;
+- **local**: no small move improves it (the KKT conditions hold), but a better plan may exist elsewhere;
+- **heuristic**: a good plan, no proof of anything.
+
+| Problem shape | Where it shows up here | Method | Answer | Status |
+| --- | --- | --- | --- | --- |
+| Linear | recipes, yields, supplies, linear resources | **Simplex** (two-phase, Bland) | global, with shadow prices | **built** |
+| Convex separable: concave value, convex cost | saturation, congestion | **Piecewise-linear LP**: segments filled in order | global to a stated breakpoint error | **built** |
+| Linear or convex + whole units | integer stages | **Branch and bound** over the LP | global, or a stated gap at the node limit | **built** |
+| Convex smooth, not separable, or needing exact curves | interacting stages; a queue delay ρ/(1 − ρ) | **Interior point / barrier**, **Frank–Wolfe**, **projected gradient** | global (convexity makes every local optimum global) | next, small |
+| Nonconvex separable: economies of scale, accelerating value | `economies` with the wrong bend (refused today) | **SOS2 piecewise + branch and bound**: binary variables force the segments to fill in order | **global** to breakpoint error | next: the branch and bound it needs now exists |
+| Fixed costs, setup, minimum batch | "if a stage runs at all, it costs S" | **MILP**: an on/off binary per stage, x ≤ cap·z | global | next, same machinery |
+| General nonconvex smooth | products of decisions, e.g. rate × rate on a Wire chain | **Gradient descent / SQP / augmented Lagrangian** | **local** | later |
+| … the same, needing confidence | | **Multistart**, **basin hopping**, **simulated annealing** around the local solver | heuristic: better odds, no proof | later |
+| … the same, needing proof | | **Spatial branch and bound** with McCormick envelopes | global, slow | only if earned |
+| Rates and latency: products and 1/rate | rate composition, travel time | **Geometric programming**: in log space both become linear or convex | global | fits cleanly: rates are already multiplicative |
+| Sequence in time: precedence, makespan | "B cannot start until A finishes" | **Time-indexed MILP** or **constraint programming** | global or bounded | with the Issue #6 scheduler |
+| Pure network structure | a flow graph with no recipes | **Network simplex / min-cost flow** | global, much faster | only if scale demands it |
+| Discrete geometry | wire routing | **Dynamic programming, A\***, local search | global per wire today; a local search pass could lower total crossings | runtime, separate concern |
+
+### Gradient descent and local optima
+
+Gradient descent follows the slope downhill (or uphill, for a maximum). On a convex problem that is enough: there is one valley, so where it stops is the best. On a nonconvex problem it stops in *a* valley, the first one it rolls into. With economies of scale that is the typical failure. Starting from a small plan, each extra unit looks expensive, so descent stays small, while the real optimum is to commit to a large batch where units become cheap. It is a local optimum and it can be far from the global one.
+
+Three responses, in order of preference here:
+
+1. **Avoid needing it.** Most effects a schematic declares are *separable*: each bends one stage's term. Separable nonconvex curves are exactly solvable, to breakpoint error, by SOS2 piecewise + branch and bound, now that branch and bound exists. That is a global answer, not a hope.
+2. **When the problem is truly nonconvex and not separable**, run a local method (projected gradient, SQP) and label the result `local`. Run it from several starting points (multistart) and report how many distinct optima were found and how far apart they are. That spread is the honest measure of how rough the landscape is.
+3. **Use the exact methods as a witness.** On problems small enough for both, compare the local answer with the global one. The difference is the measured cost of the local method on that shape, which is the evidence for when it is safe to use.
+
+The same typing applies to efficiency measurements. A shadow price is exact for an LP. It is a local slope for a smooth nonconvex problem, and it is not defined at all for whole units, where the solver measures the step instead. The report should say which of the three it is.
+
+## 5. Residuals: what this does not do yet
 
 | Gap | Kind | What closes it |
 | --- | --- | --- |
-| Whole units: the plan builds 1.25 chairs | integrality | branch-and-bound over the same simplex, or rounding with a feasibility repair |
-| Economies of scale, setup cost, minimum batch | nonconvex | MILP (SOS2 segments, binary on/off); the solver refuses these today |
+| Economies of scale, setup cost, minimum batch | nonconvex | SOS2 segments and on/off binaries over the existing branch and bound (section 4); refused today |
+| Branch and bound at scale | performance | every node re-solves the dense LP from scratch. Warm-starting from the parent's basis (dual simplex), cutting planes and a rounding heuristic are the usual next steps |
+| Local methods for nonconvex, non-separable problems | local optima | projected gradient or SQP with multistart, labelled `local`, checked against the exact methods where both run |
 | Time as sequence, not just a budget: makespan, precedence, a stage that cannot start until another finishes | scheduling | a time-indexed or event-based model. The `(logicalTime, sequence)` scheduler in Issue #6 is the natural host |
 | Rate and travel time as decision variables: choosing Wire rates under a latency target | hyperbolic (1/rate) | a geometric program: in log space the rate product and 1/rate both become linear |
 | Stochastic arrivals, queueing delay ρ/(1 − ρ) | convex in load | fits the convex case now as a `congestion` with a different curve |
@@ -139,6 +201,7 @@ These came out of the inventory. None is changed here.
 ```
 python scripts/optimize_sov.py examples/optimization/workshop.sov             # the nonlinear plan
 python scripts/optimize_sov.py examples/optimization/workshop.sov --compare   # linear vs nonlinear
+python scripts/optimize_sov.py examples/optimization/workshop.sov --relax      # allow fractional units
 python scripts/optimize_sov.py examples/optimization/workshop.sov --segments 128 --json
 python tests/optimize_sov_qa.py                                              # the gate's check
 ```

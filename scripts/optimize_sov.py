@@ -23,10 +23,16 @@ to a stated breakpoint error by turning each bent term into linear segments that
 fills in order. A bend the other way (economies of scale, setup costs) makes the problem
 nonconvex; it is refused with a reason rather than solved badly.
 
+A stage marked `integer` is held to whole units by branch and bound over the same simplex.
+The result says whether that search proved its plan optimal or stopped at the node limit
+with a bound, what whole units cost against the fractional relaxation, and the measured
+value of one more unit of each resource (shadow prices belong to the relaxation).
+
 Usage:
     python scripts/optimize_sov.py examples/optimization/workshop.sov
     python scripts/optimize_sov.py examples/optimization/workshop.sov --compare   # linear vs nonlinear
-    python scripts/optimize_sov.py a.sov --model other.opt.json --segments 64 --json
+    python scripts/optimize_sov.py examples/optimization/workshop.sov --relax     # fractional units
+    python scripts/optimize_sov.py a.sov --model other.opt.json --segments 64 --node-limit 20000 --json
 """
 from __future__ import annotations
 
@@ -166,6 +172,90 @@ def simplex(c: list[float], A_ub: list[list[float]] = (), b_ub: list[float] = ()
     return LPResult(status='optimal', x=x, objective=obj[-1],
                     duals_ub=duals[:n_ub - len(bound_rows)], duals_bound=dict(zip(bound_rows, duals[n_ub - len(bound_rows):n_ub])),
                     duals_eq=duals[n_ub:])
+
+
+# --------------------------------------------------------------------------- whole units
+
+INT_TOL = 1e-6
+
+
+def branch_and_bound(c: list[float], A_ub: list[list[float]], b_ub: list[float], A_eq: list[list[float]],
+                     b_eq: list[float], upper: list[float | None], integer: list[int],
+                     node_limit: int = 5000, gap: float = 1e-9) -> dict:
+    """Maximize c.x as `simplex` does, with the variables in `integer` held to whole numbers.
+
+    Each node is the LP with tightened bounds on some integer variables. Its LP optimum is an
+    upper bound on every whole-number plan beneath it, so a node whose bound cannot beat the
+    best plan found so far (the incumbent) is pruned without being explored. Nodes are taken
+    best bound first, and deeper first among equals, so an incumbent arrives early. The
+    variable branched on is the most fractional one: x <= floor(v) on one side, x >= ceil(v)
+    on the other.
+
+    Returns status `optimal` (the bound met the incumbent), `node_limit` (stopped with a
+    stated gap), `infeasible` or `unbounded`; the relaxation's value; nodes explored.
+    """
+    import heapq
+
+    n = len(c)
+    base_upper = list(upper) + [None] * (n - len(upper))
+
+    def relax(bounds: dict[int, tuple[float, float | None]]) -> LPResult:
+        up = list(base_upper)
+        rows, rhs = [list(r) for r in A_ub], list(b_ub)
+        for j, (lo, hi) in bounds.items():
+            if hi is not None:
+                up[j] = hi if up[j] is None else min(up[j], hi)
+            if lo > 0:
+                row = [0.0] * n
+                row[j] = -1.0
+                rows.append(row)
+                rhs.append(-lo)
+        return simplex(c, rows, rhs, A_eq, b_eq, up)
+
+    def beats(value: float, incumbent: float) -> bool:
+        # No incumbent yet (-inf) means anything beats it; the tolerance would be inf - inf.
+        return incumbent == -math.inf or value > incumbent + gap * max(1.0, abs(incumbent))
+
+    root = relax({})
+    if root['status'] != 'optimal':
+        return {'status': root['status'], 'nodes': 1}
+    relaxation = root['objective']
+    best, best_x, nodes, counter = -math.inf, None, 0, 0
+    heap = [(-root['objective'], 0, counter, {}, root)]
+    while heap:
+        neg_bound, neg_depth, _, bounds, res = heapq.heappop(heap)
+        if not beats(-neg_bound, best):
+            continue
+        nodes += 1
+        x = res['x']
+        # Distance to the nearest whole number; the most fractional variable is branched on.
+        frac = [(abs(x[j] - round(x[j])), j) for j in integer if abs(x[j] - round(x[j])) > INT_TOL]
+        if not frac:
+            best, best_x = res['objective'], [round(v) if j in integer else v for j, v in enumerate(x)]
+            continue
+        if nodes >= node_limit:
+            heapq.heappush(heap, (neg_bound, neg_depth, counter, bounds, res))
+            break
+        _, j = max(frac)
+        v = x[j]
+        lo, hi = bounds.get(j, (0.0, None))
+        for child in ({**bounds, j: (lo, float(math.floor(v)))}, {**bounds, j: (float(math.ceil(v)), hi)}):
+            clo, chi = child[j]
+            if chi is not None and clo > chi:
+                continue
+            r = relax(child)
+            if r['status'] == 'optimal' and beats(r['objective'], best):
+                counter += 1
+                heapq.heappush(heap, (-r['objective'], neg_depth - 1, counter, child, r))
+    open_bound = max([-h[0] for h in heap], default=-math.inf)
+    if best_x is None:
+        if heap:
+            return {'status': 'node_limit', 'nodes': nodes, 'relaxation': relaxation, 'bound': open_bound}
+        return {'status': 'infeasible', 'nodes': nodes, 'relaxation': relaxation}
+    bound = max(best, open_bound)
+    status = 'node_limit' if beats(bound, best) else 'optimal'
+    return {'status': status, 'x': best_x, 'objective': best, 'bound': bound, 'relaxation': relaxation,
+            'nodes': nodes}
 
 
 # --------------------------------------------------------------------------- effects
@@ -397,7 +487,7 @@ def build(doc: dict, model: dict, segments: int = 32, linear: bool = False) -> d
     dense = lambda rows: [[r.get(j, 0.0) for j in range(n)] for r in rows]  # noqa: E731
     return {'c': c, 'A_ub': dense(A_ub), 'b_ub': b_ub, 'A_eq': dense(A_eq), 'b_eq': b_eq, 'upper': upper,
             'names': var_names, 'rows_ub': rows_ub, 'rows_eq': rows_eq, 'act': act, 'flow': flow,
-            'bends': bends}
+            'bends': bends, 'integer': [act[cid] for cid in act if stages[cid].get('integer')]}
 
 
 def _flow_bound(w: dict, stages: dict, wires: list[dict], model: dict) -> float | None:
@@ -434,26 +524,44 @@ def true_value(doc: dict, model: dict, plan: dict) -> dict:
     return {'value': value, 'usage': usage, 'feasible': all(u['feasible'] for u in usage.values())}
 
 
-def solve(doc: dict, model: dict, segments: int = 32, linear: bool = False) -> dict:
+def solve(doc: dict, model: dict, segments: int = 32, linear: bool = False, relax: bool = False,
+          node_limit: int = 5000, marginals: bool = True) -> dict:
+    """Solve the model. Stages marked `integer` are held to whole units unless `relax`."""
     lp = build(doc, model, segments, linear)
     res = simplex(lp['c'], lp['A_ub'], lp['b_ub'], lp['A_eq'], lp['b_eq'], lp['upper'])
     if res['status'] != 'optimal':
         raise Refusal(res['status'].upper(), f'the model is {res["status"]}',
                       'loosen a limit' if res['status'] == 'infeasible' else 'bound a value-bearing flow')
-    x = res['x']
-    plan = {'activity': {cid: x[j] for cid, j in lp['act'].items()},
-            'flows': {wid: x[j] for wid, j in lp['flow'].items()}}
     shadow = {label[len('resource:'):]: d for label, d in zip(lp['rows_ub'], res['duals_ub'])
               if label.startswith('resource:')}
     shadow_supply = {label[len('supply:'):]: d for label, d in zip(lp['rows_ub'], res['duals_ub'])
                      if label.startswith('supply:')}
-    capacity = {}
-    for cid, j in lp['act'].items():
-        if j in res['duals_bound']:
-            capacity[cid] = res['duals_bound'][j]
-    return {'model': 'linear' if linear else 'nonlinear', 'segments': segments, 'objective': res['objective'],
+    capacity = {cid: res['duals_bound'][j] for cid, j in lp['act'].items() if j in res['duals_bound']}
+    x, objective, whole = res['x'], res['objective'], None
+    if lp['integer'] and not relax:
+        bb = branch_and_bound(lp['c'], lp['A_ub'], lp['b_ub'], lp['A_eq'], lp['b_eq'], lp['upper'],
+                              lp['integer'], node_limit=node_limit)
+        if bb['status'] == 'infeasible' or 'x' not in bb:
+            raise Refusal('NO_WHOLE_PLAN', f'no whole-unit plan found ({bb["status"]} after {bb["nodes"]} nodes)',
+                          'raise --node-limit, loosen a limit, or solve with --relax')
+        x, objective = bb['x'], bb['objective']
+        whole = {'status': bb['status'], 'nodes': bb['nodes'], 'relaxation': res['objective'],
+                 'bound': bb['bound'], 'price_of_whole_units': res['objective'] - bb['objective'],
+                 'stages': [cid for cid, j in lp['act'].items() if j in lp['integer']]}
+        if marginals:
+            # Shadow prices belong to the relaxation. With whole units the value of one more
+            # unit of a limit is lumpy, so it is measured: solve again with the limit raised by one.
+            whole['marginal'] = {}
+            for rname, r in model.get('resources', {}).items():
+                more = json.loads(json.dumps(model))
+                more['resources'][rname]['limit'] = float(r['limit']) + 1
+                whole['marginal'][rname] = solve(doc, more, segments, linear, node_limit=node_limit,
+                                                 marginals=False)['objective'] - objective
+    plan = {'activity': {cid: x[j] for cid, j in lp['act'].items()},
+            'flows': {wid: x[j] for wid, j in lp['flow'].items()}}
+    return {'model': 'linear' if linear else 'nonlinear', 'segments': segments, 'objective': objective,
             'plan': plan, 'shadow_price': {'resource': shadow, 'supply': shadow_supply, 'capacity': capacity},
-            'bends': lp['bends'], 'evaluated': true_value(doc, model, plan),
+            'whole_units': whole, 'bends': lp['bends'], 'evaluated': true_value(doc, model, plan),
             'variables': len(lp['names']), 'rows': len(lp['rows_ub']) + len(lp['rows_eq'])}
 
 
@@ -478,6 +586,15 @@ def report(result: dict, unit: str) -> str:
     for s, p in result['shadow_price']['capacity'].items():
         if abs(p) > 1e-9:
             out.append(f'    capacity:{s:<5} shadow {p:7.2f} {unit} per unit')
+    whole = result.get('whole_units')
+    if whole:
+        out.append(f"  whole units ({', '.join(whole['stages'])}): {whole['status']} after {whole['nodes']} nodes;"
+                   f" relaxation {whole['relaxation']:.2f}, price of whole units {whole['price_of_whole_units']:.2f} {unit}")
+        if whole['status'] != 'optimal':
+            out.append(f"    best bound {whole['bound']:.2f}: the plan may be up to"
+                       f" {whole['bound'] - result['objective']:.2f} {unit} short of optimal")
+        for r, m in whole.get('marginal', {}).items():
+            out.append(f'    one more {r:<8} gains {m:7.2f} {unit} (measured; shadow prices above are the relaxation\'s)')
     return '\n'.join(out)
 
 
@@ -488,12 +605,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument('--segments', type=int, default=32, help='linear pieces per bent term')
     ap.add_argument('--linear', action='store_true', help='drop every effect')
     ap.add_argument('--compare', action='store_true', help='solve linear and nonlinear, and judge both by the true curves')
+    ap.add_argument('--relax', action='store_true', help='ignore `integer` stages: fractional units allowed')
+    ap.add_argument('--node-limit', type=int, default=5000, help='branch-and-bound nodes before stopping with a gap')
     ap.add_argument('--json', action='store_true')
     args = ap.parse_args(argv)
     try:
         doc, model = load(args.document, args.model)
-        runs = [solve(doc, model, args.segments, linear=True), solve(doc, model, args.segments)] if args.compare \
-            else [solve(doc, model, args.segments, linear=args.linear)]
+        opts = {'relax': args.relax, 'node_limit': args.node_limit}
+        runs = [solve(doc, model, args.segments, linear=True, **opts), solve(doc, model, args.segments, **opts)] \
+            if args.compare else [solve(doc, model, args.segments, linear=args.linear, **opts)]
     except Refusal as r:
         print(json.dumps(r.as_dict(), indent=2, sort_keys=True) if args.json else f'refused {r.code}: {r.reason}'
               + (f'\n  next: {r.next_operation}' if r.next_operation else ''), file=sys.stderr)
