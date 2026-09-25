@@ -17,49 +17,70 @@
     if(placement.kind==='edge'||placement.kind==='path')return 1;
     return 2;
   }
-  // 2D built-in points (left/right/top) are template defaults, not an ontology.
-  // `config.attachmentDefaults='none'` exposes no built-ins: the surface is then
-  // attachable only through hosted 0D Points and data-declared boundary points.
+  // A 2D Component's ports are declared data, never assumed here. Under
+  // `config.attachmentDefaults='standard'` (explicit or implied) it exposes its
+  // template's declared ports, then its authored `config.attachmentPoints` as
+  // additions; under 'none' the authored list is the complete set. The data core
+  // registers the template lookup (`useTemplatePorts`), so this module holds no
+  // port set of its own and stays free of DOM, rendering and editor state.
   const ATTACHMENT_DEFAULT_MODES=new Set(['standard','none']);
+  const PORT_SIDES=['left','right','top','bottom'];
+  const PORT_FLOWS=['in','out','control','duplex','trigger'];
+  const DEFAULT_CHANNELS=[{id:'main'}];
+  let templatePortsOf=()=>[];
+  function useTemplatePorts(lookup){templatePortsOf=typeof lookup==='function'?lookup:()=>[];return templatePortsOf}
   function attachmentDefaults(entity){
     const mode=entity?.config?.attachmentDefaults;
     return ATTACHMENT_DEFAULT_MODES.has(mode)?mode:'standard';
   }
+  // Absent channels read as the one default channel, `main`.
+  function portChannels(port){
+    const list=Array.isArray(port?.channels)?port.channels.map(c=>String(c?.id??'').trim()).filter(Boolean):[];
+    return list.length?[...new Set(list)].map(id=>({id})):DEFAULT_CHANNELS.map(c=>({...c}));
+  }
+  function channelIds(spec){return portChannels(spec).map(c=>c.id)}
   // Connectivity follows the lower-dimensional host when a richer form is settled onto it.
   // A 2D ACT hosted by a Wire therefore exposes only the Wire-aligned 1D endpoints.
   function effectiveDimension(entity){return Math.min(intrinsicDimension(entity),hostDimension(entity))}
+  function declaredSpec(raw,{authored=false}={}){
+    if(!raw||typeof raw!=='object')return null;
+    const id=String(raw.id||'').trim();if(!id)return null;
+    const side=PORT_SIDES.includes(raw.side)?raw.side:null;if(!side)return null;
+    const compatId=String(raw.compatId||id).trim()||id;
+    const t=Math.max(0,Math.min(1,Number.isFinite(Number(raw.t))?Number(raw.t):.5));
+    const flow=PORT_FLOWS.includes(raw.flow)?raw.flow:PORT_FLOWS.includes(raw.defaultFlow)?raw.defaultFlow:'duplex';
+    const spec={id,compatId,side,role:'boundary',defaultFlow:flow,flow,t,channels:portChannels(raw)};
+    if(typeof raw.label==='string'&&raw.label)spec.label=raw.label;
+    if(authored)spec.authored=true;
+    return spec;
+  }
+  function templatePointSpecs(entity){
+    if(attachmentDefaults(entity)==='none')return [];
+    const declared=templatePortsOf(entity?.symbolId,entity);
+    return (Array.isArray(declared)?declared:[]).map(raw=>declaredSpec(raw)).filter(Boolean);
+  }
   function basePointSpecs(d,entity=null){
     if(d===0)return [{id:'self',compatId:'out',side:'point',role:'self',defaultFlow:'duplex',t:.5}];
     if(d===1)return [
       {id:'start',compatId:'in',side:'left',role:'endpoint',defaultFlow:'in',t:0},
       {id:'end',compatId:'out',side:'right',role:'endpoint',defaultFlow:'out',t:1}
     ];
-    if(attachmentDefaults(entity)==='none')return [];
-    return [
-      {id:'left',compatId:'in',side:'left',role:'boundary',defaultFlow:'in',t:.5},
-      {id:'right',compatId:'out',side:'right',role:'boundary',defaultFlow:'out',t:.5},
-      {id:'top',compatId:'control',side:'top',role:'boundary',defaultFlow:'control',t:.5}
-    ];
+    return templatePointSpecs(entity);
   }
   function customPointSpecs(entity,d,base){
-    // 0.1 RC seam: built-in dimensional points are defaults, not a permanent
-    // cardinality ceiling. Full cell/facet grammar remains post-RC; a 2D
-    // template may already declare extra boundary attachment points as data.
+    // Authored ports: additions to the template's under 'standard', the whole set under
+    // 'none'. Only a 2D surface exposes them; an entry that repeats an id or compatId
+    // already taken, or names no valid side, is not exposed.
     if(d!==2)return [];
     const authored=Array.isArray(entity?.config?.attachmentPoints)?entity.config.attachmentPoints:[];
     const usedIds=new Set(base.map(x=>x.id)),usedCompat=new Set(base.map(x=>x.compatId));
     const out=[];
     for(const raw of authored){
-      if(!raw||typeof raw!=='object')continue;
-      const id=String(raw.id||'').trim();if(!id||usedIds.has(id))continue;
-      const side=['left','right','top','bottom'].includes(raw.side)?raw.side:null;if(!side)continue;
-      let compatId=String(raw.compatId||id).trim()||id;
-      if(usedCompat.has(compatId))compatId=id;
-      if(usedCompat.has(compatId))continue;
-      const t=Math.max(0,Math.min(1,Number.isFinite(Number(raw.t))?Number(raw.t):.5));
-      const defaultFlow=['in','out','control','duplex','trigger'].includes(raw.defaultFlow)?raw.defaultFlow:'duplex';
-      out.push({id,compatId,side,role:'boundary',defaultFlow,t,authored:true});
-      usedIds.add(id);usedCompat.add(compatId);
+      const spec=declaredSpec(raw,{authored:true});if(!spec||usedIds.has(spec.id))continue;
+      if(usedCompat.has(spec.compatId))spec.compatId=spec.id;
+      if(usedCompat.has(spec.compatId))continue;
+      out.push(spec);
+      usedIds.add(spec.id);usedCompat.add(spec.compatId);
     }
     return out;
   }
@@ -110,5 +131,5 @@
     if(end==='a')wire.aSide=spec.compatId;else wire.bSide=spec.compatId;
     return wire[key];
   }
-  return {intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
+  return {PORT_SIDES,PORT_FLOWS,useTemplatePorts,portChannels,channelIds,declaredSpec,templatePointSpecs,intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
 });
