@@ -63,8 +63,8 @@ State cannot live in the `.sov`. `DATA-FORMATS.md` keeps a document to authored 
 
 ```text
 .sav
-├─ document    id, revision, file name, sha256 of the .sov it belongs to
-├─ model       file name, sha256 of the quantities it was run with
+├─ document    id, revision, file name, semantic fingerprint of the .sov it belongs to
+├─ model       file name, semantic fingerprint of the quantities it was run with
 ├─ clock       time, sequence, horizon
 ├─ sources     stock on hand (timber left)
 ├─ stages      per stage: stock of finished units, completed (total and this horizon),
@@ -74,23 +74,30 @@ State cannot live in the `.sov`. `DATA-FORMATS.md` keeps a document to authored 
 └─ events      the ordered log: horizon, material, start, work, completed, counted, stalled | met
 ```
 
-Loading a `.sav` against a document or model whose content differs from the one it names is refused (`DOCUMENT_CHANGED`, `MODEL_CHANGED`), with a next operation. **Save and resume equals running straight through:** the QA runs three horizons without stopping and three with a save and load between each, and requires the two states to be identical byte for byte. `examples/optimization/workshop.learning.week1.sav` is the example: week one, ending with the part-kitted table. The QA loads it and checks that week two finishes that table first.
+Loading a `.sav` against a document or model that differs in meaning from the one it names is refused (`DOCUMENT_CHANGED`, `MODEL_CHANGED`), with a next operation. **Save and resume equals running straight through:** the QA runs three horizons without stopping and three with a save and load between each, and requires the two states to be identical byte for byte. `examples/optimization/workshop.learning.week1.sav` is the example: week one, ending with the part-kitted table. The QA loads it and checks that week two finishes that table first.
 
-### Should the `.sov` register its saves?
+### Decided: the save points at the document, pinned by meaning
 
-Three ways to connect them:
+**Option a** (decided): a `.sav` names its `.sov`; the `.sov` knows nothing of saves. The other options were:
+- **b**, the document registering its saves: circular, because registering a save changes the document it pins.
+- **c**, a `.sovpak` bundling a document with its saves: still open for when saves need to travel.
 
-| Option | How | Cost |
-| --- | --- | --- |
-| **a. The save points at the document** (built) | `.sav` names the `.sov` by id and hash; the `.sov` knows nothing of saves | a document does not list its saves; a tool finds them by looking next to it |
-| **b. The document registers its saves** | the `.sov` lists saves, e.g. in `references` | **circular.** Registering a save edits the document, which changes its hash, which invalidates the save it just registered. It also puts runtime churn into the authored file |
-| **c. A package bundles them** | `.sovpak` carries the document, its model and chosen saves as members; the manifest lists them | a package format change, but the package is already where "a document plus things that travel with it" lives |
+**The pin is a semantic fingerprint** (decided), `scripts/sov_fingerprint.py`, written `sem1:<sha256>`:
 
-The recommendation is **a** now and **c** when saves need to travel. Option b fails on the hash cycle, unless a save pins something coarser than the whole file (below).
+- The document is first normalized through the editor's own data core (`scripts/normalize_sov.mjs`). A hand-authored file, the same file after one editor save, and after two all have one fingerprint; the QA checks this for every example.
+- Then an **allowlist** of meaning is hashed:
+  - what exists: id and type;
+  - what contains or hosts it: parent, surface, host kind and host id;
+  - dimension and whether its interior is open;
+  - signal mode, port faces, declared attachment points and `config.logic`;
+  - what each wire joins, through which points, and its direction and operations.
+- Everything else is left out: position, size, where along a side a point sits, labels, colors, titles, editor flags, revision.
+- A new field counts only if it is added to the list on purpose, so a presentation field can never invalidate saves by accident.
+- For the model, only `note` fields are ignored; every number counts.
 
-### How strict the pin should be
-
-Today a save pins the exact bytes of the `.sov`. Moving a component on the canvas changes those bytes and refuses every save. A coarser pin, a fingerprint of just the semantic content (components, wires, recipes, but not positions or labels), would let layout edits keep their saves while structural edits still refuse them. That is a decision about what "the same document" means for state.
+The QA checks both directions:
+- **Keep the save:** moving a component, relabelling it, sliding a point along its side, retitling, reordering or bumping the revision, rewording a note.
+- **Refuse the save:** moving a wire's end, retyping a component, lifting it out of its Plane, re-hosting a point, changing a limit.
 
 ## Residuals
 
@@ -108,11 +115,11 @@ Today a save pins the exact bytes of the `.sov`. Moving a component on the canva
 
 These runs feed `OPTIMIZATION-VISUALIZATION.md` directly. View A's stage ring becomes the unit in progress: one arc per requirement, filled to its progress, closing when the gate fires. Counts on sink wires tick in whole steps. A stall is drawn at the stage that stalled, with its reason. The event log is what an animated replay steps through.
 
-## Decisions this needs
+## Decisions
 
-- **Save file relation:** a (save points at document) and later c (package bundles), as recommended, or b with a coarser pin.
-- **Pin strictness:** exact bytes, or a semantic fingerprint that survives layout edits.
-- **Whether `.sav` is a name worth keeping.** It reads well next to `.sov`. The schema tag keeps the family name: `soveraeign.schematic/state`.
+- **Save relation:** option a, decided. Option c (a package bundling saves) remains for when saves need to travel.
+- **Pin:** a semantic fingerprint, decided.
+- **Name:** `.sav` it is. The schema tag keeps the family name: `soveraeign.schematic/state`.
 
 ## Try it
 

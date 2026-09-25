@@ -8,7 +8,8 @@
     takes adds up to the optimizer's true-curve usage (the per-unit steps telescope);
   - counts can be rebuilt from the event log alone, and events are strictly ordered;
   - saving a state and running the next horizon from it equals running both without stopping;
-  - a save is refused against a document or model other than the one it names.
+  - a save is pinned by meaning: layout, label and prose edits keep it; a change to what
+    exists, connects, is hosted or is quantified refuses it.
 """
 from __future__ import annotations
 
@@ -141,25 +142,72 @@ def refused(fn, code: str) -> None:
     raise AssertionError(f'expected refusal {code}')
 
 
+def check_fingerprint_survives_editor_save() -> None:
+    # The editor writes the compact form, with defaults a hand-authored file leaves out. A
+    # save made against the authored file must still load after the editor re-saves it.
+    import subprocess
+    from sov_fingerprint import document_fingerprint
+    for path in [DOC, *sorted((ROOT / 'examples').glob('*.sov'))]:
+        once = subprocess.run(['node', str(ROOT / 'scripts' / 'validate_sov.mjs'), '--compact', str(path)],
+                              capture_output=True, text=True, check=True).stdout.split('\n', 1)[1]
+        authored = document_fingerprint(json.loads(path.read_text(encoding='utf-8')))
+        assert document_fingerprint(json.loads(once)) == authored, path.name
+        with tempfile.TemporaryDirectory() as tmp:
+            again = Path(tmp) / 'again.sov'
+            again.write_text(once, encoding='utf-8')
+            twice = subprocess.run(['node', str(ROOT / 'scripts' / 'validate_sov.mjs'), '--compact', str(again)],
+                                   capture_output=True, text=True, check=True).stdout.split('\n', 1)[1]
+        assert document_fingerprint(json.loads(twice)) == authored, path.name
+
+
 def check_refusals() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         doc, model = copy_pair(Path(tmp))
         ws = Workshop(doc, model)
         sav = Path(tmp) / 'a.sav'
         sav.write_text(dump_state(run_horizon(ws, new_state(ws), plan_targets(ws))))
-        m = json.loads(model.read_text())
-        m['resources']['labor']['limit'] = 41
-        model.write_text(json.dumps(m))
-        refused(lambda: load_state(Workshop(doc, model), sav), 'MODEL_CHANGED')
-        shutil.copy(DIR / 'workshop.opt.json', model)
-        d = json.loads(doc.read_text())
-        d['meta']['title'] = 'edited'
-        doc.write_text(json.dumps(d))
-        refused(lambda: load_state(Workshop(doc, model), sav), 'DOCUMENT_CHANGED')
-        shutil.copy(DOC, doc)
-        m = json.loads(model.read_text())
-        m['flows']['w-chair-blanks']['per'] = 4.5
-        model.write_text(json.dumps(m))
+
+        def edit(path: Path, change) -> None:
+            data = json.loads(path.read_text())
+            change(data)
+            path.write_text(json.dumps(data))
+
+        def reset() -> None:
+            shutil.copy(DOC, doc)
+            shutil.copy(DIR / 'workshop.opt.json', model)
+
+        def component(d: dict, cid: str) -> dict:
+            return next(c for c in d['components'] if c['id'] == cid)
+
+        # Meaning unchanged: the save still loads.
+        keeps = [
+            (doc, lambda d: d['meta'].update(title='edited')),
+            (doc, lambda d: component(d, 'chairs').update(x=999, y=-40)),
+            (doc, lambda d: component(d, 'chairs')['config'].update(label='Stools')),
+            (doc, lambda d: component(d, 'chair-out')['placement'].update(t=0.4)),
+            (doc, lambda d: d.update(revision=d['revision'] + 7, components=list(reversed(d['components'])))),
+            (model, lambda m: m['flows']['w-stock'].update(note='a different sentence')),
+        ]
+        for path, change in keeps:
+            reset()
+            edit(path, change)
+            load_state(Workshop(doc, model), sav)
+
+        # Meaning changed: the save is refused, naming which file moved.
+        refuses = [
+            (doc, lambda d: next(w for w in d['wires'] if w['id'] == 'w-chair-blanks').update(b='tables'), 'DOCUMENT_CHANGED'),
+            (doc, lambda d: component(d, 'chairs').update(symbolId='gate'), 'DOCUMENT_CHANGED'),
+            (doc, lambda d: [component(d, 'chairs').pop(k) for k in ('parentId', 'canvasId')], 'DOCUMENT_CHANGED'),
+            (doc, lambda d: component(d, 'chair-out')['placement'].update(hostId='cut'), 'DOCUMENT_CHANGED'),
+            (model, lambda m: m['resources']['labor'].update(limit=41), 'MODEL_CHANGED'),
+        ]
+        for path, change, code in refuses:
+            reset()
+            edit(path, change)
+            refused(lambda: load_state(Workshop(doc, model), sav), code)
+
+        reset()
+        edit(model, lambda m: m['flows']['w-chair-blanks'].update(per=4.5))
         refused(lambda: Workshop(doc, model), 'FRACTIONAL_RECIPE')
 
 
@@ -169,6 +217,7 @@ def main() -> int:
     check_partial_is_not_counted()
     check_save_and_resume()
     check_committed_save()
+    check_fingerprint_survives_editor_save()
     check_refusals()
     print('simulate_sov QA PASS')
     return 0

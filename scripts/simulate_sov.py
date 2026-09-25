@@ -24,8 +24,9 @@ stage that can take materials or do work does, else the next one upstream. Each 
 event ordered by (time, sequence), the scheduler Issue #6 describes.
 
 State lives in a `.sav` (soveraeign.schematic/state@0.0-draft), never in the `.sov`: the
-document stays authored truth. A `.sav` names the document and model it belongs to by id
-and content hash, and is refused against any other. Loading one and running the next
+document stays authored truth. A `.sav` points at the document and model it belongs to by a
+semantic fingerprint (scripts/sov_fingerprint.py), and is refused against any document or
+model that differs in meaning; layout and label edits keep it. Loading one and running the next
 horizon gives the same state as running both horizons without stopping.
 
 Usage:
@@ -38,7 +39,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import hashlib
 import json
 import math
 import sys
@@ -46,13 +46,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from optimize_sov import Refusal, curve, solve  # noqa: E402
+from sov_fingerprint import document_fingerprint, model_fingerprint  # noqa: E402
 
 STATE_SCHEMA = 'soveraeign.schematic/state@0.0-draft'
 EPS = 1e-9
 
 
-def digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 class Workshop:
@@ -139,8 +138,8 @@ def new_state(ws: Workshop) -> dict:
     return {
         'schema': STATE_SCHEMA,
         'document': {'id': ws.doc.get('id'), 'revision': ws.doc.get('revision'), 'path': ws.doc_path.name,
-                     'sha256': digest(ws.doc_path)},
-        'model': {'path': ws.model_path.name, 'sha256': digest(ws.model_path)},
+                     'fingerprint': document_fingerprint(ws.doc)},
+        'model': {'path': ws.model_path.name, 'fingerprint': model_fingerprint(ws.model)},
         'clock': {'time': 0.0, 'sequence': 0, 'horizon': 0},
         'sources': {s: 0.0 for s in ws.sources},
         'stages': {s: {'stock': 0, 'completed': 0, 'horizon_completed': 0, 'wip': None} for s in ws.stages},
@@ -154,11 +153,13 @@ def load_state(ws: Workshop, path: Path) -> dict:
     state = json.loads(path.read_text(encoding='utf-8'))
     if state.get('schema') != STATE_SCHEMA:
         raise Refusal('SCHEMA', f'expected {STATE_SCHEMA}, found {state.get("schema")!r}')
-    if state['document']['sha256'] != digest(ws.doc_path):
-        raise Refusal('DOCUMENT_CHANGED', f'{path.name} was saved against a different {ws.doc_path.name}',
+    # Pinned by meaning, not bytes (scripts/sov_fingerprint.py): moving or relabelling a
+    # component keeps a save; changing what exists, connects or flows refuses it.
+    if state['document'].get('fingerprint') != document_fingerprint(ws.doc):
+        raise Refusal('DOCUMENT_CHANGED', f'{path.name} was saved against a structurally different {ws.doc_path.name}',
                       'run from the document the save names, or start a new save')
-    if state['model']['sha256'] != digest(ws.model_path):
-        raise Refusal('MODEL_CHANGED', f'{path.name} was saved against a different {ws.model_path.name}',
+    if state['model'].get('fingerprint') != model_fingerprint(ws.model):
+        raise Refusal('MODEL_CHANGED', f'{path.name} was saved against different quantities in {ws.model_path.name}',
                       'run from the model the save names, or start a new save')
     return state
 

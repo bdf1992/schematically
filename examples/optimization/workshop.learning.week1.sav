@@ -9,10 +9,10 @@
     "w-table-sales": 1
   },
   "document": {
+    "fingerprint": "sem1:d33e7bcb83fb0761aaf9bea6da4b6e95918938ffd3e82566aa112d332303dad9",
     "id": "example-optimization-workshop",
     "path": "workshop.sov",
-    "revision": 0,
-    "sha256": "f8dd3c92aa71ecb8ee04787a8586b6ca5e61f9b1246352eef756a7ced10177f4"
+    "revision": 0
   },
   "events": [
     {
@@ -3693,8 +3693,8 @@
     }
   ],
   "model": {
-    "path": "workshop.learning.opt.json",
-    "sha256": "f5b9160cc90f6e8a0c708f634847f564ebfe090a50df54ce9be425483d27302f"
+    "fingerprint": "sem1:6d4aa836e634e6e421d476fa5cd74d7f457decec7f78174555e9f3db03860550",
+    "path": "workshop.learning.opt.json"
   },
   "resources": {
     "labor": {
