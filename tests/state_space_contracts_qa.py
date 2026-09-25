@@ -834,6 +834,55 @@ def check_binding() -> None:
     assert s7['again'] and s7['check'] == clean, s7
 
 
+# Contract 1b amendment 1, step 15: a Point declares its `self` port (channels, merge) without side or t.
+POINT_SELF = r"""
+const S=require(process.argv[1]),D=globalThis.SovSchematicData,fs=require('fs');
+const clone=x=>JSON.parse(JSON.stringify(x));
+const packs=[S.loadPack(JSON.parse(fs.readFileSync(process.argv[2],'utf8'))).pack];
+const base=()=>({schema:'soveraeign.schematic/document@0.1',id:'self',revision:0,meta:{},components:[
+  {id:'S1',symbolId:'point',x:0,y:0,config:{}},{id:'S2',symbolId:'point',x:0,y:100,config:{}},{id:'J',symbolId:'point',x:100,y:50,config:{}}],
+  wires:[{id:'w1',a:'S1',aSide:'self',b:'J',bSide:'self'},{id:'w2',a:'S2',aSide:'self',b:'J',bSide:'self'}],references:[],layout:{}});
+const withSelf=entry=>{const d=base();d.components[2].config.attachmentPoints=[entry];return d};
+const look=d=>{const n=D.normalizeDocument(clone(d)),j=n.components.find(c=>c.id==='J');
+  return {stored:j.config.attachmentPoints??null,compact:D.compactDocument(n).components.find(c=>c.id==='J').config.attachmentPoints??null,
+    ports:D.canonicalAttachmentPointDescriptors(j).map(s=>[s.id,s.flow??null,s.channels??null]),valid:D.validateDocument(n).ok,
+    check:S.checkDocument(n,packs).refusals.map(r=>r.code),reload:JSON.stringify(D.documentFromFilePayload(clone(D.compactDocument(n))).components.find(c=>c.id==='J').config.attachmentPoints??null)}};
+const merge={combine:'last',order:{kind:'declared',paths:['w1','w2']}};
+const out={
+  none:look(base()),
+  clean:look(withSelf({id:'self',channels:[{id:'main',merge}]})),
+  placeholder:look(withSelf({id:'self',side:'left',t:.5,flow:'duplex',channels:[{id:'main',merge}]})),
+  bare:look(withSelf({id:'self'})),
+  stranger:look(withSelf({id:'self',channels:[{id:'main',merge:{combine:'first',order:{kind:'declared',paths:['w9']}}}]})),
+  shape:look(withSelf({id:'self',channels:[{id:'main',merge:{combine:'or',order:{kind:'stochastic'}}}]})),
+  channel:look(withSelf({id:'self',channels:[{id:'aux'}]})),
+  plusPort:look((()=>{const d=withSelf({id:'self',channels:[{id:'main',merge:{combine:'or'}}]});d.components[2].config.attachmentPoints.push({id:'x',side:'left',t:.5,flow:'in'});return d})())
+};
+process.stdout.write(JSON.stringify(out));
+"""
+
+
+def check_point_self() -> None:
+    r = node(POINT_SELF, str(ROOT / 'src/07-state-space.js'), str(ROOT / 'data/core.logic.pack.json'))
+    merge = {'combine': 'last', 'order': {'kind': 'declared', 'paths': ['w1', 'w2']}}
+    clean = [{'id': 'self', 'channels': [{'id': 'main', 'merge': merge}]}]
+    assert r['none']['stored'] is None and r['none']['ports'] == [['self', None, None]] and r['none']['check'] == [], r['none']
+    # The clean form loads as written, exposes exactly `self` with its channels, and compacts to itself.
+    assert r['clean']['stored'] == clean and r['clean']['compact'] == clean and json.loads(r['clean']['reload']) == clean, r['clean']
+    assert r['clean']['ports'] == [['self', None, clean[0]['channels']]] and r['clean']['valid'] and r['clean']['check'] == [], r['clean']
+    # The placeholder form (side/t) loads clean; a stated flow is kept.
+    ph = [{'id': 'self', 'flow': 'duplex', 'channels': [{'id': 'main', 'merge': merge}]}]
+    assert r['placeholder']['stored'] == ph and r['placeholder']['compact'] == ph and json.loads(r['placeholder']['reload']) == ph, r['placeholder']
+    assert r['placeholder']['ports'] == [['self', 'duplex', ph[0]['channels']]] and r['placeholder']['check'] == [], r['placeholder']
+    assert r['bare']['stored'] == [{'id': 'self', 'channels': [{'id': 'main'}]}] and r['bare']['ports'][0][0] == 'self', r['bare']
+    # checkDocument reads the self declaration: a declared order naming a stranger, a bad merge shape, no shared channel.
+    assert r['stranger']['check'] == ['MERGE_INVALID'], r['stranger']
+    assert r['shape']['check'] == ['MERGE_INVALID'], r['shape']
+    assert r['channel']['check'] == ['CHANNEL_MISMATCH', 'CHANNEL_MISMATCH'], r['channel']
+    # Its exposed port stays exactly self, whatever else the list holds.
+    assert [p[0] for p in r['plusPort']['ports']] == ['self'] and r['plusPort']['stored'][0] == {'id': 'self', 'channels': [{'id': 'main', 'merge': {'combine': 'or'}}]}, r['plusPort']
+
+
 def main() -> None:
     # 07 loads alone under node through a bare require, and brings its two cores with it.
     bare = node(BARE, str(ROOT / 'src/07-state-space.js'))
@@ -996,6 +1045,7 @@ def main() -> None:
     assert 'data-beta-module="src/07-state-space.js"' in (ROOT / 'index.html').read_text(encoding='utf-8'), 'index.html does not carry 07; run build.py'
     check_amendment()
     check_binding()
+    check_point_self()
     print('PASS state space contracts QA')
 
 

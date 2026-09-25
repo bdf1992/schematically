@@ -34,9 +34,6 @@
         "attachmentPoints": [
           {
             "id": "self",
-            "side": "left",
-            "t": 0.5,
-            "flow": "duplex",
             "channels": [
               {
                 "id": "main",

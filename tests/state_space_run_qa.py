@@ -26,32 +26,33 @@ const out={};
 const K=(e,p,c='main')=>JSON.stringify([e,p,c]);
 function settle(run,limit=1000){const steps=[];for(let i=0;i<limit;i++){const r=S.step(run);steps.push(r);if(!r.ok||r.tick===null)return steps}throw new Error('no quiet')}
 function started(args){const s=S.startRun(args);if(!s.ok)throw new Error(JSON.stringify(s));return s.run}
-const rehash=trace=>{let prev='0'.repeat(64);trace.ledger.forEach((e,i)=>{e.prev=prev;e.hash=C.sha256Hex(canon({seq:e.seq,kind:e.kind,body:e.body,prev}));prev=e.hash});return trace};
+const rehash=trace=>{let prev='0'.repeat(64);trace.ledger.forEach((e,i)=>{e.prev=prev;e.hash=C.sha256Hex(canon({seq:e.seq,kind:e.kind,body:e.body,prev}));prev=e.hash});trace.head=prev;return trace};
 
 out.api={keys:Object.keys(S),version:S.RUNTIME_VERSION,fns:['startRun','step','traceOf','replay','validateTrace'].map(k=>typeof S[k])};
 
 // Golden examples: a re-run is byte-identical to the stored trace, forward and in the reversed walk.
 const vec=v=>[{entity:'A',point:'self',value:v[0]==='1',at:0},{entity:'B',point:'self',value:v[1]==='1',at:0}];
 const mergeInputs=[{entity:'S1',point:'self',value:true,at:0},{entity:'S2',point:'self',value:false,at:0}];
-const jobs=[['and.sov','and.00.sovtrace',vec('00')],['and.sov','and.01.sovtrace',vec('01')],['and.sov','and.10.sovtrace',vec('10')],['and.sov','and.11.sovtrace',vec('11')],
+const jobs=[['not.sov','not.0.sovtrace',[{entity:'A',point:'self',value:false,at:0}]],['not.sov','not.1.sovtrace',[{entity:'A',point:'self',value:true,at:0}]],['not-loop.sov','not-loop.sovtrace',[],40],
+  ['and.sov','and.00.sovtrace',vec('00')],['and.sov','and.01.sovtrace',vec('01')],['and.sov','and.10.sovtrace',vec('10')],['and.sov','and.11.sovtrace',vec('11')],
   ['merge.sov','merge.declared.sovtrace',mergeInputs],['merge.or.sov','merge.or.sovtrace',mergeInputs],['merge.stochastic.sov','merge.stochastic.sovtrace',mergeInputs]];
 out.golden={};
-for(const [sov,file,inputs] of jobs){
+for(const [sov,file,inputs,budget] of jobs){
   const stored=fs.readFileSync(dir+'/'+file,'utf8'),trace=JSON.parse(stored);
   const docBefore=canon(read(sov)),doc=load(sov),docNorm=canon(doc),packBefore=canon(packs);
-  const run=started({doc,packs,inputs});
+  const run=started({doc,packs,inputs,budget});
   const startLedger=run.ledger.map(e=>({seq:e.seq,kind:e.kind,body:e.body}));
   const steps=settle(run);
   const bytes=canon(S.traceOf(run));
-  const rev=started({doc:load(sov),packs,inputs,walk:'reverse'});settle(rev);
+  const rev=started({doc:load(sov),packs,inputs,budget,walk:'reverse'});settle(rev);
   const replayed=S.replay({trace,doc,packs});
   const signal=(e,p='self')=>run.signal[K(e,p)]===true;
   out.golden[file]={
     same:bytes===stored,reversed:canon(S.traceOf(rev))===stored,storedCanonical:canon(trace)===stored,
     valid:S.validateTrace(trace),replay:{ok:replayed.ok,code:replayed.code||null,same:replayed.ok&&canon(replayed.records)===canon(trace.records)},
     docUnchanged:canon(doc)===docNorm&&canon(read(sov))===docBefore,packsUnchanged:canon(packs)===packBefore,
-    lastStep:steps[steps.length-1],ticks:steps.filter(s=>s.tick!==null).map(s=>s.tick),
-    startLedger,final:{Q:signal('Q'),J:signal('J'),OUT:signal('OUT')},
+    lastStep:steps[steps.length-1],ticks:steps.filter(s=>s.ok&&s.tick!==null).map(s=>s.tick),
+    startLedger,final:{Q:signal('Q'),J:signal('J'),OUT:signal('OUT'),q:signal('G','q')},through:trace.through,head:trace.head,lastHash:trace.ledger[trace.ledger.length-1].hash,
     records:trace.records,ledgerKinds:trace.ledger.map(e=>e.kind),draws:trace.ledger.filter(e=>e.kind==='draw').map(e=>e.body),
     recordChecks:trace.records.map(r=>S.validateRecord(r).ok),runId:run.id,replayKey:trace.replayKey,top:Object.keys(trace).sort(),budget:trace.budget,revision:trace.documentRevision
   };
@@ -62,7 +63,8 @@ for(const [sov,file,inputs] of jobs){
   const stored=fs.readFileSync(dir+'/merge.stochastic.sovtrace','utf8');
   const flipHex=h=>(h[0]==='0'?'1':'0')+h.slice(1);
   const cases={
-    startSeed:[0,e=>{e.body.seed='1'}],
+    startSeed:[0,e=>{e.body.replayKey.seed='1'}],
+    startBudget:[0,e=>{e.body.budget=1}],
     inputValue:[1,e=>{e.body.value=!e.body.value}],
     inputAt:[2,e=>{e.body.at=1}],
     drawOrder:[3,e=>{e.body.order=e.body.order.slice().reverse()}],
@@ -80,19 +82,35 @@ for(const [sov,file,inputs] of jobs){
   }
   const t=JSON.parse(stored);t.records[0].value='x';
   out.tamperRecord=S.validateTrace(t);
+  const noRecords=JSON.parse(stored);delete noRecords.records;
+  const truncated=JSON.parse(stored);truncated.ledger.pop();
+  const raised=JSON.parse(stored);raised.budget=20000;
+  const raisedChain=JSON.parse(stored);raisedChain.budget=20000;raisedChain.ledger[0].body.budget=20000;
+  const raisedStale=JSON.parse(JSON.stringify(raisedChain));rehash(raisedChain);
+  out.optional={valid:S.validateTrace(noRecords),replay:S.replay({trace:noRecords,doc:load('merge.stochastic.sov'),packs}),records:JSON.parse(stored).records,
+    truncated:S.validateTrace(truncated),truncatedLen:truncated.ledger.length,truncatedReplay:S.replay({trace:truncated,doc:load('merge.stochastic.sov'),packs}).code,
+    raised:S.validateTrace(raised),raisedStale:S.validateTrace(raisedStale),raisedChain:{valid:S.validateTrace(raisedChain).ok,headChanged:raisedChain.head!==JSON.parse(stored).head,replay:S.replay({trace:raisedChain,doc:load('merge.stochastic.sov'),packs}).ok},
+    badHead:S.validateTrace({...JSON.parse(stored),head:'x'}).ok,badThrough:S.validateTrace({...JSON.parse(stored),through:-1}).ok};
+  // A trace taken after any number of steps replays.
+  out.midRun={};
+  for(const [sov,inputs,budget] of [['merge.stochastic.sov',mergeInputs],['and.sov',vec('11')],['not-loop.sov',[],40]]){
+    const run=started({doc:load(sov),packs,inputs,budget});const got=[];
+    for(let i=0;i<25;i++){const t=S.traceOf(run);const r=S.replay({trace:t,doc:load(sov),packs});got.push([t.through,r.ok,r.ok&&canon(r.records)===canon(t.records)]);const s=S.step(run);if(!s.ok||s.tick===null)break}
+    out.midRun[sov]=got;
+  }
   out.shape={notObject:S.validateTrace(null).ok,extraKey:S.validateTrace({...JSON.parse(stored),extra:1}).ok,format:S.validateTrace({...JSON.parse(stored),format:'soveraeign.schematic/trace@0.2'}).ok,emptyLedger:S.validateTrace({...JSON.parse(stored),ledger:[]}).ok,keyDiffers:S.validateTrace({...JSON.parse(stored),replayKey:{...JSON.parse(stored).replayKey,seed:'9'}})};
 }
 
 // REPLAY_KEY_MISMATCH: a changed runtimeVersion (the chain rehashed so the trace itself is valid), a changed document.
 {
   const stored=fs.readFileSync(dir+'/and.11.sovtrace','utf8');
-  const t=JSON.parse(stored);t.replayKey.runtimeVersion='state-space@2';t.ledger[0].body.runtimeVersion='state-space@2';rehash(t);
-  const unhashed=JSON.parse(stored);unhashed.replayKey.runtimeVersion='state-space@2';unhashed.ledger[0].body.runtimeVersion='state-space@2';
+  const t=JSON.parse(stored);t.replayKey.runtimeVersion='state-space@2';t.ledger[0].body.replayKey.runtimeVersion='state-space@2';rehash(t);
+  const unhashed=JSON.parse(stored);unhashed.replayKey.runtimeVersion='state-space@2';unhashed.ledger[0].body.replayKey.runtimeVersion='state-space@2';
   const changed=load('and.sov');changed.components.find(c=>c.id==='Q').x+=10;
   const before=canon(changed);
   out.keyMismatch={runtime:S.replay({trace:t,doc:load('and.sov'),packs}),runtimeValid:S.validateTrace(t).ok,unhashed:S.replay({trace:unhashed,doc:load('and.sov'),packs}),
     doc:S.replay({trace:JSON.parse(stored),doc:changed,packs}),docUnchanged:canon(changed)===before,
-    seed:(()=>{const x=JSON.parse(stored);x.replayKey.seed='7';x.ledger[0].body.seed='7';rehash(x);return S.replay({trace:x,doc:load('and.sov'),packs})})()};
+    seed:(()=>{const x=JSON.parse(stored);x.replayKey.seed='7';x.ledger[0].body.replayKey.seed='7';rehash(x);return S.replay({trace:x,doc:load('and.sov'),packs})})()};
 }
 
 // REPLAY_DIVERGED: a recorded draw that does not re-derive from the seed; recorded records that differ.
@@ -105,13 +123,13 @@ for(const [sov,file,inputs] of jobs){
 }
 
 // A port fed by a queue merge delivers one value per tick, in merge order.
-const withMerge=(mergeSpec,base='merge.stochastic.sov')=>{const d=read(base);d.components.find(c=>c.id==='J').config.attachmentPoints=[{id:'self',side:'left',t:.5,flow:'duplex',channels:[{id:'main',merge:mergeSpec}]}];return D.normalizeDocument(d)};
+const withMerge=(mergeSpec,base='merge.stochastic.sov')=>{const d=read(base);d.components.find(c=>c.id==='J').config.attachmentPoints=[{id:'self',channels:[{id:'main',merge:mergeSpec}]}];return D.normalizeDocument(d)};
 const timeline=run=>run.records.map(r=>[r.time.logical,r.subject.entity,r.subject.point,r.value,r.kind,r.observer,r.provenance.rule]);
 {
   const q=(order,inputs,walk)=>{const run=started({doc:withMerge({combine:'queue',order:{kind:'declared',paths:order}}),packs,inputs,walk});const steps=settle(run);return {timeline:timeline(run),ticks:steps.map(s=>s.tick),bytes:canon(S.traceOf(run)),queues:run.queues}};
   const three=read('merge.stochastic.sov');three.components.push({id:'S3',symbolId:'point',x:80,y:360,config:{label:'S3'}});
   three.wires.push({id:'w4',a:'S3',aSide:'self',aAttachment:{kind:'attachment-ref',componentId:'S3',pointId:'self'},b:'J',bSide:'self',bAttachment:{kind:'attachment-ref',componentId:'J',pointId:'self'},config:{direction:'forward'}});
-  three.components.find(c=>c.id==='J').config.attachmentPoints=[{id:'self',side:'left',t:.5,flow:'duplex',channels:[{id:'main',merge:{combine:'queue',order:{kind:'declared',paths:['w4']}}}]}];
+  three.components.find(c=>c.id==='J').config.attachmentPoints=[{id:'self',channels:[{id:'main',merge:{combine:'queue',order:{kind:'declared',paths:['w4']}}}]}];
   const threeInputs=[...mergeInputs,{entity:'S3',point:'self',value:true,at:0}];
   const r3=started({doc:D.normalizeDocument(clone(three)),packs,inputs:threeInputs});settle(r3);
   const r3r=started({doc:D.normalizeDocument(clone(three)),packs,inputs:threeInputs,walk:'reverse'});settle(r3r);
@@ -139,7 +157,7 @@ const timeline=run=>run.records.map(r=>[r.time.logical,r.subject.entity,r.subjec
     {id:'G',symbolId:'act',x:200,y:0,config:{definition:ref,attachmentDefaults:'none',attachmentPoints:[{id:'a',side:'left',t:.5,flow:'in',channels:[{id:'main'}]},{id:'q',side:'right',t:.5,flow:'out',channels:[{id:'main'}]}]}},
     {id:'Q',symbolId:'point',x:400,y:0,config:{}}],
     wires:[{id:'wS',a:'S',aSide:'self',b:'G',bSide:'a'},{id:'wQ',a:'G',aSide:'q',b:'Q',bSide:'self',config:{delay:2}}],references:[],layout:{}});
-  const go=(ref,inputs,walk)=>{const run=started({doc:docFor(ref),packs:[testPack.pack],inputs,walk});const steps=settle(run);return {timeline:timeline(run),ticks:steps.map(s=>s.tick),bytes:canon(S.traceOf(run)),defs:run.ledger[0].body.definitions,replay:S.replay({trace:S.traceOf(run),doc:docFor(ref),packs:[testPack.pack]}).ok}};
+  const go=(ref,inputs,walk)=>{const run=started({doc:docFor(ref),packs:[testPack.pack],inputs,walk});const steps=settle(run);return {timeline:timeline(run),ticks:steps.map(s=>s.tick),bytes:canon(S.traceOf(run)),defs:run.ledger[0].body.replayKey.definitions,replay:S.replay({trace:S.traceOf(run),doc:docFor(ref),packs:[testPack.pack]}).ok}};
   const pulse=[{entity:'S',point:'self',value:true,at:0},{entity:'S',point:'self',value:false,at:1}];
   out.delay={pack:testPack.ok,d0:go('test.buf@1',[{entity:'S',point:'self',value:true,at:0}]),d2:go('test.buf@2',[{entity:'S',point:'self',value:true,at:0}]),
     pulse:go('test.buf@2',pulse),pulseRev:go('test.buf@2',pulse,'reverse')};
@@ -153,7 +171,7 @@ const timeline=run=>run.records.map(r=>[r.time.logical,r.subject.entity,r.subjec
   const five=started({doc:load('and.sov'),packs,inputs:vec('11'),budget:5});const fiveSteps=settle(five);
   out.budget={first,second,third,unchanged:before===after,trace:S.validateTrace(S.traceOf(run)).ok,tick:run.tick,spent:run.spent,
     exact:{last:exactSteps[exactSteps.length-1],spent:exact.spent},five:{last:fiveSteps[fiveSteps.length-1],spent:five.spent,tick:five.tick},
-    defaults:(()=>{const r=started({doc:load('and.sov'),packs});return {budget:r.budget,seed:r.seed,inputs:r.ledger[0].body.inputs,quiet:S.step(r)}})()};
+    defaults:(()=>{const r=started({doc:load('and.sov'),packs});return {budget:r.budget,seed:r.seed,inputs:r.ledger[0].body.replayKey.inputs,quiet:S.step(r)}})()};
 }
 
 // Refusals at start.
@@ -164,17 +182,29 @@ const timeline=run=>run.records.map(r=>[r.time.logical,r.subject.entity,r.subjec
     valueNumber:[A({value:1})],valueString:[A({value:'true'})],valueMissing:[{entity:'A',point:'self',at:0}],
     atNegative:[A({at:-1})],atFraction:[A({at:1.5})],atString:[A({at:'0'})],atMissing:[{entity:'A',point:'self',value:true}],
     duplicate:[A({}),A({value:false})],duplicateChannel:[A({}),A({channel:'main',value:false})],duplicateCompat:[A({}),A({point:'out'})],
-    notObject:[7]
+    notObject:[7],deviceOutput:[{entity:'G',point:'q',value:true,at:0}],deviceOutputCompat:[{entity:'G',point:'q',channel:'main',value:false,at:3}]
   };
   out.inputInvalid={};
   for(const [k,inputs] of Object.entries(cases)){const r=S.startRun({doc,packs,inputs});out.inputInvalid[k]={ok:r.ok,code:r.code,message:r.message}}
-  out.inputOk={distinctTicks:S.startRun({doc,packs,inputs:[A({}),A({at:1,value:false})]}).ok,compat:S.startRun({doc,packs,inputs:[A({point:'out'})]}).run?.ledger[1].body};
+  out.inputOk={deviceInput:S.startRun({doc,packs,inputs:[{entity:'G',point:'a',value:true,at:0}]}).ok,distinctTicks:S.startRun({doc,packs,inputs:[A({}),A({at:1,value:false})]}).ok,compat:S.startRun({doc,packs,inputs:[A({point:'out'})]}).run?.ledger[1].body};
   out.mergeForm=S.startRun({doc:withMerge({combine:'sum'}),packs,inputs:mergeInputs});
   out.mergeFormOk=['or','and','min','max','first','last','queue'].map(c=>S.startRun({doc:withMerge({combine:c}),packs,inputs:mergeInputs}).ok);
   const unresolved=S.startRun({doc,packs:[],inputs:vec('11')});
   const badDelay=read('and.sov');badDelay.wires[0].config.delay=0;
   const delay=S.startRun({doc:D.normalizeDocument(badDelay),packs,inputs:vec('11')});
   out.runRefused={unresolved:{ok:unresolved.ok,code:unresolved.code,codes:(unresolved.refusals||[]).map(r=>r.code)},delay:{ok:delay.ok,code:delay.code,codes:(delay.refusals||[]).map(r=>r.code)}};
+}
+
+// A Point's self declaration: the placeholder form 1f7c745 wrote loads clean and runs the same.
+{
+  const placeholder=read('merge.or.sov');
+  placeholder.components.find(c=>c.id==='J').config.attachmentPoints=[{id:'self',side:'left',t:.5,channels:[{id:'main',merge:{combine:'or'}}]}];
+  const n=D.normalizeDocument(clone(placeholder)),j=n.components.find(c=>c.id==='J');
+  const a=started({doc:n,packs,inputs:mergeInputs});settle(a);
+  const b=started({doc:load('merge.or.sov'),packs,inputs:mergeInputs});settle(b);
+  out.selfForm={stored:j.config.attachmentPoints,compact:D.compactDocument(n).components.find(c=>c.id==='J').config.attachmentPoints,
+    ports:D.canonicalAttachmentPointDescriptors(j).map(s=>[s.id,s.channels]),check:S.checkDocument(n,packs).ok,
+    sameHash:D.documentHash(n)===D.documentHash(load('merge.or.sov')),sameTrace:canon(S.traceOf(a))===canon(S.traceOf(b))};
 }
 
 // Only the engine appends; the ledger is hash-chained.
@@ -208,7 +238,8 @@ def main() -> None:
     names = sorted(p.name for p in STATE.iterdir())
     assert names == ['and.00.sovtrace', 'and.01.sovtrace', 'and.10.sovtrace', 'and.11.sovtrace', 'and.sov',
                      'merge.declared.sovtrace', 'merge.or.sov', 'merge.or.sovtrace', 'merge.sov',
-                     'merge.stochastic.sov', 'merge.stochastic.sovtrace'], names
+                     'merge.stochastic.sov', 'merge.stochastic.sovtrace',
+                     'not-loop.sov', 'not-loop.sovtrace', 'not.0.sovtrace', 'not.1.sovtrace', 'not.sov'], names
     run_id = re.compile(r'^[0-9a-f]{12}$')
     for file, g in r['golden'].items():
         assert g['same'], f'{file}: a re-run is not byte-identical to the stored trace'
@@ -217,15 +248,20 @@ def main() -> None:
         assert g['valid'] == {'ok': True, 'entry': None, 'errors': []}, (file, g['valid'])
         assert g['replay'] == {'ok': True, 'code': None, 'same': True}, (file, g['replay'])
         assert g['docUnchanged'] and g['packsUnchanged'], (file, 'startRun/step/replay mutated doc or packs')
-        assert g['lastStep'] == {'ok': True, 'tick': None, 'records': []}, (file, g['lastStep'])
-        assert g['top'] == ['budget', 'documentRevision', 'format', 'ledger', 'records', 'replayKey'], g['top']
-        assert g['budget'] == 10000 and g['revision'] == 0, g
+        if file == 'not-loop.sovtrace':
+            assert g['lastStep']['ok'] is False and g['lastStep']['code'] == 'BUDGET_SPENT', (file, g['lastStep'])
+            assert g['budget'] == 40, g['budget']
+        else:
+            assert g['lastStep'] == {'ok': True, 'tick': None, 'records': []}, (file, g['lastStep'])
+            assert g['budget'] == 10000, g['budget']
+        assert g['top'] == ['budget', 'documentRevision', 'format', 'head', 'ledger', 'records', 'replayKey', 'through'], g['top']
+        assert g['revision'] == 0 and g['through'] == g['ticks'][-1] and g['ticks'][0] == 0 and g['head'] == g['lastHash'], g
         key = g['replayKey']
         assert sorted(key) == ['definitions', 'documentHash', 'documentId', 'inputs', 'runtimeVersion', 'seed', 'traceFormat'], key
         assert key['runtimeVersion'] == 'state-space@1' and key['traceFormat'] == 'soveraeign.schematic/trace@0.1' and key['seed'] == '0', key
         assert re.fullmatch(r'[0-9a-f]{64}', key['documentHash']), key
-        assert g['startLedger'][0] == {'seq': 0, 'kind': 'start', 'body': key}, g['startLedger'][0]
-        assert [e['kind'] for e in g['startLedger']] == ['start', 'input', 'input'], g['startLedger']
+        assert g['startLedger'][0] == {'seq': 0, 'kind': 'start', 'body': {'replayKey': key, 'budget': g['budget']}}, g['startLedger'][0]
+        assert [e['kind'] for e in g['startLedger']] == ['start'] + ['input'] * len(key['inputs']), g['startLedger']
         assert [e['body'] for e in g['startLedger'][1:]] == key['inputs'], g['startLedger']
         # Inputs in (at, entity, point, channel) order, channel defaulted to main.
         assert [(i['at'], i['entity'], i['point'], i['channel']) for i in key['inputs']] == sorted((i['at'], i['entity'], i['point'], i['channel']) for i in key['inputs']), key['inputs']
@@ -241,7 +277,9 @@ def main() -> None:
                 assert rec['kind'] == 'registered' and rec['provenance'] == {'rule': 'input', 'inputs': []}, rec
             else:
                 assert rec['kind'] == 'derived' and re.match(r'^(path:.+|rule:.+@\d+|engine:merge@1)$', rec['observer']), rec
-                assert rec['provenance']['inputs'] and all(i in [x['id'] for x in g['records'][:n]] for i in rec['provenance']['inputs']), rec
+                # Only a power-on evaluation from the unrecorded starting state has no input records.
+                power_on = rec['time']['logical'] == 0 and rec['observer'].startswith('rule:')
+                assert (rec['provenance']['inputs'] or power_on) and all(i in [x['id'] for x in g['records'][:n]] for i in rec['provenance']['inputs']), rec
         # Sequence order within a tick is (entity, point, channel, observable, kind).
         for a, b in zip(g['records'], g['records'][1:]):
             if a['time']['logical'] == b['time']['logical']:
@@ -250,6 +288,18 @@ def main() -> None:
                 assert ka <= kb, (file, ka, kb)
             else:
                 assert a['time']['logical'] < b['time']['logical'], (file, a, b)
+
+    # Power-on: NOT gives Q = NOT A for both values of A; the NOT loop starts and alternates.
+    for v in ('0', '1'):
+        g = r['golden'][f'not.{v}.sovtrace']
+        assert g['final']['Q'] == (v == '0') and g['replayKey']['definitions'] == ['logic.not@1'], (v, g['final'])
+        q0 = [x for x in g['records'] if x['subject']['entity'] == 'G' and x['subject']['point'] == 'q' and x['time']['logical'] == 0]
+        assert len(q0) == 1 and q0[0]['value'] is True and q0[0]['observer'] == 'rule:logic.not@1', q0
+    loop = r['golden']['not-loop.sovtrace']
+    qs = [(x['time']['logical'], x['value']) for x in loop['records'] if x['subject']['point'] == 'q']
+    assert qs == [(t, t % 2 == 0) for t in range(20)], qs
+    assert loop['through'] == 19 and loop['lastStep']['tick'] == 20 and loop['lastStep']['left'] == 1, loop
+    assert len(loop['records']) == 39, len(loop['records'])
 
     # The AND truth table, all four vectors, inputs at tick 0 and every Path delay 1.
     for v in ('00', '01', '10', '11'):
@@ -269,8 +319,8 @@ def main() -> None:
         at_j = [x for x in g['records'] if x['subject']['entity'] == 'J']
         assert len(at_j) == 1 and at_j[0]['time']['logical'] == 1 and at_j[0]['observer'] == 'engine:merge@1' and len(at_j[0]['provenance']['inputs']) == 2, at_j
         assert at_j[0]['provenance']['rule'] == 'merge@1', at_j
-    assert dec['draws'] == [] and dec['final'] == {'Q': False, 'J': False, 'OUT': False}, dec['final']
-    assert orr['draws'] == [] and orr['final'] == {'Q': False, 'J': True, 'OUT': True}, orr['final']
+    assert dec['draws'] == [] and dec['final'] == {'Q': False, 'J': False, 'OUT': False, 'q': False}, dec['final']
+    assert orr['draws'] == [] and orr['final'] == {'Q': False, 'J': True, 'OUT': True, 'q': False}, orr['final']
     assert sto['ledgerKinds'].count('draw') == 1 and sto['ledgerKinds'] == ['start', 'input', 'input', 'draw'], sto['ledgerKinds']
     draw = sto['draws'][0]
     assert draw['tick'] == 1 and (draw['entity'], draw['point'], draw['channel']) == ('J', 'self', 'main') and draw['paths'] == ['w1', 'w2'] and sorted(draw['order']) == ['w1', 'w2'], draw
@@ -289,7 +339,21 @@ def main() -> None:
         assert t['replay'] == {'code': 'TRACE_INVALID', 'entry': t['at']}, (name, t)
     assert r['tamperRecord']['ok'] is False and r['tamperRecord']['entry'] is None, r['tamperRecord']
     assert r['shape'] == {'notObject': False, 'extraKey': False, 'format': False, 'emptyLedger': False,
-                          'keyDiffers': {'ok': False, 'entry': 0, 'errors': ['ledger 0: the start entry does not carry the replayKey']}}, r['shape']
+                          'keyDiffers': {'ok': False, 'entry': 0, 'errors': ['ledger 0: the start entry does not carry the replayKey and budget']}}, r['shape']
+    # Records are optional; the budget is in the chain; head catches a truncated ledger.
+    op = r['optional']
+    assert op['valid']['ok'] and op['replay']['ok'] and op['replay']['records'] == op['records'], op['replay']
+    assert op['truncated']['ok'] is False and op['truncated']['entry'] == op['truncatedLen'] and 'head' in op['truncated']['errors'][0], op['truncated']
+    assert op['truncatedReplay'] == 'TRACE_INVALID', op
+    assert op['raised']['ok'] is False and op['raised']['entry'] == 0, op['raised']
+    assert op['raisedStale']['ok'] is False and op['raisedStale']['entry'] == 0, op['raisedStale']
+    assert op['raisedChain'] == {'valid': True, 'headChanged': True, 'replay': True}, op['raisedChain']
+    assert op['badHead'] is False and op['badThrough'] is False, op
+    # A trace taken after any number of steps replays ok, records identical.
+    for sov, got in r['midRun'].items():
+        assert got[0][0] is None and all(ok and same for _, ok, same in got), (sov, got)
+    assert [t for t, _, _ in r['midRun']['merge.stochastic.sov']] == [None, 0, 1, 2], r['midRun']
+    assert len(r['midRun']['not-loop.sov']) == 21, r['midRun']['not-loop.sov']
 
     # Step 7: REPLAY_KEY_MISMATCH names the differing fields.
     km = r['keyMismatch']
@@ -348,17 +412,24 @@ def main() -> None:
     assert bu['third'] == bu['second'] and bu['unchanged'] and bu['trace'] and bu['tick'] == 0 and bu['spent'] == 2, bu
     assert bu['exact']['last'] == {'ok': True, 'tick': None, 'records': []} and bu['exact']['spent'] == 6, bu['exact']
     assert bu['five']['last']['code'] == 'BUDGET_SPENT' and bu['five']['last']['tick'] == 2 and bu['five']['last']['left'] == 1 and bu['five']['tick'] == 1, bu['five']
-    assert bu['defaults'] == {'budget': 10000, 'seed': '0', 'inputs': [], 'quiet': {'ok': True, 'tick': None, 'records': []}}, bu['defaults']
+    # Power-on: tick 0 is processed even with nothing scheduled at it.
+    assert bu['defaults'] == {'budget': 10000, 'seed': '0', 'inputs': [], 'quiet': {'ok': True, 'tick': 0, 'records': []}}, bu['defaults']
 
     # Step 2: refusals at start.
     for k, res in r['inputInvalid'].items():
         assert res['ok'] is False and res['code'] == 'INPUT_INVALID' and res['message'], (k, res)
+    assert 'output of logic.and@1' in r['inputInvalid']['deviceOutput']['message'] and r['inputOk']['deviceInput'], r
     assert r['inputOk']['distinctTicks'] and r['inputOk']['compat'] == {'entity': 'A', 'point': 'self', 'channel': 'main', 'value': True, 'at': 0}, r['inputOk']
     assert r['mergeForm']['ok'] is False and r['mergeForm']['code'] == 'MERGE_FORM' and r['mergeForm']['subject'] == 'component:J:self:main', r['mergeForm']
     assert r['mergeFormOk'] == [True] * 7, r['mergeFormOk']
     assert r['runRefused']['unresolved'] == {'ok': False, 'code': 'RUN_REFUSED', 'codes': ['DEFINITION_UNRESOLVED']}, r['runRefused']
     assert r['runRefused']['delay'] == {'ok': False, 'code': 'RUN_REFUSED', 'codes': ['PATH_DELAY_INVALID']}, r['runRefused']
 
+    # Step 15: the placeholder self form loads clean, checks and runs exactly as the clean form.
+    sf = r['selfForm']
+    clean = [{'id': 'self', 'channels': [{'id': 'main', 'merge': {'combine': 'or'}}]}]
+    assert sf['stored'] == clean and sf['compact'] == clean and sf['ports'] == [['self', [{'id': 'main', 'merge': {'combine': 'or'}}]]], sf
+    assert sf['check'] and sf['sameHash'] and sf['sameTrace'], sf
     # The ledger's chain, and a run is plain JSON.
     for e in r['chain']:
         assert e['prevOk'] and e['hashOk'] and e['keys'] == ['body', 'hash', 'kind', 'prev', 'seq'], e
@@ -366,7 +437,7 @@ def main() -> None:
 
     # Step 6: the trace schema and the file format doc.
     schema = json.loads((ROOT / 'formats/schematic.trace.schema.json').read_text(encoding='utf-8'))
-    assert schema['$id'] == 'soveraeign.schematic/trace@0.1' and sorted(schema['required']) == ['budget', 'documentRevision', 'format', 'ledger', 'records', 'replayKey'], schema
+    assert schema['$id'] == 'soveraeign.schematic/trace@0.1' and sorted(schema['required']) == ['budget', 'documentRevision', 'format', 'head', 'ledger', 'replayKey', 'through'], schema
     formats = (ROOT / 'DATA-FORMATS.md').read_text(encoding='utf-8')
     assert '.sovtrace' in formats and 'soveraeign.schematic/trace@0.1' in formats, 'DATA-FORMATS.md must document .sovtrace'
     src = (ROOT / 'src/07-state-space.js').read_text(encoding='utf-8')

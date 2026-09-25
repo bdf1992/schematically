@@ -9,8 +9,9 @@
     "replayKey",
     "documentRevision",
     "budget",
-    "ledger",
-    "records"
+    "through",
+    "head",
+    "ledger"
   ],
   "additionalProperties": false,
   "properties": {
@@ -28,7 +29,20 @@
     "budget": {
       "type": "integer",
       "minimum": 0,
-      "description": "processed events allowed (inputs, arrivals, output changes); default 10000"
+      "description": "processed events allowed (inputs, arrivals, output changes); default 10000. Also carried in the start entry, so the chain covers it"
+    },
+    "through": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "the last tick processed, null before any; replay processes exactly the ticks up to it"
+    },
+    "head": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "the hash of the last ledger entry; a truncated ledger fails against it"
     },
     "ledger": {
       "type": "array",
@@ -36,14 +50,14 @@
       "items": {
         "$ref": "#/$defs/entry"
       },
-      "description": "hash-chained; what a replay cannot recompute: the start entry (carrying replayKey), each input, each stochastic order draw"
+      "description": "hash-chained; what a replay cannot recompute: the start entry (carrying {replayKey, budget}), each input, each stochastic order draw"
     },
     "records": {
       "type": "array",
       "items": {
         "$ref": "soveraeign.schematic/state-record@0.1"
       },
-      "description": "the derived records, for audit; replay must reproduce them byte for byte. Ids are sr-<run>-<seq6>; time.sequence is their index"
+      "description": "optional: the derived records, for audit. When present, replay must reproduce them byte for byte; when absent, replay recomputes them. Ids are sr-<run>-<seq6>; time.sequence is their index"
     }
   },
   "$defs": {
@@ -229,7 +243,7 @@
           ]
         },
         "body": {
-          "description": "start: the replay key; input: one input; draw: one stochastic merge order"
+          "description": "start: {replayKey, budget}; input: one input; draw: one stochastic merge order"
         },
         "prev": {
           "type": "string",
@@ -254,7 +268,7 @@
           "then": {
             "properties": {
               "body": {
-                "$ref": "#/$defs/replayKey"
+                "$ref": "#/$defs/start"
               }
             }
           }
@@ -292,6 +306,24 @@
           }
         }
       ]
+    },
+    "start": {
+      "type": "object",
+      "required": [
+        "replayKey",
+        "budget"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "replayKey": {
+          "$ref": "#/$defs/replayKey"
+        },
+        "budget": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "description": "the start entry body: equal to the trace's replayKey and budget"
     }
   }
 }

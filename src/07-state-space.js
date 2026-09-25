@@ -451,6 +451,8 @@
       if(!component)return inputRefusal(`input ${i}: unknown entity ${JSON.stringify(raw.entity)}`);
       let spec=null;try{spec=Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&typeof raw.point==='string'&&(s.id===raw.point||s.compatId===raw.point))||null}catch(_){spec=null}
       if(!spec)return inputRefusal(`input ${i}: ${raw.entity} has no port ${JSON.stringify(raw.point)}`);
+      const bound=component.config?.definition;
+      if(bound!==undefined&&bound!==null&&(resolveDefinition(bound,o.packs)?.parameters?.outputs||[]).includes(spec.id))return inputRefusal(`input ${i}: ${component.id}.${spec.id} is an output of ${bound}; a device's output is the device's`);
       const channel=raw.channel===undefined?'main':raw.channel;
       if(!specChannels(spec).includes(channel))return inputRefusal(`input ${i}: port ${raw.entity}.${spec.id} has no channel ${JSON.stringify(channel)}`);
       if(typeof raw.value!=='boolean')return inputRefusal(`input ${i}: value must be a boolean (binary channels only)`);
@@ -473,12 +475,13 @@
       signal:{},lastRecord:{},queues:{},sequence:0,ledger:[],records:[],replayDraws:null,
       pending:inputs.map(x=>({kind:'input',...x}))
     };
-    appendEntry(run,'start',clone(replayKey));
+    appendEntry(run,'start',{replayKey:clone(replayKey),budget});
     for(const input of inputs)appendEntry(run,'input',clone(input));
     return {ok:true,run};
   }
+  // Power-on: tick 0 is always processed, even with nothing scheduled at it.
   function nextTick(run){
-    let t=null;
+    let t=run.tick===null?0:null;
     for(const item of run.pending)if(t===null||item.at<t)t=item.at;
     for(const q of Object.values(run.queues))if(q.items.length&&(t===null||q.next<t))t=q.next;
     return t;
@@ -601,7 +604,7 @@
     for(const [key,q] of Object.entries(run.queues))if(q.items.length&&q.next===t){const [entity,point,channel]=JSON.parse(key);group(entity,point,channel)}
     for(const key of walked(run,[...groups.keys()].sort())){updatePort(run,ctx,groups.get(key));if(ctx.diverged)return {ok:false,...ctx.diverged}}
     const committed=clone(run.signal);
-    const devices=Object.keys(run.components).filter(id=>run.components[id].role==='device'&&run.components[id].inputs.some(name=>ctx.changed.has(portKey(id,name,'main')))).sort();
+    const devices=Object.keys(run.components).filter(id=>run.components[id].role==='device'&&(t===0||run.components[id].inputs.some(name=>ctx.changed.has(portKey(id,name,'main'))))).sort();
     for(const entity of walked(run,devices))evaluateDevice(run,ctx,entity,committed);
     // Sequence is assigned after the tick, from stable ids only; then every provisional id is resolved.
     const sortKey=x=>[x.record.subject.entity,x.record.subject.point,x.record.subject.channel,x.record.observable,x.record.kind,x.phase,x.record.observer,x.rank,x.record.value?1:0];
@@ -632,7 +635,7 @@
     return {ok:true,tick:t,records:clone(result.records)};
   }
   function traceOf(run){
-    return {format:TRACE_FORMAT,replayKey:clone(run.ledger[0].body),documentRevision:run.doc.revision,budget:run.budget,ledger:clone(run.ledger),records:clone(run.records)};
+    return {format:TRACE_FORMAT,replayKey:clone(run.ledger[0].body.replayKey),documentRevision:run.doc.revision,budget:run.budget,through:run.tick,head:run.ledger[run.ledger.length-1].hash,ledger:clone(run.ledger),records:clone(run.records)};
   }
   // Shape and every hash link. The chain is recomputed from the start, so a change to any byte
   // of an entry fails that entry and every entry after it.
@@ -640,7 +643,9 @@
     const errors=[];let entry=null;
     const fail=(i,message)=>{errors.push(i===null?message:`ledger ${i}: ${message}`);if(i!==null&&entry===null)entry=i};
     if(!isObject(trace))return {ok:false,entry,errors:['trace must be an object']};
-    unknownKeys(trace,['format','replayKey','documentRevision','budget','ledger','records'],'trace',errors);
+    unknownKeys(trace,['format','replayKey','documentRevision','budget','through','head','ledger','records'],'trace',errors);
+    if(trace.through!==null&&!natural(trace.through))errors.push('through must be null or an integer >= 0');
+    if(typeof trace.head!=='string'||!/^[0-9a-f]{64}$/.test(trace.head))errors.push('head must be a 64-digit hex hash');
     if(trace.format!==TRACE_FORMAT)errors.push(`format must equal ${TRACE_FORMAT}`);
     if(!natural(trace.documentRevision))errors.push('documentRevision must be an integer >= 0');
     if(!natural(trace.budget))errors.push('budget must be an integer >= 0');
@@ -670,14 +675,17 @@
         if(bad){fail(i,bad);broken=i;return}
         running=hash;
       });
-      if(entry===null&&isObject(key)&&!same(trace.ledger[0].body,key))fail(0,'the start entry does not carry the replayKey');
+      if(entry===null&&isObject(key)&&!same(trace.ledger[0].body,{replayKey:key,budget:trace.budget}))fail(0,'the start entry does not carry the replayKey and budget');
+      // A consistently truncated (or extended) ledger fails here: head names the entry the trace ends on.
+      if(entry===null&&trace.head!==trace.ledger[trace.ledger.length-1].hash){errors.push(`head does not equal the hash of the last ledger entry (${trace.ledger.length-1})`);entry=trace.ledger.length}
     }
-    if(!Array.isArray(trace.records))errors.push('records must be an array');
-    else trace.records.forEach((r,i)=>{const v=validateRecord(r);if(!v.ok)errors.push(`record ${i}: ${v.errors.join('; ')}`)});
+    if(trace.records!==undefined&&!Array.isArray(trace.records))errors.push('records must be an array when present');
+    else if(trace.records!==undefined)trace.records.forEach((r,i)=>{const v=validateRecord(r);if(!v.ok)errors.push(`record ${i}: ${v.errors.join('; ')}`)});
     return {ok:errors.length===0,entry,errors};
   }
   // Replay: the trace's replay key recomputed from doc, packs, its inputs and seed; the fold re-run
-  // to quiet or budget, reading draws from the ledger; ledger and records compared byte for byte.
+  // through the trace's `through` tick, reading draws from the ledger; the ledger compared byte for
+  // byte, and the records too when the trace carries them.
   function replay(options){
     const o=isObject(options)?options:{};
     const trace=o.trace,checked=validateTrace(trace);
@@ -685,18 +693,22 @@
     const key=trace.replayKey;
     const started=startRun({doc:o.doc,packs:o.packs,inputs:key.inputs,seed:key.seed,budget:trace.budget});
     if(!started.ok)return started;
-    const run=started.run,mine=run.ledger[0].body;
+    const run=started.run,mine=run.ledger[0].body.replayKey;
     const fields=REPLAY_KEY_FIELDS.filter(field=>!same(mine[field],key[field]));
     if(fields.length)return {ok:false,code:'REPLAY_KEY_MISMATCH',fields,message:`the replay key differs in ${fields.join(', ')}`};
     run.replayDraws=trace.ledger.filter(e=>e.kind==='draw').map(e=>({seq:e.seq,body:e.body}));
-    for(;;){
+    // Exactly the ticks up to `through`.
+    while(trace.through!==null){
+      const next=nextTick(run);
+      if(next===null||next>trace.through)break;
       const r=step(run);
-      if(!r.ok){if(r.code==='BUDGET_SPENT')break;return r}
-      if(r.tick===null)break;
+      if(!r.ok){if(r.code==='BUDGET_SPENT')return {ok:false,code:'REPLAY_DIVERGED',tick:r.tick,message:`the trace processed tick ${r.tick}, which the recomputed run cannot within the budget ${trace.budget}`};return r}
     }
     run.replayDraws=null;
+    if(run.tick!==trace.through)return {ok:false,code:'REPLAY_DIVERGED',tick:run.tick,message:`the recomputed run ends at tick ${run.tick}, the trace at ${trace.through}`};
     const n=Math.max(run.ledger.length,trace.ledger.length);
     for(let i=0;i<n;i++)if(Canonical.canonicalize(run.ledger[i]??null)!==Canonical.canonicalize(trace.ledger[i]??null))return {ok:false,code:'REPLAY_DIVERGED',entry:i,message:`ledger entry ${i} differs from the recomputed run`};
+    if(trace.records===undefined)return {ok:true,records:run.records};
     const m=Math.max(run.records.length,trace.records.length);
     for(let i=0;i<m;i++)if(Canonical.canonicalize(run.records[i]??null)!==Canonical.canonicalize(trace.records[i]??null))return {ok:false,code:'REPLAY_DIVERGED',record:i,message:`record ${i} differs from the recomputed run`};
     return {ok:true,records:run.records};
