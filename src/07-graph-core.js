@@ -22,6 +22,7 @@
   // default the editor normalizes to, so the simulation and the signal view agree.
   const DEFAULT_FLOW={in:'in',out:'out',control:'control'};
   function activeConnection(port,portId){
+    if(isObject(port)&&port.side==='point'&&!(Array.isArray(port.connections)&&port.connections.length))return {flow:port.flow||'duplex',access:port.access||'read-write'};
     if(!isObject(port))return null;
     const list=Array.isArray(port.connections)?port.connections:[];
     return list[Math.max(0,Math.min(list.length-1,Number(port.activeConnection)||0))]||{flow:port.flow||DEFAULT_FLOW[portId]||'duplex',access:port.access||'read-write'};

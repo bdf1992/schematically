@@ -194,6 +194,9 @@
   }
   const STANDARD_POINT_FLOWS={in:['left','in'],out:['right','out'],control:['top','control']};
   function defaultPortForSpec(spec){
+    // A 0D Point's own point is an attachment both ways (its spec says duplex); the in/out
+    // defaults belong to the sides of Paths and Planes.
+    if(spec.role==='self')return defaultPointContract(spec.side,spec.defaultFlow||'duplex');
     const standard=STANDARD_POINT_FLOWS[spec.compatId];
     if(standard)return defaultPointContract(spec.side||standard[0],standard[1]);
     return defaultPointContract(spec.side,spec.defaultFlow||'duplex');

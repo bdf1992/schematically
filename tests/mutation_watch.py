@@ -150,6 +150,20 @@ MUTANTS=[
       'new':'if(L<72) return [];',
       'test':'tests/layout_quality_qa.py'
     },
+    {
+      'name':'point-self-defaults-out-only',
+      'file':'src/05-data-core.js',
+      'old':"if(spec.role==='self')return defaultPointContract(spec.side,spec.defaultFlow||'duplex');",
+      'new':'',
+      'test':'tests/graph_core_qa.py'
+    },
+    {
+      'name':'signal-stops-after-six-passes',
+      'file':'src/25-signal.js',
+      'old':'for(let pass=0;pass<=nodes.length;pass++){',
+      'new':'for(let pass=0;pass<6;pass++){',
+      'test':'tests/sim_control_qa.py'
+    },
 ]
 
 killed=[]

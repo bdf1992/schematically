@@ -1470,6 +1470,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   const STANDARD_POINT_FLOWS={in:['left','in'],out:['right','out'],control:['top','control']};
   function defaultPortForSpec(spec){
+    // A 0D Point's own point is an attachment both ways (its spec says duplex); the in/out
+    // defaults belong to the sides of Paths and Planes.
+    if(spec.role==='self')return defaultPointContract(spec.side,spec.defaultFlow||'duplex');
     const standard=STANDARD_POINT_FLOWS[spec.compatId];
     if(standard)return defaultPointContract(spec.side||standard[0],standard[1]);
     return defaultPointContract(spec.side,spec.defaultFlow||'duplex');
@@ -1962,6 +1965,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // default the editor normalizes to, so the simulation and the signal view agree.
   const DEFAULT_FLOW={in:'in',out:'out',control:'control'};
   function activeConnection(port,portId){
+    if(isObject(port)&&port.side==='point'&&!(Array.isArray(port.connections)&&port.connections.length))return {flow:port.flow||'duplex',access:port.access||'read-write'};
     if(!isObject(port))return null;
     const list=Array.isArray(port.connections)?port.connections:[];
     return list[Math.max(0,Math.min(list.length-1,Number(port.activeConnection)||0))]||{flow:port.flow||DEFAULT_FLOW[portId]||'duplex',access:port.access||'read-write'};
@@ -3292,7 +3296,7 @@ function componentConfig(n){
   const configuredCompatIds=new Set(specs.map(spec=>spec.compatId));
   for(const compatId of configuredCompatIds){
     const spec=specs.find(item=>item.compatId===compatId);
-    const fallback=defaults[compatId]||{side:spec?.side||'point',channel:'signal',color:'#171715',flow:spec?.defaultFlow||'duplex'};
+    const fallback=(spec?.role!=='self'&&defaults[compatId])||{side:spec?.side||'point',channel:'signal',color:'#171715',flow:spec?.defaultFlow||'duplex'};
     const p=n.config.ports[compatId]||(n.config.ports[compatId]={});
     if(typeof p.label!=='string')p.label='';
     if(!['external','internal','both'].includes(p.face))p.face='external';
@@ -4147,7 +4151,9 @@ function wireDirectionActive(w,direction,signalState){
 function computeSignalState(){
   let active=new Set();
   nodes.forEach(n=>{ if(normalizeSignalMode(componentConfig(n))==='source') active.add(n.id); });
-  for(let pass=0;pass<6;pass++){
+  // Activation only grows, so it settles within one pass per node; a fixed pass count would
+  // leave the far end of a long chain dark.
+  for(let pass=0;pass<=nodes.length;pass++){
     const probe={active,colors:new Map(nodes.map(n=>[n.id,componentConfig(n).color]))};
     const next=new Set(active);
     for(const n of nodes){

@@ -61,15 +61,17 @@ assert.match(G.query(print,'export',{format:'graphml'}).text,/<edge id="k1:case:
 assert.equal(Object.keys(G.query(print,'export',{format:'jgf'}).graph.graph.nodes).length,print.components.length);
 assert.equal(G.query(print,'nope').code,'UNKNOWN_QUERY');
 
-// Classic 08 as authored: its boundary Points are out-only (the default for a Point's `out`),
-// so nothing can enter them. The simulation reports that exactly as the signal view shows it.
-assert.deepEqual(G.query(gated,'blocked').blocked.map(b=>b.wireId).sort(),['k1','k3','k6']);
-// With its Points made duplex, the gate passes only after the grant opens its control point.
-{const g8=structuredClone(gated);for(const c of g8.components)if(c.symbolId==='point')c.config.ports.out.connections=[{id:'connection-1',flow:'duplex',access:'read-write'}];
- const {sim}=G.createSimulation(g8,{});sim.inject('req',{payload:'r1'});sim.run();assert.match(sim.refusals()[0].reason,/gate is closed/);
+// Classic 08 as authored: a Point's own point is two-way (its spec says duplex), so its
+// boundary Points carry work in and out and nothing is blocked.
+assert.deepEqual(G.query(gated,'blocked').blocked,[]);
+// The gate passes only after the grant opens its control point.
+{const {sim}=G.createSimulation(gated,{});sim.inject('req',{payload:'r1'});sim.run();assert.match(sim.refusals()[0].reason,/gate is closed/);
  sim.inject('grant',{payload:{open:true}});sim.run();sim.inject('req',{payload:'r2'});sim.run();
  assert.equal(sim.taps('log').arrivals.length,1);assert.equal(sim.receipts().filter(r=>r.kind==='receipt').length,1)}
 
+// A bare Point (no ports authored) is two-way by default: work passes through it.
+{const d=doc([A('s'),{id:'mid',symbolId:'point',x:0,y:0,form:{dimension:0}},A('z',{signalMode:'passive'})],[{id:'w1',a:'s',aSide:'out',b:'mid',bSide:'out'},{id:'w2',a:'mid',aSide:'out',b:'z',bSide:'in'}]);
+ assert.deepEqual(G.query(d,'blocked').blocked,[]);const {sim}=G.createSimulation(d);sim.inject('s',{payload:1});sim.run();assert.equal(sim.taps('z').arrivals.length,1)}
 // Junction policies.
 const hub=(policy,extra={})=>doc([A('src'),{...P('j'),config:{signalMode:'relay',ports:DUPLEX,flow:{policy,...extra}}},A('x',{signalMode:'passive'}),A('y',{signalMode:'passive'})],
   [W('w0','src','j'),{id:'wx',a:'j',aSide:'out',b:'x',bSide:'in',config:{accepts:['red']}},{id:'wy',a:'j',aSide:'out',b:'y',bSide:'in',config:{accepts:['blue','red']}}]);

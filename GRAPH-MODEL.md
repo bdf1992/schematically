@@ -453,7 +453,7 @@ Not yet modelled from the deck:
 
 ## Observed while building (defects outside this change)
 
-1. **A Point's `out` port defaults to out-only** in both the data core
+1. **Fixed (2026-09-25).** **A Point's `out` port defaulted to out-only** in both the data core
    (`STANDARD_POINT_FLOWS`) and the editor (`componentConfig` defaults). But the
    Point's own attachment spec declares `defaultFlow: 'duplex'`
    (`src/06-attachment-core.js`).
@@ -462,7 +462,7 @@ Not yet modelled from the deck:
      signal view as well as the simulation.
    - Example 09 declares its Points `duplex` explicitly.
    - Proposed fix: let the spec's `defaultFlow` win for a 0D `self` point.
-2. **The derived signal stops after 6 passes** (`computeSignalState`). A chain deeper
+2. **Fixed (2026-09-25): now iterates to a fixed point.** **The derived signal stopped after 6 passes** (`computeSignalState`). A chain deeper
    than 6 hops never lights its far end. In example 09, `evidence`, `run-out` and
    `customer` stay dark although messages reach them.
 3. **Component size is clamped silently** in the editor (w ≤ 520, h ≤ 420,

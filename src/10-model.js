@@ -354,7 +354,7 @@ function componentConfig(n){
   const configuredCompatIds=new Set(specs.map(spec=>spec.compatId));
   for(const compatId of configuredCompatIds){
     const spec=specs.find(item=>item.compatId===compatId);
-    const fallback=defaults[compatId]||{side:spec?.side||'point',channel:'signal',color:'#171715',flow:spec?.defaultFlow||'duplex'};
+    const fallback=(spec?.role!=='self'&&defaults[compatId])||{side:spec?.side||'point',channel:'signal',color:'#171715',flow:spec?.defaultFlow||'duplex'};
     const p=n.config.ports[compatId]||(n.config.ports[compatId]={});
     if(typeof p.label!=='string')p.label='';
     if(!['external','internal','both'].includes(p.face))p.face='external';

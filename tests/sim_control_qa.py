@@ -56,6 +56,9 @@ with sync_playwright() as p:
 
     # Example 09: send, wait on the reviewer, approve in place, retry without a second send.
     open_doc(page, '09-print-ai-proof-run.sov')
+    # The editor's derived signal settles however long the chain: the run's far end lights.
+    active = page.evaluate("()=>[...computeSignalState().active]")
+    assert 'run-out' in active and 'evidence' in active, active
     assert page.evaluate("()=>document.querySelectorAll('#simLayer .sim-send').length") == 0, 'controls appear only while the clock is on'
     click_center(page, '#simStepBtn')
     click_center(page, '#simLayer .sim-send')
