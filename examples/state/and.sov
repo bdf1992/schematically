@@ -1,0 +1,150 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "state-and",
+  "revision": 0,
+  "meta": {
+    "title": "State space 1b: A AND B to Q"
+  },
+  "components": [
+    {
+      "id": "A",
+      "symbolId": "point",
+      "x": 80,
+      "y": 120,
+      "config": {
+        "label": "A"
+      }
+    },
+    {
+      "id": "B",
+      "symbolId": "point",
+      "x": 80,
+      "y": 240,
+      "config": {
+        "label": "B"
+      }
+    },
+    {
+      "id": "G",
+      "symbolId": "act",
+      "x": 260,
+      "y": 180,
+      "config": {
+        "label": "AND",
+        "definition": "logic.and@1",
+        "attachmentDefaults": "none",
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333333333333333,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6666666666666666,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "flow": "out",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "Q",
+      "symbolId": "point",
+      "x": 440,
+      "y": 180,
+      "config": {
+        "label": "Q"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "wA",
+      "a": "A",
+      "aSide": "self",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "A",
+        "pointId": "self"
+      },
+      "b": "G",
+      "bSide": "a",
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "G",
+        "pointId": "a"
+      },
+      "config": {
+        "direction": "forward",
+        "delay": 1
+      }
+    },
+    {
+      "id": "wB",
+      "a": "B",
+      "aSide": "self",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "B",
+        "pointId": "self"
+      },
+      "b": "G",
+      "bSide": "b",
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "G",
+        "pointId": "b"
+      },
+      "config": {
+        "direction": "forward",
+        "delay": 1
+      }
+    },
+    {
+      "id": "wQ",
+      "a": "G",
+      "aSide": "q",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "G",
+        "pointId": "q"
+      },
+      "b": "Q",
+      "bSide": "self",
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "Q",
+        "pointId": "self"
+      },
+      "config": {
+        "direction": "forward",
+        "delay": 1
+      }
+    }
+  ],
+  "references": [],
+  "layout": {}
+}

@@ -1,0 +1,129 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "state-merge",
+  "revision": 0,
+  "meta": {
+    "title": "State space 1b: a Point fed by two Paths, combine or"
+  },
+  "components": [
+    {
+      "id": "S1",
+      "symbolId": "point",
+      "x": 80,
+      "y": 120,
+      "config": {
+        "label": "S1"
+      }
+    },
+    {
+      "id": "S2",
+      "symbolId": "point",
+      "x": 80,
+      "y": 240,
+      "config": {
+        "label": "S2"
+      }
+    },
+    {
+      "id": "J",
+      "symbolId": "point",
+      "x": 260,
+      "y": 180,
+      "config": {
+        "label": "J",
+        "attachmentPoints": [
+          {
+            "id": "self",
+            "side": "left",
+            "t": 0.5,
+            "flow": "duplex",
+            "channels": [
+              {
+                "id": "main",
+                "merge": {
+                  "combine": "or"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "OUT",
+      "symbolId": "point",
+      "x": 440,
+      "y": 180,
+      "config": {
+        "label": "OUT"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "S1",
+      "aSide": "self",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "S1",
+        "pointId": "self"
+      },
+      "b": "J",
+      "bSide": "self",
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "J",
+        "pointId": "self"
+      },
+      "config": {
+        "direction": "forward",
+        "delay": 1
+      }
+    },
+    {
+      "id": "w2",
+      "a": "S2",
+      "aSide": "self",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "S2",
+        "pointId": "self"
+      },
+      "b": "J",
+      "bSide": "self",
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "J",
+        "pointId": "self"
+      },
+      "config": {
+        "direction": "forward",
+        "delay": 1
+      }
+    },
+    {
+      "id": "w3",
+      "a": "J",
+      "aSide": "self",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "J",
+        "pointId": "self"
+      },
+      "b": "OUT",
+      "bSide": "self",
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "OUT",
+        "pointId": "self"
+      },
+      "config": {
+        "direction": "forward",
+        "delay": 1
+      }
+    }
+  ],
+  "references": [],
+  "layout": {}
+}
