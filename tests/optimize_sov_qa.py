@@ -279,6 +279,40 @@ def check_local_search() -> None:
         assert feasible(eps, lo)[1] < trapped['value'], ('a nearby plan beats the trap', eps, lo)
 
 
+def check_traces() -> None:
+    # The traces the visual views draw from: a branch-and-bound log that is a consistent tree,
+    # and climb paths that start where they were placed and end at the optimum they report.
+    doc, _ = load(DOC)
+    _, learning = load(DOC, LEARNING)
+    lp = build(doc, learning, segments=20)
+    log = []
+    bb = branch_and_bound(lp['c'], lp['A_ub'], lp['b_ub'], lp['A_eq'], lp['b_eq'], lp['upper'],
+                          lp['ordering'] + lp['integer'], log=log)
+    by_id = {e['id']: e for e in log}
+    assert len(by_id) == len(log), 'node ids repeat'
+    assert sum(e['outcome'] in ('branched', 'incumbent') for e in log) == bb['nodes'], (bb['nodes'], len(log))
+    assert [e for e in log if e['parent'] is None][0]['id'] == 0
+    for e in log:
+        if e['parent'] is not None:
+            parent = by_id[e['parent']]
+            assert parent['outcome'] == 'branched', (e, parent)
+            if e['bound'] is not None:
+                assert e['bound'] <= parent['bound'] + 1e-6, 'a child LP cannot beat its parent'
+        if e['outcome'] == 'pruned' and e['incumbent'] is not None:
+            assert e['bound'] <= e['incumbent'] + 1e-6, e
+    assert close(max(e['bound'] for e in log if e['outcome'] == 'incumbent'), bb['objective'])
+
+    got = local_search(doc, learning, starts=12, record=True)
+    assert len(got['climbs']) == 12
+    width = {'chairs': 20.0, 'tables': 8.0}
+    for climb in got['climbs']:
+        end = dict(zip(got['free'], climb['path'][-1]))
+        optimum = got['optima'][climb['optimum']]['free']
+        assert all(abs(end[k] - optimum[k]) <= 1e-2 * width[k] for k in end), (end, optimum)
+        assert all(0 - 1e-9 <= p[0] <= 20 + 1e-9 and 0 - 1e-9 <= p[1] <= 8 + 1e-9 for p in climb['path'])
+    assert 'climbs' not in local_search(doc, learning, starts=2), 'paths are recorded only on request'
+
+
 def refused(doc: dict, model: dict, code: str) -> None:
     try:
         solve(doc, model)
@@ -320,6 +354,7 @@ def main() -> int:
     check_whole_units()
     check_nonconvex()
     check_local_search()
+    check_traces()
     check_refusals()
     check_document_valid()
     print('optimize_sov QA PASS')

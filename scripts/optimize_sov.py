@@ -190,7 +190,7 @@ INT_TOL = 1e-6
 
 def branch_and_bound(c: list[float], A_ub: list[list[float]], b_ub: list[float], A_eq: list[list[float]],
                      b_eq: list[float], upper: list[float | None], integer: list[int],
-                     node_limit: int = 5000, gap: float = 1e-9) -> dict:
+                     node_limit: int = 5000, gap: float = 1e-9, log: list | None = None) -> dict:
     """Maximize c.x as `simplex` does, with the variables in `integer` held to whole numbers.
 
     Each node is the LP with tightened bounds on some integer variables. Its LP optimum is an
@@ -202,6 +202,10 @@ def branch_and_bound(c: list[float], A_ub: list[list[float]], b_ub: list[float],
 
     Returns status `optimal` (the bound met the incumbent), `node_limit` (stopped with a
     stated gap), `infeasible` or `unbounded`; the relaxation's value; nodes explored.
+
+    With `log`, every node is appended as it is decided: id, parent, the branch that made it
+    (variable index, side, value), its LP bound and its outcome: branched, incumbent, pruned
+    (its bound could not beat the incumbent), infeasible, or open (left at the node limit).
     """
     import heapq
 
@@ -225,15 +229,25 @@ def branch_and_bound(c: list[float], A_ub: list[list[float]], b_ub: list[float],
         # No incumbent yet (-inf) means anything beats it; the tolerance would be inf - inf.
         return incumbent == -math.inf or value > incumbent + gap * max(1.0, abs(incumbent))
 
+    def note(node_id: int, parent: int | None, branch: dict | None, bound: float | None, outcome: str,
+             incumbent: float) -> None:
+        if log is not None:
+            log.append({'id': node_id, 'parent': parent, 'branch': branch, 'bound': bound, 'outcome': outcome,
+                        'incumbent': None if incumbent == -math.inf else incumbent})
+
     root = relax({})
     if root['status'] != 'optimal':
+        note(0, None, None, None, root['status'], -math.inf)
         return {'status': root['status'], 'nodes': 1}
     relaxation = root['objective']
     best, best_x, nodes, counter = -math.inf, None, 0, 0
     heap = [(-root['objective'], 0, counter, {}, root)]
+    lineage: dict[int, tuple[int | None, dict | None]] = {0: (None, None)}
     while heap:
-        neg_bound, neg_depth, _, bounds, res = heapq.heappop(heap)
+        neg_bound, neg_depth, node_id, bounds, res = heapq.heappop(heap)
+        parent, branch = lineage[node_id]
         if not beats(-neg_bound, best):
+            note(node_id, parent, branch, -neg_bound, 'pruned', best)
             continue
         nodes += 1
         x = res['x']
@@ -241,21 +255,33 @@ def branch_and_bound(c: list[float], A_ub: list[list[float]], b_ub: list[float],
         frac = [(abs(x[j] - round(x[j])), j) for j in integer if abs(x[j] - round(x[j])) > INT_TOL]
         if not frac:
             best, best_x = res['objective'], [round(v) if j in integer else v for j, v in enumerate(x)]
+            note(node_id, parent, branch, -neg_bound, 'incumbent', best)
             continue
         if nodes >= node_limit:
-            heapq.heappush(heap, (neg_bound, neg_depth, counter, bounds, res))
+            heapq.heappush(heap, (neg_bound, neg_depth, node_id, bounds, res))
             break
+        note(node_id, parent, branch, -neg_bound, 'branched', best)
         _, j = max(frac)
         v = x[j]
         lo, hi = bounds.get(j, (0.0, None))
-        for child in ({**bounds, j: (lo, float(math.floor(v)))}, {**bounds, j: (float(math.ceil(v)), hi)}):
+        for side, child in (('<=', {**bounds, j: (lo, float(math.floor(v)))}),
+                            ('>=', {**bounds, j: (float(math.ceil(v)), hi)})):
             clo, chi = child[j]
+            edge = {'var': j, 'side': side, 'value': chi if side == '<=' else clo}
+            counter += 1
             if chi is not None and clo > chi:
+                note(counter, node_id, edge, None, 'infeasible', best)
                 continue
             r = relax(child)
             if r['status'] == 'optimal' and beats(r['objective'], best):
-                counter += 1
+                lineage[counter] = (node_id, edge)
                 heapq.heappush(heap, (-r['objective'], neg_depth - 1, counter, child, r))
+            else:
+                note(counter, node_id, edge, r.get('objective'),
+                     'pruned' if r['status'] == 'optimal' else 'infeasible', best)
+    for neg_bound, _, node_id, _, _ in heap:
+        parent, branch = lineage[node_id]
+        note(node_id, parent, branch, -neg_bound, 'pruned' if not beats(-neg_bound, best) else 'open', best)
     open_bound = max([-h[0] for h in heap], default=-math.inf)
     if best_x is None:
         if heap:
@@ -657,7 +683,7 @@ def _reduce(A_eq: list[list[float]], b_eq: list[float], n: int, order: list[int]
 
 
 def local_search(doc: dict, model: dict, starts: int = 24, seed: int = 0, iterations: int = 400,
-                 tol: float = 1e-6) -> dict:
+                 tol: float = 1e-6, record: bool = False) -> dict:
     """Projected gradient ascent with multistart, on the true curves.
 
     No segments and no binaries: the effects are evaluated exactly, so this is the method
@@ -768,8 +794,9 @@ def local_search(doc: dict, model: dict, starts: int = 24, seed: int = 0, iterat
 
     scale = max(1.0, sum(abs(float(f.get('value', 0))) for f in model.get('flows', {}).values()))
 
-    def climb(y: list[float]) -> tuple[list[float], int]:
+    def climb(y: list[float]) -> tuple[list[float], int, list]:
         y = project(y)
+        path = [list(y)]
         lam = [0.0] * len(curved(expand(y))[1])
         rho, steps, last = 10.0, 0, math.inf
         for _outer in range(30):
@@ -797,6 +824,7 @@ def local_search(doc: dict, model: dict, starts: int = 24, seed: int = 0, iterat
                     if gain > 0 and gain >= 1e-4 * sum(g * (t - v) for g, t, v in zip(grad, trial, y)):
                         moved = max(abs(t - v) for t, v in zip(trial, y)) > tol * max(hi for _, hi in box)
                         y, current = trial, current + gain
+                        path.append(list(y))
                         break
                     step /= 2.0
                 steps += 1
@@ -810,7 +838,7 @@ def local_search(doc: dict, model: dict, starts: int = 24, seed: int = 0, iterat
             if worst > 0.25 * last:
                 rho *= 4.0
             last = worst
-        return y, steps
+        return y, steps, path
 
     rng = random.Random(seed)
     # Corners of the box first: traps sit on edges (a product at zero whose first unit is
@@ -820,8 +848,9 @@ def local_search(doc: dict, model: dict, starts: int = 24, seed: int = 0, iterat
     seeds = corners + [[(lo + hi) / 2 for lo, hi in box]]
     seeds += [[rng.uniform(lo, hi) for lo, hi in box] for _ in range(max(0, starts - len(seeds)))]
     found: list[dict] = []
+    climbs: list[dict] = []
     for start in seeds[:max(starts, 1)]:
-        y, steps = climb(start)
+        y, steps, path = climb(start)
         x = expand(y)
         value, _ = curved(x)
         point = {lp['names'][j].split(':', 1)[1]: y[k] for k, j in enumerate(free)}
@@ -832,16 +861,26 @@ def local_search(doc: dict, model: dict, starts: int = 24, seed: int = 0, iterat
                 f['starts'] += 1
                 if value > f['value']:
                     f.update(free=point, value=value, violation=violation(x), plan=plan_of(x))
+                ended = f
                 break
         else:
-            found.append({'free': point, 'value': value, 'violation': violation(x), 'starts': 1,
-                          'steps': steps, 'plan': plan_of(x)})
+            ended = {'free': point, 'value': value, 'violation': violation(x), 'starts': 1,
+                     'steps': steps, 'plan': plan_of(x)}
+            found.append(ended)
+        if record:
+            climbs.append({'start': list(start), 'path': path, 'ended': ended})
     found.sort(key=lambda f: -f['value'])
     feasible = [f for f in found if f['violation'] <= 1e-5]
     best = feasible[0] if feasible else found[0]
-    return {'method': 'projected gradient + augmented Lagrangian, multistart', 'certificate': 'local',
-            'starts': starts, 'seed': seed, 'free': [lp['names'][j].split(':', 1)[1] for j in free],
-            'optima': found, 'best': best, 'evaluated': true_value(doc, model, best['plan'])}
+    result = {'method': 'projected gradient + augmented Lagrangian, multistart', 'certificate': 'local',
+              'starts': starts, 'seed': seed, 'free': [lp['names'][j].split(':', 1)[1] for j in free],
+              'optima': found, 'best': best, 'evaluated': true_value(doc, model, best['plan'])}
+    if record:
+        # Each climb: where it started, every accepted step (free variables, in order), and
+        # which of the optima above it ended in.
+        result['climbs'] = [{'start': c['start'], 'path': c['path'], 'optimum': found.index(c['ended'])}
+                            for c in climbs]
+    return result
 
 
 # --------------------------------------------------------------------------- report

@@ -8,6 +8,7 @@ These documents preserve future direction without widening the current release c
 - `OPTIMIZATION-VISUALIZATION.md` — plan for picturing optimization runs: a run record, and views for the plan on the diagram, curves, the landscape of local optima, the search, convergence and marginal value.
 - `WHOLE-UNITS-AND-STATE.md` — units with material and work progress, a completion gate (AND over binary completions), and a draft `.sav` saved-state file that points at its `.sov` (`scripts/simulate_sov.py`).
 - `LOGIC-GATES.md` — combinational and sequential gates as data (tables, thresholds, comparators, latches, flip-flops, C-element, Schmitt trigger), bits and levels, composites that add and count, and a catalog of further gates.
+- `VISUAL-LANGUAGE.md` — discovery of what the renderer already offers, one visual grammar for solvers, units and gates, and the views for each (glyphs, live state, timing, levels, timeline, landscape, search outline, convergence).
 - Issue #6 — small data-driven logic machine for particle routing.
 
 Implementation begins from `dev` only after the accepted RC merges to `main`. See root `ROADMAP.md`, `RC-FINISH-LINE.md`, and `docs/BRANCHING.md`.

@@ -1,6 +1,8 @@
 # Visualizing optimization runs
 
-> **Non-authoritative plan.** This plans how the runs of `scripts/optimize_sov.py` become pictures. Nothing here is built yet. It does not widen 0.1. `LINEAR-NONLINEAR-SYSTEMS.md` describes the solvers themselves.
+> **Non-authoritative plan.** `VISUAL-LANGUAGE.md` extends this plan to the simulator and the logic runtime and fixes one visual grammar for all three.
+>
+> **Plan.** This plans how the runs of `scripts/optimize_sov.py` become pictures. Nothing here is built yet. It does not widen 0.1. `LINEAR-NONLINEAR-SYSTEMS.md` describes the solvers themselves.
 
 ## What needs to be seen
 
