@@ -6,7 +6,7 @@
 const LAYOUT_RUBRIC={
   // kind: [penalty per finding, cap for the kind]. Score = 10 - Σ min(cap, n × penalty), floor 0.
   'text-overflow':[.5,3],'text-truncated':[.3,2],'text-collision':[.5,3],'placeholder-text':[.1,2],'ghost-mark':[.1,2],
-  'faint-structure':[.5,2],'route-escape':[1,4],'route-through-node':[1,4],'crossing':[.25,2],'node-overlap':[1,4]
+  'faint-structure':[.5,2],'route-escape':[1,4],'route-jog':[.25,2],'route-through-node':[1,4],'crossing':[.25,2],'node-overlap':[1,4]
 };
 
 function layoutWorldMatrix(el){const root=workspace.getScreenCTM(),m=el.getScreenCTM();return root&&m?root.inverse().multiply(m):null}
@@ -37,6 +37,16 @@ function layoutSegmentsCross(a,b,c,d){
   return ((d1>0&&d2<0)||(d1<0&&d2>0))&&((d3>0&&d4<0)||(d3<0&&d4>0));
 }
 
+// Corner points of an orthogonal path written as M/L/H/V commands.
+function layoutPathCorners(d){
+  const out=[];let x=0,y=0;
+  for(const [,cmd,args] of String(d||'').matchAll(/([MLHV])\s*([^MLHV]*)/gi)){
+    const n=args.trim().split(/[\s,]+/).filter(Boolean).map(Number);
+    if(/[ML]/i.test(cmd)){x=n[0];y=n[1]}else if(/H/i.test(cmd))x=n[0];else y=n[0];
+    out.push({x,y});
+  }
+  return out;
+}
 function layoutMetrics(options={}){
   const staticView=options.static!==false; // an export or a screenshot freezes animation
   const findings=[],add=(kind,ids,detail)=>findings.push({kind,ids,detail});
@@ -93,7 +103,11 @@ function layoutMetrics(options={}){
   const routes=[];
   for(const g of workspace.querySelectorAll('.wire-group')){
     const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
-    routes.push({w,pts:layoutSamplePath(path)});
+    routes.push({w,pts:layoutSamplePath(path),corners:layoutPathCorners(path.getAttribute('d'))});
+  }
+  // A jog is a short step between two bends: two lines that should have been one.
+  for(const {w,corners} of routes){
+    for(let i=1;i+2<corners.length;i++){const a=corners[i],b=corners[i+1],len=Math.hypot(b.x-a.x,b.y-a.y);if(len>.5&&len<12){add('route-jog',[w.id],`${len.toFixed(1)}px step`);break}}
   }
   for(const {w,pts} of routes){
     const canvasOwner=String(w.canvasId||'').startsWith('canvas:component:')?String(w.canvasId).slice('canvas:component:'.length):null;

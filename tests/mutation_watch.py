@@ -62,8 +62,8 @@ MUTANTS=[
     {
       'name':'attachment-defaults-become-hard-cardinality',
       'file':'src/06-attachment-core.js',
-      'old':'return [...base,...customPointSpecs(entity,d,base)];',
-      'new':'return base;',
+      'old':'const specs=[...base,...customPointSpecs(entity,d,base)];',
+      'new':'const specs=base;',
       'test':'tests/configurable_attachment_defaults_qa.py'
     },
     {
@@ -100,6 +100,27 @@ MUTANTS=[
       'old':"if(allowed&&!portExposedCanvasIds(n,pointId).some(c=>allowed.has(c)))continue;",
       'new':"if(false)continue;",
       'test':'tests/carrier_path_qa.py'
+    },
+    {
+      'name':'boundary-placement-ignored',
+      'file':'src/06-attachment-core.js',
+      'old':"return d===2?specs.map(spec=>spec.role==='boundary'?placedBoundary(entity,spec):spec):specs;",
+      'new':'return specs;',
+      'test':'tests/boundary_attachment_qa.py'
+    },
+    {
+      'name':'terminal-stands-off-the-edge',
+      'file':'src/30-canvas.js',
+      'old':'const faceOffset=0,t=',
+      'new':'const faceOffset=4,t=',
+      'test':'tests/boundary_attachment_qa.py'
+    },
+    {
+      'name':'interior-route-unfenced',
+      'file':'src/40-routing.js',
+      'old':'.filter(points=>pathValid(points,obstacles)&&routeInsideFence(points,fence))',
+      'new':'.filter(points=>pathValid(points,obstacles))',
+      'test':'tests/layout_quality_qa.py'
     },
 ]
 

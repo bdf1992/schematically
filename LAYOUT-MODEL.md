@@ -171,6 +171,40 @@ threshold, and a metric over its threshold is a **finding** with a suggested nex
 - A "good layout" check is then a threshold set that CI can run over the examples, as
   the golden QA runs today.
 
+## As built: measuring (2026-09-25)
+
+`layout.metrics({static})` (`src/57-layout-metrics.js`, Browser API `layout.metrics()`)
+measures the rendered SVG in world coordinates. `scripts/layout_audit.py` runs it over
+documents the way the SVG export sees them, and `tests/layout_quality_qa.py` holds every
+example at 9.5/10 or above.
+
+The score is `10 - Σ min(cap, count × penalty)` over these kinds:
+
+| Kind | Penalty (cap) |
+| --- | --- |
+| text-overflow | .5 (3) |
+| text-truncated | .3 (2) |
+| text-collision (with text, a body, or a container's border) | .5 (3) |
+| placeholder-text | .1 (2) |
+| ghost-mark (an unused point drawn at rest) | .1 (2) |
+| faint-structure (a junction or boundary Point drawn under 0.5 opacity) | .5 (2) |
+| route-escape | 1 (4) |
+| route-through-node | 1 (4) |
+| route-jog (a step under 12px between bends) | .25 (2) |
+| crossing | .25 (2) |
+| node-overlap | 1 (4) |
+
+The rubric is a declared heuristic, not a truth. Each finding names the ids it measured,
+so a person or an agent can check it against the picture.
+
+Baseline on 2026-09-25, before the fixes: mean 7.1. Example 09 scored 0, and 07 and 08
+scored about 4. After the fixes: 10 on every example.
+
+Still not measured:
+- arrowheads on short segments
+- label legibility at fit zoom
+- a card crowding its container's interior guide
+
 ## 6. Order of work
 
 1. `document.layout.views` with a `main` view migrated from entity geometry. Route

@@ -84,3 +84,36 @@ marker.
 Storage: carriers still live in `document.wires` and Components in `document.components`.
 That split is compatibility debt of the same kind as `config.ports` versus `parts.points`;
 folding carriers into one record kind is a file-format transition, not a runtime change.
+
+
+## Points anywhere on the perimeter (dev, 2026-09-25)
+
+A 2D card's own boundary points (the built-in `left`/`right`/`top`, and data-declared
+`config.attachmentPoints`) are no longer fixed to their default side.
+`config.ports.<compatId>.boundary = {side, t}` places one anywhere on the perimeter.
+- `side` is `left`, `right`, `top` or `bottom`.
+- `t` runs along that side, from 0 to 1.
+
+The attachment core (`pointSpecs`) applies the placement and marks the spec `placed`. So
+routing, reachability, rendering, the data core and the graph engine all read one
+position.
+
+- **Gesture:** Alt-drag a point to slide it round the card, corners included. It uses the
+  same edge resolver that hosts a free Point on a boundary. It snaps to eighths of a side;
+  holding Shift as well places it freely. One gesture is one history step. A pinned or
+  locked card refuses.
+- **Agent path:** a CRUD patch such as
+  `{config: {ports: {out: {boundary: {side: 'bottom', t: .25}}}}}`. It is the same over
+  the Browser API, HTTP and MCP, with the same receipts and lock refusals. Patching
+  `boundary: null` returns the point to its default.
+
+## Seamless terminals (dev, 2026-09-25)
+
+- A point sits **on** the boundary, never standing off it, so a wire meets the body edge
+  with no gap. The face (internal / external / both) is shown by the point's style.
+- A card's symbol axis is its centre line: the glyph is positioned so its terminal axis
+  (`INLINE_TERMINAL_Y`) lands at mid-height. An unplaced side point therefore sits on the
+  axis for every symbol, and cards aligned by centre are joined by straight wires.
+- A wired side point on the axis draws an inner lead from the body edge to the symbol's
+  own lead (`.component-lead`). Wire, edge and glyph read as one line.
+- A placed point is off the axis and draws no lead.

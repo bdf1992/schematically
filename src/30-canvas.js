@@ -630,6 +630,12 @@ function componentInlineGraphicBox(node){
   }
   let y=-Math.min(size.h*.34,38),hh=h;
   if(componentAcceptsChildren(node)){y=-size.h/2+18;hh=Math.min(52,size.h*.32)}
+  else{
+    // A card's symbol axis is its centre line: side points sit at mid-height for every
+    // symbol, so cards aligned by centre are joined by straight wires.
+    const axis=componentInlineTerminalY(node),p=componentConfig(node).presentation;
+    if(axis!=null&&p.graphic.kind==='symbol'){const scale=Math.min(w/96,h/64);y=-axis*scale-(h-64*scale)/2}
+  }
   return {x,y,w,h:hh};
 }
 function componentInlineTerminalHalfSpan(node){
@@ -639,6 +645,16 @@ function componentInlineTerminalHalfSpan(node){
 }
 function componentHostAngle(node){return Number(wireHostPoseCache.get(node?.id)?.angle)||0}
 function rotateVectorByDegrees(x,y,angle){const r=angle*Math.PI/180,c=Math.cos(r),s=Math.sin(r);return{x:x*c-y*s,y:x*s+y*c}}
+// Where a card's symbol meets the world: the glyph's terminal axis and its two lead ends, in
+// the component's local frame. Null when the card draws no symbol with a known axis.
+function componentGlyphAxis(n){
+  if(componentForm(n).dimension!==2||componentHostedOnWire(n)||componentAcceptsChildren(n))return null;
+  const p=componentConfig(n).presentation,axis=componentInlineTerminalY(n);
+  if(axis==null||p.graphic.kind!=='symbol'||(p.graphic.ref&&p.graphic.ref.replace(/^#/,'')!==`sym-${n.symbolId}`))return null;
+  const box=componentInlineGraphicBox(n),scale=Math.min(box.w/96,box.h/64);
+  const x0=box.x+(box.w-96*scale)/2,y0=box.y+(box.h-64*scale)/2;
+  return {y:y0+axis*scale,left:x0+8*scale,right:x0+88*scale,stroke:4*scale};
+}
 function componentPortLocalPosition(n,pointId){
   const size=componentSize(n),spec=Attachment.resolveSpec(n,pointId);if(!spec)return{x:0,y:0};
   const cfg=componentConfig(n),pcfg=cfg.ports[spec.compatId],effective=Attachment.effectiveDimension(n);
@@ -647,8 +663,13 @@ function componentPortLocalPosition(n,pointId){
     const half=componentHostedOnWire(n)?Math.max(18,componentInlineTerminalHalfSpan(n)):size.w/2;
     return spec.id==='start'?{x:-half,y:0}:{x:half,y:0};
   }
-  const face=pcfg?.face||'external',faceOffset=face==='internal'?-4:face==='both'?0:4,t=Math.max(0,Math.min(1,Number.isFinite(Number(spec.t))?Number(spec.t):.5));
-  const alongX=-size.w/2+size.w*t,alongY=-size.h/2+size.h*t;
+  // A point sits on the boundary itself, so a wire meets the body edge with no gap; the face
+  // is shown by the point's style, not by standing it off the edge.
+  const faceOffset=0,t=Math.max(0,Math.min(1,Number.isFinite(Number(spec.t))?Number(spec.t):.5));
+  const alongX=-size.w/2+size.w*t;
+  // An unplaced side point meets the symbol on its axis, so wire, edge and glyph are one line.
+  const axis=!spec.placed&&spec.role==='boundary'&&!spec.authored&&(spec.side==='left'||spec.side==='right')?componentGlyphAxis(n):null;
+  const alongY=axis?axis.y:-size.h/2+size.h*t;
   if(spec.side==='left')return{x:-size.w/2-faceOffset,y:alongY};
   if(spec.side==='right')return{x:size.w/2+faceOffset,y:alongY};
   if(spec.side==='top')return{x:alongX,y:-size.h/2-faceOffset};

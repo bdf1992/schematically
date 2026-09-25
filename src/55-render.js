@@ -61,6 +61,18 @@ function appendComponentGraphic(g,n,cfg){
 // A label belongs inside the body it names. Measured after the node is in the document (label
 // size follows zoom): a label wider than the body wraps onto two lines at word breaks, and one
 // still too long is cut with an ellipsis; the full text stays available as a tooltip.
+// A wired side point on the glyph's axis gets an inner lead from the body edge to the symbol,
+// so the wire, the edge and the symbol read as one continuous line.
+function appendComponentLeads(g,n){
+  const axis=componentGlyphAxis(n);if(!axis)return;const {w}=componentSize(n);
+  for(const [compat,side] of [['in','left'],['out','right']]){
+    const spec=Attachment.resolveSpec(n,compat);if(!spec||spec.placed||spec.side!==side)continue;
+    if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
+    const lead=document.createElementNS('http://www.w3.org/2000/svg','line');lead.setAttribute('class','component-lead');
+    lead.setAttribute('x1',String(side==='left'?-w/2:w/2));lead.setAttribute('x2',String(axis[side]));lead.setAttribute('y1',String(axis.y));lead.setAttribute('y2',String(axis.y));
+    lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
+  }
+}
 function fitComponentLabels(g,n){
   if(componentForm(n).dimension!==2)return;
   const size=componentSize(n),max=size.w-12;
@@ -231,6 +243,7 @@ function render(){
         portLabel.setAttribute('x',localX+offsets.dx);portLabel.setAttribute('y',localY+offsets.dy);portLabel.setAttribute('text-anchor',offsets.anchor);portLabel.textContent=pcfg.label;g.appendChild(portLabel);
       }
     }
+    appendComponentLeads(g,n);
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
   });
   renderWires(signalState);

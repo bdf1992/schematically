@@ -25,6 +25,12 @@ PLANTED = r"""()=>{
   out.overflow=load([{id:'a',symbolId:'act',x:200,y:200,config:{label:'An exceptionally long label that cannot possibly fit inside'}}]);
   out.overlap=load([{id:'a',symbolId:'act',x:200,y:200},{id:'b',symbolId:'act',x:230,y:210}]);
   out.through=load([{id:'a',symbolId:'act',x:100,y:200},{id:'m',symbolId:'hold',x:300,y:200},{id:'b',symbolId:'act',x:500,y:200}],[{id:'w',a:'a',aSide:'out',b:'b',bSide:'in'}]);
+  // A container whose interior is nearly blocked between two children: the fence keeps the
+  // route inside even when going round the outside would be cheaper.
+  const inside={canvasId:'canvas:component:box',parentId:'box'};
+  out.fenced=load([{id:'box',symbolId:'plane',x:400,y:300,form:{dimension:2,regions:{interior:{state:'open'}}},config:{attachmentDefaults:'none',presentation:{size:{w:500,h:200}}}},
+    {id:'a',symbolId:'act',x:230,y:300,...inside},{id:'c',symbolId:'hold',x:400,y:300,...inside,config:{presentation:{size:{w:100,h:170}}}},{id:'b',symbolId:'act',x:570,y:300,...inside}],
+    [{id:'w',a:'a',aSide:'out',b:'b',bSide:'in',canvasId:'canvas:component:box'}]);
   out.clean=load([{id:'a',symbolId:'act',x:100,y:200},{id:'b',symbolId:'act',x:400,y:200}],[{id:'w',a:'a',aSide:'out',b:'b',bSide:'in'}]);
   return out;
 }"""
@@ -42,6 +48,7 @@ assert got['overlap'].get('node-overlap'), got
 # The router avoids the middle card, so a straight pass-through should not appear; the
 # planted case proves the measure runs without inventing findings on a clean route.
 assert not got['through'].get('route-through-node'), got
+assert not got['fenced'].get('route-escape'), got
 assert got['clean'] == {}, got
 assert not errors, errors
 print(f'PASS layout quality QA (floor {FLOOR}, {len(results)} examples)')
