@@ -1,0 +1,1151 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "logic-gates",
+  "revision": 0,
+  "meta": {
+    "title": "Every gate in the pack, side by side, on shared inputs A, B, C"
+  },
+  "components": [
+    {
+      "id": "in-A",
+      "symbolId": "act",
+      "x": 120,
+      "y": 100,
+      "config": {
+        "label": "A",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A"
+        }
+      }
+    },
+    {
+      "id": "in-B",
+      "symbolId": "act",
+      "x": 120,
+      "y": 230,
+      "config": {
+        "label": "B",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B"
+        }
+      }
+    },
+    {
+      "id": "in-C",
+      "symbolId": "act",
+      "x": 120,
+      "y": 360,
+      "config": {
+        "label": "C",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "C"
+        }
+      }
+    },
+    {
+      "id": "and",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 100,
+      "config": {
+        "label": "AND",
+        "logic": {
+          "gate": "and"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-and",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 100,
+      "config": {
+        "label": "and",
+        "logic": {
+          "kind": "output",
+          "name": "and"
+        }
+      }
+    },
+    {
+      "id": "buffer",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 230,
+      "config": {
+        "label": "BUFFER",
+        "logic": {
+          "gate": "buffer"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.5,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-buffer",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 230,
+      "config": {
+        "label": "buffer",
+        "logic": {
+          "kind": "output",
+          "name": "buffer"
+        }
+      }
+    },
+    {
+      "id": "cimply",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 360,
+      "config": {
+        "label": "CIMPLY",
+        "logic": {
+          "gate": "cimply"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-cimply",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 360,
+      "config": {
+        "label": "cimply",
+        "logic": {
+          "kind": "output",
+          "name": "cimply"
+        }
+      }
+    },
+    {
+      "id": "false",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 490,
+      "config": {
+        "label": "FALSE",
+        "logic": {
+          "gate": "false"
+        },
+        "attachmentPoints": [
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-false",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 490,
+      "config": {
+        "label": "false",
+        "logic": {
+          "kind": "output",
+          "name": "false"
+        }
+      }
+    },
+    {
+      "id": "half-adder",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 620,
+      "config": {
+        "label": "HALF-ADDER",
+        "logic": {
+          "gate": "half-adder"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "s",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "c",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-half-adder-s",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 620,
+      "config": {
+        "label": "half-adder-s",
+        "logic": {
+          "kind": "output",
+          "name": "half-adder-s"
+        }
+      }
+    },
+    {
+      "id": "out-half-adder-c",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 750,
+      "config": {
+        "label": "half-adder-c",
+        "logic": {
+          "kind": "output",
+          "name": "half-adder-c"
+        }
+      }
+    },
+    {
+      "id": "imply",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 750,
+      "config": {
+        "label": "IMPLY",
+        "logic": {
+          "gate": "imply"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-imply",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 880,
+      "config": {
+        "label": "imply",
+        "logic": {
+          "kind": "output",
+          "name": "imply"
+        }
+      }
+    },
+    {
+      "id": "majority",
+      "symbolId": "gate",
+      "x": 560,
+      "y": 100,
+      "config": {
+        "label": "MAJORITY",
+        "logic": {
+          "gate": "majority"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.25,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.5,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "c",
+            "side": "left",
+            "t": 0.75,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-majority",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 1010,
+      "config": {
+        "label": "majority",
+        "logic": {
+          "kind": "output",
+          "name": "majority"
+        }
+      }
+    },
+    {
+      "id": "mux",
+      "symbolId": "gate",
+      "x": 560,
+      "y": 230,
+      "config": {
+        "label": "MUX",
+        "logic": {
+          "gate": "mux"
+        },
+        "attachmentPoints": [
+          {
+            "id": "s",
+            "side": "left",
+            "t": 0.25,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.5,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.75,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-mux",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 1140,
+      "config": {
+        "label": "mux",
+        "logic": {
+          "kind": "output",
+          "name": "mux"
+        }
+      }
+    },
+    {
+      "id": "nand",
+      "symbolId": "gate",
+      "x": 560,
+      "y": 360,
+      "config": {
+        "label": "NAND",
+        "logic": {
+          "gate": "nand"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-nand",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 1270,
+      "config": {
+        "label": "nand",
+        "logic": {
+          "kind": "output",
+          "name": "nand"
+        }
+      }
+    },
+    {
+      "id": "ncimply",
+      "symbolId": "gate",
+      "x": 560,
+      "y": 490,
+      "config": {
+        "label": "NCIMPLY",
+        "logic": {
+          "gate": "ncimply"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-ncimply",
+      "symbolId": "observe",
+      "x": 1220,
+      "y": 100,
+      "config": {
+        "label": "ncimply",
+        "logic": {
+          "kind": "output",
+          "name": "ncimply"
+        }
+      }
+    },
+    {
+      "id": "nimply",
+      "symbolId": "gate",
+      "x": 560,
+      "y": 620,
+      "config": {
+        "label": "NIMPLY",
+        "logic": {
+          "gate": "nimply"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-nimply",
+      "symbolId": "observe",
+      "x": 1220,
+      "y": 230,
+      "config": {
+        "label": "nimply",
+        "logic": {
+          "kind": "output",
+          "name": "nimply"
+        }
+      }
+    },
+    {
+      "id": "nor",
+      "symbolId": "gate",
+      "x": 560,
+      "y": 750,
+      "config": {
+        "label": "NOR",
+        "logic": {
+          "gate": "nor"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-nor",
+      "symbolId": "observe",
+      "x": 1220,
+      "y": 360,
+      "config": {
+        "label": "nor",
+        "logic": {
+          "kind": "output",
+          "name": "nor"
+        }
+      }
+    },
+    {
+      "id": "not",
+      "symbolId": "gate",
+      "x": 780,
+      "y": 100,
+      "config": {
+        "label": "NOT",
+        "logic": {
+          "gate": "not"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.5,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-not",
+      "symbolId": "observe",
+      "x": 1220,
+      "y": 490,
+      "config": {
+        "label": "not",
+        "logic": {
+          "kind": "output",
+          "name": "not"
+        }
+      }
+    },
+    {
+      "id": "or",
+      "symbolId": "gate",
+      "x": 780,
+      "y": 230,
+      "config": {
+        "label": "OR",
+        "logic": {
+          "gate": "or"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-or",
+      "symbolId": "observe",
+      "x": 1220,
+      "y": 620,
+      "config": {
+        "label": "or",
+        "logic": {
+          "kind": "output",
+          "name": "or"
+        }
+      }
+    },
+    {
+      "id": "true",
+      "symbolId": "gate",
+      "x": 780,
+      "y": 360,
+      "config": {
+        "label": "TRUE",
+        "logic": {
+          "gate": "true"
+        },
+        "attachmentPoints": [
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-true",
+      "symbolId": "observe",
+      "x": 1220,
+      "y": 750,
+      "config": {
+        "label": "true",
+        "logic": {
+          "kind": "output",
+          "name": "true"
+        }
+      }
+    },
+    {
+      "id": "xnor",
+      "symbolId": "gate",
+      "x": 780,
+      "y": 490,
+      "config": {
+        "label": "XNOR",
+        "logic": {
+          "gate": "xnor"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-xnor",
+      "symbolId": "observe",
+      "x": 1220,
+      "y": 880,
+      "config": {
+        "label": "xnor",
+        "logic": {
+          "kind": "output",
+          "name": "xnor"
+        }
+      }
+    },
+    {
+      "id": "xor",
+      "symbolId": "gate",
+      "x": 780,
+      "y": 620,
+      "config": {
+        "label": "XOR",
+        "logic": {
+          "gate": "xor"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-xor",
+      "symbolId": "observe",
+      "x": 1220,
+      "y": 1010,
+      "config": {
+        "label": "xor",
+        "logic": {
+          "kind": "output",
+          "name": "xor"
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "and",
+      "bSide": "a"
+    },
+    {
+      "id": "w2",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "and",
+      "bSide": "b"
+    },
+    {
+      "id": "w3",
+      "a": "and",
+      "aSide": "q",
+      "b": "out-and",
+      "bSide": "in"
+    },
+    {
+      "id": "w4",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "buffer",
+      "bSide": "a"
+    },
+    {
+      "id": "w5",
+      "a": "buffer",
+      "aSide": "q",
+      "b": "out-buffer",
+      "bSide": "in"
+    },
+    {
+      "id": "w6",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "cimply",
+      "bSide": "a"
+    },
+    {
+      "id": "w7",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "cimply",
+      "bSide": "b"
+    },
+    {
+      "id": "w8",
+      "a": "cimply",
+      "aSide": "q",
+      "b": "out-cimply",
+      "bSide": "in"
+    },
+    {
+      "id": "w9",
+      "a": "false",
+      "aSide": "q",
+      "b": "out-false",
+      "bSide": "in"
+    },
+    {
+      "id": "w10",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "half-adder",
+      "bSide": "a"
+    },
+    {
+      "id": "w11",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "half-adder",
+      "bSide": "b"
+    },
+    {
+      "id": "w12",
+      "a": "half-adder",
+      "aSide": "s",
+      "b": "out-half-adder-s",
+      "bSide": "in"
+    },
+    {
+      "id": "w13",
+      "a": "half-adder",
+      "aSide": "c",
+      "b": "out-half-adder-c",
+      "bSide": "in"
+    },
+    {
+      "id": "w14",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "imply",
+      "bSide": "a"
+    },
+    {
+      "id": "w15",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "imply",
+      "bSide": "b"
+    },
+    {
+      "id": "w16",
+      "a": "imply",
+      "aSide": "q",
+      "b": "out-imply",
+      "bSide": "in"
+    },
+    {
+      "id": "w17",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "majority",
+      "bSide": "a"
+    },
+    {
+      "id": "w18",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "majority",
+      "bSide": "b"
+    },
+    {
+      "id": "w19",
+      "a": "in-C",
+      "aSide": "out",
+      "b": "majority",
+      "bSide": "c"
+    },
+    {
+      "id": "w20",
+      "a": "majority",
+      "aSide": "q",
+      "b": "out-majority",
+      "bSide": "in"
+    },
+    {
+      "id": "w21",
+      "a": "in-C",
+      "aSide": "out",
+      "b": "mux",
+      "bSide": "s"
+    },
+    {
+      "id": "w22",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "mux",
+      "bSide": "a"
+    },
+    {
+      "id": "w23",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "mux",
+      "bSide": "b"
+    },
+    {
+      "id": "w24",
+      "a": "mux",
+      "aSide": "q",
+      "b": "out-mux",
+      "bSide": "in"
+    },
+    {
+      "id": "w25",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "nand",
+      "bSide": "a"
+    },
+    {
+      "id": "w26",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "nand",
+      "bSide": "b"
+    },
+    {
+      "id": "w27",
+      "a": "nand",
+      "aSide": "q",
+      "b": "out-nand",
+      "bSide": "in"
+    },
+    {
+      "id": "w28",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "ncimply",
+      "bSide": "a"
+    },
+    {
+      "id": "w29",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "ncimply",
+      "bSide": "b"
+    },
+    {
+      "id": "w30",
+      "a": "ncimply",
+      "aSide": "q",
+      "b": "out-ncimply",
+      "bSide": "in"
+    },
+    {
+      "id": "w31",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "nimply",
+      "bSide": "a"
+    },
+    {
+      "id": "w32",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "nimply",
+      "bSide": "b"
+    },
+    {
+      "id": "w33",
+      "a": "nimply",
+      "aSide": "q",
+      "b": "out-nimply",
+      "bSide": "in"
+    },
+    {
+      "id": "w34",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "nor",
+      "bSide": "a"
+    },
+    {
+      "id": "w35",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "nor",
+      "bSide": "b"
+    },
+    {
+      "id": "w36",
+      "a": "nor",
+      "aSide": "q",
+      "b": "out-nor",
+      "bSide": "in"
+    },
+    {
+      "id": "w37",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "not",
+      "bSide": "a"
+    },
+    {
+      "id": "w38",
+      "a": "not",
+      "aSide": "q",
+      "b": "out-not",
+      "bSide": "in"
+    },
+    {
+      "id": "w39",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "or",
+      "bSide": "a"
+    },
+    {
+      "id": "w40",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "or",
+      "bSide": "b"
+    },
+    {
+      "id": "w41",
+      "a": "or",
+      "aSide": "q",
+      "b": "out-or",
+      "bSide": "in"
+    },
+    {
+      "id": "w42",
+      "a": "true",
+      "aSide": "q",
+      "b": "out-true",
+      "bSide": "in"
+    },
+    {
+      "id": "w43",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "xnor",
+      "bSide": "a"
+    },
+    {
+      "id": "w44",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "xnor",
+      "bSide": "b"
+    },
+    {
+      "id": "w45",
+      "a": "xnor",
+      "aSide": "q",
+      "b": "out-xnor",
+      "bSide": "in"
+    },
+    {
+      "id": "w46",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "xor",
+      "bSide": "a"
+    },
+    {
+      "id": "w47",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "xor",
+      "bSide": "b"
+    },
+    {
+      "id": "w48",
+      "a": "xor",
+      "aSide": "q",
+      "b": "out-xor",
+      "bSide": "in"
+    }
+  ],
+  "references": []
+}

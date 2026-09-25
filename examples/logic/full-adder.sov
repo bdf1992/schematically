@@ -1,0 +1,245 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "logic-full-adder",
+  "revision": 0,
+  "meta": {
+    "title": "Full adder: two half adders and an OR"
+  },
+  "components": [
+    {
+      "id": "in-A",
+      "symbolId": "act",
+      "x": 120,
+      "y": 100,
+      "config": {
+        "label": "A",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A"
+        }
+      }
+    },
+    {
+      "id": "in-B",
+      "symbolId": "act",
+      "x": 120,
+      "y": 230,
+      "config": {
+        "label": "B",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B"
+        }
+      }
+    },
+    {
+      "id": "in-Cin",
+      "symbolId": "act",
+      "x": 120,
+      "y": 360,
+      "config": {
+        "label": "Cin",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "Cin"
+        }
+      }
+    },
+    {
+      "id": "ha1",
+      "symbolId": "act",
+      "x": 340,
+      "y": 100,
+      "config": {
+        "label": "HALF ADDER",
+        "logic": {
+          "composite": "half-adder.sov"
+        },
+        "attachmentPoints": [
+          {
+            "id": "A",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "S",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "C",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ha2",
+      "symbolId": "act",
+      "x": 560,
+      "y": 100,
+      "config": {
+        "label": "HALF ADDER",
+        "logic": {
+          "composite": "half-adder.sov"
+        },
+        "attachmentPoints": [
+          {
+            "id": "A",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "S",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "C",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "carry",
+      "symbolId": "gate",
+      "x": 780,
+      "y": 100,
+      "config": {
+        "label": "OR",
+        "logic": {
+          "gate": "or"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-S",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 100,
+      "config": {
+        "label": "S",
+        "logic": {
+          "kind": "output",
+          "name": "S"
+        }
+      }
+    },
+    {
+      "id": "out-Cout",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 230,
+      "config": {
+        "label": "Cout",
+        "logic": {
+          "kind": "output",
+          "name": "Cout"
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "ha1",
+      "bSide": "A"
+    },
+    {
+      "id": "w2",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "ha1",
+      "bSide": "B"
+    },
+    {
+      "id": "w3",
+      "a": "ha1",
+      "aSide": "S",
+      "b": "ha2",
+      "bSide": "A"
+    },
+    {
+      "id": "w4",
+      "a": "in-Cin",
+      "aSide": "out",
+      "b": "ha2",
+      "bSide": "B"
+    },
+    {
+      "id": "w5",
+      "a": "ha1",
+      "aSide": "C",
+      "b": "carry",
+      "bSide": "a"
+    },
+    {
+      "id": "w6",
+      "a": "ha2",
+      "aSide": "C",
+      "b": "carry",
+      "bSide": "b"
+    },
+    {
+      "id": "w7",
+      "a": "ha2",
+      "aSide": "S",
+      "b": "out-S",
+      "bSide": "in"
+    },
+    {
+      "id": "w8",
+      "a": "carry",
+      "aSide": "q",
+      "b": "out-Cout",
+      "bSide": "in"
+    }
+  ],
+  "references": []
+}

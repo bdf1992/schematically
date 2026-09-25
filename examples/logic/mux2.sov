@@ -1,0 +1,246 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "logic-mux2",
+  "revision": 0,
+  "meta": {
+    "title": "Two-way multiplexer from NOT, AND and OR: Q = A when S is 0, B when S is 1"
+  },
+  "components": [
+    {
+      "id": "in-S",
+      "symbolId": "act",
+      "x": 120,
+      "y": 100,
+      "config": {
+        "label": "S",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "S"
+        }
+      }
+    },
+    {
+      "id": "in-A",
+      "symbolId": "act",
+      "x": 120,
+      "y": 230,
+      "config": {
+        "label": "A",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A"
+        }
+      }
+    },
+    {
+      "id": "in-B",
+      "symbolId": "act",
+      "x": 120,
+      "y": 360,
+      "config": {
+        "label": "B",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B"
+        }
+      }
+    },
+    {
+      "id": "ns",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 100,
+      "config": {
+        "label": "NOT",
+        "logic": {
+          "gate": "not"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.5,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "pa",
+      "symbolId": "gate",
+      "x": 560,
+      "y": 100,
+      "config": {
+        "label": "AND",
+        "logic": {
+          "gate": "and"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "pb",
+      "symbolId": "gate",
+      "x": 560,
+      "y": 230,
+      "config": {
+        "label": "AND",
+        "logic": {
+          "gate": "and"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "o",
+      "symbolId": "gate",
+      "x": 780,
+      "y": 100,
+      "config": {
+        "label": "OR",
+        "logic": {
+          "gate": "or"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-Q",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 100,
+      "config": {
+        "label": "Q",
+        "logic": {
+          "kind": "output",
+          "name": "Q"
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "in-S",
+      "aSide": "out",
+      "b": "ns",
+      "bSide": "a"
+    },
+    {
+      "id": "w2",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "pa",
+      "bSide": "a"
+    },
+    {
+      "id": "w3",
+      "a": "ns",
+      "aSide": "q",
+      "b": "pa",
+      "bSide": "b"
+    },
+    {
+      "id": "w4",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "pb",
+      "bSide": "a"
+    },
+    {
+      "id": "w5",
+      "a": "in-S",
+      "aSide": "out",
+      "b": "pb",
+      "bSide": "b"
+    },
+    {
+      "id": "w6",
+      "a": "pa",
+      "aSide": "q",
+      "b": "o",
+      "bSide": "a"
+    },
+    {
+      "id": "w7",
+      "a": "pb",
+      "aSide": "q",
+      "b": "o",
+      "bSide": "b"
+    },
+    {
+      "id": "w8",
+      "a": "o",
+      "aSide": "q",
+      "b": "out-Q",
+      "bSide": "in"
+    }
+  ],
+  "references": []
+}

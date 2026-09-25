@@ -1,0 +1,173 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "logic-half-adder",
+  "revision": 0,
+  "meta": {
+    "title": "Half adder: S = A xor B, C = A and B"
+  },
+  "components": [
+    {
+      "id": "in-A",
+      "symbolId": "act",
+      "x": 120,
+      "y": 100,
+      "config": {
+        "label": "A",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A"
+        }
+      }
+    },
+    {
+      "id": "in-B",
+      "symbolId": "act",
+      "x": 120,
+      "y": 230,
+      "config": {
+        "label": "B",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B"
+        }
+      }
+    },
+    {
+      "id": "x",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 100,
+      "config": {
+        "label": "XOR",
+        "logic": {
+          "gate": "xor"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 230,
+      "config": {
+        "label": "AND",
+        "logic": {
+          "gate": "and"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-S",
+      "symbolId": "observe",
+      "x": 560,
+      "y": 100,
+      "config": {
+        "label": "S",
+        "logic": {
+          "kind": "output",
+          "name": "S"
+        }
+      }
+    },
+    {
+      "id": "out-C",
+      "symbolId": "observe",
+      "x": 560,
+      "y": 230,
+      "config": {
+        "label": "C",
+        "logic": {
+          "kind": "output",
+          "name": "C"
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "x",
+      "bSide": "a"
+    },
+    {
+      "id": "w2",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "x",
+      "bSide": "b"
+    },
+    {
+      "id": "w3",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "n",
+      "bSide": "a"
+    },
+    {
+      "id": "w4",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "n",
+      "bSide": "b"
+    },
+    {
+      "id": "w5",
+      "a": "x",
+      "aSide": "q",
+      "b": "out-S",
+      "bSide": "in"
+    },
+    {
+      "id": "w6",
+      "a": "n",
+      "aSide": "q",
+      "b": "out-C",
+      "bSide": "in"
+    }
+  ],
+  "references": []
+}

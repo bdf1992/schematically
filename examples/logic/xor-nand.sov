@@ -1,0 +1,245 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "logic-xor-nand",
+  "revision": 0,
+  "meta": {
+    "title": "XOR from four NAND gates: NAND is universal"
+  },
+  "components": [
+    {
+      "id": "in-A",
+      "symbolId": "act",
+      "x": 120,
+      "y": 100,
+      "config": {
+        "label": "A",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A"
+        }
+      }
+    },
+    {
+      "id": "in-B",
+      "symbolId": "act",
+      "x": 120,
+      "y": 230,
+      "config": {
+        "label": "B",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B"
+        }
+      }
+    },
+    {
+      "id": "m",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 100,
+      "config": {
+        "label": "NAND",
+        "logic": {
+          "gate": "nand"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "p",
+      "symbolId": "gate",
+      "x": 560,
+      "y": 100,
+      "config": {
+        "label": "NAND",
+        "logic": {
+          "gate": "nand"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "q",
+      "symbolId": "gate",
+      "x": 560,
+      "y": 230,
+      "config": {
+        "label": "NAND",
+        "logic": {
+          "gate": "nand"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "r",
+      "symbolId": "gate",
+      "x": 780,
+      "y": 100,
+      "config": {
+        "label": "NAND",
+        "logic": {
+          "gate": "nand"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-Q",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 100,
+      "config": {
+        "label": "Q",
+        "logic": {
+          "kind": "output",
+          "name": "Q"
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "m",
+      "bSide": "a"
+    },
+    {
+      "id": "w2",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "m",
+      "bSide": "b"
+    },
+    {
+      "id": "w3",
+      "a": "in-A",
+      "aSide": "out",
+      "b": "p",
+      "bSide": "a"
+    },
+    {
+      "id": "w4",
+      "a": "m",
+      "aSide": "q",
+      "b": "p",
+      "bSide": "b"
+    },
+    {
+      "id": "w5",
+      "a": "m",
+      "aSide": "q",
+      "b": "q",
+      "bSide": "a"
+    },
+    {
+      "id": "w6",
+      "a": "in-B",
+      "aSide": "out",
+      "b": "q",
+      "bSide": "b"
+    },
+    {
+      "id": "w7",
+      "a": "p",
+      "aSide": "q",
+      "b": "r",
+      "bSide": "a"
+    },
+    {
+      "id": "w8",
+      "a": "q",
+      "aSide": "q",
+      "b": "r",
+      "bSide": "b"
+    },
+    {
+      "id": "w9",
+      "a": "r",
+      "aSide": "q",
+      "b": "out-Q",
+      "bSide": "in"
+    }
+  ],
+  "references": []
+}

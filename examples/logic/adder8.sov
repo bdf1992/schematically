@@ -1,0 +1,753 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "logic-adder8",
+  "revision": 0,
+  "meta": {
+    "title": "8-bit adder: two 4-bit adders, carry rippling between them"
+  },
+  "components": [
+    {
+      "id": "in-A0",
+      "symbolId": "act",
+      "x": 120,
+      "y": 100,
+      "config": {
+        "label": "A0",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A0"
+        }
+      }
+    },
+    {
+      "id": "in-A1",
+      "symbolId": "act",
+      "x": 120,
+      "y": 230,
+      "config": {
+        "label": "A1",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A1"
+        }
+      }
+    },
+    {
+      "id": "in-A2",
+      "symbolId": "act",
+      "x": 120,
+      "y": 360,
+      "config": {
+        "label": "A2",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A2"
+        }
+      }
+    },
+    {
+      "id": "in-A3",
+      "symbolId": "act",
+      "x": 120,
+      "y": 490,
+      "config": {
+        "label": "A3",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A3"
+        }
+      }
+    },
+    {
+      "id": "in-A4",
+      "symbolId": "act",
+      "x": 120,
+      "y": 620,
+      "config": {
+        "label": "A4",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A4"
+        }
+      }
+    },
+    {
+      "id": "in-A5",
+      "symbolId": "act",
+      "x": 120,
+      "y": 750,
+      "config": {
+        "label": "A5",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A5"
+        }
+      }
+    },
+    {
+      "id": "in-A6",
+      "symbolId": "act",
+      "x": 120,
+      "y": 880,
+      "config": {
+        "label": "A6",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A6"
+        }
+      }
+    },
+    {
+      "id": "in-A7",
+      "symbolId": "act",
+      "x": 120,
+      "y": 1010,
+      "config": {
+        "label": "A7",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A7"
+        }
+      }
+    },
+    {
+      "id": "in-B0",
+      "symbolId": "act",
+      "x": 120,
+      "y": 1140,
+      "config": {
+        "label": "B0",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B0"
+        }
+      }
+    },
+    {
+      "id": "in-B1",
+      "symbolId": "act",
+      "x": 120,
+      "y": 1270,
+      "config": {
+        "label": "B1",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B1"
+        }
+      }
+    },
+    {
+      "id": "in-B2",
+      "symbolId": "act",
+      "x": 120,
+      "y": 1400,
+      "config": {
+        "label": "B2",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B2"
+        }
+      }
+    },
+    {
+      "id": "in-B3",
+      "symbolId": "act",
+      "x": 120,
+      "y": 1530,
+      "config": {
+        "label": "B3",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B3"
+        }
+      }
+    },
+    {
+      "id": "in-B4",
+      "symbolId": "act",
+      "x": 120,
+      "y": 1660,
+      "config": {
+        "label": "B4",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B4"
+        }
+      }
+    },
+    {
+      "id": "in-B5",
+      "symbolId": "act",
+      "x": 120,
+      "y": 1790,
+      "config": {
+        "label": "B5",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B5"
+        }
+      }
+    },
+    {
+      "id": "in-B6",
+      "symbolId": "act",
+      "x": 120,
+      "y": 1920,
+      "config": {
+        "label": "B6",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B6"
+        }
+      }
+    },
+    {
+      "id": "in-B7",
+      "symbolId": "act",
+      "x": 120,
+      "y": 2050,
+      "config": {
+        "label": "B7",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B7"
+        }
+      }
+    },
+    {
+      "id": "in-Cin",
+      "symbolId": "act",
+      "x": 120,
+      "y": 2180,
+      "config": {
+        "label": "Cin",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "Cin"
+        }
+      }
+    },
+    {
+      "id": "add0",
+      "symbolId": "act",
+      "x": 340,
+      "y": 100,
+      "config": {
+        "label": "ADDER4",
+        "logic": {
+          "composite": "adder4.sov"
+        },
+        "attachmentPoints": [
+          {
+            "id": "A0",
+            "side": "left",
+            "t": 0.1,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "A1",
+            "side": "left",
+            "t": 0.2,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "A2",
+            "side": "left",
+            "t": 0.3,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "A3",
+            "side": "left",
+            "t": 0.4,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B0",
+            "side": "left",
+            "t": 0.5,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B1",
+            "side": "left",
+            "t": 0.6,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B2",
+            "side": "left",
+            "t": 0.7,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B3",
+            "side": "left",
+            "t": 0.8,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "Cin",
+            "side": "left",
+            "t": 0.9,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "S0",
+            "side": "right",
+            "t": 0.1667,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "S1",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "S2",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "S3",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "Cout",
+            "side": "right",
+            "t": 0.8333,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-S0",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 100,
+      "config": {
+        "label": "S0",
+        "logic": {
+          "kind": "output",
+          "name": "S0"
+        }
+      }
+    },
+    {
+      "id": "out-S1",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 230,
+      "config": {
+        "label": "S1",
+        "logic": {
+          "kind": "output",
+          "name": "S1"
+        }
+      }
+    },
+    {
+      "id": "out-S2",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 360,
+      "config": {
+        "label": "S2",
+        "logic": {
+          "kind": "output",
+          "name": "S2"
+        }
+      }
+    },
+    {
+      "id": "out-S3",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 490,
+      "config": {
+        "label": "S3",
+        "logic": {
+          "kind": "output",
+          "name": "S3"
+        }
+      }
+    },
+    {
+      "id": "add1",
+      "symbolId": "act",
+      "x": 560,
+      "y": 100,
+      "config": {
+        "label": "ADDER4",
+        "logic": {
+          "composite": "adder4.sov"
+        },
+        "attachmentPoints": [
+          {
+            "id": "A0",
+            "side": "left",
+            "t": 0.1,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "A1",
+            "side": "left",
+            "t": 0.2,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "A2",
+            "side": "left",
+            "t": 0.3,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "A3",
+            "side": "left",
+            "t": 0.4,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B0",
+            "side": "left",
+            "t": 0.5,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B1",
+            "side": "left",
+            "t": 0.6,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B2",
+            "side": "left",
+            "t": 0.7,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B3",
+            "side": "left",
+            "t": 0.8,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "Cin",
+            "side": "left",
+            "t": 0.9,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "S0",
+            "side": "right",
+            "t": 0.1667,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "S1",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "S2",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "S3",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "Cout",
+            "side": "right",
+            "t": 0.8333,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-S4",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 620,
+      "config": {
+        "label": "S4",
+        "logic": {
+          "kind": "output",
+          "name": "S4"
+        }
+      }
+    },
+    {
+      "id": "out-S5",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 750,
+      "config": {
+        "label": "S5",
+        "logic": {
+          "kind": "output",
+          "name": "S5"
+        }
+      }
+    },
+    {
+      "id": "out-S6",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 880,
+      "config": {
+        "label": "S6",
+        "logic": {
+          "kind": "output",
+          "name": "S6"
+        }
+      }
+    },
+    {
+      "id": "out-S7",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 1010,
+      "config": {
+        "label": "S7",
+        "logic": {
+          "kind": "output",
+          "name": "S7"
+        }
+      }
+    },
+    {
+      "id": "out-Cout",
+      "symbolId": "observe",
+      "x": 1000,
+      "y": 1140,
+      "config": {
+        "label": "Cout",
+        "logic": {
+          "kind": "output",
+          "name": "Cout"
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "in-A0",
+      "aSide": "out",
+      "b": "add0",
+      "bSide": "A0"
+    },
+    {
+      "id": "w2",
+      "a": "in-B0",
+      "aSide": "out",
+      "b": "add0",
+      "bSide": "B0"
+    },
+    {
+      "id": "w3",
+      "a": "add0",
+      "aSide": "S0",
+      "b": "out-S0",
+      "bSide": "in"
+    },
+    {
+      "id": "w4",
+      "a": "in-A1",
+      "aSide": "out",
+      "b": "add0",
+      "bSide": "A1"
+    },
+    {
+      "id": "w5",
+      "a": "in-B1",
+      "aSide": "out",
+      "b": "add0",
+      "bSide": "B1"
+    },
+    {
+      "id": "w6",
+      "a": "add0",
+      "aSide": "S1",
+      "b": "out-S1",
+      "bSide": "in"
+    },
+    {
+      "id": "w7",
+      "a": "in-A2",
+      "aSide": "out",
+      "b": "add0",
+      "bSide": "A2"
+    },
+    {
+      "id": "w8",
+      "a": "in-B2",
+      "aSide": "out",
+      "b": "add0",
+      "bSide": "B2"
+    },
+    {
+      "id": "w9",
+      "a": "add0",
+      "aSide": "S2",
+      "b": "out-S2",
+      "bSide": "in"
+    },
+    {
+      "id": "w10",
+      "a": "in-A3",
+      "aSide": "out",
+      "b": "add0",
+      "bSide": "A3"
+    },
+    {
+      "id": "w11",
+      "a": "in-B3",
+      "aSide": "out",
+      "b": "add0",
+      "bSide": "B3"
+    },
+    {
+      "id": "w12",
+      "a": "add0",
+      "aSide": "S3",
+      "b": "out-S3",
+      "bSide": "in"
+    },
+    {
+      "id": "w13",
+      "a": "in-Cin",
+      "aSide": "out",
+      "b": "add0",
+      "bSide": "Cin"
+    },
+    {
+      "id": "w14",
+      "a": "in-A4",
+      "aSide": "out",
+      "b": "add1",
+      "bSide": "A0"
+    },
+    {
+      "id": "w15",
+      "a": "in-B4",
+      "aSide": "out",
+      "b": "add1",
+      "bSide": "B0"
+    },
+    {
+      "id": "w16",
+      "a": "add1",
+      "aSide": "S0",
+      "b": "out-S4",
+      "bSide": "in"
+    },
+    {
+      "id": "w17",
+      "a": "in-A5",
+      "aSide": "out",
+      "b": "add1",
+      "bSide": "A1"
+    },
+    {
+      "id": "w18",
+      "a": "in-B5",
+      "aSide": "out",
+      "b": "add1",
+      "bSide": "B1"
+    },
+    {
+      "id": "w19",
+      "a": "add1",
+      "aSide": "S1",
+      "b": "out-S5",
+      "bSide": "in"
+    },
+    {
+      "id": "w20",
+      "a": "in-A6",
+      "aSide": "out",
+      "b": "add1",
+      "bSide": "A2"
+    },
+    {
+      "id": "w21",
+      "a": "in-B6",
+      "aSide": "out",
+      "b": "add1",
+      "bSide": "B2"
+    },
+    {
+      "id": "w22",
+      "a": "add1",
+      "aSide": "S2",
+      "b": "out-S6",
+      "bSide": "in"
+    },
+    {
+      "id": "w23",
+      "a": "in-A7",
+      "aSide": "out",
+      "b": "add1",
+      "bSide": "A3"
+    },
+    {
+      "id": "w24",
+      "a": "in-B7",
+      "aSide": "out",
+      "b": "add1",
+      "bSide": "B3"
+    },
+    {
+      "id": "w25",
+      "a": "add1",
+      "aSide": "S3",
+      "b": "out-S7",
+      "bSide": "in"
+    },
+    {
+      "id": "w26",
+      "a": "add0",
+      "aSide": "Cout",
+      "b": "add1",
+      "bSide": "Cin"
+    },
+    {
+      "id": "w27",
+      "a": "add1",
+      "aSide": "Cout",
+      "b": "out-Cout",
+      "bSide": "in"
+    }
+  ],
+  "references": []
+}

@@ -1,0 +1,173 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "logic-sr-latch",
+  "revision": 0,
+  "meta": {
+    "title": "SR latch from two cross-coupled NOR gates: memory from feedback"
+  },
+  "components": [
+    {
+      "id": "in-S",
+      "symbolId": "act",
+      "x": 120,
+      "y": 100,
+      "config": {
+        "label": "S",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "S"
+        }
+      }
+    },
+    {
+      "id": "in-R",
+      "symbolId": "act",
+      "x": 120,
+      "y": 230,
+      "config": {
+        "label": "R",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "R"
+        }
+      }
+    },
+    {
+      "id": "q",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 100,
+      "config": {
+        "label": "NOR",
+        "logic": {
+          "gate": "nor"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "qn",
+      "symbolId": "gate",
+      "x": 340,
+      "y": 230,
+      "config": {
+        "label": "NOR",
+        "logic": {
+          "gate": "nor"
+        },
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.3333,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "b",
+            "side": "left",
+            "t": 0.6667,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-Q",
+      "symbolId": "observe",
+      "x": 560,
+      "y": 100,
+      "config": {
+        "label": "Q",
+        "logic": {
+          "kind": "output",
+          "name": "Q"
+        }
+      }
+    },
+    {
+      "id": "out-QN",
+      "symbolId": "observe",
+      "x": 560,
+      "y": 230,
+      "config": {
+        "label": "QN",
+        "logic": {
+          "kind": "output",
+          "name": "QN"
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "in-R",
+      "aSide": "out",
+      "b": "q",
+      "bSide": "a"
+    },
+    {
+      "id": "w2",
+      "a": "qn",
+      "aSide": "q",
+      "b": "q",
+      "bSide": "b"
+    },
+    {
+      "id": "w3",
+      "a": "in-S",
+      "aSide": "out",
+      "b": "qn",
+      "bSide": "a"
+    },
+    {
+      "id": "w4",
+      "a": "q",
+      "aSide": "q",
+      "b": "qn",
+      "bSide": "b"
+    },
+    {
+      "id": "w5",
+      "a": "q",
+      "aSide": "q",
+      "b": "out-Q",
+      "bSide": "in"
+    },
+    {
+      "id": "w6",
+      "a": "qn",
+      "aSide": "q",
+      "b": "out-QN",
+      "bSide": "in"
+    }
+  ],
+  "references": []
+}

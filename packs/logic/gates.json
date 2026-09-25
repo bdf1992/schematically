@@ -1,0 +1,273 @@
+{
+  "default_delay": 1,
+  "gates": {
+    "and": {
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "meaning": "q = a and b",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "00:0",
+        "01:0",
+        "10:0",
+        "11:1"
+      ]
+    },
+    "buffer": {
+      "inputs": [
+        "a"
+      ],
+      "meaning": "q = a, one gate delay later",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "0:0",
+        "1:1"
+      ]
+    },
+    "cimply": {
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "meaning": "q = b implies a = a or not b",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "00:1",
+        "01:0",
+        "10:1",
+        "11:1"
+      ]
+    },
+    "false": {
+      "inputs": [],
+      "meaning": "constant 0",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        ":0"
+      ]
+    },
+    "half-adder": {
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "meaning": "s = a xor b, c = a and b, as one primitive; examples/logic/half-adder.sov builds the same from gates",
+      "outputs": [
+        "s",
+        "c"
+      ],
+      "table": [
+        "00:00",
+        "01:10",
+        "10:10",
+        "11:01"
+      ]
+    },
+    "imply": {
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "meaning": "q = a implies b = (not a) or b",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "00:1",
+        "01:1",
+        "10:0",
+        "11:1"
+      ]
+    },
+    "majority": {
+      "inputs": [
+        "a",
+        "b",
+        "c"
+      ],
+      "meaning": "q = 1 when at least two inputs are 1",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "000:0",
+        "001:0",
+        "010:0",
+        "011:1",
+        "100:0",
+        "101:1",
+        "110:1",
+        "111:1"
+      ]
+    },
+    "mux": {
+      "inputs": [
+        "s",
+        "a",
+        "b"
+      ],
+      "meaning": "q = a when s is 0, b when s is 1",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "000:0",
+        "001:0",
+        "010:1",
+        "011:1",
+        "100:0",
+        "101:1",
+        "110:0",
+        "111:1"
+      ]
+    },
+    "nand": {
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "meaning": "q = not (a and b); universal",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "00:1",
+        "01:1",
+        "10:1",
+        "11:0"
+      ]
+    },
+    "ncimply": {
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "meaning": "q = b and not a",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "00:0",
+        "01:1",
+        "10:0",
+        "11:0"
+      ]
+    },
+    "nimply": {
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "meaning": "q = a and not b",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "00:0",
+        "01:0",
+        "10:1",
+        "11:0"
+      ]
+    },
+    "nor": {
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "meaning": "q = not (a or b); universal",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "00:1",
+        "01:0",
+        "10:0",
+        "11:0"
+      ]
+    },
+    "not": {
+      "inputs": [
+        "a"
+      ],
+      "meaning": "q = not a",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "0:1",
+        "1:0"
+      ]
+    },
+    "or": {
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "meaning": "q = a or b",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "00:0",
+        "01:1",
+        "10:1",
+        "11:1"
+      ]
+    },
+    "true": {
+      "inputs": [],
+      "meaning": "constant 1",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        ":1"
+      ]
+    },
+    "xnor": {
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "meaning": "q = a equals b",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "00:1",
+        "01:0",
+        "10:0",
+        "11:1"
+      ]
+    },
+    "xor": {
+      "inputs": [
+        "a",
+        "b"
+      ],
+      "meaning": "q = a xor b: exactly one",
+      "outputs": [
+        "q"
+      ],
+      "table": [
+        "00:0",
+        "01:1",
+        "10:1",
+        "11:0"
+      ]
+    }
+  },
+  "id": "logic.core",
+  "note": "Every gate is a truth table. A row is 'inputs:outputs', bits in the order the pins are listed. With buffer, not, true and false, the ten named two-input gates cover all sixteen Boolean functions of two inputs; majority, mux and half-adder show tables wider than two inputs and more than one output.",
+  "schema": "soveraeign.schematic/logic-pack@0.0-draft"
+}

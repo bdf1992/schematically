@@ -1,0 +1,499 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "logic-adder4",
+  "revision": 0,
+  "meta": {
+    "title": "4-bit ripple-carry adder: four full adders"
+  },
+  "components": [
+    {
+      "id": "in-A0",
+      "symbolId": "act",
+      "x": 120,
+      "y": 100,
+      "config": {
+        "label": "A0",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A0"
+        }
+      }
+    },
+    {
+      "id": "in-A1",
+      "symbolId": "act",
+      "x": 120,
+      "y": 230,
+      "config": {
+        "label": "A1",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A1"
+        }
+      }
+    },
+    {
+      "id": "in-A2",
+      "symbolId": "act",
+      "x": 120,
+      "y": 360,
+      "config": {
+        "label": "A2",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A2"
+        }
+      }
+    },
+    {
+      "id": "in-A3",
+      "symbolId": "act",
+      "x": 120,
+      "y": 490,
+      "config": {
+        "label": "A3",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "A3"
+        }
+      }
+    },
+    {
+      "id": "in-B0",
+      "symbolId": "act",
+      "x": 120,
+      "y": 620,
+      "config": {
+        "label": "B0",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B0"
+        }
+      }
+    },
+    {
+      "id": "in-B1",
+      "symbolId": "act",
+      "x": 120,
+      "y": 750,
+      "config": {
+        "label": "B1",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B1"
+        }
+      }
+    },
+    {
+      "id": "in-B2",
+      "symbolId": "act",
+      "x": 120,
+      "y": 880,
+      "config": {
+        "label": "B2",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B2"
+        }
+      }
+    },
+    {
+      "id": "in-B3",
+      "symbolId": "act",
+      "x": 120,
+      "y": 1010,
+      "config": {
+        "label": "B3",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "B3"
+        }
+      }
+    },
+    {
+      "id": "in-Cin",
+      "symbolId": "act",
+      "x": 120,
+      "y": 1140,
+      "config": {
+        "label": "Cin",
+        "signalMode": "source",
+        "logic": {
+          "kind": "input",
+          "name": "Cin"
+        }
+      }
+    },
+    {
+      "id": "fa0",
+      "symbolId": "act",
+      "x": 340,
+      "y": 100,
+      "config": {
+        "label": "FULL-ADDER",
+        "logic": {
+          "composite": "full-adder.sov"
+        },
+        "attachmentPoints": [
+          {
+            "id": "A",
+            "side": "left",
+            "t": 0.25,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B",
+            "side": "left",
+            "t": 0.5,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "Cin",
+            "side": "left",
+            "t": 0.75,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "S",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "Cout",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-S0",
+      "symbolId": "observe",
+      "x": 1440,
+      "y": 100,
+      "config": {
+        "label": "S0",
+        "logic": {
+          "kind": "output",
+          "name": "S0"
+        }
+      }
+    },
+    {
+      "id": "fa1",
+      "symbolId": "act",
+      "x": 560,
+      "y": 100,
+      "config": {
+        "label": "FULL-ADDER",
+        "logic": {
+          "composite": "full-adder.sov"
+        },
+        "attachmentPoints": [
+          {
+            "id": "A",
+            "side": "left",
+            "t": 0.25,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B",
+            "side": "left",
+            "t": 0.5,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "Cin",
+            "side": "left",
+            "t": 0.75,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "S",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "Cout",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-S1",
+      "symbolId": "observe",
+      "x": 1440,
+      "y": 230,
+      "config": {
+        "label": "S1",
+        "logic": {
+          "kind": "output",
+          "name": "S1"
+        }
+      }
+    },
+    {
+      "id": "fa2",
+      "symbolId": "act",
+      "x": 780,
+      "y": 100,
+      "config": {
+        "label": "FULL-ADDER",
+        "logic": {
+          "composite": "full-adder.sov"
+        },
+        "attachmentPoints": [
+          {
+            "id": "A",
+            "side": "left",
+            "t": 0.25,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B",
+            "side": "left",
+            "t": 0.5,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "Cin",
+            "side": "left",
+            "t": 0.75,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "S",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "Cout",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-S2",
+      "symbolId": "observe",
+      "x": 1440,
+      "y": 360,
+      "config": {
+        "label": "S2",
+        "logic": {
+          "kind": "output",
+          "name": "S2"
+        }
+      }
+    },
+    {
+      "id": "fa3",
+      "symbolId": "act",
+      "x": 1000,
+      "y": 100,
+      "config": {
+        "label": "FULL-ADDER",
+        "logic": {
+          "composite": "full-adder.sov"
+        },
+        "attachmentPoints": [
+          {
+            "id": "A",
+            "side": "left",
+            "t": 0.25,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "B",
+            "side": "left",
+            "t": 0.5,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "Cin",
+            "side": "left",
+            "t": 0.75,
+            "defaultFlow": "in"
+          },
+          {
+            "id": "S",
+            "side": "right",
+            "t": 0.3333,
+            "defaultFlow": "out"
+          },
+          {
+            "id": "Cout",
+            "side": "right",
+            "t": 0.6667,
+            "defaultFlow": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out-S3",
+      "symbolId": "observe",
+      "x": 1440,
+      "y": 490,
+      "config": {
+        "label": "S3",
+        "logic": {
+          "kind": "output",
+          "name": "S3"
+        }
+      }
+    },
+    {
+      "id": "out-Cout",
+      "symbolId": "observe",
+      "x": 1440,
+      "y": 620,
+      "config": {
+        "label": "Cout",
+        "logic": {
+          "kind": "output",
+          "name": "Cout"
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "in-A0",
+      "aSide": "out",
+      "b": "fa0",
+      "bSide": "A"
+    },
+    {
+      "id": "w2",
+      "a": "in-B0",
+      "aSide": "out",
+      "b": "fa0",
+      "bSide": "B"
+    },
+    {
+      "id": "w3",
+      "a": "fa0",
+      "aSide": "S",
+      "b": "out-S0",
+      "bSide": "in"
+    },
+    {
+      "id": "w4",
+      "a": "in-Cin",
+      "aSide": "out",
+      "b": "fa0",
+      "bSide": "Cin"
+    },
+    {
+      "id": "w5",
+      "a": "in-A1",
+      "aSide": "out",
+      "b": "fa1",
+      "bSide": "A"
+    },
+    {
+      "id": "w6",
+      "a": "in-B1",
+      "aSide": "out",
+      "b": "fa1",
+      "bSide": "B"
+    },
+    {
+      "id": "w7",
+      "a": "fa1",
+      "aSide": "S",
+      "b": "out-S1",
+      "bSide": "in"
+    },
+    {
+      "id": "w8",
+      "a": "fa0",
+      "aSide": "Cout",
+      "b": "fa1",
+      "bSide": "Cin"
+    },
+    {
+      "id": "w9",
+      "a": "in-A2",
+      "aSide": "out",
+      "b": "fa2",
+      "bSide": "A"
+    },
+    {
+      "id": "w10",
+      "a": "in-B2",
+      "aSide": "out",
+      "b": "fa2",
+      "bSide": "B"
+    },
+    {
+      "id": "w11",
+      "a": "fa2",
+      "aSide": "S",
+      "b": "out-S2",
+      "bSide": "in"
+    },
+    {
+      "id": "w12",
+      "a": "fa1",
+      "aSide": "Cout",
+      "b": "fa2",
+      "bSide": "Cin"
+    },
+    {
+      "id": "w13",
+      "a": "in-A3",
+      "aSide": "out",
+      "b": "fa3",
+      "bSide": "A"
+    },
+    {
+      "id": "w14",
+      "a": "in-B3",
+      "aSide": "out",
+      "b": "fa3",
+      "bSide": "B"
+    },
+    {
+      "id": "w15",
+      "a": "fa3",
+      "aSide": "S",
+      "b": "out-S3",
+      "bSide": "in"
+    },
+    {
+      "id": "w16",
+      "a": "fa2",
+      "aSide": "Cout",
+      "b": "fa3",
+      "bSide": "Cin"
+    },
+    {
+      "id": "w17",
+      "a": "fa3",
+      "aSide": "Cout",
+      "b": "out-Cout",
+      "bSide": "in"
+    }
+  ],
+  "references": []
+}

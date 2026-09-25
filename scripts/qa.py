@@ -18,6 +18,7 @@ STATIC=[
     'tests/desktop_shell_qa.py',
     'tests/optimize_sov_qa.py',
     'tests/simulate_sov_qa.py',
+    'tests/logic_sov_qa.py',
 ]
 BROWSER=[
     'tests/attachment_point_refactor_qa.py',
