@@ -1,6 +1,7 @@
 # Module ownership — 0.1
 
 - `03-canonical.js` — canonical JSON encoding (RFC 8785 / JCS), synchronous pure-JS SHA-256, and the seeded draw used by merges and QA. Pure; loaded before `06-attachment-core.js` and `05-data-core.js`.
+- `07-state-space.js` — the state space's contract layer (slice 1a of `STATE-SPACE.md`): the state record validator, the closed pattern registry (`truth_table@1`, `merge@1`), definitions and the minimal pack envelope, contracts derived from pattern + parameters, ports generated from a bound definition (`bindDefinition` returns a data-core `update`), and the load checks (`checkDocument`). Pure; no DOM and no pack data (packs are passed in; the built-ins are `data/core.logic.pack.json`); requires only `03-canonical.js` and `05-data-core.js`, and loads right after `05`. The ledger, ticks and runs are not built yet.
 - `00-state.js` — runtime state and DOM references.
 - `05-data-core.js` — transport-neutral documents, packages, validation, CRUD, reachability, primitive template presets, and compact serialization (`compactDocument`).
 - `10-model.js` — Component/Wire/Port semantic normalization.
