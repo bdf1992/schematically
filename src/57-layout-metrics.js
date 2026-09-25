@@ -8,7 +8,7 @@ const LAYOUT_RUBRIC={
   'text-overflow':[.5,3],'text-truncated':[.3,2],'text-collision':[.5,3],'placeholder-text':[.1,2],'ghost-mark':[.1,2],
   'faint-structure':[.5,2],'route-escape':[1,4],'route-jog':[.25,2],'arrowless':[.25,2],'unmarked-junction':[.5,2],'route-through-node':[1,4],'crossing':[.25,2],'node-overlap':[1,4],
   'text-contrast':[.5,3],'mark-contrast':[.25,2],
-  'cramped-label':[.5,2],'route-wraps':[1.5,3],'empty-container':[1.5,3],'code-label':[1,2]
+  'cramped-label':[.5,2],'route-overlap':[1,3],'route-wraps':[1.5,3],'empty-container':[1.5,3],'code-label':[1,2]
 };
 
 function layoutWorldMatrix(el){const root=workspace.getScreenCTM(),m=el.getScreenCTM();return root&&m?root.inverse().multiply(m):null}
@@ -192,6 +192,14 @@ function layoutMetrics(options={}){
     const out=layoutSamplePath(path,8).filter(p=>p.x<U.l-12||p.x>U.r+12||p.y<U.t-12||p.y>U.b+12).length;
     if(out>=4)add('route-wraps',[w.id],`runs ${out*8}px outside everything it connects`);
   }
+  // One track: two wires that share no end, collinear and touching, read as one line (review, 13).
+  {const segs=[];
+   for(const w of wires){const d=wiresG.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"] path.wire`)?.getAttribute('d');const m=d&&layoutWorldMatrix(wiresG.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"] path.wire`));
+     const c=layoutPathCorners(d).map(p=>m?new DOMPoint(p.x,p.y).matrixTransform(m):p);for(let i=0;i<c.length-1;i++)segs.push({w,a:c[i],b:c[i+1],ends:[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]})}
+   const seen=new Set();
+   for(let i=0;i<segs.length;i++)for(let j=i+1;j<segs.length;j++){const x=segs[i],y=segs[j];if(x.w===y.w||x.ends.some(e=>y.ends.includes(e)))continue;
+     const key=[x.w.id,y.w.id].sort().join('|');if(seen.has(key))continue;
+     if(onOneTrack(x.a,x.b,y.a,y.b,8)){seen.add(key);add('route-overlap',[x.w.id,y.w.id],'two wires run on one track')}}}
   // Empty container: its children and inner wires fill under a fifth of its interior (review, 03, 04, 07).
   for(const n of visible){
     if(!is2D(n)||!componentAcceptsChildren(n))continue;

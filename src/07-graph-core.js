@@ -40,10 +40,14 @@
   // Asserted: declared state, changed only by an operation (a lever, a source, a clock).
   // Derived: computed from inputs as they change over time. Without config.signal the
   // legacy signalMode decides, with the editor's default (absent = source).
-  const COMBINES=['or','and','not','max','min','mean','sum'];
+  const COMBINES=['or','and','not','max','min','mean','sum','xor','nand','nor','buffer'];
   const WAVES=['square','saw','triangle','sine'];
-  function signalConfig(c){
-    const raw=isObject(c.config?.signal)?c.config.signal:null,legacy=c.config?.signalMode;
+  // `glyph` is the notation's glyph for this card: a glyph that declares a combine (a logic
+  // gate) makes the card derived with that combine unless the card says otherwise.
+  function signalConfig(c,glyph=null){
+    const glyphCombine=COMBINES.includes(glyph?.signal?.combine)?glyph.signal.combine:null;
+    let raw=isObject(c.config?.signal)?c.config.signal:null;const legacy=c.config?.signalMode;
+    if(glyphCombine)raw={mode:'derived',combine:glyphCombine,...(raw||{})};
     const clockRaw=isObject(raw?.clock)?raw.clock:null;
     const assertedSymbol=c.symbolId==='lever'||c.symbolId==='clock';
     const mode=raw&&['asserted','derived'].includes(raw.mode)?raw.mode:(clockRaw||assertedSymbol?'asserted':raw?'derived':(legacy==='relay'||legacy==='passive')?'derived':'asserted');
@@ -88,12 +92,13 @@
   // The graph is derived from the normalized document on every call; it is never stored.
   function build(input){
     const doc=Data.makeDocument(clone(input||{}));
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,resolved=N?N.resolve(doc):null,notation=resolved?.ok?resolved.notation:null;
     const nodes=new Map(),arcs=[],blocked=[],ends=new Map();
     for(const c of doc.components){
       nodes.set(c.id,{id:c.id,symbolId:c.symbolId,label:c.config?.label||'',parentId:c.parentId||null,canvasId:c.canvasId||Data.GLOBAL_CANVAS_ID,
         dimension:Number(c.form?.dimension??2),signalMode:c.config?.signalMode||null,flow:flowConfig(c),
         behavior:isObject(c.config?.behavior)?clone(c.config.behavior):{},ports:c.config?.ports||{},placement:c.placement||null,
-        signal:signalConfig(c),principal:typeof c.config?.principal==='string'&&c.config.principal?c.config.principal:null,acl:aclConfig(c),
+        signal:signalConfig(c,notation?.glyphs?.[c.symbolId]||null),principal:typeof c.config?.principal==='string'&&c.config.principal?c.config.principal:null,acl:aclConfig(c),
         interior:Data.componentCanvasId(c),open:c.form?.regions?.interior?.state==='open'});
       ends.set(c.id,0);
     }
@@ -475,7 +480,8 @@
       return true;
     }
     const COMBINE={or:v=>Math.max(0,...v),max:v=>Math.max(0,...v),and:v=>v.length?Math.min(...v):0,min:v=>v.length?Math.min(...v):0,
-      not:v=>1-Math.max(0,...v),mean:v=>v.length?v.reduce((a,b)=>a+b,0)/v.length:0,sum:v=>Math.min(1,v.reduce((a,b)=>a+b,0))};
+      not:v=>1-Math.max(0,...v),nand:v=>1-(v.length?Math.min(...v):0),nor:v=>1-Math.max(0,...v),buffer:v=>Math.max(0,...v),
+      xor:v=>v.filter(x=>x>=.5).length%2,mean:v=>v.length?v.reduce((a,b)=>a+b,0)/v.length:0,sum:v=>Math.min(1,v.reduce((a,b)=>a+b,0))};
     function recompute(node){
       const inputs=s.inputs[node.id]||{},arcs=g.in.get(node.id);
       const data=arcs.filter(a=>!a.control).map(a=>inputs[a.wireId]??0),control=arcs.filter(a=>a.control).map(a=>inputs[a.wireId]??0);
@@ -514,7 +520,7 @@
       // Power on: asserted levels drive out at time 0; clocks start their schedule.
       for(const n of g.nodes.values()){
         if(n.signal.clock)schedule(0,{kind:'clock',node:n.id});
-        else if(n.signal.mode==='asserted'&&n.signal.value>0)schedule(0,{kind:'action',action:{set:{node:n.id,value:n.signal.value}}});
+        else if(n.signal.mode==='asserted'&&n.signal.value>0)schedule(0,{kind:'action',powerOn:true,action:{set:{node:n.id,value:n.signal.value}}});
       }
     }
 
@@ -551,6 +557,8 @@
       set(nodeId,value){
         const node=g.nodes.get(nodeId);if(!node)return refusal('UNKNOWN_NODE',`No component ${nodeId}`);
         if(node.signal.mode!=='asserted')return refusal('DERIVED_SIGNAL',`${node.label||nodeId} is derived from its inputs; only an asserted signal is set`);
+        // An explicit set before power-on replaces the declared starting value; it is not undone by it.
+        s.queue=s.queue.filter(ev=>!(ev.powerOn&&ev.action?.set?.node===nodeId));
         const changed=setLevel(node,value,'set');return {ok:true,node:nodeId,value:s.levels[nodeId]??0,changed};
       },
       // Schedule an operation at a time: {set:{node,value}} | {toggle:{node}} | {inject:{node,channel,payload,principal}}.

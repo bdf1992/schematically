@@ -3,6 +3,7 @@
 // This file intentionally has no DOM dependencies and is shared by browser and MCP adapters.
 (function(root,factory){
   let Attachment=root.SovSchematicAttachment;
+  if(typeof globalThis!=='undefined'&&!globalThis.SovSchematicNotation&&typeof module!=='undefined'&&module.exports)require('./03-notation-core.js');
   if(!Attachment&&typeof module!=='undefined'&&module.exports)Attachment=require('./06-attachment-core.js');
   const api=factory(Attachment);
   root.SovSchematicData=api;
@@ -91,6 +92,11 @@
       references:Array.isArray(input.references)?clone(input.references):[],
       layout:isObject(input.layout)?clone(input.layout):{}
     };
+    // Presentation the document carries (NOTATION-MODEL.md): which notation it is drawn in, its
+    // narration track and its legend choices. Absent means the default, and is not written.
+    if(typeof input.notation==='string'&&input.notation.trim())doc.notation=input.notation.trim();
+    if(Array.isArray(input.narration))doc.narration=clone(input.narration);
+    if(isObject(input.legend))doc.legend=clone(input.legend);
     if(input.canvas&&isObject(input.canvas))doc.canvas={...doc.canvas,...clone(input.canvas),id:GLOBAL_CANVAS_ID,scope:'global',dimension:2,state:'open'};
     doc.meta.updatedAt=cleanString(doc.meta.updatedAt,nowIso());
     return normalizeDocument(doc);
@@ -107,6 +113,9 @@
     if(!Array.isArray(doc.wires))doc.wires=Array.isArray(doc.connections)?doc.connections:[];
     if(!Array.isArray(doc.references))doc.references=[];
     if(!isObject(doc.layout))doc.layout={};
+    // Resolving the notation registers the glyphs whose terminals are points, before any
+    // component's points are read.
+    {const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(N)N.resolve(doc)}
     for(const component of doc.components){
       normalizeComponentIdentity(component);
       applyTemplatePreset(component);
@@ -710,6 +719,7 @@
     wires.splice(0,wires.length,...incoming.wires);
     references.splice(0,references.length,...incoming.references);
     target.schema=DOCUMENT_SCHEMA;target.id=incoming.id;target.revision=incoming.revision;target.meta=incoming.meta;target.canvas=incoming.canvas;target.layout=incoming.layout;
+    for(const k of ['notation','narration','legend']){if(incoming[k]===undefined)delete target[k];else target[k]=incoming[k]}
     return target;
   }
   function validateDocument(input){
@@ -722,6 +732,10 @@
     const ids=new Set();
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]],['reference',input.references||[]]])for(const item of items){if(!item?.id)errors.push(`${kind} missing id`);else if(ids.has(`${kind}:${item.id}`))errors.push(`duplicate ${kind} id: ${item.id}`);else ids.add(`${kind}:${item.id}`)}
     const componentIds=new Set((input.components||[]).map(x=>x.id));
+    // A notation is named or carried; an unknown one is refused, never replaced by the default.
+    {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null;if(N&&input.notation!=null){const r=N.resolve(input);if(!r.ok)errors.push(`notation: ${r.message} (${r.code})`)}}
+    if(input.narration!=null&&!Array.isArray(input.narration))errors.push('narration must be an array of {at, say}');
+    for(const [i,line] of (Array.isArray(input.narration)?input.narration:[]).entries())if(!isObject(line)||typeof line.say!=='string')errors.push(`narration[${i}] needs a say`);
     // A section's regions sit between its lines: n lines bound exactly n-1 bands. Never repaired.
     for(const c of input.components||[]){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)errors.push(`component ${c.id||'?'} section: bands must be one fewer than lines (${s.lines.length} lines, ${s.bands.length} bands)`)}
     for(const wire of input.wires||[]){

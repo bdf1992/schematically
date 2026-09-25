@@ -116,15 +116,16 @@ function directionPenalty(points,A,B){
   }
   return p;
 }
-function pathScore(points,A,B,obstacles=[],occupied=[]){
+function pathScore(points,A,B,obstacles=[],occupied=[],ends=null){
   const pts=normalizePoints(points);
-  let length=0, bends=Math.max(0,pts.length-2), crossings=0, shared=0, hugging=0;
+  let length=0, bends=Math.max(0,pts.length-2), crossings=0, shared=0, hugging=0, tracks=0;
   for(let i=0;i<pts.length-1;i++){
     const P=pts[i], Q=pts[i+1];
     length += segmentLength(P,Q);
     for(const seg of occupied){
       crossings += segmentsCross(P,Q,seg.a,seg.b) ? 1 : 0;
       shared += sharedLength(P,Q,seg.a,seg.b);
+      if(ends&&seg.ends&&!seg.ends.some(e=>ends.includes(e))&&onOneTrack(P,Q,seg.a,seg.b))tracks++;
     }
     for(const R of obstacles){
       const d=distanceSegmentToRect(P,Q,R);
@@ -138,6 +139,7 @@ function pathScore(points,A,B,obstacles=[],occupied=[]){
     directionPenalty(pts,A,B)*2.2 +
     crossings*90 +
     shared*5 +
+    tracks*260 +
     hugging*1.6
   );
 }
@@ -216,7 +218,7 @@ function captureDragSnapshots(nodeId){
     const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
     if(!A||!B) return;
     const points=stableRouteForWire(i,w,A,B,occupied);
-    occupied.push(...routeSegments(points));
+    occupied.push(...routeSegments(points,w));
     if(w.a===nodeId || w.b===nodeId){
       dragRouteSnapshots.set(i,{
         points:clonePoints(points),
@@ -241,10 +243,10 @@ function settleDraggedRoutes(){
         aPos:{x:A.x,y:A.y},
         bPos:{x:B.x,y:B.y}
       });
-      occupied.push(...routeSegments(candidate.points));
+      occupied.push(...routeSegments(candidate.points,w));
     }else{
       const points=stableRouteForWire(i,w,A,B,occupied);
-      occupied.push(...routeSegments(points));
+      occupied.push(...routeSegments(points,w));
     }
   });
   renderWires();
@@ -277,6 +279,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   const sourceNode=nodes.find(n=>n.id===sourceId);
   const targetNode=nodes.find(n=>n.id===targetId);
   const routedWire=wireId?wires.find(x=>x.id===wireId):null;
+  const ends=routedWire?[`${routedWire.a}:${routedWire.aSide}`,`${routedWire.b}:${routedWire.bSide}`]:null;
   // A free end has no boundary to leave; the route starts exactly there.
   // A carrier on a Component's interior runs inside it: that interior is its whole surface.
   const fence=routeFence(routedWire);
@@ -335,7 +338,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
     .filter(points=>pathValid(points,obstacles)&&routeInsideFence(points,fence))
     .map(points=>({
       points,
-      score:pathScore(points,SA,SB,obstacles,occupied),
+      score:pathScore(points,SA,SB,obstacles,occupied,ends),
       signature:routeSignature(points),
       anchor:routeAnchor(points)
     }))
@@ -358,7 +361,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
     ].map(normalizePoints)
      .map(points=>({
        points,
-       score:pathScore(points,SA,SB,obstacles,occupied),
+       score:pathScore(points,SA,SB,obstacles,occupied,ends),
        signature:routeSignature(points),
        anchor:routeAnchor(points)
      }))
@@ -466,7 +469,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
   const SA=sourceNode?routeLead(A,B,w.aSide,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?routeLead(B,A,w.bSide,targetNode,wireEndpointInward(w,targetNode)):B;
   const rebuiltCore=normalizePoints([SA,...rebuilt.slice(2,-2),SB]);
   const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
-  const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied);
+  const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied,[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]);
   const anchor=routeAnchor(rebuiltCore);
 
   const sameFamily = candidate.signature===cached.signature;
@@ -494,10 +497,22 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
   return rebuilt;
 }
 
-function routeSegments(points){
+// Segments a later route must keep clear of, tagged with the wire's two ends: wires that
+// share an end (a fan-out, a fan-in) may run together; any others may not run on one track.
+function routeSegments(points,w=null){
   const pts=normalizePoints(points), out=[];
-  for(let i=0;i<pts.length-1;i++) out.push({a:pts[i],b:pts[i+1]});
+  const ends=w?[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]:null;
+  for(let i=0;i<pts.length-1;i++) out.push({a:pts[i],b:pts[i+1],ends});
   return out;
+}
+// Two segments on one track: collinear and overlapping, or end to end within a gap a reader
+// would read as one line.
+function onOneTrack(A,B,C,D,gap=14){
+  const ab=segmentAxis(A,B),cd=segmentAxis(C,D);if(ab!==cd||ab==='d')return false;
+  const [p,q,r,s,off]=ab==='h'?[A.x,B.x,C.x,D.x,Math.abs(A.y-C.y)]:[A.y,B.y,C.y,D.y,Math.abs(A.x-C.x)];
+  if(off>=3)return false;
+  const lo1=Math.min(p,q),hi1=Math.max(p,q),lo2=Math.min(r,s),hi2=Math.max(r,s);
+  return Math.max(lo1,lo2)-Math.min(hi1,hi2)<gap;
 }
 function terminalPointId(nodeId,id){
   const node=nodes.find(n=>n.id===nodeId);

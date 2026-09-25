@@ -55,6 +55,7 @@ BROWSER=[
     'tests/layouts_qa.py',
     'tests/sections_qa.py',
     'tests/section_exposure_qa.py',
+    'tests/notation_qa.py',
     'tests/loop_svg_qa.py',
     'tests/menu_dismissal_qa.py',
     'tests/appearance_history_qa.py',

@@ -353,7 +353,7 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
   for(const n of scopedNodes){const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
   const wireIds=activeCanvasWireSet(canvasId),occupied=[];
-  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
+  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points,w));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
   return Number.isFinite(l)?{l,r,t,b}:null;
 }
 function fitDiagram(){
@@ -619,10 +619,9 @@ function isDescendantOf(nodeId,parentId){
 
   return false;
 }
-const INLINE_TERMINAL_Y={act:32,hold:32,buffer:32,gate:32,switch:38,limit:32,observe:42,receipt:24,clock:32,lever:40};
-// Symbols with a control stem on top: the stem's top in the 96×64 symbol frame.
-const GLYPH_CONTROL_STEM={gate:8,switch:8};
-function componentInlineTerminalY(node){return INLINE_TERMINAL_Y[node?.symbolId]??null}
+// Where a glyph is wired comes from its declared terminals (NOTATION-MODEL.md §2): the axis is
+// the in and out terminals' line; an icon (no terminals) has none.
+function componentInlineTerminalY(node){return SovSchematicNotation.glyphAxis(componentGlyph(node))}
 function componentInlineGraphicBox(node){
   const p=componentConfig(node).presentation,size=p.size;
   // A container's glyph is its title mark: small, at the top inside its skin, with its label
@@ -631,7 +630,8 @@ function componentInlineGraphicBox(node){
     const w=Math.min(size.w*.5,72),h=Math.min(34,size.h*.28);
     return {x:-w/2,y:-size.h/2+componentSectionInset(node)+10,w,h};
   }
-  const w=Math.min(size.w*.72,108),h=Math.min(size.h*.55,70),x=-w/2;
+  // A glyph whose terminals are its points needs room between them: it takes more of the card.
+  const {w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),size),x=-w/2;
   if(componentHostedOnWire(node)){
     const axis=componentInlineTerminalY(node);
     return {x,y:axis==null?-h/2:-(axis/64)*h,w,h};
@@ -660,8 +660,10 @@ function componentGlyphAxis(n){
   if(axis==null||p.graphic.kind!=='symbol'||(p.graphic.ref&&p.graphic.ref.replace(/^#/,'')!==`sym-${n.symbolId}`))return null;
   const box=componentInlineGraphicBox(n),scale=Math.min(box.w/96,box.h/64);
   const x0=box.x+(box.w-96*scale)/2,y0=box.y+(box.h-64*scale)/2;
-  const stem=GLYPH_CONTROL_STEM[n.symbolId];
-  return {y:y0+axis*scale,left:x0+8*scale,right:x0+88*scale,stroke:4*scale,stemTop:stem==null?null:y0+stem*scale,stemX:x0+48*scale};
+  const g=componentGlyph(n),N=SovSchematicNotation,M=N.MARGIN,control=N.terminal(g,'control');
+  return {x0,y0,scale,y:y0+axis*scale,left:x0+M*scale,right:x0+(96-M)*scale,stroke:glyphUnitStroke()*scale,
+    stemTop:control&&control.toward==='top'?y0+M*scale:null,stemX:x0+(control?control.at[0]:48)*scale,
+    has:{in:!!N.terminal(g,'in'),out:!!N.terminal(g,'out'),control:!!control}};
 }
 // How far inside the outline a position on a section sits: to its line, or to its band's middle.
 function sectionPointInset(host,pos){
@@ -683,8 +685,10 @@ function componentPortLocalPosition(n,pointId){
   const faceOffset=-sectionPointInset(n,SovSchematicData.pointSectionPosition(diagram,n.id,spec.compatId)),t=Math.max(0,Math.min(1,Number.isFinite(Number(spec.t))?Number(spec.t):.5));
   const alongX=-size.w/2+size.w*t;
   // An unplaced side point meets the symbol on its axis, so wire, edge and glyph are one line.
+  // With a glyph terminal of its own, it meets that terminal's line, so every lead is straight.
   const axis=!spec.placed&&spec.role==='boundary'&&!spec.authored&&(spec.side==='left'||spec.side==='right')?componentGlyphAxis(n):null;
-  const alongY=axis?axis.y:-size.h/2+size.h*t;
+  const own=axis?SovSchematicNotation.terminal(componentGlyph(n),spec.compatId):null;
+  const alongY=axis?(own&&own.toward===spec.side?axis.y0+own.at[1]*axis.scale:axis.y):-size.h/2+size.h*t;
   if(spec.side==='left')return{x:-size.w/2-faceOffset,y:alongY};
   if(spec.side==='right')return{x:size.w/2+faceOffset,y:alongY};
   if(spec.side==='top')return{x:alongX,y:-size.h/2-faceOffset};

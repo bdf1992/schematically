@@ -65,20 +65,20 @@ function appendComponentGraphic(g,n,cfg){
 // still too long is cut with an ellipsis; the full text stays available as a tooltip.
 // A wired side point on the glyph's axis gets an inner lead from the body edge to the symbol,
 // so the wire, the edge and the symbol read as one continuous line.
+// A wired terminal is joined to its point on the card's edge by a lead: straight when they
+// line up, one orthogonal dogleg when the point sits elsewhere on the same side.
 function appendComponentLeads(g,n){
-  const axis=componentGlyphAxis(n);if(!axis)return;const {w}=componentSize(n);
-  for(const [compat,side] of [['in','left'],['out','right']]){
-    const spec=Attachment.resolveSpec(n,compat);if(!spec||spec.placed||spec.side!==side)continue;
-    if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
-    const lead=document.createElementNS('http://www.w3.org/2000/svg','line');lead.setAttribute('class','component-lead');
-    lead.setAttribute('x1',String(side==='left'?-w/2:w/2));lead.setAttribute('x2',String(axis[side]));lead.setAttribute('y1',String(axis.y));lead.setAttribute('y2',String(axis.y));
-    lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
-  }
-  // A wired control point on top meets the symbol's control stem, when it has one.
-  const control=Attachment.resolveSpec(n,'control'),{h}=componentSize(n);
-  if(axis.stemTop!=null&&control&&!control.placed&&control.side==='top'&&Math.abs(componentPortLocalPosition(n,'control').x-axis.stemX)<.5&&wires.some(x=>(x.a===n.id&&x.aSide==='control')||(x.b===n.id&&x.bSide==='control'))){
-    const lead=document.createElementNS('http://www.w3.org/2000/svg','line');lead.setAttribute('class','component-lead');
-    lead.setAttribute('x1',String(axis.stemX));lead.setAttribute('x2',String(axis.stemX));lead.setAttribute('y1',String(-h/2));lead.setAttribute('y2',String(axis.stemTop));
+  const axis=componentGlyphAxis(n);if(!axis)return;
+  const glyph=componentGlyph(n);
+  for(const t of glyph?.terminals||[]){
+    const spec=Attachment.resolveSpec(n,t.id);if(!spec||spec.side!==t.toward)continue;
+    if(!wires.some(x=>(x.a===n.id&&x.aSide===spec.compatId)||(x.b===n.id&&x.bSide===spec.compatId)))continue;
+    const P=componentPortLocalPosition(n,spec.id),[ex,ey]=SovSchematicNotation.pinEnd(t),E={x:axis.x0+ex*axis.scale,y:axis.y0+ey*axis.scale};
+    const horizontal=t.toward==='left'||t.toward==='right';
+    let d;
+    if(horizontal)d=Math.abs(P.y-E.y)<.5?`M${P.x} ${E.y}H${E.x}`:`M${P.x} ${P.y}H${(P.x+E.x)/2}V${E.y}H${E.x}`;
+    else d=Math.abs(P.x-E.x)<.5?`M${E.x} ${P.y}V${E.y}`:`M${P.x} ${P.y}V${(P.y+E.y)/2}H${E.x}V${E.y}`;
+    const lead=document.createElementNS('http://www.w3.org/2000/svg','path');lead.setAttribute('class','component-lead');lead.setAttribute('d',d);
     lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
   }
 }
@@ -579,7 +579,7 @@ function renderWires(signalState=computeSignalState()){
       : stableRouteForWire(i,w,A,B,occupied);
 
     const d=pathD(points);
-    occupied.push(...routeSegments(points));
+    occupied.push(...routeSegments(points,w));
 
     const signal=wireSignalColors(w,signalState);
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');

@@ -35,6 +35,10 @@
       {id:'end',compatId:'out',side:'right',role:'endpoint',defaultFlow:'out',t:1}
     ];
     if(attachmentDefaults(entity)==='none')return [];
+    // A glyph that declares its terminals as points (NOTATION-MODEL.md §2) gives the card one
+    // point per terminal: a two-input gate has two inputs.
+    const glyphPoints=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation?.pointsFor?.(entity?.symbolId);
+    if(glyphPoints)return glyphPoints.map(p=>({...p,role:'boundary'}));
     return [
       {id:'left',compatId:'in',side:'left',role:'boundary',defaultFlow:'in',t:.5},
       {id:'right',compatId:'out',side:'right',role:'boundary',defaultFlow:'out',t:.5},

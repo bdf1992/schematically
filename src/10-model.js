@@ -58,6 +58,30 @@ function connectionReachability(a,aSide,b,bSide){
 }
 const escapeXML=s=>(s||'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]));
 function glyph(id){ return `<svg viewBox="0 0 96 64"><use href="#sym-${id}"/></svg>`; }
+// The notation this document is drawn in (NOTATION-MODEL.md). An unknown notation is reported
+// and the built-in one is drawn, so the editor never shows a blank canvas; validation refuses it.
+let notationCache={key:null,notation:null,error:null};
+function activeNotation(){
+  const key=`${diagram?.notation||'schematic'}|${(diagram?.references||[]).filter(r=>r?.kind==='notation').map(r=>JSON.stringify(r.data)).join('|')}`;
+  if(notationCache.key===key)return notationCache.notation;
+  const r=SovSchematicNotation.resolve(diagram);
+  notationCache={key,notation:r.ok?r.notation:SovSchematicNotation.resolve('schematic').notation,error:r.ok?null:r};
+  installNotationSymbols(notationCache.notation);
+  return notationCache.notation;
+}
+// A glyph's stroke in its 96 x 64 box: the symbol weight at a standard card's glyph scale.
+function glyphUnitStroke(notation=activeNotation()){return +(notation.tokens.stroke.symbol/.84).toFixed(2)}
+function installNotationSymbols(notation){
+  const defs=document.querySelector('.hidden-symbols defs');if(!defs)return;
+  const stroke=glyphUnitStroke(notation),out=[];
+  for(const [id,g] of Object.entries(notation.glyphs||{})){
+    out.push(`<symbol id="sym-${id}" viewBox="0 0 96 64">${SovSchematicNotation.glyphMarkup(g,{stroke})}</symbol>`);
+    for(const [key,values] of Object.entries(g.variants||{}))for(const value of Object.keys(values))out.push(`<symbol id="sym-${id}-${value}" viewBox="0 0 96 64">${SovSchematicNotation.glyphMarkup(g,{variant:{[key]:value},stroke})}</symbol>`);
+  }
+  defs.innerHTML=out.join('');
+}
+function componentGlyph(node){return SovSchematicNotation.glyphOf(activeNotation(),node?.symbolId)}
+activeNotation();
 function ensureComponentStructure(n){
   if(!n.boundary){
     n.boundary={

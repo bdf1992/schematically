@@ -192,6 +192,27 @@ MUTANTS=[
       'new':"const b=null;\n    if(b){",
       'test':'tests/section_exposure_qa.py'
     },
+    {
+      'name':'glyph-terminals-not-points',
+      'file':'src/06-attachment-core.js',
+      'old':"if(glyphPoints)return glyphPoints.map(p=>({...p,role:'boundary'}));",
+      'new':"if(false)return glyphPoints;",
+      'test':'tests/notation_qa.py'
+    },
+    {
+      'name':'radius-not-concentric',
+      'file':'src/03-notation-core.js',
+      'old':"const r=sectioned?t.radius.core+Math.max(0,total-inset):t.radius.card;",
+      'new':"const r=t.radius.card;",
+      'test':'tests/notation_qa.py'
+    },
+    {
+      'name':'power-on-undoes-explicit-set',
+      'file':'src/07-graph-core.js',
+      'old':"s.queue=s.queue.filter(ev=>!(ev.powerOn&&ev.action?.set?.node===nodeId));",
+      'new':"",
+      'test':'tests/notation_qa.py'
+    },
 ]
 
 killed=[]

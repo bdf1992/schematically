@@ -186,6 +186,7 @@
     const scopeCanvas=scope?interiorOf(scope):Data.GLOBAL_CANVAS_ID;
     if(scope&&!doc.components.some(c=>c.id===scope))return refusal('UNKNOWN_NODE',`No component ${scope}`);
     const byId=new Map(doc.components.map(c=>[c.id,c])),frozen=[];
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,resolvedNotation=N?N.resolve(doc):null,notation=resolvedNotation?.ok?resolvedNotation.notation:null;
     const inScope=canvas=>doc.components.filter(c=>!hosted(c)&&(c.canvasId||Data.GLOBAL_CANVAS_ID)===canvas);
     const isContainer=c=>c.form?.regions?.interior?.state==='open'&&Number(c.form?.dimension??2)===2;
     // A container drawing its own symbol keeps it clear of its children; a section's skin counts too.
@@ -208,6 +209,14 @@
         else boxes.set(c.id,{...size(c),inner:null});
       }
       const ids=members.map(c=>c.id),succ=new Map(ids.map(i=>[i,new Set()])),pred=new Map(ids.map(i=>[i,new Set()]));
+      // How far below q's centre u's centre sits when the wire between them runs straight:
+      // the difference of the two terminals' offsets from their cards' centres.
+      const portDy=(q,u)=>{
+        const w=doc.wires.find(x=>(x.a===q&&x.b===u)||(x.b===q&&x.a===u));if(!w||!notation)return 0;
+        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c))?.dy||0};
+        const [qp,up]=w.a===q?[w.aSide,w.bSide]:[w.bSide,w.aSide];
+        return off(q,qp)-off(u,up);
+      };
       for(const w of doc.wires){
         let a=rep(w.a,canvas),b=rep(w.b,canvas);if(!a||!b||a===b||!succ.has(a)||!succ.has(b))continue;
         if(w.config?.direction==='reverse')[a,b]=[b,a];
@@ -249,7 +258,8 @@
       for(const L of layers){
         let top=0;
         for(const u of L){
-          const h=boxes.get(u).h,p=[...pred.get(u)].filter(q=>y.has(q)),want=p.length?p.map(q=>y.get(q)).sort((a,b)=>a-b)[Math.floor((p.length-1)/2)]:top+h/2;
+          // Level with its predecessors by the terminals the wires use, not by card centres.
+          const h=boxes.get(u).h,p=[...pred.get(u)].filter(q=>y.has(q)),want=p.length?p.map(q=>y.get(q)+portDy(q,u)).sort((a,b)=>a-b)[Math.floor((p.length-1)/2)]:top+h/2;
           const at=Math.max(top+h/2,want);y.set(u,at);top=at+h/2+gapY;
         }
       }

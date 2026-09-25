@@ -29,12 +29,12 @@ with sync_playwright() as p:
     # and a lead joins each wired edge to its symbol.
     g = page.evaluate('''()=>{const a=nodes.find(n=>n.id==='a'),b=nodes.find(n=>n.id==='b'),w=wires[0];
       const A=portPos(a,'out'),B=portPos(b,'in'),d=document.querySelector('.wire-group[data-wire-id="w"] path.wire').getAttribute('d');
-      const leads=[...document.querySelectorAll('.node .component-lead')].map(l=>({id:l.closest('.node').dataset.id,x1:+l.getAttribute('x1'),x2:+l.getAttribute('x2'),y:+l.getAttribute('y1')}));
+      const leads=[...document.querySelectorAll('.node .component-lead')].map(l=>{const m=/^M(\S+) (\S+)H(\S+)$/.exec(l.getAttribute('d'));return {id:l.closest('.node').dataset.id,straight:!!m,y:m?+m[2]:null}});
       return {A,B,ax:a.x,ay:a.y,aw:componentSize(a).w,bx:b.x,bw:componentSize(b).w,d,leads}}''')
     assert abs(g['A']['y'] - g['ay']) < .01 and abs(g['B']['y'] - g['ay']) < .01, g
     assert abs(g['A']['x'] - (g['ax'] + g['aw'] / 2)) < .01 and abs(g['B']['x'] - (g['bx'] - g['bw'] / 2)) < .01, g
     assert g['d'].startswith(f"M {g['A']['x']:g} ") or g['d'].startswith(f"M {g['A']['x']}"), g['d']
-    assert sorted(l['id'] for l in g['leads']) == ['a', 'b'] and all(l['y'] == 0 for l in g['leads']), g['leads']
+    assert sorted(l['id'] for l in g['leads']) == ['a', 'b'] and all(l['straight'] and l['y'] == 0 for l in g['leads']), g['leads']
 
     def port_center(node, point):
         return page.evaluate('''([n,p])=>{const r=document.querySelector(`.node[data-id="${n}"] .port-hit[data-point="${p}"]`).getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2]}''', [node, point])
