@@ -682,6 +682,46 @@ def _reduce(A_eq: list[list[float]], b_eq: list[float], n: int, order: list[int]
     return x0, N, free
 
 
+def _decision_space(doc: dict, model: dict) -> dict:
+    """The plans a model allows, written over its free decisions.
+
+    Recipes, yields and relays are eliminated (every plan is x = x0 + N y), flows first, then
+    stages that feed other stages, so the free variables y are the activities nearest the
+    market: the decisions a person would name. Each gets a box [0, capacity]; a free variable
+    with no capacity is bounded by what the supplies allow.
+    """
+    lp = build(doc, model, linear=True)
+    n = len(lp['names'])
+    feeds = {w['a'] for w in doc.get('wires', []) if w['b'] in lp['act']}
+    acts = sorted(lp['act'].items(), key=lambda kv: (kv[0] not in feeds, kv[0]))
+    order = sorted(lp['flow'].values()) + [j for _, j in acts]
+    order += [j for j in range(n) if j not in order]
+    x0, N, free = _reduce(lp['A_eq'], lp['b_eq'], n, order)
+    if not free:
+        raise Refusal('NOTHING_TO_CHOOSE', 'the recipes fix every quantity; there is no plan to search')
+    upper = lp['upper']
+    box = [(0.0, upper[j] if upper[j] is not None else None) for j in free]
+    for k, (lo, hi) in enumerate(box):
+        if hi is None:
+            probe = simplex([1.0 if j == free[k] else 0.0 for j in range(n)], lp['A_ub'], lp['b_ub'],
+                            lp['A_eq'], lp['b_eq'], upper)
+            if probe['status'] != 'optimal':
+                raise Refusal('UNBOUNDED_SEARCH', f'{lp["names"][free[k]]} has no bound to search within',
+                              'declare a capacity')
+            box[k] = (0.0, probe['objective'])
+
+    def expand(y: list[float]) -> list[float]:
+        return [x0[j] + sum(N[j][k] * y[k] for k in range(len(y))) for j in range(n)]
+
+    def plan_of(x: list[float]) -> dict:
+        return {'activity': {cid: max(0.0, x[j]) for cid, j in lp['act'].items()},
+                'flows': {wid: max(0.0, x[j]) for wid, j in lp['flow'].items()}}
+
+    return {'lp': lp, 'n': n, 'x0': x0, 'N': N, 'free': free, 'upper': upper, 'box': box,
+            'expand': expand, 'plan_of': plan_of,
+            'names': [lp['names'][j].split(':', 1)[1] for j in free]}
+
+
 def local_search(doc: dict, model: dict, starts: int = 24, seed: int = 0, iterations: int = 400,
                  tol: float = 1e-6, record: bool = False) -> dict:
     """Projected gradient ascent with multistart, on the true curves.
@@ -704,35 +744,9 @@ def local_search(doc: dict, model: dict, starts: int = 24, seed: int = 0, iterat
     """
     import random
 
-    lp = build(doc, model, linear=True)
-    n = len(lp['names'])
-    # Eliminate flows first, then stages that feed other stages, so the free variables are
-    # the activities nearest the market: the decisions a person would name.
-    feeds = {w['a'] for w in doc.get('wires', []) if w['b'] in lp['act']}
-    acts = sorted(lp['act'].items(), key=lambda kv: (kv[0] not in feeds, kv[0]))
-    order = sorted(lp['flow'].values()) + [j for _, j in acts]
-    order += [j for j in range(n) if j not in order]
-    x0, N, free = _reduce(lp['A_eq'], lp['b_eq'], n, order)
-    if not free:
-        raise Refusal('NOTHING_TO_CHOOSE', 'the recipes fix every quantity; there is no plan to search')
-    upper = lp['upper']
-    box = [(0.0, upper[j] if upper[j] is not None else None) for j in free]
-    for k, (lo, hi) in enumerate(box):
-        if hi is None:
-            # An unbounded free variable is bounded by what the supplies allow; search needs a box.
-            probe = simplex([1.0 if j == free[k] else 0.0 for j in range(n)], lp['A_ub'], lp['b_ub'],
-                            lp['A_eq'], lp['b_eq'], upper)
-            if probe['status'] != 'optimal':
-                raise Refusal('UNBOUNDED_SEARCH', f'{lp["names"][free[k]]} has no bound to search within',
-                              'declare a capacity')
-            box[k] = (0.0, probe['objective'])
-
-    def expand(y: list[float]) -> list[float]:
-        return [x0[j] + sum(N[j][k] * y[k] for k in range(len(y))) for j in range(n)]
-
-    def plan_of(x: list[float]) -> dict:
-        return {'activity': {cid: max(0.0, x[j]) for cid, j in lp['act'].items()},
-                'flows': {wid: max(0.0, x[j]) for wid, j in lp['flow'].items()}}
+    space = _decision_space(doc, model)
+    lp, n, x0, N, free, upper, box = (space[k] for k in ('lp', 'n', 'x0', 'N', 'free', 'upper', 'box'))
+    expand, plan_of = space['expand'], space['plan_of']
 
     # Linear inequalities, written over y: supplies, and the bounds of the eliminated variables.
     # These are kept exactly, by projection; only the curved resource limits are penalized.
@@ -881,6 +895,71 @@ def local_search(doc: dict, model: dict, starts: int = 24, seed: int = 0, iterat
         result['climbs'] = [{'start': c['start'], 'path': c['path'], 'optimum': found.index(c['ended'])}
                             for c in climbs]
     return result
+
+
+def landscape(doc: dict, model: dict, steps: int = 81) -> dict:
+    """The true value of every plan over a model's two free decisions, for the landscape view.
+
+    Samples a steps x steps grid over the decisions' box. Each point is expanded to a full plan,
+    valued on the true curves, and checked against every limit. For each named limit (a
+    resource, a supply, or the capacity of an eliminated stage) the slack is kept too, so the
+    view can draw the limit as the curve where its slack is zero. When both decisions are
+    whole-unit stages, every whole plan is listed with whether it is a local optimum: no single
+    step (one more or fewer of either, or a swap) improves it.
+    """
+    space = _decision_space(doc, model)
+    if len(space['free']) != 2:
+        raise Refusal('NOT_TWO_DECISIONS', f'a landscape needs two free decisions; this model has {len(space["free"])}',
+                      'use the outline or table views for other models')
+    lp, n, upper, expand, plan_of = space['lp'], space['n'], space['upper'], space['expand'], space['plan_of']
+    free_set = set(space['free'])
+    limits = []                                               # (name, function x -> slack)
+    for rname, res in model.get('resources', {}).items():
+        limits.append((f'{rname} {float(res["limit"]):g}',
+                       lambda x, r=rname: true_value(doc, model, plan_of(x))['usage'][r]['limit']
+                       - true_value(doc, model, plan_of(x))['usage'][r]['used']))
+    for r, b, label in zip(lp['A_ub'], lp['b_ub'], lp['rows_ub']):
+        if label.startswith('supply:'):
+            limits.append((f'{label.split(":", 1)[1]} supply {b:g}',
+                           lambda x, r=r, b=b: b - sum(a * v for a, v in zip(r, x))))
+    for j in range(n):
+        if j not in free_set and upper[j] is not None and lp['names'][j].startswith('activity:'):
+            limits.append((f'{lp["names"][j].split(":", 1)[1]} capacity {upper[j]:g}', lambda x, j=j: upper[j] - x[j]))
+
+    def feasible(x: list[float]) -> bool:
+        return all(v >= -1e-9 for j, v in enumerate(x) if j not in free_set) and \
+            all(f(x) >= -1e-6 for _, f in limits)
+
+    (lo0, hi0), (lo1, hi1) = space['box']
+    xs = [lo0 + (hi0 - lo0) * i / (steps - 1) for i in range(steps)]
+    ys = [lo1 + (hi1 - lo1) * j / (steps - 1) for j in range(steps)]
+    value, slack = [], {name: [] for name, _ in limits}
+    for a in xs:
+        vrow, srows = [], {name: [] for name, _ in limits}
+        for b in ys:
+            x = expand([a, b])
+            ok = feasible(x)
+            vrow.append(round(true_value(doc, model, plan_of(x))['value'], 4) if ok else None)
+            for name, f in limits:
+                srows[name].append(round(f(x), 5))
+        value.append(vrow)
+        for name in slack:
+            slack[name].append(srows[name])
+    whole = []
+    ints = {cid for cid, spec in model.get('stages', {}).items() if spec.get('integer')}
+    if set(space['names']) <= ints:
+        vals = {}
+        for a in range(int(lo0), int(hi0) + 1):
+            for b in range(int(lo1), int(hi1) + 1):
+                x = expand([a, b])
+                if feasible(x):
+                    vals[(a, b)] = true_value(doc, model, plan_of(x))['value']
+        steps_ = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
+        for (a, b), v in sorted(vals.items()):
+            local = all(vals.get((a + da, b + db), -math.inf) <= v + 1e-9 for da, db in steps_)
+            whole.append({'at': [a, b], 'value': round(v, 4), 'local': local})
+    return {'decisions': space['names'], 'x': [round(v, 6) for v in xs], 'y': [round(v, 6) for v in ys],
+            'value': value, 'slack': slack, 'whole': whole}
 
 
 # --------------------------------------------------------------------------- report

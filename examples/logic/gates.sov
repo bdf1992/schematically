@@ -77,7 +77,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H48A20 20 0 0 1 48 52H28Z\"/><path d=\"M68 32H90\"/>"
+          }
+        }
       }
     },
     {
@@ -116,7 +122,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 32H28\"/><path d=\"M28 14L66 32L28 50Z\"/><path d=\"M66 32H90\"/>"
+          }
+        }
       }
     },
     {
@@ -161,7 +173,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">\u21d0</text>"
+          }
+        }
       }
     },
     {
@@ -194,7 +212,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">0</text>"
+          }
+        }
       }
     },
     {
@@ -245,7 +269,13 @@
             "t": 0.6667,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">\u03a3</text>"
+          }
+        }
       }
     },
     {
@@ -303,7 +333,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">\u21d2</text>"
+          }
+        }
       }
     },
     {
@@ -354,7 +390,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 18H30\"/><path d=\"M6 32H30\"/><path d=\"M6 46H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">\u22652</text>"
+          }
+        }
       }
     },
     {
@@ -405,7 +447,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 18H30\"/><path d=\"M6 32H30\"/><path d=\"M6 46H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"11\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">MUX</text>"
+          }
+        }
       }
     },
     {
@@ -450,7 +498,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>"
+          }
+        }
       }
     },
     {
@@ -495,7 +549,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">\u21cd</text>"
+          }
+        }
       }
     },
     {
@@ -540,7 +600,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">\u21cf</text>"
+          }
+        }
       }
     },
     {
@@ -585,7 +651,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H33\"/><path d=\"M6 42H33\"/><path d=\"M26 12Q40 32 26 52Q54 52 66 32Q54 12 26 12Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>"
+          }
+        }
       }
     },
     {
@@ -624,7 +696,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 32H28\"/><path d=\"M28 14L62 32L28 50Z\"/><path d=\"M70 32H90\"/><circle cx=\"66\" cy=\"32\" r=\"4\"/>"
+          }
+        }
       }
     },
     {
@@ -669,7 +747,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H33\"/><path d=\"M6 42H33\"/><path d=\"M26 12Q40 32 26 52Q56 52 70 32Q56 12 26 12Z\"/><path d=\"M70 32H90\"/>"
+          }
+        }
       }
     },
     {
@@ -702,7 +786,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">1</text>"
+          }
+        }
       }
     },
     {
@@ -747,7 +837,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H31\"/><path d=\"M6 42H31\"/><path d=\"M30 12Q44 32 30 52Q58 52 68 32Q58 12 30 12Z\"/><path d=\"M22 12Q36 32 22 52\"/><path d=\"M76 32H90\"/><circle cx=\"72\" cy=\"32\" r=\"4\"/>"
+          }
+        }
       }
     },
     {
@@ -792,7 +888,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H31\"/><path d=\"M6 42H31\"/><path d=\"M30 12Q44 32 30 52Q60 52 72 32Q60 12 30 12Z\"/><path d=\"M22 12Q36 32 22 52\"/><path d=\"M72 32H90\"/>"
+          }
+        }
       }
     },
     {

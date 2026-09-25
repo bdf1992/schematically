@@ -52,7 +52,13 @@
             "t": 0.6667,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 32H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><path d=\"M38 38H50V26H58\"/><path d=\"M42 38V26H54\"/>"
+          }
+        }
       }
     },
     {

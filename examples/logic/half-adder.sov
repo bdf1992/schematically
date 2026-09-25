@@ -63,7 +63,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H31\"/><path d=\"M6 42H31\"/><path d=\"M30 12Q44 32 30 52Q60 52 72 32Q60 12 30 12Z\"/><path d=\"M22 12Q36 32 22 52\"/><path d=\"M72 32H90\"/>"
+          }
+        }
       }
     },
     {
@@ -95,7 +101,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H48A20 20 0 0 1 48 52H28Z\"/><path d=\"M68 32H90\"/>"
+          }
+        }
       }
     },
     {

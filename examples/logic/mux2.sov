@@ -71,7 +71,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 32H28\"/><path d=\"M28 14L62 32L28 50Z\"/><path d=\"M70 32H90\"/><circle cx=\"66\" cy=\"32\" r=\"4\"/>"
+          }
+        }
       }
     },
     {
@@ -103,7 +109,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H48A20 20 0 0 1 48 52H28Z\"/><path d=\"M68 32H90\"/>"
+          }
+        }
       }
     },
     {
@@ -135,7 +147,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H48A20 20 0 0 1 48 52H28Z\"/><path d=\"M68 32H90\"/>"
+          }
+        }
       }
     },
     {
@@ -167,7 +185,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H33\"/><path d=\"M6 42H33\"/><path d=\"M26 12Q40 32 26 52Q56 52 70 32Q56 12 26 12Z\"/><path d=\"M70 32H90\"/>"
+          }
+        }
       }
     },
     {

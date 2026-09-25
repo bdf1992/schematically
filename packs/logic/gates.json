@@ -2,6 +2,9 @@
   "default_delay": 1,
   "gates": {
     "and": {
+      "glyph": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H48A20 20 0 0 1 48 52H28Z\"/><path d=\"M68 32H90\"/>",
+      "glyph_family": "distinctive",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">&amp;</text>",
       "inputs": [
         "a",
         "b"
@@ -19,6 +22,9 @@
       ]
     },
     "buffer": {
+      "glyph": "<path d=\"M6 32H28\"/><path d=\"M28 14L66 32L28 50Z\"/><path d=\"M66 32H90\"/>",
+      "glyph_family": "distinctive",
+      "glyph_small": "<path d=\"M6 32H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">1</text>",
       "inputs": [
         "a"
       ],
@@ -33,6 +39,9 @@
       ]
     },
     "c-element": {
+      "glyph": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">C</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">C</text>",
       "initial": "0",
       "inputs": [
         "a",
@@ -62,6 +71,9 @@
       ]
     },
     "cimply": {
+      "glyph": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">⇐</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">⇐</text>",
       "inputs": [
         "a",
         "b"
@@ -79,6 +91,9 @@
       ]
     },
     "compare": {
+      "glyph": "<path d=\"M6 32H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">≥θ</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 32H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">≥θ</text>",
       "inputs": [
         "x"
       ],
@@ -92,6 +107,9 @@
       }
     },
     "d-latch": {
+      "glyph": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><text x=\"36\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">D</text><text x=\"38\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">EN</text><text x=\"58\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q</text><text x=\"58\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q̄</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><text x=\"36\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">D</text><text x=\"38\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">EN</text><text x=\"58\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q</text><text x=\"58\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q̄</text>",
       "initial": "0",
       "inputs": [
         "d",
@@ -124,6 +142,9 @@
     "dff": {
       "clock": "clk",
       "edge": "rising",
+      "glyph": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><path d=\"M30 38L38 42L30 46\"/><text x=\"36\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">D</text><text x=\"58\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q</text><text x=\"58\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q̄</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><path d=\"M30 38L38 42L30 46\"/><text x=\"36\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">D</text><text x=\"58\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q</text><text x=\"58\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q̄</text>",
       "initial": "0",
       "inputs": [
         "d",
@@ -150,6 +171,9 @@
       ]
     },
     "false": {
+      "glyph": "<path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">0</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">0</text>",
       "inputs": [],
       "kind": "table",
       "meaning": "constant 0",
@@ -161,6 +185,9 @@
       ]
     },
     "half-adder": {
+      "glyph": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Σ</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Σ</text>",
       "inputs": [
         "a",
         "b"
@@ -179,6 +206,9 @@
       ]
     },
     "imply": {
+      "glyph": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">⇒</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">⇒</text>",
       "inputs": [
         "a",
         "b"
@@ -198,6 +228,9 @@
     "jkff": {
       "clock": "clk",
       "edge": "rising",
+      "glyph": "<path d=\"M6 18H30\"/><path d=\"M6 32H30\"/><path d=\"M6 46H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><path d=\"M30 42L38 46L30 50\"/><text x=\"36\" y=\"21\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">J</text><text x=\"36\" y=\"35\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">K</text><text x=\"58\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q</text><text x=\"58\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q̄</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 18H30\"/><path d=\"M6 32H30\"/><path d=\"M6 46H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><path d=\"M30 42L38 46L30 50\"/><text x=\"36\" y=\"21\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">J</text><text x=\"36\" y=\"35\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">K</text><text x=\"58\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q</text><text x=\"58\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q̄</text>",
       "initial": "0",
       "inputs": [
         "j",
@@ -229,6 +262,9 @@
       ]
     },
     "majority": {
+      "glyph": "<path d=\"M6 18H30\"/><path d=\"M6 32H30\"/><path d=\"M6 46H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">≥2</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 18H30\"/><path d=\"M6 32H30\"/><path d=\"M6 46H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">≥2</text>",
       "inputs": [
         "a",
         "b",
@@ -251,6 +287,9 @@
       ]
     },
     "mux": {
+      "glyph": "<path d=\"M6 18H30\"/><path d=\"M6 32H30\"/><path d=\"M6 46H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"11\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">MUX</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 18H30\"/><path d=\"M6 32H30\"/><path d=\"M6 46H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"11\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">MUX</text>",
       "inputs": [
         "s",
         "a",
@@ -273,6 +312,9 @@
       ]
     },
     "nand": {
+      "glyph": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>",
+      "glyph_family": "distinctive",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M70 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">&amp;</text>",
       "inputs": [
         "a",
         "b"
@@ -290,6 +332,9 @@
       ]
     },
     "ncimply": {
+      "glyph": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">⇍</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">⇍</text>",
       "inputs": [
         "a",
         "b"
@@ -307,6 +352,9 @@
       ]
     },
     "nimply": {
+      "glyph": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">⇏</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">⇏</text>",
       "inputs": [
         "a",
         "b"
@@ -324,6 +372,9 @@
       ]
     },
     "nor": {
+      "glyph": "<path d=\"M6 22H33\"/><path d=\"M6 42H33\"/><path d=\"M26 12Q40 32 26 52Q54 52 66 32Q54 12 26 12Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>",
+      "glyph_family": "distinctive",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M70 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">≥1</text>",
       "inputs": [
         "a",
         "b"
@@ -341,6 +392,9 @@
       ]
     },
     "not": {
+      "glyph": "<path d=\"M6 32H28\"/><path d=\"M28 14L62 32L28 50Z\"/><path d=\"M70 32H90\"/><circle cx=\"66\" cy=\"32\" r=\"4\"/>",
+      "glyph_family": "distinctive",
+      "glyph_small": "<path d=\"M6 32H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M70 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">1</text>",
       "inputs": [
         "a"
       ],
@@ -355,6 +409,9 @@
       ]
     },
     "or": {
+      "glyph": "<path d=\"M6 22H33\"/><path d=\"M6 42H33\"/><path d=\"M26 12Q40 32 26 52Q56 52 70 32Q56 12 26 12Z\"/><path d=\"M70 32H90\"/>",
+      "glyph_family": "distinctive",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">≥1</text>",
       "inputs": [
         "a",
         "b"
@@ -372,6 +429,9 @@
       ]
     },
     "schmitt": {
+      "glyph": "<path d=\"M6 32H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><path d=\"M38 38H50V26H58\"/><path d=\"M42 38V26H54\"/>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 32H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><path d=\"M38 38H50V26H58\"/><path d=\"M42 38V26H54\"/>",
       "initial": "0",
       "inputs": [
         "x"
@@ -388,6 +448,9 @@
       }
     },
     "sr-latch": {
+      "glyph": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><text x=\"36\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">S</text><text x=\"36\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">R</text><text x=\"58\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q</text><text x=\"58\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q̄</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><text x=\"36\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">S</text><text x=\"36\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">R</text><text x=\"58\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q</text><text x=\"58\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q̄</text>",
       "initial": "0",
       "inputs": [
         "s",
@@ -420,6 +483,9 @@
     "tff": {
       "clock": "clk",
       "edge": "rising",
+      "glyph": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><path d=\"M30 38L38 42L30 46\"/><text x=\"36\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">T</text><text x=\"58\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q</text><text x=\"58\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q̄</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><path d=\"M30 38L38 42L30 46\"/><text x=\"36\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">T</text><text x=\"58\" y=\"25\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q</text><text x=\"58\" y=\"45\" text-anchor=\"middle\" font-size=\"9\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Q̄</text>",
       "initial": "0",
       "inputs": [
         "t",
@@ -446,6 +512,9 @@
       ]
     },
     "threshold": {
+      "glyph": "<path d=\"M6 18H30\"/><path d=\"M6 32H30\"/><path d=\"M6 46H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"11\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Σ≥θ</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M6 18H30\"/><path d=\"M6 32H30\"/><path d=\"M6 46H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"11\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">Σ≥θ</text>",
       "inputs": [
         "a",
         "b",
@@ -466,6 +535,9 @@
       }
     },
     "true": {
+      "glyph": "<path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">1</text>",
+      "glyph_family": "rectangle",
+      "glyph_small": "<path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">1</text>",
       "inputs": [],
       "kind": "table",
       "meaning": "constant 1",
@@ -477,6 +549,9 @@
       ]
     },
     "xnor": {
+      "glyph": "<path d=\"M6 22H31\"/><path d=\"M6 42H31\"/><path d=\"M30 12Q44 32 30 52Q58 52 68 32Q58 12 30 12Z\"/><path d=\"M22 12Q36 32 22 52\"/><path d=\"M76 32H90\"/><circle cx=\"72\" cy=\"32\" r=\"4\"/>",
+      "glyph_family": "distinctive",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M70 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">=1</text>",
       "inputs": [
         "a",
         "b"
@@ -494,6 +569,9 @@
       ]
     },
     "xor": {
+      "glyph": "<path d=\"M6 22H31\"/><path d=\"M6 42H31\"/><path d=\"M30 12Q44 32 30 52Q60 52 72 32Q60 12 30 12Z\"/><path d=\"M22 12Q36 32 22 52\"/><path d=\"M72 32H90\"/>",
+      "glyph_family": "distinctive",
+      "glyph_small": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">=1</text>",
       "inputs": [
         "a",
         "b"

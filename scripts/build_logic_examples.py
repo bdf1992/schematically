@@ -53,20 +53,24 @@ class Doc:
         return cid
 
     def _part(self, cid: str, col: int, label: str, logic: dict, ins: list[str], outs: list[str],
-              symbol: str = 'gate') -> str:
+              symbol: str = 'gate', glyph: str | None = None) -> str:
         x, y = self._place(col)
         points = [{'id': p, 'side': 'left', 't': round((i + 1) / (len(ins) + 1), 4), 'defaultFlow': 'in'}
                   for i, p in enumerate(ins)]
         points += [{'id': p, 'side': 'right', 't': round((i + 1) / (len(outs) + 1), 4), 'defaultFlow': 'out'}
                    for i, p in enumerate(outs)]
-        self.components.append({'id': cid, 'symbolId': symbol, 'x': x, 'y': y,
-                                'config': {'label': label, 'logic': logic, 'attachmentPoints': points}})
+        config = {'label': label, 'logic': logic, 'attachmentPoints': points}
+        if glyph:
+            # The gate's glyph from the pack, carried as a custom graphic (VISUAL-LANGUAGE.md).
+            config['presentation'] = {'graphic': {'kind': 'custom', 'svg': glyph}}
+        self.components.append({'id': cid, 'symbolId': symbol, 'x': x, 'y': y, 'config': config})
         self.pins[cid] = (ins, outs)
         return cid
 
     def gate(self, cid: str, kind: str, col: int, **params) -> str:
         g = PACK[kind]
-        return self._part(cid, col, kind.upper(), {'gate': kind, **params}, g['inputs'], g['outputs'])
+        return self._part(cid, col, kind.upper(), {'gate': kind, **params}, g['inputs'], g['outputs'],
+                          glyph=g.get('glyph'))
 
     def part(self, cid: str, composite: str, col: int, label: str) -> str:
         ins, outs = composite_pins(composite)

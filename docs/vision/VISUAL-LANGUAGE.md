@@ -109,17 +109,75 @@ These are the views in `OPTIMIZATION-VISUALIZATION.md`, now drawn in the shared 
 
   Plus determinism, and the contrast floor in both themes.
 
-## Decisions
+## Decided in the bake-off
 
-1. **Glyph style.** Proposed: distinctive shapes for the eight familiar gates, IEC rectangles for the rest. Alternative: IEC throughout.
-2. **Where logic state is shown.** Proposed: on the canvas (wire color is state, packets are changes) plus the timing view. Alternative: timing view only.
-3. **Color budget.** Proposed: three data colors across every view. Alternative: more per view.
-4. **Where views live first.** Proposed: standalone SVG next to a run, then a run page, then the editor after the RC.
-5. **Motion.** Proposed: canvas packets keep moving; timing and search views get a step-through control on recorded events rather than animation.
+The bake-off put two or three contenders per view side by side, drawn from the same real runs, each round ending with a recommendation. Responses:
 
-## Next steps
+| Round | Response | What was built |
+| --- | --- | --- |
+| Gate glyphs | agreed | hybrid: distinctive shapes for AND, OR, XOR, NOT, NAND, NOR, XNOR, BUFFER; IEC rectangles with qualifiers for everything else; every gate also carries its rectangle for sizes below about 40 px |
+| Live signal state | agreed | wire colour and glow carry state, high wires 0.6 px heavier, pin chips; monochrome by weight alone |
+| Behaviour over time | agreed | timing diagram with a value lane per bus, transients shaded, linked to the event log |
+| Level gates | agreed | the trace with each reader's thresholds and outputs; a hysteresis gate's transfer loop as its detail |
+| Solver landscape | agreed | heatmap, labelled contours near the top, limits drawn where their slack is zero, and the ranked table beneath |
+| Search | **delta** | see below |
+| Unit execution | agreed | worker timeline with a progress-against-target strip; the labor split as a ledger row |
 
-1. Glyphs into `packs/logic/gates.json` as `presentation.graphic` data, with a QA check that each renders in the export pipeline in both themes.
-2. `scripts/plot_run.py` with the first three projections: timing (from circuit events), landscape (from climbs and the enumerated grid), outline (from the branch-and-bound log).
-3. The live-state overlay on `export_svg.py`: a circuit run's final net values drawn onto the exported diagram.
-4. Timeline and ring from the `.sav` event log.
+**The search delta.** The response: *"I don't like C as much, the tree is somewhat clear if dead branches rendered different. We should also consider gradient maps to update C."* Read as:
+- keep the **outline**;
+- bring back the **node-link tree**, with dead branches (pruned and infeasible) drawn dead: dashed edges, dotted hollow or crossed nodes, struck-through labels in the outline;
+- replace the bound-against-incumbent chart with a **gradient map**: every live node, on both the outline and the tree, is shaded by how close its LP bound came to the final incumbent (strong near it, faint far from it), so "how far from done" is read on the tree itself.
+
+## Built
+
+| Piece | File | Checked by |
+| --- | --- | --- |
+| Glyphs as pack data (`glyph`, `glyph_small`, `glyph_family` per gate), written into the pack and applied by the example builder as `presentation.graphic` | `scripts/logic_glyphs.py`, `packs/logic/gates.json` | `tests/plot_run_qa.py` (sanitizer allowlist, family rule, examples carry them); `tests/logic_state_export_qa.py` (every gate keeps its glyph through the editor, both themes) |
+| Run records, one kind per domain, naming the document by fingerprint | `scripts/record_run.py`; `landscape()` and the shared `_decision_space()` in `scripts/optimize_sov.py` | `tests/plot_run_qa.py` |
+| The views: timing and event log, level trace and transfer loop, landscape and table, search outline and tree, timeline, glyph sheet, and a run page that links them | `scripts/plot_run.mjs` (plain JavaScript, record in, SVG out; runs under Node now and in a page or the editor later) | `tests/plot_run_qa.py`: every view's claims against the record, determinism, both themes |
+| Live signal state on the editor's own export | `scripts/export_svg.py --logic-state A=1,B=1 [--monochrome]` | `tests/logic_state_export_qa.py`: every input of the half adder against its definition, one chip per pin, no packets in a snapshot, no signal colour in monochrome |
+| Gallery | `docs/visual/`, from `scripts/build_visual_gallery.py` | `--check` inside `tests/plot_run_qa.py` |
+
+Making the tests fail on purpose (transient detection off, pruned nodes drawn live) fails them. Two defects surfaced while building: a bare `&` in the IEC AND qualifier made the glyph markup unparseable, which in the editor would have silently fallen back to the generic symbol; and monochrome exports still named the signal colour for the hidden glow.
+
+### Gallery
+
+The glitch the value lane exists for: the ripple counter passing 6, 4 and 0 on its way from 7 to 8.
+
+![Ripple counter, pulse 8](../visual/timing-ripple-glitch.svg)
+
+The search, with dead branches drawn dead and the bound gradient:
+
+![Search tree](../visual/search-tree.svg)
+
+The landscape of the learning-curve workshop: limits where their slack is zero, contours near the top, whole-unit local optima ringed, climbs coloured by where they end.
+
+![Landscape](../visual/landscape-learning.svg)
+
+Live state on the editor's own export, full adder with A = 1, B = 0, Cin = 1:
+
+![Full adder, live state](../visual/live-state-full-adder.svg)
+
+Also in `docs/visual/`: `glyphs.svg`, `timing-sync-counter.svg`, `level-schmitt.svg`, `loop-schmitt.svg`, `search-outline.svg`, `timeline-week.svg`, `live-state-full-adder-mono.svg`. Standalone files follow the viewer's colour scheme.
+
+### Try it
+
+```
+python scripts/record_run.py logic examples/logic/ripple-counter4.sov --clock CLK --pulses 17 --bus Q --out ripple.json
+python scripts/record_run.py logic examples/logic/schmitt.sov --wave X --out schmitt.json
+python scripts/record_run.py optimize examples/optimization/workshop.sov --model examples/optimization/workshop.learning.opt.json --out learning.json
+python scripts/record_run.py simulate examples/optimization/workshop.sov --model examples/optimization/workshop.learning.opt.json --target chairs=14,tables=2 --out week.json
+node scripts/plot_run.mjs ripple.json schmitt.json learning.json week.json --out views/ --page runs.html
+python scripts/export_svg.py examples/logic/half-adder.sov --logic-state A=1,B=1
+```
+
+## Residuals
+
+| Gap | What closes it |
+| --- | --- |
+| The size rule (rectangle below about 40 px) needs the editor's zoom | the renderer picks `glyph_small` when a gate's drawn size falls below the threshold; post-RC |
+| Pin chips are always on in exports; on hover, selection or zoom ≥ 100% in the editor | editor work, post-RC |
+| The landscape needs exactly two free decisions | pairwise slices through the best plan for more, labelled as slices |
+| Composite gates still draw as generic boxes | an IEC box labelled with the composite's name, from its document |
+| Step-through for timing and search | a control on the run page over the recorded events |
+| Editor, API and MCP surfaces | the view functions move into the editor's module set after the RC; `scripts/plot_run.mjs` is already plain JavaScript with no dependencies |

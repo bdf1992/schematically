@@ -19,6 +19,7 @@ STATIC=[
     'tests/optimize_sov_qa.py',
     'tests/simulate_sov_qa.py',
     'tests/logic_sov_qa.py',
+    'tests/plot_run_qa.py',
 ]
 BROWSER=[
     'tests/attachment_point_refactor_qa.py',
@@ -48,6 +49,7 @@ BROWSER=[
     'tests/file_surface_qa.py',
     'tests/svg_export_qa.py',
     'tests/loop_svg_qa.py',
+    'tests/logic_state_export_qa.py',
     'tests/menu_dismissal_qa.py',
     'tests/appearance_history_qa.py',
     'tests/appearance_color_scheme_qa.py',

@@ -45,7 +45,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 32H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">\u2265\u03b8</text>"
+          }
+        }
       }
     },
     {
@@ -72,7 +78,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 32H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">\u2265\u03b8</text>"
+          }
+        }
       }
     },
     {
@@ -104,7 +116,13 @@
             "t": 0.5,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">\u21cf</text>"
+          }
+        }
       }
     },
     {
