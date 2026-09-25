@@ -28,6 +28,16 @@ Graph and simulation (`GRAPH-MODEL.md`, read-only over the document):
 
 HTTP: `GET|POST /api/v1/graph/<verb>`, `POST /api/v1/sim/<action>`, `GET /api/v1/sim/inspect?what=…&id=…`.
 
+Arranging (`LAYOUT-MODEL.md`, "As built: layouts"): `schematic.layout {op, …}`.
+- Read-only ops: `list`, `unplaced`.
+- Views: `create`, `rename`, `delete`, `set-default`.
+- Placement: `move`, `place`, `align`, `distribute`.
+- `route` sets `auto`, `guided` or `pinned`.
+- `apply` runs the `layered` engine, with `scope` and `into`.
+
+Refusals are typed (`PINNED`, `LOCKED`, `HOSTED`, `UNPLACED`, `UNKNOWN_*`). Arranging never
+changes what the document means.
+
 Seeing and measuring (`LAYOUT-MODEL.md` §4–5). These need Python with Playwright and a
 Chromium browser (`SOV_RENDER_PYTHON` selects the interpreter). Without them the call is
 refused with `RENDERER_UNAVAILABLE`: over MCP as an error result, over HTTP as a 503.

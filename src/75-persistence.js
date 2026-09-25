@@ -12,7 +12,7 @@ let lastFileFingerprint=null;
 
 function snapshotDocument(){
   // Files and API snapshots carry authored truth only; runtime projections are rebuilt on load.
-  const doc=SovSchematicData.compactDocument(SovSchematicData.makeDocument(SovSchematicData.clone(diagram)));
+  const doc=SovSchematicData.compactDocument(SovSchematicData.makeDocument(typeof canonicalDiagram==='function'?canonicalDiagram():SovSchematicData.clone(diagram)));
   doc.meta=doc.meta||{};
   doc.meta.title=doc.meta.title||'Soveraeign Schematic';
   return doc;
@@ -33,7 +33,8 @@ function captureWorkspace(){
       showFlow,
       colorEngine:SovSchematicData.clone(colorEngine),
       appearanceMode,
-      globalRate:globalTimeScale()
+      globalRate:globalTimeScale(),
+      layout:typeof activeLayoutId==='function'?activeLayoutId():null
     }
   };
 }
@@ -94,6 +95,7 @@ function replaceRuntimeDocument(input){
   const valid=SovSchematicData.validateDocument(normalized);
   if(!valid.ok)throw new Error(valid.errors.join('; '));
   SovSchematicData.replaceDocument(diagram,normalized);
+  if(typeof layoutAfterDocumentLoad==='function')layoutAfterDocumentLoad();
   syncRuntimeAfterDocumentReplace();
   return snapshotDocument();
 }
@@ -109,6 +111,8 @@ function applyWorkspace(bundle){
   if(typeof view.showFlow==='boolean'){showFlow=view.showFlow;document.getElementById('workspace')?.classList.toggle('show-flow',showFlow);flowBtn?.classList.toggle('active',showFlow)}
   if(view.colorEngine&&typeof view.colorEngine==='object'){Object.assign(colorEngine,view.colorEngine);applyColorEngine()}
   if(view.appearanceMode){appearanceMode=view.appearanceMode;applyAppearanceMode()}
+  // The layout on screen is a viewer's choice, kept with the workspace, never in the file.
+  if(view.layout&&typeof switchLayout==='function'&&view.layout!==activeLayoutId())switchLayout(view.layout);
   if(view.globalRate!=null){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Number(view.globalRate)||1}
   render();
   return captureWorkspace();

@@ -1,6 +1,6 @@
 """Render one document for a caller that has no browser (the MCP/HTTP server).
 
-Reads JSON on stdin: {document, formats: [svg|png|metrics], appearance: light|dark, scale, pad}.
+Reads JSON on stdin: {document, formats: [svg|png|metrics], appearance: light|dark, scale, pad, view}.
 Writes JSON on stdout: {ok, svg?, png? (base64), metrics?} or {ok: false, code, message}.
 Uses the editor's own renderStandaloneSvg / renderStandalonePng / layout.metrics in headless
 Chromium, so a picture from the server is the picture the editor exports.
@@ -41,6 +41,10 @@ def main() -> int:
             page.wait_for_timeout(200)
             page.evaluate('(m)=>window.SovSchematicAPI.view.setAppearance(m)', req.get('appearance', 'light'))
             page.evaluate('(d)=>{window.SovSchematicAPI.document.replace(d);fitDiagram()}', req.get('document') or {})
+            if req.get('view'):
+                switched = page.evaluate('(v)=>{const r=window.SovSchematicAPI.layout.switch(v);fitDiagram();return r}', req['view'])
+                if not switched.get('ok'):
+                    return fail(switched.get('code', 'UNKNOWN_LAYOUT'), switched.get('message', 'no such layout'))
             page.wait_for_timeout(250)
             opts = {'pad': req.get('pad', 48), 'scale': req.get('scale', 2)}
             if 'svg' in formats:

@@ -50,6 +50,7 @@ BROWSER=[
     'tests/sim_control_qa.py',
     'tests/server_render_qa.py',
     'tests/access_panel_qa.py',
+    'tests/layouts_qa.py',
     'tests/loop_svg_qa.py',
     'tests/menu_dismissal_qa.py',
     'tests/appearance_history_qa.py',

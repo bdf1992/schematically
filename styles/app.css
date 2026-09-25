@@ -98,6 +98,9 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .terminal-mark.in{fill:var(--accent-in)}.terminal-mark.out{fill:var(--accent-out)}
 .terminal-mark.control{fill:var(--canvas-muted)}
 #junctionLayer{pointer-events:none}
+/* Unplaced in the layout on screen: shown where the default has it, until arranged or moved. */
+.node.unplaced{opacity:.42}.node.unplaced .body{stroke-dasharray:6 4}
+#layoutSelect{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 6px;max-width:15em}
 .access-entries{display:grid;gap:6px;margin:6px 0}
 .access-entry{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(0,1fr)) auto;gap:4px;align-items:center}
 .access-entry input,.access-entry select{min-width:0;font-size:12px;padding:3px 4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}

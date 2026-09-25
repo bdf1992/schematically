@@ -164,6 +164,20 @@ MUTANTS=[
       'new':'for(let pass=0;pass<6;pass++){',
       'test':'tests/sim_control_qa.py'
     },
+    {
+      'name':'save-keeps-the-projection',
+      'file':'src/75-persistence.js',
+      'old':"const doc=SovSchematicData.compactDocument(SovSchematicData.makeDocument(typeof canonicalDiagram==='function'?canonicalDiagram():SovSchematicData.clone(diagram)));",
+      'new':"const doc=SovSchematicData.compactDocument(SovSchematicData.makeDocument(SovSchematicData.clone(diagram)));",
+      'test':'tests/layouts_qa.py'
+    },
+    {
+      'name':'router-ignores-pinned-routes',
+      'file':'src/40-routing.js',
+      'old':"if(spec){const declared=routeThroughSpec(A,B,w,spec);if(declared)return declared}",
+      'new':"",
+      'test':'tests/layouts_qa.py'
+    },
 ]
 
 killed=[]

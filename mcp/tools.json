@@ -30,6 +30,7 @@
     "schematic.sim.scenario",
     "schematic.sim.scenarios",
     "schematic.render",
-    "schematic.layout.metrics"
+    "schematic.layout.metrics",
+    "schematic.layout"
   ]
 }

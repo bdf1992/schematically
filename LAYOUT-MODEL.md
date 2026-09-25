@@ -205,6 +205,84 @@ Still not measured:
 - label legibility at fit zoom
 - a card crowding its container's interior guide
 
+## As built: layouts (2026-09-25)
+
+`src/08-layout-core.js` (`SovSchematicLayout`) has no DOM and is shared by the editor and
+the server. It implements §1–3 and the `layered` engine.
+
+### Storage
+
+- The **default** layout is the components' own `x`/`y`/`size`, so a reader that knows
+  nothing of layouts sees the default.
+- Every other layout is stored at `document.layout.views[id]` as
+  `{name, audience, nodes: {id: {x, y, w, h} | {side, t}}, routes: {wireId: route}}`.
+- A boundary Point's `{side, t}` is stored per layout, since where it sits along its host's
+  edge is layout.
+- `default` can move with `set-default`. The old default's geometry is then kept as a
+  stored layout.
+- An entity with no position in a layout is **unplaced**. It is listed, shown faint and
+  dashed where the default has it, and placed by Arrange or by moving it.
+
+### In the editor
+
+- `src/58-layouts.js` shows another layout by projecting it onto the components and
+  stashing the default.
+- Files, history and every API snapshot see the canonical document through
+  `canonicalDiagram()`. Undo, open and checkpoints re-show the active layout.
+- The workspace remembers which layout was on screen. The file only knows its default.
+
+**Toolbar layout menu:**
+- switch layout
+- new layout (a copy of this one)
+- Arrange left to right
+- rename
+- make default
+- delete
+
+**Routes.**
+- A route is `auto` (routed), `pinned` (the interior points kept) or `guided` (via
+  points).
+- A pinned or guided route re-lays only its end leads, orthogonally, when terminals move.
+- A wire's **Pin** in the settings freezes its rendered route in the layout on screen. A
+  straight wire refuses, since there is nothing to pin.
+
+### Verbs
+
+Available on the Browser API (`layout.*`) and MCP (`schematic.layout` with `op`):
+- `list`, `unplaced`
+- `create`, `rename`, `delete`, `set-default`
+- `move`, `place` (`right-of` / `left-of` / `above` / `below` another, with a gap), `align`,
+  `distribute`
+- `route`
+- `apply` with `engine: layered`, `scope` and `into`
+
+Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLACED`,
+`UNKNOWN_*`. `schematic.render` takes `view`, so an agent can see any layout.
+
+### What `layered` does
+
+- It lays out left to right by wire direction:
+  - cycles are broken
+  - layers come from the longest path
+  - order within a layer comes from barycentre sweeps
+  - each node is pulled level with its predecessors, for straight chains
+- A container is laid out inside first and fitted to its contents, then placed as one
+  node of its parent.
+- A column gap widens to fit the widest wire label that crosses it.
+- Afterwards, boundary Points slide to meet what they connect to inside. A Point wired to
+  a top or bottom port aims clear of that card. Points sharing a side keep 40px apart.
+- A single-connection neighbour outside moves level with its Point when nothing is in the
+  way.
+- Pinned and locked components stay put.
+
+Every example, arranged, scores 10 on the audit (`tests/layouts_qa.py`).
+
+**Not yet built:**
+- `layout.candidates` (settling as data)
+- engines other than `layered`
+- collapse and hidden groups per layout, which need groups from `GRAPH-MODEL.md`
+- a `stale` metric for pinned routes
+
 ## As built: seeing (2026-09-25)
 
 `renderStandaloneSvg()` (`src/75-persistence.js`) is the one picture of a document, with

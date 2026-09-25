@@ -62,6 +62,20 @@ const SovSchematicAPI={
     png:(options={})=>renderStandalonePng(options)
   },
   layout:{
+    list:()=>SovSchematicData.clone(runLayoutOp('list')),
+    active:()=>activeLayoutId(),
+    switch:(id)=>SovSchematicData.clone(switchLayout(id)),
+    create:(options={})=>SovSchematicData.clone(runLayoutOp('create',options,'New layout')),
+    rename:(view,name)=>SovSchematicData.clone(runLayoutOp('rename',{view,name},'Rename layout')),
+    delete:(view)=>{if(view===activeLayoutId())switchLayout(SovSchematicLayout.defaultId(diagram));return SovSchematicData.clone(runLayoutOp('delete',{view},'Delete layout'))},
+    setDefault:(view)=>SovSchematicData.clone(runLayoutOp('set-default',{view},'Make default layout')),
+    unplaced:()=>layoutUnplacedIds(),
+    move:(id,to={})=>SovSchematicData.clone(runLayoutOp('move',{...to,id},'Move')),
+    place:(id,options={})=>SovSchematicData.clone(runLayoutOp('place',{...options,id},'Place')),
+    align:(ids,options={})=>SovSchematicData.clone(runLayoutOp('align',{...options,ids},'Align')),
+    distribute:(ids,options={})=>SovSchematicData.clone(runLayoutOp('distribute',{...options,ids},'Distribute')),
+    route:(wireId,spec=null)=>SovSchematicData.clone(runLayoutOp('route',{wireId,...(spec||{mode:'auto'})},'Route')),
+    apply:(options={})=>SovSchematicData.clone(runLayoutOp('apply',{engine:'layered',...options},'Arrange layout')),
     metrics:(options={})=>SovSchematicData.clone(layoutMetrics(options)),
     rubric:()=>SovSchematicData.clone(LAYOUT_RUBRIC)
   },

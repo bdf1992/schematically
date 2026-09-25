@@ -403,6 +403,9 @@ function routePath(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSe
   return pathD(routePoints(A,B,aSide,bSide,sourceId,targetId,laneSeed,occupied).points);
 }
 function stableRouteForWire(index,w,A,B,occupied=[]){
+  // A route the layout on screen pins or guides is drawn as declared, not re-derived.
+  const spec=typeof activeRouteSpec==='function'?activeRouteSpec(w.id):null;
+  if(spec){const declared=routeThroughSpec(A,B,w,spec);if(declared)return declared}
   const candidate=routePoints(A,B,w.aSide,w.bSide,w.a,w.b,w.lane??index,occupied,w.id);
   const cached=routeCache.get(index);
 

@@ -135,6 +135,9 @@ function layoutMetrics(options={}){
   // Wires sharing one point of a card must be marked as joined.
   {const shared=new Map();for(const w of wires)for(const [id,side] of [[w.a,w.aSide],[w.b,w.bSide]]){const n=id&&nodes.find(x=>x.id===id);if(!n||componentForm(n).dimension===0)continue;const k=`${id}|${side}`;shared.set(k,(shared.get(k)||0)+1)}
    for(const [k,count] of shared)if(count>=2&&!workspace.querySelector(`.junction-dot[data-port="${CSS.escape(k)}"]`))add('unmarked-junction',[k.split('|')[0]],`${count} wires meet at ${k.split('|')[1]} with no junction mark`)}
+  // Points drawn on top of each other read as one.
+  {const pts=visible.filter(n=>componentForm(n).dimension===0);
+   for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++)if(Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y)<12)add('node-overlap',[pts[i].id,pts[j].id],'points drawn on top of each other')}
   // Sibling bodies must not overlap.
   for(let i=0;i<visible.length;i++)for(let j=i+1;j<visible.length;j++){
     const a=visible[i],b=visible[j];

@@ -27,6 +27,7 @@ Primary operations:
 - `checkpoints.list()` / `create(name)` / `restore(id)`
 - `selection.copy()` / `paste()` / `duplicate()`
 - `view.setAppearance(mode)` / `setGlobalRate(value)`
+- `layout.list()` / `active()` / `switch(id)` / `create({name, from, empty})` / `rename` / `delete` / `setDefault` / `unplaced()` / `move(id, {x, y | dx, dy})` / `place(id, {relation, of, gap})` / `align(ids, {axis})` / `distribute(ids, {axis, gap})` / `route(wireId, {mode, points | via})` / `apply({into, scope})` — arrange for a reader without changing meaning
 - `render.svg(options)` / `render.png(options)` (a promise of a data URL) / `layout.metrics()` — the picture and its measured quality
 - `clock.play()` / `pause()` / `step()` / `advance(ms)` / `toggle(lever)` / `send(node)` / `resume(parkId, decision)` / `state()` / `inspect(what, id)` — the canvas control plane
 - `graph.query(verb, args)` / `graph.verbs()` — read-only: junctions, reach, paths, cycles, order, cut, boundary, untyped, blocked, acl, signals, export
@@ -45,6 +46,7 @@ Additional server tools:
 - `schematic.checkpoint.list`
 - `schematic.checkpoint.create`
 - `schematic.checkpoint.restore`
+- `schematic.layout` (`op: list | unplaced | create | rename | delete | set-default | move | place | align | distribute | route | apply`) — layouts and placement; `schematic.render` takes `view` to see a layout
 - `schematic.render` (`format: svg | png`) / `schematic.layout.metrics` — see the diagram as the editor draws it, and measure it: check your layout before you report it done
 - `schematic.graph.query` — read-only graph queries (`GRAPH-MODEL.md` §5)
 - `schematic.sim.set` / `at` / `advance` / `tick` — assert a level, schedule an operation, drive time
