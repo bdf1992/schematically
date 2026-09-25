@@ -10,7 +10,7 @@
       "id": "grant",
       "symbolId": "authority",
       "x": 160,
-      "y": 295,
+      "y": 302.5,
       "config": {
         "label": "Grant",
         "signalMode": "source"
@@ -20,7 +20,7 @@
       "id": "req",
       "symbolId": "act",
       "x": 160,
-      "y": 425,
+      "y": 417.5,
       "config": {
         "label": "Requester",
         "signalMode": "source"
@@ -48,8 +48,8 @@
           },
           "labelMode": "none",
           "size": {
-            "w": 560,
-            "h": 260
+            "w": 480,
+            "h": 230
           }
         }
       }

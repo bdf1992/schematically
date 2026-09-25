@@ -169,6 +169,8 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .node .custom-graphic [fill="currentColor"]{fill:currentColor}
 .node .custom-graphic [stroke="currentColor"]{stroke:currentColor}
 .node .container-guide{fill:none;stroke:var(--component-boundary-color,#777);stroke-width:1;stroke-dasharray:4 5;opacity:.22;pointer-events:none}
+/* The interior guide is an editing aid: shown while the container is selected or a card is being dragged, never in a picture. */
+.node.is-container:not(.selected)>.container-guide{opacity:0}#workspace.dragging-node .node.is-container>.container-guide{opacity:.22}
 .node.is-container>.body{stroke-width:1.8}
 .node .internal-text{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:600;opacity:.78}
 .node .outside-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));opacity:.8}
@@ -370,7 +372,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .node.blank text{font-style:italic}
 .node.blank.selected .body{stroke-dasharray:5 4}
 
-.connection-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:700;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}.reciprocity-mark{font-size:calc(clamp(8px,10px * var(--zoom,1),14px) / var(--zoom,1));font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}
+.connection-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:700;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}.reciprocity-mark{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:600;font-style:italic;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}
 
 @media(max-width:900px){
   .app{grid-template-columns:210px minmax(0,1fr);}
@@ -765,6 +767,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       </label>
       <label class="palette-row"><span>Palette</span>
         <select id="colorPaletteInput">
+          <option value="okabe-ito">Okabe–Ito · colour-blind safe</option>
           <option value="spectrum">Spectrum</option>
           <option value="cool">Cool</option>
           <option value="warm">Warm</option>
@@ -3122,6 +3125,101 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 });
 /* END src/08-layout-core.js */
 </script>
+<script data-beta-module="src/09-colour-core.js">
+/* BEGIN src/09-colour-core.js */
+'use strict';
+// 0.1 concern: colour measurement. No DOM; shared by the editor, the audits and the server.
+// Contrast is WCAG 2.2's (SC 1.4.3 text 4.5:1, large text 3:1; SC 1.4.11 non-text 3:1).
+// Distinctness is measured in OKLab (Ottosson 2020) after simulating colour-vision deficiency
+// with Machado, Oliveira & Fernandes 2009 (severity 1.0, applied in linear sRGB).
+// A palette is judged as it is realised on screen, never as authored: see auditPalette().
+(function(root,factory){
+  const api=factory();
+  root.SovSchematicColour=api;
+  if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof globalThis!=='undefined'?globalThis:this,function(){
+  const WCAG=Object.freeze({text:4.5,largeText:3,nonText:3});
+  // OKLab distance a categorical palette keeps between its closest pair under every simulated
+  // vision. 0.02 is about one just-noticeable difference (Ottosson); 0.05 asks for two and a half.
+  const CVD_FLOOR=.05;
+  const VISIONS=['normal','protan','deutan','tritan'];
+  const MACHADO={
+    protan:[.152286,1.052583,-.204868,.114503,.786281,.099216,-.003882,-.048116,1.051998],
+    deutan:[.367322,.860646,-.227968,.280085,.672501,.047413,-.011820,.042940,.968881],
+    tritan:[1.255528,-.076749,-.178779,-.078411,.930809,.147602,.004733,.691367,.303900]
+  };
+  // Research palettes, as published. The editor's own palettes derive from these (00-state.js).
+  const REFERENCES=Object.freeze({
+    'okabe-ito':{colors:['#E69F00','#56B4E9','#009E73','#F0E442','#0072B2','#D55E00','#CC79A7'],source:'Okabe & Ito (2008), Color Universal Design: https://jfly.uni-koeln.de/color/'},
+    'tol-bright':{colors:['#4477AA','#EE6677','#228833','#CCBB44','#66CCEE','#AA3377'],source:'Tol (2021), Colour Schemes, SRON/EPS/TN/09-002: https://personal.sron.nl/~pault/'},
+    'tol-muted':{colors:['#CC6677','#332288','#DDCC77','#117733','#88CCEE','#882255','#44AA99','#999933','#AA4499'],source:'Tol (2021), Colour Schemes, SRON/EPS/TN/09-002: https://personal.sron.nl/~pault/'},
+    'ibm':{colors:['#648FFF','#785EF0','#DC267F','#FE6100','#FFB000'],source:'IBM Design Library colour-blind safe palette'}
+  });
+  const SOURCES=Object.freeze([
+    'W3C (2023), Web Content Accessibility Guidelines 2.2, SC 1.4.3 Contrast (Minimum) and SC 1.4.11 Non-text Contrast: https://www.w3.org/TR/WCAG22/',
+    'Machado, Oliveira & Fernandes (2009), A Physiologically-based Model for Simulation of Color Vision Deficiency, IEEE TVCG 15(6)',
+    'Ottosson (2020), A perceptual color space for image processing (OKLab): https://bottosson.github.io/posts/oklab/',
+    REFERENCES['okabe-ito'].source,REFERENCES['tol-bright'].source
+  ]);
+
+  function parse(css){
+    const s=String(css||'').trim();let m;
+    if((m=s.match(/^#([0-9a-f]{3})$/i)))return {r:parseInt(m[1][0]+m[1][0],16),g:parseInt(m[1][1]+m[1][1],16),b:parseInt(m[1][2]+m[1][2],16),a:1};
+    if((m=s.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/i)))return {r:parseInt(m[1].slice(0,2),16),g:parseInt(m[1].slice(2,4),16),b:parseInt(m[1].slice(4,6),16),a:m[2]?parseInt(m[2],16)/255:1};
+    if((m=s.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+%?))?\s*\)$/i))){
+      const a=m[4]==null?1:m[4].endsWith('%')?Number(m[4].slice(0,-1))/100:Number(m[4]);
+      return {r:Number(m[1]),g:Number(m[2]),b:Number(m[3]),a};
+    }
+    return null;
+  }
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  function hex(c){const h=v=>Math.round(clamp(v,0,255)).toString(16).padStart(2,'0');return '#'+h(c.r)+h(c.g)+h(c.b)}
+  const toLinear=v=>{const x=v/255;return x<=.04045?x/12.92:Math.pow((x+.055)/1.055,2.4)};
+  const fromLinear=v=>255*(v<=.0031308?v*12.92:1.055*Math.pow(v,1/2.4)-.055);
+  function linear(c){const p=typeof c==='string'?parse(c):c;return [toLinear(p.r),toLinear(p.g),toLinear(p.b)]}
+  function luminance(c){const [r,g,b]=linear(c);return .2126*r+.7152*g+.0722*b}
+  function contrast(a,b){const A=luminance(a),B=luminance(b);return (Math.max(A,B)+.05)/(Math.min(A,B)+.05)}
+  // Paint `top` (with its alpha, times `alpha`) over an opaque `under`.
+  function over(top,under,alpha=1){
+    const t=typeof top==='string'?parse(top):top,u=typeof under==='string'?parse(under):under,a=clamp((t.a??1)*alpha,0,1);
+    return {r:t.r*a+u.r*(1-a),g:t.g*a+u.g*(1-a),b:t.b*a+u.b*(1-a),a:1};
+  }
+  const largeText=(px,weight=400)=>px>=24||(px>=18.66&&Number(weight)>=700);
+  function textFloor(px,weight){return largeText(px,weight)?WCAG.largeText:WCAG.text}
+
+  function oklab(c){
+    const [r,g,b]=Array.isArray(c)?c:linear(c);
+    const l=Math.cbrt(.4122214708*r+.5363325363*g+.0514459929*b),m=Math.cbrt(.2119034982*r+.6806995451*g+.1073969566*b),s=Math.cbrt(.0883024619*r+.2817188376*g+.6299787005*b);
+    return [.2104542553*l+.7936177850*m-.0040720468*s,1.9779984951*l-2.4285922050*m+.4505937099*s,.0259040371*l+.7827717662*m-.8086757660*s];
+  }
+  function simulate(c,vision){
+    const v=linear(c),M=MACHADO[vision];if(!M)return v;
+    return [0,1,2].map(i=>clamp(M[i*3]*v[0]+M[i*3+1]*v[1]+M[i*3+2]*v[2],0,1));
+  }
+  function simulateHex(c,vision){const v=simulate(c,vision);return hex({r:fromLinear(v[0]),g:fromLinear(v[1]),b:fromLinear(v[2])})}
+  function distance(a,b,vision='normal'){const A=oklab(simulate(a,vision)),B=oklab(simulate(b,vision));return Math.hypot(A[0]-B[0],A[1]-B[1],A[2]-B[2])}
+
+  // A categorical palette as realised on `background`: every colour must reach `floor` against
+  // it, and the closest pair must stay `cvdFloor` apart under every simulated vision.
+  function auditPalette(colors,{background='#FFFFFF',floor=WCAG.nonText,cvdFloor=CVD_FLOOR}={}){
+    const failures=[];
+    const contrasts=colors.map(c=>Math.round(contrast(c,background)*100)/100);
+    contrasts.forEach((r,i)=>{if(r<floor)failures.push({kind:'contrast',index:i,color:colors[i],ratio:r,need:floor})});
+    const closest={};
+    for(const vision of VISIONS){
+      let best={d:Infinity,pair:null};
+      for(let i=0;i<colors.length;i++)for(let j=i+1;j<colors.length;j++){const d=distance(colors[i],colors[j],vision);if(d<best.d)best={d,pair:[i,j]}}
+      closest[vision]={distance:Math.round(best.d*1000)/1000,pair:best.pair};
+      if(best.pair&&best.d<cvdFloor)failures.push({kind:'distinct',vision,pair:best.pair,colors:best.pair.map(i=>colors[i]),distance:closest[vision].distance,need:cvdFloor});
+    }
+    const minDistance=Math.min(...VISIONS.map(v=>closest[v].distance));
+    return {ok:!failures.length,background,floor,cvdFloor,contrasts,minContrast:Math.min(...contrasts),closest,minDistance,failures};
+  }
+
+  return {WCAG,CVD_FLOOR,VISIONS,REFERENCES,SOURCES,parse,hex,luminance,contrast,over,largeText,textFloor,oklab,simulate,simulateHex,distance,auditPalette};
+});
+/* END src/09-colour-core.js */
+</script>
 <script data-beta-module="src/00-state.js">
 /* BEGIN src/00-state.js */
 'use strict';
@@ -3276,13 +3374,20 @@ const LIGHT_SURFACE_MONO=['#202020','#353535','#4B4B4B','#616161','#747474','#87
 const LIGHT_SURFACE_MONO_DEEP=['#0D0D0D','#171717','#222222','#2E2E2E','#3A3A3A','#464646'];
 const DARK_SURFACE_MONO=['#F2F2EE','#DDDDD8','#C8C8C2','#B3B3AD','#9E9E98','#898984'];
 const DARK_SURFACE_MONO_BRIGHT=['#FFFFFF','#F0F0EB','#E1E1DB','#D2D2CC','#C3C3BD','#B4B4AE'];
+// 'okabe-ito' is the default: Okabe & Ito's colour-universal hues (09-colour-core.js REFERENCES),
+// re-tuned by search so that, after each theme's realisation (themeColor), every slot keeps its
+// contrast floor and the closest pair stays CVD_FLOOR apart under protan, deutan and tritan
+// simulation. The other colour rows are hue families: legible, not colour-blind distinct;
+// scripts/contrast_audit.py measures and says so.
 const BASE_PALETTES={
+  'okabe-ito':['#F85401','#F4C768','#98E2BD','#0092E4','#2E69A0','#7B3962'],
   spectrum:['#D34E4E','#D99032','#79A948','#3EA7A0','#507CCB','#8A5BC0'],
   cool:['#3C7EA6','#3AA2A0','#54A58B','#6589BF','#6D67B1','#8A69A7'],
   warm:['#C34B48','#D36F3E','#D7983D','#B77A4C','#A85E65','#91546F'],
   earth:['#8A6348','#A3814D','#7E8E55','#5F8677','#687C86','#806C78']
 };
 const DARK_SURFACE_PALETTES={
+  'okabe-ito':['#AD5200','#F7C07A','#0CA86E','#00BDFF','#1C598C','#FF79BB'],
   spectrum:['#FF7A7D','#E8AA58','#9AC86C','#62C9C1','#82A9F2','#B88CE5'],
   cool:['#74B8E2','#69D0CB','#82C9AE','#91AFE8','#A19BE1','#B58FC8'],
   warm:['#F37C78','#ED966A','#E8B660','#D6A071','#CE858E','#C77F9E'],
@@ -3292,7 +3397,7 @@ const DEFAULT_CUSTOM_PALETTE=['#C84E64','#DB8750','#B7A647','#58A27C','#4E86BE',
 
 const colorEngine={
   theme:'pastel',
-  palette:'spectrum',
+  palette:'okabe-ito',
   custom:[...DEFAULT_CUSTOM_PALETTE],
   diffuse:true
 };
@@ -3377,7 +3482,7 @@ function activeColorPalette(){
     ? (dark?DARK_SURFACE_MONO_BRIGHT:LIGHT_SURFACE_MONO_DEEP)
     : colorEngine.palette==='custom'
       ? colorEngine.custom
-      : (dark?(DARK_SURFACE_PALETTES[colorEngine.palette]||DARK_SURFACE_PALETTES.spectrum):(BASE_PALETTES[colorEngine.palette]||BASE_PALETTES.spectrum));
+      : (dark?(DARK_SURFACE_PALETTES[colorEngine.palette]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[colorEngine.palette]||BASE_PALETTES['okabe-ito']));
   return base.map(c=>themeColor(c));
 }
 let activePaletteCacheKey=null;
@@ -5349,14 +5454,19 @@ const GLYPH_CONTROL_STEM={gate:8,switch:8};
 function componentInlineTerminalY(node){return INLINE_TERMINAL_Y[node?.symbolId]??null}
 function componentInlineGraphicBox(node){
   const p=componentConfig(node).presentation,size=p.size;
+  // A container's glyph is its title mark: small, at the top inside its skin, with its label
+  // under it, so the name sits with the symbol and the interior is left to the children.
+  if(componentAcceptsChildren(node)&&!componentHostedOnWire(node)){
+    const w=Math.min(size.w*.5,72),h=Math.min(34,size.h*.28);
+    return {x:-w/2,y:-size.h/2+componentSectionInset(node)+10,w,h};
+  }
   const w=Math.min(size.w*.72,108),h=Math.min(size.h*.55,70),x=-w/2;
   if(componentHostedOnWire(node)){
     const axis=componentInlineTerminalY(node);
     return {x,y:axis==null?-h/2:-(axis/64)*h,w,h};
   }
   let y=-Math.min(size.h*.34,38),hh=h;
-  if(componentAcceptsChildren(node)){y=-size.h/2+18;hh=Math.min(52,size.h*.32)}
-  else{
+  {
     // A card's symbol axis is its centre line: side points sit at mid-height for every
     // symbol, so cards aligned by centre are joined by straight wires.
     const axis=componentInlineTerminalY(node),p=componentConfig(node).presentation;
@@ -6341,7 +6451,9 @@ function appendComponentText(g,n,cfg,s){
     }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
     else if(labelMode==='outside'){t.setAttribute('x','0');t.setAttribute('y',String(size.h/2+18))}
     // Inside the innermost line: a label never straddles a section's own boundary.
-    else {t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-8-componentSectionInset(n)))}
+    // A container's name heads it, under its glyph; a card's sits at its foot.
+    else if(componentAcceptsChildren(n)&&((p.graphic?.kind&&p.graphic.kind!=='none')||nodes.some(c=>c.parentId===n.id))){const box=componentInlineGraphicBox(n),glyph=p.graphic?.kind&&p.graphic.kind!=='none';t.setAttribute('x','0');t.setAttribute('y',String(glyph?box.y+box.h+12:box.y+10))}
+    else {const inset=componentSectionInset(n);t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-(inset?11:8)-inset))}
     t.textContent=label;g.appendChild(t);
   }
   const annotation=String(p.text||'').trim();
@@ -6843,7 +6955,7 @@ function renderWires(signalState=computeSignalState()){
       group.appendChild(badge);
     }
 
-    if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'RETURN!':'RETURN?';group.appendChild(mark)}
+    if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'return required':'return expected';group.appendChild(mark)}
     if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13-(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0));label.setAttribute('text-anchor','middle');label.textContent=(cfg.direction==='duplex'?'↔ ':'')+cfg.label;group.appendChild(label)}
     // Channel markers belong to bound ends; a free end has no port to mark.
     if(a&&endpointShowsChannelTag(w,'a')){
@@ -6891,7 +7003,9 @@ function renderWires(signalState=computeSignalState()){
 const LAYOUT_RUBRIC={
   // kind: [penalty per finding, cap for the kind]. Score = 10 - Σ min(cap, n × penalty), floor 0.
   'text-overflow':[.5,3],'text-truncated':[.3,2],'text-collision':[.5,3],'placeholder-text':[.1,2],'ghost-mark':[.1,2],
-  'faint-structure':[.5,2],'route-escape':[1,4],'route-jog':[.25,2],'arrowless':[.25,2],'unmarked-junction':[.5,2],'route-through-node':[1,4],'crossing':[.25,2],'node-overlap':[1,4]
+  'faint-structure':[.5,2],'route-escape':[1,4],'route-jog':[.25,2],'arrowless':[.25,2],'unmarked-junction':[.5,2],'route-through-node':[1,4],'crossing':[.25,2],'node-overlap':[1,4],
+  'text-contrast':[.5,3],'mark-contrast':[.25,2],
+  'cramped-label':[.5,2],'route-wraps':[1.5,3],'empty-container':[1.5,3],'code-label':[1,2]
 };
 
 function layoutWorldMatrix(el){const root=workspace.getScreenCTM(),m=el.getScreenCTM();return root&&m?root.inverse().multiply(m):null}
@@ -6975,6 +7089,23 @@ function layoutMetrics(options={}){
   }
   // Placeholder text: a default channel tag on a single-connection end says nothing.
   for(const t of texts)if(/endpoint-channel-tag|wire-packet-tag/.test(t.cls)&&t.text==='1')add('placeholder-text',[t.wire],'default channel marker "1"');
+  // A code shown as if it were words: capitals ending in ? or ! (layout review 2026-09-25, 02).
+  for(const t of texts)if(/^[A-Z][A-Z_-]+[?!]$/.test(t.text))add('code-label',[t.owner||t.wire],`"${t.text}" is a code, not words`);
+  // Cramped: a label clear of a line or a card but closer than a reader can separate: under
+  // six tenths of its own font size (review, 11 and 12).
+  for(const t of texts){
+    const room=.6*(parseFloat(getComputedStyle(t.el).fontSize)||10);
+    const lines=t.owner?(nodeEl(t.owner)?.querySelectorAll(':scope > .section-line')||[]):[];
+    let cramped=false;
+    for(const l of lines){const L=layoutWorldBox(l);if(!L)continue;const d=Math.min(t.box.l-L.l,L.r-t.box.r,t.box.t-L.t,L.b-t.box.b);if(d>=0&&d<room){add('cramped-label',[t.owner],`"${t.text}" sits ${d.toFixed(1)}px from its section line`);cramped=true;break}}
+    if(cramped)continue;
+    const own=t.owner?new Set([t.owner,...ancestors(t.owner)]):new Set();
+    for(const n of visible){
+      if(own.has(n.id)||!is2D(n)||componentAcceptsChildren(n))continue;const R=body.get(n.id);
+      const dx=Math.max(R.l-t.box.r,t.box.l-R.r,0),dy=Math.max(R.t-t.box.b,t.box.t-R.b,0),d=Math.hypot(dx,dy);
+      if(d>0&&d<room){add('cramped-label',[t.owner||t.wire,n.id],`"${t.text}" sits ${d.toFixed(1)}px from ${n.config?.label||n.id}`);break}
+    }
+  }
 
   // Ghost marks: marks that look like structure but are not.
   const bound=new Set();for(const w of wires){if(w.a)bound.add(`${w.a}:${w.aSide}`);if(w.b)bound.add(`${w.b}:${w.bSide}`)}
@@ -7049,6 +7180,29 @@ function layoutMetrics(options={}){
     if(!is2D(a)||!is2D(b)||(a.canvasId||'')!==(b.canvasId||''))continue;
     if(layoutOverlap(body.get(a.id),body.get(b.id),1))add('node-overlap',[a.id,b.id],'bodies overlap');
   }
+  // Wrapping: a route that runs outside everything drawn in its canvas, round the picture
+  // instead of through it (review, 06).
+  for(const w of wires){
+    const gEl=wiresG.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"]`),path=gEl?.querySelector('path.wire');if(!path)continue;
+    const peers=visible.filter(n=>is2D(n)&&(n.canvasId||'')===(w.canvasId||'')&&!componentAcceptsChildren(n)).map(n=>body.get(n.id));if(peers.length<2)continue;
+    const U=peers.reduce((u,b)=>({l:Math.min(u.l,b.l),r:Math.max(u.r,b.r),t:Math.min(u.t,b.t),b:Math.max(u.b,b.b)}));
+    const out=layoutSamplePath(path,8).filter(p=>p.x<U.l-12||p.x>U.r+12||p.y<U.t-12||p.y>U.b+12).length;
+    if(out>=4)add('route-wraps',[w.id],`runs ${out*8}px outside everything it connects`);
+  }
+  // Empty container: its children and inner wires fill under a fifth of its interior (review, 03, 04, 07).
+  for(const n of visible){
+    if(!is2D(n)||!componentAcceptsChildren(n))continue;
+    const kids=visible.filter(c=>c.parentId===n.id&&is2D(c));if(!kids.length)continue;
+    const R=body.get(n.id),inset=typeof componentSectionInset==='function'?componentSectionInset(n):0;
+    const area=Math.max(1,(R.r-R.l-2*inset)*(R.b-R.t-2*inset));
+    // Wires drawn inside are content too: a route across the interior is not empty space.
+    const inner=wires.filter(w=>w.canvasId===`canvas:component:${n.id}`).map(w=>layoutWorldBox(wiresG.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"] path.wire`)||workspace)).filter(Boolean);
+    const U=[...kids.map(c=>body.get(c.id)),...inner].reduce((u,b)=>({l:Math.min(u.l,b.l),r:Math.max(u.r,b.r),t:Math.min(u.t,b.t),b:Math.max(u.b,b.b)}));
+    const fill=(U.r-U.l)*(U.b-U.t)/area;
+    if(fill<.2)add('empty-container',[n.id],`children fill ${Math.round(fill*100)}% of ${n.config?.label||n.id}'s interior`);
+  }
+  // Contrast: measured against what is painted beneath (src/59-contrast.js).
+  if(options.contrast!==false&&typeof contrastAudit==='function')for(const f of contrastAudit(options).findings)add(f.kind,f.ids,f.detail);
 
   const counts={};for(const f of findings)counts[f.kind]=(counts[f.kind]||0)+1;
   let score=10;for(const [kind,n] of Object.entries(counts)){const [p,cap]=LAYOUT_RUBRIC[kind]||[0,0];score-=Math.min(cap,n*p)}
@@ -7192,6 +7346,113 @@ function toggleWireRoutePin(w,pinned){
 }
 refreshLayoutSelect();
 /* END src/58-layouts.js */
+</script>
+<script data-beta-module="src/59-contrast.js">
+/* BEGIN src/59-contrast.js */
+'use strict';
+// 0.1 concern: measured contrast of the rendered canvas (WCAG 2.2 SC 1.4.3 and 1.4.11).
+// Every visible label and every mark a reader needs (wires, arrows, outlines, terminals,
+// junctions, section lines, glyphs) is measured against what is actually painted beneath it:
+// the fills that precede it in paint order, composited over the canvas tone. Reads only.
+
+const CONTRAST_MARKS='path.wire, .flow-chevron, .component-lead, .terminal-mark, .junction-dot, .node .body, .dimensional-point-body, .dimensional-path-body, .section-line, use.glyph, .glyph path, .glyph line, .glyph circle, .glyph rect, .glyph polyline, .glyph polygon';
+const CONTRAST_SKIP='.wire-packet, .wire-voltage, .wire-hit, .port-hit, .transform-handle-group, .move-tether, .move-anchor, .carrier-end-handle, .endpoint-halo, defs, title';
+
+function contrastCanvasColour(){
+  for(let e=workspace;e;e=e.parentElement){const c=SovSchematicColour.parse(getComputedStyle(e).backgroundColor);if(c&&c.a>0)return c}
+  return SovSchematicColour.parse(canvasTone());
+}
+function contrastPaint(value){const c=SovSchematicColour.parse(value);return c&&c.a>0?c:null}
+// Every colour a paint can show: a flat colour, or each stop of a referenced gradient.
+function contrastPaints(value){
+  const m=String(value||'').match(/url\(["']?#([^"')]+)["']?\)/);
+  if(!m){const c=contrastPaint(value);return c?[c]:[]}
+  const g=document.getElementById(m[1]);if(!g)return [];
+  return [...g.querySelectorAll('stop')].map(s=>{const cs=getComputedStyle(s),c=contrastPaint(cs.stopColor);return c?{...c,a:c.a*Number(cs.stopOpacity||1)}:null}).filter(Boolean);
+}
+function contrastPainters(){
+  const out=[];
+  for(const el of workspace.querySelectorAll('rect, circle, ellipse, path, polygon, polyline')){
+    if(el.closest(CONTRAST_SKIP))continue;
+    const cs=getComputedStyle(el),fill=contrastPaint(cs.fill);if(!fill)continue;
+    const alpha=layoutEffectiveOpacity(el)*Number(cs.fillOpacity||1);if(alpha<=.01)continue;
+    const box=layoutWorldBox(el),m=layoutWorldMatrix(el);if(!box||!m)continue;
+    out.push({el,fill,alpha,box,inv:m.inverse()});
+  }
+  return out;
+}
+// What a reader sees behind `target` at world point p: every fill painted before it, in order.
+function contrastBackdrop(p,target,painters,canvas,under=null){
+  let c=canvas;
+  for(const P of painters){
+    if(P.el===target||P.el.contains(target)||target.contains?.(P.el))continue;
+    if(target.compareDocumentPosition(P.el)&Node.DOCUMENT_POSITION_FOLLOWING)break;
+    if(p.x<P.box.l||p.x>P.box.r||p.y<P.box.t||p.y>P.box.b)continue;
+    const q=new DOMPoint(p.x,p.y).matrixTransform(P.inv);
+    let inside=false;try{inside=P.el.isPointInFill(q)}catch(_){inside=false}
+    if(inside){c=SovSchematicColour.over(P.fill,c,P.alpha);under?.push([...P.el.classList][0]||P.el.tagName)}
+  }
+  return c;
+}
+function contrastOwner(el){return el.closest('.node')?.dataset.id||el.closest('.wire-group')?.dataset.wireId||null}
+
+function contrastAudit(options={}){
+  const C=SovSchematicColour,canvas=contrastCanvasColour(),painters=contrastPainters(),findings=[];
+  let checked=0;
+  // Text and lines are judged at their worst sample. A small solid mark is judged by the ring
+  // just outside it, at the median: it must stand apart from most of what surrounds it, and a
+  // dot joined to a line of its own ink is not a contrast failure.
+  const measure=(el,paints,alpha,points,need,kind,label,ring=false)=>{
+    paints=(Array.isArray(paints)?paints:[paints]).filter(Boolean);
+    if(!paints.length||alpha<=.01||!points.length)return;
+    checked++;const samples=[];
+    for(const paint of paints)for(const p of points){
+      const under=[];let bg=contrastBackdrop(p,el,painters,canvas,under);
+      if(kind==='text'){const cs=getComputedStyle(el),halo=contrastPaint(cs.stroke),w=parseFloat(cs.strokeWidth)||0;if(halo&&w>=1.5)bg=C.over(halo,bg,Number(cs.strokeOpacity||1)*alpha)}
+      const fg=C.over(paint,bg,alpha),ratio=C.contrast(fg,bg);
+      samples.push({ratio,fg:C.hex(fg),bg:C.hex(bg),under:under.length?under:['canvas']});
+    }
+    samples.sort((a,b)=>a.ratio-b.ratio);const worst=ring?samples[Math.floor((samples.length-1)/2)]:samples[0];
+    if(worst.ratio<need)findings.push({kind:kind==='text'?'text-contrast':'mark-contrast',ids:[contrastOwner(el)].filter(Boolean),ratio:Math.round(worst.ratio*100)/100,need,fg:worst.fg,bg:worst.bg,under:worst.under,detail:`${label} ${worst.ratio.toFixed(2)}:1 < ${need}:1 (${worst.fg} on ${worst.bg}: ${worst.under.join(' > ')})`});
+  };
+  for(const el of workspace.querySelectorAll('text')){
+    if(el.closest(CONTRAST_SKIP))continue;
+    const txt=(el.textContent||'').trim();if(!txt)continue;
+    const cs=getComputedStyle(el),alpha=layoutEffectiveOpacity(el)*Number(cs.fillOpacity||1),box=layoutWorldBox(el);if(!box)continue;
+    const px=parseFloat(cs.fontSize)||12,need=C.textFloor(px,cs.fontWeight);
+    const w=box.r-box.l,h=box.b-box.t,pts=[[.5,.5],[.25,.3],[.75,.3],[.25,.7],[.75,.7]].map(([fx,fy])=>({x:box.l+w*fx,y:box.t+h*fy}));
+    measure(el,contrastPaint(cs.fill),alpha,pts,need,'text',`"${txt.slice(0,24)}"`);
+  }
+  for(const el of workspace.querySelectorAll(CONTRAST_MARKS)){
+    if(el.closest(CONTRAST_SKIP))continue;
+    const cs=getComputedStyle(el),sw=parseFloat(cs.strokeWidth)||0,strokes=contrastPaints(cs.stroke);
+    // A glyph drawn through <use> paints in its currentColor.
+    const useStroke=strokes.length>0&&sw>0,paint=el.tagName==='use'?contrastPaints(cs.color):useStroke?strokes:contrastPaints(cs.fill);
+    const alpha=layoutEffectiveOpacity(el)*Number((useStroke?cs.strokeOpacity:cs.fillOpacity)||1);
+    let pts=[];
+    if(useStroke&&el.tagName!=='use'&&!contrastPaint(cs.fill)&&typeof el.getTotalLength==='function'){
+      let L=0;try{L=el.getTotalLength()}catch(_){L=0}
+      const m=layoutWorldMatrix(el);
+      if(L>0&&m)pts=[.1,.3,.5,.7,.9].map(f=>{const q=el.getPointAtLength(L*f);return new DOMPoint(q.x,q.y).matrixTransform(m)});
+    }
+    let ring=false;
+    if(!pts.length){const b=layoutWorldBox(el);if(b){ring=true;const cx=(b.l+b.r)/2,cy=(b.t+b.b)/2,rx=(b.r-b.l)/2+1.5,ry=(b.b-b.t)/2+1.5;pts=[...Array(8)].map((_,i)=>({x:cx+rx*Math.cos(i*Math.PI/4),y:cy+ry*Math.sin(i*Math.PI/4)}))}}
+    const cls=[...el.classList][0]||el.tagName;
+    measure(el,paint,alpha,pts,C.WCAG.nonText,'mark',cls,ring);
+  }
+  const counts={};for(const f of findings)counts[f.kind]=(counts[f.kind]||0)+1;
+  return {ok:!findings.length,checked,counts,findings,canvas:C.hex(canvas),static:options.static!==false};
+}
+
+// The palette as realised now (theme x appearance), judged as a categorical palette.
+function paletteAudit(){
+  const bg=canvasTone(),mono=activePalette().slice(0,6),colour=activePalette().slice(6);
+  const distinct=colorEngine.palette!=='mono';
+  const audit=SovSchematicColour.auditPalette(colour,{background:bg,floor:themeContrastFloor()});
+  if(!distinct)audit.failures=audit.failures.filter(f=>f.kind!=='distinct');
+  return {appearance:surfaceAppearance(),theme:colorEngine.theme,palette:colorEngine.palette,background:bg,mono,colour,...audit,ok:!audit.failures.length,categorical:distinct};
+}
+/* END src/59-contrast.js */
 </script>
 <script data-beta-module="src/60-interactions.js">
 /* BEGIN src/60-interactions.js */
@@ -8344,7 +8605,16 @@ function restoreRecovery(){
 // (render.svg / render.png), scripts/export_svg.py and the server's render service. Computed
 // styles are inlined so the file renders outside the editor; the viewBox fits the diagram; the
 // live clock's overlay and, unless asked for, animated packets are left out.
-function renderStandaloneSvg(opts={}){
+// A picture (export, PNG, audit) draws labels at their base size whatever the editor's zoom:
+// the on-screen clamp (app.css, issue #15) keeps the canvas readable, but a fitted picture of a
+// small diagram would otherwise carry labels at a third of their size.
+function withPictureLabels(fn){
+  const prev=workspace.style.getPropertyValue('--zoom');if(prev===''||Number(prev)===1)return fn();
+  workspace.style.setProperty('--zoom','1');render();
+  try{return fn()}finally{workspace.style.setProperty('--zoom',prev);render()}
+}
+function renderStandaloneSvg(opts={}){return withPictureLabels(()=>renderStandaloneSvgNow(opts))}
+function renderStandaloneSvgNow(opts={}){
   if (typeof cancelWireDrag === 'function') cancelWireDrag();
   const live = workspace;
   const INHERITED = ['fill','fill-opacity','fill-rule','stroke','stroke-width','stroke-opacity','stroke-dasharray',
@@ -8953,7 +9223,7 @@ const SovSchematicAPI={
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
-  view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  view:{colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
   render:{
     svg:(options={})=>renderStandaloneSvg(options),
     png:(options={})=>renderStandalonePng(options)
@@ -8973,7 +9243,8 @@ const SovSchematicAPI={
     distribute:(ids,options={})=>SovSchematicData.clone(runLayoutOp('distribute',{...options,ids},'Distribute')),
     route:(wireId,spec=null)=>SovSchematicData.clone(runLayoutOp('route',{wireId,...(spec||{mode:'auto'})},'Route')),
     apply:(options={})=>SovSchematicData.clone(runLayoutOp('apply',{engine:'layered',...options},'Arrange layout')),
-    metrics:(options={})=>SovSchematicData.clone(layoutMetrics(options)),
+    metrics:(options={})=>SovSchematicData.clone(options.static===false?layoutMetrics(options):withPictureLabels(()=>layoutMetrics(options))),
+    contrast:(options={})=>SovSchematicData.clone(options.static===false?contrastAudit(options):withPictureLabels(()=>contrastAudit(options))),
     rubric:()=>SovSchematicData.clone(LAYOUT_RUBRIC)
   },
   clock:{

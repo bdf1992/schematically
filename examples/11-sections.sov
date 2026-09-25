@@ -273,7 +273,7 @@
       "id": "inside",
       "symbolId": "act",
       "x": 730,
-      "y": 122,
+      "y": 175,
       "config": {
         "label": "Inside",
         "signalMode": "relay"

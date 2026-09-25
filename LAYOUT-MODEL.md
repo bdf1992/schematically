@@ -193,6 +193,12 @@ The score is `10 - Σ min(cap, count × penalty)` over these kinds:
 | route-jog (a step under 12px between bends) | .25 (2) |
 | crossing | .25 (2) |
 | node-overlap | 1 (4) |
+| text-contrast (a label under WCAG 2.2's 4.5:1, or 3:1 for large text, against what is painted beneath it) | .5 (3) |
+| mark-contrast (a wire, arrow, outline, terminal or junction under 3:1) | .25 (2) |
+| code-label (capitals ending in ? or !, shown as if it were words) | 1 (2) |
+| cramped-label (clear of a line or a foreign card by under 0.6 of its font size) | .5 (2) |
+| route-wraps (a route running outside every card it connects) | 1.5 (3) |
+| empty-container (children filling under 20% of the interior) | 1.5 (3) |
 
 The rubric is a declared heuristic, not a truth. Each finding names the ids it measured,
 so a person or an agent can check it against the picture.
@@ -200,9 +206,18 @@ so a person or an agent can check it against the picture.
 Baseline on 2026-09-25, before the fixes: mean 7.1. Example 09 scored 0, and 07 and 08
 scored about 4. After the fixes: 10 on every example.
 
+The last six kinds came from the first layout review (docs/reviews/2026-09-25-examples.md).
+The audit still scored every example 10 while the pictures read 6 to 9. `scripts/layout_review.py`
+(skills/layout-review) now puts the audit beside the reviewer's own reading. The reviewer scores
+the pictures in a cast reader's voice, and names each disagreement as a rule; the rule becomes a
+kind here with a planted case. Contrast is `layout.contrast()` (`src/59-contrast.js`, measured
+against the painted backdrop) and `scripts/contrast_audit.py`, which regenerates contrast-audit.md.
+
 Still not measured:
-- arrowheads on short segments
-- label legibility at fit zoom
+- label legibility at fit zoom: labels hold their screen size, so a small diagram fitted and exported draws them at 4 to 6 world pixels
+- a control mark fainter than the in and out marks on its card
+- marks crowding marks (a chevron against a junction dot)
+- a join drawn as a splice before a gate's single port
 - a card crowding its container's interior guide
 
 ## As built: layouts (2026-09-25)

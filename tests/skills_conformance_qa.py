@@ -26,7 +26,7 @@ DOCUMENTED = [
     'history.list', 'history.undo', 'history.redo',
     'checkpoints.list', 'checkpoints.create', 'checkpoints.restore',
     'selection.components', 'selection.copy', 'selection.paste', 'selection.duplicate',
-    'view.appearance', 'view.setAppearance', 'view.globalRate', 'view.setGlobalRate',
+    'view.appearance', 'view.setAppearance', 'view.colour', 'view.setColour', 'view.paletteAudit', 'layout.contrast', 'view.globalRate', 'view.setGlobalRate',
     'graph.query', 'graph.verbs', 'render.svg', 'render.png', 'layout.metrics', 'layout.list', 'layout.active', 'layout.switch', 'layout.create', 'layout.move', 'layout.place', 'layout.align', 'layout.distribute', 'layout.route', 'layout.apply', 'layout.unplaced', 'layout.setDefault',
     'clock.play', 'clock.pause', 'clock.step', 'clock.advance', 'clock.toggle', 'clock.send', 'clock.resume', 'clock.state', 'clock.inspect',
     'sim.start', 'sim.stop', 'sim.inject', 'sim.step', 'sim.set', 'sim.at', 'sim.advance', 'sim.tick', 'sim.run', 'sim.resume', 'sim.reconcile',

@@ -162,6 +162,8 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .node .custom-graphic [fill="currentColor"]{fill:currentColor}
 .node .custom-graphic [stroke="currentColor"]{stroke:currentColor}
 .node .container-guide{fill:none;stroke:var(--component-boundary-color,#777);stroke-width:1;stroke-dasharray:4 5;opacity:.22;pointer-events:none}
+/* The interior guide is an editing aid: shown while the container is selected or a card is being dragged, never in a picture. */
+.node.is-container:not(.selected)>.container-guide{opacity:0}#workspace.dragging-node .node.is-container>.container-guide{opacity:.22}
 .node.is-container>.body{stroke-width:1.8}
 .node .internal-text{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:600;opacity:.78}
 .node .outside-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));opacity:.8}
@@ -363,7 +365,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .node.blank text{font-style:italic}
 .node.blank.selected .body{stroke-dasharray:5 4}
 
-.connection-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:700;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}.reciprocity-mark{font-size:calc(clamp(8px,10px * var(--zoom,1),14px) / var(--zoom,1));font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}
+.connection-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:700;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}.reciprocity-mark{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:600;font-style:italic;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}
 
 @media(max-width:900px){
   .app{grid-template-columns:210px minmax(0,1fr);}

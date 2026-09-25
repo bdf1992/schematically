@@ -3,7 +3,7 @@
   "id": "example-read-write-evidence",
   "revision": 0,
   "meta": {
-    "title": "Classic 06 \u2014 Read / Write Evidence",
+    "title": "Classic 06 — Read / Write Evidence",
     "description": "A Write records what happened; a Read represents observation. Access does not imply authority."
   },
   "canvas": {
@@ -17,7 +17,7 @@
       "id": "c1",
       "type": "act",
       "symbolId": "act",
-      "x": 220,
+      "x": 420,
       "y": 300,
       "canvasId": "canvas:global",
       "canvas": {
@@ -187,7 +187,7 @@
       "id": "c2",
       "type": "receipt",
       "symbolId": "receipt",
-      "x": 610,
+      "x": 810,
       "y": 190,
       "canvasId": "canvas:global",
       "canvas": {
@@ -357,7 +357,7 @@
       "id": "c3",
       "type": "observe",
       "symbolId": "observe",
-      "x": 610,
+      "x": 140,
       "y": 410,
       "canvasId": "canvas:global",
       "canvas": {

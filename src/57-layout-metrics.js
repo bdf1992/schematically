@@ -6,7 +6,9 @@
 const LAYOUT_RUBRIC={
   // kind: [penalty per finding, cap for the kind]. Score = 10 - Σ min(cap, n × penalty), floor 0.
   'text-overflow':[.5,3],'text-truncated':[.3,2],'text-collision':[.5,3],'placeholder-text':[.1,2],'ghost-mark':[.1,2],
-  'faint-structure':[.5,2],'route-escape':[1,4],'route-jog':[.25,2],'arrowless':[.25,2],'unmarked-junction':[.5,2],'route-through-node':[1,4],'crossing':[.25,2],'node-overlap':[1,4]
+  'faint-structure':[.5,2],'route-escape':[1,4],'route-jog':[.25,2],'arrowless':[.25,2],'unmarked-junction':[.5,2],'route-through-node':[1,4],'crossing':[.25,2],'node-overlap':[1,4],
+  'text-contrast':[.5,3],'mark-contrast':[.25,2],
+  'cramped-label':[.5,2],'route-wraps':[1.5,3],'empty-container':[1.5,3],'code-label':[1,2]
 };
 
 function layoutWorldMatrix(el){const root=workspace.getScreenCTM(),m=el.getScreenCTM();return root&&m?root.inverse().multiply(m):null}
@@ -90,6 +92,23 @@ function layoutMetrics(options={}){
   }
   // Placeholder text: a default channel tag on a single-connection end says nothing.
   for(const t of texts)if(/endpoint-channel-tag|wire-packet-tag/.test(t.cls)&&t.text==='1')add('placeholder-text',[t.wire],'default channel marker "1"');
+  // A code shown as if it were words: capitals ending in ? or ! (layout review 2026-09-25, 02).
+  for(const t of texts)if(/^[A-Z][A-Z_-]+[?!]$/.test(t.text))add('code-label',[t.owner||t.wire],`"${t.text}" is a code, not words`);
+  // Cramped: a label clear of a line or a card but closer than a reader can separate: under
+  // six tenths of its own font size (review, 11 and 12).
+  for(const t of texts){
+    const room=.6*(parseFloat(getComputedStyle(t.el).fontSize)||10);
+    const lines=t.owner?(nodeEl(t.owner)?.querySelectorAll(':scope > .section-line')||[]):[];
+    let cramped=false;
+    for(const l of lines){const L=layoutWorldBox(l);if(!L)continue;const d=Math.min(t.box.l-L.l,L.r-t.box.r,t.box.t-L.t,L.b-t.box.b);if(d>=0&&d<room){add('cramped-label',[t.owner],`"${t.text}" sits ${d.toFixed(1)}px from its section line`);cramped=true;break}}
+    if(cramped)continue;
+    const own=t.owner?new Set([t.owner,...ancestors(t.owner)]):new Set();
+    for(const n of visible){
+      if(own.has(n.id)||!is2D(n)||componentAcceptsChildren(n))continue;const R=body.get(n.id);
+      const dx=Math.max(R.l-t.box.r,t.box.l-R.r,0),dy=Math.max(R.t-t.box.b,t.box.t-R.b,0),d=Math.hypot(dx,dy);
+      if(d>0&&d<room){add('cramped-label',[t.owner||t.wire,n.id],`"${t.text}" sits ${d.toFixed(1)}px from ${n.config?.label||n.id}`);break}
+    }
+  }
 
   // Ghost marks: marks that look like structure but are not.
   const bound=new Set();for(const w of wires){if(w.a)bound.add(`${w.a}:${w.aSide}`);if(w.b)bound.add(`${w.b}:${w.bSide}`)}
@@ -164,6 +183,29 @@ function layoutMetrics(options={}){
     if(!is2D(a)||!is2D(b)||(a.canvasId||'')!==(b.canvasId||''))continue;
     if(layoutOverlap(body.get(a.id),body.get(b.id),1))add('node-overlap',[a.id,b.id],'bodies overlap');
   }
+  // Wrapping: a route that runs outside everything drawn in its canvas, round the picture
+  // instead of through it (review, 06).
+  for(const w of wires){
+    const gEl=wiresG.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"]`),path=gEl?.querySelector('path.wire');if(!path)continue;
+    const peers=visible.filter(n=>is2D(n)&&(n.canvasId||'')===(w.canvasId||'')&&!componentAcceptsChildren(n)).map(n=>body.get(n.id));if(peers.length<2)continue;
+    const U=peers.reduce((u,b)=>({l:Math.min(u.l,b.l),r:Math.max(u.r,b.r),t:Math.min(u.t,b.t),b:Math.max(u.b,b.b)}));
+    const out=layoutSamplePath(path,8).filter(p=>p.x<U.l-12||p.x>U.r+12||p.y<U.t-12||p.y>U.b+12).length;
+    if(out>=4)add('route-wraps',[w.id],`runs ${out*8}px outside everything it connects`);
+  }
+  // Empty container: its children and inner wires fill under a fifth of its interior (review, 03, 04, 07).
+  for(const n of visible){
+    if(!is2D(n)||!componentAcceptsChildren(n))continue;
+    const kids=visible.filter(c=>c.parentId===n.id&&is2D(c));if(!kids.length)continue;
+    const R=body.get(n.id),inset=typeof componentSectionInset==='function'?componentSectionInset(n):0;
+    const area=Math.max(1,(R.r-R.l-2*inset)*(R.b-R.t-2*inset));
+    // Wires drawn inside are content too: a route across the interior is not empty space.
+    const inner=wires.filter(w=>w.canvasId===`canvas:component:${n.id}`).map(w=>layoutWorldBox(wiresG.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"] path.wire`)||workspace)).filter(Boolean);
+    const U=[...kids.map(c=>body.get(c.id)),...inner].reduce((u,b)=>({l:Math.min(u.l,b.l),r:Math.max(u.r,b.r),t:Math.min(u.t,b.t),b:Math.max(u.b,b.b)}));
+    const fill=(U.r-U.l)*(U.b-U.t)/area;
+    if(fill<.2)add('empty-container',[n.id],`children fill ${Math.round(fill*100)}% of ${n.config?.label||n.id}'s interior`);
+  }
+  // Contrast: measured against what is painted beneath (src/59-contrast.js).
+  if(options.contrast!==false&&typeof contrastAudit==='function')for(const f of contrastAudit(options).findings)add(f.kind,f.ids,f.detail);
 
   const counts={};for(const f of findings)counts[f.kind]=(counts[f.kind]||0)+1;
   let score=10;for(const [kind,n] of Object.entries(counts)){const [p,cap]=LAYOUT_RUBRIC[kind]||[0,0];score-=Math.min(cap,n*p)}

@@ -150,13 +150,20 @@ const LIGHT_SURFACE_MONO=['#202020','#353535','#4B4B4B','#616161','#747474','#87
 const LIGHT_SURFACE_MONO_DEEP=['#0D0D0D','#171717','#222222','#2E2E2E','#3A3A3A','#464646'];
 const DARK_SURFACE_MONO=['#F2F2EE','#DDDDD8','#C8C8C2','#B3B3AD','#9E9E98','#898984'];
 const DARK_SURFACE_MONO_BRIGHT=['#FFFFFF','#F0F0EB','#E1E1DB','#D2D2CC','#C3C3BD','#B4B4AE'];
+// 'okabe-ito' is the default: Okabe & Ito's colour-universal hues (09-colour-core.js REFERENCES),
+// re-tuned by search so that, after each theme's realisation (themeColor), every slot keeps its
+// contrast floor and the closest pair stays CVD_FLOOR apart under protan, deutan and tritan
+// simulation. The other colour rows are hue families: legible, not colour-blind distinct;
+// scripts/contrast_audit.py measures and says so.
 const BASE_PALETTES={
+  'okabe-ito':['#F85401','#F4C768','#98E2BD','#0092E4','#2E69A0','#7B3962'],
   spectrum:['#D34E4E','#D99032','#79A948','#3EA7A0','#507CCB','#8A5BC0'],
   cool:['#3C7EA6','#3AA2A0','#54A58B','#6589BF','#6D67B1','#8A69A7'],
   warm:['#C34B48','#D36F3E','#D7983D','#B77A4C','#A85E65','#91546F'],
   earth:['#8A6348','#A3814D','#7E8E55','#5F8677','#687C86','#806C78']
 };
 const DARK_SURFACE_PALETTES={
+  'okabe-ito':['#AD5200','#F7C07A','#0CA86E','#00BDFF','#1C598C','#FF79BB'],
   spectrum:['#FF7A7D','#E8AA58','#9AC86C','#62C9C1','#82A9F2','#B88CE5'],
   cool:['#74B8E2','#69D0CB','#82C9AE','#91AFE8','#A19BE1','#B58FC8'],
   warm:['#F37C78','#ED966A','#E8B660','#D6A071','#CE858E','#C77F9E'],
@@ -166,7 +173,7 @@ const DEFAULT_CUSTOM_PALETTE=['#C84E64','#DB8750','#B7A647','#58A27C','#4E86BE',
 
 const colorEngine={
   theme:'pastel',
-  palette:'spectrum',
+  palette:'okabe-ito',
   custom:[...DEFAULT_CUSTOM_PALETTE],
   diffuse:true
 };
@@ -251,7 +258,7 @@ function activeColorPalette(){
     ? (dark?DARK_SURFACE_MONO_BRIGHT:LIGHT_SURFACE_MONO_DEEP)
     : colorEngine.palette==='custom'
       ? colorEngine.custom
-      : (dark?(DARK_SURFACE_PALETTES[colorEngine.palette]||DARK_SURFACE_PALETTES.spectrum):(BASE_PALETTES[colorEngine.palette]||BASE_PALETTES.spectrum));
+      : (dark?(DARK_SURFACE_PALETTES[colorEngine.palette]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[colorEngine.palette]||BASE_PALETTES['okabe-ito']));
   return base.map(c=>themeColor(c));
 }
 let activePaletteCacheKey=null;

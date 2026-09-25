@@ -320,7 +320,16 @@ function restoreRecovery(){
 // (render.svg / render.png), scripts/export_svg.py and the server's render service. Computed
 // styles are inlined so the file renders outside the editor; the viewBox fits the diagram; the
 // live clock's overlay and, unless asked for, animated packets are left out.
-function renderStandaloneSvg(opts={}){
+// A picture (export, PNG, audit) draws labels at their base size whatever the editor's zoom:
+// the on-screen clamp (app.css, issue #15) keeps the canvas readable, but a fitted picture of a
+// small diagram would otherwise carry labels at a third of their size.
+function withPictureLabels(fn){
+  const prev=workspace.style.getPropertyValue('--zoom');if(prev===''||Number(prev)===1)return fn();
+  workspace.style.setProperty('--zoom','1');render();
+  try{return fn()}finally{workspace.style.setProperty('--zoom',prev);render()}
+}
+function renderStandaloneSvg(opts={}){return withPictureLabels(()=>renderStandaloneSvgNow(opts))}
+function renderStandaloneSvgNow(opts={}){
   if (typeof cancelWireDrag === 'function') cancelWireDrag();
   const live = workspace;
   const INHERITED = ['fill','fill-opacity','fill-rule','stroke','stroke-width','stroke-opacity','stroke-dasharray',

@@ -87,8 +87,8 @@
         "signalMode": "source",
         "presentation": {
           "size": {
-            "w": 500,
-            "h": 330
+            "w": 300,
+            "h": 280
           }
         },
         "ports": {
@@ -168,8 +168,8 @@
       "id": "c2",
       "type": "act",
       "symbolId": "act",
-      "x": 410,
-      "y": 330,
+      "x": 575,
+      "y": 405,
       "canvasId": "canvas:component:c1",
       "canvas": {
         "id": "canvas:component:c2",

@@ -625,14 +625,19 @@ const GLYPH_CONTROL_STEM={gate:8,switch:8};
 function componentInlineTerminalY(node){return INLINE_TERMINAL_Y[node?.symbolId]??null}
 function componentInlineGraphicBox(node){
   const p=componentConfig(node).presentation,size=p.size;
+  // A container's glyph is its title mark: small, at the top inside its skin, with its label
+  // under it, so the name sits with the symbol and the interior is left to the children.
+  if(componentAcceptsChildren(node)&&!componentHostedOnWire(node)){
+    const w=Math.min(size.w*.5,72),h=Math.min(34,size.h*.28);
+    return {x:-w/2,y:-size.h/2+componentSectionInset(node)+10,w,h};
+  }
   const w=Math.min(size.w*.72,108),h=Math.min(size.h*.55,70),x=-w/2;
   if(componentHostedOnWire(node)){
     const axis=componentInlineTerminalY(node);
     return {x,y:axis==null?-h/2:-(axis/64)*h,w,h};
   }
   let y=-Math.min(size.h*.34,38),hh=h;
-  if(componentAcceptsChildren(node)){y=-size.h/2+18;hh=Math.min(52,size.h*.32)}
-  else{
+  {
     // A card's symbol axis is its centre line: side points sit at mid-height for every
     // symbol, so cards aligned by centre are joined by straight wires.
     const axis=componentInlineTerminalY(node),p=componentConfig(node).presentation;

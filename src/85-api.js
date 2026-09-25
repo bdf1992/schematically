@@ -56,7 +56,7 @@ const SovSchematicAPI={
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
-  view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  view:{colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
   render:{
     svg:(options={})=>renderStandaloneSvg(options),
     png:(options={})=>renderStandalonePng(options)
@@ -76,7 +76,8 @@ const SovSchematicAPI={
     distribute:(ids,options={})=>SovSchematicData.clone(runLayoutOp('distribute',{...options,ids},'Distribute')),
     route:(wireId,spec=null)=>SovSchematicData.clone(runLayoutOp('route',{wireId,...(spec||{mode:'auto'})},'Route')),
     apply:(options={})=>SovSchematicData.clone(runLayoutOp('apply',{engine:'layered',...options},'Arrange layout')),
-    metrics:(options={})=>SovSchematicData.clone(layoutMetrics(options)),
+    metrics:(options={})=>SovSchematicData.clone(options.static===false?layoutMetrics(options):withPictureLabels(()=>layoutMetrics(options))),
+    contrast:(options={})=>SovSchematicData.clone(options.static===false?contrastAudit(options):withPictureLabels(()=>contrastAudit(options))),
     rubric:()=>SovSchematicData.clone(LAYOUT_RUBRIC)
   },
   clock:{

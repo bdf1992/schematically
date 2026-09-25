@@ -36,6 +36,15 @@ PLANTED = r"""()=>{
   out.fenced=load([{id:'box',symbolId:'plane',x:400,y:300,form:{dimension:2,regions:{interior:{state:'open'}}},config:{attachmentDefaults:'none',presentation:{size:{w:500,h:200}}}},
     {id:'a',symbolId:'act',x:230,y:300,...inside},{id:'c',symbolId:'hold',x:400,y:300,...inside,config:{presentation:{size:{w:100,h:170}}}},{id:'b',symbolId:'act',x:570,y:300,...inside}],
     [{id:'w',a:'a',aSide:'out',b:'b',bSide:'in',canvasId:'canvas:component:box'}]);
+  // Measures added by the layout review of 2026-09-25 (docs/reviews/2026-09-25-examples.md).
+  out.code=load([{id:'a',symbolId:'act',x:100,y:200},{id:'b',symbolId:'act',x:400,y:200}],[{id:'w',a:'a',aSide:'out',b:'b',bSide:'in',config:{label:'RETRY!'}}]);
+  out.empty=load([{id:'box',symbolId:'plane',x:400,y:300,form:{dimension:2,regions:{interior:{state:'open'}}},config:{attachmentDefaults:'none',presentation:{size:{w:700,h:460}}}},{id:'a',symbolId:'act',x:250,y:200,...inside}]);
+  // The output faces away from its peer: the route goes round the picture.
+  out.wraps=load([{id:'a',symbolId:'act',x:500,y:200},{id:'b',symbolId:'act',x:100,y:420},{id:'c',symbolId:'act',x:300,y:300}],[{id:'w',a:'a',aSide:'out',b:'b',bSide:'in'}]);
+  // A card placed just clear of a label: not a collision, still cramped.
+  {const base=[{id:'a',symbolId:'act',x:100,y:200},{id:'p',symbolId:'point',x:400,y:200,config:{label:'a label pressed against a card'}},{id:'far',symbolId:'act',x:900,y:600}];load(base);
+   const t=[...workspace.querySelectorAll('text')].find(e=>e.textContent==='a label pressed against a card'),b=layoutWorldBox(t),gap=Math.max(.5,(b.b-b.t)*.3);
+   out.cramped=load([...base,{id:'c',symbolId:'act',x:(b.l+b.r)/2,y:b.b+gap+42}]);}
   out.clean=load([{id:'a',symbolId:'act',x:100,y:200},{id:'b',symbolId:'act',x:400,y:200}],[{id:'w',a:'a',aSide:'out',b:'b',bSide:'in'}]);
   return out;
 }"""
@@ -55,5 +64,13 @@ assert got['overlap'].get('node-overlap'), got
 assert not got['through'].get('route-through-node'), got
 assert not got['fenced'].get('route-escape'), got
 assert got['clean'] == {}, got
+assert got['code'].get('code-label'), got['code']
+assert got['empty'].get('empty-container'), got['empty']
+assert got['wraps'].get('route-wraps'), got['wraps']
+assert got['cramped'].get('cramped-label'), got['cramped']
+# Some defects are never acceptable in an example either: a code for a label, a container
+# left mostly empty, a route round the whole picture.
+bad = [(r['source'], k) for r in results for k in r['counts'] if k in {'code-label', 'empty-container', 'route-wraps'}]
+assert not bad, bad
 assert not errors, errors
 print(f'PASS layout quality QA (floor {FLOOR}, {len(results)} examples)')

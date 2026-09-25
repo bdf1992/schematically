@@ -134,7 +134,9 @@ function appendComponentText(g,n,cfg,s){
     }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
     else if(labelMode==='outside'){t.setAttribute('x','0');t.setAttribute('y',String(size.h/2+18))}
     // Inside the innermost line: a label never straddles a section's own boundary.
-    else {t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-8-componentSectionInset(n)))}
+    // A container's name heads it, under its glyph; a card's sits at its foot.
+    else if(componentAcceptsChildren(n)&&((p.graphic?.kind&&p.graphic.kind!=='none')||nodes.some(c=>c.parentId===n.id))){const box=componentInlineGraphicBox(n),glyph=p.graphic?.kind&&p.graphic.kind!=='none';t.setAttribute('x','0');t.setAttribute('y',String(glyph?box.y+box.h+12:box.y+10))}
+    else {const inset=componentSectionInset(n);t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-(inset?11:8)-inset))}
     t.textContent=label;g.appendChild(t);
   }
   const annotation=String(p.text||'').trim();
@@ -636,7 +638,7 @@ function renderWires(signalState=computeSignalState()){
       group.appendChild(badge);
     }
 
-    if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'RETURN!':'RETURN?';group.appendChild(mark)}
+    if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'return required':'return expected';group.appendChild(mark)}
     if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13-(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0));label.setAttribute('text-anchor','middle');label.textContent=(cfg.direction==='duplex'?'↔ ':'')+cfg.label;group.appendChild(label)}
     // Channel markers belong to bound ends; a free end has no port to mark.
     if(a&&endpointShowsChannelTag(w,'a')){
