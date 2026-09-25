@@ -1252,21 +1252,23 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   function customPointSpecs(entity,d,base){
     // Authored ports: additions to the template's under 'standard', the whole set under
-    // 'none'. Only a 2D surface exposes them; an entry that repeats an id or compatId
-    // already taken, or names no valid side, is not exposed.
+    // 'none'. Only a 2D surface exposes them. An entry that names no valid side, or whose id
+    // is already taken (as an id or a compatId), is not exposed; a compatId already taken
+    // falls back to the entry's own id.
     if(d!==2)return [];
     const authored=Array.isArray(entity?.config?.attachmentPoints)?entity.config.attachmentPoints:[];
-    const usedIds=new Set(base.map(x=>x.id)),usedCompat=new Set(base.map(x=>x.compatId));
+    const used=new Set(base.flatMap(x=>[x.id,x.compatId]));
     const out=[];
     for(const raw of authored){
-      const spec=declaredSpec(raw,{authored:true});if(!spec||usedIds.has(spec.id))continue;
-      if(usedCompat.has(spec.compatId))spec.compatId=spec.id;
-      if(usedCompat.has(spec.compatId))continue;
+      const spec=declaredSpec(raw,{authored:true});if(!spec||used.has(spec.id))continue;
+      if(used.has(spec.compatId)||spec.compatId===spec.id)spec.compatId=spec.id;
       out.push(spec);
-      usedIds.add(spec.id);usedCompat.add(spec.compatId);
+      used.add(spec.id);used.add(spec.compatId);
     }
     return out;
   }
+  // The authored ports a 2D surface of this record exposes, whatever its current host.
+  function authoredPointSpecs(entity){return customPointSpecs(entity,2,templatePointSpecs(entity))}
   function pointSpecs(entity){
     const d=effectiveDimension(entity),base=basePointSpecs(d,entity);
     return [...base,...customPointSpecs(entity,d,base)];
@@ -1314,7 +1316,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(end==='a')wire.aSide=spec.compatId;else wire.bSide=spec.compatId;
     return wire[key];
   }
-  return {PORT_SIDES,PORT_FLOWS,useTemplatePorts,portChannels,channelIds,declaredSpec,templatePointSpecs,intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
+  return {PORT_SIDES,PORT_FLOWS,useTemplatePorts,portChannels,channelIds,declaredSpec,templatePointSpecs,authoredPointSpecs,intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
 });
 /* END src/06-attachment-core.js */
 </script>
@@ -1446,6 +1448,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const component of doc.components){
       normalizeComponentIdentity(component);
       applyTemplatePreset(component);
+      cleanStoredPorts(component);
       component.form=normalizeComponentForm(component.form,component.canvas);
       if(!isObject(component.canvas))component.canvas={};
       component.canvas.id=`canvas:component:${component.id||'unknown'}`;component.canvas.scope='local';component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
@@ -1646,6 +1649,21 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return out;
   }
   const samePort=(x,y)=>JSON.stringify([x.id,x.compatId||x.id,x.side,x.t,x.flow,x.channels,x.label||''])===JSON.stringify([y.id,y.compatId||y.id,y.side,y.t,y.flow,y.channels,y.label||'']);
+  // A spec in the stored declared-port shape.
+  function storedPort(spec){
+    const port={id:spec.id};if(spec.compatId&&spec.compatId!==spec.id)port.compatId=spec.compatId;
+    Object.assign(port,{side:spec.side,t:spec.t,flow:spec.flow,channels:(spec.channels||[{id:'main'}]).map(c=>({id:c.id}))});
+    if(spec.label)port.label=spec.label;
+    return port;
+  }
+  // Loading cleans, never refuses: a stored list is rewritten into exactly the authored
+  // ports the loader exposes (t coerced and clamped, an invalid flow read as duplex, empty
+  // channels read as main, entries without a valid side or with a taken id dropped).
+  function cleanStoredPorts(component){
+    const config=component?.config;if(!isObject(config)||!Array.isArray(config.attachmentPoints))return component;
+    config.attachmentPoints=Attachment.authoredPointSpecs(component).map(storedPort);
+    return component;
+  }
   // Every component edit (update, retype, the 'none' switch, a port list) is checked against
   // the Wires that end on the component: an end whose port the edit removes is refused
   // (PORT_IN_USE), and so is an end left on a port sharing no channel with the port at the
@@ -1725,6 +1743,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const next=normalizeSymbolId(symbolId),preset=templatePreset(next)||{};
     if(!isObject(component.config))component.config={};
     const config=component.config,before=isObject(config.presentation)?config.presentation:{};
+    // The authored ports, as the record exposes them before the retype.
+    const authored=Array.isArray(config.attachmentPoints)?Attachment.authoredPointSpecs(component).map(storedPort):[];
     component.symbolId=next;component.type=next==='blank'?null:next;component.incomplete=next==='blank';
     component.form=normalizeComponentForm(preset.form||{dimension:2});
     config.signalMode=preset.signalMode||'source';
@@ -1734,6 +1754,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(Number.isInteger(before.interiorColorSlot))presentation.interiorColorSlot=before.interiorColorSlot;
     config.presentation=presentation;
     if(preset.attachmentDefaults==='none')config.attachmentDefaults='none';else delete config.attachmentDefaults;
+    // The new template's ports in template order, an authored port with a template id
+    // replacing it, then the remaining authored ports in stored order; stored in the
+    // smallest form. The loader's rules settle any id or compatId the two lists share.
+    if(authored.length){
+      const template=defaultAttachmentMode(next)==='none'?[]:templatePorts(next),byId=new Map(authored.map(p=>[p.id,p])),templateIds=new Set(template.map(p=>p.id));
+      const merged={config:{attachmentDefaults:'none',attachmentPoints:[...template.map(p=>byId.get(p.id)||p),...authored.filter(p=>!templateIds.has(p.id))]}};
+      config.attachmentPoints=Attachment.authoredPointSpecs(merged).map(storedPort);config.attachmentDefaults='none';
+      setDeclaredPorts(null,component);
+    }else delete config.attachmentPoints;
     if(isObject(component.boundary?.inside))component.boundary.inside.type=component.type;
     if(isObject(component.canvas)){component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state}
     return ensureAttachmentPortConfigs(component);
@@ -2114,7 +2143,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {assertWiresSurviveEdit,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {cleanStoredPorts,assertWiresSurviveEdit,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
 /* END src/05-data-core.js */
 </script>
@@ -3092,23 +3121,29 @@ function copySelection(){
 }
 function pasteClipboard({offset=32}={}){
   if(!semanticClipboard?.components?.length){statusEl.textContent='Clipboard empty';return []}
-  setHistoryHint('Paste');const idMap=new Map(),created=[];
+  // All or nothing: every record is built and checked against a staged copy of the document
+  // before any is inserted, so a refused record inserts nothing and leaves history as it was.
+  const stage={...diagram,components:nodes.slice(),wires:wires.slice()};
+  const idMap=new Map(),created=[],createdWires=[];
   const comps=semanticClipboard.components.slice().sort((a,b)=>nodeDepth(a)-nodeDepth(b));
-  for(const old of comps){
-    const value=SovSchematicData.clone(old);delete value.id;
-    value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
-    if(old.parentId&&idMap.has(old.parentId)){
-      value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
-      // A Point stuck to the copied host's boundary or path stays stuck to the copy.
-      if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
-    }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
-    const fresh=SovSchematicData.makeComponent(diagram,value);nodes.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
-  }
+  try{
+    for(const old of comps){
+      const value=SovSchematicData.clone(old);delete value.id;
+      value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
+      if(old.parentId&&idMap.has(old.parentId)){
+        value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
+        // A Point stuck to the copied host's boundary or path stays stuck to the copy.
+        if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
+      }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
+      const fresh=SovSchematicData.makeComponent(stage,value);stage.components.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
+    }
+  }catch(error){statusEl.textContent=`Paste refused · ${error.message}`;return []}
   for(const old of semanticClipboard.wires||[]){
     if(!idMap.has(old.a)||!idMap.has(old.b))continue;
     const value=SovSchematicData.clone(old);delete value.id;value.a=idMap.get(old.a);value.b=idMap.get(old.b);
-    try{wires.push(SovSchematicData.makeWire(diagram,value))}catch(_){ }
+    try{const w=SovSchematicData.makeWire(stage,value);stage.wires.push(w);createdWires.push(w)}catch(_){ }
   }
+  setHistoryHint('Paste');nodes.push(...created);wires.push(...createdWires);
   syncAllNodeBoundaryContext();setComponentSelection(created.filter(n=>semanticClipboard.rootIds.includes([...idMap.entries()].find(([,v])=>v===n.id)?.[0])).map(n=>n.id),created.at(-1)?.id);routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();statusEl.textContent=`Pasted · ${created.length} Component${created.length===1?'':'s'}`;return created;
 }
 function cutSelection(){if(!copySelection())return;setHistoryHint('Cut');deleteSelected();scheduleHistoryCapture()}

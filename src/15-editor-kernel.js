@@ -141,23 +141,29 @@ function copySelection(){
 }
 function pasteClipboard({offset=32}={}){
   if(!semanticClipboard?.components?.length){statusEl.textContent='Clipboard empty';return []}
-  setHistoryHint('Paste');const idMap=new Map(),created=[];
+  // All or nothing: every record is built and checked against a staged copy of the document
+  // before any is inserted, so a refused record inserts nothing and leaves history as it was.
+  const stage={...diagram,components:nodes.slice(),wires:wires.slice()};
+  const idMap=new Map(),created=[],createdWires=[];
   const comps=semanticClipboard.components.slice().sort((a,b)=>nodeDepth(a)-nodeDepth(b));
-  for(const old of comps){
-    const value=SovSchematicData.clone(old);delete value.id;
-    value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
-    if(old.parentId&&idMap.has(old.parentId)){
-      value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
-      // A Point stuck to the copied host's boundary or path stays stuck to the copy.
-      if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
-    }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
-    const fresh=SovSchematicData.makeComponent(diagram,value);nodes.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
-  }
+  try{
+    for(const old of comps){
+      const value=SovSchematicData.clone(old);delete value.id;
+      value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
+      if(old.parentId&&idMap.has(old.parentId)){
+        value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
+        // A Point stuck to the copied host's boundary or path stays stuck to the copy.
+        if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
+      }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
+      const fresh=SovSchematicData.makeComponent(stage,value);stage.components.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
+    }
+  }catch(error){statusEl.textContent=`Paste refused · ${error.message}`;return []}
   for(const old of semanticClipboard.wires||[]){
     if(!idMap.has(old.a)||!idMap.has(old.b))continue;
     const value=SovSchematicData.clone(old);delete value.id;value.a=idMap.get(old.a);value.b=idMap.get(old.b);
-    try{wires.push(SovSchematicData.makeWire(diagram,value))}catch(_){ }
+    try{const w=SovSchematicData.makeWire(stage,value);stage.wires.push(w);createdWires.push(w)}catch(_){ }
   }
+  setHistoryHint('Paste');nodes.push(...created);wires.push(...createdWires);
   syncAllNodeBoundaryContext();setComponentSelection(created.filter(n=>semanticClipboard.rootIds.includes([...idMap.entries()].find(([,v])=>v===n.id)?.[0])).map(n=>n.id),created.at(-1)?.id);routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();statusEl.textContent=`Pasted · ${created.length} Component${created.length===1?'':'s'}`;return created;
 }
 function cutSelection(){if(!copySelection())return;setHistoryHint('Cut');deleteSelected();scheduleHistoryCapture()}

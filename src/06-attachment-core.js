@@ -71,21 +71,23 @@
   }
   function customPointSpecs(entity,d,base){
     // Authored ports: additions to the template's under 'standard', the whole set under
-    // 'none'. Only a 2D surface exposes them; an entry that repeats an id or compatId
-    // already taken, or names no valid side, is not exposed.
+    // 'none'. Only a 2D surface exposes them. An entry that names no valid side, or whose id
+    // is already taken (as an id or a compatId), is not exposed; a compatId already taken
+    // falls back to the entry's own id.
     if(d!==2)return [];
     const authored=Array.isArray(entity?.config?.attachmentPoints)?entity.config.attachmentPoints:[];
-    const usedIds=new Set(base.map(x=>x.id)),usedCompat=new Set(base.map(x=>x.compatId));
+    const used=new Set(base.flatMap(x=>[x.id,x.compatId]));
     const out=[];
     for(const raw of authored){
-      const spec=declaredSpec(raw,{authored:true});if(!spec||usedIds.has(spec.id))continue;
-      if(usedCompat.has(spec.compatId))spec.compatId=spec.id;
-      if(usedCompat.has(spec.compatId))continue;
+      const spec=declaredSpec(raw,{authored:true});if(!spec||used.has(spec.id))continue;
+      if(used.has(spec.compatId)||spec.compatId===spec.id)spec.compatId=spec.id;
       out.push(spec);
-      usedIds.add(spec.id);usedCompat.add(spec.compatId);
+      used.add(spec.id);used.add(spec.compatId);
     }
     return out;
   }
+  // The authored ports a 2D surface of this record exposes, whatever its current host.
+  function authoredPointSpecs(entity){return customPointSpecs(entity,2,templatePointSpecs(entity))}
   function pointSpecs(entity){
     const d=effectiveDimension(entity),base=basePointSpecs(d,entity);
     return [...base,...customPointSpecs(entity,d,base)];
@@ -133,5 +135,5 @@
     if(end==='a')wire.aSide=spec.compatId;else wire.bSide=spec.compatId;
     return wire[key];
   }
-  return {PORT_SIDES,PORT_FLOWS,useTemplatePorts,portChannels,channelIds,declaredSpec,templatePointSpecs,intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
+  return {PORT_SIDES,PORT_FLOWS,useTemplatePorts,portChannels,channelIds,declaredSpec,templatePointSpecs,authoredPointSpecs,intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
 });

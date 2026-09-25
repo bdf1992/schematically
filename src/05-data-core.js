@@ -124,6 +124,7 @@
     for(const component of doc.components){
       normalizeComponentIdentity(component);
       applyTemplatePreset(component);
+      cleanStoredPorts(component);
       component.form=normalizeComponentForm(component.form,component.canvas);
       if(!isObject(component.canvas))component.canvas={};
       component.canvas.id=`canvas:component:${component.id||'unknown'}`;component.canvas.scope='local';component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
@@ -324,6 +325,21 @@
     return out;
   }
   const samePort=(x,y)=>JSON.stringify([x.id,x.compatId||x.id,x.side,x.t,x.flow,x.channels,x.label||''])===JSON.stringify([y.id,y.compatId||y.id,y.side,y.t,y.flow,y.channels,y.label||'']);
+  // A spec in the stored declared-port shape.
+  function storedPort(spec){
+    const port={id:spec.id};if(spec.compatId&&spec.compatId!==spec.id)port.compatId=spec.compatId;
+    Object.assign(port,{side:spec.side,t:spec.t,flow:spec.flow,channels:(spec.channels||[{id:'main'}]).map(c=>({id:c.id}))});
+    if(spec.label)port.label=spec.label;
+    return port;
+  }
+  // Loading cleans, never refuses: a stored list is rewritten into exactly the authored
+  // ports the loader exposes (t coerced and clamped, an invalid flow read as duplex, empty
+  // channels read as main, entries without a valid side or with a taken id dropped).
+  function cleanStoredPorts(component){
+    const config=component?.config;if(!isObject(config)||!Array.isArray(config.attachmentPoints))return component;
+    config.attachmentPoints=Attachment.authoredPointSpecs(component).map(storedPort);
+    return component;
+  }
   // Every component edit (update, retype, the 'none' switch, a port list) is checked against
   // the Wires that end on the component: an end whose port the edit removes is refused
   // (PORT_IN_USE), and so is an end left on a port sharing no channel with the port at the
@@ -403,6 +419,8 @@
     const next=normalizeSymbolId(symbolId),preset=templatePreset(next)||{};
     if(!isObject(component.config))component.config={};
     const config=component.config,before=isObject(config.presentation)?config.presentation:{};
+    // The authored ports, as the record exposes them before the retype.
+    const authored=Array.isArray(config.attachmentPoints)?Attachment.authoredPointSpecs(component).map(storedPort):[];
     component.symbolId=next;component.type=next==='blank'?null:next;component.incomplete=next==='blank';
     component.form=normalizeComponentForm(preset.form||{dimension:2});
     config.signalMode=preset.signalMode||'source';
@@ -412,6 +430,15 @@
     if(Number.isInteger(before.interiorColorSlot))presentation.interiorColorSlot=before.interiorColorSlot;
     config.presentation=presentation;
     if(preset.attachmentDefaults==='none')config.attachmentDefaults='none';else delete config.attachmentDefaults;
+    // The new template's ports in template order, an authored port with a template id
+    // replacing it, then the remaining authored ports in stored order; stored in the
+    // smallest form. The loader's rules settle any id or compatId the two lists share.
+    if(authored.length){
+      const template=defaultAttachmentMode(next)==='none'?[]:templatePorts(next),byId=new Map(authored.map(p=>[p.id,p])),templateIds=new Set(template.map(p=>p.id));
+      const merged={config:{attachmentDefaults:'none',attachmentPoints:[...template.map(p=>byId.get(p.id)||p),...authored.filter(p=>!templateIds.has(p.id))]}};
+      config.attachmentPoints=Attachment.authoredPointSpecs(merged).map(storedPort);config.attachmentDefaults='none';
+      setDeclaredPorts(null,component);
+    }else delete config.attachmentPoints;
     if(isObject(component.boundary?.inside))component.boundary.inside.type=component.type;
     if(isObject(component.canvas)){component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state}
     return ensureAttachmentPortConfigs(component);
@@ -792,5 +819,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {assertWiresSurviveEdit,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {cleanStoredPorts,assertWiresSurviveEdit,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });

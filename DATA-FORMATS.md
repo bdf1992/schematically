@@ -113,7 +113,11 @@ A 2D Component's ports are declared data. `config.attachmentPoints` holds declar
 `config.attachmentDefaults` says how the list is read. `standard` (explicit, or implied on a typed Component) is the
 template's declared ports (`left`/`in`, `right`/`out`, `top`/`control` for the typed Component template) followed by
 `attachmentPoints` as additions; `none` makes `attachmentPoints` the complete list. A Plane's default is `none`.
-The loader never writes template ports into the stored array. A component `create` or `update` that sets
+The loader never writes template ports into the stored array, and never refuses a list: it rewrites each stored list
+into exactly the authored ports it exposes (`t` coerced to a number and clamped to `0..1`, an invalid `flow` read as
+`duplex`, absent or empty `channels` read as `main`, entries with no valid side or with an id already taken dropped).
+A retype keeps the new template's ports in order, an authored port with a template id replacing it, followed by the
+remaining authored ports, stored in the smallest form. A component `create` or `update` that sets
 `attachmentPoints` is checked and stored in the smallest form, keeping order: `standard` plus additions when the list
 begins with the template's ports in template order and unchanged, otherwise `none` plus the full list as given. It is
 refused for a repeated id or compat id, an invalid side, t or flow, or a repeated channel id. Every component edit

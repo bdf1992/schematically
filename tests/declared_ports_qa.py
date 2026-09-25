@@ -1,4 +1,4 @@
-"""Declared ports: the data model (contract 0b-1, issue #45, with amendment 2).
+"""Declared ports: the data model (contract 0b-1, issue #45, with amendments 2 and 3).
 
 A 2D Component's ports are declared data. The attachment core holds no port set of its own;
 the typed Component template declares the left/right/top trio; stored forms keep their
@@ -185,6 +185,53 @@ out.planePreset=D.templatePreset('plane');
   out.amend=r;
 }
 
+// Steps 17-18 (amendment 3).
+{
+  const r={};
+  const tmpl=new Set(['left','right','top']);
+  const storedIds=c=>(c.config.attachmentPoints||[]).map(p=>p.id);
+  const storedIsEffective=c=>c.config.attachmentDefaults==='none'?JSON.stringify(storedIds(c))===JSON.stringify(A.authoredPointSpecs(c).map(s=>s.id)):JSON.stringify(storedIds(c))===JSON.stringify(ids(c).filter(id=>!tmpl.has(id)));
+  // Step 17, case 1: 'none' + [left, right, x] retyped to authority.
+  {const d=doc0();mk(d,{id:'a',symbolId:'act',x:0,y:0,config:{attachmentDefaults:'none',attachmentPoints:[{id:'left',compatId:'in',side:'left',t:.5,flow:'in'},{id:'right',compatId:'out',side:'right',t:.5,flow:'out'},{id:'x',side:'bottom',t:.5,flow:'duplex'}]}});
+   const rc=upd(d,'a',{symbolId:'authority'}),a=d.components[0];
+   const again=upd(d,'a',{config:{attachmentPoints:clone(a.config.attachmentPoints||[])}});
+   r.case1={ok:rc.ok,mode:a.config.attachmentDefaults??null,stored:storedIds(a),ids:ids(a),same:storedIsEffective(a),again:again.ok,againIds:ids(d.components[0])};
+   // applySymbol directly (the bar retype) follows the same rule.
+   const b=D.makeComponent(doc0(),{id:'b',symbolId:'act',x:0,y:0,config:{attachmentDefaults:'none',attachmentPoints:[{id:'left',compatId:'in',side:'left',t:.5,flow:'in'},{id:'x',side:'bottom',t:.5,flow:'duplex'}]}});
+   D.applySymbol(b,'gate');r.case1apply={mode:b.config.attachmentDefaults??null,stored:storedIds(b),ids:ids(b)};}
+  // Step 17, case 2: a Plane with an authored left on channel data, retyped to act, wired on that channel.
+  {const d=doc0();mk(d,{id:'pl',symbolId:'plane',x:0,y:0,config:{attachmentPoints:[{id:'left',side:'left',t:.5,flow:'in',channels:[{id:'data'}]}]}});
+   mk(d,{id:'src',symbolId:'act',x:-400,y:0,config:{attachmentPoints:[{id:'tx',side:'bottom',t:.5,flow:'out',channels:[{id:'data'}]}]}});
+   const w=mkw(d,{id:'w',a:'src',aAttachment:{pointId:'tx'},b:'pl',bAttachment:{pointId:'left'}});
+   const rc=upd(d,'pl',{symbolId:'act'}),pl=d.components.find(c=>c.id==='pl');
+   r.case2={wire:w.ok,ok:rc.ok,msg:rc.error?.message||'',mode:pl.config.attachmentDefaults??null,stored:storedIds(pl),ids:ids(pl),left:A.pointSpecs(pl).find(s=>s.id==='left')?.channels,same:storedIsEffective(pl),valid:D.validateDocument(reload(d)).ok,bound:d.wires[0].bAttachment.pointId};}
+  // Step 17: the Wire checks apply to a retype's port list.
+  {const d=doc0();mk(d,{id:'pl',symbolId:'plane',x:0,y:0,config:{attachmentPoints:[{id:'feed',side:'left',t:.5,flow:'in',channels:[{id:'data'}]}]}});
+   mk(d,{id:'src',symbolId:'act',x:-400,y:0,config:{attachmentPoints:[{id:'tx',side:'bottom',t:.5,flow:'out',channels:[{id:'data'}]}]}});
+   mkw(d,{id:'w',a:'src',aAttachment:{pointId:'tx'},b:'pl',bAttachment:{pointId:'feed'}});
+   const rc=upd(d,'src',{symbolId:'plane'});r.case2wire={ok:rc.ok,ids:ids(d.components.find(c=>c.id==='src'))};}
+  // Step 18: seven lenient lists load, are cleaned, and paste (makeComponent from the loaded record).
+  const lenient={
+    stringT:[{id:'p',side:'bottom',t:'0.3',flow:'in'}],
+    bigT:[{id:'p',side:'bottom',t:1.5,flow:'in'}],
+    bareLeft:[{id:'left'}],
+    badDefaultFlow:[{id:'p',side:'bottom',t:.5,defaultFlow:'sideways'}],
+    noSide:[{id:'p',t:.5,flow:'in'}],
+    dupIds:[{id:'p',side:'bottom',t:.2,flow:'in'},{id:'p',side:'top',t:.8,flow:'out'}],
+    emptyChannels:[{id:'p',side:'bottom',t:.5,flow:'in',channels:[]}]
+  };
+  r.lenient={};
+  for(const [k,list] of Object.entries(lenient)){
+    const file={schema:D.DOCUMENT_SCHEMA,id:'len',revision:0,references:[],wires:[],components:[{id:'c',symbolId:'act',x:0,y:0,config:{attachmentPoints:list}}]};
+    let loaded=null,err='';try{loaded=D.documentFromFilePayload(clone(file))}catch(e){err=e.message}
+    const c=loaded?.components[0];
+    const res={err,stored:c?.config.attachmentPoints??null,ids:c?ids(c):null,same:c?storedIsEffective(c):false,idempotent:c?JSON.stringify(D.normalizeDocument(clone(loaded)).components[0].config.attachmentPoints)===JSON.stringify(c.config.attachmentPoints):false};
+    try{const v=clone(c);delete v.id;const pasted=D.makeComponent(loaded,v);res.paste={ok:true,ids:ids(pasted)}}catch(e){res.paste={ok:false,msg:e.message}}
+    r.lenient[k]=res;
+  }
+  out.amend3=r;
+}
+
 // Step 5 + 9: every example round-trips with the same port ids, bound ports and stored forms.
 out.examples={};
 for(const file of JSON.parse(process.argv[4])){
@@ -257,8 +304,13 @@ def main() -> None:
     for key in ('once', 'twice', 'again'):
         assert lg[key]['points'] == exp, (key, lg[key]['points'])
         assert lg[key]['wires'] == [['k1', 'right', 'left'], ['k2', 'aux', 'only'], ['k3', 'aux2', 'top']], (key, lg[key]['wires'])
+    # Loading rewrites each stored list into exactly its exposed authored ports (step 18), never the template's.
+    main = [{'id': 'main'}]
+    cleaned = {'plain': None, 'std': [{'id': 'aux', 'side': 'bottom', 't': .25, 'flow': 'duplex', 'channels': main}],
+               'imp': [{'id': 'aux2', 'compatId': 'aux-2', 'side': 'bottom', 't': .75, 'flow': 'duplex', 'channels': main}],
+               'non': [{'id': 'only', 'side': 'left', 't': .5, 'flow': 'in', 'channels': main}], 'pls': None}
     for key in ('once', 'twice'):
-        assert lg[key]['arrays'] == lg['stored'], (key, lg[key]['arrays'], lg['stored'])
+        assert lg[key]['arrays'] == cleaned, (key, lg[key]['arrays'])
     assert lg['once']['modes'] == lg['twice']['modes'] == {'plain': None, 'std': 'standard', 'imp': None, 'non': 'none', 'pls': 'standard'}, lg['once']['modes']
     assert lg['again']['modes']['pls'] == 'standard', lg['again']['modes']
 
@@ -313,6 +365,32 @@ def main() -> None:
     assert cr['reloaded'] == {'c1': ['top', 'left', 'right', 'x'], 'c2': ['top', 'left', 'right', 'x']}, cr['reloaded']
     assert cr['storedIsEffective'], cr
     assert cr['legacyFlow'] == ['in', 'out'], cr['legacyFlow']
+
+    # Amendment 3, step 17: a retype keeps stored = effective and keeps authored channels.
+    a3 = r['amend3']
+    c1 = a3['case1']
+    assert c1 == {'ok': True, 'mode': None, 'stored': ['x'], 'ids': ['left', 'right', 'top', 'x'], 'same': True, 'again': True, 'againIds': ['left', 'right', 'top', 'x']}, c1
+    assert a3['case1apply'] == {'mode': None, 'stored': ['x'], 'ids': ['left', 'right', 'top', 'x']}, a3['case1apply']
+    c2 = a3['case2']
+    assert c2['wire'] and c2['ok'] and c2['mode'] == 'none' and c2['stored'] == ['left', 'right', 'top'] and c2['ids'] == ['left', 'right', 'top'], c2
+    assert c2['left'] == [{'id': 'data'}] and c2['same'] and c2['valid'] and c2['bound'] == 'left', c2
+    assert a3['case2wire']['ok'] is True and a3['case2wire']['ids'] == ['tx'], a3['case2wire']  # a Plane keeps the authored port
+    # Step 18: each lenient list loads, is cleaned into exactly its exposed ports, and pastes.
+    m = [{'id': 'main'}]
+    want = {
+        'stringT': [{'id': 'p', 'side': 'bottom', 't': .3, 'flow': 'in', 'channels': m}],
+        'bigT': [{'id': 'p', 'side': 'bottom', 't': 1, 'flow': 'in', 'channels': m}],
+        'bareLeft': [],
+        'badDefaultFlow': [{'id': 'p', 'side': 'bottom', 't': .5, 'flow': 'duplex', 'channels': m}],
+        'noSide': [],
+        'dupIds': [{'id': 'p', 'side': 'bottom', 't': .2, 'flow': 'in', 'channels': m}],
+        'emptyChannels': [{'id': 'p', 'side': 'bottom', 't': .5, 'flow': 'in', 'channels': m}],
+    }
+    for key, stored in want.items():
+        got = a3['lenient'][key]
+        assert got['err'] == '' and got['stored'] == stored and got['same'] and got['idempotent'], (key, got)
+        exp_ids = ['left', 'right', 'top'] + [p['id'] for p in stored]
+        assert got['ids'] == exp_ids and got['paste'] == {'ok': True, 'ids': exp_ids}, (key, got)
 
     # Steps 5 + 9: every example round-trips unchanged; stored forms are saved as authored.
     for file, ex in r['examples'].items():

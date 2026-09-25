@@ -115,6 +115,15 @@ What is implemented:
   full list as given. It refuses a repeated id or compat id, an invalid side, t or flow, and a channel id repeated
   within a port. A refusal is a failed receipt with no history entry and no revision change; browser API, HTTP and
   MCP share this one path.
+- **Load cleans, never refuses.** Normalization rewrites each stored `attachmentPoints` list into exactly the
+  authored ports the loader exposes (`cleanStoredPorts`): `t` coerced and clamped, an invalid flow read as
+  `duplex`, empty channels read as `main`, entries with no valid side or a taken id dropped. After loading, the
+  stored list equals the effective list; files without such lists save exactly as before.
+- **Retype.** `applySymbol` gives the new template's ports in template order, an authored port with the same id
+  replacing the template's (keeping its side, t, flow, channels and label), then the remaining authored ports in
+  stored order, stored in the smallest form.
+- **Paste and Duplicate** build and check every record against a staged copy of the document before inserting
+  any: a refusal inserts nothing and leaves history unchanged; success is one history transition.
 - **Wires survive every edit.** `assertWiresSurviveEdit` runs on every component update (port list,
   `attachmentDefaults: 'none'`, retype by `symbolId`), on `applySymbol(component, symbolId, doc)` (the bar retype)
   and on the Form panel switch. It refuses an edit that would remove a port a Wire ends on (`PORT_IN_USE`) or leave
