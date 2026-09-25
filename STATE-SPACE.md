@@ -1,15 +1,8 @@
 # State Space · design
 
-**Status: design, not yet accepted.** Nothing here is implemented. This document fixes the model before code is written; once accepted, the slices at the end become issues and it becomes the living reference for the concern, like `FORM-MODEL.md`.
+**Status: design, settled for slices 1–3.** Nothing here is implemented. Slice 4 (the instrument) has one open question. Each slice becomes an issue; this document is the reference for the concern, like `FORM-MODEL.md`, and changes with it.
 
-**Review pass (2026-09-25).** Inline notes below come from a standards comparison (DEVS and VHDL/SystemC scheduling, Temporal-style replay, W3C PROV, OpenTelemetry and CloudEvents, digital-twin specs, GUM/VIM metrology, directed graph Laplacians, idempotent effects) plus a red-team pass over it. Two markers are used:
-
-- **Suggestion** — a proposed design change, with the slice it belongs to.
-- **Review question** — something the design or the code review has to answer before the section is accepted.
-
-The model holds up. Most suggestions are determinism details for slice 1; instrument-facing additions are held back to slice 4 so the core record stays small.
-
-Sources: *State Planes for Governed Graph Systems* (2026-09-25), Issue #6 (logic machine), `docs/vision/DATA-DRIVEN-SCHEMATIC-LANGUAGE.md` ("Logic/runtime proof"), and the current `src/25-signal.js`.
+Sources: *State Planes for Governed Graph Systems* (2026-09-25); Issue #6 (logic machine); `docs/vision/DATA-DRIVEN-SCHEMATIC-LANGUAGE.md` ("Logic/runtime proof"); the current `src/25-signal.js`; and a review pass (2026-09-25) comparing the design with DEVS and VHDL/SystemC scheduling, Temporal-style replay, W3C PROV, OpenTelemetry and CloudEvents, digital-twin specifications, GUM/VIM metrology, directed graph Laplacians and idempotent effects, plus a red-team pass. The review's accepted suggestions are folded into the text below.
 
 ## Purpose
 
@@ -17,10 +10,10 @@ A schematic already says what exists and how it connects. The state space is wha
 
 It serves two uses, built in this order:
 
-1. **Runtime (first).** Schematically executes its own documents: sources change values, Paths carry them, gates evaluate them, receipts record what happened. Issue #6's logic machine is the first consumer.
+1. **Runtime (first).** Schematically executes its own documents: sources change values, Paths carry them, devices evaluate them, receipts record what happened. Issue #6's logic machine is the first consumer.
 2. **Instrument (later).** Schematically shows the state of an outside governed graph (a workstation, an agent pipeline): measured records arrive from outside and are laid over a document that models that graph.
 
-Both use the same record, the same fold and the same projections. The instrument adds nothing but an import of measured records and a way to bind their subjects to document entities.
+Both use the same record, the same fold and the same projections. The instrument adds an import of measured records, a way to bind their subjects to document entities, and the record coordinates only measurement needs.
 
 ## Vocabulary
 
@@ -34,9 +27,11 @@ One concept, one word. The source paper's words collide with words the editor al
 | control loop | **control** | No collision. |
 | measurement / reading | **observation** | Matches the existing OBSERVE symbol. |
 
-**State space is always two words.** `Space` alone keeps its horizon meaning (`HORIZON-SPACE.md`: the coordinate domain and admitted grammar a document lives in). The two relate: a document lives in a Space; its state space is the state of that document over time. Code names use `stateSpace` / `state-space`, never `space`.
+**State space is always two words.** `Space` alone keeps its horizon meaning (`HORIZON-SPACE.md`: the coordinate domain and admitted grammar a document lives in). A document lives in a Space; its state space is the state of that document over time. Code names use `stateSpace` / `state-space`, never `space`.
 
 **Logical time is not animation time.** `diagram.meta.timeScale` and per-entity `rate` pace the rendered packets. Logical time is the integer clock of the state space. Changing rate, zoom or geometry may change how long a packet takes on screen; it never changes a logical outcome.
+
+**Replay is not re-run.** A *replay* recomputes a recorded run from its trace and never touches anything outside. A *re-run* is a new run, with a new run id and new effect keys.
 
 ## Model
 
@@ -45,9 +40,9 @@ State space
 ├─ subjects        addressable things state is about (entity + optional point + run)
 ├─ records         every state claim, one shape (the state record)
 ├─ event log       the authoritative, ordered inputs of a run
-├─ fold            deterministic function: document × event log → derived records
-├─ fields          one observable over all subjects, with a declared spread rule
-├─ observers       who or what produced a record, with calibration and class
+├─ fold            deterministic function: replay key × event log → derived records
+├─ fields          one observable over all subjects, with a declared operator
+├─ observers       who or what produced a record, with class, limits, read/write sets
 ├─ residuals       differences the state space can learn from
 └─ control         observe → estimate → compare → gate or route → act → record
 ```
@@ -57,34 +52,33 @@ State space
 The **event log is authoritative; all other state is a fold over it.** This matches the existing file rule: a `.sov` carries authored truth only and runtime projections are rebuilt, never saved.
 
 - Registered values (a lever's position, an input vector) and observations enter the log.
-- Derived records are outputs of the fold and must be recomputable: replaying the log against the same document revision yields byte-identical derived records. That identity is the first golden test.
-- A cached derived value is **materialized** state. It is allowed only with the inputs it stands in for, so the state space always knows what would invalidate it.
-
-> **Suggestion (slice 1).** The replay key is larger than the document revision. Replay identity holds only against the same *document revision + pack versions + runtime (fold) version + initial registered values + seed*. The fold is an input like the document is; a runtime change can break byte identity with no document change at all.
->
-> **Suggestion (slice 1).** Log effect *intents* as well as their outcomes. On replay, recompute the intent and compare it to the logged one; a mismatch is a typed nondeterminism refusal, the way Temporal fails a replay instead of silently diverging.
->
-> **Review question.** Is a materialized value keyed by the hashes of its input records plus rule id@version? That makes invalidation a hash comparison instead of a dependency walk.
+- Derived records are outputs of the fold and must be recomputable.
+- **The replay key** is everything the fold depends on: document revision, the resolved pack and definition versions, the runtime (fold) version, the initial registered values, and the seed. Replaying the same log under the same replay key yields byte-identical derived records (see *Canonical encoding*). That identity is the first golden test. A runtime change is an input like a document change: it may break identity with no document change at all, which is why the runtime version is in every trace.
+- **Materialized** state is a cached derived value. It is keyed by the hashes of its input records plus the rule's `id@version`, so invalidation is a hash comparison, never a dependency walk.
 
 ### The state record
 
-Every claim has the same coordinates, whether it is a logic level, a gate verdict, a measured latency or (later) a forecast.
+Every claim has the same coordinates, whether it is a logic level, a gate verdict, a device's memory, a measured latency or (later) a forecast.
 
 | Coordinate | Answers | Values |
 |---|---|---|
 | `subject` | about what | `{entity, point?, run}` |
 | `vantage` | seen from where | `space` (Eulerian: the whole graph at a time), `point` (Lagrangian: one subject's history), `relative` (against a `reference`) |
-| `observable` | what is measured | a declared observable id, e.g. `logic.level`, `cost`, `latency` |
-| `kind` | how it became true | `registered`, `measured`, `derived`, `predicted` |
+| `observable` | what is measured | a declared observable id, e.g. `logic.level`, `device.state`, `cost` |
+| `kind` | how it became true | `registered`, `measured`, `derived`, `predicted` (`estimated` from slice 4) |
 | `form` | its shape | `binary`, `continuous`, `categorical` |
-| `value` | the value | per `form` |
-| `time` | when | `{logical, sequence}`; `wall` optional (instrument use); `mode: observed \| predicted` |
-| `certainty` | how sure | `{kind: exact}` first; distributions later |
+| `value` | the value | per `form`, under the numeric policy |
+| `time` | when | `{logical, sequence, mode: observed \| predicted}` |
+| `certainty` | how sure | `{kind: exact}` until slice 4 |
 | `observer` | who produced it | an observer id: a rule, a sensor, a person |
 | `provenance` | from what, by which rule | `{rule, inputs: [record ids], threshold?}` |
 | `perturbation` | did observing change it | `none`, `disturbed` (with a ledger entry), `created` |
 
-Draft shape (the schema will be `formats/schematic.state-record.schema.json`):
+`time.sequence` is **for serialization only**: it gives records a total order in a file, and no outcome may depend on it (see *Two-phase ticks*).
+
+**Units live on the observable declaration**, not on each record: `{id: "latency", unit: "ms", form: "continuous"}`. Every twin standard reviewed carries units, and adding them later would touch every pack.
+
+Draft shape (schema `formats/schematic.state-record.schema.json`):
 
 ```json
 {
@@ -104,22 +98,17 @@ Draft shape (the schema will be `formats/schematic.state-record.schema.json`):
 }
 ```
 
-> **Suggestion (slice 1).** Put `unit` on the observable declaration (not on every record). Units are the one record extension worth taking early; every twin standard reviewed (DTDL, OPC UA, AAS) carries them, and adding them later touches every pack.
->
-> **Suggestion (slice 4, not before).** The instrument will need more coordinates: a `quality` status separate from certainty (a value can be exact and stale), `time.source` vs `time.receipt` (OPC UA's source and server timestamps), and `certainty` in GUM terms (`{u, k, evaluation: A|B}`). None of these mean anything in an exact deterministic runtime, so they stay out of the core schema until measured records exist.
->
-> **Review question.** Is `time.sequence` semantic or serialization only? After the execution changes below, it should be serialization only: equal-time outcomes must not depend on it.
+**Instrument coordinates (slice 4, not before).** Measurement needs coordinates an exact deterministic runtime does not: a `quality` status separate from certainty (a value can be exact and stale); `time.source` and `time.receipt` (OPC UA's source and server timestamps) plus `time.wall`; and `certainty` in GUM terms, `{u, k, evaluation: A | B}`. They enter the schema with the first measured records.
 
 ### Kinds of state
 
 | Kind | Source | Truth test | Here |
 |---|---|---|---|
-| registered | written by an authorised act | did the write pass the data core's legality? | a source's value, an input vector, a switch position |
+| registered | written by an authorised act | did the write pass the data core's legality? | a source's value, an input vector, a switch position, a device's initial state |
 | measured | read by an observer | is the observer calibrated? | an OBSERVE reading; an imported instrument reading |
-| derived | computed by a rule | can it be recomputed from its inputs? | a gate output, a field value, a Component's active state |
+| derived | computed by a rule | can it be recomputed from its inputs? | a device output, a device's next state, a field value |
 | predicted | projected forward | how did past forecasts score? | deferred |
-
-> **Suggestion (slice 4).** Add `estimated` as a fifth kind when the instrument lands: a value assimilated from measurement plus prediction is neither measured, derived by an exact rule, nor predicted. The control loop already has an estimate step with no kind to record it.
+| estimated *(slice 4)* | assimilated from measurement and prediction | do its residuals stay consistent? | the control loop's estimate step |
 
 Every derived observable is declared with three properties the fold uses to decide whether a value is fresh enough to gate on:
 
@@ -133,7 +122,7 @@ Every derived observable is declared with three properties the fold uses to deci
 - **point** is what a packet shows: one transition carried along a Path, with its history.
 - **relative** is where control lives: the difference across a Path, a run against its baseline, a value against a threshold.
 
-When a subject's value changes, the state space reports which part moved it: the value changed where the subject sits, or the subject moved into a different region (the paper's material derivative). In the runtime these are, respectively, an input changing under a gate and a packet arriving somewhere new; the trace names which.
+When a subject's value changes, the state space reports which part moved it: the value changed where the subject sits, or the subject moved into a different region (the paper's material derivative). In the runtime these are, respectively, an input changing under a device and a packet arriving somewhere new; the trace names which.
 
 ### Signal state and particles
 
@@ -142,13 +131,19 @@ Kept exactly as Issue #6 separates them:
 - **Signal state** is the current value at an attachment Point or channel. It is a record with `vantage: space`.
 - **A particle** is a transition moving along a Path: value or change, channel, logical departure and arrival, provenance. It is an event in the log and a `vantage: point` view of it.
 
-A gate evaluates signal state, never particles, so an AND gate sees both inputs when only one transition arrives. The rendered packet is a projection of a particle; it is never the source of a value.
+A device evaluates signal state, never particles, so an AND gate sees both inputs when only one transition arrives. The rendered packet is a projection of a particle; it is never the source of a value.
 
-> **Review question.** Does every gate read signal state *committed at the end of the previous tick*, and never a value written in the tick it is evaluating? Delta-cycle determinism in VHDL and SystemC holds only when processes communicate through committed signals; SystemC loses it the moment two processes share a variable. Any code path in `07-state-space.js` that lets a device read in-flight state recreates that shared variable.
+**Devices read only committed state.** A device reads signal state committed in the update phase of the current tick and its own state committed at the previous tick; it never reads a value written during the evaluate phase it is part of. This is the condition under which VHDL and SystemC scheduling stay deterministic, and SystemC loses it the moment two processes share a variable. No code path in the runtime lets a device read in-flight state.
+
+### Device state
+
+A device with memory keeps it in the log, not in the runtime. Its memory is a `device.state` record (`vantage: point`, `kind: derived`) written at commit; a stateful rule reads its own committed state and its inputs, and nothing else. A device's **initial state** is a registered value declared in the document; a stateful device without one refuses to run.
+
+This is the one mechanism for memory: hysteresis (slice 2) and latches, edges and clocks (slice 5) all mean "a rule that reads its own prior records".
 
 ### Assertions: binary as a cut through continuous
 
-A binary verdict is the visible half of a measurement. A GATE's output is an assertion, which keeps what a bare boolean loses:
+A binary verdict is the visible half of a measurement. A threshold device's output is an assertion, which keeps what a bare boolean loses:
 
 | Field | Example |
 |---|---|
@@ -160,82 +155,67 @@ A binary verdict is the visible half of a measurement. A GATE's output is an ass
 | rule version | `gate.threshold@1` |
 | time | logical 12 |
 
-Two thresholds give hysteresis, so a value near the cut does not chatter. Pure boolean logic is the degenerate case: value is 0 or 1, one threshold, margin ±1.
+Two thresholds give hysteresis, so a value near the cut does not chatter. A value inside the dead band is decided by the device's committed state, which is why `threshold` is a stateful rule and needs a declared initial state.
 
-> **Suggestion (slice 2).** Hysteresis needs memory: a value inside the dead band is decided by which side the gate was on. Keep that memory in the log. A device's memory is an explicit `state` record (`vantage: point`, observable `device.state`) written at commit; the threshold rule reads its own committed state and nothing else. Latches, edges and clocks in slice 5 then reuse the same mechanism, so "stateful device" means "a rule that reads its own prior records."
->
-> **Suggestion (slice 2).** A threshold gate requires a declared initial state as a registered value in the document. Without it, the first output inside the dead band is undefined.
->
-> **Review question.** Slice 2 ships enter/exit thresholds but stateful devices are deferred to slice 5. Either the `state` record moves into slice 2 (recommended; it is one record type), or slice 2 ships single-threshold gates and hysteresis moves to slice 5.
->
-> **Review question.** Define margin as distance to the *active* threshold (enter or exit, depending on state). Once uncertainty exists (slice 4), margin divided by standard uncertainty gives a z-score.
+**Margin** is the distance to the *active* threshold: the exit threshold while the assertion holds, the enter threshold while it does not. Pure boolean logic is the degenerate case: value 0 or 1, one threshold, margin ±1. Once measured values carry uncertainty (slice 4), margin divided by the standard uncertainty is a z-score.
 
 ### Fields
 
-A field is one observable defined over every subject, including where nothing was measured: samples, a declared spread rule, an uncertainty that grows with distance from samples, a gradient across each Path, and snapshots so drift in the field itself is visible.
+A field is one observable defined over every subject, including where nothing was measured: samples, a declared operator, an uncertainty that grows with distance from samples, a gradient across each Path, and snapshots so drift in the field itself is visible.
 
-Spread rules run over the graph Laplacian `L = D − A` of the document's connection graph:
+Fields run over the document's connection graph. Write `A` for its weighted adjacency, with `A_ij = w` for a Path from i to j, and `D_in`, `D_out` for the diagonal in- and out-degree matrices. `L = D − A` is ambiguous on directed Paths (libraries choose silently; NetworkX's `laplacian_matrix` uses out-degree), so **every field declares its operator by name**:
 
-- **diffusion**: values spread along Paths and even out (risk from a failing Component to what depends on it);
-- **advection**: values travel with directed flow (budget consumed, taint from an unverified input).
+- **`consensus`**: `L = D_in − Aᵀ`. Each node pulls toward what feeds it; values even out along the direction of flow. Risk from a failing Component spreads to what depends on it.
+- **`advection`**: `L = D_out − Aᵀ`. What leaves a node arrives at its successors, so the total is conserved. Budget consumed and taint from an unverified input need this one.
 
-Today's colour mixing in `25-signal.js` is an undeclared diffusion with fixed pass counts. It becomes a declared field (`presentation.signal-color`, diffusion, `regional`) so the colour on screen has a rule, a rate and a provenance, and colour stops standing in for signal value.
+A step is `x ← x − εLx`. It is stable only for small enough ε; `ε ≤ 1 / d_max` (the largest weighted degree in the graph) is sufficient for both operators. The runtime checks ε against the document's graph at load and refuses a field that would diverge.
 
-> **Suggestion (slice 3).** `L = D − A` is ambiguous on directed Paths. Each field declares its operator by name:
->
-> - `consensus` — in-degree Laplacian; nodes pull toward what feeds them.
-> - `advection` — `L_adv = D_out − A_in`; flow into a node equals flow out, so the total is conserved. Budget and taint need this one.
->
-> Libraries choose silently (NetworkX's `laplacian_matrix` uses out-degree), so the declaration is the only safe source.
->
-> **Suggestion (slice 3).** An explicit step `x ← x − εLx` is stable only for ε below a bound set by the graph's maximum degree. Validate ε against the document's graph at load, or a field blows up deterministically.
->
-> **Review question.** Which operator does `presentation.signal-color` use? Colour follows direction but is not a conserved quantity, which suggests `consensus` along Paths.
+Today's colour mixing in `25-signal.js` is an undeclared diffusion with fixed pass counts. It becomes a declared field, `presentation.signal-color`, operator `consensus`, blast radius `regional`: colour follows direction but is not a conserved quantity. The colour on screen then has a rule, a rate and a provenance, and colour stops standing in for signal value.
 
 ### Observers and perturbation
 
-Each observer is registered with its **class** and **limits**:
+Each observer is registered with its **class**, **limits** and **read/write sets**:
 
 - **passive**: reads recorded state and changes nothing. The OBSERVE symbol ("reads evidence from outside the action path") is passive by definition.
-- **active**: disturbs the subject: spends budget, pauses a run, consumes context. Active observations write a perturbation ledger entry and are paid **relative to the subject observed**: each one draws from the observed run's own budget, capped by a share its definition declares (for example, at most 10% of what remains). There is no separate absolute pool for looking; the more a run has left, the harder it may be looked at, and a run near exhaustion cannot be drained by observing it.
-- limits: resolution, noise, drift, latency. Recorded per observer; the runtime's own rules are exact, so these matter first for the instrument.
+- **active**: disturbs the subject: spends budget, pauses a run, consumes context. Every active observation writes a perturbation ledger entry.
+- **limits**: resolution, noise, drift, latency. The runtime's own rules are exact, so these matter first for the instrument.
+- **read and write sets**: the observables an observer reads and the ones it changes.
 
 For any record, the state space can answer: observed passively, observed actively, or created by the act of observing.
 
-**Order matters for non-commuting observations.** Two active observers whose order changes the outcome must have that order fixed by the document; the fold flags any pair it sees give different results when swapped.
+**Paying for observation.** Active observation is paid relative to the observed run and never from an absolute pool. At run start, a declared share of the run's *initial* budget (default 10%) moves into a reserved **observation account**. Active observations debit it through logged events. When it is empty, further active observation is refused with a typed refusal, and the run itself continues. A per-observation cap on "what remains" was rejected because it never reaches zero yet drains the run: ten observations would take 65% of the budget, twenty 88%.
 
-> **Suggestion (slice 4).** The budget rule leaks. "At most 10% of what remains" per observation never reaches zero, but the cumulative share is 1 − 0.9ⁿ: ten observations take 65% of the run's budget, twenty take 88%. Replace it with a **reserved observation account**: at run start a declared share of the *initial* budget moves into an observation ledger; active observations debit it through logged events; exhausting it is a typed refusal *for observation*, and the run continues. This amends Settled #4 in its mechanism, and keeps its intent (relative to the run, never an absolute pool).
->
-> **Suggestion (slice 4).** Replace pairwise swap checks with declared read/write sets on observers. Passive observers commute with everything; active observers with disjoint write sets commute; only overlapping write sets need a declared order. The fold then flags *undeclared* conflicts statically instead of running counterfactual folds.
->
-> **Suggestion (docs).** Cite the lineage. Measurement disturbing the measured system is the *probe effect* (Gait, 1986; McDowell & Helmbold, 1989; Malony, Reed & Wijshoff, 1992), with three standard responses: avoid, compensate, ignore. Passive observers here implement *avoid* by construction; the perturbation ledger implements *compensate*, which prior work does after the fact on traces. Handling it per record, inside state, is the novel part, and the relative observation budget has no precedent found.
->
-> **Review question.** Is editor inspection (paint, hover, `schematic.state.query`) passive by construction, with no code path from UI inspection to the event log? If the outcome of a run can depend on when someone looked, replay identity is gone.
+**Order.** Passive observers commute with everything. Active observers with disjoint write sets commute. Only observers whose write sets overlap need an order, and the document must declare it; the runtime refuses, at load, a document with an undeclared conflict. No run is needed to find one.
+
+**Inspection is passive by construction.** Painting, hovering, selecting and `schematic.state.query` have no code path to the event log. The outcome of a run never depends on when or whether anyone looked, or replay identity would be gone. A QA suite queries a run while it steps and checks that the trace is unchanged.
+
+**Lineage.** Measurement disturbing the measured system is the *probe effect* (Gait, 1986; McDowell & Helmbold, 1989; Malony, Reed & Wijshoff, 1992), with three standard responses: avoid, compensate, ignore. Passive observers implement *avoid* by construction; the perturbation ledger implements *compensate*, which prior work does after the fact over traces. Handling it per record, inside state, and paying for it from the observed run's own budget have no precedent the review found.
 
 ### Collapse and receipts
 
-A consequential effect removes every path in which it did not happen. That is the boundary where possibility becomes recorded fact. RECEIPT and REFUSE are those boundaries: an effect crossing one writes a receipt keyed by an idempotency key, and replaying the log returns the recorded outcome instead of acting again. Everything upstream of a receipt may stay open or uncertain; everything downstream is fact.
+A consequential effect removes every path in which it did not happen. That is the boundary where possibility becomes recorded fact. An effect has three outcomes:
 
-> **Suggestion (slice 2 for the model, slice 4 for real effects).** Add a third outcome: `in-doubt`. A timed-out effect is neither RECEIPT nor REFUSE, and it is the most common real failure. An in-doubt effect is resolved later by a logged reconciliation event (query by key) into a receipt or a refusal.
->
-> **Suggestion.** Derive idempotency keys deterministically from `(run, effect site entity, logical tick, occurrence index)`, store a fingerprint of the effect payload with the key, and refuse same-key/different-payload with a typed error. Record REFUSE outcomes with the same fidelity as receipts.
->
-> **Review question.** Replay never touches the outside world, and a *re-run* is a new run with new keys. Is that distinction explicit in the API, given that outside dedupe windows are finite (Stripe's keys can be pruned after 24 hours)?
+- **receipt**: it happened;
+- **refused**: it did not, and will not;
+- **in-doubt**: it was attempted and its outcome is unknown (a timeout, the most common real failure). An in-doubt effect is resolved later by a logged reconciliation event (query by key) into a receipt or a refusal.
+
+RECEIPT and REFUSE are the boundaries in the document; `in-doubt` is a state of the effect, not a symbol. Refusals are recorded with the same fidelity as receipts.
+
+**Effect keys** are derived, never generated: `(run, effect-site entity, logical tick, occurrence index)`. Each key is stored with a fingerprint of the effect's payload; the same key with a different payload is refused with a typed error. Replay returns the recorded outcome instead of acting again, because a collapsed state cannot collapse twice. A re-run has a new run id, so new keys; outside systems dedupe only within their own windows (Stripe prunes keys after 24 hours), which is why the two operations are separate in the API.
+
+Everything upstream of a receipt may stay open or uncertain; everything downstream is fact.
 
 ### Residuals
 
 | Residual | Compares | Points to |
 |---|---|---|
-| sensor | reading vs estimate | a noisy or miscalibrated observer |
-| forecast | predicted vs actual | a wrong model of the run (deferred with prediction) |
-| policy | intended vs achieved | a document or gate that needs revision |
-| drift | current field vs its baseline | the field itself moved |
+| policy | intended vs achieved | a document or device that needs revision |
+| sensor *(slice 4)* | reading vs estimate | a noisy or miscalibrated observer |
+| structural *(slice 4)* | the document's edge set vs the outside graph's reported edge set, as a typed diff | a model whose shape no longer matches the world |
+| drift *(slice 4)* | current field vs its baseline | the field itself moved |
+| forecast *(later)* | predicted vs actual | a wrong model of the run |
 
-In the runtime the first residual is a policy one: a golden truth table vs a run's result.
-
-> **Suggestion (slice 4).** Add a **structural** residual: the model's shape against the world's reported shape, computed as a typed diff of edge sets. It gives Open question 1 a measurable output. It lines up with ISO 23247's distinction between a driving twin (model-led) and a driven twin (measurement-led), which names the difference but offers no metric for it.
->
-> **Suggestion (slice 4).** Once measured records carry uncertainty, judge sensor residuals normalized by their expected spread (the normalized innovation squared used in Kalman consistency checks), so a residual is compared with what is plausible for that observer.
+In the runtime the first residual is a policy one: a golden truth table vs a run's result. Once measured records carry uncertainty, sensor residuals are judged normalized by their expected spread (the normalized innovation squared of Kalman consistency checks), so a residual is compared with what is plausible for that observer.
 
 ### Control
 
@@ -247,40 +227,56 @@ observe → estimate → (predict) → compare to setpoint → gate or route →
 
 Setpoints and thresholds come from the document, so people author behaviour and the runtime enforces it. Hysteresis lives in the compare step. The receipt is where control collapses possibility.
 
-> **Suggestion (slice 4).** Mark transitions `controllable` or `uncontrollable`, as supervisory control does. A gate can only disable controllable transitions; the instrument can then show which actions in an outside AI graph were preventable and which could only be observed.
+From slice 4, transitions are marked **controllable** or **uncontrollable**, as in supervisory control: a gate can only disable controllable transitions, so the instrument can show which actions in an outside graph were preventable and which could only be observed.
 
 ## Execution (the runtime)
 
-A **run** is: one document revision + an initial set of registered values + a budget. Runs are deterministic: no wall clock, no randomness without a declared seed.
+A **run** is one replay key (document revision, resolved definitions, runtime version, initial registered values, seed) plus a budget. Runs are deterministic: no wall clock, no randomness except from the declared seed.
 
 1. A source's registered value changes; the change is an event.
 2. The event enters a Path through a 0D attachment Point.
 3. The Path schedules arrival at `logical + path delay`. Path delay is declared on the Path (default 1). Geometry does not set logical delay.
 4. Arrival writes the destination Point's signal state.
-5. Hosted logic evaluates when one of its inputs changes.
+5. A device evaluates when one of its inputs changed.
 6. A changed output is emitted at `logical + device delay`, the delay its definition declares (default 0), onto admitted outgoing Paths. Boundary legality is the data core's; the runtime never reaches through a boundary the editor would refuse.
 7. Every step appends to the trace.
 
-The queue is ordered by `(logical, sequence)`, so equal-time events are deterministic. A run stops when the queue is empty (quiet) or the budget is spent (a typed refusal naming what was left).
+Delay lives in both places, as in real circuits: a Path takes time to carry (propagation), a device takes time to respond (device delay). A DELAY or REPEATER is a device whose definition declares a delay and passes its input through. The trace records both delays separately, so a slow run says whether the Path or the device was slow.
 
-Delay lives in both places, as in real circuits: a Path takes time to carry (propagation), a device takes time to respond (gate delay). A DELAY or REPEATER is then simply a device whose definition declares a delay and passes its input through. Both delays show in the trace separately, so a slow run says whether the wire or the device was slow.
+### Two-phase ticks
 
-> **Suggestion (slice 1).** Two-phase ticks. Because every Path delay is at least 1, a device's output always lands at a later tick, and zero-time chains cannot form. The only same-tick hazard is several arrivals at one device. One rule covers it:
->
-> 1. **Update:** apply every arrival scheduled for tick t to signal state.
-> 2. **Evaluate:** evaluate every device whose inputs changed, reading only committed state.
->
-> Within each phase order is irrelevant, which is the VHDL delta-cycle guarantee without the full delta machinery. `sequence` is then assigned by sorting on stable ids (target entity, target point, source Path) and serves serialization only.
->
-> **Suggestion (slice 1).** Make "Path delay ≥ 1" an invariant checked at load. If zero-delay Paths are ever allowed, the scheduler needs full delta rounds and a static check that every cycle has total delay ≥ 1 (typed "algebraic loop" refusal otherwise).
->
-> **Suggestion (slice 1).** Loops need a result other than budget exhaustion. A NOT feeding itself oscillates forever and never goes quiet. `settle` hashes committed state at each tick; a repeated hash returns a typed `oscillating{period, subjects}` result, which reads very differently from "ran out."
->
-> **Suggestion (slice 1).** Numeric policy. Byte identity across browser and `node` fails on floats: sums depend on reduction order, and ECMAScript leaves `Math.exp` and `Math.sin` precision to the engine. Core packs use integers or fixed-point, reductions use a fixed order, and engine-provided transcendental functions are excluded unless implemented in software.
+**Path delay is at least 1**, checked at load. A device's output therefore always arrives at a later tick, even with device delay 0, and no zero-time chain can form. The only same-tick hazard is several arrivals at one device, and one rule covers it. Each tick has two phases:
+
+1. **Update:** apply every arrival scheduled for tick t to signal state, and commit.
+2. **Evaluate:** evaluate every device whose inputs changed, reading only committed state; schedule its outputs; commit its `device.state`.
+
+Within each phase order is irrelevant, which is the VHDL delta-cycle guarantee without the delta machinery. `sequence` is assigned afterwards by sorting on stable ids (target entity, target point, source Path) and serves serialization only.
+
+Zero-delay Paths stay forbidden until a domain pack needs them. Allowing them would require full delta rounds and a static check that every cycle has total delay ≥ 1, refusing an "algebraic loop" otherwise.
+
+### Components hosted on a Path
+
+A Component may sit inline on a Path (`placement.kind: wire`, `wireId + t`). It splits the Path into segments ordered along it, and the Component is a device between them. The Path's declared delay is the **total** for the whole Path: it is divided across the segments in integer ticks, evenly, with any remainder given to the earliest segments. Every segment keeps at least 1 tick, so a Path whose declared delay is smaller than its segment count is refused at load. Adding a hosted Component therefore never silently changes a Path's end-to-end delay.
+
+### Stepping and settling
+
+One `schematic.run.step` is **one tick**: the smallest unit whose result is deterministic. `schematic.run.settle` steps until one of three typed results:
+
+- **quiet**: the queue is empty;
+- **oscillating `{period, subjects}`**: the run has entered a cycle. At each tick the runtime hashes the full state that determines the future: committed signal state, every `device.state`, and the pending queue with arrival times taken relative to the current tick. A repeated hash proves a cycle; committed signal state alone would not, because transitions still in flight can differ between two ticks that look the same. A NOT feeding itself ends here, not in budget exhaustion.
+- **budget spent**: a typed refusal naming what was left in the queue.
+
+### Numeric policy
+
+Byte identity across the browser and `node` fails on floats: sums depend on reduction order, and ECMAScript leaves the precision of `Math.exp`, `Math.sin` and similar functions to the engine. So:
+
+- core packs use integers or fixed-point values;
+- reductions (sums over inputs, over edges) run in a fixed order, sorted by stable id;
+- engine-provided transcendental functions are excluded from rules unless implemented in software within the runtime.
 
 ### Definitions
 
-Behaviour is data, not code. The runtime evaluates **definitions**; it has no built-in knowledge of AND, DELAY or a threshold gate.
+Behaviour is data, not code. The runtime evaluates **definitions**; it has no built-in knowledge of AND, DELAY or a threshold device.
 
 A definition (`soveraeign.schematic/definition@0.1`, schema `formats/schematic.definition.schema.json`) declares:
 
@@ -290,20 +286,20 @@ A definition (`soveraeign.schematic/definition@0.1`, schema `formats/schematic.d
 | `kind` | `combinational`, `temporal`, `stateful`, `observer`, `field` |
 | `inputs`, `outputs` | named attachment Points, each with its observable and form |
 | `rule` | one of a closed set of rule forms: `truth_table`, `threshold` (enter / exit), `pass` (identity), `route` (selector → output); later `transition` (state machine) |
+| `state` | for stateful rules: the state observable the rule reads and writes, and its form |
 | `delay` | device delay in logical ticks |
-| `observables` | derived observables it produces, each with update rule, blast radius, staleness tolerance |
-| `observer` | for observer definitions: class (passive / active), cost, limits |
+| `observables` | observables it produces: unit, form, update rule, blast radius, staleness tolerance |
+| `observer` | for observer definitions: class (passive / active), cost, limits, read and write sets |
+| `children` | for compositions: the definitions composed, each pinned `id@version` |
 | `projection` | glyph and labels; presentation only |
 
-The rule forms are the only runtime code. A new gate, device or domain is a new definition, never a new code path; NAND, NOR, XNOR and larger devices are definitions or compositions of definitions.
+The rule forms are the only runtime code. A rule form declares whether it reads state: `threshold` and `transition` do, and a definition using them must be of kind `stateful` and declare `state`. A new gate, device or domain is a new definition, never a new code path; NAND, NOR, XNOR and larger devices are definitions or compositions.
+
+Compositions pin their children by `id@version`. A run resolves the full set, children included transitively, and the trace records that resolved set; it is part of the replay key.
 
 Definitions are **domain-driven**: they arrive in domain packs (Issue #4), and a pack is the unit a domain publishes (logic, dataflow, a workstation model, ...). Until #4 defines the pack format, the state space carries a minimal pack envelope (`id`, `version`, `definitions[]`) that #4 will absorb as one member of the full domain pack. The built-in vocabulary (SOURCE, SINK, NOT, AND, OR, XOR, SWITCH, DELAY, threshold GATE) ships as the `core.logic` pack in `data/`, loaded the same way as any other pack, so built-ins have no privileged path.
 
 A document references definitions by `id@version` and records which packs it uses. A `.sovpak` embeds the packs its document references, so a package runs anywhere. A document that references a definition it cannot resolve opens, but refuses to run, with a typed refusal naming the missing definition.
-
-> **Review question.** Composed definitions reference other definitions. Does a composition pin its children by `id@version`, and does the trace record the full resolved set, including transitive pins?
->
-> **Review question.** Once hysteresis reads its own state record, the `threshold` rule form belongs to kind `stateful`. Does the definition schema let a rule form declare the state it reads?
 
 ### What `signalMode` becomes
 
@@ -311,54 +307,67 @@ A document references definitions by `id@version` and records which packs it use
 
 ## Files
 
-- A `.sov` gains only **authored** state-space data: Path delays, definition references (`id@version`) and the packs they come from, thresholds, observable and field declarations, initial registered values. Nothing a run computes is written to it.
-- **Runs are saved.** A run's trace is its own file, `.sovtrace` (`soveraeign.schematic/trace@0.1`, MIME `application/vnd.soveraeign.schematic-trace+json`): document id and revision, the pack versions used, the input set, budget, the event log, and optionally the derived records for audit. A trace without derived records is still complete, because they are recomputable. A trace is kept apart from the `.sov` so running a document never changes the document, and so one document can have many runs.
-- File menu: Save Run / Open Run, owned by `75-persistence.js` like every other file. Opening a trace against a document of a different revision opens read-only and says so; it cannot be replayed until the revisions match.
+- A `.sov` gains only **authored** state-space data: Path delays, definition references (`id@version`) and the packs they come from, thresholds, device initial states, observable and field declarations, observation-account share and observer order, initial registered values. Nothing a run computes is written to it.
+- **Runs are saved.** A run's trace is its own file, `.sovtrace` (`soveraeign.schematic/trace@0.1`, MIME `application/vnd.soveraeign.schematic-trace+json`): the replay key (document id and revision, resolved definitions, runtime version, trace format version, inputs, seed), the budget, the event log, and optionally the derived records for audit. A trace without derived records is still complete, because they are recomputable. A trace is kept apart from the `.sov` so running a document never changes the document, and so one document can have many runs.
+- File menu: Save Run / Open Run, owned by `75-persistence.js` like every other file. Opening a trace against a document of a different revision opens read-only and says so; it cannot be replayed until the replay key matches.
 - A `.sovpak` may carry traces alongside its document and packs (`traces[]`), so a package can ship with its evidence.
 - Golden traces live beside the examples they run.
-
-> **Suggestion (slice 1).** "Byte-identical" needs a canonical encoding. Use RFC 8785 (JSON Canonicalization Scheme) for `.sovtrace` and derived records, and record the runtime version and trace format version in every trace.
->
-> **Suggestion (later).** Hash-chain the event log for tamper evidence, and carry CloudEvents-style `source` + `id` on every imported event (slice 4) as its dedupe key.
+- **Canonical encoding.** `.sovtrace` files and derived records are encoded with RFC 8785 (JSON Canonicalization Scheme), so "byte-identical" has one meaning.
+- *Later:* the event log is hash-chained for tamper evidence; imported events carry CloudEvents-style `source` + `id` as their dedupe key (slice 4).
 
 ## Surfaces
 
-The runtime is transport-neutral and headless, like the data core, so the browser, HTTP, MCP and `node` scripts share one implementation. Proposed operations, following the existing `schematic.<noun>.<verb>` naming:
+The runtime is transport-neutral and headless, like the data core, so the browser, HTTP, MCP and `node` scripts share one implementation. Operations follow the existing `schematic.<noun>.<verb>` naming:
 
-- `schematic.run.start` (document, registered inputs, budget) → run id
-- `schematic.run.step` / `schematic.run.settle` → records emitted
-- `schematic.state.query` (subject, observable, time, vantage) → records
+- `schematic.run.start` (document, registered inputs, budget) → a new run id
+- `schematic.run.step` → one tick's records; `schematic.run.settle` → quiet, oscillating, or budget spent
+- `schematic.run.replay` (trace) → the recomputed run, or a typed refusal naming the first divergence; never acts outside
+- `schematic.state.query` (subject, observable, time, vantage) → records; passive
 - `schematic.run.trace` → the trace
-- later: `schematic.state.observe` (import measured records; instrument use)
+- slice 4: `schematic.state.observe` (import measured records)
 
 Refusals return receipts and do not enter editor history, as for every other operation.
 
-> **Review question.** What is one `schematic.run.step`: one event, or one tick? With two-phase ticks, a tick is the smallest unit whose result is deterministic, which makes it the natural step.
->
-> **Suggestion (slice 4, at the edges only).** Standards adoption lives in import and export, never in the core record: PROV-JSON export of provenance (observer → Agent, rule application → Activity, record → Entity, inputs → wasDerivedFrom); OpenTelemetry and CloudEvents import for measured records, with metrics becoming signal state and spans becoming particles. Pin the semantic-convention version per import adapter; the GenAI conventions are still pre-stable.
+**Standards live at the edges, never in the core record (slice 4).** Export provenance as PROV-JSON (observer → Agent, rule application → Activity, record → Entity, inputs → wasDerivedFrom). Import measured records from OpenTelemetry, with metrics becoming signal state and spans becoming particles, and CloudEvents for discrete events. Each import adapter pins its semantic-convention version; the GenAI conventions are still pre-stable.
 
 ## Module ownership
 
 Proposed additions to `MODULES.md`:
 
-- `src/07-state-space.js`: the state record, event log, scheduler, fold, rule evaluation, fields and residuals. Pure; no DOM; loadable by `scripts/`, `mcp/server.mjs` and the editor, like `05-data-core.js` and `06-attachment-core.js`.
+- `src/07-state-space.js`: the state record, event log, scheduler, fold, rule forms, fields and residuals. Pure; no DOM; loadable by `scripts/`, `mcp/server.mjs` and the editor, like `05-data-core.js` and `06-attachment-core.js`.
 - `src/25-signal.js`: becomes the projection of settled or current state-space records onto the canvas.
 - `src/55-render.js`: packets are driven from trace particles when a run is live.
 - `src/75-persistence.js`: Save Run / Open Run and `.sovtrace`, the only place a trace is serialized.
 - `data/core.logic.pack.json`: the built-in definitions.
 - `formats/schematic.state-record.schema.json`, `formats/schematic.trace.schema.json`, `formats/schematic.definition.schema.json`.
 
+## Invariants
+
+What the runtime checks, and where. Each becomes a QA assertion in the slice that introduces it.
+
+At load (typed refusal, the document still opens):
+- every Path delay ≥ 1, and ≥ its segment count when Components are hosted on it;
+- every referenced definition resolves, children included;
+- every stateful device has a declared initial state;
+- every field's ε is within its stability bound;
+- no two active observers with overlapping write sets lack a declared order.
+
+At run time:
+- devices read only committed state;
+- no outcome depends on `sequence`;
+- inspection never writes to the event log;
+- the same effect key never carries two payloads;
+- replay under the same replay key is byte-identical under RFC 8785.
+
 ## Slices
 
 Each slice ends with its QA suite inside `python scripts/qa.py`.
 
-1. **Record, definitions and fold.** State record, definition and trace schemas with validators; the minimal pack envelope and `core.logic` with NOT / AND / OR / XOR as truth-table data; event log; `(logical, sequence)` scheduler with budget; `A AND B → Q` run over all four input vectors with golden `.sovtrace` files; replay identity; API / HTTP / MCP parity; nothing written to `.sov`.
-2. **Visible runtime.** `SOURCE → NOT → DELAY → SWITCH → SINK A / SINK B` from Issue #6; Path and device delays; packets rendered from the trace; Save Run / Open Run; assertions with enter/exit thresholds on a continuous input.
-3. **Fields.** Laplacian diffusion and advection as declared fields; signal colour moved onto a declared field; `25-signal.js` reduced to projection.
-4. **Measurement.** Observer registry (passive / active, limits); perturbation ledger; sensor and policy residuals; `schematic.state.observe` for importing measured records (the instrument).
-5. **Later, only when earned.** Stateful devices (latch, clock, edge); predicted state, possibility sets and ensembles; sensor placement from the uncertainty map.
-
-> **Suggestion.** Slice 1 grows by the determinism items above: the replay key, two-phase ticks with canonical ordering, the Path delay invariant, the typed oscillation result, the numeric policy, canonical encoding, and intent logging. Slice 2 adds the device `state` record for hysteresis. The instrument-facing record extensions (quality, dual timestamps, GUM certainty, `estimated`, structural residual, controllability) collect in slice 4.
+1. **Record, definitions and fold.** State record, definition and trace schemas with validators; observable declarations with units; the minimal pack envelope and `core.logic` with NOT / AND / OR / XOR as truth-table data; event log and replay key; two-phase ticks with Path delay ≥ 1 checked at load; step = one tick; settle with quiet / oscillating / budget spent; numeric policy; RFC 8785 encoding; `run.replay` separate from `run.start`; `A AND B → Q` over all four input vectors with golden `.sovtrace` files; a NOT loop that settles as oscillating; replay identity; API / HTTP / MCP parity; nothing written to `.sov`.
+2. **Visible runtime.** `SOURCE → NOT → DELAY → SWITCH → SINK A / SINK B` from Issue #6; Path and device delays, including Components hosted on a Path; packets rendered from the trace; Save Run / Open Run; the `device.state` record; threshold devices with enter / exit hysteresis, declared initial state and margin; effect outcomes with receipt / refused / in-doubt and derived effect keys; inspection-is-passive QA.
+3. **Fields.** `consensus` and `advection` as declared operators with the ε check; signal colour moved onto `presentation.signal-color`; `25-signal.js` reduced to projection.
+4. **Instrument.** Observer registry with class, limits and read/write sets; observation account; perturbation ledger; instrument coordinates (quality, source and receipt time, GUM certainty) and the `estimated` kind; sensor, structural and drift residuals; controllability; `schematic.state.observe` with the OpenTelemetry adapter first; PROV-JSON export; intent logging and reconciliation for effects that reach outside.
+5. **Later, only when earned.** Latches, clocks and edges on the `device.state` mechanism; predicted state, possibility sets and ensembles; sensor placement from the uncertainty map; an OPC UA / DTDL adapter if an industrial pack earns it; hash-chained logs.
 
 ## Non-goals
 
@@ -369,13 +378,13 @@ Analog or electrical simulation; exact Redstone emulation; HDL synthesis; amplit
 1. **Delay** is on both the Path (propagation) and the device (response). *(2026-09-25)*
 2. **Behaviour** is definitions as data, delivered in domain packs; built-ins are the `core.logic` pack. *(2026-09-25)*
 3. **Runs are saved** as `.sovtrace`, separate from the document. *(2026-09-25)*
-4. **Active observation** is paid relative to the observed run's own budget, capped by a declared share. *(2026-09-25)*
+4. **Active observation** is paid relative to the observed run: a reserved observation account holding a declared share of the initial budget (default 10%); exhausting it refuses observation, not the run. *(2026-09-25; mechanism amended by review the same day)*
+5. **Zero-delay Paths** are forbidden; Path delay ≥ 1 is checked at load. *(2026-09-25)*
+6. **Hysteresis** ships in slice 2 on the `device.state` record. *(2026-09-25)*
+7. **Scheduling** is two-phase ticks over committed state; `sequence` is serialization only; one step is one tick. *(2026-09-25)*
+8. **Intent logging** waits for effects that reach outside (slice 4); until then replay identity is the divergence check. *(2026-09-25)*
+9. **The first import standard** is OpenTelemetry. *(2026-09-25)*
 
 ## Open questions
 
-1. **Connections for the instrument.** When schematically watches an outside system, who says what connects to what? (a) A person draws the model, and outside readings only attach to the drawn entities. (b) The outside system also reports its connections, and those arrive as measured records. The draft's lean: (a) by default; reported connections may arrive as measured records shown as proposals, and become part of the document only when someone accepts them, so nothing observed silently rewrites what was authored. This only matters at slice 4.
-
-2. **Zero-delay Paths.** Forbid them (two-phase ticks stay sufficient), or allow them (full delta rounds plus algebraic-loop checks)? The review leans toward forbidding them until a domain pack needs them.
-3. **Hysteresis timing.** Move the device `state` record into slice 2, or ship single-threshold gates in slice 2 and defer hysteresis to slice 5?
-4. **Observation account.** Confirm the reserved-account mechanism as the amendment to Settled #4, and pick the default share.
-5. **First import standard.** For slice 4, which lands first: OpenTelemetry (closest to AI agent pipelines) or OPC UA / DTDL (closest to industrial twins)?
+1. **Connections for the instrument (slice 4).** When schematically watches an outside system, who says what connects to what? (a) A person draws the model, and outside readings only attach to the drawn entities. (b) The outside system also reports its connections, and those arrive as measured records. Current lean: (a) by default; reported connections arrive as measured records shown as proposals and become part of the document only when someone accepts them, so nothing observed silently rewrites what was authored. The structural residual measures the gap either way.
