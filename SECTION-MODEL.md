@@ -284,6 +284,8 @@ is the same on all of them.
 **Cards.** A closed section draws each inner line as an inset boundary.
 - Each region is filled as what it is: solid is the material, space is a wash.
 - A band's `depth` keeps the frame's bevel.
+- A solid core (a disk, a coated core) is bevelled inside its innermost line, lit from the top
+  left, so a solid body does not read as a blank card. Its label is lifted clear of the shade.
 - A label and the container guide sit inside the innermost line.
 
 **Wires.** An open section is drawn as nested strokes along the route, outside in, so a
