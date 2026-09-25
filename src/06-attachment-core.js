@@ -69,17 +69,27 @@
     ];
     return templatePointSpecs(entity);
   }
-  function customPointSpecs(entity,d,base){
+  function customPointSpecs(entity,d,base,{keepCollisions=false}={}){
     // Authored ports: additions to the template's under 'standard', the whole set under
-    // 'none'. Only a 2D surface exposes them. An entry that names no valid side, or whose id
-    // is already taken (as an id or a compatId), is not exposed; a compatId already taken
-    // falls back to the entry's own id.
+    // 'none'. Only a 2D surface exposes them. An entry that names no valid side is not
+    // exposed. An entry whose id is already taken (as an id or a compatId) is dropped,
+    // unless `keepCollisions` asks it kept: it is then exposed under a fresh id
+    // (`<id>~2`, `<id>~3`, ...: the first not taken), tagged `originalId` so a caller
+    // (load cleaning) can decide whether a bound Wire still needs it. A compatId already
+    // taken falls back to the entry's own id.
     if(d!==2)return [];
     const authored=Array.isArray(entity?.config?.attachmentPoints)?entity.config.attachmentPoints:[];
     const used=new Set(base.flatMap(x=>[x.id,x.compatId]));
     const out=[];
     for(const raw of authored){
-      const spec=declaredSpec(raw,{authored:true});if(!spec||used.has(spec.id))continue;
+      const spec=declaredSpec(raw,{authored:true});if(!spec)continue;
+      if(used.has(spec.id)){
+        if(!keepCollisions)continue;
+        const originalId=spec.id;
+        let n=2,candidate=`${originalId}~${n}`;
+        while(used.has(candidate))candidate=`${originalId}~${++n}`;
+        spec.id=candidate;spec.originalId=originalId;
+      }
       if(used.has(spec.compatId)||spec.compatId===spec.id)spec.compatId=spec.id;
       out.push(spec);
       used.add(spec.id);used.add(spec.compatId);
@@ -87,7 +97,10 @@
     return out;
   }
   // The authored ports a 2D surface of this record exposes, whatever its current host.
-  function authoredPointSpecs(entity){return customPointSpecs(entity,2,templatePointSpecs(entity))}
+  // `{keepCollisions:true}` keeps a colliding entry under a fresh id (`originalId` marks
+  // it) instead of dropping it; load cleaning uses this to decide, per Wire, whether the
+  // entry is still needed.
+  function authoredPointSpecs(entity,opts){return customPointSpecs(entity,2,templatePointSpecs(entity),opts)}
   function pointSpecs(entity){
     const d=effectiveDimension(entity),base=basePointSpecs(d,entity);
     return [...base,...customPointSpecs(entity,d,base)];

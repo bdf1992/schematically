@@ -115,15 +115,21 @@ template's declared ports (`left`/`in`, `right`/`out`, `top`/`control` for the t
 `attachmentPoints` as additions; `none` makes `attachmentPoints` the complete list. A Plane's default is `none`.
 The loader never writes template ports into the stored array, and never refuses a list: it rewrites each stored list
 into exactly the authored ports it exposes (`t` coerced to a number and clamped to `0..1`, an invalid `flow` read as
-`duplex`, absent or empty `channels` read as `main`, entries with no valid side or with an id already taken dropped).
+`duplex`, absent or empty `channels` read as `main`, entries with no valid side dropped). An entry whose id or
+compat id collides with an earlier one is dropped too, unless a bound Wire end refers to it (by its original id or
+its declared compat id): that entry is instead kept under a fresh id (`<id>~2`, `<id>~3`, ...) and the Wire end is
+rebound to it by `pointId`, so loading never unbinds a Wire on a collision.
 A retype keeps the new template's ports in order, an authored port with a template id replacing it, followed by the
-remaining authored ports, stored in the smallest form. A component `create` or `update` that sets
+remaining authored ports, stored in the smallest form. It is refused with `PORT_IN_USE` when it would leave a bound
+Wire end resolving to a different port id than before (a compat-id match to a different port counts as moving it),
+unless the retype changes the component's effective dimension, the one case a bound end may still move by compat id
+(a typed Component's `out` to a Point's `self`). A component `create` or `update` that sets
 `attachmentPoints` is checked and stored in the smallest form, keeping order: `standard` plus additions when the list
 begins with the template's ports in template order and unchanged, otherwise `none` plus the full list as given. It is
 refused for a repeated id or compat id, an invalid side, t or flow, or a repeated channel id. Every component edit
 (a port list, `attachmentDefaults: none`, a retype) is refused with `PORT_IN_USE` when it would remove a port a Wire
-ends on, and with `CHANNEL_MISMATCH` when it would leave a Wire between two ports sharing no channel, so a saved
-document always passes validation. See `ATTACHMENT-POINT-MODEL.md`, *Declared ports*.
+ends on or move it to a different port id, and with `CHANNEL_MISMATCH` when it would leave a Wire between two ports
+sharing no channel, so a saved document always passes validation. See `ATTACHMENT-POINT-MODEL.md`, *Declared ports*.
 
 
 ## Compact records (dev, 2026-09-01)

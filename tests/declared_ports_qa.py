@@ -232,6 +232,65 @@ out.planePreset=D.templatePreset('plane');
   out.amend3=r;
 }
 
+// Issue #46: load cleaning never unbinds a Wire on an id/compat collision (step 1-2), and a
+// retype never silently moves a bound Wire to a different port id (step 3).
+{
+  const r={};
+  // The review's file: 'a' authors [{id:p,compatId:q,side:bottom},{id:q,compatId:r,side:top}];
+  // the second entry's id collides with the first's compatId. It is kept as q~2, and Wire w
+  // (bound by side 'r', a's compat id) stays bound to it, by compat id.
+  {
+    const file={schema:D.DOCUMENT_SCHEMA,id:'collide',revision:0,references:[],components:[
+      {id:'a',symbolId:'act',x:0,y:0,config:{attachmentPoints:[{id:'p',compatId:'q',side:'bottom'},{id:'q',compatId:'r',side:'top'}]}},
+      {id:'b',symbolId:'act',x:400,y:0}
+    ],wires:[{id:'w',a:'a',aSide:'r',b:'b',bSide:'in'}]};
+    const once=D.documentFromFilePayload(clone(file));
+    const twice=D.normalizeDocument(D.normalizeDocument(clone(once)));
+    const back=reload(once);
+    const view=d=>{const a=d.components.find(c=>c.id==='a');return {ids:ids(a),stored:a.config.attachmentPoints,wire:[d.wires[0].aAttachment.pointId,d.wires[0].bAttachment.pointId,d.wires[0].aSide]}};
+    r.review={once:view(once),twice:view(twice),back:view(back),valid:D.validateDocument(once).ok};
+  }
+  // A second collision variant: the Wire is bound by pointId to the collision's original id
+  // ('q'), not by the surviving compat id. The load rebinds the pointId itself.
+  {
+    const file={schema:D.DOCUMENT_SCHEMA,id:'collide2',revision:0,references:[],components:[
+      {id:'a',symbolId:'act',x:0,y:0,config:{attachmentPoints:[{id:'p',compatId:'q',side:'bottom'},{id:'q',compatId:'r',side:'top'}]}},
+      {id:'b',symbolId:'act',x:400,y:0}
+    ],wires:[{id:'w',a:'a',aAttachment:{pointId:'q'},b:'b',bSide:'in'}]};
+    const once=D.documentFromFilePayload(clone(file));
+    const twice=D.normalizeDocument(D.normalizeDocument(clone(once)));
+    const view=d=>{const a=d.components.find(c=>c.id==='a');return {ids:ids(a),stored:a.config.attachmentPoints,wire:[d.wires[0].aAttachment.pointId,d.wires[0].bAttachment.pointId,d.wires[0].aSide]}};
+    r.byPointId={once:view(once),twice:view(twice),valid:D.validateDocument(once).ok};
+  }
+  // A collision no Wire needs is still dropped, exactly as before (dupIds, step 18).
+  {
+    const file={schema:D.DOCUMENT_SCHEMA,id:'collide3',revision:0,references:[],wires:[],components:[
+      {id:'a',symbolId:'act',x:0,y:0,config:{attachmentPoints:[{id:'p',compatId:'q',side:'bottom'},{id:'q',compatId:'r',side:'top'}]}}
+    ]};
+    const once=D.documentFromFilePayload(clone(file));
+    r.noWireNeed={ids:ids(once.components[0]),stored:once.components[0].config.attachmentPoints};
+  }
+  // Step 3: a Plane authors {id:'in',side:'bottom'}; a Wire binds to it. Retyped to 'act', the
+  // authored 'in' has no same-id template port and the Wire would move to 'left' by compat id
+  // ('in' is left's compat), so the retype is refused.
+  {
+    const d=doc0();mk(d,{id:'pl',symbolId:'plane',x:0,y:0,config:{attachmentPoints:[{id:'in',side:'bottom',t:.5,flow:'in'}]}});
+    mk(d,{id:'src',symbolId:'act',x:-400,y:0});
+    mkw(d,{id:'w',a:'src',aSide:'out',b:'pl',bAttachment:{pointId:'in'}});
+    const rc=upd(d,'pl',{symbolId:'act'});
+    r.retypeRefused={ok:rc.ok,msg:rc.error?.message||'',ids:ids(d.components.find(c=>c.id==='pl')),wire:d.wires[0].bAttachment.pointId};
+  }
+  // The kept exception: a retype to a Point keeps a Wire on 'out' bound to 'self' - the one
+  // case where a change of effective dimension may resolve by compat id.
+  {
+    const d=doc0();mk(d,{id:'a',symbolId:'act',x:0,y:0});mk(d,{id:'b',symbolId:'act',x:400,y:0});
+    mkw(d,{id:'w',a:'a',aSide:'out',b:'b',bSide:'in'});
+    const rc=upd(d,'a',{symbolId:'point'});
+    r.pointException={ok:rc.ok,msg:rc.error?.message||'',ids:ids(d.components.find(c=>c.id==='a')),wire:d.wires[0].aAttachment.pointId};
+  }
+  out.followUps=r;
+}
+
 // Step 5 + 9: every example round-trips with the same port ids, bound ports and stored forms.
 out.examples={};
 for(const file of JSON.parse(process.argv[4])){
@@ -391,6 +450,33 @@ def main() -> None:
         assert got['err'] == '' and got['stored'] == stored and got['same'] and got['idempotent'], (key, got)
         exp_ids = ['left', 'right', 'top'] + [p['id'] for p in stored]
         assert got['ids'] == exp_ids and got['paste'] == {'ok': True, 'ids': exp_ids}, (key, got)
+
+    # Issue #46, steps 1-2: load cleaning never unbinds a Wire on an id/compat collision.
+    fu = r['followUps']
+    collided = {
+        'ids': ['left', 'right', 'top', 'p', 'q~2'],
+        'stored': [
+            {'id': 'p', 'compatId': 'q', 'side': 'bottom', 't': .5, 'flow': 'duplex', 'channels': m},
+            {'id': 'q~2', 'compatId': 'r', 'side': 'top', 't': .5, 'flow': 'duplex', 'channels': m},
+        ],
+        'wire': ['q~2', 'left', 'r'],
+    }
+    rv = fu['review']
+    for key in ('once', 'twice', 'back'):
+        assert rv[key] == collided, (key, rv[key])
+    assert rv['valid'], rv
+    bp = fu['byPointId']
+    for key in ('once', 'twice'):
+        assert bp[key] == collided, (key, bp[key])
+    assert bp['valid'], bp
+    assert fu['noWireNeed'] == {'ids': ['left', 'right', 'top', 'p'], 'stored': [{'id': 'p', 'compatId': 'q', 'side': 'bottom', 't': .5, 'flow': 'duplex', 'channels': m}]}, fu['noWireNeed']
+
+    # Issue #46, step 3: a retype that would move a bound Wire to a different port id is
+    # refused; a retype to a Point keeping a Wire on out->self is the one kept exception.
+    rr = fu['retypeRefused']
+    assert rr['ok'] is False and 'PORT_IN_USE' in rr['msg'] and 'would move' in rr['msg'] and rr['ids'] == ['in'] and rr['wire'] == 'in', rr
+    pe = fu['pointException']
+    assert pe['ok'] is True and pe['msg'] == '' and pe['ids'] == ['self'] and pe['wire'] == 'self', pe
 
     # Steps 5 + 9: every example round-trips unchanged; stored forms are saved as authored.
     for file, ex in r['examples'].items():

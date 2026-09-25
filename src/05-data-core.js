@@ -124,7 +124,7 @@
     for(const component of doc.components){
       normalizeComponentIdentity(component);
       applyTemplatePreset(component);
-      cleanStoredPorts(component);
+      cleanStoredPorts(doc,component);
       component.form=normalizeComponentForm(component.form,component.canvas);
       if(!isObject(component.canvas))component.canvas={};
       component.canvas.id=`canvas:component:${component.id||'unknown'}`;component.canvas.scope='local';component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
@@ -332,19 +332,53 @@
     if(spec.label)port.label=spec.label;
     return port;
   }
+  // An end's raw stored reference, the way normalizeWireEndpoints reads one: a real
+  // (non-free) attachment's pointId, otherwise the compatibility side.
+  function endRawRef(wire,end){
+    const att=wire?.[end+'Attachment'];
+    if(isFreeEndpoint(att))return null;
+    const value=att?.pointId??wire?.[end+'Side'];
+    return value==null?null:String(value);
+  }
   // Loading cleans, never refuses: a stored list is rewritten into exactly the authored
   // ports the loader exposes (t coerced and clamped, an invalid flow read as duplex, empty
-  // channels read as main, entries without a valid side or with a taken id dropped).
-  function cleanStoredPorts(component){
+  // channels read as main, entries without a valid side dropped). An entry an id or compat
+  // id collision would otherwise drop is instead kept under a fresh id (`<id>~2`, ...) when
+  // a bound Wire end refers to it (by its original id or its declared compat id), and that
+  // Wire end is rebound to the fresh id; a colliding entry no Wire needs is dropped, as
+  // before. Cleaning stays idempotent: once ids no longer collide, nothing further moves.
+  function cleanStoredPorts(doc,component){
     const config=component?.config;if(!isObject(config)||!Array.isArray(config.attachmentPoints))return component;
-    config.attachmentPoints=Attachment.authoredPointSpecs(component).map(storedPort);
+    const specs=Attachment.authoredPointSpecs(component,{keepCollisions:true});
+    const wires=Array.isArray(doc?.wires)?doc.wires:[];
+    const keepColliding=spec=>{
+      let needed=false;
+      for(const wire of wires)for(const end of ['a','b']){
+        if(wire[end]!==component.id)continue;
+        const ref=endRawRef(wire,end);
+        if(ref==null||(ref!==spec.originalId&&ref!==spec.compatId))continue;
+        needed=true;
+        const att=wire[end+'Attachment'];
+        if(isFreeEndpoint(att))continue;
+        wire[end+'Attachment']={kind:'attachment-ref',componentId:component.id,pointId:spec.id};
+        wire[end+'Side']=spec.compatId;
+      }
+      return needed;
+    };
+    const kept=specs.filter(spec=>!spec.originalId||keepColliding(spec));
+    for(const spec of kept)delete spec.originalId;
+    config.attachmentPoints=kept.map(storedPort);
     return component;
   }
   // Every component edit (update, retype, the 'none' switch, a port list) is checked against
   // the Wires that end on the component: an end whose port the edit removes is refused
   // (PORT_IN_USE), and so is an end left on a port sharing no channel with the port at the
-  // Wire's other end (CHANNEL_MISMATCH). A port survives a change of effective dimension
-  // under its compat id (left/in -> start), as reconciliation has always rebound it.
+  // Wire's other end (CHANNEL_MISMATCH). When the edit is a retype (a symbolId change) that
+  // leaves the effective dimension unchanged, a bound end must resolve to the exact same
+  // port id as before (PORT_IN_USE otherwise): a name that would move it to a different id
+  // by compat-id resolution is refused, not followed silently. Only a change of effective
+  // dimension may move a port by compat id (left/in -> start; a typed Component's out ->
+  // a Point's self), as reconciliation has always rebound it.
   function assertWiresSurviveEdit(doc,before,after){
     const dimensionChanged=Attachment.effectiveDimension(before)!==Attachment.effectiveDimension(after);
     const resolveEnd=(component,wire,end,edited)=>{
@@ -355,6 +389,10 @@
       if(wire[end]!==after.id||!wireEndBound(wire,end))continue;
       const spec=resolveEnd(after,wire,end,true);
       if(!spec)throw new Error(`PORT_IN_USE: wire ${wire.id} ends on port ${wire[end+'Attachment']?.pointId||wire[end+'Side']} of ${after.id}`);
+      if(!dimensionChanged){
+        const beforeSpec=resolveEnd(before,wire,end,false);
+        if(beforeSpec&&spec.id!==beforeSpec.id)throw new Error(`PORT_IN_USE: wire ${wire.id} would move from port ${beforeSpec.id} to ${spec.id} of ${after.id}`);
+      }
       const other=end==='a'?'b':'a';if(!wireEndBound(wire,other))continue;
       const otherComponent=wire[other]===after.id?after:doc.components.find(c=>c.id===wire[other]);
       const otherSpec=otherComponent?resolveEnd(otherComponent,wire,other,wire[other]===after.id):null;
