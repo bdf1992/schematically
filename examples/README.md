@@ -9,6 +9,7 @@ These files are executable reference material for the 0.1 contract.
 | `03-contained-stage.sov` | Ordinary Component hosted by an open interior Region |
 | `04-boundary-port.sov` | Explicit boundary crossing through an inside-facing parent Port |
 | `05-rate-chain.sov` | Global × source Component × Wire rate composition |
+| `09-print-ai-proof-run.sov` | The Print AI proof-resolution run: an adopted AI step, an eval gate, a monitored fan-out, a human pause, and a mediated effect with replay identity. It carries five saved scenarios; run them with `sim.scenario(id)` (`GRAPH-MODEL.md`) |
 | `08-gated-service.sov` | Authored by hand in the `skills/author-offline` form: a Plane with three boundary Points, an authority into a gate's control, a receipt |
 | `classic-reference.sovpak` | Portable reference package containing metadata and embedded copies of the classic examples |
 

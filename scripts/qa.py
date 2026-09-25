@@ -11,6 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 STATIC=[
     'tests/dimensional_form_qa.py',
+    'tests/graph_core_qa.py',
     'tests/pre_repo_hardening_qa.py',
     'tests/author_offline_qa.py',
     'tests/file_load_presets_qa.py',

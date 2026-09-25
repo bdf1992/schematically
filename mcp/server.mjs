@@ -8,8 +8,12 @@ const HERE=path.dirname(fileURLToPath(import.meta.url));
 // Absolute paths are not valid ESM specifiers on Windows; import by file:// URL everywhere.
 await import(pathToFileURL(path.join(HERE,'../src/06-attachment-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/05-data-core.js')).href);
-const Data=globalThis.SovSchematicData;
+await import(pathToFileURL(path.join(HERE,'../src/07-graph-core.js')).href);
+const Data=globalThis.SovSchematicData,Graph=globalThis.SovSchematicGraph;
 if(!Data)throw new Error('SovSchematicData core failed to load');
+if(!Graph)throw new Error('SovSchematicGraph core failed to load');
+// Graph queries and the simulation are read-only over the document; one session per server.
+const graphSession=Graph.createSession();
 
 const args=process.argv.slice(2);
 const arg=(name,fallback)=>{const i=args.indexOf(name);return i>=0&&args[i+1]?args[i+1]:fallback};
@@ -40,6 +44,7 @@ function rpcResult(id,result){return {jsonrpc:'2.0',id,result}}
 function rpcError(id,code,message,data){return {jsonrpc:'2.0',id,error:{code,message,...(data===undefined?{}:{data})}}}
 function toolPayload(value,isError=false){return {content:[{type:'text',text:JSON.stringify(value,null,2)}],structuredContent:value,isError}}
 function executeTool(name,args={}){
+  if(graphSession.names.includes(name)){const value=graphSession.execute(name,documentState,args);return {ok:value.ok!==false,value,mutates:false}}
   if(name==='schematic.history.undo'){const prev=historyUndo.pop();if(!prev)return {ok:false,value:{error:'Nothing to undo'},mutates:false};historyRedo.push(cloneDoc());Data.replaceDocument(documentState,prev);return {ok:true,value:Data.clone(documentState),mutates:true}}
   if(name==='schematic.history.redo'){const next=historyRedo.pop();if(!next)return {ok:false,value:{error:'Nothing to redo'},mutates:false};historyUndo.push(cloneDoc());Data.replaceDocument(documentState,next);return {ok:true,value:Data.clone(documentState),mutates:true}}
   if(name==='schematic.checkpoint.list')return {ok:true,value:checkpointStore().map(({document,...meta})=>meta),mutates:false};
@@ -64,7 +69,7 @@ async function handleMcp(req,res){
   let rpc;try{rpc=await bodyJson(req)}catch(e){return json(res,400,rpcError(null,-32700,'Parse error',e.message),{'MCP-Protocol-Version':MCP_VERSION})}
   const id=rpc.id??null,method=rpc.method;
   if(method==='server/discover')return json(res,200,rpcResult(id,{protocolVersion:MCP_VERSION,serverInfo:{name:'soveraeign-schematic',version:'0.1.24'},capabilities:{tools:{listChanged:false}},instructions:'CRUD against SOV Schematic document@0.1. File packages use package@0.1.'}),{'MCP-Protocol-Version':MCP_VERSION});
-  if(method==='tools/list'){const extra=[{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}}];return json(res,200,rpcResult(id,{tools:[...Data.operationTools(),...extra]}),{'MCP-Protocol-Version':MCP_VERSION});}
+  if(method==='tools/list'){const extra=[{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}}];return json(res,200,rpcResult(id,{tools:[...Data.operationTools(),...extra,...Graph.tools()]}),{'MCP-Protocol-Version':MCP_VERSION});}
   if(method==='tools/call'){
     const name=rpc.params?.name,args=rpc.params?.arguments||{};
     const result=executeTool(name,args);if(result.mutates)saveDocument();
@@ -82,6 +87,16 @@ async function handleApi(req,res,url){
       const input=await bodyJson(req),incoming=Data.makeDocument(input),valid=Data.validateDocument(incoming);if(!valid.ok)return json(res,400,{ok:false,errors:valid.errors});
       const before=cloneDoc();Data.replaceDocument(documentState,incoming);Data.touch(documentState);recordHistory(before);saveDocument();return json(res,200,Data.clone(documentState));
     }
+  }
+  if(parts[2]==='graph'&&parts[3]&&['GET','POST'].includes(req.method)){
+    const args=req.method==='POST'?await bodyJson(req):Object.fromEntries(url.searchParams.entries());
+    const value=graphSession.execute('schematic.graph.query',documentState,{verb:parts[3],args});return json(res,value.ok===false?400:200,value);
+  }
+  if(parts[2]==='sim'&&parts[3]&&req.method==='POST'){
+    const value=graphSession.execute(`schematic.sim.${parts[3]}`,documentState,await bodyJson(req));return json(res,value.ok===false?(value.code==='UNKNOWN_TOOL'?404:400):200,value);
+  }
+  if(parts[2]==='sim'&&parts[3]==='inspect'&&req.method==='GET'){
+    const value=graphSession.execute('schematic.sim.inspect',documentState,Object.fromEntries(url.searchParams.entries()));return json(res,value.ok===false?400:200,value);
   }
   if(parts[0]==='api'&&parts[1]==='v1'&&parts[2]){
     const resource=resourceFromPath(parts[2]);if(!resource)return json(res,404,{error:'resource not found'});

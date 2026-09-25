@@ -20,6 +20,13 @@ Tools:
 - `schematic.document.get`
 - `schematic.document.replace`
 
+Graph and simulation (`GRAPH-MODEL.md`, read-only over the document):
+
+- `schematic.graph.query` — `{verb, args}`: junctions, reach, paths, cycles, order, cut, boundary, untyped, blocked, export (jgf | dot | graphml)
+- `schematic.sim.start` / `stop` / `inject` / `step` / `run` / `resume` / `reconcile` / `inspect` / `scenario` / `scenarios`
+
+HTTP: `GET|POST /api/v1/graph/<verb>`, `POST /api/v1/sim/<action>`, `GET /api/v1/sim/inspect?what=…&id=…`.
+
 Resources: `component`, `wire`, `reference`.
 
 ## HTTP

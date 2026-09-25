@@ -13,6 +13,17 @@
     "schematic.history.redo",
     "schematic.checkpoint.list",
     "schematic.checkpoint.create",
-    "schematic.checkpoint.restore"
+    "schematic.checkpoint.restore",
+    "schematic.graph.query",
+    "schematic.sim.start",
+    "schematic.sim.stop",
+    "schematic.sim.inject",
+    "schematic.sim.step",
+    "schematic.sim.run",
+    "schematic.sim.resume",
+    "schematic.sim.reconcile",
+    "schematic.sim.inspect",
+    "schematic.sim.scenario",
+    "schematic.sim.scenarios"
   ]
 }

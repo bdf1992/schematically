@@ -27,6 +27,9 @@ DOCUMENTED = [
     'checkpoints.list', 'checkpoints.create', 'checkpoints.restore',
     'selection.components', 'selection.copy', 'selection.paste', 'selection.duplicate',
     'view.appearance', 'view.setAppearance', 'view.globalRate', 'view.setGlobalRate',
+    'graph.query', 'graph.verbs',
+    'sim.start', 'sim.stop', 'sim.inject', 'sim.step', 'sim.run', 'sim.resume', 'sim.reconcile',
+    'sim.inspect', 'sim.scenario', 'sim.scenarios',
 ]
 
 with sync_playwright() as p:

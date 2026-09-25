@@ -1,6 +1,11 @@
 # Graph Model · proposed (2026-09-25)
 
-Status: **proposed**. Nothing here is implemented. This doc covers the graph primitives
+Status: **phase 1 implemented (2026-09-25)** in `src/07-graph-core.js`: junction
+policies (§1), queries (§5) and the simulation with scenarios (§6, simulation only).
+Proposed: subgraph instances and groups (§2), payload schemas (§4) and the live relay
+(§6, live). "As built" below records where the implementation settled a detail.
+
+This doc covers the graph primitives
 that sit above Form: junctions, hyperedges, subgraphs, direction, typing, queries, and a
 message runtime that runs first as a simulation and later live. `SECTION-MODEL.md`
 covers what the inside of a node or edge looks like. `LAYOUT-MODEL.md` covers where
@@ -232,6 +237,122 @@ One discrete-event engine serves both modes.
 
 Each step keeps the rule already in `AGENTS.md`: Browser API, HTTP and MCP go through
 the shared data core, and a refusal is identical on every surface.
+
+## As built (phase 1)
+
+Settled details:
+
+**Surfaces**
+- One module, `src/07-graph-core.js` (`SovSchematicGraph`), is loaded by the browser
+  and by `mcp/server.mjs`. Each surface dispatches through one `createSession()`, so
+  the Browser API (`graph.*`, `sim.*`), MCP (`schematic.graph.query`,
+  `schematic.sim.*`) and HTTP (`/api/v1/graph/<verb>`, `/api/v1/sim/<action>`) return
+  the same values and the same refusals.
+- The simulation reads a snapshot of the document and never mutates it.
+  `sim.inspect('state')` reports `stale: true` once the document's revision moves on.
+
+**Direction and ports**
+- Passability is the signal's rule (`wireDirectionActive`): wire direction, whether
+  the sending port can emit and the receiving port can receive, and read/write access.
+- A port with no authored connections takes the data core's default for its id, which
+  is also what the editor normalizes to. Wires that fail are listed by the query
+  `blocked`, with the reason.
+
+**Messages and nodes**
+- `inject(node)` makes the node emit the message: it leaves by that node's outgoing
+  wires.
+- A node with no declared `config.flow.policy` fans out. The query `junctions` reports
+  `declared: false` for such a node, so the default is visible, not hidden.
+- A message whose channel no outgoing end accepts is **refused**, never dropped.
+  "Delivered" means only that the node is a sink.
+- Control points: a message into a `control` port latches the node open (or closed,
+  with `payload.open = false`).
+  - A `GATE` with no handler passes only while open, and refuses when nothing is wired
+    to its control point.
+  - A `SWITCH` starts closed.
+  - A `LIMIT` with no `config.flow.rate` refuses.
+  - A `BUFFER` holds up to `config.flow.capacity` and releases one message every
+    `releaseMs`.
+- A human step is `config.behavior.human: {prompt}`. The message parks there until
+  `resume(parkId, {decision: approve | reject, payload?})`.
+
+**Effects**
+- An effect is `config.behavior.effect: {key: <path into the message>}`, optionally
+  with a `handler` that performs it.
+- The ledger key is `<node>:<value>`. A confirmed key is **replayed**: logged as
+  `effect-replayed`, not performed, and not forwarded.
+- A handler that throws leaves the key **ambiguous**. Retries are refused until
+  `reconcile(key, {confirmed})`.
+- A missing key is refused.
+- The ledger survives `snapshot()` → `createSimulation(doc, {restore})`, and can be
+  handed to a fresh engine with `{effects}`.
+
+**Handlers**
+- A node naming a handler nobody registered refuses its messages.
+- Declarative handlers: `{kind: 'stub'}` passes through;
+  `{kind: 'fixture', key, responses, otherwise?, merge?}` answers from a table.
+- Code callers may pass functions.
+
+**Scenarios**
+- Stored as `document.references` with `kind: 'scenario'`, as
+  `data: {handlers, steps, expect}`.
+- Steps are `inject`, `resume`, `restart` (snapshot, then a new engine), `reconcile`
+  and `run`.
+- `expect` counts taps, refusals, parked messages, effects by status, and log events.
+  The run returns each check with its expected and actual values.
+
+## Print AI mapping (example 09)
+
+`examples/09-print-ai-proof-run.sov` models the Print AI deck's (2026-09-23) active run:
+"Proof-resolution @ v3" — Ingest → Evaluate → Human review → Notify. Its five saved
+scenarios are the deck's claims, run as evidence.
+
+| Deck concept | In this model |
+| --- | --- |
+| Case | a source Component outside the run (`case`) |
+| Run @ version, the platform boundary | an open Plane whose boundary Points are the only way in (`case in`) and out (`effect out`) |
+| Participant AI workflow, adopted and opaque | a Component naming an external handler (`ingest`). It is stubbed in simulation, and in live it will be registered with the relay. |
+| Eval / judgement | a `GATE` with a handler (`evaluate`) whose refusal stops the run before any person is asked |
+| Monitoring | a fan-out junction (`split`) into an `OBSERVE` (`monitor`) that records observations off the action path |
+| Human gate, where waiting is not computing | `behavior.human` on `review`: the message parks, and the engine is idle until `resume` |
+| Mediated effect with stable replay identity | `behavior.effect` on `notify`, keyed by `payload.caseId` |
+| Evidence | a `RECEIPT` (`evidence`), plus the engine's log, traces and refusals |
+| REQ.EFFECT.HAS_STABLE_REPLAY_IDENTITY | scenario `s-retry`: a retried case messages the customer once |
+| INV.RECOVERY.PRESERVES_COMPLETED_EFFECT_IDENTITY | scenario `s-restart`: a restart while parked, and again after the effect; still one message |
+| Kill around an effect; reconcile ambiguous work (deck §14.2) | `tests/graph_core_qa.py`: a throwing handler leaves the effect ambiguous, and retry is refused until it is reconciled |
+
+`tests/graph_core_qa.py` also removes the effect identity and confirms that `s-retry`
+then fails, with the customer messaged twice. The scenarios can therefore catch the
+failure they claim to rule out.
+
+Not yet modelled from the deck:
+- version pinning (a run bound to v3 while v4 is published): needs definitions and
+  instances (§2)
+- Case ↔ Session ↔ Run: needs sessions as participants
+- usage and cost meters
+- the live relay
+
+## Observed while building (defects outside this change)
+
+1. **A Point's `out` port defaults to out-only** in both the data core
+   (`STANDARD_POINT_FLOWS`) and the editor (`componentConfig` defaults). But the
+   Point's own attachment spec declares `defaultFlow: 'duplex'`
+   (`src/06-attachment-core.js`).
+   - Effect: a boundary Point authored with only a `face` cannot receive, so Classic
+     08's `permit`, `ingress` and `egress` block wires `k1`, `k3` and `k6`, in the
+     signal view as well as the simulation.
+   - Example 09 declares its Points `duplex` explicitly.
+   - Proposed fix: let the spec's `defaultFlow` win for a 0D `self` point.
+2. **The derived signal stops after 6 passes** (`computeSignalState`). A chain deeper
+   than 6 hops never lights its far end. In example 09, `evidence`, `run-out` and
+   `customer` stay dark although messages reach them.
+3. **Component size is clamped silently** in the editor (w ≤ 520, h ≤ 420,
+   `src/10-model.js:323`). The data core accepts any size of at least 80 × 64, so a
+   file can declare a size the screen never shows.
+4. **The router leaves a container at its boundary Points**. In example 09, `case in` →
+   Ingest loops out over the plane's top edge, and split → Monitor dips below its
+   bottom edge. These are the `throughNode` / escaping-route cases `LAYOUT-MODEL.md`
+   §5 is meant to measure.
 
 ## Open
 

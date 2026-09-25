@@ -26,6 +26,9 @@ function runtimeCrud(operation){
   }
   return SovSchematicData.clone(receipt);
 }
+// Graph queries and the message simulation read the live document; one session per page.
+const graphSession=SovSchematicGraph.createSession();
+function graphCall(name,args={}){return SovSchematicData.clone(graphSession.execute(name,snapshotDocument(),args))}
 function apiOperation(op,resource,resourceId,value,patch,query){return runtimeCrud({schema:SovSchematicData.OPERATION_SCHEMA,id:`browser-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,op,resource,resourceId,value,patch,query})}
 
 const SovSchematicAPI={
@@ -54,6 +57,22 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
-  tools:()=>SovSchematicData.operationTools()
+  graph:{
+    query:(verb,args={})=>graphCall('schematic.graph.query',{verb,args}),
+    verbs:()=>[...SovSchematicGraph.queries]
+  },
+  sim:{
+    start:(options={})=>graphCall('schematic.sim.start',options),
+    stop:()=>graphCall('schematic.sim.stop'),
+    inject:(node,message={})=>graphCall('schematic.sim.inject',{...message,node}),
+    step:(n=1)=>graphCall('schematic.sim.step',{n}),
+    run:(options={})=>graphCall('schematic.sim.run',options),
+    resume:(parkId,options={})=>graphCall('schematic.sim.resume',{...options,parkId}),
+    reconcile:(effectKey,options={})=>graphCall('schematic.sim.reconcile',{...options,effectKey}),
+    inspect:(what='state',id)=>graphCall('schematic.sim.inspect',{what,id}),
+    scenario:(idOrScenario,handlers)=>graphCall('schematic.sim.scenario',typeof idOrScenario==='string'?{id:idOrScenario,handlers}:{scenario:idOrScenario,handlers}),
+    scenarios:()=>graphCall('schematic.sim.scenarios')
+  },
+  tools:()=>[...SovSchematicData.operationTools(),...SovSchematicGraph.tools()]
 };
 window.SovSchematicAPI=SovSchematicAPI;
