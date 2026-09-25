@@ -205,6 +205,20 @@ Still not measured:
 - label legibility at fit zoom
 - a card crowding its container's interior guide
 
+## As built: seeing (2026-09-25)
+
+`renderStandaloneSvg()` (`src/75-persistence.js`) is the one picture of a document, with
+styles inlined and the view fitted to the diagram. The same function serves:
+- File → Export SVG
+- the Browser API: `render.svg`, and `render.png` via a canvas
+- `scripts/export_svg.py`
+- the server, through `scripts/render_service.py`: MCP `schematic.render` (a PNG comes
+  back as image content), `schematic.layout.metrics`, and HTTP `/api/v1/render.svg`,
+  `/api/v1/render.png` and `/api/v1/layout/metrics`
+
+An agent with only MCP can therefore see the diagram and its score before it reports
+the work done.
+
 ## As built: presentation (2026-09-25)
 
 **Colour carries meaning, not decoration.** There are two accents:

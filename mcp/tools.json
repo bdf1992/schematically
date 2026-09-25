@@ -28,6 +28,8 @@
     "schematic.sim.reconcile",
     "schematic.sim.inspect",
     "schematic.sim.scenario",
-    "schematic.sim.scenarios"
+    "schematic.sim.scenarios",
+    "schematic.render",
+    "schematic.layout.metrics"
   ]
 }

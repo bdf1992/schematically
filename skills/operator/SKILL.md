@@ -27,6 +27,8 @@ Primary operations:
 - `checkpoints.list()` / `create(name)` / `restore(id)`
 - `selection.copy()` / `paste()` / `duplicate()`
 - `view.setAppearance(mode)` / `setGlobalRate(value)`
+- `render.svg(options)` / `render.png(options)` (a promise of a data URL) / `layout.metrics()` — the picture and its measured quality
+- `clock.play()` / `pause()` / `step()` / `advance(ms)` / `toggle(lever)` / `send(node)` / `resume(parkId, decision)` / `state()` / `inspect(what, id)` — the canvas control plane
 - `graph.query(verb, args)` / `graph.verbs()` — read-only: junctions, reach, paths, cycles, order, cut, boundary, untyped, blocked, acl, signals, export
 - `sim.set(node, value)` / `at(time, {set|toggle|inject})` / `advance(ms)` / `tick(n)` — time is the driver: clocks, asserted levels and scheduled operations
 - `sim.start({handlers, scenarioId})` / `inject(node, {channel, payload, principal})` / `step(n)` / `run({until})` / `resume(parkId, {decision})` / `reconcile(effectKey, {confirmed})` / `inspect(what, id)` / `scenario(id)` / `scenarios()` / `stop()`
@@ -43,6 +45,7 @@ Additional server tools:
 - `schematic.checkpoint.list`
 - `schematic.checkpoint.create`
 - `schematic.checkpoint.restore`
+- `schematic.render` (`format: svg | png`) / `schematic.layout.metrics` — see the diagram as the editor draws it, and measure it: check your layout before you report it done
 - `schematic.graph.query` — read-only graph queries (`GRAPH-MODEL.md` §5)
 - `schematic.sim.set` / `at` / `advance` / `tick` — assert a level, schedule an operation, drive time
 - `schematic.sim.start` / `inject` / `step` / `run` / `resume` / `reconcile` / `inspect` / `scenario` / `scenarios` / `stop` — the message simulation (`GRAPH-MODEL.md` §6). It reads the document and never mutates it; a node naming a handler nobody registered refuses its messages.

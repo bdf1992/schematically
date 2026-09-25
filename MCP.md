@@ -28,6 +28,19 @@ Graph and simulation (`GRAPH-MODEL.md`, read-only over the document):
 
 HTTP: `GET|POST /api/v1/graph/<verb>`, `POST /api/v1/sim/<action>`, `GET /api/v1/sim/inspect?what=…&id=…`.
 
+Seeing and measuring (`LAYOUT-MODEL.md` §4–5). These need Python with Playwright and a
+Chromium browser (`SOV_RENDER_PYTHON` selects the interpreter). Without them the call is
+refused with `RENDERER_UNAVAILABLE`: over MCP as an error result, over HTTP as a 503.
+
+- `schematic.render`
+  - `{format: 'svg'}` returns the editor's own standalone SVG as text.
+  - `{format: 'png', scale}` returns the picture as MCP **image content**, followed by
+    the score as text.
+- `schematic.layout.metrics` returns the 0–10 score and every finding.
+
+HTTP: `GET /api/v1/render.svg`, `GET /api/v1/render.png?appearance=dark&scale=2`,
+`GET /api/v1/layout/metrics`.
+
 Resources: `component`, `wire`, `reference`.
 
 ## HTTP

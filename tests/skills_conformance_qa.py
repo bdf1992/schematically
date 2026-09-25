@@ -27,7 +27,8 @@ DOCUMENTED = [
     'checkpoints.list', 'checkpoints.create', 'checkpoints.restore',
     'selection.components', 'selection.copy', 'selection.paste', 'selection.duplicate',
     'view.appearance', 'view.setAppearance', 'view.globalRate', 'view.setGlobalRate',
-    'graph.query', 'graph.verbs',
+    'graph.query', 'graph.verbs', 'render.svg', 'render.png', 'layout.metrics',
+    'clock.play', 'clock.pause', 'clock.step', 'clock.advance', 'clock.toggle', 'clock.send', 'clock.resume', 'clock.state', 'clock.inspect',
     'sim.start', 'sim.stop', 'sim.inject', 'sim.step', 'sim.set', 'sim.at', 'sim.advance', 'sim.tick', 'sim.run', 'sim.resume', 'sim.reconcile',
     'sim.inspect', 'sim.scenario', 'sim.scenarios',
 ]
