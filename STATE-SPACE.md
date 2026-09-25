@@ -155,7 +155,7 @@ Today's colour mixing in `25-signal.js` is an undeclared diffusion with fixed pa
 Each observer is registered with its **class** and **limits**:
 
 - **passive**: reads recorded state and changes nothing. The OBSERVE symbol ("reads evidence from outside the action path") is passive by definition.
-- **active**: disturbs the subject: spends budget, pauses a run, consumes context. Active observations go through the same budget as any other work and write a perturbation ledger entry.
+- **active**: disturbs the subject: spends budget, pauses a run, consumes context. Active observations write a perturbation ledger entry and are paid **relative to the subject observed**: each one draws from the observed run's own budget, capped by a share its definition declares (for example, at most 10% of what remains). There is no separate absolute pool for looking; the more a run has left, the harder it may be looked at, and a run near exhaustion cannot be drained by observing it.
 - limits: resolution, noise, drift, latency. Recorded per observer; the runtime's own rules are exact, so these matter first for the instrument.
 
 For any record, the state space can answer: observed passively, observed actively, or created by the act of observing.
@@ -193,15 +193,38 @@ A **run** is: one document revision + an initial set of registered values + a bu
 
 1. A source's registered value changes; the change is an event.
 2. The event enters a Path through a 0D attachment Point.
-3. The Path schedules arrival at `logical + delay`, where `delay` is declared on the Path (default 1). Geometry does not set logical delay.
+3. The Path schedules arrival at `logical + path delay`. Path delay is declared on the Path (default 1). Geometry does not set logical delay.
 4. Arrival writes the destination Point's signal state.
 5. Hosted logic evaluates when one of its inputs changes.
-6. A changed output emits new events onto admitted outgoing Paths. Boundary legality is the data core's; the runtime never reaches through a boundary the editor would refuse.
+6. A changed output is emitted at `logical + device delay`, the delay its definition declares (default 0), onto admitted outgoing Paths. Boundary legality is the data core's; the runtime never reaches through a boundary the editor would refuse.
 7. Every step appends to the trace.
 
 The queue is ordered by `(logical, sequence)`, so equal-time events are deterministic. A run stops when the queue is empty (quiet) or the budget is spent (a typed refusal naming what was left).
 
-Gate behaviour is data, not code: a definition names inputs, outputs and a rule (truth table first), exactly the shape Issue #6 gives. NAND, NOR, XNOR and larger devices are definitions or compositions.
+Delay lives in both places, as in real circuits: a Path takes time to carry (propagation), a device takes time to respond (gate delay). A DELAY or REPEATER is then simply a device whose definition declares a delay and passes its input through. Both delays show in the trace separately, so a slow run says whether the wire or the device was slow.
+
+### Definitions
+
+Behaviour is data, not code. The runtime evaluates **definitions**; it has no built-in knowledge of AND, DELAY or a threshold gate.
+
+A definition (`soveraeign.schematic/definition@0.1`, schema `formats/schematic.definition.schema.json`) declares:
+
+| Member | Holds |
+|---|---|
+| `id`, `version` | `logic.and`, `1`; a document binds `logic.and@1` |
+| `kind` | `combinational`, `temporal`, `stateful`, `observer`, `field` |
+| `inputs`, `outputs` | named attachment Points, each with its observable and form |
+| `rule` | one of a closed set of rule forms: `truth_table`, `threshold` (enter / exit), `pass` (identity), `route` (selector → output); later `transition` (state machine) |
+| `delay` | device delay in logical ticks |
+| `observables` | derived observables it produces, each with update rule, blast radius, staleness tolerance |
+| `observer` | for observer definitions: class (passive / active), cost, limits |
+| `projection` | glyph and labels; presentation only |
+
+The rule forms are the only runtime code. A new gate, device or domain is a new definition, never a new code path; NAND, NOR, XNOR and larger devices are definitions or compositions of definitions.
+
+Definitions are **domain-driven**: they arrive in domain packs (Issue #4), and a pack is the unit a domain publishes (logic, dataflow, a workstation model, ...). Until #4 defines the pack format, the state space carries a minimal pack envelope (`id`, `version`, `definitions[]`) that #4 will absorb as one member of the full domain pack. The built-in vocabulary (SOURCE, SINK, NOT, AND, OR, XOR, SWITCH, DELAY, threshold GATE) ships as the `core.logic` pack in `data/`, loaded the same way as any other pack, so built-ins have no privileged path.
+
+A document references definitions by `id@version` and records which packs it uses. A `.sovpak` embeds the packs its document references, so a package runs anywhere. A document that references a definition it cannot resolve opens, but refuses to run, with a typed refusal naming the missing definition.
 
 ### What `signalMode` becomes
 
@@ -209,8 +232,10 @@ Gate behaviour is data, not code: a definition names inputs, outputs and a rule 
 
 ## Files
 
-- A `.sov` gains only **authored** state-space data: declared delays on Paths, gate definitions or references, thresholds, observable and field declarations, initial registered values. Nothing a run computes is written to it.
-- A run's trace is its own format, `soveraeign.schematic/trace@0.1`: document id and revision, the input set, budget, the event log, and (optionally, for audit) the derived records. A trace without derived records is complete, because they are recomputable.
+- A `.sov` gains only **authored** state-space data: Path delays, definition references (`id@version`) and the packs they come from, thresholds, observable and field declarations, initial registered values. Nothing a run computes is written to it.
+- **Runs are saved.** A run's trace is its own file, `.sovtrace` (`soveraeign.schematic/trace@0.1`, MIME `application/vnd.soveraeign.schematic-trace+json`): document id and revision, the pack versions used, the input set, budget, the event log, and optionally the derived records for audit. A trace without derived records is still complete, because they are recomputable. A trace is kept apart from the `.sov` so running a document never changes the document, and so one document can have many runs.
+- File menu: Save Run / Open Run, owned by `75-persistence.js` like every other file. Opening a trace against a document of a different revision opens read-only and says so; it cannot be replayed until the revisions match.
+- A `.sovpak` may carry traces alongside its document and packs (`traces[]`), so a package can ship with its evidence.
 - Golden traces live beside the examples they run.
 
 ## Surfaces
@@ -232,14 +257,16 @@ Proposed additions to `MODULES.md`:
 - `src/07-state-space.js`: the state record, event log, scheduler, fold, rule evaluation, fields and residuals. Pure; no DOM; loadable by `scripts/`, `mcp/server.mjs` and the editor, like `05-data-core.js` and `06-attachment-core.js`.
 - `src/25-signal.js`: becomes the projection of settled or current state-space records onto the canvas.
 - `src/55-render.js`: packets are driven from trace particles when a run is live.
-- `formats/schematic.state-record.schema.json`, `formats/schematic.trace.schema.json`.
+- `src/75-persistence.js`: Save Run / Open Run and `.sovtrace`, the only place a trace is serialized.
+- `data/core.logic.pack.json`: the built-in definitions.
+- `formats/schematic.state-record.schema.json`, `formats/schematic.trace.schema.json`, `formats/schematic.definition.schema.json`.
 
 ## Slices
 
 Each slice ends with its QA suite inside `python scripts/qa.py`.
 
-1. **Record and fold.** State record schema and validator; event log; `(logical, sequence)` scheduler with budget; truth-table rules for NOT / AND / OR / XOR as data; `A AND B → Q` run over all four input vectors with golden traces; replay identity; API / HTTP / MCP parity; nothing written to `.sov`.
-2. **Visible runtime.** `SOURCE → NOT → DELAY → SWITCH → SINK A / SINK B` from Issue #6; declared Path delays; packets rendered from the trace; assertions with enter/exit thresholds on a continuous input.
+1. **Record, definitions and fold.** State record, definition and trace schemas with validators; the minimal pack envelope and `core.logic` with NOT / AND / OR / XOR as truth-table data; event log; `(logical, sequence)` scheduler with budget; `A AND B → Q` run over all four input vectors with golden `.sovtrace` files; replay identity; API / HTTP / MCP parity; nothing written to `.sov`.
+2. **Visible runtime.** `SOURCE → NOT → DELAY → SWITCH → SINK A / SINK B` from Issue #6; Path and device delays; packets rendered from the trace; Save Run / Open Run; assertions with enter/exit thresholds on a continuous input.
 3. **Fields.** Laplacian diffusion and advection as declared fields; signal colour moved onto a declared field; `25-signal.js` reduced to projection.
 4. **Measurement.** Observer registry (passive / active, limits); perturbation ledger; sensor and policy residuals; `schematic.state.observe` for importing measured records (the instrument).
 5. **Later, only when earned.** Stateful devices (latch, clock, edge); predicted state, possibility sets and ensembles; sensor placement from the uncertainty map.
@@ -248,10 +275,13 @@ Each slice ends with its QA suite inside `python scripts/qa.py`.
 
 Analog or electrical simulation; exact Redstone emulation; HDL synthesis; amplitudes (probabilities narrow by observation and that is enough unless paths must cancel); 3D.
 
+## Settled
+
+1. **Delay** is on both the Path (propagation) and the device (response). *(2026-09-25)*
+2. **Behaviour** is definitions as data, delivered in domain packs; built-ins are the `core.logic` pack. *(2026-09-25)*
+3. **Runs are saved** as `.sovtrace`, separate from the document. *(2026-09-25)*
+4. **Active observation** is paid relative to the observed run's own budget, capped by a declared share. *(2026-09-25)*
+
 ## Open questions
 
-1. **Delay authoring.** Is delay a property of the Path (carrier), of the gate (device), or both, as in real circuits? The draft puts it on the Path.
-2. **Where gate definitions live.** In the document, as built-in data, or in a domain pack (Issue #4)? The draft allows a reference so the answer can move to packs without a format change.
-3. **Trace persistence.** Is a trace a file a person saves (`.sovtrace`, next to the document) or only an API/MCP result and a test fixture?
-4. **Active observation budget.** When the instrument arrives: does an active observer spend the observed run's budget or a separate one?
-5. **Relation graph for the instrument.** In the runtime, edges are registered (authored). When records come from outside, are the edges still authored in the document, or measured from the outside graph?
+1. **Connections for the instrument.** When schematically watches an outside system, who says what connects to what? (a) A person draws the model, and outside readings only attach to the drawn entities. (b) The outside system also reports its connections, and those arrive as measured records. The draft's lean: (a) by default; reported connections may arrive as measured records shown as proposals, and become part of the document only when someone accepts them, so nothing observed silently rewrites what was authored. This only matters at slice 4.
