@@ -356,6 +356,30 @@
     }
     return errors;
   }
+  // A Wire's propagation delay (STATE-SPACE.md "Two-phase ticks"): absent means 1; a value an
+  // edit supplies must be an integer >= 1. Loading keeps a stored value as written, for the
+  // state space's load check to report.
+  function assertPathDelay(config){
+    if(!isObject(config)||config.delay===undefined)return;
+    if(!(Number.isInteger(config.delay)&&config.delay>=1))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
+  }
+  // A Component bound to a definition (`config.definition`) has ports the definition owns. An
+  // update that does not itself set `config.definition` may move, relabel and set channel merges
+  // on them, but may not change the port ids, a port's flow or channel ids, the attachment mode
+  // or the type (DEFINITION_PORTS). Binding, rebinding and unbinding set `config.definition`.
+  function ownedPortKey(component){
+    return Attachment.templatePointSpecs(component).concat(Attachment.authoredPointSpecs(component)).map(s=>[s.id,s.flow,Attachment.channelIds(s)]).sort((x,y)=>x[0]<y[0]?-1:x[0]>y[0]?1:0);
+  }
+  function assertDefinitionPortsKept(current,patch,candidate){
+    const bound=current?.config?.definition;
+    if(bound===undefined||bound===null||patch?.config?.definition!==undefined)return;
+    const refuse=why=>{throw new Error(`DEFINITION_PORTS: ${current.id} is bound to ${bound}; ${why}`)};
+    const nextSymbol=patch?.symbolId??patch?.type;
+    if(nextSymbol!==undefined&&normalizeSymbolId(nextSymbol)!==normalizeSymbolId(current.symbolId))refuse('its type may not change');
+    if(patch?.config?.attachmentDefaults!==undefined&&patch.config.attachmentDefaults!=='none')refuse('its attachment mode stays none');
+    if(!candidate)return;
+    if(JSON.stringify(ownedPortKey(current))!==JSON.stringify(ownedPortKey(candidate)))refuse('its port ids, flows and channel ids may not change');
+  }
   const samePort=(x,y)=>JSON.stringify([x.id,x.compatId||x.id,x.side,x.t,x.flow,x.channels,x.label||''])===JSON.stringify([y.id,y.compatId||y.id,y.side,y.t,y.flow,y.channels,y.label||'']);
   // A spec in the stored declared-port shape.
   function storedPort(spec){
@@ -507,6 +531,8 @@
       if(!Array.isArray(value.config.attachmentPoints))throw new Error('PORTS_INVALID: attachmentPoints must be an array');
       config.attachmentPoints=clone(value.config.attachmentPoints);setDeclaredPorts(doc,component);
     }
+    // A bound definition (`id@version`) is kept as authored, so a pasted or created bound Component stays bound.
+    if(value.config?.definition!==undefined)config.definition=clone(value.config.definition);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -674,6 +700,7 @@
   }
   function makeWire(doc,value={}){
     const id=cleanString(value.id,nextId(doc.wires,'k'));
+    assertPathDelay(value.config);
     const wire={id,a:cleanString(value.a)||null,b:cleanString(value.b)||null,aSide:value.aSide??null,bSide:value.bSide??null,aAttachment:isObject(value.aAttachment)?clone(value.aAttachment):null,bAttachment:isObject(value.bAttachment)?clone(value.bAttachment):null};
     if(!wire.a&&!wire.aAttachment&&!wire.b&&!wire.bAttachment)throw new Error('wire.create requires a and b component ids, or free endpoints');
     for(const end of ['a','b'])if(!wire[end]&&!wire[end+'Attachment'])throw new Error(`wire.create requires ${end} (component id) or ${end}Attachment`);
@@ -730,6 +757,7 @@
     const current=arr[index];assertUnlocked(current,resource);
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource==='component'){
+      assertDefinitionPortsKept(current,patch,null);
       const nextSymbol=patch?.symbolId??patch?.type;
       if(nextSymbol!==undefined&&normalizeSymbolId(nextSymbol)!==normalizeSymbolId(current.symbolId)){
         // A Path is a carrier drawn from the palette; a Component is not retyped into one (#19).
@@ -747,9 +775,11 @@
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
       candidate.form=normalizeComponentForm(candidate.form,candidate.canvas);candidate.canvas.state=candidate.form.regions.interior.state;
       ensureAttachmentPortConfigs(candidate);
+      assertDefinitionPortsKept(current,patch,candidate);
       assertWiresSurviveEdit(doc,current,candidate);
       if(candidate.config?.presentation?.size){candidate.config.presentation.size.w=Math.max(80,num(candidate.config.presentation.size.w,112));candidate.config.presentation.size.h=Math.max(64,num(candidate.config.presentation.size.h,84));}
     }else if(resource==='wire'){
+      if(isObject(patch?.config))assertPathDelay(patch.config);
       // A patch may rebind an end (a/aSide or aAttachment ref) or free it (aAttachment {kind:'free'}).
       for(const end of ['a','b']){
         const key=end+'Attachment',patched=patch?.[key];

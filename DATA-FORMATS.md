@@ -174,7 +174,7 @@ four schemas below document the shapes (no JSON Schema evaluator is used).
 
 - `soveraeign.schematic/state-record@0.1` — one state claim: `subject {entity, run, point?, channel?, attempt?}`,
   `vantage` (`relative` requires `reference`), `observable`, `kind`, `form`, `value` (typed by `form`), `time
-  {logical, sequence, mode}`, `certainty {kind: exact}`, `observer`, `provenance {rule, inputs}`, `perturbation`.
+  {logical, sequence, mode}`, `certainty {kind: exact}`, `observer`, `provenance {rule, inputs, threshold?}` (`threshold` a finite number), `perturbation`.
   Any other key, at any level, is refused. Schema: `formats/schematic.state-record.schema.json`.
 - Pattern declaration — `id`, `version`, `class`, `stateful`, `blastRadius`, `validate`, `derive`; the patterns ship
   with the engine (`truth_table@1`, `merge@1`). Schema, with each pattern's parameters and derived contract:
@@ -192,9 +192,16 @@ A `.sov` carries three pieces of authored state-space data, and nothing a run co
 - **`config.definition`** on a Component: the definition it is bound to, `id@version` (`"logic.and@1"`). Binding
   (`bindDefinition`, applied as a component `update`) also sets `attachmentDefaults: none` and exactly the
   contract's generated ports as `attachmentPoints`: one per input on the left and one per output on the right,
-  spread evenly unless the definition's `ports` places them. The existing Wire checks apply (`PORT_IN_USE`).
+  spread evenly unless the definition's `ports` places them. The existing Wire checks apply (`PORT_IN_USE`). A
+  definition whose contract has no ports (one on `merge@1`) is refused (`DEFINITION_NOT_BINDABLE`). Rebinding carries
+  each channel `merge` to the same port id and channel id, and is refused with `MERGE_IN_USE` when the new contract
+  drops a port or channel holding one. While bound, an update that does not itself set `config.definition` is
+  refused with `DEFINITION_PORTS` when it would change the port ids, a port's `flow` or channel ids, set
+  `attachmentDefaults` to anything but `none`, or change `symbolId`; moving, relabelling and channel `merge` edits
+  are allowed. Setting `config.definition` to `null` unbinds and leaves the ports as stored.
 - **`config.delay`** on a Wire: its propagation delay in logical ticks, an integer >= 1. Absent means 1 and is not
-  written.
+  written. A Wire `create` or `update` carrying any other value is refused with `PATH_DELAY_INVALID` on every
+  surface; loading keeps a stored value as written.
 - **`merge`** on a declared port's channel: the `merge@1` parameters for same-tick arrivals there.
 
 ```json
@@ -206,10 +213,13 @@ A `.sov` carries three pieces of authored state-space data, and nothing a run co
 (order-dependent; `order` defaults to `{kind: stochastic}`). `order` is `{kind: declared, paths: [wire ids]}`,
 `{kind: stochastic}` or `{kind: observed}`. A channel without `merge` is stored as `{id}` only. A component `create`
 or `update` whose port list carries an invalid `merge` is refused with `MERGE_INVALID` on every surface; loading
-keeps a stored `merge` as written.
+keeps a stored `merge` as written. Paste and Duplicate map each `declared` order's `paths` through the copied Wires'
+new ids; a Wire not copied leaves the list, and an order left empty is removed (the merge's default order applies).
 
 `checkDocument(doc, packs)` reports the load checks without throwing or changing the document: `PATH_DELAY_INVALID`,
-`PATH_DIRECTION_FLOW` (a Wire's direction against its ports' flows: `out` and `duplex` emit; `in`, `duplex`,
-`control` and `trigger` receive), `CHANNEL_MISMATCH`, `DEFINITION_UNRESOLVED`, `DEFINITION_PORTS` and
-`MERGE_INVALID` (including a `declared` order naming a Wire that does not end on the port). A refused document
+`PATH_DIRECTION_FLOW` (none of the Wire's declared directions is admitted by its ports' flows: `out` and `duplex`
+emit; `in`, `duplex`, `control` and `trigger` receive; `duplex` declares forward and reverse, so a duplex Wire from
+`out` to `in` carries forward only and passes; `none` is never refused), `CHANNEL_MISMATCH`,
+`DEFINITION_UNRESOLVED`, `DEFINITION_INVALID` (the definition resolves but does not validate),
+`DEFINITION_NOT_BINDABLE`, `DEFINITION_PORTS` and `MERGE_INVALID` (including a `declared` order naming a Wire that does not end on the port). A refused document
 still opens.

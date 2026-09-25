@@ -73,7 +73,8 @@
     const provenance=record.provenance;
     if(!isObject(provenance))errors.push('provenance must be an object');
     else{
-      unknownKeys(provenance,['rule','inputs'],'provenance',errors);
+      unknownKeys(provenance,['rule','inputs','threshold'],'provenance',errors);
+      if(provenance.threshold!==undefined&&!(typeof provenance.threshold==='number'&&Number.isFinite(provenance.threshold)))errors.push('provenance.threshold must be a finite number');
       if(!nonEmpty(provenance.rule))errors.push('provenance.rule must be a non-empty string');
       if(!Array.isArray(provenance.inputs)||!provenance.inputs.every(nonEmpty))errors.push('provenance.inputs must be an array of non-empty strings');
     }
@@ -235,17 +236,33 @@
   function contractPorts(contract){return [...(contract.inputs||[]),...(contract.outputs||[])]}
 
   // --- Binding: an `update` operation for the data core; nothing is applied here.
+  // A contract with no inputs and no outputs (merge@1's, for one) generates no ports: nothing binds to it.
+  function bindable(contract){return contractPorts(contract).length>0}
   function bindDefinition(doc,componentId,ref,packs){
     const definition=resolveDefinition(ref,packs);
     if(!definition)return {ok:false,code:'DEFINITION_UNRESOLVED',message:`definition ${ref} is not in the packs`};
-    if(!(doc?.components||[]).some(c=>c?.id===componentId))return {ok:false,code:'COMPONENT_NOT_FOUND',message:`component ${componentId} not found`};
+    const component=(doc?.components||[]).find(c=>c?.id===componentId);
+    if(!component)return {ok:false,code:'COMPONENT_NOT_FOUND',message:`component ${componentId} not found`};
     const problems=checkDefinition(definition);
     if(problems.length)return {ok:false,code:problems[0].code,message:problems[0].message};
-    const attachmentPoints=contractPorts(contractOf(definition)).map(port=>{
+    const contract=contractOf(definition);
+    if(!bindable(contract))return {ok:false,code:'DEFINITION_NOT_BINDABLE',message:`definition ${ref} (${definition.pattern}) generates no ports`};
+    const attachmentPoints=contractPorts(contract).map(port=>{
       const stored={id:port.id,side:port.side,t:port.t,flow:port.flow,channels:port.channels.map(c=>({id:c.id}))};
       if(port.label)stored.label=port.label;
       return stored;
     });
+    // Rebinding carries each existing channel merge to the same port id and channel id, and
+    // is refused when the new contract drops a port or channel that holds one.
+    const byId=new Map(attachmentPoints.map(p=>[p.id,p]));
+    for(const spec of Data.canonicalAttachmentPointDescriptors(component)){
+      for(const channel of spec?.channels||[]){
+        if(channel.merge===undefined)continue;
+        const target=byId.get(spec.id)?.channels.find(c=>c.id===channel.id);
+        if(!target)return {ok:false,code:'MERGE_IN_USE',message:`port ${spec.id} channel ${channel.id} of ${componentId} holds a merge, and ${ref} has no such port and channel`};
+        target.merge=clone(channel.merge);
+      }
+    }
     return {schema:Data.OPERATION_SCHEMA,op:'update',resource:'component',resourceId:componentId,patch:{config:{definition:ref,attachmentDefaults:'none',attachmentPoints}}};
   }
 
@@ -275,10 +292,11 @@
         const flow=spec=>spec.flow||spec.defaultFlow||'duplex';
         const direction=['none','forward','reverse','duplex'].includes(config.direction)?config.direction:wire.duplex?'duplex':'forward';
         const aFlow=flow(aSpec),bFlow=flow(bSpec);
-        const admitted=direction==='none'?true
-          :direction==='forward'?EMITS.includes(aFlow)&&RECEIVES.includes(bFlow)
-          :direction==='reverse'?EMITS.includes(bFlow)&&RECEIVES.includes(aFlow)
-          :[aFlow,bFlow].every(f=>EMITS.includes(f)&&RECEIVES.includes(f));
+        // Refused only when none of the Wire's declared directions is admitted by both flows:
+        // a duplex Wire from an out port to an in port carries forward only.
+        const carries={forward:EMITS.includes(aFlow)&&RECEIVES.includes(bFlow),reverse:EMITS.includes(bFlow)&&RECEIVES.includes(aFlow)};
+        const declared=direction==='none'?[]:direction==='duplex'?['forward','reverse']:[direction];
+        const admitted=!declared.length||declared.some(x=>carries[x]);
         if(!admitted)refuse('PATH_DIRECTION_FLOW',subject,`direction ${direction} is not admitted by ports ${wire.a}.${aSpec.id} (${aFlow}) and ${wire.b}.${bSpec.id} (${bFlow})`);
         const theirs=new Set((bSpec.channels||[{id:'main'}]).map(c=>c.id));
         if(!(aSpec.channels||[{id:'main'}]).some(c=>theirs.has(c.id)))refuse('CHANNEL_MISMATCH',subject,`ports ${wire.a}.${aSpec.id} and ${wire.b}.${bSpec.id} share no channel`);
@@ -287,12 +305,13 @@
     for(const component of d.components){
       try{
         const config=isObject(component.config)?component.config:{};
-        if(config.definition!==undefined){
+        if(config.definition!==undefined&&config.definition!==null){ // null is unbound
           const subject=`component:${component.id}`;
           const definition=resolveDefinition(config.definition,packs);
           const problems=definition?checkDefinition(definition):[];
           if(!definition)refuse('DEFINITION_UNRESOLVED',subject,`definition ${JSON.stringify(config.definition)} is not in the packs`);
-          else if(problems.length)refuse('DEFINITION_UNRESOLVED',subject,`definition ${config.definition} does not validate: ${problems.map(x=>x.message).join('; ')}`);
+          else if(problems.length)refuse('DEFINITION_INVALID',subject,`definition ${config.definition} does not validate: ${problems.map(x=>`${x.code} ${x.message}`).join('; ')}`);
+          else if(!bindable(contractOf(definition)))refuse('DEFINITION_NOT_BINDABLE',subject,`definition ${config.definition} (${definition.pattern}) generates no ports`);
           else{
             const key=port=>[port.id,port.flow||port.defaultFlow||'duplex',(port.channels||[{id:'main'}]).map(c=>c.id)];
             const want=contractPorts(contractOf(definition)).map(key).sort();

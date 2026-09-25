@@ -156,6 +156,10 @@
             "type": "string",
             "minLength": 1
           }
+        },
+        "threshold": {
+          "type": "number",
+          "description": "optional: the threshold a rule applied (for an assertion), a finite number"
         }
       },
       "additionalProperties": false

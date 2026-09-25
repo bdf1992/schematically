@@ -64,7 +64,7 @@ const bad={
   extraSubject:r=>{r.subject.region='x'},
   extraTime:r=>{r.time.wall='2026-09-25'},
   extraCertainty:r=>{r.certainty.u=0.1},
-  extraProvenance:r=>{r.provenance.threshold=0.8}
+  extraProvenance:r=>{r.provenance.seed=7}
 };
 out.recordBad={};for(const [k,f] of Object.entries(bad))out.recordBad[k]=S.validateRecord(variant(f));
 
@@ -222,7 +222,8 @@ const reload=doc=>D.documentFromFilePayload(JSON.parse(JSON.stringify(D.compactD
    mkw(d,{id:'ctl',a:'a',aSide:'out',b:'b',bSide:'control',config:{direction:'forward'}});
    mkw(d,{id:'none',a:'a',aSide:'in',b:'b',bSide:'in',config:{direction:'none'}});
    mkw(d,{id:'dup',a:'p1',aSide:'self',b:'p2',bSide:'self',config:{direction:'duplex'}});
-   mkw(d,{id:'dupBad',a:'a',aSide:'out',b:'b',bSide:'in',config:{direction:'duplex'}});
+   mkw(d,{id:'dupOutIn',a:'a',aSide:'out',b:'b',bSide:'in',config:{direction:'duplex'}});
+   mkw(d,{id:'dupBad',a:'a',aSide:'in',b:'b',bSide:'in',config:{direction:'duplex'}});
    mkw(d,{id:'revBad',a:'a',aSide:'out',b:'b',bSide:'in',config:{direction:'reverse'}});
    mkw(d,{id:'free',aAttachment:{kind:'free',x:0,y:0},b:'b',bSide:'in',config:{direction:'reverse'}});
    out.directions=S.checkDocument(reload(d),packs).refusals.map(x=>[x.code,x.subject])}
@@ -234,6 +235,158 @@ out.examples={};
 for(const file of JSON.parse(process.argv[3])){
   const raw=JSON.parse(fs.readFileSync(file,'utf8'));
   try{out.examples[file]={result:S.checkDocument(D.documentFromFilePayload(raw),packs)}}catch(e){out.examples[file]={threw:String(e&&e.message||e)}}
+}
+console.log(JSON.stringify(out));
+"""
+
+# Amendment 1 (steps 12-19).
+AMEND = r"""
+const S=require(process.argv[1]),D=globalThis.SovSchematicData,A=globalThis.SovSchematicAttachment,fs=require('fs'),vm=require('vm');
+const clone=x=>JSON.parse(JSON.stringify(x));
+const packs=[S.loadPack(JSON.parse(fs.readFileSync(process.argv[2],'utf8'))).pack];
+const out={};
+const op=(doc,o)=>D.applyOperation(doc,o);
+const upd=(doc,id,patch,resource='component')=>op(doc,{op:'update',resource,resourceId:id,patch});
+const mk=(doc,value)=>op(doc,{op:'create',resource:'component',value});
+const mkw=(doc,value)=>op(doc,{op:'create',resource:'wire',value});
+const reload=doc=>D.documentFromFilePayload(JSON.parse(JSON.stringify(D.compactDocument(doc))));
+const refusedClean=(doc,fn,pick)=>{const rev=doc.revision,before=JSON.stringify(pick(doc));const rc=fn();return {ok:rc.ok,msg:rc.error?.message||'',rev:rc.revisionAfter===rev&&doc.revision===rev,same:JSON.stringify(pick(doc))===before}};
+
+// Step 13: an invalid delay is refused on create and update; load keeps a stored one.
+{
+  const d=D.makeDocument({id:'delay'});mk(d,{id:'a',symbolId:'act',x:0,y:0});mk(d,{id:'b',symbolId:'act',x:400,y:0});
+  const w=mkw(d,{id:'w',a:'a',aSide:'out',b:'b',bSide:'in',config:{delay:2}});
+  const wires=doc=>doc.wires;
+  const r={ok:w.ok,create:{},update:{}};
+  for(const [k,v] of Object.entries({zero:0,negative:-1,fraction:1.5,string:'2',nul:null})){
+    r.create[k]=refusedClean(d,()=>mkw(d,{id:'x'+k,a:'a',aSide:'out',b:'b',bSide:'in',config:{delay:v}}),wires);
+    r.update[k]=refusedClean(d,()=>upd(d,'w',{config:{delay:v}},'wire'),wires);
+  }
+  r.accepted=upd(d,'w',{config:{delay:5}},'wire').ok&&d.wires[0].config.delay===5;
+  r.unrelated=upd(d,'w',{config:{label:'x'}},'wire').ok;
+  const file=JSON.parse(JSON.stringify(D.compactDocument(d)));file.wires[0].config.delay=0;
+  const loaded=D.documentFromFilePayload(file);
+  r.loadKeeps=loaded.wires[0].config.delay;
+  r.check=S.checkDocument(loaded,packs).refusals.map(x=>x.code);
+  out.delay=r;
+}
+
+// Step 14: a definition that resolves but does not validate is DEFINITION_INVALID.
+// Step 16: a definition with no ports is refused on bind and on load with DEFINITION_NOT_BINDABLE.
+{
+  const and=clone(packs[0].definitions.find(x=>x.id==='logic.and'));
+  const broken={format:'soveraeign.schematic/pack@0.1',id:'broken',version:1,definitions:[{...and,id:'logic.broken',parameters:{...and.parameters,table:and.parameters.table.slice(0,3)}}]};
+  const flow=S.loadPack({format:'soveraeign.schematic/pack@0.1',id:'flow',version:1,definitions:[{id:'flow.last',version:1,pattern:'merge@1',parameters:{combine:'last'}}]});
+  const d=D.makeDocument({id:'defs'});mk(d,{id:'g',symbolId:'act',x:0,y:0});
+  out.flowPack={ok:flow.ok,errors:flow.errors};
+  out.notBindable=S.bindDefinition(d,'g','flow.last@1',[flow.pack]);
+  upd(d,'g',{config:{definition:'logic.broken@1'}});
+  out.invalid=S.checkDocument(reload(d),[broken]).refusals.map(x=>x.code);
+  const e=D.makeDocument({id:'nb'});mk(e,{id:'g',symbolId:'act',x:0,y:0,config:{definition:'flow.last@1',attachmentDefaults:'none',attachmentPoints:[]}});
+  out.notBindableCheck=S.checkDocument(reload(e),[flow.pack]).refusals.map(x=>x.code);
+}
+
+// Step 15: rebinding carries merges; a dropped port or channel holding one is MERGE_IN_USE.
+{
+  const d=D.makeDocument({id:'rebind'});mk(d,{id:'g',symbolId:'act',x:300,y:0});
+  op(d,S.bindDefinition(d,'g','logic.and@1',packs));
+  const g=()=>d.components.find(c=>c.id==='g');
+  const withMerge=clone(g().config.attachmentPoints);withMerge[0].channels=[{id:'main',merge:{combine:'last'}}];withMerge[1].channels=[{id:'main',merge:{combine:'or'}}];
+  const set=upd(d,'g',{config:{attachmentPoints:withMerge}});
+  const rebind=S.bindDefinition(d,'g','logic.or@1',packs);
+  const applied=op(d,clone(rebind));
+  const not=S.bindDefinition(d,'g','logic.not@1',packs);
+  out.rebind={set:set.ok,patchA:rebind.patch?.config.attachmentPoints[0].channels,applied:applied.ok,definition:g().config.definition,stored:g().config.attachmentPoints.map(p=>[p.id,p.channels]),check:S.checkDocument(reload(d),packs),not};
+}
+
+// Step 18: owned ports are guarded; move, relabel and merge edits pass; unbinding is allowed.
+{
+  const d=D.makeDocument({id:'own'});mk(d,{id:'g',symbolId:'act',x:300,y:0});mk(d,{id:'p',symbolId:'point',x:0,y:0});
+  op(d,S.bindDefinition(d,'g','logic.and@1',packs));
+  mkw(d,{id:'w',a:'p',aSide:'self',b:'g',bAttachment:{pointId:'a'}});
+  const g=()=>d.components.find(c=>c.id==='g');
+  const ports=()=>clone(g().config.attachmentPoints);
+  const edit=f=>{const list=ports();f(list);return {config:{attachmentPoints:list}}};
+  const forbidden={
+    addPort:edit(l=>l.push({id:'c',side:'left',t:.9,flow:'in'})),
+    removePort:edit(l=>l.splice(1,1)),
+    renamePort:edit(l=>{l[1].id='bb'}),
+    flow:edit(l=>{l[2].flow='duplex'}),
+    channelIds:edit(l=>{l[1].channels=[{id:'main'},{id:'aux'}]}),
+    channelRename:edit(l=>{l[1].channels=[{id:'data'}]}),
+    standard:{config:{attachmentDefaults:'standard'}},
+    retype:{symbolId:'gate'},
+    retypePlane:{symbolId:'plane'}
+  };
+  const r={forbidden:{},allowed:{}};
+  for(const [k,patch] of Object.entries(forbidden))r.forbidden[k]=refusedClean(d,()=>upd(d,'g',patch),doc=>doc.components.find(c=>c.id==='g'));
+  const allowed={
+    move:()=>edit(l=>{l[0].side='top';l[0].t=.25}),
+    relabel:()=>edit(l=>{l[2].label='Q'}),
+    merge:()=>edit(l=>{l[0].channels=[{id:'main',merge:{combine:'first',order:{kind:'declared',paths:['w']}}}]}),
+    noneAgain:()=>({config:{attachmentDefaults:'none'}}),
+    label:()=>({config:{label:'AND'}}),
+    sameType:()=>({symbolId:'act'})
+  };
+  for(const [k,patch] of Object.entries(allowed)){const rc=upd(d,'g',patch());r.allowed[k]={ok:rc.ok,msg:rc.error?.message||''}}
+  r.after=g().config.attachmentPoints.map(p=>[p.id,p.side,p.t,p.label||null,p.channels]);
+  r.check=S.checkDocument(reload(d),packs);
+  // bindDefinition's own patch is exempt (it sets config.definition).
+  r.rebindExempt=op(d,S.bindDefinition(d,'g','logic.xor@1',packs)).ok&&g().config.definition==='logic.xor@1';
+  // Unbinding leaves the ports as stored; then the ports are free to change.
+  const before=JSON.stringify(g().config.attachmentPoints);
+  const unbind=upd(d,'g',{config:{definition:null}});
+  r.unbind={ok:unbind.ok,definition:g().config.definition,portsKept:JSON.stringify(g().config.attachmentPoints)===before,thenFree:upd(d,'g',{symbolId:'gate'}).ok,check:S.checkDocument(reload(d),packs)};
+  out.owned=r;
+}
+
+// Step 19: provenance.threshold.
+{
+  const rec={format:'soveraeign.schematic/state-record@0.1',id:'sr-1',subject:{entity:'g',run:'run-1'},vantage:'point',observable:'level_high',kind:'derived',form:'binary',value:true,time:{logical:12,sequence:3,mode:'observed'},certainty:{kind:'exact'},observer:'rule:gate.threshold@1',provenance:{rule:'gate.threshold@1',inputs:['sr-0'],threshold:0.8},perturbation:'none'};
+  const v=t=>{const r=clone(rec);r.provenance.threshold=t;return S.validateRecord(r)};
+  out.threshold={number:S.validateRecord(rec),integer:v(1),string:v('0.8'),nul:v(null),bool:v(true)};
+}
+
+// Step 17: paste and Duplicate remap declared orders (the real 15-editor-kernel.js, editor runtime stubbed).
+{
+  const diagram=D.makeDocument({id:'paste'});
+  mk(diagram,{id:'s1',symbolId:'point',x:0,y:0});mk(diagram,{id:'s2',symbolId:'point',x:0,y:200});
+  mk(diagram,{id:'g',symbolId:'act',x:300,y:100,config:{attachmentDefaults:'none',attachmentPoints:[{id:'in',side:'left',t:.5,flow:'in',channels:[{id:'main',merge:{combine:'last',order:{kind:'declared',paths:['w1','w2']}}}]},{id:'out',side:'right',t:.5,flow:'out'}]}});
+  mkw(diagram,{id:'w1',a:'s1',aSide:'self',b:'g',bAttachment:{pointId:'in'}});
+  mkw(diagram,{id:'w2',a:'s2',aSide:'self',b:'g',bAttachment:{pointId:'in'}});
+  const source=S.checkDocument(reload(diagram),packs).refusals.filter(x=>x.code==='MERGE_INVALID').length;
+  const nodes=diagram.components,wires=diagram.wires,noop=()=>{};
+  const ctx=vm.createContext({window:{addEventListener:noop},document:{getElementById:()=>null,querySelectorAll:()=>[]},SovSchematicData:D,diagram,nodes,wires,selected:null,
+    statusEl:{},GLOBAL_CANVAS_ID:D.GLOBAL_CANVAS_ID,parentComponent:()=>null,descendantsOf:()=>[],isAttachmentSelectionValue:()=>false,nodeDepth:()=>0,
+    syncAllNodeBoundaryContext:noop,render:noop,routeCache:{clear:noop},arrowPoseCache:{clear:noop},setTimeout:()=>0,clearTimeout:noop,Date,Math,Number,String,JSON,Map,Set,Array,Object});
+  vm.runInContext(fs.readFileSync(process.argv[3],'utf8'),ctx,{filename:'15-editor-kernel.js'});
+  const dup=ids=>{vm.runInContext(`setComponentSelection(${JSON.stringify(ids)})`,ctx);const made=vm.runInContext('duplicateSelection()',ctx);return made.map(c=>c.id)};
+  const orderOf=id=>nodes.find(c=>c.id===id).config.attachmentPoints[0].channels[0].merge;
+  const r={source};
+  // g, s1 and s2 copied: both Wires copied, the order follows them.
+  {const before=new Set(wires.map(w=>w.id));const made=dup(['g','s1','s2']);const newWires=wires.filter(w=>!before.has(w.id));const g2=made.find(id=>nodes.find(c=>c.id===id).symbolId==='act');
+   r.all={made:made.length,merge:orderOf(g2),wires:newWires.map(w=>[w.id,w.a,w.b]),g2}}
+  // g and s1 copied: only w1's copy; w2 leaves the list.
+  {const before=new Set(wires.map(w=>w.id));const made=dup(['g','s1']);const newWires=wires.filter(w=>!before.has(w.id));const g2=made.find(id=>nodes.find(c=>c.id===id).symbolId==='act');
+   r.some={merge:orderOf(g2),wires:newWires.map(w=>[w.id,w.a,w.b]),g2}}
+  // g alone: no Wire copied; the order is removed and the merge keeps its combine.
+  {const made=dup(['g']);r.none={merge:orderOf(made[0])}}
+  r.original=orderOf('g');
+  r.after=S.checkDocument(reload(diagram),packs).refusals.filter(x=>x.code==='MERGE_INVALID').length;
+  out.paste=r;
+}
+
+// Step 13 over the browser API adapter.
+{
+  const diagram=D.makeDocument({id:'adapter-delay'});
+  mk(diagram,{id:'a',symbolId:'act',x:0,y:0});mk(diagram,{id:'b',symbolId:'act',x:400,y:0});mkw(diagram,{id:'w',a:'a',aSide:'out',b:'b',bSide:'in'});
+  D.normalizeDocument(diagram);
+  const captures=[],runtime=[];
+  const ctx=vm.createContext({window:{},SovSchematicData:D,diagram,Date,Math,String,commitHistoryCapture:label=>captures.push(label===undefined?null:label),normalizeRuntimeAfterCrud:()=>runtime.push('normalize'),saveWorkspaceToStorage:()=>runtime.push('save'),LOCAL_RECOVERY_KEY:'k'});
+  vm.runInContext(fs.readFileSync(process.argv[4],'utf8'),ctx,{filename:'85-api.js'});
+  const api=ctx.window.SovSchematicAPI,rev=diagram.revision,before=JSON.stringify(diagram.wires);
+  const u=api.update('wire','w',{config:{delay:0}}),c=api.create('wire',{id:'w2',a:'a',aSide:'out',b:'b',bSide:'in',config:{delay:1.5}});
+  out.adapterDelay={update:u,create:c,labelled:captures.filter(x=>x!==null),runtime,revSame:diagram.revision===rev,same:JSON.stringify(diagram.wires)===before};
 }
 console.log(JSON.stringify(out));
 """
@@ -308,8 +461,24 @@ def check_http_mcp() -> None:
             # The stored merge is untouched, and the refusals entered no history: one undo removes the creation.
             doc, is_error = rpc(base, 'schematic.document.get', {}, 3)
             assert not is_error and doc['components'][0]['config']['attachmentPoints'][0]['channels'] == GOOD_MERGE_PORTS[0]['channels'], doc
-            undo, is_error = rpc(base, 'schematic.history.undo', {}, 4)
-            assert not is_error and not undo['components'], undo
+            # Amendment 1, step 13: an invalid Wire delay is refused on create and update, over HTTP and MCP.
+            assert http_json(base + '/api/v1/components', 'POST', {'id': 'h', 'symbolId': 'act', 'x': 400, 'y': 0})[0] == 201
+            status, wire = http_json(base + '/api/v1/wires', 'POST', {'id': 'w', 'a': 'g', 'aSide': 'out', 'b': 'h', 'bSide': 'in', 'config': {'delay': 2}})
+            assert status == 201 and wire['ok'] and wire['result']['config']['delay'] == 2, wire
+            rev = wire['revisionAfter']
+            status, denied = http_json(base + '/api/v1/wires/w', 'PATCH', {'config': {'delay': 0}})
+            assert status == 400 and 'PATH_DELAY_INVALID' in denied['error']['message'] and denied['revisionAfter'] == rev, denied
+            status, denied = http_json(base + '/api/v1/wires', 'POST', {'id': 'w9', 'a': 'g', 'aSide': 'out', 'b': 'h', 'bSide': 'in', 'config': {'delay': 1.5}})
+            assert status == 400 and 'PATH_DELAY_INVALID' in denied['error']['message'] and denied['revisionAfter'] == rev, denied
+            mcp, is_error = rpc(base, 'schematic.update', {'resource': 'wire', 'id': 'w', 'patch': {'config': {'delay': -1}}}, 5)
+            assert is_error and 'PATH_DELAY_INVALID' in mcp['error']['message'] and mcp['revisionAfter'] == rev, mcp
+            mcp, is_error = rpc(base, 'schematic.create', {'resource': 'wire', 'value': {'id': 'w8', 'a': 'g', 'aSide': 'out', 'b': 'h', 'bSide': 'in', 'config': {'delay': '3'}}}, 6)
+            assert is_error and 'PATH_DELAY_INVALID' in mcp['error']['message'] and mcp['revisionAfter'] == rev, mcp
+            # No refusal entered history: three undos remove the Wire, h and the creation of g.
+            for n in range(3):
+                undo, is_error = rpc(base, 'schematic.history.undo', {}, 10 + n)
+                assert not is_error, undo
+            assert not undo['components'] and not undo['wires'], undo
         finally:
             proc.terminate()
             proc.wait(timeout=5)
@@ -338,6 +507,65 @@ console.log(JSON.stringify({made:made.ok,denied,labelled:captures.filter(x=>x!==
 
 def check_adapter() -> dict:
     return node(ADAPTER, str(ROOT / 'src/05-data-core.js'), str(ROOT / 'src/07-state-space.js'), str(ROOT / 'src/85-api.js'), json.dumps([GOOD_MERGE_PORTS, BAD_MERGE_PORTS]))
+
+
+def check_amendment() -> None:
+    a = node(AMEND, str(ROOT / 'src/07-state-space.js'), str(ROOT / 'data/core.logic.pack.json'), str(ROOT / 'src/15-editor-kernel.js'), str(ROOT / 'src/85-api.js'))
+
+    # Step 13: delay refused on edit, kept on load, reported by checkDocument.
+    dl = a['delay']
+    assert dl['ok'] and dl['accepted'] and dl['unrelated'], dl
+    for kind in ('create', 'update'):
+        for key, got in dl[kind].items():
+            assert got['ok'] is False and 'PATH_DELAY_INVALID' in got['msg'] and got['rev'] and got['same'], (kind, key, got)
+    assert dl['loadKeeps'] == 0 and dl['check'] == ['PATH_DELAY_INVALID'], dl
+    ad = a['adapterDelay']
+    for key in ('update', 'create'):
+        assert ad[key]['ok'] is False and 'PATH_DELAY_INVALID' in ad[key]['error']['message'], ad
+    assert ad['labelled'] == [] and ad['runtime'] == [] and ad['revSame'] and ad['same'], ad
+
+    # Steps 14 + 16.
+    assert a['invalid'] == ['DEFINITION_INVALID'], a['invalid']
+    assert a['flowPack'] == {'ok': True, 'errors': []}, a['flowPack']
+    assert a['notBindable']['ok'] is False and a['notBindable']['code'] == 'DEFINITION_NOT_BINDABLE', a['notBindable']
+    assert a['notBindableCheck'] == ['DEFINITION_NOT_BINDABLE'], a['notBindableCheck']
+
+    # Step 15: rebinding and.a.main.merge onto logic.or keeps it; logic.not drops b, which holds one.
+    rb = a['rebind']
+    assert rb['set'] and rb['applied'] and rb['definition'] == 'logic.or@1', rb
+    assert rb['patchA'] == [{'id': 'main', 'merge': {'combine': 'last'}}], rb['patchA']
+    assert rb['stored'] == [['a', [{'id': 'main', 'merge': {'combine': 'last'}}]], ['b', [{'id': 'main', 'merge': {'combine': 'or'}}]], ['q', [{'id': 'main'}]]], rb['stored']
+    assert rb['check'] == {'ok': True, 'refusals': []}, rb['check']
+    assert rb['not']['ok'] is False and rb['not']['code'] == 'MERGE_IN_USE', rb['not']
+
+    # Step 18: each forbidden owned-port edit refused; move, relabel and merge edits accepted.
+    ow = a['owned']
+    for key, got in ow['forbidden'].items():
+        assert got['ok'] is False and 'DEFINITION_PORTS' in got['msg'] and got['rev'] and got['same'], (key, got)
+    for key, got in ow['allowed'].items():
+        assert got['ok'], (key, got)
+    assert ow['after'][0] == ['a', 'top', .25, None, [{'id': 'main', 'merge': {'combine': 'first', 'order': {'kind': 'declared', 'paths': ['w']}}}]], ow['after']
+    assert ow['after'][2][3] == 'Q', ow['after']
+    assert ow['check'] == {'ok': True, 'refusals': []}, ow['check']
+    assert ow['rebindExempt'], ow
+    assert ow['unbind'] == {'ok': True, 'definition': None, 'portsKept': True, 'thenFree': True, 'check': {'ok': True, 'refusals': []}}, ow['unbind']
+
+    # Step 19.
+    th = a['threshold']
+    assert th['number']['ok'] and th['integer']['ok'], th
+    for key in ('string', 'nul', 'bool'):
+        assert th[key]['ok'] is False and any('threshold' in e for e in th[key]['errors']), (key, th[key])
+
+    # Step 17: paste and Duplicate remap declared orders through the Wire id map.
+    ps = a['paste']
+    assert ps['source'] == 0, ps
+    new_ids = [w[0] for w in ps['all']['wires']]
+    assert len(new_ids) == 2 and all(w[2] == ps['all']['g2'] for w in ps['all']['wires']), ps['all']
+    assert ps['all']['merge'] == {'combine': 'last', 'order': {'kind': 'declared', 'paths': new_ids}}, ps['all']
+    assert len(ps['some']['wires']) == 1 and ps['some']['merge'] == {'combine': 'last', 'order': {'kind': 'declared', 'paths': [ps['some']['wires'][0][0]]}}, ps['some']
+    assert ps['none']['merge'] == {'combine': 'last'}, ps['none']
+    assert ps['original'] == {'combine': 'last', 'order': {'kind': 'declared', 'paths': ['w1', 'w2']}}, ps['original']
+    assert ps['after'] == 0, ps
 
 
 def main() -> None:
@@ -483,10 +711,12 @@ def main() -> None:
     assert r['directions'] == [['PATH_DIRECTION_FLOW', 'wire:dupBad'], ['PATH_DIRECTION_FLOW', 'wire:revBad']], r['directions']
     assert r['garbage'] == {'nul': False, 'str': False}, r['garbage']
 
-    # checkDocument on every example returns without throwing; its result is printed.
+    # checkDocument on every example returns without throwing (its result is printed), and since amendment 1
+    # (step 12, the relaxed direction rule) every example checks ok.
     for file, res in r['examples'].items():
         assert 'threw' not in res, (file, res)
         print(f'checkDocument {file}: {json.dumps(res["result"])}')
+        assert res['result'] == {'ok': True, 'refusals': []}, (file, res)
 
     # Step 4 on every surface: an invalid merge update is refused, with no revision and no history.
     check_http_mcp()
@@ -498,6 +728,7 @@ def main() -> None:
     page = (ROOT / 'index.source.html').read_text(encoding='utf-8')
     assert '<script src="src/05-data-core.js"></script>\n<script src="src/07-state-space.js"></script>' in page, 'index.source.html must load 07 after 05'
     assert 'data-beta-module="src/07-state-space.js"' in (ROOT / 'index.html').read_text(encoding='utf-8'), 'index.html does not carry 07; run build.py'
+    check_amendment()
     print('PASS state space contracts QA')
 
 

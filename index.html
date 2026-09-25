@@ -1688,6 +1688,30 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     }
     return errors;
   }
+  // A Wire's propagation delay (STATE-SPACE.md "Two-phase ticks"): absent means 1; a value an
+  // edit supplies must be an integer >= 1. Loading keeps a stored value as written, for the
+  // state space's load check to report.
+  function assertPathDelay(config){
+    if(!isObject(config)||config.delay===undefined)return;
+    if(!(Number.isInteger(config.delay)&&config.delay>=1))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
+  }
+  // A Component bound to a definition (`config.definition`) has ports the definition owns. An
+  // update that does not itself set `config.definition` may move, relabel and set channel merges
+  // on them, but may not change the port ids, a port's flow or channel ids, the attachment mode
+  // or the type (DEFINITION_PORTS). Binding, rebinding and unbinding set `config.definition`.
+  function ownedPortKey(component){
+    return Attachment.templatePointSpecs(component).concat(Attachment.authoredPointSpecs(component)).map(s=>[s.id,s.flow,Attachment.channelIds(s)]).sort((x,y)=>x[0]<y[0]?-1:x[0]>y[0]?1:0);
+  }
+  function assertDefinitionPortsKept(current,patch,candidate){
+    const bound=current?.config?.definition;
+    if(bound===undefined||bound===null||patch?.config?.definition!==undefined)return;
+    const refuse=why=>{throw new Error(`DEFINITION_PORTS: ${current.id} is bound to ${bound}; ${why}`)};
+    const nextSymbol=patch?.symbolId??patch?.type;
+    if(nextSymbol!==undefined&&normalizeSymbolId(nextSymbol)!==normalizeSymbolId(current.symbolId))refuse('its type may not change');
+    if(patch?.config?.attachmentDefaults!==undefined&&patch.config.attachmentDefaults!=='none')refuse('its attachment mode stays none');
+    if(!candidate)return;
+    if(JSON.stringify(ownedPortKey(current))!==JSON.stringify(ownedPortKey(candidate)))refuse('its port ids, flows and channel ids may not change');
+  }
   const samePort=(x,y)=>JSON.stringify([x.id,x.compatId||x.id,x.side,x.t,x.flow,x.channels,x.label||''])===JSON.stringify([y.id,y.compatId||y.id,y.side,y.t,y.flow,y.channels,y.label||'']);
   // A spec in the stored declared-port shape.
   function storedPort(spec){
@@ -1839,6 +1863,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(!Array.isArray(value.config.attachmentPoints))throw new Error('PORTS_INVALID: attachmentPoints must be an array');
       config.attachmentPoints=clone(value.config.attachmentPoints);setDeclaredPorts(doc,component);
     }
+    // A bound definition (`id@version`) is kept as authored, so a pasted or created bound Component stays bound.
+    if(value.config?.definition!==undefined)config.definition=clone(value.config.definition);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -2006,6 +2032,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   function makeWire(doc,value={}){
     const id=cleanString(value.id,nextId(doc.wires,'k'));
+    assertPathDelay(value.config);
     const wire={id,a:cleanString(value.a)||null,b:cleanString(value.b)||null,aSide:value.aSide??null,bSide:value.bSide??null,aAttachment:isObject(value.aAttachment)?clone(value.aAttachment):null,bAttachment:isObject(value.bAttachment)?clone(value.bAttachment):null};
     if(!wire.a&&!wire.aAttachment&&!wire.b&&!wire.bAttachment)throw new Error('wire.create requires a and b component ids, or free endpoints');
     for(const end of ['a','b'])if(!wire[end]&&!wire[end+'Attachment'])throw new Error(`wire.create requires ${end} (component id) or ${end}Attachment`);
@@ -2062,6 +2089,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const current=arr[index];assertUnlocked(current,resource);
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource==='component'){
+      assertDefinitionPortsKept(current,patch,null);
       const nextSymbol=patch?.symbolId??patch?.type;
       if(nextSymbol!==undefined&&normalizeSymbolId(nextSymbol)!==normalizeSymbolId(current.symbolId)){
         // A Path is a carrier drawn from the palette; a Component is not retyped into one (#19).
@@ -2079,9 +2107,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
       candidate.form=normalizeComponentForm(candidate.form,candidate.canvas);candidate.canvas.state=candidate.form.regions.interior.state;
       ensureAttachmentPortConfigs(candidate);
+      assertDefinitionPortsKept(current,patch,candidate);
       assertWiresSurviveEdit(doc,current,candidate);
       if(candidate.config?.presentation?.size){candidate.config.presentation.size.w=Math.max(80,num(candidate.config.presentation.size.w,112));candidate.config.presentation.size.h=Math.max(64,num(candidate.config.presentation.size.h,84));}
     }else if(resource==='wire'){
+      if(isObject(patch?.config))assertPathDelay(patch.config);
       // A patch may rebind an end (a/aSide or aAttachment ref) or free it (aAttachment {kind:'free'}).
       for(const end of ['a','b']){
         const key=end+'Attachment',patched=patch?.[key];
@@ -2264,7 +2294,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const provenance=record.provenance;
     if(!isObject(provenance))errors.push('provenance must be an object');
     else{
-      unknownKeys(provenance,['rule','inputs'],'provenance',errors);
+      unknownKeys(provenance,['rule','inputs','threshold'],'provenance',errors);
+      if(provenance.threshold!==undefined&&!(typeof provenance.threshold==='number'&&Number.isFinite(provenance.threshold)))errors.push('provenance.threshold must be a finite number');
       if(!nonEmpty(provenance.rule))errors.push('provenance.rule must be a non-empty string');
       if(!Array.isArray(provenance.inputs)||!provenance.inputs.every(nonEmpty))errors.push('provenance.inputs must be an array of non-empty strings');
     }
@@ -2426,17 +2457,33 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   function contractPorts(contract){return [...(contract.inputs||[]),...(contract.outputs||[])]}
 
   // --- Binding: an `update` operation for the data core; nothing is applied here.
+  // A contract with no inputs and no outputs (merge@1's, for one) generates no ports: nothing binds to it.
+  function bindable(contract){return contractPorts(contract).length>0}
   function bindDefinition(doc,componentId,ref,packs){
     const definition=resolveDefinition(ref,packs);
     if(!definition)return {ok:false,code:'DEFINITION_UNRESOLVED',message:`definition ${ref} is not in the packs`};
-    if(!(doc?.components||[]).some(c=>c?.id===componentId))return {ok:false,code:'COMPONENT_NOT_FOUND',message:`component ${componentId} not found`};
+    const component=(doc?.components||[]).find(c=>c?.id===componentId);
+    if(!component)return {ok:false,code:'COMPONENT_NOT_FOUND',message:`component ${componentId} not found`};
     const problems=checkDefinition(definition);
     if(problems.length)return {ok:false,code:problems[0].code,message:problems[0].message};
-    const attachmentPoints=contractPorts(contractOf(definition)).map(port=>{
+    const contract=contractOf(definition);
+    if(!bindable(contract))return {ok:false,code:'DEFINITION_NOT_BINDABLE',message:`definition ${ref} (${definition.pattern}) generates no ports`};
+    const attachmentPoints=contractPorts(contract).map(port=>{
       const stored={id:port.id,side:port.side,t:port.t,flow:port.flow,channels:port.channels.map(c=>({id:c.id}))};
       if(port.label)stored.label=port.label;
       return stored;
     });
+    // Rebinding carries each existing channel merge to the same port id and channel id, and
+    // is refused when the new contract drops a port or channel that holds one.
+    const byId=new Map(attachmentPoints.map(p=>[p.id,p]));
+    for(const spec of Data.canonicalAttachmentPointDescriptors(component)){
+      for(const channel of spec?.channels||[]){
+        if(channel.merge===undefined)continue;
+        const target=byId.get(spec.id)?.channels.find(c=>c.id===channel.id);
+        if(!target)return {ok:false,code:'MERGE_IN_USE',message:`port ${spec.id} channel ${channel.id} of ${componentId} holds a merge, and ${ref} has no such port and channel`};
+        target.merge=clone(channel.merge);
+      }
+    }
     return {schema:Data.OPERATION_SCHEMA,op:'update',resource:'component',resourceId:componentId,patch:{config:{definition:ref,attachmentDefaults:'none',attachmentPoints}}};
   }
 
@@ -2466,10 +2513,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         const flow=spec=>spec.flow||spec.defaultFlow||'duplex';
         const direction=['none','forward','reverse','duplex'].includes(config.direction)?config.direction:wire.duplex?'duplex':'forward';
         const aFlow=flow(aSpec),bFlow=flow(bSpec);
-        const admitted=direction==='none'?true
-          :direction==='forward'?EMITS.includes(aFlow)&&RECEIVES.includes(bFlow)
-          :direction==='reverse'?EMITS.includes(bFlow)&&RECEIVES.includes(aFlow)
-          :[aFlow,bFlow].every(f=>EMITS.includes(f)&&RECEIVES.includes(f));
+        // Refused only when none of the Wire's declared directions is admitted by both flows:
+        // a duplex Wire from an out port to an in port carries forward only.
+        const carries={forward:EMITS.includes(aFlow)&&RECEIVES.includes(bFlow),reverse:EMITS.includes(bFlow)&&RECEIVES.includes(aFlow)};
+        const declared=direction==='none'?[]:direction==='duplex'?['forward','reverse']:[direction];
+        const admitted=!declared.length||declared.some(x=>carries[x]);
         if(!admitted)refuse('PATH_DIRECTION_FLOW',subject,`direction ${direction} is not admitted by ports ${wire.a}.${aSpec.id} (${aFlow}) and ${wire.b}.${bSpec.id} (${bFlow})`);
         const theirs=new Set((bSpec.channels||[{id:'main'}]).map(c=>c.id));
         if(!(aSpec.channels||[{id:'main'}]).some(c=>theirs.has(c.id)))refuse('CHANNEL_MISMATCH',subject,`ports ${wire.a}.${aSpec.id} and ${wire.b}.${bSpec.id} share no channel`);
@@ -2478,12 +2526,13 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const component of d.components){
       try{
         const config=isObject(component.config)?component.config:{};
-        if(config.definition!==undefined){
+        if(config.definition!==undefined&&config.definition!==null){ // null is unbound
           const subject=`component:${component.id}`;
           const definition=resolveDefinition(config.definition,packs);
           const problems=definition?checkDefinition(definition):[];
           if(!definition)refuse('DEFINITION_UNRESOLVED',subject,`definition ${JSON.stringify(config.definition)} is not in the packs`);
-          else if(problems.length)refuse('DEFINITION_UNRESOLVED',subject,`definition ${config.definition} does not validate: ${problems.map(x=>x.message).join('; ')}`);
+          else if(problems.length)refuse('DEFINITION_INVALID',subject,`definition ${config.definition} does not validate: ${problems.map(x=>`${x.code} ${x.message}`).join('; ')}`);
+          else if(!bindable(contractOf(definition)))refuse('DEFINITION_NOT_BINDABLE',subject,`definition ${config.definition} (${definition.pattern}) generates no ports`);
           else{
             const key=port=>[port.id,port.flow||port.defaultFlow||'duplex',(port.channels||[{id:'main'}]).map(c=>c.id)];
             const want=contractPorts(contractOf(definition)).map(key).sort();
@@ -3484,12 +3533,28 @@ function copySelection(){
   semanticClipboard={schema:'soveraeign.schematic/clipboard@0.1',createdAt:new Date().toISOString(),rootIds:data.roots.map(x=>x.id),components:data.components,wires:data.wires};
   statusEl.textContent=`Copied · ${data.components.length} Component${data.components.length===1?'':'s'}`;updateEditMenuState();return SovSchematicData.clone(semanticClipboard);
 }
+// A channel merge's declared order names Wires by id. On paste the copies' orders follow the
+// copied Wires (old id -> new id); a Wire that was not copied leaves the list, and an order left
+// with no path is removed so the merge falls back to its default order.
+function remapPastedMergeOrders(components,wireIdMap){
+  for(const component of components){
+    for(const port of Array.isArray(component?.config?.attachmentPoints)?component.config.attachmentPoints:[]){
+      for(const channel of Array.isArray(port?.channels)?port.channels:[]){
+        const order=channel?.merge?.order;
+        if(!order||order.kind!=='declared'||!Array.isArray(order.paths))continue;
+        const paths=order.paths.map(id=>wireIdMap.get(id)).filter(Boolean);
+        if(paths.length)order.paths=paths;else delete channel.merge.order;
+      }
+    }
+  }
+  return components;
+}
 function pasteClipboard({offset=32}={}){
   if(!semanticClipboard?.components?.length){statusEl.textContent='Clipboard empty';return []}
   // All or nothing: every record is built and checked against a staged copy of the document
   // before any is inserted, so a refused record inserts nothing and leaves history as it was.
   const stage={...diagram,components:nodes.slice(),wires:wires.slice()};
-  const idMap=new Map(),created=[],createdWires=[];
+  const idMap=new Map(),wireIdMap=new Map(),created=[],createdWires=[];
   const comps=semanticClipboard.components.slice().sort((a,b)=>nodeDepth(a)-nodeDepth(b));
   try{
     for(const old of comps){
@@ -3506,8 +3571,9 @@ function pasteClipboard({offset=32}={}){
   for(const old of semanticClipboard.wires||[]){
     if(!idMap.has(old.a)||!idMap.has(old.b))continue;
     const value=SovSchematicData.clone(old);delete value.id;value.a=idMap.get(old.a);value.b=idMap.get(old.b);
-    try{const w=SovSchematicData.makeWire(stage,value);stage.wires.push(w);createdWires.push(w)}catch(_){ }
+    try{const w=SovSchematicData.makeWire(stage,value);stage.wires.push(w);createdWires.push(w);wireIdMap.set(old.id,w.id)}catch(_){ }
   }
+  remapPastedMergeOrders(created,wireIdMap);
   setHistoryHint('Paste');nodes.push(...created);wires.push(...createdWires);
   syncAllNodeBoundaryContext();setComponentSelection(created.filter(n=>semanticClipboard.rootIds.includes([...idMap.entries()].find(([,v])=>v===n.id)?.[0])).map(n=>n.id),created.at(-1)?.id);routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();statusEl.textContent=`Pasted · ${created.length} Component${created.length===1?'':'s'}`;return created;
 }
