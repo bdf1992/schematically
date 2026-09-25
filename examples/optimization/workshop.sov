@@ -1,0 +1,267 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "example-optimization-workshop",
+  "revision": 0,
+  "meta": {
+    "title": "Optimization \u2014 a workshop under time and timber limits"
+  },
+  "components": [
+    {
+      "id": "timber",
+      "symbolId": "hold",
+      "x": 140,
+      "y": 360,
+      "config": {
+        "label": "Timber"
+      }
+    },
+    {
+      "id": "floor",
+      "symbolId": "plane",
+      "x": 620,
+      "y": 360,
+      "config": {
+        "label": "Shop floor",
+        "attachmentDefaults": "none",
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "none",
+          "size": {
+            "w": 560,
+            "h": 300
+          }
+        }
+      },
+      "form": {
+        "dimension": 2,
+        "regions": {
+          "interior": {
+            "state": "open"
+          }
+        }
+      }
+    },
+    {
+      "id": "ingress",
+      "symbolId": "point",
+      "x": 340,
+      "y": 360,
+      "canvasId": "canvas:component:floor",
+      "parentId": "floor",
+      "placement": {
+        "kind": "edge",
+        "hostId": "floor",
+        "side": "left",
+        "t": 0.5
+      },
+      "form": {
+        "dimension": 0
+      },
+      "config": {
+        "label": "ingress",
+        "ports": {
+          "out": {
+            "face": "both"
+          }
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "none",
+          "backdrop": "none"
+        }
+      }
+    },
+    {
+      "id": "cut",
+      "symbolId": "act",
+      "x": 480,
+      "y": 360,
+      "config": {
+        "label": "Cut"
+      },
+      "canvasId": "canvas:component:floor",
+      "parentId": "floor"
+    },
+    {
+      "id": "chairs",
+      "symbolId": "act",
+      "x": 680,
+      "y": 290,
+      "config": {
+        "label": "Chairs"
+      },
+      "canvasId": "canvas:component:floor",
+      "parentId": "floor"
+    },
+    {
+      "id": "tables",
+      "symbolId": "act",
+      "x": 680,
+      "y": 430,
+      "config": {
+        "label": "Tables"
+      },
+      "canvasId": "canvas:component:floor",
+      "parentId": "floor"
+    },
+    {
+      "id": "chair-out",
+      "symbolId": "point",
+      "x": 900,
+      "y": 290,
+      "canvasId": "canvas:component:floor",
+      "parentId": "floor",
+      "placement": {
+        "kind": "edge",
+        "hostId": "floor",
+        "side": "right",
+        "t": 0.25
+      },
+      "form": {
+        "dimension": 0
+      },
+      "config": {
+        "label": "chairs out",
+        "ports": {
+          "out": {
+            "face": "both"
+          }
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "none",
+          "backdrop": "none"
+        }
+      }
+    },
+    {
+      "id": "table-out",
+      "symbolId": "point",
+      "x": 900,
+      "y": 430,
+      "canvasId": "canvas:component:floor",
+      "parentId": "floor",
+      "placement": {
+        "kind": "edge",
+        "hostId": "floor",
+        "side": "right",
+        "t": 0.75
+      },
+      "form": {
+        "dimension": 0
+      },
+      "config": {
+        "label": "tables out",
+        "ports": {
+          "out": {
+            "face": "both"
+          }
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "none",
+          "backdrop": "none"
+        }
+      }
+    },
+    {
+      "id": "market",
+      "symbolId": "hold",
+      "x": 1120,
+      "y": 360,
+      "config": {
+        "label": "Market"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w-timber",
+      "a": "timber",
+      "aSide": "out",
+      "b": "ingress",
+      "bSide": "out",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "timber"
+      }
+    },
+    {
+      "id": "w-stock",
+      "a": "ingress",
+      "aSide": "out",
+      "b": "cut",
+      "bSide": "in",
+      "canvasId": "canvas:component:floor"
+    },
+    {
+      "id": "w-chair-blanks",
+      "a": "cut",
+      "aSide": "out",
+      "b": "chairs",
+      "bSide": "in",
+      "canvasId": "canvas:component:floor",
+      "config": {
+        "label": "blanks"
+      }
+    },
+    {
+      "id": "w-table-blanks",
+      "a": "cut",
+      "aSide": "out",
+      "b": "tables",
+      "bSide": "in",
+      "canvasId": "canvas:component:floor",
+      "config": {
+        "label": "blanks"
+      }
+    },
+    {
+      "id": "w-chairs",
+      "a": "chairs",
+      "aSide": "out",
+      "b": "chair-out",
+      "bSide": "out",
+      "canvasId": "canvas:component:floor"
+    },
+    {
+      "id": "w-chair-sales",
+      "a": "chair-out",
+      "aSide": "out",
+      "b": "market",
+      "bSide": "in",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "chairs"
+      }
+    },
+    {
+      "id": "w-tables",
+      "a": "tables",
+      "aSide": "out",
+      "b": "table-out",
+      "bSide": "out",
+      "canvasId": "canvas:component:floor"
+    },
+    {
+      "id": "w-table-sales",
+      "a": "table-out",
+      "aSide": "out",
+      "b": "market",
+      "bSide": "in",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "tables"
+      }
+    }
+  ],
+  "references": []
+}

@@ -1,0 +1,74 @@
+{
+  "document": "workshop.sov",
+  "flows": {
+    "w-chair-blanks": {
+      "per": 4
+    },
+    "w-chair-sales": {
+      "effect": {
+        "k": 6,
+        "kind": "saturation"
+      },
+      "note": "a small local market: each further chair sells for less",
+      "value": 60
+    },
+    "w-stock": {
+      "note": "board-ft per blank, a fifth lost to kerf and knots",
+      "per": 1.25
+    },
+    "w-table-blanks": {
+      "per": 10
+    },
+    "w-table-sales": {
+      "value": 120
+    }
+  },
+  "horizon": "one week",
+  "objective": "maximize",
+  "resources": {
+    "labor": {
+      "limit": 40,
+      "scope": "floor",
+      "unit": "h"
+    }
+  },
+  "schema": "soveraeign.schematic/optimization@0.0-draft",
+  "stages": {
+    "chairs": {
+      "capacity": 20,
+      "unit": "chair",
+      "uses": {
+        "labor": 1.5
+      }
+    },
+    "cut": {
+      "capacity": 90,
+      "effects": {
+        "labor": {
+          "kind": "congestion",
+          "power": 2
+        }
+      },
+      "unit": "blank",
+      "uses": {
+        "labor": 0.2
+      }
+    },
+    "market": {
+      "role": "sink"
+    },
+    "tables": {
+      "capacity": 8,
+      "unit": "table",
+      "uses": {
+        "labor": 4
+      }
+    },
+    "timber": {
+      "role": "source",
+      "supply": 90,
+      "unit": "board-ft"
+    }
+  },
+  "unit": "USD"
+}
