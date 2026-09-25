@@ -58,6 +58,7 @@ BROWSER=[
     'tests/notation_qa.py',
     'tests/wire_crossing_qa.py',
     'tests/typography_qa.py',
+    'tests/legend_qa.py',
     'tests/loop_svg_qa.py',
     'tests/menu_dismissal_qa.py',
     'tests/appearance_history_qa.py',

@@ -71,6 +71,7 @@ function paintSim(){
   if(!simLayer)return;
   // A render replaces the node groups: narration focus is put back on the new ones.
   if(typeof narrationState!=='undefined'&&narrationState.index!=null)showNarration(narrationState.index,{manual:narrationState.manual});
+  if(typeof legendState!=='undefined'&&legendState.open)renderLegendPanel();
   simLayer.replaceChildren();
   workspace.classList.toggle('sim-live',!!simClock.run);
   for(const gEl of workspace.querySelectorAll('.wire-group.level-high'))gEl.classList.remove('level-high');

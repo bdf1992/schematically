@@ -136,6 +136,7 @@
     <button class="btn active" id="flowBtn" title="Show circuit direction">Flow</button>
     <div class="toolbar-separator" aria-hidden="true"></div>
     <div class="sim-transport" role="group" aria-label="Simulation clock">
+      <button class="btn" id="legendBtn" title="Show what the marks, colours, glyphs and shapes mean">Legend</button>
       <button class="btn" id="simPlayBtn" title="Run the clock">▶</button>
       <button class="btn" id="simStepBtn" title="Next instant">⏭</button>
       <button class="btn" id="simResetBtn" title="Stop and reset the clock">⟲</button>
@@ -444,6 +445,7 @@
     <div class="color-slot-panel" id="colorSlotPanel" hidden></div>
   </div>
   <div class="hint" id="hint">Drag body: move · corner grip: resize · Point: drag centre to move, drag ring to wire · drop a Point on a Path, Plane edge, or Wire to attach it</div>
+  <aside id="legendPanel" class="legend-panel" aria-label="Legend" hidden></aside>
   <div id="narrationBar" class="narration-bar" role="status" aria-live="polite" hidden></div>
 </main>
 
@@ -536,6 +538,7 @@
 <script src="src/80-bootstrap.js"></script>
 <script src="src/65-sim-control.js"></script>
 <script src="src/66-narration.js"></script>
+<script src="src/67-legend.js"></script>
 <script src="src/85-api.js"></script>
 </body>
 </html>
