@@ -122,12 +122,15 @@ What is implemented:
 - **Load cleaning never unbinds a Wire on a collision (#46).** When an entry's id or compat id collides with an
   earlier one (`customPointSpecs`), it is normally dropped. `cleanStoredPorts` keeps it instead, under a fresh id
   (`<id>~2`, `<id>~3`, ...: the first not taken), whenever a bound Wire end still refers to it, by the entry's
-  original id or by its declared compat id: that end is rebound to the fresh id by `pointId`, so it never resolves
-  through a different, colliding entry's compat id instead. A collision no bound Wire needs is still dropped, as
-  before. This keeps cleaning idempotent: once ids no longer collide, nothing further moves.
+  original id or by its declared compat id, and that reference is not the id of a surviving port: that end is
+  rebound to the fresh id by `pointId`, so it never resolves through a different, colliding entry's compat id
+  instead. A reference that names a surviving port's id stays on that port (a Wire on one of two `a` entries stays
+  on the first; #47), so a bound Component's owned ports stay the contract's. A collision no bound Wire needs is
+  still dropped, as before. This keeps cleaning idempotent: once ids no longer collide, nothing further moves.
 - **Retype.** `applySymbol` gives the new template's ports in template order, an authored port with the same id
   replacing the template's (keeping its side, t, flow, channels and label), then the remaining authored ports in
-  stored order, stored in the smallest form.
+  stored order, stored in the smallest form. A Component bound to a definition is not retyped (`DEFINITION_PORTS`):
+  its ports are the definition's (#47).
 - **A retype never moves a bound Wire to a different port id (#46).** `assertWiresSurviveEdit` refuses a retype
   (`update` changing `symbolId`, or `applySymbol(component, symbolId, doc)`) that leaves a Wire's end resolving to
   a different port id than before, with `PORT_IN_USE`, whenever the retype leaves the effective dimension

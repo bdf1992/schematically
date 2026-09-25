@@ -171,7 +171,8 @@ function pasteClipboard({offset=32}={}){
         // A Point stuck to the copied host's boundary or path stays stuck to the copy.
         if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
       }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
-      const fresh=SovSchematicData.makeComponent(stage,value);stage.components.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
+      // A copy keeps a bound Component's config.definition as-is (a plain create may not set one).
+      const fresh=SovSchematicData.makeComponent(stage,value,{copy:true});stage.components.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
     }
   }catch(error){statusEl.textContent=`Paste refused · ${error.message}`;return []}
   for(const old of semanticClipboard.wires||[]){

@@ -288,6 +288,23 @@ out.planePreset=D.templatePreset('plane');
     const rc=upd(d,'a',{symbolId:'point'});
     r.pointException={ok:rc.ok,msg:rc.error?.message||'',ids:ids(d.components.find(c=>c.id==='a')),wire:d.wires[0].aAttachment.pointId};
   }
+  // Contract #47, step 6: a Wire reference needs a renamed colliding copy only when it names no surviving
+  // port's id. Two `a` entries and a Wire on bSide 'a': the Wire stays on the original `a`, the copy is dropped.
+  {
+    const file={schema:D.DOCUMENT_SCHEMA,id:'dupA',revision:0,references:[],components:[
+      {id:'p',symbolId:'point',x:0,y:0},
+      {id:'g',symbolId:'act',x:300,y:0,config:{attachmentDefaults:'none',attachmentPoints:[{id:'a',side:'left',t:.3,flow:'in'},{id:'q',side:'right',flow:'out'},{id:'a',side:'bottom',t:.5,flow:'in'}]}}
+    ],wires:[{id:'w',a:'p',aSide:'self',b:'g',bSide:'a'},{id:'v',a:'p',aSide:'self',b:'g',bAttachment:{pointId:'a'}}]};
+    const once=D.documentFromFilePayload(clone(file)),twice=reload(once);
+    const view=d=>{const g=d.components.find(c=>c.id==='g');return {ids:ids(g),stored:g.config.attachmentPoints.map(x=>[x.id,x.side,x.t]),wires:d.wires.map(w=>[w.bAttachment.pointId,w.bSide])}};
+    r.dupA={once:view(once),twice:view(twice),valid:D.validateDocument(once).ok};
+    // The same on a template port: an authored `left` duplicates the template's; a Wire on `left` stays on the template port.
+    const std={schema:D.DOCUMENT_SCHEMA,id:'dupLeft',revision:0,references:[],components:[
+      {id:'p',symbolId:'point',x:0,y:0},{id:'g',symbolId:'act',x:300,y:0,config:{attachmentPoints:[{id:'left',side:'bottom',t:.5,flow:'in'}]}}
+    ],wires:[{id:'w',a:'p',aSide:'self',b:'g',bAttachment:{pointId:'left'}}]};
+    const loaded=D.documentFromFilePayload(clone(std)),g=loaded.components.find(c=>c.id==='g');
+    r.dupLeft={ids:ids(g),stored:g.config.attachmentPoints??null,wire:[loaded.wires[0].bAttachment.pointId,loaded.wires[0].bSide],side:A.resolveSpec(g,loaded.wires[0].bAttachment.pointId).side};
+  }
   out.followUps=r;
 }
 
@@ -470,6 +487,11 @@ def main() -> None:
         assert bp[key] == collided, (key, bp[key])
     assert bp['valid'], bp
     assert fu['noWireNeed'] == {'ids': ['left', 'right', 'top', 'p'], 'stored': [{'id': 'p', 'compatId': 'q', 'side': 'bottom', 't': .5, 'flow': 'duplex', 'channels': m}]}, fu['noWireNeed']
+
+    # Contract #47, step 6: a Wire on a duplicated id stays on the surviving port; the copy is dropped.
+    want_dup = {'ids': ['a', 'q'], 'stored': [['a', 'left', .3], ['q', 'right', .5]], 'wires': [['a', 'a'], ['a', 'a']]}
+    assert fu['dupA']['once'] == want_dup and fu['dupA']['twice'] == want_dup and fu['dupA']['valid'], fu['dupA']
+    assert fu['dupLeft'] == {'ids': ['left', 'right', 'top'], 'stored': [], 'wire': ['left', 'in'], 'side': 'left'}, fu['dupLeft']
 
     # Issue #46, step 3: a retype that would move a bound Wire to a different port id is
     # refused; a retype to a Point keeping a Wire on out->self is the one kept exception.

@@ -169,7 +169,7 @@ const reload=doc=>D.documentFromFilePayload(JSON.parse(JSON.stringify(D.compactD
   const d=D.makeDocument({id:'bind'});
   mk(d,{id:'g',symbolId:'act',x:300,y:100});
   const op1=S.bindDefinition(d,'g','logic.and@1',packs);
-  const rc=D.applyOperation(d,clone(op1));
+  const rc=S.applyBind(d,'g','logic.and@1',packs);
   const g=d.components.find(c=>c.id==='g');
   const A=globalThis.SovSchematicAttachment;
   out.bind={op:op1,ok:rc.ok,msg:rc.error?.message||'',definition:g.config.definition,mode:g.config.attachmentDefaults,stored:g.config.attachmentPoints,specs:A.pointSpecs(g).map(s=>({id:s.id,side:s.side,t:s.t,flow:s.flow,channels:s.channels})),check:S.checkDocument(d,packs),reloaded:reload(d).components.find(c=>c.id==='g').config};
@@ -179,7 +179,7 @@ const reload=doc=>D.documentFromFilePayload(JSON.parse(JSON.stringify(D.compactD
   mk(e,{id:'g',symbolId:'act',x:300,y:100});mk(e,{id:'s',symbolId:'act',x:0,y:100});
   const w=mkw(e,{id:'w',a:'s',aSide:'out',b:'g',bSide:'control'});
   const rev=e.revision,before=JSON.stringify(e.components.find(c=>c.id==='g'));
-  const rc2=D.applyOperation(e,S.bindDefinition(e,'g','logic.and@1',packs));
+  const rc2=S.applyBind(e,'g','logic.and@1',packs);
   out.inUse={wire:w.ok,bound:e.wires[0].bAttachment.pointId,ok:rc2.ok,msg:rc2.error?.message||'',rev:e.revision===rev,same:JSON.stringify(e.components.find(c=>c.id==='g'))===before};
 }
 
@@ -187,7 +187,7 @@ const reload=doc=>D.documentFromFilePayload(JSON.parse(JSON.stringify(D.compactD
 {
   const base=()=>{const d=D.makeDocument({id:'q'});mk(d,{id:'pa',symbolId:'point',x:0,y:0});mk(d,{id:'pb',symbolId:'point',x:0,y:200});mk(d,{id:'g',symbolId:'act',x:300,y:100});mk(d,{id:'pq',symbolId:'point',x:600,y:100});return d};
   const valid=base();
-  const bound=D.applyOperation(valid,S.bindDefinition(valid,'g','logic.and@1',packs));
+  const bound=S.applyBind(valid,'g','logic.and@1',packs);
   const wires=[mkw(valid,{id:'wa',a:'pa',aSide:'self',b:'g',bAttachment:{pointId:'a'}}),mkw(valid,{id:'wb',a:'pb',aSide:'self',b:'g',bAttachment:{pointId:'b'}}),mkw(valid,{id:'wq',a:'g',aAttachment:{pointId:'q'},b:'pq',bSide:'self'})];
   const validDoc=reload(valid);
   const snapshot=JSON.stringify(validDoc);
@@ -203,10 +203,12 @@ const reload=doc=>D.documentFromFilePayload(JSON.parse(JSON.stringify(D.compactD
      {id:'b',symbolId:'act',x:400,y:0,config:{attachmentDefaults:'none',attachmentPoints:[{id:'rx',side:'left',t:.5,flow:'in',channels:[{id:'main'}]}]}}],
    wires:[{id:'k',a:'a',aSide:'tx',aAttachment:{kind:'attachment-ref',componentId:'a',pointId:'tx'},b:'b',bSide:'rx',bAttachment:{kind:'attachment-ref',componentId:'b',pointId:'rx'},config:{direction:'forward'}}]};
    crafted.CHANNEL_MISMATCH=D.makeDocument(file)}
+  // A stand-in pack binds through applyBind a ref the core pack does not hold, or holds with other ports.
+  const standIn=(id,parameters)=>S.loadPack({format:'soveraeign.schematic/pack@0.1',id:'stand-in',version:1,definitions:[{...clone(andDef),id,...(parameters?{parameters}:{})}]}).pack;
   // DEFINITION_UNRESOLVED: a definition no pack holds.
-  {const d=D.makeDocument({id:'un'});mk(d,{id:'g',symbolId:'act',x:0,y:0});upd(d,'g',{config:{definition:'logic.nand@1'}});crafted.DEFINITION_UNRESOLVED=reload(d)}
-  // DEFINITION_PORTS: bound to logic.and@1 but still carrying the template trio.
-  {const d=D.makeDocument({id:'dp'});mk(d,{id:'g',symbolId:'act',x:0,y:0});upd(d,'g',{config:{definition:'logic.and@1'}});crafted.DEFINITION_PORTS=reload(d)}
+  {const d=D.makeDocument({id:'un'});mk(d,{id:'g',symbolId:'act',x:0,y:0});S.applyBind(d,'g','logic.nand@1',[standIn('logic.nand')]);crafted.DEFINITION_UNRESOLVED=reload(d)}
+  // DEFINITION_PORTS: bound to logic.and@1 but carrying ports another logic.and@1 generated (x, y -> z).
+  {const d=D.makeDocument({id:'dp'});mk(d,{id:'g',symbolId:'act',x:0,y:0});S.applyBind(d,'g','logic.and@1',[standIn('logic.and',{inputs:['x','y'],outputs:['z'],table:andDef.parameters.table})]);crafted.DEFINITION_PORTS=reload(d)}
   // MERGE_INVALID (a): a declared order naming a Wire that does not end on the port.
   {const d=reload(valid);const g=d.components.find(c=>c.id==='g');g.config.attachmentPoints[0].channels=[{id:'main',merge:{combine:'first',order:{kind:'declared',paths:['wa','wq']}}}];crafted.MERGE_INVALID=D.normalizeDocument(d)}
   // MERGE_INVALID (b): a file whose merge fails merge@1 (order on an order-free combine); loading keeps it as written.
@@ -260,7 +262,8 @@ const refusedClean=(doc,fn,pick)=>{const rev=doc.revision,before=JSON.stringify(
   const r={ok:w.ok,create:{},update:{}};
   for(const [k,v] of Object.entries({zero:0,negative:-1,fraction:1.5,string:'2',nul:null})){
     r.create[k]=refusedClean(d,()=>mkw(d,{id:'x'+k,a:'a',aSide:'out',b:'b',bSide:'in',config:{delay:v}}),wires);
-    r.update[k]=refusedClean(d,()=>upd(d,'w',{config:{delay:v}},'wire'),wires);
+    // Contract #47 step 7: an update's delay null removes the delay (absent means 1); it is not refused.
+    if(v!==null)r.update[k]=refusedClean(d,()=>upd(d,'w',{config:{delay:v}},'wire'),wires);
   }
   r.accepted=upd(d,'w',{config:{delay:5}},'wire').ok&&d.wires[0].config.delay===5;
   r.unrelated=upd(d,'w',{config:{label:'x'}},'wire').ok;
@@ -280,21 +283,23 @@ const refusedClean=(doc,fn,pick)=>{const rev=doc.revision,before=JSON.stringify(
   const d=D.makeDocument({id:'defs'});mk(d,{id:'g',symbolId:'act',x:0,y:0});
   out.flowPack={ok:flow.ok,errors:flow.errors};
   out.notBindable=S.bindDefinition(d,'g','flow.last@1',[flow.pack]);
-  upd(d,'g',{config:{definition:'logic.broken@1'}});
+  // A stand-in pack binds through applyBind a ref whose definition the checked pack holds differently.
+  const standIn=id=>S.loadPack({format:'soveraeign.schematic/pack@0.1',id:'stand-in',version:1,definitions:[{...clone(and),id}]}).pack;
+  S.applyBind(d,'g','logic.broken@1',[standIn('logic.broken')]);
   out.invalid=S.checkDocument(reload(d),[broken]).refusals.map(x=>x.code);
-  const e=D.makeDocument({id:'nb'});mk(e,{id:'g',symbolId:'act',x:0,y:0,config:{definition:'flow.last@1',attachmentDefaults:'none',attachmentPoints:[]}});
+  const e=D.makeDocument({id:'nb'});mk(e,{id:'g',symbolId:'act',x:0,y:0});S.applyBind(e,'g','flow.last@1',[standIn('flow.last')]);
   out.notBindableCheck=S.checkDocument(reload(e),[flow.pack]).refusals.map(x=>x.code);
 }
 
 // Step 15: rebinding carries merges; a dropped port or channel holding one is MERGE_IN_USE.
 {
   const d=D.makeDocument({id:'rebind'});mk(d,{id:'g',symbolId:'act',x:300,y:0});
-  op(d,S.bindDefinition(d,'g','logic.and@1',packs));
+  S.applyBind(d,'g','logic.and@1',packs);
   const g=()=>d.components.find(c=>c.id==='g');
   const withMerge=clone(g().config.attachmentPoints);withMerge[0].channels=[{id:'main',merge:{combine:'last'}}];withMerge[1].channels=[{id:'main',merge:{combine:'or'}}];
   const set=upd(d,'g',{config:{attachmentPoints:withMerge}});
   const rebind=S.bindDefinition(d,'g','logic.or@1',packs);
-  const applied=op(d,clone(rebind));
+  const applied=S.applyBind(d,'g','logic.or@1',packs);
   const not=S.bindDefinition(d,'g','logic.not@1',packs);
   out.rebind={set:set.ok,patchA:rebind.patch?.config.attachmentPoints[0].channels,applied:applied.ok,definition:g().config.definition,stored:g().config.attachmentPoints.map(p=>[p.id,p.channels]),check:S.checkDocument(reload(d),packs),not};
 }
@@ -302,7 +307,7 @@ const refusedClean=(doc,fn,pick)=>{const rev=doc.revision,before=JSON.stringify(
 // Step 18: owned ports are guarded; move, relabel and merge edits pass; unbinding is allowed.
 {
   const d=D.makeDocument({id:'own'});mk(d,{id:'g',symbolId:'act',x:300,y:0});mk(d,{id:'p',symbolId:'point',x:0,y:0});
-  op(d,S.bindDefinition(d,'g','logic.and@1',packs));
+  S.applyBind(d,'g','logic.and@1',packs);
   mkw(d,{id:'w',a:'p',aSide:'self',b:'g',bAttachment:{pointId:'a'}});
   const g=()=>d.components.find(c=>c.id==='g');
   const ports=()=>clone(g().config.attachmentPoints);
@@ -331,8 +336,8 @@ const refusedClean=(doc,fn,pick)=>{const rev=doc.revision,before=JSON.stringify(
   for(const [k,patch] of Object.entries(allowed)){const rc=upd(d,'g',patch());r.allowed[k]={ok:rc.ok,msg:rc.error?.message||''}}
   r.after=g().config.attachmentPoints.map(p=>[p.id,p.side,p.t,p.label||null,p.channels]);
   r.check=S.checkDocument(reload(d),packs);
-  // bindDefinition's own patch is exempt (it sets config.definition).
-  r.rebindExempt=op(d,S.bindDefinition(d,'g','logic.xor@1',packs)).ok&&g().config.definition==='logic.xor@1';
+  // The binding path is exempt (it sets config.definition).
+  r.rebindExempt=S.applyBind(d,'g','logic.xor@1',packs).ok&&g().config.definition==='logic.xor@1';
   // Unbinding leaves the ports as stored; then the ports are free to change.
   const before=JSON.stringify(g().config.attachmentPoints);
   const unbind=upd(d,'g',{config:{definition:null}});
@@ -474,6 +479,15 @@ def check_http_mcp() -> None:
             assert is_error and 'PATH_DELAY_INVALID' in mcp['error']['message'] and mcp['revisionAfter'] == rev, mcp
             mcp, is_error = rpc(base, 'schematic.create', {'resource': 'wire', 'value': {'id': 'w8', 'a': 'g', 'aSide': 'out', 'b': 'h', 'bSide': 'in', 'config': {'delay': '3'}}}, 6)
             assert is_error and 'PATH_DELAY_INVALID' in mcp['error']['message'] and mcp['revisionAfter'] == rev, mcp
+            # Contract #47, step 2: a non-null definition by update or create is refused over HTTP and MCP.
+            status, denied = http_json(base + '/api/v1/components/h', 'PATCH', {'config': {'definition': 'logic.and@1'}})
+            assert status == 400 and denied['error']['message'].startswith('DEFINITION_BIND_REQUIRED:') and denied['revisionAfter'] == rev, denied
+            status, denied = http_json(base + '/api/v1/components', 'POST', {'id': 'n', 'symbolId': 'act', 'config': {'definition': 'logic.and@1'}})
+            assert status == 400 and denied['error']['message'].startswith('DEFINITION_BIND_REQUIRED:') and denied['revisionAfter'] == rev, denied
+            mcp, is_error = rpc(base, 'schematic.update', {'resource': 'component', 'id': 'h', 'patch': {'config': {'definition': 'logic.and@1'}}}, 7)
+            assert is_error and mcp['error']['message'].startswith('DEFINITION_BIND_REQUIRED:') and mcp['revisionAfter'] == rev, mcp
+            mcp, is_error = rpc(base, 'schematic.create', {'resource': 'component', 'value': {'id': 'n', 'symbolId': 'act', 'config': {'definition': {'evil': 1}}}}, 8)
+            assert is_error and mcp['error']['message'].startswith('DEFINITION_INVALID:') and mcp['revisionAfter'] == rev, mcp
             # No refusal entered history: three undos remove the Wire, h and the creation of g.
             for n in range(3):
                 undo, is_error = rpc(base, 'schematic.history.undo', {}, 10 + n)
@@ -566,6 +580,258 @@ def check_amendment() -> None:
     assert ps['none']['merge'] == {'combine': 'last'}, ps['none']
     assert ps['original'] == {'combine': 'last', 'order': {'kind': 'declared', 'paths': ['w1', 'w2']}}, ps['original']
     assert ps['after'] == 0, ps
+
+
+# Contract #47: a definition binding is only ever done by binding.
+BINDING = r"""
+const S=require(process.argv[1]),D=globalThis.SovSchematicData,A=globalThis.SovSchematicAttachment,fs=require('fs'),vm=require('vm');
+const clone=x=>JSON.parse(JSON.stringify(x));
+const packs=[S.loadPack(JSON.parse(fs.readFileSync(process.argv[2],'utf8'))).pack];
+const out={};
+const op=(doc,o)=>D.applyOperation(doc,o);
+const upd=(doc,id,patch,resource='component')=>op(doc,{op:'update',resource,resourceId:id,patch});
+const mk=(doc,value)=>op(doc,{op:'create',resource:'component',value});
+const mkw=(doc,value)=>op(doc,{op:'create',resource:'wire',value});
+const reload=doc=>D.documentFromFilePayload(JSON.parse(JSON.stringify(D.compactDocument(doc))));
+const refusedClean=(doc,fn,pick=d=>d.components)=>{const rev=doc.revision,before=JSON.stringify(pick(doc));const rc=fn();return {ok:rc.ok,msg:rc.error?.message||'',code:rc.error?.code??null,rev:rc.revisionAfter===rev&&doc.revision===rev,same:JSON.stringify(pick(doc))===before}};
+const bound=()=>{const d=D.makeDocument({id:'b47'});mk(d,{id:'g',symbolId:'act',x:300,y:0});mk(d,{id:'p',symbolId:'point',x:0,y:0});mk(d,{id:'h',symbolId:'plane',x:900,y:0});
+  const rc=S.applyBind(d,'g','logic.and@1',packs);mkw(d,{id:'w',a:'p',aSide:'self',b:'g',bAttachment:{pointId:'a'}});return {d,rc}};
+
+// Step 1: applyBind binds and returns a receipt; bindDefinition only builds the patch.
+{
+  const d=D.makeDocument({id:'s1'});mk(d,{id:'g',symbolId:'act',x:0,y:0});
+  const snap=JSON.stringify(d),patch=S.bindDefinition(d,'g','logic.and@1',packs),untouched=JSON.stringify(d)===snap;
+  const rev=d.revision,rc=S.applyBind(d,'g','logic.and@1',packs),g=d.components.find(c=>c.id==='g');
+  out.step1={patch:patch.patch,untouched,ok:rc.ok,schema:rc.schema,revs:[rev,rc.revisionBefore,rc.revisionAfter,d.revision],error:rc.error,definition:g.config.definition,stored:g.config.attachmentPoints,
+    check:S.checkDocument(reload(d),packs),exported:typeof D.applyBinding};
+  // Refused applyBind receipts carry a code and change nothing.
+  const e=D.makeDocument({id:'s1r'});mk(e,{id:'g',symbolId:'act',x:0,y:0});mk(e,{id:'s',symbolId:'act',x:-400,y:0});mkw(e,{id:'k',a:'s',aSide:'out',b:'g',bSide:'control'});
+  out.step1.refused={unresolved:refusedClean(e,()=>S.applyBind(e,'g','logic.nand@1',packs)),missing:refusedClean(e,()=>S.applyBind(e,'zz','logic.and@1',packs)),inUse:refusedClean(e,()=>S.applyBind(e,'g','logic.and@1',packs))};
+  // The binding path itself accepts only a binding patch, on a 2D Component.
+  out.step1.binding={extra:refusedClean(e,()=>D.applyBinding(e,'s',{symbolId:'gate',config:{definition:'logic.and@1',attachmentDefaults:'none',attachmentPoints:[]}})),
+    nul:refusedClean(e,()=>D.applyBinding(e,'s',{config:{definition:null,attachmentDefaults:'none',attachmentPoints:[]}}))};
+}
+
+// Step 2: update and create never set a definition, on the core path (HTTP, MCP and the adapter below).
+{
+  const {d,rc}=bound(),g=()=>d.components.find(c=>c.id==='g');
+  const renamed=clone(g().config.attachmentPoints);renamed[1].id='bb';
+  const r={bound:rc.ok,restate:{},plain:{},invalid:{},create:{}};
+  // The three patches that restate config.definition: with a port change, a retype, and the attachment mode.
+  const restate={ports:{config:{definition:'logic.and@1',attachmentPoints:renamed}},retype:{symbolId:'gate',config:{definition:'logic.and@1'}},standard:{config:{definition:'logic.and@1',attachmentDefaults:'standard'}}};
+  for(const [k,patch] of Object.entries(restate))r.restate[k]=refusedClean(d,()=>upd(d,'g',patch));
+  r.plain.rebind=refusedClean(d,()=>upd(d,'g',{config:{definition:'logic.or@1'}}));
+  r.plain.operation=refusedClean(d,()=>op(d,S.bindDefinition(d,'g','logic.or@1',packs)));
+  mk(d,{id:'u',symbolId:'act',x:0,y:400});D.normalizeDocument(d); // the first operation after a create normalizes its port records
+  r.plain.unbound=refusedClean(d,()=>upd(d,'u',{config:{definition:'logic.and@1'}}));
+  for(const [k,v] of Object.entries({evil:{evil:1},noVersion:'logic.and',zeroVersion:'logic.and@0',number:5,empty:'',list:['logic.and@1']}))r.invalid[k]=refusedClean(d,()=>upd(d,'u',{config:{definition:v}}));
+  r.create.bound=refusedClean(d,()=>mk(d,{id:'n1',symbolId:'act',config:{definition:'logic.and@1',attachmentDefaults:'none',attachmentPoints:clone(g().config.attachmentPoints)}}));
+  r.create.evil=refusedClean(d,()=>mk(d,{id:'n2',symbolId:'act',config:{definition:{evil:1}}}));
+  const nul=mk(d,{id:'n3',symbolId:'act',config:{definition:null}});
+  r.create.nul={ok:nul.ok,saved:'definition' in D.compactDocument(d).components.find(c=>c.id==='n3').config};
+  r.unbind=upd(d,'g',{config:{definition:null}}).ok&&g().config.definition===null;
+  out.step2=r;
+}
+
+// Step 2: paste and Duplicate copy a bound Component as-is (the real 15-editor-kernel.js, editor runtime stubbed).
+{
+  const {d:diagram}=bound();
+  const nodes=diagram.components,wires=diagram.wires,noop=()=>{},statusEl={};
+  const ctx=vm.createContext({window:{addEventListener:noop},document:{getElementById:()=>null,querySelectorAll:()=>[]},SovSchematicData:D,diagram,nodes,wires,selected:null,
+    statusEl,GLOBAL_CANVAS_ID:D.GLOBAL_CANVAS_ID,parentComponent:()=>null,descendantsOf:()=>[],isAttachmentSelectionValue:()=>false,nodeDepth:()=>0,
+    syncAllNodeBoundaryContext:noop,render:noop,routeCache:{clear:noop},arrowPoseCache:{clear:noop},setTimeout:()=>0,clearTimeout:noop,Date,Math,Number,String,JSON,Map,Set,Array,Object});
+  vm.runInContext(fs.readFileSync(process.argv[3],'utf8'),ctx,{filename:'15-editor-kernel.js'});
+  const view=id=>{const c=nodes.find(x=>x.id===id);return [c.config.definition,c.config.attachmentDefaults,c.config.attachmentPoints.map(p=>p.id)]};
+  vm.runInContext(`setComponentSelection(['g','p'])`,ctx);
+  const dup=vm.runInContext('duplicateSelection()',ctx).map(c=>c.id);
+  vm.runInContext(`setComponentSelection(['g'])`,ctx);vm.runInContext('copySelection()',ctx);
+  const pasted=vm.runInContext('pasteClipboard()',ctx).map(c=>c.id);
+  const g2=dup.find(id=>nodes.find(c=>c.id===id).symbolId==='act');
+  const r={dup:dup.length,dupView:view(g2),pasteView:view(pasted[0]),wire:wires.filter(w=>w.b===g2).map(w=>w.bAttachment.pointId),check:S.checkDocument(reload(diagram),packs)};
+  // A clipboard carrying an invalid definition pastes nothing.
+  const count=nodes.length;
+  vm.runInContext(`semanticClipboard.components[0].config.definition={evil:1}`,ctx);
+  const refused=vm.runInContext('pasteClipboard()',ctx);
+  r.evil={made:refused.length,count:nodes.length===count,status:statusEl.textContent};
+  out.paste=r;
+}
+
+// Step 3: host and dimension changes are refused; moving, relabelling and merges stay allowed.
+{
+  const {d}=bound(),g=()=>d.components.find(c=>c.id==='g');
+  const r={forbidden:{},allowed:{}};
+  const forbidden={
+    dimension1:{form:{dimension:1}},
+    dimension0:{form:{dimension:0}},
+    wireHost:{placement:{kind:'wire',wireId:'w',t:.5}},
+    edgeHost:{placement:{kind:'edge',hostId:'h',side:'top',t:.5}},
+    pathHost:{placement:{kind:'path',hostId:'h',t:.5}}
+  };
+  for(const [k,patch] of Object.entries(forbidden))r.forbidden[k]=refusedClean(d,()=>upd(d,'g',patch));
+  const ports=()=>clone(g().config.attachmentPoints);
+  const edit=f=>{const l=ports();f(l);return {config:{attachmentPoints:l}}};
+  const allowed={move:()=>edit(l=>{l[1].side='bottom';l[1].t=.75}),relabel:()=>edit(l=>{l[0].label='A'}),merge:()=>edit(l=>{l[0].channels=[{id:'main',merge:{combine:'or'}}]}),
+    surface:()=>({placement:{kind:'surface',x:320,y:40},x:320,y:40}),reorder:()=>edit(l=>l.reverse()),label:()=>({config:{label:'AND'}})};
+  for(const [k,f] of Object.entries(allowed)){const rc=upd(d,'g',f());r.allowed[k]={ok:rc.ok,msg:rc.error?.message||''}}
+  r.check=S.checkDocument(reload(d),packs);
+  // Unbound, the same host and dimension patches are ordinary edits.
+  const e=D.makeDocument({id:'free'});mk(e,{id:'g',symbolId:'act',x:0,y:0});S.applyBind(e,'g','logic.and@1',packs);upd(e,'g',{config:{definition:null}});
+  r.unbound=upd(e,'g',{form:{dimension:1}}).ok;
+  out.step3=r;
+}
+
+// Step 4: applySymbol on a bound Component is refused (the bar retype calls it).
+{
+  const {d}=bound(),g=d.components.find(c=>c.id==='g'),before=JSON.stringify(g);
+  const attempt=f=>{try{f();return ''}catch(e){return String(e.message)}};
+  out.step4={withDoc:attempt(()=>D.applySymbol(g,'gate',d)),bare:attempt(()=>D.applySymbol(g,'point')),sameType:attempt(()=>D.applySymbol(g,'act',d)),same:JSON.stringify(g)===before};
+  // The real bar handler from 60-interactions.js, with the editor runtime it reads stubbed.
+  const src=fs.readFileSync(process.argv[4],'utf8'),start=src.indexOf("barComponentType.addEventListener('change',"),end=src.indexOf('\n});\n',start)+4;
+  let handler=null;const statusEl={textContent:''},hints=[],captures=[];
+  const barComponentType={value:'act',addEventListener:(ev,fn)=>{handler=fn}};
+  const ctx=vm.createContext({SovSchematicData:D,Attachment:A,diagram:d,nodes:d.components,selected:'g',barComponentType,statusEl,GROUPS:{Primitives:['point','path','plane'],Components:['blank','act','hold','buffer','gate','switch','limit','receipt','observe']},
+    mutationBlocked:()=>false,setHistoryHint:h=>hints.push(h),componentForm:n=>D.clone(n.form),wiresOnBuiltinPoints:()=>[],formHostsChildren:()=>false,
+    GLOBAL_CANVAS_ID:D.GLOBAL_CANVAS_ID,ensureComponentStructure:()=>{},routeCache:{clear(){}},arrowPoseCache:{clear(){}},render:()=>{},selectNode:()=>{},scheduleHistoryCapture:()=>captures.push(1)});
+  vm.runInContext(src.slice(start,end),ctx,{filename:'60-interactions.js'});
+  const bar={};
+  for(const next of ['gate','point','plane']){barComponentType.value=next;statusEl.textContent='';handler();bar[next]={status:statusEl.textContent,value:barComponentType.value,symbol:g.symbolId,same:JSON.stringify(g)===before}}
+  out.step4.bar={found:typeof handler==='function',results:bar,captures:captures.length};
+}
+
+// Step 5: only 2D Components bind.
+{
+  const d=D.makeDocument({id:'s5'});mk(d,{id:'pt',symbolId:'point',x:0,y:0});mk(d,{id:'rail',symbolId:'path',x:0,y:200});
+  mk(d,{id:'a',symbolId:'act',x:-300,y:0});mk(d,{id:'b',symbolId:'act',x:300,y:0});mkw(d,{id:'k',a:'a',aSide:'out',b:'b',bSide:'in'});
+  mk(d,{id:'onPath',symbolId:'act',canvasId:'canvas:wire:k',placement:{kind:'wire',wireId:'k',t:.5}});
+  const r={};
+  for(const id of ['pt','rail','onPath']){const dim=D.effectiveDimension(d.components.find(c=>c.id===id));r[id]={dim,patch:S.bindDefinition(d,id,'logic.and@1',packs),apply:refusedClean(d,()=>S.applyBind(d,id,'logic.and@1',packs))}}
+  out.step5=r;
+}
+
+// Step 6: load cleaning keeps owned ports. The review's file: a bound Component stored with two `a` entries
+// and a Wire with bSide 'a'. The Wire stays on the original `a`; no DEFINITION_PORTS.
+{
+  const file={schema:D.DOCUMENT_SCHEMA,id:'dupA',revision:0,references:[],components:[
+    {id:'p',symbolId:'point',x:0,y:0},
+    {id:'g',symbolId:'act',x:300,y:0,config:{definition:'logic.and@1',attachmentDefaults:'none',attachmentPoints:[
+      {id:'a',side:'left',t:1/3,flow:'in',channels:[{id:'main'}]},{id:'b',side:'left',t:2/3,flow:'in',channels:[{id:'main'}]},{id:'q',side:'right',t:.5,flow:'out',channels:[{id:'main'}]},
+      {id:'a',side:'bottom',t:.5,flow:'in',channels:[{id:'main'}]}]}}],
+    wires:[{id:'w',a:'p',aSide:'self',b:'g',bSide:'a'}]};
+  const once=D.documentFromFilePayload(clone(file)),twice=reload(once);
+  const view=doc=>{const g=doc.components.find(c=>c.id==='g');return {ids:A.pointIds(g),stored:g.config.attachmentPoints.map(p=>[p.id,p.side]),wire:[doc.wires[0].bAttachment.pointId,doc.wires[0].bSide]}};
+  out.step6={once:view(once),twice:view(twice),check:S.checkDocument(once,packs),checkTwice:S.checkDocument(twice,packs)};
+}
+
+// Step 7: a clean save. A null definition is not written; a Wire update with delay null removes the delay.
+{
+  const {d}=bound();
+  const unbind=upd(d,'g',{config:{definition:null}});
+  const saved=D.compactDocument(d).components.find(c=>c.id==='g').config;
+  mk(d,{id:'z',symbolId:'act',x:600,y:0});
+  const wire=mkw(d,{id:'k',a:'g',aAttachment:{pointId:'q'},b:'z',bSide:'in',config:{delay:3}});
+  const rev=d.revision,clear=upd(d,'k',{config:{delay:null}},'wire'),k=()=>d.wires.find(w=>w.id==='k');
+  const cleared={ok:clear.ok,msg:clear.error?.message||'',rev:[rev,d.revision],inRecord:'delay' in k().config,saved:'delay' in D.compactDocument(d).wires.find(w=>w.id==='k').config,reloaded:'delay' in reload(d).wires.find(w=>w.id==='k').config};
+  const again=upd(d,'k',{config:{delay:null}},'wire').ok&&!('delay' in k().config);
+  out.step7={unbind:unbind.ok,savedHasDefinition:'definition' in saved,wire:wire.ok,cleared,again,check:S.checkDocument(reload(d),packs)};
+}
+
+// Step 2 over the browser API adapter: a refusal reaches no runtime normalization and no history.
+{
+  const diagram=D.makeDocument({id:'adapter-bind'});mk(diagram,{id:'g',symbolId:'act',x:0,y:0});D.normalizeDocument(diagram);
+  const captures=[],runtime=[];
+  const ctx=vm.createContext({window:{},SovSchematicData:D,diagram,Date,Math,String,commitHistoryCapture:label=>captures.push(label===undefined?null:label),normalizeRuntimeAfterCrud:()=>runtime.push('normalize'),saveWorkspaceToStorage:()=>runtime.push('save'),LOCAL_RECOVERY_KEY:'k'});
+  vm.runInContext(fs.readFileSync(process.argv[5],'utf8'),ctx,{filename:'85-api.js'});
+  const api=ctx.window.SovSchematicAPI,rev=diagram.revision,before=JSON.stringify(diagram.components);
+  const u=api.update('component','g',{config:{definition:'logic.and@1'}}),c=api.create('component',{id:'h',symbolId:'act',config:{definition:'logic.and@1'}}),x=api.create('component',{id:'i',symbolId:'act',config:{definition:{evil:1}}});
+  out.adapter={update:u.error?.message||'',create:c.error?.message||'',evil:x.error?.message||'',oks:[u.ok,c.ok,x.ok],labelled:captures.filter(x=>x!==null),runtime,revSame:diagram.revision===rev,same:JSON.stringify(diagram.components)===before};
+}
+console.log(JSON.stringify(out));
+"""
+
+
+def check_binding() -> None:
+    b = node(BINDING, str(ROOT / 'src/07-state-space.js'), str(ROOT / 'data/core.logic.pack.json'), str(ROOT / 'src/15-editor-kernel.js'), str(ROOT / 'src/60-interactions.js'), str(ROOT / 'src/85-api.js'))
+    main_ch = [{'id': 'main'}]
+    want_ports = [
+        {'id': 'a', 'side': 'left', 't': 1 / 3, 'flow': 'in', 'channels': main_ch},
+        {'id': 'b', 'side': 'left', 't': 2 / 3, 'flow': 'in', 'channels': main_ch},
+        {'id': 'q', 'side': 'right', 't': .5, 'flow': 'out', 'channels': main_ch},
+    ]
+    clean = {'ok': True, 'refusals': []}
+
+    def refused(got, code, where=''):
+        assert got['ok'] is False and got['msg'].startswith(code + ':') and got['rev'] and got['same'], (where, code, got)
+
+    # Step 1: applyBind binds with a receipt; bindDefinition returns the patch and changes nothing.
+    s1 = b['step1']
+    assert s1['patch'] == {'config': {'definition': 'logic.and@1', 'attachmentDefaults': 'none', 'attachmentPoints': want_ports}} and s1['untouched'], s1
+    assert s1['ok'] and s1['schema'] == 'soveraeign.schematic/receipt@0.1' and s1['error'] is None, s1
+    assert s1['revs'][1] == s1['revs'][0] and s1['revs'][2] == s1['revs'][3] == s1['revs'][0] + 1, s1['revs']
+    assert s1['definition'] == 'logic.and@1' and s1['stored'] == want_ports and s1['check'] == clean and s1['exported'] == 'function', s1
+    for key, code in (('unresolved', 'DEFINITION_UNRESOLVED'), ('missing', 'COMPONENT_NOT_FOUND'), ('inUse', 'PORT_IN_USE')):
+        got = s1['refused'][key]
+        refused(got, code)
+        assert got['code'] == code, (key, got)
+    for key, got in s1['binding'].items():
+        refused(got, 'DEFINITION_INVALID')
+        assert got['code'] == 'DEFINITION_INVALID', (key, got)
+
+    # Step 2: a non-null definition by update or create is DEFINITION_BIND_REQUIRED; a malformed one DEFINITION_INVALID.
+    s2 = b['step2']
+    assert s2['bound'], s2
+    for key, got in list(s2['restate'].items()) + list(s2['plain'].items()) + [('create.bound', s2['create']['bound'])]:
+        refused(got, 'DEFINITION_BIND_REQUIRED', key)
+    assert set(s2['restate']) == {'ports', 'retype', 'standard'}, s2['restate']
+    for key, got in list(s2['invalid'].items()) + [('create.evil', s2['create']['evil'])]:
+        refused(got, 'DEFINITION_INVALID')
+    assert s2['create']['nul'] == {'ok': True, 'saved': False} and s2['unbind'], s2
+    ad = b['adapter']
+    assert ad['oks'] == [False, False, False] and ad['update'].startswith('DEFINITION_BIND_REQUIRED:') and ad['create'].startswith('DEFINITION_BIND_REQUIRED:') and ad['evil'].startswith('DEFINITION_INVALID:'), ad
+    assert ad['labelled'] == [] and ad['runtime'] == [] and ad['revSame'] and ad['same'], ad
+
+    # Step 2: paste and Duplicate keep a bound Component bound; an invalid definition pastes nothing.
+    ps = b['paste']
+    bound_view = ['logic.and@1', 'none', ['a', 'b', 'q']]
+    assert ps['dup'] == 2 and ps['dupView'] == bound_view and ps['pasteView'] == bound_view and ps['wire'] == ['a'], ps
+    assert ps['check'] == clean, ps['check']
+    assert ps['evil']['made'] == 0 and ps['evil']['count'] and ps['evil']['status'].startswith('Paste refused · DEFINITION_INVALID:'), ps['evil']
+
+    # Step 3: the three host and dimension changes (and two more) are DEFINITION_PORTS.
+    s3 = b['step3']
+    for key, got in s3['forbidden'].items():
+        refused(got, 'DEFINITION_PORTS')
+    for key, got in s3['allowed'].items():
+        assert got['ok'], (key, got)
+    assert s3['check'] == clean and s3['unbound'], s3
+
+    # Step 4: applySymbol and the bar retype refuse a bound Component and change nothing.
+    s4 = b['step4']
+    for key in ('withDoc', 'bare', 'sameType'):
+        assert s4[key].startswith('DEFINITION_PORTS:'), (key, s4)
+    assert s4['same'], s4
+    assert s4['bar']['found'] and s4['bar']['captures'] == 0, s4['bar']
+    for key, got in s4['bar']['results'].items():
+        assert got['status'].startswith('DEFINITION_PORTS:') and got['value'] == 'act' and got['symbol'] == 'act' and got['same'], (key, got)
+
+    # Step 5: a Point, a Path and a Component hosted on a Path do not bind.
+    s5 = b['step5']
+    assert {k: v['dim'] for k, v in s5.items()} == {'pt': 0, 'rail': 1, 'onPath': 1}, s5
+    for key, got in s5.items():
+        assert got['patch']['ok'] is False and got['patch']['code'] == 'DEFINITION_NOT_BINDABLE', (key, got)
+        refused(got['apply'], 'DEFINITION_NOT_BINDABLE')
+
+    # Step 6: the duplicate-`a` file loads with the Wire on the original `a` and no DEFINITION_PORTS.
+    s6 = b['step6']
+    want6 = {'ids': ['a', 'b', 'q'], 'stored': [['a', 'left'], ['b', 'left'], ['q', 'right']], 'wire': ['a', 'a']}
+    assert s6['once'] == want6 and s6['twice'] == want6, s6
+    assert s6['check'] == clean and s6['checkTwice'] == clean, s6
+
+    # Step 7: a null definition is not saved; delay null removes the delay, and absent means 1.
+    s7 = b['step7']
+    assert s7['unbind'] and s7['savedHasDefinition'] is False and s7['wire'], s7
+    c = s7['cleared']
+    assert c['ok'] and c['msg'] == '' and c['rev'][1] == c['rev'][0] + 1 and not c['inRecord'] and not c['saved'] and not c['reloaded'], c
+    assert s7['again'] and s7['check'] == clean, s7
 
 
 def main() -> None:
@@ -729,6 +995,7 @@ def main() -> None:
     assert '<script src="src/05-data-core.js"></script>\n<script src="src/07-state-space.js"></script>' in page, 'index.source.html must load 07 after 05'
     assert 'data-beta-module="src/07-state-space.js"' in (ROOT / 'index.html').read_text(encoding='utf-8'), 'index.html does not carry 07; run build.py'
     check_amendment()
+    check_binding()
     print('PASS state space contracts QA')
 
 

@@ -235,14 +235,19 @@
   }
   function contractPorts(contract){return [...(contract.inputs||[]),...(contract.outputs||[])]}
 
-  // --- Binding: an `update` operation for the data core; nothing is applied here.
+  // --- Binding. `bindDefinition` builds the binding patch for inspection and applies nothing;
+  // `applyBind` builds it the same way, checks it and applies it through the data core's binding
+  // path (`Data.applyBinding`), the only way `config.definition` becomes non-null.
   // A contract with no inputs and no outputs (merge@1's, for one) generates no ports: nothing binds to it.
   function bindable(contract){return contractPorts(contract).length>0}
+  // Only a 2D Component binds: a Point, a Path, or a Component hosted on a Path exposes no declared ports.
   function bindDefinition(doc,componentId,ref,packs){
     const definition=resolveDefinition(ref,packs);
     if(!definition)return {ok:false,code:'DEFINITION_UNRESOLVED',message:`definition ${ref} is not in the packs`};
     const component=(doc?.components||[]).find(c=>c?.id===componentId);
     if(!component)return {ok:false,code:'COMPONENT_NOT_FOUND',message:`component ${componentId} not found`};
+    const dimension=Data.effectiveDimension(component);
+    if(dimension!==2)return {ok:false,code:'DEFINITION_NOT_BINDABLE',message:`${componentId} is ${dimension}D; only a 2D Component binds a definition`};
     const problems=checkDefinition(definition);
     if(problems.length)return {ok:false,code:problems[0].code,message:problems[0].message};
     const contract=contractOf(definition);
@@ -264,6 +269,21 @@
       }
     }
     return {schema:Data.OPERATION_SCHEMA,op:'update',resource:'component',resourceId:componentId,patch:{config:{definition:ref,attachmentDefaults:'none',attachmentPoints}}};
+  }
+  // Binds `ref` to the Component: resolves the definition, builds the patch as bindDefinition
+  // does, verifies its ports equal the contract, and applies it through the binding path.
+  // Returns a receipt: ok, or refused with `error.code` (nothing changed, no revision).
+  const portKey=port=>[port.id,port.flow||port.defaultFlow||'duplex',(port.channels||[{id:'main'}]).map(c=>c.id)];
+  function applyBind(doc,componentId,ref,packs){
+    const revision=Number.isInteger(doc?.revision)?doc.revision:0;
+    const refused=(code,message)=>({schema:Data.RECEIPT_SCHEMA,operationId:null,ok:false,revisionBefore:revision,revisionAfter:revision,result:null,error:{code,message:`${code}: ${message}`}});
+    if(!isObject(doc))return refused('DOCUMENT_INVALID','a document must be an object');
+    const operation=bindDefinition(doc,componentId,ref,packs);
+    if(operation.ok===false)return refused(operation.code,operation.message);
+    const want=contractPorts(contractOf(resolveDefinition(ref,packs))).map(portKey).sort();
+    const have=operation.patch.config.attachmentPoints.map(portKey).sort();
+    if(!same(want,have))return refused('DEFINITION_PORTS',`the binding patch's ports ${JSON.stringify(have)} differ from the contract of ${ref} ${JSON.stringify(want)}`);
+    return Data.applyBinding(doc,componentId,operation.patch);
   }
 
   // --- Load checks (STATE-SPACE.md "Invariants", at load). Never throws, never mutates doc.
@@ -336,5 +356,5 @@
     return {ok:refusals.length===0,refusals};
   }
 
-  return {RECORD_FORMAT,PACK_FORMAT,validateRecord,patterns,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,checkDocument};
+  return {RECORD_FORMAT,PACK_FORMAT,validateRecord,patterns,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument};
 });

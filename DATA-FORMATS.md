@@ -117,8 +117,9 @@ The loader never writes template ports into the stored array, and never refuses 
 into exactly the authored ports it exposes (`t` coerced to a number and clamped to `0..1`, an invalid `flow` read as
 `duplex`, absent or empty `channels` read as `main`, entries with no valid side dropped). An entry whose id or
 compat id collides with an earlier one is dropped too, unless a bound Wire end refers to it (by its original id or
-its declared compat id): that entry is instead kept under a fresh id (`<id>~2`, `<id>~3`, ...) and the Wire end is
-rebound to it by `pointId`, so loading never unbinds a Wire on a collision.
+its declared compat id) and that reference is not the id of a surviving port: that entry is instead kept under a
+fresh id (`<id>~2`, `<id>~3`, ...) and the Wire end is rebound to it by `pointId`, so loading never unbinds a Wire
+on a collision. A Wire on a duplicated id (two entries `a`) stays on the surviving `a`, and the copy is dropped.
 A retype keeps the new template's ports in order, an authored port with a template id replacing it, followed by the
 remaining authored ports, stored in the smallest form. It is refused with `PORT_IN_USE` when it would leave a bound
 Wire end resolving to a different port id than before (a compat-id match to a different port counts as moving it),
@@ -195,19 +196,29 @@ four schemas below document the shapes (no JSON Schema evaluator is used).
 
 A `.sov` carries three pieces of authored state-space data, and nothing a run computes:
 
-- **`config.definition`** on a Component: the definition it is bound to, `id@version` (`"logic.and@1"`). Binding
-  (`bindDefinition`, applied as a component `update`) also sets `attachmentDefaults: none` and exactly the
-  contract's generated ports as `attachmentPoints`: one per input on the left and one per output on the right,
-  spread evenly unless the definition's `ports` places them. The existing Wire checks apply (`PORT_IN_USE`). A
-  definition whose contract has no ports (one on `merge@1`) is refused (`DEFINITION_NOT_BINDABLE`). Rebinding carries
-  each channel `merge` to the same port id and channel id, and is refused with `MERGE_IN_USE` when the new contract
-  drops a port or channel holding one. While bound, an update that does not itself set `config.definition` is
-  refused with `DEFINITION_PORTS` when it would change the port ids, a port's `flow` or channel ids, set
-  `attachmentDefaults` to anything but `none`, or change `symbolId`; moving, relabelling and channel `merge` edits
-  are allowed. Setting `config.definition` to `null` unbinds and leaves the ports as stored.
+- **`config.definition`** on a Component: the definition it is bound to, `id@version` (`"logic.and@1"`), or `null`
+  (unbound; not written on save). Only binding sets it to a non-null value: `applyBind(doc, componentId, ref, packs)`
+  resolves the definition, builds the patch (`bindDefinition` returns the same patch for inspection and applies
+  nothing), checks that its ports equal the contract, and applies it through the data core's binding path
+  (`applyBinding`), returning a receipt that is ok or refused with `error.code`. Binding also sets
+  `attachmentDefaults: none` and exactly the contract's generated ports as `attachmentPoints`: one per input on the
+  left and one per output on the right, spread evenly unless the definition's `ports` places them. The existing Wire
+  checks apply (`PORT_IN_USE`). A definition whose contract has no ports (one on `merge@1`), and any Component whose
+  effective dimension is not 2 (a Point, a Path, a Component hosted on a Path), is refused
+  (`DEFINITION_NOT_BINDABLE`). Rebinding carries each channel `merge` to the same port id and channel id, and is
+  refused with `MERGE_IN_USE` when the new contract drops a port or channel holding one. A component `update` or
+  `create` that sets a non-null `config.definition` is refused with `DEFINITION_BIND_REQUIRED` on every surface;
+  paste and Duplicate copy a bound Component's record as-is. A value that is neither `null` nor an `id@version`
+  string is refused everywhere with `DEFINITION_INVALID`. While bound, an update other than unbinding is refused
+  with `DEFINITION_PORTS` when the ports the Component exposes (ids, flows, channel ids, as
+  `canonicalAttachmentPointDescriptors` reads them) would differ, which includes a change of host (`placement`) or
+  of dimension (`form.dimension`), or when it would set `attachmentDefaults` to anything but `none` or change
+  `symbolId`; `applySymbol` (the bar retype) refuses a bound Component the same way. Moving (`side`, `t`),
+  relabelling and channel `merge` edits are allowed. Setting `config.definition` to `null` unbinds and leaves the
+  ports as stored.
 - **`config.delay`** on a Wire: its propagation delay in logical ticks, an integer >= 1. Absent means 1 and is not
-  written. A Wire `create` or `update` carrying any other value is refused with `PATH_DELAY_INVALID` on every
-  surface; loading keeps a stored value as written.
+  written. A Wire `update` with `delay: null` removes it. A Wire `create` or `update` carrying any other value is
+  refused with `PATH_DELAY_INVALID` on every surface; loading keeps a stored value as written.
 - **`merge`** on a declared port's channel: the `merge@1` parameters for same-tick arrivals there.
 
 ```json

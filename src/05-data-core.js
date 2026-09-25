@@ -357,28 +357,43 @@
     return errors;
   }
   // A Wire's propagation delay (STATE-SPACE.md "Two-phase ticks"): absent means 1; a value an
-  // edit supplies must be an integer >= 1. Loading keeps a stored value as written, for the
-  // state space's load check to report.
-  function assertPathDelay(config){
-    if(!isObject(config)||config.delay===undefined)return;
+  // edit supplies must be an integer >= 1. An update's `delay: null` removes it (`clearable`).
+  // Loading keeps a stored value as written, for the state space's load check to report.
+  function assertPathDelay(config,clearable=false){
+    if(!isObject(config)||config.delay===undefined||(clearable&&config.delay===null))return;
     if(!(Number.isInteger(config.delay)&&config.delay>=1))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
   }
+  // `config.definition` is null (unbound) or an `id@version` string, anywhere it is written
+  // (DEFINITION_INVALID). Only the binding path (`applyBinding`) sets it to a non-null value: a
+  // plain component update or create may clear it or leave it alone (DEFINITION_BIND_REQUIRED).
+  const DEFINITION_REF=/^.+@[1-9][0-9]*$/;
+  function assertDefinitionValue(value){
+    if(value===undefined||value===null)return;
+    if(typeof value!=='string'||!DEFINITION_REF.test(value))throw new Error(`DEFINITION_INVALID: config.definition must be null or an id@version string, not ${JSON.stringify(value)}`);
+  }
+  function assertDefinitionPatch(patch,binding){
+    const has=isObject(patch?.config)&&Object.prototype.hasOwnProperty.call(patch.config,'definition'),value=has?patch.config.definition:undefined;
+    assertDefinitionValue(value);
+    if(binding){if(value==null)throw new Error('DEFINITION_INVALID: a binding sets config.definition');return}
+    if(value!=null)throw new Error(`DEFINITION_BIND_REQUIRED: config.definition ${value} is set only by binding (applyBind), not by update or create`);
+  }
   // A Component bound to a definition (`config.definition`) has ports the definition owns. An
-  // update that does not itself set `config.definition` may move, relabel and set channel merges
-  // on them, but may not change the port ids, a port's flow or channel ids, the attachment mode
-  // or the type (DEFINITION_PORTS). Binding, rebinding and unbinding set `config.definition`.
-  function ownedPortKey(component){
-    return Attachment.templatePointSpecs(component).concat(Attachment.authoredPointSpecs(component)).map(s=>[s.id,s.flow,Attachment.channelIds(s)]).sort((x,y)=>x[0]<y[0]?-1:x[0]>y[0]?1:0);
+  // update other than unbinding (`config.definition: null`) may move, relabel and set channel
+  // merges on them, but may not change the type, the attachment mode, or the ports it exposes,
+  // compared by `canonicalAttachmentPointDescriptors` (ids, flows, channel ids), so a change of
+  // host (`placement`) or of dimension (`form.dimension`) is refused too (DEFINITION_PORTS).
+  function exposedPortKey(component){
+    return canonicalAttachmentPointDescriptors(component).map(s=>[s.id,s.flow||s.defaultFlow||'duplex',Attachment.channelIds(s)]).sort((x,y)=>x[0]<y[0]?-1:x[0]>y[0]?1:0);
   }
   function assertDefinitionPortsKept(current,patch,candidate){
     const bound=current?.config?.definition;
-    if(bound===undefined||bound===null||patch?.config?.definition!==undefined)return;
+    if(bound===undefined||bound===null||patch?.config?.definition===null)return;
     const refuse=why=>{throw new Error(`DEFINITION_PORTS: ${current.id} is bound to ${bound}; ${why}`)};
     const nextSymbol=patch?.symbolId??patch?.type;
     if(nextSymbol!==undefined&&normalizeSymbolId(nextSymbol)!==normalizeSymbolId(current.symbolId))refuse('its type may not change');
     if(patch?.config?.attachmentDefaults!==undefined&&patch.config.attachmentDefaults!=='none')refuse('its attachment mode stays none');
     if(!candidate)return;
-    if(JSON.stringify(ownedPortKey(current))!==JSON.stringify(ownedPortKey(candidate)))refuse('its port ids, flows and channel ids may not change');
+    if(JSON.stringify(exposedPortKey(current))!==JSON.stringify(exposedPortKey(candidate)))refuse('the ports it exposes (ids, flows, channel ids) may not change');
   }
   const samePort=(x,y)=>JSON.stringify([x.id,x.compatId||x.id,x.side,x.t,x.flow,x.channels,x.label||''])===JSON.stringify([y.id,y.compatId||y.id,y.side,y.t,y.flow,y.channels,y.label||'']);
   // A spec in the stored declared-port shape.
@@ -400,19 +415,22 @@
   // ports the loader exposes (t coerced and clamped, an invalid flow read as duplex, empty
   // channels read as main, entries without a valid side dropped). An entry an id or compat
   // id collision would otherwise drop is instead kept under a fresh id (`<id>~2`, ...) when
-  // a bound Wire end refers to it (by its original id or its declared compat id), and that
-  // Wire end is rebound to the fresh id; a colliding entry no Wire needs is dropped, as
-  // before. Cleaning stays idempotent: once ids no longer collide, nothing further moves.
+  // a bound Wire end refers to it (by its original id or its declared compat id) and that
+  // reference names no surviving port's id, and that Wire end is rebound to the fresh id; a
+  // colliding entry no Wire needs is dropped, as before, so a Wire on a duplicated id stays
+  // on the original port. Cleaning stays idempotent: once ids no longer collide, nothing
+  // further moves.
   function cleanStoredPorts(doc,component){
     const config=component?.config;if(!isObject(config)||!Array.isArray(config.attachmentPoints))return component;
     const specs=Attachment.authoredPointSpecs(component,{keepCollisions:true});
+    const surviving=new Set(Attachment.templatePointSpecs(component).concat(specs.filter(spec=>!spec.originalId)).map(spec=>spec.id));
     const wires=Array.isArray(doc?.wires)?doc.wires:[];
     const keepColliding=spec=>{
       let needed=false;
       for(const wire of wires)for(const end of ['a','b']){
         if(wire[end]!==component.id)continue;
         const ref=endRawRef(wire,end);
-        if(ref==null||(ref!==spec.originalId&&ref!==spec.compatId))continue;
+        if(ref==null||(ref!==spec.originalId&&ref!==spec.compatId)||surviving.has(ref))continue;
         needed=true;
         const att=wire[end+'Attachment'];
         if(isFreeEndpoint(att))continue;
@@ -505,10 +523,13 @@
   // glyph. Identity, position, placement, label, colour, editor state, authored attachment
   // points, the annotation, and a custom glyph on a Component stay. Creating a record
   // with the carrier preset (`symbolId:'path'`, the static 1D rail) is admissible here;
-  // retyping an existing Component into a carrier is refused by `update` and the bar.
-  // With `doc`, the retype is checked first against the Wires that end on the component
+  // retyping an existing Component into a carrier is refused by `update` and the bar, and
+  // retyping a bound Component is refused here (DEFINITION_PORTS). With `doc`, the retype is checked first against the Wires that end on the component
   // and refused (nothing changed) when it would remove a port one of them ends on.
   function applySymbol(component,symbolId,doc=null){
+    // A bound Component's ports are the definition's: it is not retyped (DEFINITION_PORTS).
+    const bound=component?.config?.definition;
+    if(bound!==undefined&&bound!==null)throw new Error(`DEFINITION_PORTS: ${component.id} is bound to ${bound}; its type may not change`);
     if(doc){const trial=clone(component);applySymbol(trial,symbolId);assertWiresSurviveEdit(doc,component,trial)}
     const next=normalizeSymbolId(symbolId),preset=templatePreset(next)||{};
     if(!isObject(component.config))component.config={};
@@ -537,7 +558,9 @@
     if(isObject(component.canvas)){component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state}
     return ensureAttachmentPortConfigs(component);
   }
-  function makeComponent(doc,value={}){
+  // `copy` is the paste and Duplicate path: it copies a bound Component's record as-is, so its
+  // `config.definition` is kept. Any other creation may not set one (DEFINITION_BIND_REQUIRED).
+  function makeComponent(doc,value={},{copy=false}={}){
     const symbolId=normalizeSymbolId(value.symbolId||value.type);
     const preset=templatePreset(symbolId)||{};
     const id=cleanString(value.id,nextId(doc.components,'c'));
@@ -569,7 +592,8 @@
       if(!Array.isArray(value.config.attachmentPoints))throw new Error('PORTS_INVALID: attachmentPoints must be an array');
       config.attachmentPoints=clone(value.config.attachmentPoints);setDeclaredPorts(doc,component);
     }
-    // A bound definition (`id@version`) is kept as authored, so a pasted or created bound Component stays bound.
+    // A bound definition (`id@version`) is kept only on a copy, so a pasted or duplicated bound Component stays bound.
+    if(copy)assertDefinitionValue(value.config?.definition);else assertDefinitionPatch(value,false);
     if(value.config?.definition!==undefined)config.definition=clone(value.config.definition);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
@@ -587,6 +611,7 @@
     delete c.canvas;delete c.boundary;delete c.parts;delete c.type;delete c.incomplete;
     if(isObject(c.config)){
       delete c.config.color;
+      if(c.config.definition===null)delete c.config.definition; // null is unbound
       // 'none' is always stored; 'standard' only where it overrides a preset of 'none' (a Plane).
       if(c.config.attachmentDefaults==='standard'&&(templatePreset(c.symbolId)?.attachmentDefaults||'standard')==='standard')delete c.config.attachmentDefaults;
       if(Array.isArray(c.config.attachmentPoints)&&!c.config.attachmentPoints.length)delete c.config.attachmentPoints;
@@ -790,12 +815,16 @@
     if(arr.some(x=>x.id===record.id))throw new Error(`${resource} id already exists: ${record.id}`);
     arr.push(record);return clone(record);
   }
-  function update(doc,resource,id,patch={}){
+  // `binding` is the binding path only (`applyBinding`): the one update that may set a non-null
+  // `config.definition`; the owned-port guard does not apply to it, the Wire checks do.
+  function update(doc,resource,id,patch={},{binding=false}={}){
     const arr=resourceArray(doc,resource),index=arr.findIndex(x=>x.id===id);if(index<0)throw new Error(`${resource} not found: ${id}`);
     const current=arr[index];assertUnlocked(current,resource);
+    if(binding&&resource!=='component')throw new Error('DEFINITION_INVALID: only a component binds a definition');
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource==='component'){
-      assertDefinitionPortsKept(current,patch,null);
+      assertDefinitionPatch(patch,binding);
+      if(!binding)assertDefinitionPortsKept(current,patch,null);
       const nextSymbol=patch?.symbolId??patch?.type;
       if(nextSymbol!==undefined&&normalizeSymbolId(nextSymbol)!==normalizeSymbolId(current.symbolId)){
         // A Path is a carrier drawn from the palette; a Component is not retyped into one (#19).
@@ -813,11 +842,12 @@
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
       candidate.form=normalizeComponentForm(candidate.form,candidate.canvas);candidate.canvas.state=candidate.form.regions.interior.state;
       ensureAttachmentPortConfigs(candidate);
-      assertDefinitionPortsKept(current,patch,candidate);
+      if(!binding)assertDefinitionPortsKept(current,patch,candidate);
       assertWiresSurviveEdit(doc,current,candidate);
       if(candidate.config?.presentation?.size){candidate.config.presentation.size.w=Math.max(80,num(candidate.config.presentation.size.w,112));candidate.config.presentation.size.h=Math.max(64,num(candidate.config.presentation.size.h,84));}
     }else if(resource==='wire'){
-      if(isObject(patch?.config))assertPathDelay(patch.config);
+      if(isObject(patch?.config))assertPathDelay(patch.config,true);
+      if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
       // A patch may rebind an end (a/aSide or aAttachment ref) or free it (aAttachment {kind:'free'}).
       for(const end of ['a','b']){
         const key=end+'Attachment',patched=patch?.[key];
@@ -876,6 +906,23 @@
       return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:value,error:null};
     }catch(error){return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:false,revisionBefore:before,revisionAfter:doc.revision,result:null,error:{message:String(error.message||error)}}}
   }
+  // The binding path (`applyBind` in the state space calls it): applies a binding patch,
+  // `{config:{definition, attachmentDefaults:'none', attachmentPoints}}`, to a 2D Component with the
+  // Wire checks every component edit runs. It is not a CRUD operation: no surface's `update`
+  // reaches it. Returns a receipt; a refusal carries its code and changes nothing.
+  const refusalCode=message=>(String(message||'').match(/^([A-Z][A-Z0-9_]*):/)||[])[1]||null;
+  function applyBinding(document,componentId,patch){
+    const doc=normalizeDocument(document),before=doc.revision,id=`bind-${Date.now()}`;
+    try{
+      const config=isObject(patch)&&Object.keys(patch).length===1?patch.config:null;
+      if(!isObject(config)||Object.keys(config).some(key=>!['definition','attachmentDefaults','attachmentPoints'].includes(key))||config.attachmentDefaults!=='none'||!Array.isArray(config.attachmentPoints))throw new Error('DEFINITION_INVALID: a binding patch is {config:{definition, attachmentDefaults: none, attachmentPoints}}');
+      const component=doc.components.find(c=>c.id===componentId);if(!component)throw new Error(`COMPONENT_NOT_FOUND: component ${componentId} not found`);
+      if(Attachment.effectiveDimension(component)!==2)throw new Error(`DEFINITION_NOT_BINDABLE: ${componentId} is ${Attachment.effectiveDimension(component)}D; only a 2D Component binds a definition`);
+      const value=update(doc,'component',componentId,patch,{binding:true});
+      touch(doc);
+      return {schema:RECEIPT_SCHEMA,operationId:id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:value,error:null};
+    }catch(error){const message=String(error.message||error);return {schema:RECEIPT_SCHEMA,operationId:id,ok:false,revisionBefore:before,revisionAfter:doc.revision,result:null,error:{code:refusalCode(message),message}}}
+  }
   function replaceDocument(target,input){
     const incoming=makeDocument(clone(input));
     const components=target.components,wires=target.wires,references=target.references;
@@ -919,5 +966,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {validateMerge,cleanStoredPorts,assertWiresSurviveEdit,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {validateMerge,cleanStoredPorts,assertWiresSurviveEdit,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch};
 });
