@@ -358,6 +358,26 @@ Zero-delay Paths stay forbidden until a domain pack needs them. Allowing them wo
 
 A Component hosted on a Path (`placement.kind: wire`, `wireId + t`) is a **tap**: it reads the value the Path carries and does not interrupt it. This is what the editor does today (`25-signal.js` gives a hosted Component the Path's source value while the Path still delivers end to end). A hosted Component that *interposes*, splitting the Path into segments with the Component as a device between them, needs carriers and Components in one record kind, which is the file-format transition the roadmap already names; it waits for that.
 
+### Runtime semantics (slice 1b)
+
+Decided before building the first runtime, so the contract names outcomes, not choices:
+
+- **Signal state** is kept per `(entity, port, channel)`. Every binary channel starts `false`; the starting state is implied by the document and is not recorded.
+- **Who does what on arrival.** A Component bound to a definition *evaluates*. A Point *relays*: a value arriving on its `self` port is emitted onto every other Path on that port, in each direction `self` emits, but never back onto the Path it arrived on. Any other Component *absorbs*: it holds the value and emits nothing.
+- **Sources are registered inputs.** A run's inputs are `{entity, point, channel?, value, at}`: at tick `at`, the port takes `value` and emits it. An input and a Path arrival at the same port and tick: the input wins, and the arrival is recorded as `overridden`.
+- **Emission.** When a port's value changes and the port emits, one arrival is scheduled per bound Path, per direction that Path carries out of this port (see *Ports*), per shared channel, at `t + path delay`.
+- **Device delay.** A device evaluates in the evaluate phase of tick `t`. With device delay 0 its output ports change in that phase and emit (arriving at `t + path delay`, which is ≥ `t + 1`). With device delay `d > 0` the output change is scheduled for the update phase of tick `t + d`, and emits then.
+- **Time jumps.** One step is the next tick that has scheduled work. Logical time skips empty ticks.
+- **Queue merges** keep a per-channel FIFO buffer as state: each tick the port delivers the head, and newly merged arrivals are appended in merge order.
+- **Forms.** Slice 1b runs binary channels only. On binary channels `min` is `and` and `max` is `or`; `sum` is refused at run start (`MERGE_FORM`).
+- **Budget** counts processed events (inputs, arrivals, output changes). Crossing it refuses the step with `BUDGET_SPENT`. The run stays inspectable.
+- **The ledger** holds what a replay cannot recompute:
+  - a `start` entry carrying the replay key;
+  - each registered input;
+  - each stochastic order draw.
+
+  Every entry carries the hash of the one before it. Derived records are the fold's output. The trace carries them for audit, and replay must reproduce them byte for byte.
+
 ### Stepping and settling
 
 One `schematic.run.step` is **one tick**: the smallest unit whose result is deterministic. `schematic.run.settle` steps until one of three typed results:
