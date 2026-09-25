@@ -58,6 +58,32 @@ function appendComponentGraphic(g,n,cfg){
   use.setAttribute('x',box.x);use.setAttribute('y',box.y);use.setAttribute('width',box.w);use.setAttribute('height',box.h);
   g.appendChild(use);
 }
+// A label belongs inside the body it names. Measured after the node is in the document (label
+// size follows zoom): a label wider than the body wraps onto two lines at word breaks, and one
+// still too long is cut with an ellipsis; the full text stays available as a tooltip.
+function fitComponentLabels(g,n){
+  if(componentForm(n).dimension!==2)return;
+  const size=componentSize(n),max=size.w-12;
+  for(const t of g.querySelectorAll(':scope > text.component-label,:scope > text.outside-label')){
+    const full=t.textContent;if(!full||t.getComputedTextLength()<=max)continue;
+    const words=full.split(/\s+/),lines=[''];
+    for(const word of words){
+      const trial=lines.at(-1)?lines.at(-1)+' '+word:word;
+      t.textContent=trial;
+      if(t.getComputedTextLength()<=max||!lines.at(-1))lines[lines.length-1]=trial;else lines.push(word);
+    }
+    if(lines.length>2)lines.splice(1,lines.length-1,lines.slice(1).join(' '));
+    t.textContent=lines[lines.length-1];
+    while(t.getComputedTextLength()>max&&t.textContent.length>1){t.textContent=t.textContent.slice(0,-2)+'…';t.dataset.truncated='true'}
+    lines[lines.length-1]=t.textContent;
+    const em=parseFloat(getComputedStyle(t).fontSize)||9,x=t.getAttribute('x')||'0',outside=t.classList.contains('outside-label');
+    t.textContent='';
+    lines.forEach((line,i)=>{const span=document.createElementNS('http://www.w3.org/2000/svg','tspan');span.setAttribute('x',x);
+      // Inside the body the block grows upward from its baseline; below the body it grows down.
+      span.setAttribute('dy',i===0?(outside?'0':String(-(lines.length-1)*em*1.15)):String(em*1.15));span.textContent=line;t.appendChild(span)});
+    const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=full;t.appendChild(title);
+  }
+}
 function appendComponentText(g,n,cfg,s){
   const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s),labelMode=SovSchematicData.effectiveLabelMode(n);
   if(labelMode!=='none'&&label){
@@ -133,13 +159,21 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   const backdrop=componentBackdropMode(n);g.dataset.backdrop=backdrop;
   if(form.dimension===0){
     const pointCfg=componentAttachmentPoint(n,'self')?.config,point=document.createElementNS('http://www.w3.org/2000/svg','circle');
-    point.setAttribute('class','dimensional-point-body port attachment-point');point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
+    // A Point that carries wires is structure (a terminal, a junction) and is drawn solid; an
+    // empty Point stays an open ring, an attachment waiting for a wire.
+    const ends=wires.reduce((k,w)=>k+(w.a===n.id?1:0)+(w.b===n.id?1:0),0);
+    point.setAttribute('class','dimensional-point-body port attachment-point'+(ends?' carries':'')+(ends>=3?' junction':''));point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(ends?(ends>=3?4.5:4):Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
     const display=String(cfg.label||'').trim()||componentTypeCaption(n,s);
     if(display){
       // A hosted Point inherits its host's angle; its label stays upright and below the point in world space.
       const angle=componentHostAngle(n),label=document.createElementNS('http://www.w3.org/2000/svg','text');
-      label.setAttribute('class','component-label dimensional-point-label');label.setAttribute('text-anchor','middle');label.setAttribute('y','0');
-      label.setAttribute('transform',`rotate(${-angle}) translate(0 22)`);label.textContent=display;g.appendChild(label);
+      label.setAttribute('class','component-label dimensional-point-label');label.setAttribute('y','0');
+      // A boundary Point labels the crossing from outside its host, clear of the wire it carries.
+      const edge=componentPlacement(n).kind==='edge'?componentPlacement(n).side:null;
+      // Below the wire it carries: a wire's own label sits above its line.
+      const at={left:[-8,15,'end'],right:[8,15,'start'],top:[8,-10,'start'],bottom:[8,16,'start']}[edge]||[0,22,'middle'];
+      label.setAttribute('text-anchor',at[2]);
+      label.setAttribute('transform',`rotate(${-angle}) translate(${at[0]} ${at[1]})`);label.textContent=display;g.appendChild(label);
     }
     return
   }
@@ -197,7 +231,7 @@ function render(){
         portLabel.setAttribute('x',localX+offsets.dx);portLabel.setAttribute('y',localY+offsets.dy);portLabel.setAttribute('text-anchor',offsets.anchor);portLabel.textContent=pcfg.label;g.appendChild(portLabel);
       }
     }
-    bindNode(g,n); nodesG.appendChild(g);
+    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
   });
   renderWires(signalState);
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
@@ -362,21 +396,21 @@ function renderPacketsForWire(group,cfg,points,signal,pathLength,w){
 
   if(cfg.direction==='forward'){
     if(signal.forwardLive){
-      appendWirePacket(group,forwardPath,pathLength,signal.forwardBody,signal.forwardBoundary,'forward',wireEndpointMarker(w,'a'),packetRateForWire(w,'forward'),wireOperation(w,'forward'))
+      appendWirePacket(group,forwardPath,pathLength,signal.forwardBody,signal.forwardBoundary,'forward',(endpointShowsChannelTag(w,'a')?wireEndpointMarker(w,'a'):''),packetRateForWire(w,'forward'),wireOperation(w,'forward'))
       count++;
     }
   }else if(cfg.direction==='reverse'){
     if(signal.reverseLive){
-      appendWirePacket(group,reversePath,pathLength,signal.reverseBody,signal.reverseBoundary,'reverse',wireEndpointMarker(w,'b'),packetRateForWire(w,'reverse'),wireOperation(w,'reverse'))
+      appendWirePacket(group,reversePath,pathLength,signal.reverseBody,signal.reverseBoundary,'reverse',(endpointShowsChannelTag(w,'b')?wireEndpointMarker(w,'b'):''),packetRateForWire(w,'reverse'),wireOperation(w,'reverse'))
       count++;
     }
   }else if(cfg.direction==='duplex'){
     if(signal.forwardLive){
-      appendWirePacket(group,forwardPath,pathLength,signal.forwardBody,signal.forwardBoundary,'forward',wireEndpointMarker(w,'a'),packetRateForWire(w,'forward'),wireOperation(w,'forward'))
+      appendWirePacket(group,forwardPath,pathLength,signal.forwardBody,signal.forwardBoundary,'forward',(endpointShowsChannelTag(w,'a')?wireEndpointMarker(w,'a'):''),packetRateForWire(w,'forward'),wireOperation(w,'forward'))
       count++;
     }
     if(signal.reverseLive){
-      appendWirePacket(group,reversePath,pathLength,signal.reverseBody,signal.reverseBoundary,'reverse',wireEndpointMarker(w,'b'),packetRateForWire(w,'reverse'),wireOperation(w,'reverse'))
+      appendWirePacket(group,reversePath,pathLength,signal.reverseBody,signal.reverseBoundary,'reverse',(endpointShowsChannelTag(w,'b')?wireEndpointMarker(w,'b'):''),packetRateForWire(w,'reverse'),wireOperation(w,'reverse'))
       count++;
     }
   }
@@ -485,7 +519,8 @@ function renderWires(signalState=computeSignalState()){
       if(w.b===activeNodeDrag)renderMoveTether(group,snapshot.bPos,B);
     }
 
-    if(cfg.direction==='duplex'){
+    // One mark per place: a labelled duplex wire carries ↔ in its label, not stacked above it.
+    if(cfg.direction==='duplex'&&!cfg.label){
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5);
       const badge=document.createElementNS('http://www.w3.org/2000/svg','text');
       badge.setAttribute('class','net-badge');
@@ -496,16 +531,16 @@ function renderWires(signalState=computeSignalState()){
     }
 
     if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'RETURN!':'RETURN?';group.appendChild(mark)}
-    if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13);label.setAttribute('text-anchor','middle');label.textContent=cfg.label;group.appendChild(label)}
+    if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13);label.setAttribute('text-anchor','middle');label.textContent=(cfg.direction==='duplex'?'↔ ':'')+cfg.label;group.appendChild(label)}
     // Channel markers belong to bound ends; a free end has no port to mark.
-    if(a){
+    if(a&&endpointShowsChannelTag(w,'a')){
       const markerA=document.createElementNS('http://www.w3.org/2000/svg','text');
       markerA.setAttribute('class','endpoint-channel-tag');
       {const side=physicalPortSide(a,w.aSide);markerA.setAttribute('x',A.x+(side==='left'?-14:side==='right'?14:0));markerA.setAttribute('y',A.y+(side==='top'?-12:side==='bottom'?15:4));markerA.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
       markerA.textContent=endpointMarkerDisplay(w,'a');
       group.appendChild(markerA);
     }
-    if(b){
+    if(b&&endpointShowsChannelTag(w,'b')){
       const markerB=document.createElementNS('http://www.w3.org/2000/svg','text');
       markerB.setAttribute('class','endpoint-channel-tag');
       {const side=physicalPortSide(b,w.bSide);markerB.setAttribute('x',B.x+(side==='left'?-14:side==='right'?14:0));markerB.setAttribute('y',B.y+(side==='top'?-12:side==='bottom'?15:4));markerB.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}

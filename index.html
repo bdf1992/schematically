@@ -113,8 +113,10 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .node .internal-text{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:600;opacity:.78}
 .node .outside-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));opacity:.8}
 .port-hit{fill:transparent;stroke:none;cursor:pointer;pointer-events:all;touch-action:none}
-.port{fill:var(--panel);stroke:var(--port-color,var(--component-color,var(--canvas-ink)));stroke-width:2;cursor:pointer;opacity:.18;transition:opacity .1s,transform .1s;pointer-events:none;transform-box:fill-box;transform-origin:center}
-.node:hover .port,.node.wiring-source .port{opacity:1}
+.port{fill:var(--panel);stroke:var(--port-color,var(--component-color,var(--canvas-ink)));stroke-width:2;cursor:pointer;opacity:0;transition:opacity .1s,transform .1s;pointer-events:none;transform-box:fill-box;transform-origin:center}
+.node:hover .port,.node.wiring-source .port,.node.selected .port{opacity:1}
+/* Unused points are affordances, not structure: hidden at rest, offered while a wire is drawn. */
+#workspace.wiring .port{opacity:.45}
 .node.wiring-source .body{stroke-width:2.5}
 .port-hit.snap-target + .port{opacity:1;stroke-width:3;transform:scale(1.55)}
 .ghost-wire{fill:none;stroke:var(--canvas-ink);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:7 6;opacity:.55;pointer-events:none}
@@ -413,6 +415,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 
 /* Earned dimensional Forms */
 .dimensional-point-body{fill:var(--panel);stroke:var(--component-boundary-color,#555);stroke-width:2;vector-effect:non-scaling-stroke}
+.node .dimensional-point-body.port{opacity:1}
+.node .dimensional-point-body.carries{fill:var(--component-boundary-color,var(--canvas-ink));stroke-width:1.5}
 .dimensional-point-label{font-size:8px;fill:var(--ink)}
 .dimensional-path-body{stroke:var(--component-boundary-color,#555);stroke-linecap:round;vector-effect:non-scaling-stroke}
 
@@ -3044,6 +3048,12 @@ function wireMarkerSummaryForPort(nodeId,pointId){
     (w.a===nodeId&&w.aSide===compatId)?wireEndpointMarker(w,'a'):wireEndpointMarker(w,'b')
   );
 }
+// A channel marker distinguishes one connection of a port from its others. On a port with a
+// single connection it distinguishes nothing, so it is not drawn.
+function endpointShowsChannelTag(w,end){
+  const p=endpointPortConfig(w,end);if(!p)return false;
+  normalizePortConnections(p);return p.connectionCount>1;
+}
 function endpointMarkerDisplay(w,end){
   return wireEndpointMarker(w,end)||'1';
 }
@@ -4670,6 +4680,8 @@ function ignoreContainerObstacle(candidate,sourceNode,targetNode){
 }
 function endpointNeedsOuterObstacle(node,portId,wire=null){
   if(!node)return false;
+  // A 0D Point has no body a route could tunnel through; its own wires leave from its centre.
+  if(componentForm(node).dimension===0)return false;
   // A carrier on the endpoint's own interior surface starts inside it: the body is the
   // surface the carrier runs on, not an obstacle to route around.
   if(wire&&(wire.canvasId||GLOBAL_CANVAS_ID)===componentCanvas(node).id)return false;
@@ -4938,7 +4950,9 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   const targetNode=nodes.find(n=>n.id===targetId);
   const routedWire=wireId?wires.find(x=>x.id===wireId):null;
   // A free end has no boundary to leave; the route starts exactly there.
-  const SA=sourceNode?stubPos(A,aSide,26,sourceNode,wireEndpointInward(routedWire,sourceNode)):A, SB=targetNode?stubPos(B,bSide,26,targetNode,wireEndpointInward(routedWire,targetNode)):B;
+  const SA=sourceNode?routeLead(A,B,aSide,sourceNode,wireEndpointInward(routedWire,sourceNode)):A, SB=targetNode?routeLead(B,A,bSide,targetNode,wireEndpointInward(routedWire,targetNode)):B;
+  // A carrier on a Component's interior runs inside it: that interior is its whole surface.
+  const fence=routeFence(routedWire);
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
   const otherRects=nodes
     .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
@@ -4954,6 +4968,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
   const xs=[SA.x,SB.x,(SA.x+SB.x)/2];
   const ys=[SA.y,SB.y,(SA.y+SB.y)/2];
+  if(fence){xs.push(fence.l+14,fence.r-14);ys.push(fence.t+14,fence.b-14)}
 
   for(const R of allRects){
     xs.push(R.l-18,R.r+18);
@@ -4987,7 +5002,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
 
   const valid=candidates
     .map(normalizePoints)
-    .filter(points=>pathValid(points,obstacles))
+    .filter(points=>pathValid(points,obstacles)&&routeInsideFence(points,fence))
     .map(points=>({
       points,
       score:pathScore(points,SA,SB,obstacles,occupied),
@@ -4999,11 +5014,12 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   let chosen=valid[0]||null;
 
   if(!chosen){
-    // Last resort: a clean perimeter route. Choose the cheapest of four sides.
-    const minL=Math.min(SA.x,SB.x,...allRects.map(r=>r.l))-36-Math.abs(lane);
-    const maxR=Math.max(SA.x,SB.x,...allRects.map(r=>r.r))+36+Math.abs(lane);
-    const minT=Math.min(SA.y,SB.y,...allRects.map(r=>r.t))-36-Math.abs(lane);
-    const maxB=Math.max(SA.y,SB.y,...allRects.map(r=>r.b))+36+Math.abs(lane);
+    // Last resort: a clean perimeter route. Choose the cheapest of four sides; inside a
+    // fence the perimeter is the fence's own inner edge, never the world outside it.
+    const minL=fence?fence.l+8:Math.min(SA.x,SB.x,...allRects.map(r=>r.l))-36-Math.abs(lane);
+    const maxR=fence?fence.r-8:Math.max(SA.x,SB.x,...allRects.map(r=>r.r))+36+Math.abs(lane);
+    const minT=fence?fence.t+8:Math.min(SA.y,SB.y,...allRects.map(r=>r.t))-36-Math.abs(lane);
+    const maxB=fence?fence.b-8:Math.max(SA.y,SB.y,...allRects.map(r=>r.b))+36+Math.abs(lane);
     const fallback=[
       [SA,{x:SA.x,y:minT},{x:SB.x,y:minT},SB],
       [SA,{x:SA.x,y:maxB},{x:SB.x,y:maxB},SB],
@@ -5028,6 +5044,32 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
     anchor: chosen.anchor,
     obstacles
   };
+}
+// The first bend point after leaving an endpoint. A lead never overshoots a facing port:
+// across a short gap each lead takes at most half of it. A free 0D Point has no side, so it
+// leaves toward the other end along the dominant axis, with a short lead.
+const ROUTE_LEAD=26,POINT_LEAD=12;
+function routeLead(P,Q,portId,node,inward){
+  const placement=componentPlacement(node);
+  if(componentForm(node).dimension===0&&placement.kind!=='edge'&&!componentHostedOnWire(node)){
+    const dx=Q.x-P.x,dy=Q.y-P.y;
+    if(Math.abs(dx)<1&&Math.abs(dy)<1)return P;
+    return Math.abs(dx)>=Math.abs(dy)?{x:P.x+Math.sign(dx)*Math.min(POINT_LEAD,Math.abs(dx)/2),y:P.y}:{x:P.x,y:P.y+Math.sign(dy)*Math.min(POINT_LEAD,Math.abs(dy)/2)};
+  }
+  const unit=stubPos(P,portId,1,node,inward),nx=unit.x-P.x,ny=unit.y-P.y;
+  const ahead=(Q.x-P.x)*nx+(Q.y-P.y)*ny;
+  const d=ahead>0?Math.max(4,Math.min(ROUTE_LEAD,ahead/2)):ROUTE_LEAD;
+  return {x:P.x+nx*d,y:P.y+ny*d};
+}
+function routeFence(wire){
+  const surface=wire?.canvasId||'';
+  if(!surface.startsWith('canvas:component:'))return null;
+  const owner=nodes.find(n=>componentCanvas(n).id===surface);
+  return owner?componentBounds(owner,-4):null;
+}
+function routeInsideFence(points,fence){
+  if(!fence)return true;
+  return points.every(p=>p.x>=fence.l-.5&&p.x<=fence.r+.5&&p.y>=fence.t-.5&&p.y<=fence.b+.5);
 }
 function routePath(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSeed=0,occupied=[]){
   return pathD(routePoints(A,B,aSide,bSide,sourceId,targetId,laneSeed,occupied).points);
@@ -5055,7 +5097,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
   const targetNode=nodes.find(n=>n.id===w.b);
   let rebuilt=null;
   if(cachedCore.length>=2){
-    const SA=sourceNode?stubPos(A,w.aSide,26,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?stubPos(B,w.bSide,26,targetNode,wireEndpointInward(w,targetNode)):B;
+    const SA=sourceNode?routeLead(A,B,w.aSide,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?routeLead(B,A,w.bSide,targetNode,wireEndpointInward(w,targetNode)):B;
     const inner=cachedCore.slice(1,-1).map(q=>({x:q.x,y:q.y}));
     rebuilt=normalizePoints([A,SA,...inner,SB,B]);
 
@@ -5068,7 +5110,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     if(endpointNeedsOuterObstacle(targetNode,w.bSide,w))endpointRects.push(rectForNode(targetNode,8));
     const obstacles=[...otherRects,...endpointRects];
 
-    if(!pathValid(routeOnly,obstacles)) rebuilt=null;
+    if(!pathValid(routeOnly,obstacles)||!routeInsideFence(routeOnly,routeFence(w))) rebuilt=null;
   }
 
   if(!rebuilt){
@@ -5079,7 +5121,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     return candidate.points;
   }
 
-  const SA=sourceNode?stubPos(A,w.aSide,26,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?stubPos(B,w.bSide,26,targetNode,wireEndpointInward(w,targetNode)):B;
+  const SA=sourceNode?routeLead(A,B,w.aSide,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?routeLead(B,A,w.bSide,targetNode,wireEndpointInward(w,targetNode)):B;
   const rebuiltCore=normalizePoints([SA,...rebuilt.slice(2,-2),SB]);
   const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
   const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied);
@@ -5346,6 +5388,32 @@ function appendComponentGraphic(g,n,cfg){
   use.setAttribute('x',box.x);use.setAttribute('y',box.y);use.setAttribute('width',box.w);use.setAttribute('height',box.h);
   g.appendChild(use);
 }
+// A label belongs inside the body it names. Measured after the node is in the document (label
+// size follows zoom): a label wider than the body wraps onto two lines at word breaks, and one
+// still too long is cut with an ellipsis; the full text stays available as a tooltip.
+function fitComponentLabels(g,n){
+  if(componentForm(n).dimension!==2)return;
+  const size=componentSize(n),max=size.w-12;
+  for(const t of g.querySelectorAll(':scope > text.component-label,:scope > text.outside-label')){
+    const full=t.textContent;if(!full||t.getComputedTextLength()<=max)continue;
+    const words=full.split(/\s+/),lines=[''];
+    for(const word of words){
+      const trial=lines.at(-1)?lines.at(-1)+' '+word:word;
+      t.textContent=trial;
+      if(t.getComputedTextLength()<=max||!lines.at(-1))lines[lines.length-1]=trial;else lines.push(word);
+    }
+    if(lines.length>2)lines.splice(1,lines.length-1,lines.slice(1).join(' '));
+    t.textContent=lines[lines.length-1];
+    while(t.getComputedTextLength()>max&&t.textContent.length>1){t.textContent=t.textContent.slice(0,-2)+'…';t.dataset.truncated='true'}
+    lines[lines.length-1]=t.textContent;
+    const em=parseFloat(getComputedStyle(t).fontSize)||9,x=t.getAttribute('x')||'0',outside=t.classList.contains('outside-label');
+    t.textContent='';
+    lines.forEach((line,i)=>{const span=document.createElementNS('http://www.w3.org/2000/svg','tspan');span.setAttribute('x',x);
+      // Inside the body the block grows upward from its baseline; below the body it grows down.
+      span.setAttribute('dy',i===0?(outside?'0':String(-(lines.length-1)*em*1.15)):String(em*1.15));span.textContent=line;t.appendChild(span)});
+    const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=full;t.appendChild(title);
+  }
+}
 function appendComponentText(g,n,cfg,s){
   const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s),labelMode=SovSchematicData.effectiveLabelMode(n);
   if(labelMode!=='none'&&label){
@@ -5421,13 +5489,21 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   const backdrop=componentBackdropMode(n);g.dataset.backdrop=backdrop;
   if(form.dimension===0){
     const pointCfg=componentAttachmentPoint(n,'self')?.config,point=document.createElementNS('http://www.w3.org/2000/svg','circle');
-    point.setAttribute('class','dimensional-point-body port attachment-point');point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
+    // A Point that carries wires is structure (a terminal, a junction) and is drawn solid; an
+    // empty Point stays an open ring, an attachment waiting for a wire.
+    const ends=wires.reduce((k,w)=>k+(w.a===n.id?1:0)+(w.b===n.id?1:0),0);
+    point.setAttribute('class','dimensional-point-body port attachment-point'+(ends?' carries':'')+(ends>=3?' junction':''));point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(ends?(ends>=3?4.5:4):Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
     const display=String(cfg.label||'').trim()||componentTypeCaption(n,s);
     if(display){
       // A hosted Point inherits its host's angle; its label stays upright and below the point in world space.
       const angle=componentHostAngle(n),label=document.createElementNS('http://www.w3.org/2000/svg','text');
-      label.setAttribute('class','component-label dimensional-point-label');label.setAttribute('text-anchor','middle');label.setAttribute('y','0');
-      label.setAttribute('transform',`rotate(${-angle}) translate(0 22)`);label.textContent=display;g.appendChild(label);
+      label.setAttribute('class','component-label dimensional-point-label');label.setAttribute('y','0');
+      // A boundary Point labels the crossing from outside its host, clear of the wire it carries.
+      const edge=componentPlacement(n).kind==='edge'?componentPlacement(n).side:null;
+      // Below the wire it carries: a wire's own label sits above its line.
+      const at={left:[-8,15,'end'],right:[8,15,'start'],top:[8,-10,'start'],bottom:[8,16,'start']}[edge]||[0,22,'middle'];
+      label.setAttribute('text-anchor',at[2]);
+      label.setAttribute('transform',`rotate(${-angle}) translate(${at[0]} ${at[1]})`);label.textContent=display;g.appendChild(label);
     }
     return
   }
@@ -5485,7 +5561,7 @@ function render(){
         portLabel.setAttribute('x',localX+offsets.dx);portLabel.setAttribute('y',localY+offsets.dy);portLabel.setAttribute('text-anchor',offsets.anchor);portLabel.textContent=pcfg.label;g.appendChild(portLabel);
       }
     }
-    bindNode(g,n); nodesG.appendChild(g);
+    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
   });
   renderWires(signalState);
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
@@ -5650,21 +5726,21 @@ function renderPacketsForWire(group,cfg,points,signal,pathLength,w){
 
   if(cfg.direction==='forward'){
     if(signal.forwardLive){
-      appendWirePacket(group,forwardPath,pathLength,signal.forwardBody,signal.forwardBoundary,'forward',wireEndpointMarker(w,'a'),packetRateForWire(w,'forward'),wireOperation(w,'forward'))
+      appendWirePacket(group,forwardPath,pathLength,signal.forwardBody,signal.forwardBoundary,'forward',(endpointShowsChannelTag(w,'a')?wireEndpointMarker(w,'a'):''),packetRateForWire(w,'forward'),wireOperation(w,'forward'))
       count++;
     }
   }else if(cfg.direction==='reverse'){
     if(signal.reverseLive){
-      appendWirePacket(group,reversePath,pathLength,signal.reverseBody,signal.reverseBoundary,'reverse',wireEndpointMarker(w,'b'),packetRateForWire(w,'reverse'),wireOperation(w,'reverse'))
+      appendWirePacket(group,reversePath,pathLength,signal.reverseBody,signal.reverseBoundary,'reverse',(endpointShowsChannelTag(w,'b')?wireEndpointMarker(w,'b'):''),packetRateForWire(w,'reverse'),wireOperation(w,'reverse'))
       count++;
     }
   }else if(cfg.direction==='duplex'){
     if(signal.forwardLive){
-      appendWirePacket(group,forwardPath,pathLength,signal.forwardBody,signal.forwardBoundary,'forward',wireEndpointMarker(w,'a'),packetRateForWire(w,'forward'),wireOperation(w,'forward'))
+      appendWirePacket(group,forwardPath,pathLength,signal.forwardBody,signal.forwardBoundary,'forward',(endpointShowsChannelTag(w,'a')?wireEndpointMarker(w,'a'):''),packetRateForWire(w,'forward'),wireOperation(w,'forward'))
       count++;
     }
     if(signal.reverseLive){
-      appendWirePacket(group,reversePath,pathLength,signal.reverseBody,signal.reverseBoundary,'reverse',wireEndpointMarker(w,'b'),packetRateForWire(w,'reverse'),wireOperation(w,'reverse'))
+      appendWirePacket(group,reversePath,pathLength,signal.reverseBody,signal.reverseBoundary,'reverse',(endpointShowsChannelTag(w,'b')?wireEndpointMarker(w,'b'):''),packetRateForWire(w,'reverse'),wireOperation(w,'reverse'))
       count++;
     }
   }
@@ -5773,7 +5849,8 @@ function renderWires(signalState=computeSignalState()){
       if(w.b===activeNodeDrag)renderMoveTether(group,snapshot.bPos,B);
     }
 
-    if(cfg.direction==='duplex'){
+    // One mark per place: a labelled duplex wire carries ↔ in its label, not stacked above it.
+    if(cfg.direction==='duplex'&&!cfg.label){
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5);
       const badge=document.createElementNS('http://www.w3.org/2000/svg','text');
       badge.setAttribute('class','net-badge');
@@ -5784,16 +5861,16 @@ function renderWires(signalState=computeSignalState()){
     }
 
     if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'RETURN!':'RETURN?';group.appendChild(mark)}
-    if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13);label.setAttribute('text-anchor','middle');label.textContent=cfg.label;group.appendChild(label)}
+    if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13);label.setAttribute('text-anchor','middle');label.textContent=(cfg.direction==='duplex'?'↔ ':'')+cfg.label;group.appendChild(label)}
     // Channel markers belong to bound ends; a free end has no port to mark.
-    if(a){
+    if(a&&endpointShowsChannelTag(w,'a')){
       const markerA=document.createElementNS('http://www.w3.org/2000/svg','text');
       markerA.setAttribute('class','endpoint-channel-tag');
       {const side=physicalPortSide(a,w.aSide);markerA.setAttribute('x',A.x+(side==='left'?-14:side==='right'?14:0));markerA.setAttribute('y',A.y+(side==='top'?-12:side==='bottom'?15:4));markerA.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
       markerA.textContent=endpointMarkerDisplay(w,'a');
       group.appendChild(markerA);
     }
-    if(b){
+    if(b&&endpointShowsChannelTag(w,'b')){
       const markerB=document.createElementNS('http://www.w3.org/2000/svg','text');
       markerB.setAttribute('class','endpoint-channel-tag');
       {const side=physicalPortSide(b,w.bSide);markerB.setAttribute('x',B.x+(side==='left'?-14:side==='right'?14:0));markerB.setAttribute('y',B.y+(side==='top'?-12:side==='bottom'?15:4));markerB.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
@@ -5820,6 +5897,136 @@ function renderWires(signalState=computeSignalState()){
   });
 }
 /* END src/55-render.js */
+</script>
+<script data-beta-module="src/57-layout-metrics.js">
+/* BEGIN src/57-layout-metrics.js */
+'use strict';
+// 0.1 concern: measured quality of the rendered projection (LAYOUT-MODEL.md §5).
+// Reads the rendered SVG in world coordinates and never mutates the document or the DOM.
+// A metric is observed, never declared: every finding names the ids it measured.
+
+const LAYOUT_RUBRIC={
+  // kind: [penalty per finding, cap for the kind]. Score = 10 - Σ min(cap, n × penalty), floor 0.
+  'text-overflow':[.5,3],'text-truncated':[.3,2],'text-collision':[.5,3],'placeholder-text':[.1,2],'ghost-mark':[.1,2],
+  'faint-structure':[.5,2],'route-escape':[1,4],'route-through-node':[1,4],'crossing':[.25,2],'node-overlap':[1,4]
+};
+
+function layoutWorldMatrix(el){const root=workspace.getScreenCTM(),m=el.getScreenCTM();return root&&m?root.inverse().multiply(m):null}
+function layoutWorldBox(el){
+  let b;try{b=el.getBBox()}catch(_){return null}
+  if(!b||(!b.width&&!b.height))return null;
+  const m=layoutWorldMatrix(el);if(!m)return null;
+  const pts=[[b.x,b.y],[b.x+b.width,b.y],[b.x,b.y+b.height],[b.x+b.width,b.y+b.height]].map(([x,y])=>new DOMPoint(x,y).matrixTransform(m));
+  const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);
+  return {l:Math.min(...xs),r:Math.max(...xs),t:Math.min(...ys),b:Math.max(...ys)};
+}
+function layoutEffectiveOpacity(el){
+  let o=1;
+  for(let e=el;e&&e!==workspace;e=e.parentElement){const cs=getComputedStyle(e);if(cs.display==='none'||cs.visibility==='hidden')return 0;o*=Number(cs.opacity||1)}
+  return o;
+}
+const layoutOverlap=(a,b,pad=0)=>a.l<b.r-pad&&b.l<a.r-pad&&a.t<b.b-pad&&b.t<a.b-pad;
+const layoutInside=(p,R,pad=0)=>p.x>R.l+pad&&p.x<R.r-pad&&p.y>R.t+pad&&p.y<R.b-pad;
+function layoutSamplePath(path,step=6){
+  const L=path.getTotalLength(),out=[];if(!(L>0))return out;
+  const m=layoutWorldMatrix(path);
+  for(let d=0;d<=L;d+=step){const q=path.getPointAtLength(d);out.push(m?new DOMPoint(q.x,q.y).matrixTransform(m):q)}
+  const end=path.getPointAtLength(L);out.push(m?new DOMPoint(end.x,end.y).matrixTransform(m):end);return out;
+}
+function layoutSegmentsCross(a,b,c,d){
+  const o=(p,q,r)=>(q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x);
+  const d1=o(c,d,a),d2=o(c,d,b),d3=o(a,b,c),d4=o(a,b,d);
+  return ((d1>0&&d2<0)||(d1<0&&d2>0))&&((d3>0&&d4<0)||(d3<0&&d4>0));
+}
+
+function layoutMetrics(options={}){
+  const staticView=options.static!==false; // an export or a screenshot freezes animation
+  const findings=[],add=(kind,ids,detail)=>findings.push({kind,ids,detail});
+  const visible=nodes.filter(n=>!isEffectivelyHidden(n));
+  const body=new Map(visible.map(n=>[n.id,componentBounds(n)]));
+  const nodeEl=id=>nodesG.querySelector(`.node[data-id="${CSS.escape(id)}"]`);
+  const ancestors=id=>{const out=new Set();let n=nodes.find(x=>x.id===id);while(n?.parentId){out.add(n.parentId);n=nodes.find(x=>x.id===n.parentId)}return out};
+  const is2D=n=>componentForm(n).dimension===2;
+
+  // Text: every visible label, in world space.
+  const texts=[];
+  for(const el of workspace.querySelectorAll('#nodes text,#wires text')){
+    if(!el.textContent.trim()||layoutEffectiveOpacity(el)<.1)continue;
+    if(el.closest('.wire-packet'))continue; // motion, never structure; static exports drop it
+    const box=layoutWorldBox(el);if(!box)continue;
+    const owner=el.closest('.node')?.dataset.id||null,wire=el.closest('.wire-group')?.dataset.wireId||null;
+    texts.push({el,box,owner,wire,text:el.textContent.trim(),cls:el.getAttribute('class')||''});
+  }
+  for(const t of texts){
+    const n=t.owner&&nodes.find(x=>x.id===t.owner);
+    if(n&&is2D(n)&&/component-label|internal-text/.test(t.cls)){
+      const R=body.get(n.id);if(R&&(t.box.l<R.l-1||t.box.r>R.r+1||t.box.t<R.t-1||t.box.b>R.b+1))add('text-overflow',[n.id],`"${t.text}" is ${Math.round((t.box.r-t.box.l)-(R.r-R.l))}px wider than its body`);
+    }
+  }
+  for(const t of texts)if(t.el.dataset.truncated)add('text-truncated',[t.owner],`"${t.el.querySelector('title')?.textContent||t.text}" is cut to fit`);
+  for(let i=0;i<texts.length;i++)for(let j=i+1;j<texts.length;j++)if(layoutOverlap(texts[i].box,texts[j].box,1))add('text-collision',[texts[i].owner||texts[i].wire,texts[j].owner||texts[j].wire],`"${texts[i].text}" overlaps "${texts[j].text}"`);
+  for(const t of texts){
+    const own=t.owner?new Set([t.owner,...ancestors(t.owner)]):new Set();
+    for(const n of visible){
+      if(own.has(n.id)||!is2D(n))continue;
+      const R=body.get(n.id),container=componentAcceptsChildren(n);
+      // A label crossing a container's border is as unreadable as one over a box.
+      const hit=container?(layoutOverlap(t.box,R)&&!(t.box.l>R.l&&t.box.r<R.r&&t.box.t>R.t&&t.box.b<R.b)):layoutOverlap(t.box,R,1);
+      if(hit){add('text-collision',[t.owner||t.wire,n.id],`"${t.text}" ${container?'straddles the border of':'overlaps'} ${n.config?.label||n.id}`);break}
+    }
+  }
+  // Placeholder text: a default channel tag on a single-connection end says nothing.
+  for(const t of texts)if(/endpoint-channel-tag|wire-packet-tag/.test(t.cls)&&t.text==='1')add('placeholder-text',[t.wire],'default channel marker "1"');
+
+  // Ghost marks: marks that look like structure but are not.
+  const bound=new Set();for(const w of wires){if(w.a)bound.add(`${w.a}:${w.aSide}`);if(w.b)bound.add(`${w.b}:${w.bSide}`)}
+  for(const el of nodesG.querySelectorAll('.port.attachment-point:not(.dimensional-point-body)')){
+    const id=el.closest('.node')?.dataset.id;if(layoutEffectiveOpacity(el)>=.1&&!bound.has(`${id}:${el.dataset.port}`))add('ghost-mark',[id],`unused ${el.dataset.port} point drawn`);
+  }
+  // Faint structure: a junction or boundary Point that carries wires must be seen.
+  for(const n of visible){
+    if(componentForm(n).dimension!==0)continue;
+    const ends=wires.filter(w=>w.a===n.id||w.b===n.id).length,hosted=n.placement?.kind==='edge';
+    if(!(ends>=3||(hosted&&ends)))continue;
+    const el=nodeEl(n.id)?.querySelector('.dimensional-point-body');if(el&&layoutEffectiveOpacity(el)<.5)add('faint-structure',[n.id],`${ends>=3?'junction':'boundary point'} drawn at ${layoutEffectiveOpacity(el).toFixed(2)} opacity`);
+  }
+
+  // Routes.
+  const routes=[];
+  for(const g of workspace.querySelectorAll('.wire-group')){
+    const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
+    routes.push({w,pts:layoutSamplePath(path)});
+  }
+  for(const {w,pts} of routes){
+    const canvasOwner=String(w.canvasId||'').startsWith('canvas:component:')?String(w.canvasId).slice('canvas:component:'.length):null;
+    const own=canvasOwner&&body.get(canvasOwner);
+    if(own&&pts.some(p=>!layoutInside(p,own,-1)))add('route-escape',[w.id,canvasOwner],`leaves the interior of ${nodes.find(n=>n.id===canvasOwner)?.config?.label||canvasOwner}`);
+    const exempt=new Set([w.a,w.b,canvasOwner,...ancestors(w.a),...ancestors(w.b)].filter(Boolean));
+    for(const n of visible){
+      if(exempt.has(n.id)||!is2D(n))continue;
+      const R=body.get(n.id),inner=componentAcceptsChildren(n);
+      if(inner){if(pts.some(p=>layoutInside(p,R,2))&&pts.some(p=>!layoutInside(p,R,-2)))add('route-through-node',[w.id,n.id],`crosses the boundary of ${n.config?.label||n.id} without a point`);continue}
+      if(pts.some(p=>layoutInside(p,R,2)))add('route-through-node',[w.id,n.id],`passes through ${n.config?.label||n.id}`);
+    }
+  }
+  for(let i=0;i<routes.length;i++)for(let j=i+1;j<routes.length;j++){
+    const A=routes[i],B=routes[j],shared=[A.w.a,A.w.b].some(x=>x&&(x===B.w.a||x===B.w.b));
+    let crossed=0;
+    for(let s=1;s<A.pts.length&&crossed<4;s++)for(let t=1;t<B.pts.length;t++)if(layoutSegmentsCross(A.pts[s-1],A.pts[s],B.pts[t-1],B.pts[t])){crossed++;break}
+    if(crossed&&!(shared&&crossed===1))add('crossing',[A.w.id,B.w.id],`${crossed} crossing${crossed>1?'s':''}`);
+  }
+  // Sibling bodies must not overlap.
+  for(let i=0;i<visible.length;i++)for(let j=i+1;j<visible.length;j++){
+    const a=visible[i],b=visible[j];
+    if(!is2D(a)||!is2D(b)||(a.canvasId||'')!==(b.canvasId||''))continue;
+    if(layoutOverlap(body.get(a.id),body.get(b.id),1))add('node-overlap',[a.id,b.id],'bodies overlap');
+  }
+
+  const counts={};for(const f of findings)counts[f.kind]=(counts[f.kind]||0)+1;
+  let score=10;for(const [kind,n] of Object.entries(counts)){const [p,cap]=LAYOUT_RUBRIC[kind]||[0,0];score-=Math.min(cap,n*p)}
+  return {ok:true,score:Math.max(0,Math.round(score*10)/10),counts,findings,rubric:LAYOUT_RUBRIC,static:staticView};
+}
+/* END src/57-layout-metrics.js */
 </script>
 <script data-beta-module="src/60-interactions.js">
 /* BEGIN src/60-interactions.js */
@@ -7262,6 +7469,10 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  layout:{
+    metrics:(options={})=>SovSchematicData.clone(layoutMetrics(options)),
+    rubric:()=>SovSchematicData.clone(LAYOUT_RUBRIC)
+  },
   graph:{
     query:(verb,args={})=>graphCall('schematic.graph.query',{verb,args}),
     verbs:()=>[...SovSchematicGraph.queries]

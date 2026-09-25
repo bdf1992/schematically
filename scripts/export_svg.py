@@ -80,6 +80,9 @@ EXPORT_JS = r"""
   clone.querySelector('#paletteDropLayer')?.replaceChildren();
   clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
   clone.querySelectorAll('.port-hit,.wire-hit').forEach(x => x.remove());
+  // A still picture cannot show travel: a packet frozen mid-wire reads as a junction.
+  // Packets stay only when the file is made to loop (--loop).
+  if (!opts.packets) clone.querySelectorAll('.wire-packet').forEach(x => x.remove());
 
   // A wire on a local surface already sits just after its host in the node layer
   // (renderWires), so the picture shows it above the host body with no lifting here.
@@ -133,7 +136,7 @@ def export_documents(paths: list[Path], out_dir: Path | None = None, appearance:
             page.evaluate('([t,n])=>window.SovSchematicAPI.file.open(t,n)', [text, src.name])
             page.evaluate('()=>{ if (typeof fitDiagram === "function") fitDiagram(); }')
             page.wait_for_timeout(300)
-            svg = page.evaluate(EXPORT_JS, {'pad': pad})
+            svg = page.evaluate(EXPORT_JS, {'pad': pad, 'packets': loop is not None})
             period = 0.0
             if loop is not None:
                 from loop_svg import quantize

@@ -9,6 +9,7 @@
 - `40-routing.js` — Wire geometry.
 - `50-selection.js` — selection projection.
 - `55-render.js` — SVG projection.
+- `57-layout-metrics.js` — measured quality of the rendered projection (`layout.metrics()`); reads the DOM, mutates nothing.
 - `60-interactions.js` — pointer/drag gestures.
 - `70-editor-controls.js` — selection/form editing controls.
 - `75-persistence.js` — File lifecycle, `.sov`/`.sovpak`, recovery, rehydration.

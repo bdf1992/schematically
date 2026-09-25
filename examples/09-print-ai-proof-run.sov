@@ -11,7 +11,7 @@
       "id": "case",
       "symbolId": "hold",
       "x": 250,
-      "y": 250,
+      "y": 330,
       "config": {
         "label": "Case · Customer proof 48219",
         "signalMode": "source"
@@ -49,14 +49,14 @@
       "id": "run-in",
       "symbolId": "point",
       "x": 440,
-      "y": 250,
+      "y": 330,
       "canvasId": "canvas:component:run",
       "parentId": "run",
       "placement": {
         "kind": "edge",
         "hostId": "run",
         "side": "left",
-        "t": 0.19
+        "t": 0.381
       },
       "form": {
         "dimension": 0
@@ -88,14 +88,14 @@
       "id": "run-out",
       "symbolId": "point",
       "x": 960,
-      "y": 380,
+      "y": 490,
       "canvasId": "canvas:component:run",
       "parentId": "run",
       "placement": {
         "kind": "edge",
         "hostId": "run",
         "side": "right",
-        "t": 0.5
+        "t": 0.762
       },
       "form": {
         "dimension": 0
@@ -127,7 +127,7 @@
       "id": "ingest",
       "symbolId": "act",
       "x": 545,
-      "y": 250,
+      "y": 330,
       "canvasId": "canvas:component:run",
       "parentId": "run",
       "config": {
@@ -142,7 +142,7 @@
       "id": "evaluate",
       "symbolId": "gate",
       "x": 700,
-      "y": 250,
+      "y": 330,
       "canvasId": "canvas:component:run",
       "parentId": "run",
       "config": {
@@ -157,7 +157,7 @@
       "id": "split",
       "symbolId": "point",
       "x": 785,
-      "y": 250,
+      "y": 330,
       "canvasId": "canvas:component:run",
       "parentId": "run",
       "form": {
@@ -194,7 +194,7 @@
       "id": "review",
       "symbolId": "act",
       "x": 870,
-      "y": 250,
+      "y": 330,
       "canvasId": "canvas:component:run",
       "parentId": "run",
       "config": {
@@ -211,7 +211,7 @@
       "id": "monitor",
       "symbolId": "observe",
       "x": 870,
-      "y": 500,
+      "y": 225,
       "canvasId": "canvas:component:run",
       "parentId": "run",
       "config": {
@@ -223,7 +223,7 @@
       "id": "notify",
       "symbolId": "act",
       "x": 545,
-      "y": 400,
+      "y": 490,
       "canvasId": "canvas:component:run",
       "parentId": "run",
       "config": {
@@ -241,7 +241,7 @@
       "id": "evidence",
       "symbolId": "receipt",
       "x": 700,
-      "y": 400,
+      "y": 490,
       "canvasId": "canvas:component:run",
       "parentId": "run",
       "config": {
@@ -253,7 +253,7 @@
       "id": "customer",
       "symbolId": "act",
       "x": 1110,
-      "y": 380,
+      "y": 490,
       "config": {
         "label": "Customer · external service",
         "signalMode": "passive"

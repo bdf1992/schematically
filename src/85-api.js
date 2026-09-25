@@ -57,6 +57,10 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  layout:{
+    metrics:(options={})=>SovSchematicData.clone(layoutMetrics(options)),
+    rubric:()=>SovSchematicData.clone(LAYOUT_RUBRIC)
+  },
   graph:{
     query:(verb,args={})=>graphCall('schematic.graph.query',{verb,args}),
     verbs:()=>[...SovSchematicGraph.queries]

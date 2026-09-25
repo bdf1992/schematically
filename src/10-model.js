@@ -423,6 +423,12 @@ function wireMarkerSummaryForPort(nodeId,pointId){
     (w.a===nodeId&&w.aSide===compatId)?wireEndpointMarker(w,'a'):wireEndpointMarker(w,'b')
   );
 }
+// A channel marker distinguishes one connection of a port from its others. On a port with a
+// single connection it distinguishes nothing, so it is not drawn.
+function endpointShowsChannelTag(w,end){
+  const p=endpointPortConfig(w,end);if(!p)return false;
+  normalizePortConnections(p);return p.connectionCount>1;
+}
 function endpointMarkerDisplay(w,end){
   return wireEndpointMarker(w,end)||'1';
 }

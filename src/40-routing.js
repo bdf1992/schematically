@@ -8,6 +8,8 @@ function ignoreContainerObstacle(candidate,sourceNode,targetNode){
 }
 function endpointNeedsOuterObstacle(node,portId,wire=null){
   if(!node)return false;
+  // A 0D Point has no body a route could tunnel through; its own wires leave from its centre.
+  if(componentForm(node).dimension===0)return false;
   // A carrier on the endpoint's own interior surface starts inside it: the body is the
   // surface the carrier runs on, not an obstacle to route around.
   if(wire&&(wire.canvasId||GLOBAL_CANVAS_ID)===componentCanvas(node).id)return false;
@@ -276,7 +278,9 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   const targetNode=nodes.find(n=>n.id===targetId);
   const routedWire=wireId?wires.find(x=>x.id===wireId):null;
   // A free end has no boundary to leave; the route starts exactly there.
-  const SA=sourceNode?stubPos(A,aSide,26,sourceNode,wireEndpointInward(routedWire,sourceNode)):A, SB=targetNode?stubPos(B,bSide,26,targetNode,wireEndpointInward(routedWire,targetNode)):B;
+  const SA=sourceNode?routeLead(A,B,aSide,sourceNode,wireEndpointInward(routedWire,sourceNode)):A, SB=targetNode?routeLead(B,A,bSide,targetNode,wireEndpointInward(routedWire,targetNode)):B;
+  // A carrier on a Component's interior runs inside it: that interior is its whole surface.
+  const fence=routeFence(routedWire);
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
   const otherRects=nodes
     .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
@@ -292,6 +296,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
   const xs=[SA.x,SB.x,(SA.x+SB.x)/2];
   const ys=[SA.y,SB.y,(SA.y+SB.y)/2];
+  if(fence){xs.push(fence.l+14,fence.r-14);ys.push(fence.t+14,fence.b-14)}
 
   for(const R of allRects){
     xs.push(R.l-18,R.r+18);
@@ -325,7 +330,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
 
   const valid=candidates
     .map(normalizePoints)
-    .filter(points=>pathValid(points,obstacles))
+    .filter(points=>pathValid(points,obstacles)&&routeInsideFence(points,fence))
     .map(points=>({
       points,
       score:pathScore(points,SA,SB,obstacles,occupied),
@@ -337,11 +342,12 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   let chosen=valid[0]||null;
 
   if(!chosen){
-    // Last resort: a clean perimeter route. Choose the cheapest of four sides.
-    const minL=Math.min(SA.x,SB.x,...allRects.map(r=>r.l))-36-Math.abs(lane);
-    const maxR=Math.max(SA.x,SB.x,...allRects.map(r=>r.r))+36+Math.abs(lane);
-    const minT=Math.min(SA.y,SB.y,...allRects.map(r=>r.t))-36-Math.abs(lane);
-    const maxB=Math.max(SA.y,SB.y,...allRects.map(r=>r.b))+36+Math.abs(lane);
+    // Last resort: a clean perimeter route. Choose the cheapest of four sides; inside a
+    // fence the perimeter is the fence's own inner edge, never the world outside it.
+    const minL=fence?fence.l+8:Math.min(SA.x,SB.x,...allRects.map(r=>r.l))-36-Math.abs(lane);
+    const maxR=fence?fence.r-8:Math.max(SA.x,SB.x,...allRects.map(r=>r.r))+36+Math.abs(lane);
+    const minT=fence?fence.t+8:Math.min(SA.y,SB.y,...allRects.map(r=>r.t))-36-Math.abs(lane);
+    const maxB=fence?fence.b-8:Math.max(SA.y,SB.y,...allRects.map(r=>r.b))+36+Math.abs(lane);
     const fallback=[
       [SA,{x:SA.x,y:minT},{x:SB.x,y:minT},SB],
       [SA,{x:SA.x,y:maxB},{x:SB.x,y:maxB},SB],
@@ -366,6 +372,32 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
     anchor: chosen.anchor,
     obstacles
   };
+}
+// The first bend point after leaving an endpoint. A lead never overshoots a facing port:
+// across a short gap each lead takes at most half of it. A free 0D Point has no side, so it
+// leaves toward the other end along the dominant axis, with a short lead.
+const ROUTE_LEAD=26,POINT_LEAD=12;
+function routeLead(P,Q,portId,node,inward){
+  const placement=componentPlacement(node);
+  if(componentForm(node).dimension===0&&placement.kind!=='edge'&&!componentHostedOnWire(node)){
+    const dx=Q.x-P.x,dy=Q.y-P.y;
+    if(Math.abs(dx)<1&&Math.abs(dy)<1)return P;
+    return Math.abs(dx)>=Math.abs(dy)?{x:P.x+Math.sign(dx)*Math.min(POINT_LEAD,Math.abs(dx)/2),y:P.y}:{x:P.x,y:P.y+Math.sign(dy)*Math.min(POINT_LEAD,Math.abs(dy)/2)};
+  }
+  const unit=stubPos(P,portId,1,node,inward),nx=unit.x-P.x,ny=unit.y-P.y;
+  const ahead=(Q.x-P.x)*nx+(Q.y-P.y)*ny;
+  const d=ahead>0?Math.max(4,Math.min(ROUTE_LEAD,ahead/2)):ROUTE_LEAD;
+  return {x:P.x+nx*d,y:P.y+ny*d};
+}
+function routeFence(wire){
+  const surface=wire?.canvasId||'';
+  if(!surface.startsWith('canvas:component:'))return null;
+  const owner=nodes.find(n=>componentCanvas(n).id===surface);
+  return owner?componentBounds(owner,-4):null;
+}
+function routeInsideFence(points,fence){
+  if(!fence)return true;
+  return points.every(p=>p.x>=fence.l-.5&&p.x<=fence.r+.5&&p.y>=fence.t-.5&&p.y<=fence.b+.5);
 }
 function routePath(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSeed=0,occupied=[]){
   return pathD(routePoints(A,B,aSide,bSide,sourceId,targetId,laneSeed,occupied).points);
@@ -393,7 +425,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
   const targetNode=nodes.find(n=>n.id===w.b);
   let rebuilt=null;
   if(cachedCore.length>=2){
-    const SA=sourceNode?stubPos(A,w.aSide,26,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?stubPos(B,w.bSide,26,targetNode,wireEndpointInward(w,targetNode)):B;
+    const SA=sourceNode?routeLead(A,B,w.aSide,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?routeLead(B,A,w.bSide,targetNode,wireEndpointInward(w,targetNode)):B;
     const inner=cachedCore.slice(1,-1).map(q=>({x:q.x,y:q.y}));
     rebuilt=normalizePoints([A,SA,...inner,SB,B]);
 
@@ -406,7 +438,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     if(endpointNeedsOuterObstacle(targetNode,w.bSide,w))endpointRects.push(rectForNode(targetNode,8));
     const obstacles=[...otherRects,...endpointRects];
 
-    if(!pathValid(routeOnly,obstacles)) rebuilt=null;
+    if(!pathValid(routeOnly,obstacles)||!routeInsideFence(routeOnly,routeFence(w))) rebuilt=null;
   }
 
   if(!rebuilt){
@@ -417,7 +449,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     return candidate.points;
   }
 
-  const SA=sourceNode?stubPos(A,w.aSide,26,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?stubPos(B,w.bSide,26,targetNode,wireEndpointInward(w,targetNode)):B;
+  const SA=sourceNode?routeLead(A,B,w.aSide,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?routeLead(B,A,w.bSide,targetNode,wireEndpointInward(w,targetNode)):B;
   const rebuiltCore=normalizePoints([SA,...rebuilt.slice(2,-2),SB]);
   const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
   const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied);
