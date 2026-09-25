@@ -286,8 +286,10 @@
   }
   // The attachment mode a record has when it authors none: its template's default.
   function defaultAttachmentMode(symbolId){return templatePreset(symbolId)?.attachmentDefaults==='none'?'none':'standard'}
-  // A complete port list supplied by an edit, checked strictly. Legacy `defaultFlow`
-  // reads as `flow`; absent channels read as `[{id:'main'}]`.
+  // A complete port list supplied by an edit or a creation, checked strictly: a value that
+  // is present must be valid. `flow` is the direction; legacy `defaultFlow` is read only when
+  // `flow` is absent. Absent t reads as .5, absent flow as 'duplex', absent channels as
+  // `[{id:'main'}]`, as the loader has always read them.
   function normalizeDeclaredPorts(list){
     if(!Array.isArray(list))throw new Error('PORTS_INVALID: attachmentPoints must be an array');
     const ids=new Set(),compat=new Set(),out=[];
@@ -297,9 +299,10 @@
       const compatId=cleanString(raw.compatId,'').trim()||id;
       if(ids.has(id)||compat.has(compatId)||ids.has(compatId)||compat.has(id))throw new Error(`PORTS_INVALID: two ports share the id ${ids.has(id)||compat.has(id)?id:compatId}`);
       if(!Attachment.PORT_SIDES.includes(raw.side))throw new Error(`PORTS_INVALID: port ${id} has invalid side ${raw.side}`);
-      const t=typeof raw.t==='number'?raw.t:NaN;
+      const t=raw.t===undefined?.5:typeof raw.t==='number'?raw.t:NaN;
       if(!Number.isFinite(t)||t<0||t>1)throw new Error(`PORTS_INVALID: port ${id} has invalid t ${raw.t}`);
-      const flow=raw.flow??raw.defaultFlow;
+      // `flow` is the port's direction; legacy `defaultFlow` is read only when `flow` is absent.
+      const flow=raw.flow!==undefined?raw.flow:raw.defaultFlow!==undefined?raw.defaultFlow:'duplex';
       if(!Attachment.PORT_FLOWS.includes(flow))throw new Error(`PORTS_INVALID: port ${id} has invalid flow ${flow}`);
       let channels=[{id:'main'}];
       if(raw.channels!==undefined){
@@ -321,6 +324,29 @@
     return out;
   }
   const samePort=(x,y)=>JSON.stringify([x.id,x.compatId||x.id,x.side,x.t,x.flow,x.channels,x.label||''])===JSON.stringify([y.id,y.compatId||y.id,y.side,y.t,y.flow,y.channels,y.label||'']);
+  // Every component edit (update, retype, the 'none' switch, a port list) is checked against
+  // the Wires that end on the component: an end whose port the edit removes is refused
+  // (PORT_IN_USE), and so is an end left on a port sharing no channel with the port at the
+  // Wire's other end (CHANNEL_MISMATCH). A port survives a change of effective dimension
+  // under its compat id (left/in -> start), as reconciliation has always rebound it.
+  function assertWiresSurviveEdit(doc,before,after){
+    const dimensionChanged=Attachment.effectiveDimension(before)!==Attachment.effectiveDimension(after);
+    const resolveEnd=(component,wire,end,edited)=>{
+      const ref=wire[end+'Attachment']?.pointId||wire[end+'Side'];
+      return Attachment.resolveSpec(component,ref)||(edited&&dimensionChanged?Attachment.resolveSpec(component,wire[end+'Side']):null);
+    };
+    for(const wire of doc.wires||[])for(const end of ['a','b']){
+      if(wire[end]!==after.id||!wireEndBound(wire,end))continue;
+      const spec=resolveEnd(after,wire,end,true);
+      if(!spec)throw new Error(`PORT_IN_USE: wire ${wire.id} ends on port ${wire[end+'Attachment']?.pointId||wire[end+'Side']} of ${after.id}`);
+      const other=end==='a'?'b':'a';if(!wireEndBound(wire,other))continue;
+      const otherComponent=wire[other]===after.id?after:doc.components.find(c=>c.id===wire[other]);
+      const otherSpec=otherComponent?resolveEnd(otherComponent,wire,other,wire[other]===after.id):null;
+      if(!otherSpec)continue;
+      const theirs=new Set(Attachment.channelIds(otherSpec));
+      if(!Attachment.channelIds(spec).some(id=>theirs.has(id)))throw new Error(`CHANNEL_MISMATCH: wire ${wire.id} would join ports ${spec.id} and ${otherSpec.id}, which share no channel`);
+    }
+  }
   // An edit sets a Component's complete port list: `attachmentPoints` under 'none', or the
   // additions under 'standard'. It is stored in the smallest form: 'standard' plus the
   // additions when every template port is kept unchanged, otherwise 'none' plus the full
@@ -331,19 +357,11 @@
     const template=normalizeDeclaredPorts(templatePorts(symbolId));
     const supplied=Array.isArray(config.attachmentPoints)?config.attachmentPoints:[];
     const full=normalizeDeclaredPorts(mode==='none'?supplied:[...template,...supplied]);
-    if(Attachment.effectiveDimension(component)===2){
-      const keep=new Set(full.map(port=>port.id));
-      for(const wire of doc.wires||[])for(const end of ['a','b']){
-        if(wire[end]!==component.id||!wireEndBound(wire,end))continue;
-        const pointId=wire[end+'Attachment']?.pointId||wire[end+'Side'];
-        const current=doc.components.find(c=>c.id===component.id);
-        const id=current?Attachment.pointId(current,pointId)||pointId:pointId;
-        if(!keep.has(id))throw new Error(`PORT_IN_USE: wire ${wire.id} ends on port ${id}`);
-      }
-    }
-    const kept=template.every(port=>full.some(other=>samePort(port,other)));
+    // Order is kept: 'standard' only when the list begins with the template's ports, in
+    // template order and unchanged; otherwise 'none' and the list exactly as given.
+    const kept=template.length<=full.length&&template.every((port,i)=>samePort(port,full[i]));
     if(kept){
-      const templateIds=new Set(template.map(port=>port.id)),additions=full.filter(port=>!templateIds.has(port.id));
+      const additions=full.slice(template.length);
       if(defaultAttachmentMode(symbolId)==='none')config.attachmentDefaults='standard';else delete config.attachmentDefaults;
       if(additions.length)config.attachmentPoints=additions;else delete config.attachmentPoints;
     }else{config.attachmentDefaults='none';config.attachmentPoints=full}
@@ -378,7 +396,10 @@
   // points, the annotation, and a custom glyph on a Component stay. Creating a record
   // with the carrier preset (`symbolId:'path'`, the static 1D rail) is admissible here;
   // retyping an existing Component into a carrier is refused by `update` and the bar.
-  function applySymbol(component,symbolId){
+  // With `doc`, the retype is checked first against the Wires that end on the component
+  // and refused (nothing changed) when it would remove a port one of them ends on.
+  function applySymbol(component,symbolId,doc=null){
+    if(doc){const trial=clone(component);applySymbol(trial,symbolId);assertWiresSurviveEdit(doc,component,trial)}
     const next=normalizeSymbolId(symbolId),preset=templatePreset(next)||{};
     if(!isObject(component.config))component.config={};
     const config=component.config,before=isObject(config.presentation)?config.presentation:{};
@@ -422,7 +443,11 @@
     // An authored choice stays on the runtime record either way, so a later normalization
     // pass cannot replace a Plane's authored 'standard' with its preset 'none'.
     if(['standard','none'].includes(value.config?.attachmentDefaults))config.attachmentDefaults=value.config.attachmentDefaults;
-    if(Array.isArray(value.config?.attachmentPoints)&&value.config.attachmentPoints.length)config.attachmentPoints=clone(value.config.attachmentPoints);
+    // An authored port list is checked and stored in the smallest form, exactly as update does.
+    if(value.config?.attachmentPoints!==undefined){
+      if(!Array.isArray(value.config.attachmentPoints))throw new Error('PORTS_INVALID: attachmentPoints must be an array');
+      config.attachmentPoints=clone(value.config.attachmentPoints);setDeclaredPorts(doc,component);
+    }
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -663,6 +688,7 @@
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
       candidate.form=normalizeComponentForm(candidate.form,candidate.canvas);candidate.canvas.state=candidate.form.regions.interior.state;
       ensureAttachmentPortConfigs(candidate);
+      assertWiresSurviveEdit(doc,current,candidate);
       if(candidate.config?.presentation?.size){candidate.config.presentation.size.w=Math.max(80,num(candidate.config.presentation.size.w,112));candidate.config.presentation.size.h=Math.max(64,num(candidate.config.presentation.size.h,84));}
     }else if(resource==='wire'){
       // A patch may rebind an end (a/aSide or aAttachment ref) or free it (aAttachment {kind:'free'}).
@@ -766,5 +792,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {assertWiresSurviveEdit,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });

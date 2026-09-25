@@ -102,18 +102,25 @@ What is implemented:
   The primitives declare no ports of their own; a Plane's default is `'none'`, and an authored `'standard'` on a
   Plane still means the Component template's ports.
 - **Shape.** `{id, compatId?, side: left | right | top | bottom, t: 0..1, flow: in | out | control | duplex |
-  trigger, channels: [{id}], label?}`. Absent `channels` reads as `[{id: 'main'}]`; an older entry's
-  `defaultFlow` reads as `flow`.
+  trigger, channels: [{id}], label?}`. Absent `channels` reads as `[{id: 'main'}]`. `flow` is the direction;
+  an older entry's `defaultFlow` is read only when `flow` is absent.
 - **Stored forms keep their meaning.** `'standard'` (explicit or implied) is the template's ports followed by the
   authored `attachmentPoints` as additions; `'none'` is the authored list as the complete set. Loading and
   normalizing never write template ports into the stored array, so every existing file loads, binds and saves
   exactly as before, and `compactDocument` is unchanged.
-- **Edits.** A component `update` whose patch sets `config.attachmentPoints` supplies the complete list (under
-  `'none'`) or the additions (under `'standard'`). `setDeclaredPorts` checks it strictly and stores it in the
-  smallest form: `'standard'` plus additions when every template port is kept unchanged (same id, compat id,
-  side, t, flow, channels, label), otherwise `'none'` plus the full list. It refuses, with a failed receipt and
-  no history entry, a repeated id or compat id, an invalid side, t or flow, a channel id repeated within a port,
-  and removing a port a Wire ends on (`PORT_IN_USE`). Browser API, HTTP and MCP share this one path.
+- **Edits.** A component `create` or `update` that sets `config.attachmentPoints` supplies the complete list
+  (under `'none'`) or the additions (under `'standard'`). `setDeclaredPorts` checks it strictly and stores it in
+  the smallest form, keeping order: `'standard'` plus additions when the list begins with the template's ports in
+  template order and unchanged (same id, compat id, side, t, flow, channels, label), otherwise `'none'` plus the
+  full list as given. It refuses a repeated id or compat id, an invalid side, t or flow, and a channel id repeated
+  within a port. A refusal is a failed receipt with no history entry and no revision change; browser API, HTTP and
+  MCP share this one path.
+- **Wires survive every edit.** `assertWiresSurviveEdit` runs on every component update (port list,
+  `attachmentDefaults: 'none'`, retype by `symbolId`), on `applySymbol(component, symbolId, doc)` (the bar retype)
+  and on the Form panel switch. It refuses an edit that would remove a port a Wire ends on (`PORT_IN_USE`) or leave
+  a Wire between two ports sharing no channel (`CHANNEL_MISMATCH`), so a saved document always validates. When an
+  edit changes the effective dimension, a Wire end keeps its port by compat id (`left`/`in` -> `start`), as
+  reconciliation has always rebound it.
 - **Channels.** `connectionReachability` also requires the two ports to share a channel id
   (`CHANNEL_MISMATCH`), so binding by gesture, `wire.create`, `wire.update`, carrier rebinding and document
   validation all refuse the same way. Ports without declared channels share `main`, so no existing document is

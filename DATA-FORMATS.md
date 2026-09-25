@@ -106,16 +106,20 @@ A 2D Component's ports are declared data. `config.attachmentPoints` holds declar
 - `side`: `left | right | top | bottom`; `t`: `0..1` along that side; `flow`: `in | out | control | duplex | trigger`.
 - `channels`: an array of `{id}` with unique ids; absent means `[{"id": "main"}]`. A Wire binds two ports only when
   they share a channel id; the refusal is the same over UI, API, HTTP and MCP.
-- `compatId` (the key into `config.ports`) defaults to `id`. Older files may omit `t` (read as `0.5`) and write
-  `defaultFlow` in place of `flow`; both still load.
+- `compatId` (the key into `config.ports`) defaults to `id`.
+- `flow` is the port's direction. `defaultFlow` is a legacy alias, read only when `flow` is absent; when both are
+  present, `flow` wins. Absent `t` reads as `0.5` and absent `flow` (and `defaultFlow`) as `duplex`.
 
 `config.attachmentDefaults` says how the list is read. `standard` (explicit, or implied on a typed Component) is the
 template's declared ports (`left`/`in`, `right`/`out`, `top`/`control` for the typed Component template) followed by
 `attachmentPoints` as additions; `none` makes `attachmentPoints` the complete list. A Plane's default is `none`.
-The loader never writes template ports into the stored array. A component `update` that sets `attachmentPoints` is
-stored in the smallest form (`standard` plus additions when every template port is kept unchanged, else `none` plus
-the full list) and is refused for a repeated id, an invalid side, t or flow, a repeated channel id, or removing a
-port a Wire ends on. See `ATTACHMENT-POINT-MODEL.md`, *Declared ports*.
+The loader never writes template ports into the stored array. A component `create` or `update` that sets
+`attachmentPoints` is checked and stored in the smallest form, keeping order: `standard` plus additions when the list
+begins with the template's ports in template order and unchanged, otherwise `none` plus the full list as given. It is
+refused for a repeated id or compat id, an invalid side, t or flow, or a repeated channel id. Every component edit
+(a port list, `attachmentDefaults: none`, a retype) is refused with `PORT_IN_USE` when it would remove a port a Wire
+ends on, and with `CHANNEL_MISMATCH` when it would leave a Wire between two ports sharing no channel, so a saved
+document always passes validation. See `ATTACHMENT-POINT-MODEL.md`, *Declared ports*.
 
 
 ## Compact records (dev, 2026-09-01)

@@ -48,7 +48,9 @@
     const side=PORT_SIDES.includes(raw.side)?raw.side:null;if(!side)return null;
     const compatId=String(raw.compatId||id).trim()||id;
     const t=Math.max(0,Math.min(1,Number.isFinite(Number(raw.t))?Number(raw.t):.5));
-    const flow=PORT_FLOWS.includes(raw.flow)?raw.flow:PORT_FLOWS.includes(raw.defaultFlow)?raw.defaultFlow:'duplex';
+    // `flow` is the direction; legacy `defaultFlow` is read only when `flow` is absent.
+    const flowRaw=raw.flow!==undefined?raw.flow:raw.defaultFlow;
+    const flow=PORT_FLOWS.includes(flowRaw)?flowRaw:'duplex';
     const spec={id,compatId,side,role:'boundary',defaultFlow:flow,flow,t,channels:portChannels(raw)};
     if(typeof raw.label==='string'&&raw.label)spec.label=raw.label;
     if(authored)spec.authored=true;

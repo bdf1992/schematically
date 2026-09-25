@@ -137,7 +137,7 @@
             "duplex",
             "trigger"
           ],
-          "description": "Legacy name of flow."
+          "description": "Legacy alias of flow, read only when flow is absent; flow wins when both are present."
         },
         "channels": {
           "type": "array",

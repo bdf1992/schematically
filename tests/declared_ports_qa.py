@@ -1,4 +1,4 @@
-"""Declared ports: the data model (contract 0b-1, issue #45).
+"""Declared ports: the data model (contract 0b-1, issue #45, with amendment 2).
 
 A 2D Component's ports are declared data. The attachment core holds no port set of its own;
 the typed Component template declares the left/right/top trio; stored forms keep their
@@ -134,6 +134,57 @@ out.planePreset=D.templatePreset('plane');
   out.channels=r;
 }
 
+// Steps 11-15 (amendment 2).
+{
+  const r={};
+  const pair=()=>{const d=doc0();mk(d,{id:'a',symbolId:'act',x:0,y:0});mk(d,{id:'b',symbolId:'act',x:400,y:0});mkw(d,{id:'w',a:'a',aSide:'out',b:'b',bSide:'in'});return d};
+  const trace=d=>({rev:d.revision,a:JSON.stringify(d.components.find(c=>c.id==='a'))});
+  // Step 11: the review's reproduction.
+  {const d=pair(),t0=trace(d);
+   const rc=upd(d,'a',{config:{attachmentDefaults:'none',attachmentPoints:[{id:'right',compatId:'out',side:'right',t:.5,flow:'out',channels:[{id:'data'}]}]}});
+   r.review={ok:rc.ok,msg:rc.error?.message||'',unchanged:JSON.stringify(trace(d))===JSON.stringify(t0),valid:D.validateDocument(reload(d)).ok,wire:[d.wires[0].aAttachment.pointId,d.wires[0].bAttachment.pointId]};
+   // Both ends moved onto the channel together is accepted, and the save stays valid.
+   const b1=upd(d,'b',{config:{attachmentPoints:[{id:'feed',side:'bottom',t:.5,flow:'in',channels:[{id:'data'},{id:'main'}]}]}});
+   const w1=op(d,{op:'update',resource:'wire',resourceId:'w',patch:{bAttachment:{kind:'attachment-ref',componentId:'b',pointId:'feed'}}});
+   const a1=upd(d,'a',{config:{attachmentDefaults:'none',attachmentPoints:[{id:'right',compatId:'out',side:'right',t:.5,flow:'out',channels:[{id:'data'}]}]}});
+   const mis=upd(d,'b',{config:{attachmentPoints:[{id:'feed',side:'bottom',t:.5,flow:'in',channels:[{id:'main'}]}]}});
+   r.accepted={b1:b1.ok,w1:w1.ok,a1:a1.ok,mis:mis.ok,misMsg:mis.error?.message||'',valid:D.validateDocument(reload(d)).ok,wire:[d.wires[0].aAttachment.pointId,d.wires[0].bAttachment.pointId]};}
+  // Step 12: PORT_IN_USE whatever the edit's form.
+  {const d=pair(),t0=trace(d),res={},bBefore=JSON.stringify(d.components.find(c=>c.id==='b'));
+   // a ends on right/out, b on left/in. A Point's one port, self, answers to compat 'out' only,
+   // so retyping b (on 'in') to a Point removes its port; a dimension change keeps a port by compat id.
+   for(const [k,[id,patch]] of Object.entries({noneSwitch:['a',{config:{attachmentDefaults:'none'}}],retypePlane:['a',{symbolId:'plane'}],retypePoint:['b',{symbolId:'point'}]})){const rc=upd(d,id,patch);res[k]={ok:rc.ok,msg:rc.error?.message||''}}
+   let thrown='';const a=d.components.find(c=>c.id==='a'),before=JSON.stringify(a);try{D.applySymbol(a,'plane',d)}catch(e){thrown=e.message}
+   res.applySymbol={msg:thrown,unchanged:JSON.stringify(a)===before};
+   res.unchanged=JSON.stringify(trace(d))===JSON.stringify(t0)&&JSON.stringify(d.components.find(c=>c.id==='b'))===bBefore;
+   // A retype that keeps the port (another typed Component) and a dimension change that maps it by compat id are accepted.
+   res.retypeGate=upd(d,'a',{symbolId:'gate'}).ok;
+   res.valid=D.validateDocument(reload(d)).ok;
+   r.inUse=res;}
+  // Step 13 + 14 + 15: create validates and stores like update; order is kept; flow wins.
+  {const d=doc0(),res={};
+   res.dup=mk(d,{id:'x1',symbolId:'act',x:0,y:0,config:{attachmentPoints:[{id:'left',side:'left',t:.5,flow:'in'}]}});
+   res.badFlow=mk(d,{id:'x2',symbolId:'act',x:0,y:0,config:{attachmentDefaults:'none',attachmentPoints:[{id:'p',side:'left',t:.5,flow:'nope'}]}});
+   res.dupChannel=mk(d,{id:'x3',symbolId:'act',x:0,y:0,config:{attachmentPoints:[{id:'p',side:'left',t:.5,flow:'in',channels:[{id:'c'},{id:'c'}]}]}});
+   const add=mk(d,{id:'c1',symbolId:'act',x:0,y:0,config:{attachmentPoints:[{id:'x',side:'bottom',t:.3,flow:'in',defaultFlow:'out'}]}});
+   const c1=d.components.find(c=>c.id==='c1');
+   res.add={ok:add.ok,mode:c1.config.attachmentDefaults??null,stored:c1.config.attachmentPoints,ids:ids(c1),flow:A.pointSpecs(c1).find(s=>s.id==='x').flow};
+   const order=[{id:'top',compatId:'control',side:'top',t:.5,flow:'control'},{id:'left',compatId:'in',side:'left',t:.5,flow:'in'},{id:'right',compatId:'out',side:'right',t:.5,flow:'out'},{id:'x',side:'bottom',t:.5,flow:'duplex'}];
+   const oc=mk(d,{id:'c2',symbolId:'act',x:0,y:0,config:{attachmentDefaults:'none',attachmentPoints:order}});
+   const c2=d.components.find(c=>c.id==='c2');
+   res.order={ok:oc.ok,mode:c2.config.attachmentDefaults,stored:c2.config.attachmentPoints.map(p=>p.id),ids:ids(c2)};
+   const ou=upd(d,'c1',{config:{attachmentDefaults:'none',attachmentPoints:order}});
+   res.orderUpdate={ok:ou.ok,mode:d.components.find(c=>c.id==='c1').config.attachmentDefaults,ids:ids(d.components.find(c=>c.id==='c1'))};
+   const back=reload(d);res.reloaded={c1:ids(back.components.find(c=>c.id==='c1')),c2:ids(back.components.find(c=>c.id==='c2'))};
+   // Stored list equals the effective list: under 'none' every stored entry is exposed, in order.
+   res.storedIsEffective=[c1,c2].every(c=>c.config.attachmentDefaults!=='none'||JSON.stringify(c.config.attachmentPoints.map(p=>p.id))===JSON.stringify(ids(c)));
+   // A legacy file entry with both flow and defaultFlow reads flow.
+   const legacy=D.documentFromFilePayload({schema:D.DOCUMENT_SCHEMA,id:'f',revision:0,references:[],wires:[],components:[{id:'l',symbolId:'act',x:0,y:0,config:{attachmentPoints:[{id:'q',side:'bottom',t:.5,flow:'in',defaultFlow:'out'},{id:'r',side:'bottom',t:.7,defaultFlow:'out'}]}}]});
+   res.legacyFlow=A.pointSpecs(legacy.components[0]).filter(s=>['q','r'].includes(s.id)).map(s=>s.flow);
+   r.create=res;}
+  out.amend=r;
+}
+
 // Step 5 + 9: every example round-trips with the same port ids, bound ports and stored forms.
 out.examples={};
 for(const file of JSON.parse(process.argv[4])){
@@ -238,6 +289,30 @@ def main() -> None:
     assert ch['rebind']['ok'] is False and 'CHANNEL_MISMATCH' in ch['rebind']['error']['message'] and ch['k2After'] == 's1', ch
     assert 'CHANNEL_MISMATCH' in ch['bindErr'] and ch['k3After']['kind'] == 'free', ch
     assert not ch['validate']['ok'] and any('k9' in e and 'CHANNEL_MISMATCH' in e for e in ch['validate']['errors']), ch['validate']
+
+    # Amendment 2, step 11: an edit that leaves a Wire between ports sharing no channel is refused.
+    am = r['amend']
+    rv = am['review']
+    assert rv['ok'] is False and 'CHANNEL_MISMATCH' in rv['msg'] and rv['unchanged'] and rv['valid'] and rv['wire'] == ['right', 'left'], rv
+    ac = am['accepted']
+    assert ac['b1'] and ac['w1'] and ac['a1'] and ac['valid'] and ac['wire'] == ['right', 'feed'], ac
+    assert ac['mis'] is False and 'CHANNEL_MISMATCH' in ac['misMsg'], ac
+    # Step 12: PORT_IN_USE for the 'none' switch, a retype by update, and applySymbol with the document.
+    iu = am['inUse']
+    for key in ('noneSwitch', 'retypePlane', 'retypePoint'):
+        assert iu[key]['ok'] is False and 'PORT_IN_USE' in iu[key]['msg'], (key, iu[key])
+    assert 'PORT_IN_USE' in iu['applySymbol']['msg'] and iu['applySymbol']['unchanged'] and iu['unchanged'], iu
+    assert iu['retypeGate'] and iu['valid'], iu
+    # Steps 13-15: create validates and stores like update; order is kept; flow wins over defaultFlow.
+    cr = am['create']
+    for key, want in (('dup', 'share the id'), ('badFlow', 'invalid flow'), ('dupChannel', 'repeats channel')):
+        assert cr[key]['ok'] is False and want in cr[key]['error']['message'], (key, cr[key])
+    assert cr['add'] == {'ok': True, 'mode': None, 'stored': [{'id': 'x', 'side': 'bottom', 't': .3, 'flow': 'in', 'channels': [{'id': 'main'}]}], 'ids': ['left', 'right', 'top', 'x'], 'flow': 'in'}, cr['add']
+    assert cr['order'] == {'ok': True, 'mode': 'none', 'stored': ['top', 'left', 'right', 'x'], 'ids': ['top', 'left', 'right', 'x']}, cr['order']
+    assert cr['orderUpdate'] == {'ok': True, 'mode': 'none', 'ids': ['top', 'left', 'right', 'x']}, cr['orderUpdate']
+    assert cr['reloaded'] == {'c1': ['top', 'left', 'right', 'x'], 'c2': ['top', 'left', 'right', 'x']}, cr['reloaded']
+    assert cr['storedIsEffective'], cr
+    assert cr['legacyFlow'] == ['in', 'out'], cr['legacyFlow']
 
     # Steps 5 + 9: every example round-trips unchanged; stored forms are saved as authored.
     for file, ex in r['examples'].items():
