@@ -32,7 +32,7 @@ aside{background:var(--panel);overflow:auto;user-select:text}
 .palette{border-right:1px solid var(--line);padding:14px}
 .inspector{border-left:1px solid var(--line);padding:16px}
 .section{margin:0 0 18px}
-h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;color:var(--muted)}
+h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(--muted)}
 .symbol-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .symbol-card{border:1px solid transparent;border-radius:8px;padding:7px;background:var(--panel);color:var(--ink);cursor:grab;text-align:left;touch-action:pan-y}
 .symbol-card.drag-source{background:var(--hover);border-color:#999;cursor:grabbing;opacity:.72}
@@ -69,7 +69,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
   box-shadow:0 8px 24px rgba(0,0,0,.08);user-select:none
 }
 .palette-settings[hidden]{display:none}
-.palette-settings h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.palette-settings h3{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--muted)}
 .palette-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:34px;font-size:12px}
 .palette-row select{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:4px 6px;color:var(--ink)}
 .palette-row input[type="checkbox"]{width:16px;height:16px}
@@ -90,7 +90,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
   box-shadow:0 8px 24px rgba(0,0,0,.08);user-select:none;
 }
 .grid-settings[hidden]{display:none}
-.grid-settings h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.grid-settings h3{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--muted)}
 .grid-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:34px;font-size:12px}
 .grid-row select{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:4px 6px;color:var(--ink)}
 .grid-row input[type="checkbox"]{width:16px;height:16px}
@@ -123,7 +123,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .access-entry select{text-align:center;font-weight:700}
 .access-entry select[data-state="allow"]{color:var(--accent-out);border-color:var(--accent-out)}
 .access-entry select[data-state="deny"]{color:var(--accent-in);border-color:var(--accent-in)}
-.access-head{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.access-head{font-size:11px;font-weight:600;color:var(--muted)}
 .access-head span{text-align:center}.access-head span:first-child{text-align:left}
 .junction-dot{fill:var(--canvas-ink)}
 /* The control plane: transport and live state over the canvas. */
@@ -162,7 +162,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
    font-size is clamped to 8 to 14 screen pixels and expressed back in world units. At
    zoom 1 each label keeps its base size, so an export at zoom 1 is unchanged. */
 #workspace{--zoom:1}
-.node text{font-size:calc(clamp(8px,10px * var(--zoom,1),14px) / var(--zoom,1));fill:var(--component-boundary-color,var(--component-color,#171715));font-weight:700;letter-spacing:.04em;pointer-events:none;user-select:none}
+.node text{font-size:calc(clamp(8px,var(--type-title-size,10px) * var(--zoom,1),14px) / var(--zoom,1));fill:var(--component-boundary-color,var(--component-color,#171715));font-weight:var(--type-title-weight,600);letter-spacing:.015em;pointer-events:none;user-select:none}
 .node .glyph{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .component-lead{stroke:var(--component-interior-ink,var(--component-color,#171715));stroke-linecap:round;fill:none;pointer-events:none}
 .node.backdrop-none .component-lead{stroke:var(--canvas-ink)}
@@ -173,8 +173,9 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 /* The interior guide is an editing aid: shown while the container is selected or a card is being dragged, never in a picture. */
 .node.is-container:not(.selected)>.container-guide{opacity:0}#workspace.dragging-node .node.is-container>.container-guide{opacity:.22}
 .node.is-container>.body{stroke-width:var(--stroke-structure-container,1.8px)}
-.node .internal-text{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:600;opacity:.78}
-.node .outside-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));opacity:.8}
+.node .internal-text{font-size:calc(clamp(8px,var(--type-body-size,9px) * var(--zoom,1),14px) / var(--zoom,1));font-weight:var(--type-body-weight,400);opacity:.86}.node .internal-text .md-strong{font-weight:700}.node .internal-text .md-em{font-style:italic}.node .internal-text .md-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.node .component-subtitle{font-size:calc(clamp(8px,var(--type-subtitle-size,8.5px) * var(--zoom,1),14px) / var(--zoom,1));font-weight:var(--type-subtitle-weight,400);letter-spacing:0;opacity:.72}
+.node .outside-label{font-size:calc(clamp(8px,var(--type-caption-size,9px) * var(--zoom,1),14px) / var(--zoom,1));font-weight:var(--type-caption-weight,600);opacity:.8}
 .port-hit{fill:transparent;stroke:none;cursor:pointer;pointer-events:all;touch-action:none}
 .port{fill:var(--panel);stroke:var(--port-color,var(--component-color,var(--canvas-ink)));stroke-width:2;cursor:pointer;opacity:0;transition:opacity .1s,transform .1s;pointer-events:none;transform-box:fill-box;transform-origin:center}
 .node:hover .port,.node.wiring-source .port,.node.selected .port{opacity:1}
@@ -203,7 +204,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 #workspace.dragging-node .wire-packet{display:none!important}
 .wire-packet-tag{font-size:7px;font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:2px;letter-spacing:.03em}
 .wire-packet-operation{font-size:6.5px;font-weight:900;fill:var(--packet-op-ink,var(--canvas-ink));pointer-events:none;dominant-baseline:middle}
-.endpoint-channel-tag,.port-label-text{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:700;fill:var(--canvas-muted);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:3px;letter-spacing:.03em;pointer-events:none}
+.endpoint-channel-tag,.port-label-text{font-size:calc(clamp(8px,var(--type-caption-size,9px) * var(--zoom,1),14px) / var(--zoom,1));font-weight:var(--type-caption-weight,600);fill:var(--canvas-muted);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:3px;letter-spacing:.03em;pointer-events:none}
 .endpoint-channel-tag{font-size:8px}
 .flow-chevron{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;opacity:0}
 #workspace.show-flow .flow-chevron{opacity:1}
@@ -373,7 +374,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .node.blank text{font-style:italic}
 .node.blank.selected .body{stroke-dasharray:5 4}
 
-.connection-label{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:700;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}.reciprocity-mark{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:600;font-style:italic;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}
+.connection-label{font-size:calc(clamp(8px,var(--type-caption-size,9px) * var(--zoom,1),14px) / var(--zoom,1));font-weight:var(--type-caption-weight,600);fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}.reciprocity-mark{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:600;font-style:italic;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}
 
 @media(max-width:900px){
   .app{grid-template-columns:210px minmax(0,1fr);}
@@ -435,7 +436,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .menu-wrap{position:relative}.editor-menu{position:absolute;top:38px;right:0;z-index:60;width:245px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:7px;box-shadow:0 10px 30px rgba(0,0,0,.12)}.editor-menu[hidden],.shortcut-help[hidden]{display:none}.editor-menu .file-menu-item{width:100%}.menu-field{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 8px;font-size:11px}.menu-field select{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:4px 6px}.history-list,.checkpoint-list{display:flex;flex-direction:column;gap:3px;padding:5px 0;max-height:160px;overflow:auto}.history-row,.empty-mini{font-size:9px;color:var(--muted);padding:3px 4px}.checkpoint-row{border:0;background:transparent;color:var(--ink);display:flex;justify-content:space-between;gap:8px;text-align:left;padding:4px;border-radius:5px;cursor:pointer}.checkpoint-row:hover{background:var(--hover)}.checkpoint-row small{color:var(--muted)}
 .shortcut-help{position:absolute;right:14px;top:48px;z-index:61;width:360px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:0 10px 30px rgba(0,0,0,.12);padding:10px;font-size:10px;color:var(--muted);line-height:1.7}.shortcut-help b{color:var(--ink);display:block;margin-bottom:3px}.shortcut-help kbd,.file-menu-item kbd{font-size:9px}
 .quick-search{position:absolute;left:50%;top:62px;transform:translateX(-50%);z-index:70;width:min(520px,calc(100% - 40px));border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 18px 50px rgba(0,0,0,.18);padding:8px}.quick-search[hidden]{display:none}.quick-search input{width:100%;height:38px;border:1px solid var(--line);border-radius:8px;padding:0 11px;background:var(--panel);color:var(--ink);outline:none}.quick-search-results{display:flex;flex-direction:column;gap:3px;margin-top:6px;max-height:300px;overflow:auto}.search-result{border:0;border-radius:7px;background:transparent;color:var(--ink);padding:7px 9px;text-align:left;cursor:pointer}.search-result:hover{background:var(--hover)}.search-result b,.search-result small{display:block}.search-result small{font-size:9px;color:var(--muted)}.search-empty{padding:10px;color:var(--muted);font-size:10px}.node.search-dim,.wire-group.search-dim{opacity:.12!important;filter:grayscale(1)}.node.search-match .body{stroke-width:3.4}
-.objects-empty{display:block}.objects-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}.objects-head b{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}#hiddenObjectCount:not(:empty)::before{content:"Hidden ";font-size:9px;color:var(--muted)}.objects-list{display:flex;flex-direction:column;gap:2px}.object-row{border:0;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;border-radius:6px;text-align:left;cursor:pointer}.object-row:hover{background:var(--hover)}.object-row small{font-size:8px;color:var(--muted)}.object-row.is-hidden{opacity:.55}.object-row.is-locked small{font-weight:800}.objects-tip{border-top:1px solid var(--line);margin-top:8px;padding-top:7px;font-size:9px;color:var(--muted)}
+.objects-empty{display:block}.objects-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}.objects-head b{font-size:11px;letter-spacing:.1em;color:var(--muted)}#hiddenObjectCount:not(:empty)::before{content:"Hidden ";font-size:9px;color:var(--muted)}.objects-list{display:flex;flex-direction:column;gap:2px}.object-row{border:0;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;border-radius:6px;text-align:left;cursor:pointer}.object-row:hover{background:var(--hover)}.object-row small{font-size:8px;color:var(--muted)}.object-row.is-hidden{opacity:.55}.object-row.is-locked small{font-weight:800}.objects-tip{border-top:1px solid var(--line);margin-top:8px;padding-top:7px;font-size:9px;color:var(--muted)}
 .utility-settings{border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:10px}.utility-toggle-row{display:flex;gap:12px;align-items:center;padding:4px 0 7px;font-size:10px}.utility-toggle-row label{display:flex;gap:5px;align-items:center}.utility-settings input[type="range"]{width:100%}
 .node.is-pinned>.body{stroke-dasharray:2 2}.node.is-locked>.body{stroke-dasharray:6 3}.node.is-locked{cursor:not-allowed}.node.is-pinned{cursor:default}.marquee-rect{fill:rgba(90,110,140,.08);stroke:#5c718c;stroke-width:1.5;stroke-dasharray:5 4;pointer-events:none}.settle-host-ghost{pointer-events:none;opacity:0;animation:settleHostGhostIn .16s ease-out forwards}@keyframes settleHostGhostIn{to{opacity:1}}.settle-host-ghost rect{fill:rgba(80,110,140,.08);stroke:#627b99;stroke-width:2;stroke-dasharray:6 4}.settle-host-ghost text{font-size:calc(clamp(8px,9px * var(--zoom,1),14px) / var(--zoom,1));font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:3px}
 .component-body-depth,.component-frame-depth{fill:none;stroke:var(--component-boundary-color,#555);opacity:.22;pointer-events:none}.component-body-depth{fill:var(--component-interior-fill,#eee);opacity:.28}.node[data-material="glass"]>.body{fill-opacity:.5}.node[data-material="metal"]>.body{filter:brightness(.94)}.node[data-material="wood"]>.body{filter:sepia(.22)}.node[data-material="canvas"]>.body{stroke-dasharray:1.5 .6}.node[data-material="paper"]>.body{stroke-width:1}.node[data-material="panel"]>.body{stroke-width:2}
@@ -510,6 +511,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .carrier-end-handle.free{stroke-width:2;stroke-dasharray:2 2}
 .wire-group.has-free-end .wire{stroke-dasharray:7 5}
 .endpoint-halo.free-end{stroke-dasharray:2 3}
+
+/* Narration: interface narration shown as a film shows subtitles (NOTATION-MODEL.md §4). */
+.narration-bar{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);max-width:min(72%,760px);padding:9px 16px;border-radius:9px;background:rgba(22,21,19,.84);color:#FAF9F5;font-size:var(--type-narration-size,15px);font-weight:var(--type-narration-weight,500);line-height:1.4;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.18);pointer-events:none;z-index:40}
+.narration-bar[hidden]{display:none}
+#workspace.narrating .node.narration-dim,#workspace.narrating .wire-group.narration-dim{opacity:.28!important;transition:opacity .2s}
 </style>
 </head>
 <body>
@@ -950,6 +956,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     <div class="color-slot-panel" id="colorSlotPanel" hidden></div>
   </div>
   <div class="hint" id="hint">Drag body: move · corner grip: resize · Point: drag centre to move, drag ring to wire · drop a Point on a Path, Plane edge, or Wire to attach it</div>
+  <div id="narrationBar" class="narration-bar" role="status" aria-live="polite" hidden></div>
 </main>
 
 <aside class="inspector">
@@ -1037,6 +1044,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       // World units. Selected and highlighted states multiply these, never replace them.
       stroke:{structure:1.5,section:1.25,flow:2.25,symbol:2.6},
       space:{labelClear:10,bevel:3.5,pin:14},
+      // Text roles (NOTATION-MODEL.md §4). Sizes are at zoom 1; the canvas clamps them on screen.
+      type:{title:{size:10,weight:600},subtitle:{size:8.5,weight:400},body:{size:9,weight:400},caption:{size:9,weight:600},narration:{size:15,weight:500}},
       // One soft shadow per level: a root card is lifted 1, a card inside it 2, and so on.
       elevation:{
         light:[null,{dy:2,blur:3,opacity:.16},{dy:3,blur:5,opacity:.2},{dy:4.5,blur:7,opacity:.22}],
@@ -1157,8 +1166,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   // The glyph box inside a card of `size`, and where a terminal sits relative to the card's
   // centre. One formula for the renderer and the layout engine, so a laid-out wire is straight.
-  function glyphBox(g,size){
-    const many=g?.points==='terminals',w=Math.min(size.w*.72,108),h=Math.min(size.h*(many?.7:.55),70);
+  // The glyph leaves the card's foot to its title, and a line more for a subtitle.
+  function glyphBox(g,size,{subtitle=false}={}){
+    const many=g?.points==='terminals',w=Math.min(size.w*.72,108),h=Math.max(24,Math.min(size.h*(many?.7:.55),70,size.h-2*(20+(subtitle?11:0))));
     return {w,h,scale:Math.min(w/96,h/64)};
   }
   function glyphAxis(g){
@@ -1166,9 +1176,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(g.points==='terminals'){const ys=(g.terminals||[]).filter(t=>t.toward==='left'||t.toward==='right').map(t=>t.at[1]);return ys.length?(Math.min(...ys)+Math.max(...ys))/2:null}
     const t=terminal(g,'in')||terminal(g,'out');return t&&(t.toward==='left'||t.toward==='right')?t.at[1]:null;
   }
-  function terminalOffset(g,id,size){
+  function terminalOffset(g,id,size,opts={}){
     const t=(g?.terminals||[]).find(x=>x.id===id),axis=glyphAxis(g);if(!t||axis==null)return null;
-    const {scale}=glyphBox(g,size);return {dx:(t.at[0]-48)*scale,dy:(t.at[1]-axis)*scale};
+    const {scale}=glyphBox(g,size,opts);return {dx:(t.at[0]-48)*scale,dy:(t.at[1]-axis)*scale};
   }
   function terminal(g,idOrRole){return (g?.terminals||[]).find(t=>t.id===idOrRole)||(g?.terminals||[]).find(t=>t.role===idOrRole)||null}
   return {BUILTIN,MARGIN,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
@@ -3005,7 +3015,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       // the difference of the two terminals' offsets from their cards' centres.
       const portDy=(q,u)=>{
         const w=doc.wires.find(x=>(x.a===q&&x.b===u)||(x.b===q&&x.a===u));if(!w||!notation)return 0;
-        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c))?.dy||0};
+        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c),{subtitle:!!String(c?.config?.subtitle||'').trim()})?.dy||0};
         const [qp,up]=w.a===q?[w.aSide,w.bSide]:[w.bSide,w.aSide];
         return off(q,qp)-off(u,up);
       };
@@ -3045,8 +3055,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         if(left&&l>0)labelGap.set(l-1,Math.max(labelGap.get(l-1)||0,left));
         if(right)labelGap.set(l,Math.max(labelGap.get(l)||0,right));
       }
+      // A gap wide enough for its wires: each wire beyond two that crosses it needs a channel.
+      const crossing=new Map();
+      for(const u of ids)for(const v of succ.get(u)){const la=layer.get(u),lb=layer.get(v);for(let l=Math.min(la,lb);l<Math.max(la,lb);l++)crossing.set(l,(crossing.get(l)||0)+doc.wires.filter(w=>(rep(w.a,canvas)===u&&rep(w.b,canvas)===v)||(rep(w.b,canvas)===u&&rep(w.a,canvas)===v)).length)}
       const x=new Map(),y=new Map();let cx=0;
-      layers.forEach((L,l)=>{const w=Math.max(0,...L.map(u=>boxes.get(u).w));for(const u of L)x.set(u,cx+w/2);cx+=w+Math.max(gapX,labelGap.get(l)||0)});
+      layers.forEach((L,l)=>{const w=Math.max(0,...L.map(u=>boxes.get(u).w));for(const u of L)x.set(u,cx+w/2);cx+=w+Math.max(gapX+Math.max(0,(crossing.get(l)||0)-2)*22,labelGap.get(l)||0)});
       for(const L of layers){
         let top=0;
         for(const u of L){
@@ -3054,6 +3067,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
           const h=boxes.get(u).h,p=[...pred.get(u)].filter(q=>y.has(q)),want=p.length?p.map(q=>y.get(q)+portDy(q,u)).sort((a,b)=>a-b)[Math.floor((p.length-1)/2)]:top+h/2;
           const at=Math.max(top+h/2,want);y.set(u,at);top=at+h/2+gapY;
         }
+      }
+      // Back up the layers: a card with no predecessors levels with its successors instead, by the
+      // terminals its wires use, where that does not collide with its column.
+      for(let l=layers.length-1;l>=0;l--)for(const u of layers[l]){
+        if([...pred.get(u)].length||!succ.get(u).size)continue;
+        const wants=[...succ.get(u)].filter(v=>y.has(v)).map(v=>y.get(v)-portDy(u,v)).sort((a,b)=>a-b);if(!wants.length)continue;
+        const h=boxes.get(u).h,col=layers[l].filter(k=>k!==u);
+        const clear=t=>col.every(k=>Math.abs(y.get(k)-t)>=(boxes.get(k).h+h)/2+gapY*.5);
+        const pick=[wants[Math.floor((wants.length-1)/2)],wants.at(-1),wants[0]].find(clear);if(pick!=null)y.set(u,pick);
       }
       const minY=Math.min(0,...ids.map(u=>y.get(u)-boxes.get(u).h/2));
       if(minY<0)for(const u of ids)y.set(u,y.get(u)-minY);
@@ -3887,7 +3909,9 @@ function componentIsPoint(n){return componentForm(n).dimension===0}
 function componentIsPath(n){return componentForm(n).dimension===1}
 function componentIsSurface(n){return componentForm(n).dimension===2}
 // A primitive shows no type name of its own; only an authored label is drawn.
-function componentTypeCaption(n,s=byId(n.symbolId)){return isPrimitiveSymbol(n.symbolId)?'':(s?.name||'')}
+// A card with no label shows its glyph's title, in sentence case: "Act", never "ACT".
+function sentenceCase(v){const t=String(v||'').toLowerCase();return t.charAt(0).toUpperCase()+t.slice(1)}
+function componentTypeCaption(n,s=byId(n.symbolId)){return isPrimitiveSymbol(n.symbolId)?'':(componentGlyph(n)?.title||sentenceCase(s?.name||''))}
 // Wires whose endpoint sits on one of this component's built-in points. Used to refuse
 // attachment-default or type changes that would silently orphan a carrier.
 function wiresOnBuiltinPoints(n){
@@ -5096,21 +5120,32 @@ document.addEventListener('visibilitychange',()=>{
 });
 
 
-for (const [group, ids] of Object.entries(GROUPS)) {
-  const section=document.createElement('div'); section.className='section';
-  section.dataset.group=group.toLowerCase();
-  section.innerHTML=`<h2>${group}</h2><div class="symbol-grid${group==='Primitives'?' primitive-grid':''}"></div>`;
-  const grid=section.querySelector('.symbol-grid');
-  ids.forEach(id=>{
-    const s=byId(id), b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
-    b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
-    const caption=preset?`${preset.form.dimension}D · ${s.role}`:`${s.family} · ${s.diagram_class}`;
-    b.innerHTML=glyph(id)+`<b>${s.name}</b><small>${caption}</small>`;
-    bindPaletteComponent(b,id);
-    grid.appendChild(b);
-  });
-  palette.appendChild(section);
+// The symbol tray: the built-in groups, then the active notation's own glyphs under its name.
+// Names are shown as the notation titles them, in sentence case.
+let paletteNotationKey=null;
+function buildSymbolPalette(){
+  const notation=activeNotation();if(paletteNotationKey===notation.id&&palette.childElementCount)return;paletteNotationKey=notation.id;
+  palette.replaceChildren();
+  const own=Object.keys(notation.glyphs||{}).filter(id=>!byId(id));
+  const groups=[...Object.entries(GROUPS),...(own.length?[[notation.name||notation.id,own]]:[])];
+  for(const [group,ids] of groups){
+    const section=document.createElement('div'); section.className='section';
+    section.dataset.group=group.toLowerCase();
+    const h=document.createElement('h2');h.textContent=group;section.appendChild(h);
+    const grid=document.createElement('div');grid.className='symbol-grid'+(group==='Primitives'?' primitive-grid':'');section.appendChild(grid);
+    ids.forEach(id=>{
+      const g=notation.glyphs?.[id],s=byId(id)||{name:g?.title||id,family:g?.family||'',role:'',diagram_class:''};
+      const b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
+      b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
+      const caption=preset?`${preset.form.dimension}D · ${sentenceCase(s.role)}`:[s.family,s.diagram_class].filter(Boolean).map(sentenceCase).join(' · ');
+      b.innerHTML=glyph(id);const name=document.createElement('b');name.textContent=g?.title||sentenceCase(s.name);const small=document.createElement('small');small.textContent=caption;b.append(name,small);
+      bindPaletteComponent(b,id);
+      grid.appendChild(b);
+    });
+    palette.appendChild(section);
+  }
 }
+buildSymbolPalette();
 
 function svgPoint(cx,cy){
   const pt=workspace.createSVGPoint(); pt.x=cx; pt.y=cy;
@@ -5512,7 +5547,7 @@ function componentInlineGraphicBox(node){
     return {x:-w/2,y:-size.h/2+componentSectionInset(node)+10,w,h};
   }
   // A glyph whose terminals are its points needs room between them: it takes more of the card.
-  const {w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),size),x=-w/2;
+  const {w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),size,{subtitle:!!String(componentConfig(node).subtitle||'').trim()}),x=-w/2;
   if(componentHostedOnWire(node)){
     const axis=componentInlineTerminalY(node);
     return {x,y:axis==null?-h/2:-(axis/64)*h,w,h};
@@ -6550,13 +6585,41 @@ function appendComponentText(g,n,cfg,s){
     else if(componentAcceptsChildren(n)&&((p.graphic?.kind&&p.graphic.kind!=='none')||nodes.some(c=>c.parentId===n.id))){const box=componentInlineGraphicBox(n),glyph=p.graphic?.kind&&p.graphic.kind!=='none';t.setAttribute('x','0');t.setAttribute('y',String(glyph?box.y+box.h+12:box.y+10))}
     else {const inset=componentSectionInset(n),sec=componentForm(n).section?SovSchematicData.componentSection(n):null,bevel=sec&&(sec.core?.fill||'solid')==='solid';t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-(bevel?15:inset?11:8)-inset))}
     t.textContent=label;g.appendChild(t);
+    // A subtitle sits under its title; the title steps up a line to make room.
+    const subtitle=String(cfg.subtitle||'').trim();
+    if(subtitle&&labelMode!=='none'){
+      const u=document.createElementNS('http://www.w3.org/2000/svg','text');u.setAttribute('class','component-subtitle');u.setAttribute('text-anchor','middle');
+      const y=Number(t.getAttribute('y'))||0,below=labelMode==='outside'||(componentAcceptsChildren(n)&&t.getAttribute('y')&&y<0);
+      u.setAttribute('x','0');u.setAttribute('y',String(below?y+11:y));if(!below)t.setAttribute('y',String(y-11));
+      u.textContent=subtitle;g.appendChild(u);
+    }
   }
   const annotation=String(p.text||'').trim();
   if(annotation&&annotation!==label&&annotation!==s.name){
     const t=document.createElementNS('http://www.w3.org/2000/svg','text');
     t.setAttribute('class','internal-text');t.setAttribute('text-anchor','middle');t.setAttribute('x','0');
-    t.setAttribute('y',componentAcceptsChildren(n)?String(-p.size.h/2+72):'5');t.textContent=annotation;g.appendChild(t);
+    const lines=appendMarkdownLite(t,annotation,{x:0,lineHeight:11});
+    t.setAttribute('y',componentAcceptsChildren(n)?String(-p.size.h/2+72):String(5-(lines-1)*5.5));g.appendChild(t);
   }
+}
+// Body text is a small, safe Markdown (NOTATION-MODEL.md §4): **bold**, *italic*, `code`, line
+// breaks and "- " list items. Everything goes in as text content; nothing is read as markup.
+function appendMarkdownLite(textEl,source,{x=0,lineHeight=11}={}){
+  const lines=String(source).replace(/\r/g,'').split('\n').slice(0,6);
+  lines.forEach((raw,i)=>{
+    const line=document.createElementNS('http://www.w3.org/2000/svg','tspan');line.setAttribute('x',String(x));if(i)line.setAttribute('dy',String(lineHeight));
+    const text=raw.replace(/^\s*[-*]\s+/,'• ');
+    for(const part of text.split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|`[^`]+`)/).filter(Boolean)){
+      const run=document.createElementNS('http://www.w3.org/2000/svg','tspan');
+      if(/^\*\*.+\*\*$/.test(part)){run.setAttribute('class','md-strong');run.textContent=part.slice(2,-2)}
+      else if(/^\*.+\*$/.test(part)){run.setAttribute('class','md-em');run.textContent=part.slice(1,-1)}
+      else if(/^`.+`$/.test(part)){run.setAttribute('class','md-code');run.textContent=part.slice(1,-1)}
+      else run.textContent=part;
+      line.appendChild(run);
+    }
+    textEl.appendChild(line);
+  });
+  return lines.length;
 }
 function appendComponentTransformHandles(g,n,cfg){
   const {w,h}=componentSize(n);
@@ -6707,9 +6770,11 @@ function applyNotationTokens(){
   // Derived weights are computed here, not with calc(): a computed calc() is not a length a reader can parse.
   workspace.style.setProperty('--stroke-structure-container',`${+(T.stroke.structure*1.2).toFixed(2)}px`);
   workspace.style.setProperty('--stroke-structure-selected',`${+(T.stroke.structure*1.9).toFixed(2)}px`);
+  for(const [role,t] of Object.entries(T.type||{})){workspace.style.setProperty(`--type-${role}-size`,`${t.size}px`);workspace.style.setProperty(`--type-${role}-weight`,String(t.weight))}
 }
 function render(){
   applyNotationTokens();
+  if(typeof buildSymbolPalette==='function')buildSymbolPalette();
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
   const componentSignals=signalState.colors;
@@ -7233,6 +7298,12 @@ function layoutMetrics(options={}){
   for(const t of texts){
     const lines=t.owner?(nodeEl(t.owner)?.querySelectorAll(':scope > .section-line')||[]):workspace.querySelectorAll('.node > .section-line');
     for(const l of lines){const L=layoutWorldBox(l);if(L&&layoutOverlap(t.box,L)&&!(t.box.l>L.l&&t.box.r<L.r&&t.box.t>L.t&&t.box.b<L.b)){add('text-collision',[t.owner],`"${t.text}" crosses its own section line`);break}}
+  }
+  // A label across its own card's glyph (review, 13: a subtitle pushed the title into the gate).
+  for(const t of texts){
+    if(!t.owner||!/component-label|component-subtitle/.test(t.cls))continue;
+    const glyph=nodeEl(t.owner)?.querySelector(':scope > .glyph'),G=glyph&&layoutWorldBox(glyph);
+    if(G&&layoutOverlap(t.box,G,.5))add('text-collision',[t.owner],`"${t.text}" crosses its own glyph`);
   }
   for(const t of texts)if(t.el.dataset.truncated)add('text-truncated',[t.owner],`"${t.el.querySelector('title')?.textContent||t.text}" is cut to fit`);
   for(let i=0;i<texts.length;i++)for(let j=i+1;j<texts.length;j++)if(layoutOverlap(texts[i].box,texts[j].box,1))add('text-collision',[texts[i].owner||texts[i].wire,texts[j].owner||texts[j].wire],`"${texts[i].text}" overlaps "${texts[j].text}"`);
@@ -8849,7 +8920,10 @@ function renderStandaloneSvgNow(opts={}){
   const pad = opts.pad ?? 48;
   const b = typeof diagramBounds === 'function' ? diagramBounds() : null;
   if (b) {
-    const w = Math.max(160, b.r - b.l + pad * 2), h = Math.max(120, b.b - b.t + pad * 2);
+    const w = Math.max(160, b.r - b.l + pad * 2);
+    // Blocks below the drawing, never over it: a narration line, then the legend.
+    const extra = appendPictureBlocks(clone, {x: b.l - pad, y: b.b + pad * .5, w}, opts);
+    const h = Math.max(120, b.b - b.t + pad * 2 + extra);
     clone.setAttribute('viewBox', `${b.l - pad} ${b.t - pad} ${w} ${h}`);
     clone.setAttribute('width', String(Math.round(w)));
     clone.setAttribute('height', String(Math.round(h)));
@@ -8862,6 +8936,26 @@ function renderStandaloneSvgNow(opts={}){
   const own = clone.getAttribute('style') || '';
   clone.setAttribute('style', `${own}${own && !own.endsWith(';') ? ';' : ''}background-color:${bg}`);
   return new XMLSerializer().serializeToString(clone);
+}
+// Picture blocks (NOTATION-MODEL.md §4-5), drawn with inline attributes because a picture carries
+// no stylesheet. Returns the height they add under the drawing.
+function appendPictureBlocks(svg,{x,y,w},opts={}){
+  const NS='http://www.w3.org/2000/svg',T=SovSchematicNotation.tokens(diagram),dark=surfaceAppearance()==='dark';
+  const ink=dark?'#F3F2EE':'#2B2A27',muted=dark?'#B9B7B0':'#6C6A64';let used=0;
+  const lines=typeof narrationLines==='function'?narrationLines():[];
+  const line=opts.narration!=null?lines[Number(opts.narration)]:null;
+  if(line){
+    const size=T.type?.narration?.size||15,perLine=Math.max(12,Math.floor((w-48)/(size*.54)));
+    const words=line.say.split(/\s+/),rows=[''];for(const word of words){const t=rows.at(-1)?rows.at(-1)+' '+word:word;if(t.length>perLine&&rows.at(-1))rows.push(word);else rows[rows.length-1]=t}
+    const boxH=rows.length*size*1.4+size*.9,g=document.createElementNS(NS,'g');g.setAttribute('class','picture-narration');
+    const r=document.createElementNS(NS,'rect');r.setAttribute('x',String(x+24));r.setAttribute('y',String(y));r.setAttribute('width',String(w-48));r.setAttribute('height',String(boxH));r.setAttribute('rx','9');
+    r.setAttribute('style',`fill:${dark?'#2A2C2E':'#1F1E1C'};fill-opacity:.9`);g.appendChild(r);
+    rows.forEach((row,i)=>{const t=document.createElementNS(NS,'text');t.setAttribute('x',String(x+w/2));t.setAttribute('y',String(y+(boxH-rows.length*size*1.4)/2+size*1.05+i*size*1.4));t.setAttribute('text-anchor','middle');
+      t.setAttribute('style',`font-family:ui-sans-serif,system-ui,sans-serif;font-size:${size}px;font-weight:${T.type?.narration?.weight||500};fill:#FAF9F5`);t.textContent=row;g.appendChild(t)});
+    svg.appendChild(g);used+=boxH+16;
+  }
+  if(opts.legend&&typeof appendLegendBlock==='function')used+=appendLegendBlock(svg,{x,y:y+used,w,ink,muted,dark});
+  return used;
 }
 function exportSvgFile(){
   triggerDownload(renderStandaloneSvg({pad:48}),`${fileBaseName()}.svg`,'image/svg+xml');
@@ -9260,6 +9354,7 @@ function updateSimReadout(){
   const st=simClock.run?.state();
   const t=st?st.time:0,seconds=t>=1000?`${(t/1000).toFixed(t>=10000?1:2)} s`:`${Math.round(t)} ms`;
   out.textContent=simClock.run?`t ${seconds} · ${st.high} high · ${st.edges} edges${st.parked?` · ${st.parked} waiting`:''}${simClock.note?` · ${simClock.note}`:''}`:(simClock.note||'clock stopped');
+  if(typeof narrationTick==='function')narrationTick();
   play.textContent=simClock.playing?'❚❚':'▶';play.title=simClock.playing?'Pause the clock':'Run the clock';play.classList.toggle('active',simClock.playing);
 }
 
@@ -9268,6 +9363,8 @@ function simEl(tag,attrs,cls){const e=document.createElementNS(SVGNS,tag);if(cls
 // Paint the engine's state over the rendered canvas. Called after every render and every frame.
 function paintSim(){
   if(!simLayer)return;
+  // A render replaces the node groups: narration focus is put back on the new ones.
+  if(typeof narrationState!=='undefined'&&narrationState.index!=null)showNarration(narrationState.index,{manual:narrationState.manual});
   simLayer.replaceChildren();
   workspace.classList.toggle('sim-live',!!simClock.run);
   for(const gEl of workspace.querySelectorAll('.wire-group.level-high'))gEl.classList.remove('level-high');
@@ -9330,6 +9427,46 @@ document.getElementById('simSpeed')?.addEventListener('change',e=>{simClock.spee
 updateSimReadout();
 /* END src/65-sim-control.js */
 </script>
+<script data-beta-module="src/66-narration.js">
+/* BEGIN src/66-narration.js */
+'use strict';
+// 0.1 concern: narration (NOTATION-MODEL.md §4). Interface narration is shown the way a film
+// shows subtitles: one line at a time in a caption bar at the foot of the canvas, following the
+// clock, with the components it names in focus and the rest dimmed. Narration is presentation,
+// like a layout: it never changes what the document means.
+
+const narrationBar=document.getElementById('narrationBar');
+const narrationState={index:null,manual:false};
+
+// Every line, in order: the document's own track, then the lines its saved scenarios carry.
+function narrationLines(doc=diagram){
+  const own=(Array.isArray(doc.narration)?doc.narration:[]).filter(l=>l&&typeof l.say==='string'&&l.say.trim()).map(l=>({at:Number.isFinite(Number(l.at))?Number(l.at):null,say:l.say.trim(),focus:Array.isArray(l.focus)?l.focus.map(String):[]}));
+  const scenario=[];
+  for(const r of doc.references||[])if(r.kind==='scenario')for(const step of r.data?.steps||[])if(typeof step?.say==='string'&&step.say.trim())scenario.push({at:Number.isFinite(Number(step.at))?Number(step.at):null,say:step.say.trim(),focus:step.inject?.node?[String(step.inject.node)]:[],scenario:r.id});
+  return [...own,...scenario];
+}
+// The line in force at a clock time: the last one whose time has come.
+function narrationIndexAt(time,lines=narrationLines()){
+  let best=null;lines.forEach((l,i)=>{if(l.at!=null&&l.at<=time&&(best==null||l.at>=lines[best].at))best=i});return best;
+}
+function showNarration(index,{manual=true}={}){
+  const lines=narrationLines(),line=index==null?null:lines[index];
+  narrationState.index=line?index:null;narrationState.manual=!!line&&manual;
+  if(narrationBar){narrationBar.hidden=!line;narrationBar.textContent=line?line.say:''}
+  const focus=new Set(line?.focus||[]);
+  workspace.classList.toggle('narrating',!!line&&focus.size>0);
+  for(const g of workspace.querySelectorAll('.node'))g.classList.toggle('narration-dim',focus.size>0&&!focus.has(g.dataset.id));
+  for(const g of workspace.querySelectorAll('.wire-group')){const w=wires.find(x=>x.id===g.dataset.wireId);g.classList.toggle('narration-dim',focus.size>0&&!(w&&(focus.has(w.a)||focus.has(w.b))))}
+  return {ok:true,index:narrationState.index,line};
+}
+// Called by the clock readout: while the clock runs, the line for the current time is shown.
+function narrationTick(){
+  if(narrationState.manual)return;
+  const st=simClock.run?.state();if(!st){if(narrationState.index!=null)showNarration(null,{manual:false});return}
+  const i=narrationIndexAt(st.time);if(i!==narrationState.index)showNarration(i,{manual:false});
+}
+/* END src/66-narration.js */
+</script>
 <script data-beta-module="src/85-api.js">
 /* BEGIN src/85-api.js */
 'use strict';
@@ -9390,7 +9527,7 @@ const SovSchematicAPI={
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
-  view:{colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  view:{narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
   render:{
     svg:(options={})=>renderStandaloneSvg(options),
     png:(options={})=>renderStandalonePng(options)

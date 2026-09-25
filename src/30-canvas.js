@@ -215,21 +215,32 @@ document.addEventListener('visibilitychange',()=>{
 });
 
 
-for (const [group, ids] of Object.entries(GROUPS)) {
-  const section=document.createElement('div'); section.className='section';
-  section.dataset.group=group.toLowerCase();
-  section.innerHTML=`<h2>${group}</h2><div class="symbol-grid${group==='Primitives'?' primitive-grid':''}"></div>`;
-  const grid=section.querySelector('.symbol-grid');
-  ids.forEach(id=>{
-    const s=byId(id), b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
-    b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
-    const caption=preset?`${preset.form.dimension}D · ${s.role}`:`${s.family} · ${s.diagram_class}`;
-    b.innerHTML=glyph(id)+`<b>${s.name}</b><small>${caption}</small>`;
-    bindPaletteComponent(b,id);
-    grid.appendChild(b);
-  });
-  palette.appendChild(section);
+// The symbol tray: the built-in groups, then the active notation's own glyphs under its name.
+// Names are shown as the notation titles them, in sentence case.
+let paletteNotationKey=null;
+function buildSymbolPalette(){
+  const notation=activeNotation();if(paletteNotationKey===notation.id&&palette.childElementCount)return;paletteNotationKey=notation.id;
+  palette.replaceChildren();
+  const own=Object.keys(notation.glyphs||{}).filter(id=>!byId(id));
+  const groups=[...Object.entries(GROUPS),...(own.length?[[notation.name||notation.id,own]]:[])];
+  for(const [group,ids] of groups){
+    const section=document.createElement('div'); section.className='section';
+    section.dataset.group=group.toLowerCase();
+    const h=document.createElement('h2');h.textContent=group;section.appendChild(h);
+    const grid=document.createElement('div');grid.className='symbol-grid'+(group==='Primitives'?' primitive-grid':'');section.appendChild(grid);
+    ids.forEach(id=>{
+      const g=notation.glyphs?.[id],s=byId(id)||{name:g?.title||id,family:g?.family||'',role:'',diagram_class:''};
+      const b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
+      b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
+      const caption=preset?`${preset.form.dimension}D · ${sentenceCase(s.role)}`:[s.family,s.diagram_class].filter(Boolean).map(sentenceCase).join(' · ');
+      b.innerHTML=glyph(id);const name=document.createElement('b');name.textContent=g?.title||sentenceCase(s.name);const small=document.createElement('small');small.textContent=caption;b.append(name,small);
+      bindPaletteComponent(b,id);
+      grid.appendChild(b);
+    });
+    palette.appendChild(section);
+  }
 }
+buildSymbolPalette();
 
 function svgPoint(cx,cy){
   const pt=workspace.createSVGPoint(); pt.x=cx; pt.y=cy;
@@ -631,7 +642,7 @@ function componentInlineGraphicBox(node){
     return {x:-w/2,y:-size.h/2+componentSectionInset(node)+10,w,h};
   }
   // A glyph whose terminals are its points needs room between them: it takes more of the card.
-  const {w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),size),x=-w/2;
+  const {w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),size,{subtitle:!!String(componentConfig(node).subtitle||'').trim()}),x=-w/2;
   if(componentHostedOnWire(node)){
     const axis=componentInlineTerminalY(node);
     return {x,y:axis==null?-h/2:-(axis/64)*h,w,h};

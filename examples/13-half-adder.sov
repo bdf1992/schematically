@@ -35,25 +35,39 @@
    "id": "sum-gate",
    "symbolId": "xor2",
    "x": 480,
-   "y": 208.4,
+   "y": 207.19,
    "config": {
-    "label": "Sum gate"
+    "label": "Sum gate",
+    "subtitle": "a ⊕ b",
+    "presentation": {
+     "size": {
+      "w": 128,
+      "h": 108
+     }
+    }
    }
   },
   {
    "id": "carry-gate",
    "symbolId": "and2",
    "x": 480,
-   "y": 411.6,
+   "y": 412.81,
    "config": {
-    "label": "Carry gate"
+    "label": "Carry gate",
+    "subtitle": "a · b",
+    "presentation": {
+     "size": {
+      "w": 128,
+      "h": 108
+     }
+    }
    }
   },
   {
    "id": "sum",
    "symbolId": "observe",
    "x": 800,
-   "y": 208.4,
+   "y": 207.19,
    "config": {
     "label": "Sum",
     "signal": {
@@ -65,7 +79,7 @@
    "id": "carry",
    "symbolId": "observe",
    "x": 800,
-   "y": 411.6,
+   "y": 412.81,
    "config": {
     "label": "Carry",
     "signal": {
@@ -118,5 +132,31 @@
    "bSide": "in"
   }
  ],
- "references": []
+ "references": [],
+ "narration": [
+  {
+   "at": 0,
+   "say": "Two levers, A and B, each feed both gates.",
+   "focus": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "at": 1000,
+   "say": "The exclusive-or gate is high when exactly one input is high: that is the sum.",
+   "focus": [
+    "sum-gate",
+    "sum"
+   ]
+  },
+  {
+   "at": 2000,
+   "say": "The and gate is high only when both inputs are: that is the carry.",
+   "focus": [
+    "carry-gate",
+    "carry"
+   ]
+  }
+ ]
 }

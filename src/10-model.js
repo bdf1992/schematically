@@ -331,7 +331,9 @@ function componentIsPoint(n){return componentForm(n).dimension===0}
 function componentIsPath(n){return componentForm(n).dimension===1}
 function componentIsSurface(n){return componentForm(n).dimension===2}
 // A primitive shows no type name of its own; only an authored label is drawn.
-function componentTypeCaption(n,s=byId(n.symbolId)){return isPrimitiveSymbol(n.symbolId)?'':(s?.name||'')}
+// A card with no label shows its glyph's title, in sentence case: "Act", never "ACT".
+function sentenceCase(v){const t=String(v||'').toLowerCase();return t.charAt(0).toUpperCase()+t.slice(1)}
+function componentTypeCaption(n,s=byId(n.symbolId)){return isPrimitiveSymbol(n.symbolId)?'':(componentGlyph(n)?.title||sentenceCase(s?.name||''))}
 // Wires whose endpoint sits on one of this component's built-in points. Used to refuse
 // attachment-default or type changes that would silently orphan a carrier.
 function wiresOnBuiltinPoints(n){

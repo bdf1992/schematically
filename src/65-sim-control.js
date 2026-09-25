@@ -60,6 +60,7 @@ function updateSimReadout(){
   const st=simClock.run?.state();
   const t=st?st.time:0,seconds=t>=1000?`${(t/1000).toFixed(t>=10000?1:2)} s`:`${Math.round(t)} ms`;
   out.textContent=simClock.run?`t ${seconds} · ${st.high} high · ${st.edges} edges${st.parked?` · ${st.parked} waiting`:''}${simClock.note?` · ${simClock.note}`:''}`:(simClock.note||'clock stopped');
+  if(typeof narrationTick==='function')narrationTick();
   play.textContent=simClock.playing?'❚❚':'▶';play.title=simClock.playing?'Pause the clock':'Run the clock';play.classList.toggle('active',simClock.playing);
 }
 
@@ -68,6 +69,8 @@ function simEl(tag,attrs,cls){const e=document.createElementNS(SVGNS,tag);if(cls
 // Paint the engine's state over the rendered canvas. Called after every render and every frame.
 function paintSim(){
   if(!simLayer)return;
+  // A render replaces the node groups: narration focus is put back on the new ones.
+  if(typeof narrationState!=='undefined'&&narrationState.index!=null)showNarration(narrationState.index,{manual:narrationState.manual});
   simLayer.replaceChildren();
   workspace.classList.toggle('sim-live',!!simClock.run);
   for(const gEl of workspace.querySelectorAll('.wire-group.level-high'))gEl.classList.remove('level-high');

@@ -78,6 +78,12 @@ function layoutMetrics(options={}){
     const lines=t.owner?(nodeEl(t.owner)?.querySelectorAll(':scope > .section-line')||[]):workspace.querySelectorAll('.node > .section-line');
     for(const l of lines){const L=layoutWorldBox(l);if(L&&layoutOverlap(t.box,L)&&!(t.box.l>L.l&&t.box.r<L.r&&t.box.t>L.t&&t.box.b<L.b)){add('text-collision',[t.owner],`"${t.text}" crosses its own section line`);break}}
   }
+  // A label across its own card's glyph (review, 13: a subtitle pushed the title into the gate).
+  for(const t of texts){
+    if(!t.owner||!/component-label|component-subtitle/.test(t.cls))continue;
+    const glyph=nodeEl(t.owner)?.querySelector(':scope > .glyph'),G=glyph&&layoutWorldBox(glyph);
+    if(G&&layoutOverlap(t.box,G,.5))add('text-collision',[t.owner],`"${t.text}" crosses its own glyph`);
+  }
   for(const t of texts)if(t.el.dataset.truncated)add('text-truncated',[t.owner],`"${t.el.querySelector('title')?.textContent||t.text}" is cut to fit`);
   for(let i=0;i<texts.length;i++)for(let j=i+1;j<texts.length;j++)if(layoutOverlap(texts[i].box,texts[j].box,1))add('text-collision',[texts[i].owner||texts[i].wire,texts[j].owner||texts[j].wire],`"${texts[i].text}" overlaps "${texts[j].text}"`);
   for(const t of texts){

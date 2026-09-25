@@ -154,13 +154,41 @@ function appendComponentText(g,n,cfg,s){
     else if(componentAcceptsChildren(n)&&((p.graphic?.kind&&p.graphic.kind!=='none')||nodes.some(c=>c.parentId===n.id))){const box=componentInlineGraphicBox(n),glyph=p.graphic?.kind&&p.graphic.kind!=='none';t.setAttribute('x','0');t.setAttribute('y',String(glyph?box.y+box.h+12:box.y+10))}
     else {const inset=componentSectionInset(n),sec=componentForm(n).section?SovSchematicData.componentSection(n):null,bevel=sec&&(sec.core?.fill||'solid')==='solid';t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-(bevel?15:inset?11:8)-inset))}
     t.textContent=label;g.appendChild(t);
+    // A subtitle sits under its title; the title steps up a line to make room.
+    const subtitle=String(cfg.subtitle||'').trim();
+    if(subtitle&&labelMode!=='none'){
+      const u=document.createElementNS('http://www.w3.org/2000/svg','text');u.setAttribute('class','component-subtitle');u.setAttribute('text-anchor','middle');
+      const y=Number(t.getAttribute('y'))||0,below=labelMode==='outside'||(componentAcceptsChildren(n)&&t.getAttribute('y')&&y<0);
+      u.setAttribute('x','0');u.setAttribute('y',String(below?y+11:y));if(!below)t.setAttribute('y',String(y-11));
+      u.textContent=subtitle;g.appendChild(u);
+    }
   }
   const annotation=String(p.text||'').trim();
   if(annotation&&annotation!==label&&annotation!==s.name){
     const t=document.createElementNS('http://www.w3.org/2000/svg','text');
     t.setAttribute('class','internal-text');t.setAttribute('text-anchor','middle');t.setAttribute('x','0');
-    t.setAttribute('y',componentAcceptsChildren(n)?String(-p.size.h/2+72):'5');t.textContent=annotation;g.appendChild(t);
+    const lines=appendMarkdownLite(t,annotation,{x:0,lineHeight:11});
+    t.setAttribute('y',componentAcceptsChildren(n)?String(-p.size.h/2+72):String(5-(lines-1)*5.5));g.appendChild(t);
   }
+}
+// Body text is a small, safe Markdown (NOTATION-MODEL.md §4): **bold**, *italic*, `code`, line
+// breaks and "- " list items. Everything goes in as text content; nothing is read as markup.
+function appendMarkdownLite(textEl,source,{x=0,lineHeight=11}={}){
+  const lines=String(source).replace(/\r/g,'').split('\n').slice(0,6);
+  lines.forEach((raw,i)=>{
+    const line=document.createElementNS('http://www.w3.org/2000/svg','tspan');line.setAttribute('x',String(x));if(i)line.setAttribute('dy',String(lineHeight));
+    const text=raw.replace(/^\s*[-*]\s+/,'• ');
+    for(const part of text.split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|`[^`]+`)/).filter(Boolean)){
+      const run=document.createElementNS('http://www.w3.org/2000/svg','tspan');
+      if(/^\*\*.+\*\*$/.test(part)){run.setAttribute('class','md-strong');run.textContent=part.slice(2,-2)}
+      else if(/^\*.+\*$/.test(part)){run.setAttribute('class','md-em');run.textContent=part.slice(1,-1)}
+      else if(/^`.+`$/.test(part)){run.setAttribute('class','md-code');run.textContent=part.slice(1,-1)}
+      else run.textContent=part;
+      line.appendChild(run);
+    }
+    textEl.appendChild(line);
+  });
+  return lines.length;
 }
 function appendComponentTransformHandles(g,n,cfg){
   const {w,h}=componentSize(n);
@@ -311,9 +339,11 @@ function applyNotationTokens(){
   // Derived weights are computed here, not with calc(): a computed calc() is not a length a reader can parse.
   workspace.style.setProperty('--stroke-structure-container',`${+(T.stroke.structure*1.2).toFixed(2)}px`);
   workspace.style.setProperty('--stroke-structure-selected',`${+(T.stroke.structure*1.9).toFixed(2)}px`);
+  for(const [role,t] of Object.entries(T.type||{})){workspace.style.setProperty(`--type-${role}-size`,`${t.size}px`);workspace.style.setProperty(`--type-${role}-weight`,String(t.weight))}
 }
 function render(){
   applyNotationTokens();
+  if(typeof buildSymbolPalette==='function')buildSymbolPalette();
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
   const componentSignals=signalState.colors;

@@ -82,7 +82,7 @@
         "ports": {}
       },
       "config": {
-        "label": "EVENT",
+        "label": "Event",
         "colorSlot": 0,
         "signalMode": "source",
         "presentation": {
@@ -252,7 +252,7 @@
         "ports": {}
       },
       "config": {
-        "label": "RECORD",
+        "label": "Record",
         "colorSlot": 0,
         "signalMode": "passive",
         "presentation": {
@@ -422,7 +422,7 @@
         "ports": {}
       },
       "config": {
-        "label": "WITNESS",
+        "label": "Witness",
         "colorSlot": 0,
         "signalMode": "source",
         "presentation": {

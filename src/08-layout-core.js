@@ -213,7 +213,7 @@
       // the difference of the two terminals' offsets from their cards' centres.
       const portDy=(q,u)=>{
         const w=doc.wires.find(x=>(x.a===q&&x.b===u)||(x.b===q&&x.a===u));if(!w||!notation)return 0;
-        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c))?.dy||0};
+        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c),{subtitle:!!String(c?.config?.subtitle||'').trim()})?.dy||0};
         const [qp,up]=w.a===q?[w.aSide,w.bSide]:[w.bSide,w.aSide];
         return off(q,qp)-off(u,up);
       };
@@ -253,8 +253,11 @@
         if(left&&l>0)labelGap.set(l-1,Math.max(labelGap.get(l-1)||0,left));
         if(right)labelGap.set(l,Math.max(labelGap.get(l)||0,right));
       }
+      // A gap wide enough for its wires: each wire beyond two that crosses it needs a channel.
+      const crossing=new Map();
+      for(const u of ids)for(const v of succ.get(u)){const la=layer.get(u),lb=layer.get(v);for(let l=Math.min(la,lb);l<Math.max(la,lb);l++)crossing.set(l,(crossing.get(l)||0)+doc.wires.filter(w=>(rep(w.a,canvas)===u&&rep(w.b,canvas)===v)||(rep(w.b,canvas)===u&&rep(w.a,canvas)===v)).length)}
       const x=new Map(),y=new Map();let cx=0;
-      layers.forEach((L,l)=>{const w=Math.max(0,...L.map(u=>boxes.get(u).w));for(const u of L)x.set(u,cx+w/2);cx+=w+Math.max(gapX,labelGap.get(l)||0)});
+      layers.forEach((L,l)=>{const w=Math.max(0,...L.map(u=>boxes.get(u).w));for(const u of L)x.set(u,cx+w/2);cx+=w+Math.max(gapX+Math.max(0,(crossing.get(l)||0)-2)*22,labelGap.get(l)||0)});
       for(const L of layers){
         let top=0;
         for(const u of L){
@@ -262,6 +265,15 @@
           const h=boxes.get(u).h,p=[...pred.get(u)].filter(q=>y.has(q)),want=p.length?p.map(q=>y.get(q)+portDy(q,u)).sort((a,b)=>a-b)[Math.floor((p.length-1)/2)]:top+h/2;
           const at=Math.max(top+h/2,want);y.set(u,at);top=at+h/2+gapY;
         }
+      }
+      // Back up the layers: a card with no predecessors levels with its successors instead, by the
+      // terminals its wires use, where that does not collide with its column.
+      for(let l=layers.length-1;l>=0;l--)for(const u of layers[l]){
+        if([...pred.get(u)].length||!succ.get(u).size)continue;
+        const wants=[...succ.get(u)].filter(v=>y.has(v)).map(v=>y.get(v)-portDy(u,v)).sort((a,b)=>a-b);if(!wants.length)continue;
+        const h=boxes.get(u).h,col=layers[l].filter(k=>k!==u);
+        const clear=t=>col.every(k=>Math.abs(y.get(k)-t)>=(boxes.get(k).h+h)/2+gapY*.5);
+        const pick=[wants[Math.floor((wants.length-1)/2)],wants.at(-1),wants[0]].find(clear);if(pick!=null)y.set(u,pick);
       }
       const minY=Math.min(0,...ids.map(u=>y.get(u)-boxes.get(u).h/2));
       if(minY<0)for(const u of ids)y.set(u,y.get(u)-minY);

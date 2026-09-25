@@ -397,7 +397,10 @@ function renderStandaloneSvgNow(opts={}){
   const pad = opts.pad ?? 48;
   const b = typeof diagramBounds === 'function' ? diagramBounds() : null;
   if (b) {
-    const w = Math.max(160, b.r - b.l + pad * 2), h = Math.max(120, b.b - b.t + pad * 2);
+    const w = Math.max(160, b.r - b.l + pad * 2);
+    // Blocks below the drawing, never over it: a narration line, then the legend.
+    const extra = appendPictureBlocks(clone, {x: b.l - pad, y: b.b + pad * .5, w}, opts);
+    const h = Math.max(120, b.b - b.t + pad * 2 + extra);
     clone.setAttribute('viewBox', `${b.l - pad} ${b.t - pad} ${w} ${h}`);
     clone.setAttribute('width', String(Math.round(w)));
     clone.setAttribute('height', String(Math.round(h)));
@@ -410,6 +413,26 @@ function renderStandaloneSvgNow(opts={}){
   const own = clone.getAttribute('style') || '';
   clone.setAttribute('style', `${own}${own && !own.endsWith(';') ? ';' : ''}background-color:${bg}`);
   return new XMLSerializer().serializeToString(clone);
+}
+// Picture blocks (NOTATION-MODEL.md §4-5), drawn with inline attributes because a picture carries
+// no stylesheet. Returns the height they add under the drawing.
+function appendPictureBlocks(svg,{x,y,w},opts={}){
+  const NS='http://www.w3.org/2000/svg',T=SovSchematicNotation.tokens(diagram),dark=surfaceAppearance()==='dark';
+  const ink=dark?'#F3F2EE':'#2B2A27',muted=dark?'#B9B7B0':'#6C6A64';let used=0;
+  const lines=typeof narrationLines==='function'?narrationLines():[];
+  const line=opts.narration!=null?lines[Number(opts.narration)]:null;
+  if(line){
+    const size=T.type?.narration?.size||15,perLine=Math.max(12,Math.floor((w-48)/(size*.54)));
+    const words=line.say.split(/\s+/),rows=[''];for(const word of words){const t=rows.at(-1)?rows.at(-1)+' '+word:word;if(t.length>perLine&&rows.at(-1))rows.push(word);else rows[rows.length-1]=t}
+    const boxH=rows.length*size*1.4+size*.9,g=document.createElementNS(NS,'g');g.setAttribute('class','picture-narration');
+    const r=document.createElementNS(NS,'rect');r.setAttribute('x',String(x+24));r.setAttribute('y',String(y));r.setAttribute('width',String(w-48));r.setAttribute('height',String(boxH));r.setAttribute('rx','9');
+    r.setAttribute('style',`fill:${dark?'#2A2C2E':'#1F1E1C'};fill-opacity:.9`);g.appendChild(r);
+    rows.forEach((row,i)=>{const t=document.createElementNS(NS,'text');t.setAttribute('x',String(x+w/2));t.setAttribute('y',String(y+(boxH-rows.length*size*1.4)/2+size*1.05+i*size*1.4));t.setAttribute('text-anchor','middle');
+      t.setAttribute('style',`font-family:ui-sans-serif,system-ui,sans-serif;font-size:${size}px;font-weight:${T.type?.narration?.weight||500};fill:#FAF9F5`);t.textContent=row;g.appendChild(t)});
+    svg.appendChild(g);used+=boxH+16;
+  }
+  if(opts.legend&&typeof appendLegendBlock==='function')used+=appendLegendBlock(svg,{x,y:y+used,w,ink,muted,dark});
+  return used;
 }
 function exportSvgFile(){
   triggerDownload(renderStandaloneSvg({pad:48}),`${fileBaseName()}.svg`,'image/svg+xml');
