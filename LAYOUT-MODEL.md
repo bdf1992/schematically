@@ -312,6 +312,24 @@ styles inlined and the view fitted to the diagram. The same function serves:
 An agent with only MCP can therefore see the diagram and its score before it reports
 the work done.
 
+## As built: crossings (2026-09-25)
+
+A crossing never reads as a junction.
+
+- **Hops.** Where two wires that share no end cross, the later one hops over the earlier with a
+  half circle (radius 6.5). The earlier wire runs straight through. It is always the same side:
+  over the top going right, and to the right going down.
+- **Wires that share an end** (a fan-out or a fan-in) never hop each other. They part at a
+  junction dot.
+- **Arrowheads** keep 24 clear of every crossing and junction, on both wires.
+- **The router** keeps unrelated wires off one track: a collinear touching run costs 260. It
+  also keeps them apart when they run side by side closer than 16 for a real stretch, which
+  costs 70.
+- **The audit** counts `route-overlap` (two unrelated wires on one track).
+- A multi-line wire (strip, lanes, pipe) is a band and does not hop.
+
+Tests: `tests/wire_crossing_qa.py`.
+
 ## As built: presentation (2026-09-25)
 
 **Colour carries meaning, not decoration.** There are two accents:

@@ -5819,14 +5819,14 @@ function directionPenalty(points,A,B){
 }
 function pathScore(points,A,B,obstacles=[],occupied=[],ends=null){
   const pts=normalizePoints(points);
-  let length=0, bends=Math.max(0,pts.length-2), crossings=0, shared=0, hugging=0, tracks=0;
+  let length=0, bends=Math.max(0,pts.length-2), crossings=0, shared=0, hugging=0, tracks=0, crowded=0;
   for(let i=0;i<pts.length-1;i++){
     const P=pts[i], Q=pts[i+1];
     length += segmentLength(P,Q);
     for(const seg of occupied){
       crossings += segmentsCross(P,Q,seg.a,seg.b) ? 1 : 0;
       shared += sharedLength(P,Q,seg.a,seg.b);
-      if(ends&&seg.ends&&!seg.ends.some(e=>ends.includes(e))&&onOneTrack(P,Q,seg.a,seg.b))tracks++;
+      if(ends&&seg.ends&&!seg.ends.some(e=>ends.includes(e))){if(onOneTrack(P,Q,seg.a,seg.b))tracks++;else if(runsBeside(P,Q,seg.a,seg.b))crowded++}
     }
     for(const R of obstacles){
       const d=distanceSegmentToRect(P,Q,R);
@@ -5841,6 +5841,7 @@ function pathScore(points,A,B,obstacles=[],occupied=[],ends=null){
     crossings*90 +
     shared*5 +
     tracks*260 +
+    crowded*70 +
     hugging*1.6
   );
 }
@@ -6205,6 +6206,13 @@ function routeSegments(points,w=null){
   const ends=w?[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]:null;
   for(let i=0;i<pts.length-1;i++) out.push({a:pts[i],b:pts[i+1],ends});
   return out;
+}
+// Two unrelated segments side by side, closer than a reader can tell apart, for a real stretch.
+function runsBeside(A,B,C,D,near=16,stretch=16){
+  const ab=segmentAxis(A,B),cd=segmentAxis(C,D);if(ab!==cd||ab==='d')return false;
+  const off=ab==='h'?Math.abs(A.y-C.y):Math.abs(A.x-C.x);if(off<3||off>=near)return false;
+  const [p,q,r,s]=ab==='h'?[A.x,B.x,C.x,D.x]:[A.y,B.y,C.y,D.y];
+  return Math.min(Math.max(p,q),Math.max(r,s))-Math.max(Math.min(p,q),Math.min(r,s))>=stretch;
 }
 // Two segments on one track: collinear and overlapping, or end to end within a gap a reader
 // would read as one line.
@@ -6790,12 +6798,16 @@ function straightnessAt(path,d){
   const after=pointAngleAtDistance(path,Math.min(L-2,d+10),3);
   return Math.max(angleDelta(q.angle,before.angle),angleDelta(q.angle,after.angle));
 }
+// Where wires cross, in world space: no arrowhead is placed within reach of one, on either wire.
+let arrowKeepClear=[];
+const ARROW_CROSSING_CLEAR=24;
 function stableArrowPoint(path,targetD,minD,maxD){
   const offsets=[0,10,-10,20,-20,30,-30,42,-42];
   let fallback=null;
   for(const off of offsets){
     const d=Math.max(minD,Math.min(maxD,targetD+off));
     const q=pointAngleAtDistance(path,d,3);
+    if(arrowKeepClear.some(c=>Math.hypot(c.x-q.x,c.y-q.y)<ARROW_CROSSING_CLEAR))continue;
     const bend=straightnessAt(path,d);
     if(!fallback || bend<fallback.bend) fallback={q,bend};
     if(bend<=8) return q;
@@ -6933,6 +6945,28 @@ function renderPacketsForWire(group,cfg,points,signal,pathLength,w){
   return count;
 }
 
+// A route drawn with a hop at each crossing it makes over an earlier wire: a half circle that
+// lifts it over the other line, so a crossing never reads as a junction (NOTATION-MODEL.md).
+const WIRE_HOP_RADIUS=6.5;
+function pathWithHops(points,hops){
+  const pts=normalizePoints(points);if(!hops?.length||pts.length<2)return pathD(pts);
+  const r=WIRE_HOP_RADIUS;let d=`M ${pts[0].x} ${pts[0].y}`;
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1],b=pts[i],h=a.y===b.y,dir=h?Math.sign(b.x-a.x):Math.sign(b.y-a.y);
+    const along=c=>h?(c.x-a.x)*dir:(c.y-a.y)*dir,len=h?Math.abs(b.x-a.x):Math.abs(b.y-a.y);
+    const mine=hops.filter(c=>(h?Math.abs(c.y-a.y)<.5:Math.abs(c.x-a.x)<.5)&&along(c)>r+2&&along(c)<len-r-2).sort((p,q)=>along(p)-along(q));
+    let last=-Infinity;
+    for(const c of mine){
+      if(along(c)-last<2*r+2)continue;last=along(c);
+      // Over the top going right or down; the mirror going left or up. Always the same side.
+      const sweep=dir>0?1:0;
+      if(h)d+=` H ${c.x-r*dir} A ${r} ${r} 0 0 ${sweep} ${c.x+r*dir} ${c.y}`;
+      else d+=` V ${c.y-r*dir} A ${r} ${r} 0 0 ${sweep} ${c.x} ${c.y+r*dir}`;
+    }
+    d+=h?` H ${b.x}`:` V ${b.y}`;
+  }
+  return d;
+}
 function renderArrowPoses(group,poses,className='flow-chevron'){
   for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className);
 }
@@ -6953,21 +6987,45 @@ function renderWires(signalState=computeSignalState()){
   const dragging=!!activeNodeDrag;
   const hostAnchors=new Map();
 
+  // Every route first, so each wire knows the crossings it makes: the later wire hops over the
+  // earlier one, and neither puts an arrowhead on the crossing. Wires sharing an end never hop.
+  const routes=new Map();
+  wires.forEach((w,i)=>{
+    if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
+    const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
+    const snapshot=dragging&&(w.a===activeNodeDrag||w.b===activeNodeDrag)?dragRouteSnapshots.get(i):null;
+    // While moving, the settled route is immutable. We do not rebuild its
+    // interior, endpoint leads, arrows, or direction marks on pointer frames.
+    const points=snapshot?clonePoints(snapshot.points):stableRouteForWire(i,w,A,B,occupied);
+    routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
+    occupied.push(...routes.get(i).segs);
+  });
+  const hops=new Map(),order=[...routes.keys()];arrowKeepClear=[];
+  for(let x=0;x<order.length;x++)for(let y=x+1;y<order.length;y++){
+    const P=routes.get(order[x]),Q=routes.get(order[y]);
+    for(const p of P.segs)for(const q of Q.segs){
+      if(p.ends&&q.ends&&p.ends.some(e=>q.ends.includes(e)))continue;
+      if(!segmentsCross(p.a,p.b,q.a,q.b))continue;
+      const c=segmentAxis(p.a,p.b)==='h'?{x:q.a.x,y:p.a.y}:{x:p.a.x,y:q.a.y};
+      if(!hops.has(order[y]))hops.set(order[y],[]);hops.get(order[y]).push(c);arrowKeepClear.push(c);
+    }
+  }
+  // Junctions too: where wires sharing an end part, the dot needs room around it.
+  {const at=(pts,d)=>{for(let k=1;k<pts.length;k++){const L=Math.hypot(pts[k].x-pts[k-1].x,pts[k].y-pts[k-1].y);if(d<=L){const t=L?d/L:0;return {x:pts[k-1].x+(pts[k].x-pts[k-1].x)*t,y:pts[k-1].y+(pts[k].y-pts[k-1].y)*t}}d-=L}return pts.at(-1)};
+   const lenOf=pts=>pts.slice(1).reduce((a,q,k)=>a+Math.hypot(q.x-pts[k].x,q.y-pts[k].y),0);
+   const groups=new Map();
+   for(const [i,r] of routes){const w=wires[i];for(const [end,id,side] of [['a',w.a,w.aSide],['b',w.b,w.bSide]]){if(!id)continue;const k=`${id}|${side}`;if(!groups.has(k))groups.set(k,[]);const pts=normalizePoints(r.points);groups.get(k).push(end==='b'?[...pts].reverse():pts)}}
+   for(const list of groups.values()){if(list.length<2)continue;const reach=Math.min(...list.map(lenOf));let join=list[0][0];
+     for(let d=0;d<=reach;d+=2){const q=list.map(p=>at(p,d));if(q.some(v=>Math.hypot(v.x-q[0].x,v.y-q[0].y)>1.2))break;join=q[0]}
+     arrowKeepClear.push(join)}}
+
   wires.forEach((w,i)=>{
     const editor=entityEditorState(w);const cfg=connectionConfig(w);if(editor.hidden||!carrierIsRenderable(w))return;
     const epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b'),a=epA.node,b=epB.node;
     const A=epA.pos, B=epB.pos;
-    const touchesDragged = dragging && (w.a===activeNodeDrag || w.b===activeNodeDrag);
-    const snapshot = touchesDragged ? dragRouteSnapshots.get(i) : null;
-
-    // While moving, the settled route is immutable. We do not rebuild its
-    // interior, endpoint leads, arrows, or direction marks on pointer frames.
-    const points = snapshot
-      ? clonePoints(snapshot.points)
-      : stableRouteForWire(i,w,A,B,occupied);
-
-    const d=pathD(points);
-    occupied.push(...routeSegments(points,w));
+    const {points,snapshot}=routes.get(i);
+    // A multi-line wire is a band, not a line: it does not hop.
+    const d=SovSchematicData.normalizeSection(w.form?.section,1)?.lines?.length>=2?pathD(points):pathWithHops(points,hops.get(i));
 
     const signal=wireSignalColors(w,signalState);
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');

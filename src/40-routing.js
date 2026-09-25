@@ -118,14 +118,14 @@ function directionPenalty(points,A,B){
 }
 function pathScore(points,A,B,obstacles=[],occupied=[],ends=null){
   const pts=normalizePoints(points);
-  let length=0, bends=Math.max(0,pts.length-2), crossings=0, shared=0, hugging=0, tracks=0;
+  let length=0, bends=Math.max(0,pts.length-2), crossings=0, shared=0, hugging=0, tracks=0, crowded=0;
   for(let i=0;i<pts.length-1;i++){
     const P=pts[i], Q=pts[i+1];
     length += segmentLength(P,Q);
     for(const seg of occupied){
       crossings += segmentsCross(P,Q,seg.a,seg.b) ? 1 : 0;
       shared += sharedLength(P,Q,seg.a,seg.b);
-      if(ends&&seg.ends&&!seg.ends.some(e=>ends.includes(e))&&onOneTrack(P,Q,seg.a,seg.b))tracks++;
+      if(ends&&seg.ends&&!seg.ends.some(e=>ends.includes(e))){if(onOneTrack(P,Q,seg.a,seg.b))tracks++;else if(runsBeside(P,Q,seg.a,seg.b))crowded++}
     }
     for(const R of obstacles){
       const d=distanceSegmentToRect(P,Q,R);
@@ -140,6 +140,7 @@ function pathScore(points,A,B,obstacles=[],occupied=[],ends=null){
     crossings*90 +
     shared*5 +
     tracks*260 +
+    crowded*70 +
     hugging*1.6
   );
 }
@@ -504,6 +505,13 @@ function routeSegments(points,w=null){
   const ends=w?[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]:null;
   for(let i=0;i<pts.length-1;i++) out.push({a:pts[i],b:pts[i+1],ends});
   return out;
+}
+// Two unrelated segments side by side, closer than a reader can tell apart, for a real stretch.
+function runsBeside(A,B,C,D,near=16,stretch=16){
+  const ab=segmentAxis(A,B),cd=segmentAxis(C,D);if(ab!==cd||ab==='d')return false;
+  const off=ab==='h'?Math.abs(A.y-C.y):Math.abs(A.x-C.x);if(off<3||off>=near)return false;
+  const [p,q,r,s]=ab==='h'?[A.x,B.x,C.x,D.x]:[A.y,B.y,C.y,D.y];
+  return Math.min(Math.max(p,q),Math.max(r,s))-Math.max(Math.min(p,q),Math.min(r,s))>=stretch;
 }
 // Two segments on one track: collinear and overlapping, or end to end within a gap a reader
 // would read as one line.

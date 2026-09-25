@@ -213,6 +213,20 @@ MUTANTS=[
       'new':"",
       'test':'tests/notation_qa.py'
     },
+    {
+      'name':'crossings-drawn-flat',
+      'file':'src/55-render.js',
+      'old':"const pts=normalizePoints(points);if(!hops?.length||pts.length<2)return pathD(pts);",
+      'new':"const pts=normalizePoints(points);return pathD(pts);",
+      'test':'tests/wire_crossing_qa.py'
+    },
+    {
+      'name':'arrows-land-on-junctions',
+      'file':'src/55-render.js',
+      'old':"if(arrowKeepClear.some(c=>Math.hypot(c.x-q.x,c.y-q.y)<ARROW_CROSSING_CLEAR))continue;",
+      'new':"",
+      'test':'tests/wire_crossing_qa.py'
+    },
 ]
 
 killed=[]
