@@ -6,7 +6,7 @@
 const LAYOUT_RUBRIC={
   // kind: [penalty per finding, cap for the kind]. Score = 10 - Σ min(cap, n × penalty), floor 0.
   'text-overflow':[.5,3],'text-truncated':[.3,2],'text-collision':[.5,3],'placeholder-text':[.1,2],'ghost-mark':[.1,2],
-  'faint-structure':[.5,2],'route-escape':[1,4],'route-jog':[.25,2],'route-through-node':[1,4],'crossing':[.25,2],'node-overlap':[1,4]
+  'faint-structure':[.5,2],'route-escape':[1,4],'route-jog':[.25,2],'arrowless':[.25,2],'unmarked-junction':[.5,2],'route-through-node':[1,4],'crossing':[.25,2],'node-overlap':[1,4]
 };
 
 function layoutWorldMatrix(el){const root=workspace.getScreenCTM(),m=el.getScreenCTM();return root&&m?root.inverse().multiply(m):null}
@@ -127,6 +127,14 @@ function layoutMetrics(options={}){
     for(let s=1;s<A.pts.length&&crossed<4;s++)for(let t=1;t<B.pts.length;t++)if(layoutSegmentsCross(A.pts[s-1],A.pts[s],B.pts[t-1],B.pts[t])){crossed++;break}
     if(crossed&&!(shared&&crossed===1))add('crossing',[A.w.id,B.w.id],`${crossed} crossing${crossed>1?'s':''}`);
   }
+  // A directed wire long enough to carry a mark must say which way it runs.
+  for(const {w} of routes){
+    const dir=connectionConfig(w).direction,gEl=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"]`),path=gEl?.querySelector('path.wire');
+    if(dir!=='none'&&path&&path.getTotalLength()>=20&&!gEl.querySelector('.flow-chevron'))add('arrowless',[w.id],`${dir} wire with no direction mark`);
+  }
+  // Wires sharing one point of a card must be marked as joined.
+  {const shared=new Map();for(const w of wires)for(const [id,side] of [[w.a,w.aSide],[w.b,w.bSide]]){const n=id&&nodes.find(x=>x.id===id);if(!n||componentForm(n).dimension===0)continue;const k=`${id}|${side}`;shared.set(k,(shared.get(k)||0)+1)}
+   for(const [k,count] of shared)if(count>=2&&!workspace.querySelector(`.junction-dot[data-port="${CSS.escape(k)}"]`))add('unmarked-junction',[k.split('|')[0]],`${count} wires meet at ${k.split('|')[1]} with no junction mark`)}
   // Sibling bodies must not overlap.
   for(let i=0;i<visible.length;i++)for(let j=i+1;j<visible.length;j++){
     const a=visible[i],b=visible[j];

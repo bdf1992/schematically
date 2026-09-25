@@ -104,6 +104,8 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .terminal-mark{stroke:none;pointer-events:none}
 .terminal-mark.in{fill:var(--accent-in)}.terminal-mark.out{fill:var(--accent-out)}
 .terminal-mark.control{fill:var(--canvas-muted)}
+#junctionLayer{pointer-events:none}
+.junction-dot{fill:var(--canvas-ink)}
 /* The control plane: transport and live state over the canvas. */
 .sim-transport{display:flex;gap:4px;align-items:center}
 .sim-transport select{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 4px}
@@ -574,6 +576,24 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     <path d="M20 42V22h14v20h14V22h14v20h14"/>
   </g>
 </symbol>
+<symbol id="sym-clock-sine" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 32h12M76 32h12"/>
+    <path d="M20 32c7-18 11-18 14 0s7 18 14 0 7-18 14 0 7 18 14 0"/>
+  </g>
+</symbol>
+<symbol id="sym-clock-saw" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 32h12M76 32h12"/>
+    <path d="M20 42l18-20v20l19-20v20l19-20v10"/>
+  </g>
+</symbol>
+<symbol id="sym-clock-triangle" viewBox="0 0 96 64">
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 32h12M76 32h12"/>
+    <path d="M20 32l9-10 18 20 18-20 11 10"/>
+  </g>
+</symbol>
 <symbol id="sym-lever" viewBox="0 0 96 64">
   <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
     <path d="M8 40h20M68 40h20"/>
@@ -801,6 +821,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     <g id="ghostLayer" aria-hidden="true"></g>
     <g id="paletteDropLayer" aria-hidden="true"></g>
     <g id="nodes"></g>
+    <g id="junctionLayer" aria-hidden="true"></g>
     <g id="simLayer"></g>
   </svg>
   <div class="quick-search" id="quickSearch" hidden>
@@ -4780,6 +4801,8 @@ function isDescendantOf(nodeId,parentId){
   return false;
 }
 const INLINE_TERMINAL_Y={act:32,hold:32,buffer:32,gate:32,switch:38,limit:32,observe:42,receipt:24,clock:32,lever:40};
+// Symbols with a control stem on top: the stem's top in the 96×64 symbol frame.
+const GLYPH_CONTROL_STEM={gate:8,switch:8};
 function componentInlineTerminalY(node){return INLINE_TERMINAL_Y[node?.symbolId]??null}
 function componentInlineGraphicBox(node){
   const p=componentConfig(node).presentation,size=p.size;
@@ -4813,7 +4836,8 @@ function componentGlyphAxis(n){
   if(axis==null||p.graphic.kind!=='symbol'||(p.graphic.ref&&p.graphic.ref.replace(/^#/,'')!==`sym-${n.symbolId}`))return null;
   const box=componentInlineGraphicBox(n),scale=Math.min(box.w/96,box.h/64);
   const x0=box.x+(box.w-96*scale)/2,y0=box.y+(box.h-64*scale)/2;
-  return {y:y0+axis*scale,left:x0+8*scale,right:x0+88*scale,stroke:4*scale};
+  const stem=GLYPH_CONTROL_STEM[n.symbolId];
+  return {y:y0+axis*scale,left:x0+8*scale,right:x0+88*scale,stroke:4*scale,stemTop:stem==null?null:y0+stem*scale,stemX:x0+48*scale};
 }
 function componentPortLocalPosition(n,pointId){
   const size=componentSize(n),spec=Attachment.resolveSpec(n,pointId);if(!spec)return{x:0,y:0};
@@ -5671,7 +5695,9 @@ function appendComponentGraphic(g,n,cfg){
   const box=componentInlineGraphicBox(n);
   if(p.graphic.kind==='custom'&&appendCustomSvgFragment(g,p.graphic.svg,box))return;
   const use=document.createElementNS('http://www.w3.org/2000/svg','use');
-  use.setAttribute('class','glyph');use.setAttribute('href',`#${(p.graphic.ref||`sym-${n.symbolId}`).replace(/^#/,'')}`);
+  // A clock draws the wave it makes.
+  const wave=n.symbolId==='clock'?cfg.signal?.clock?.wave:null,ref=(p.graphic.ref||`sym-${n.symbolId}`).replace(/^#/,'');
+  use.setAttribute('class','glyph');use.setAttribute('href',`#${ref==='sym-clock'&&['saw','triangle','sine'].includes(wave)?`sym-clock-${wave}`:ref}`);
   use.setAttribute('x',box.x);use.setAttribute('y',box.y);use.setAttribute('width',box.w);use.setAttribute('height',box.h);
   g.appendChild(use);
 }
@@ -5687,6 +5713,13 @@ function appendComponentLeads(g,n){
     if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
     const lead=document.createElementNS('http://www.w3.org/2000/svg','line');lead.setAttribute('class','component-lead');
     lead.setAttribute('x1',String(side==='left'?-w/2:w/2));lead.setAttribute('x2',String(axis[side]));lead.setAttribute('y1',String(axis.y));lead.setAttribute('y2',String(axis.y));
+    lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
+  }
+  // A wired control point on top meets the symbol's control stem, when it has one.
+  const control=Attachment.resolveSpec(n,'control'),{h}=componentSize(n);
+  if(axis.stemTop!=null&&control&&!control.placed&&control.side==='top'&&Math.abs(componentPortLocalPosition(n,'control').x-axis.stemX)<.5&&wires.some(x=>(x.a===n.id&&x.aSide==='control')||(x.b===n.id&&x.bSide==='control'))){
+    const lead=document.createElementNS('http://www.w3.org/2000/svg','line');lead.setAttribute('class','component-lead');
+    lead.setAttribute('x1',String(axis.stemX));lead.setAttribute('x2',String(axis.stemX));lead.setAttribute('y1',String(-h/2));lead.setAttribute('y2',String(axis.stemTop));
     lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
   }
 }
@@ -5843,6 +5876,26 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   }
   appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);
 }
+// Where two or more wires share one point of a card, a dot marks where their lines part:
+// connected, not crossing. The dot is found from the rendered lines, walking back from the point.
+function renderJunctionDots(){
+  const layer=document.getElementById('junctionLayer');if(!layer)return;layer.replaceChildren();
+  const groups=new Map();
+  for(const w of wires)for(const [end,id,side] of [['a',w.a,w.aSide],['b',w.b,w.bSide]]){
+    if(!id)continue;const n=nodes.find(x=>x.id===id);if(!n||componentForm(n).dimension===0||isEffectivelyHidden(n))continue; // a Point is its own junction
+    const k=`${id}|${side}`;if(!groups.has(k))groups.set(k,[]);groups.get(k).push({w,end});
+  }
+  for(const [key,list] of groups){
+    if(list.length<2)continue;
+    const paths=list.map(({w,end})=>{const el=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"] path.wire`);return el?{el,L:el.getTotalLength(),fromEnd:end==='b'}:null}).filter(Boolean);
+    if(paths.length<2)continue;
+    const at=(p,d)=>p.el.getPointAtLength(p.fromEnd?Math.max(0,p.L-d):Math.min(p.L,d));
+    let join=at(paths[0],0);const reach=Math.min(...paths.map(p=>p.L));
+    for(let d=0;d<=reach;d+=2){const pts=paths.map(p=>at(p,d));if(pts.some(q=>Math.hypot(q.x-pts[0].x,q.y-pts[0].y)>1.2))break;join=pts[0]}
+    const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('class','junction-dot');dot.dataset.port=key;
+    dot.setAttribute('cx',String(join.x));dot.setAttribute('cy',String(join.y));dot.setAttribute('r','3.6');layer.appendChild(dot);
+  }
+}
 function render(){
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
@@ -5884,6 +5937,7 @@ function render(){
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
   });
   renderWires(signalState);
+  renderJunctionDots();
   if(typeof paintSim==='function')paintSim();
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
@@ -5947,7 +6001,8 @@ function appendChevronAt(group,q,reverse=false,className='flow-chevron'){
 }
 function adaptiveArrowDistances(path,duplex=false){
   const L=path.getTotalLength();
-  if(L<72) return [];
+  // A short directed wire still says which way it runs: one mark at its middle.
+  if(L<72) return L>=20?[L/2]:[];
 
   // Keep arrows away from terminals and scale density with actual wire length.
   const margin=Math.min(46,Math.max(26,L*.16));
@@ -5971,7 +6026,7 @@ function arrowPosesForPath(path,duplex=false){
   const L=path.getTotalLength();
   const distances=adaptiveArrowDistances(path,duplex);
   if(!distances.length)return [];
-  const margin=Math.min(46,Math.max(26,L*.16));
+  const margin=Math.min(L/2,Math.min(46,Math.max(26,L*.16)));
   const poses=[];
   distances.forEach((d,i)=>{
     const q=stableArrowPoint(path,d,margin,L-margin);
@@ -6229,7 +6284,7 @@ function renderWires(signalState=computeSignalState()){
 const LAYOUT_RUBRIC={
   // kind: [penalty per finding, cap for the kind]. Score = 10 - Σ min(cap, n × penalty), floor 0.
   'text-overflow':[.5,3],'text-truncated':[.3,2],'text-collision':[.5,3],'placeholder-text':[.1,2],'ghost-mark':[.1,2],
-  'faint-structure':[.5,2],'route-escape':[1,4],'route-jog':[.25,2],'route-through-node':[1,4],'crossing':[.25,2],'node-overlap':[1,4]
+  'faint-structure':[.5,2],'route-escape':[1,4],'route-jog':[.25,2],'arrowless':[.25,2],'unmarked-junction':[.5,2],'route-through-node':[1,4],'crossing':[.25,2],'node-overlap':[1,4]
 };
 
 function layoutWorldMatrix(el){const root=workspace.getScreenCTM(),m=el.getScreenCTM();return root&&m?root.inverse().multiply(m):null}
@@ -6350,6 +6405,14 @@ function layoutMetrics(options={}){
     for(let s=1;s<A.pts.length&&crossed<4;s++)for(let t=1;t<B.pts.length;t++)if(layoutSegmentsCross(A.pts[s-1],A.pts[s],B.pts[t-1],B.pts[t])){crossed++;break}
     if(crossed&&!(shared&&crossed===1))add('crossing',[A.w.id,B.w.id],`${crossed} crossing${crossed>1?'s':''}`);
   }
+  // A directed wire long enough to carry a mark must say which way it runs.
+  for(const {w} of routes){
+    const dir=connectionConfig(w).direction,gEl=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"]`),path=gEl?.querySelector('path.wire');
+    if(dir!=='none'&&path&&path.getTotalLength()>=20&&!gEl.querySelector('.flow-chevron'))add('arrowless',[w.id],`${dir} wire with no direction mark`);
+  }
+  // Wires sharing one point of a card must be marked as joined.
+  {const shared=new Map();for(const w of wires)for(const [id,side] of [[w.a,w.aSide],[w.b,w.bSide]]){const n=id&&nodes.find(x=>x.id===id);if(!n||componentForm(n).dimension===0)continue;const k=`${id}|${side}`;shared.set(k,(shared.get(k)||0)+1)}
+   for(const [k,count] of shared)if(count>=2&&!workspace.querySelector(`.junction-dot[data-port="${CSS.escape(k)}"]`))add('unmarked-junction',[k.split('|')[0]],`${count} wires meet at ${k.split('|')[1]} with no junction mark`)}
   // Sibling bodies must not overlap.
   for(let i=0;i<visible.length;i++)for(let j=i+1;j<visible.length;j++){
     const a=visible[i],b=visible[j];

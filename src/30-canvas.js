@@ -620,6 +620,8 @@ function isDescendantOf(nodeId,parentId){
   return false;
 }
 const INLINE_TERMINAL_Y={act:32,hold:32,buffer:32,gate:32,switch:38,limit:32,observe:42,receipt:24,clock:32,lever:40};
+// Symbols with a control stem on top: the stem's top in the 96×64 symbol frame.
+const GLYPH_CONTROL_STEM={gate:8,switch:8};
 function componentInlineTerminalY(node){return INLINE_TERMINAL_Y[node?.symbolId]??null}
 function componentInlineGraphicBox(node){
   const p=componentConfig(node).presentation,size=p.size;
@@ -653,7 +655,8 @@ function componentGlyphAxis(n){
   if(axis==null||p.graphic.kind!=='symbol'||(p.graphic.ref&&p.graphic.ref.replace(/^#/,'')!==`sym-${n.symbolId}`))return null;
   const box=componentInlineGraphicBox(n),scale=Math.min(box.w/96,box.h/64);
   const x0=box.x+(box.w-96*scale)/2,y0=box.y+(box.h-64*scale)/2;
-  return {y:y0+axis*scale,left:x0+8*scale,right:x0+88*scale,stroke:4*scale};
+  const stem=GLYPH_CONTROL_STEM[n.symbolId];
+  return {y:y0+axis*scale,left:x0+8*scale,right:x0+88*scale,stroke:4*scale,stemTop:stem==null?null:y0+stem*scale,stemX:x0+48*scale};
 }
 function componentPortLocalPosition(n,pointId){
   const size=componentSize(n),spec=Attachment.resolveSpec(n,pointId);if(!spec)return{x:0,y:0};

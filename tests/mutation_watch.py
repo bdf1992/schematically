@@ -136,6 +136,20 @@ MUTANTS=[
       'new':"",
       'test':'tests/graph_core_qa.py'
     },
+    {
+      'name':'junction-dots-not-drawn',
+      'file':'src/55-render.js',
+      'old':'  renderJunctionDots();\n',
+      'new':'\n',
+      'test':'tests/layout_quality_qa.py'
+    },
+    {
+      'name':'short-wires-lose-their-arrow',
+      'file':'src/55-render.js',
+      'old':'if(L<72) return L>=20?[L/2]:[];',
+      'new':'if(L<72) return [];',
+      'test':'tests/layout_quality_qa.py'
+    },
 ]
 
 killed=[]

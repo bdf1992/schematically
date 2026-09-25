@@ -97,6 +97,8 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .terminal-mark{stroke:none;pointer-events:none}
 .terminal-mark.in{fill:var(--accent-in)}.terminal-mark.out{fill:var(--accent-out)}
 .terminal-mark.control{fill:var(--canvas-muted)}
+#junctionLayer{pointer-events:none}
+.junction-dot{fill:var(--canvas-ink)}
 /* The control plane: transport and live state over the canvas. */
 .sim-transport{display:flex;gap:4px;align-items:center}
 .sim-transport select{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 4px}

@@ -18,6 +18,11 @@ FLOOR = 9.5
 results = audit(sorted((ROOT / 'examples').glob('*.sov')))
 low = [(r['source'], r['score'], r['counts']) for r in results if r['score'] < FLOOR]
 assert not low, f'examples below {FLOOR}/10: {low}'
+# Some defects are never acceptable in an example, whatever the score: a directed wire with no
+# direction mark, wires joined at a point with no junction mark, a route leaving its container.
+NEVER = {'arrowless', 'unmarked-junction', 'route-escape', 'route-through-node', 'node-overlap'}
+bad = [(r['source'], k) for r in results for k in r['counts'] if k in NEVER]
+assert not bad, bad
 
 PLANTED = r"""()=>{
   const A=window.SovSchematicAPI,out={};

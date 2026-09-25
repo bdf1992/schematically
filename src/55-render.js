@@ -54,7 +54,9 @@ function appendComponentGraphic(g,n,cfg){
   const box=componentInlineGraphicBox(n);
   if(p.graphic.kind==='custom'&&appendCustomSvgFragment(g,p.graphic.svg,box))return;
   const use=document.createElementNS('http://www.w3.org/2000/svg','use');
-  use.setAttribute('class','glyph');use.setAttribute('href',`#${(p.graphic.ref||`sym-${n.symbolId}`).replace(/^#/,'')}`);
+  // A clock draws the wave it makes.
+  const wave=n.symbolId==='clock'?cfg.signal?.clock?.wave:null,ref=(p.graphic.ref||`sym-${n.symbolId}`).replace(/^#/,'');
+  use.setAttribute('class','glyph');use.setAttribute('href',`#${ref==='sym-clock'&&['saw','triangle','sine'].includes(wave)?`sym-clock-${wave}`:ref}`);
   use.setAttribute('x',box.x);use.setAttribute('y',box.y);use.setAttribute('width',box.w);use.setAttribute('height',box.h);
   g.appendChild(use);
 }
@@ -70,6 +72,13 @@ function appendComponentLeads(g,n){
     if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
     const lead=document.createElementNS('http://www.w3.org/2000/svg','line');lead.setAttribute('class','component-lead');
     lead.setAttribute('x1',String(side==='left'?-w/2:w/2));lead.setAttribute('x2',String(axis[side]));lead.setAttribute('y1',String(axis.y));lead.setAttribute('y2',String(axis.y));
+    lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
+  }
+  // A wired control point on top meets the symbol's control stem, when it has one.
+  const control=Attachment.resolveSpec(n,'control'),{h}=componentSize(n);
+  if(axis.stemTop!=null&&control&&!control.placed&&control.side==='top'&&Math.abs(componentPortLocalPosition(n,'control').x-axis.stemX)<.5&&wires.some(x=>(x.a===n.id&&x.aSide==='control')||(x.b===n.id&&x.bSide==='control'))){
+    const lead=document.createElementNS('http://www.w3.org/2000/svg','line');lead.setAttribute('class','component-lead');
+    lead.setAttribute('x1',String(axis.stemX));lead.setAttribute('x2',String(axis.stemX));lead.setAttribute('y1',String(-h/2));lead.setAttribute('y2',String(axis.stemTop));
     lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
   }
 }
@@ -226,6 +235,26 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   }
   appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);
 }
+// Where two or more wires share one point of a card, a dot marks where their lines part:
+// connected, not crossing. The dot is found from the rendered lines, walking back from the point.
+function renderJunctionDots(){
+  const layer=document.getElementById('junctionLayer');if(!layer)return;layer.replaceChildren();
+  const groups=new Map();
+  for(const w of wires)for(const [end,id,side] of [['a',w.a,w.aSide],['b',w.b,w.bSide]]){
+    if(!id)continue;const n=nodes.find(x=>x.id===id);if(!n||componentForm(n).dimension===0||isEffectivelyHidden(n))continue; // a Point is its own junction
+    const k=`${id}|${side}`;if(!groups.has(k))groups.set(k,[]);groups.get(k).push({w,end});
+  }
+  for(const [key,list] of groups){
+    if(list.length<2)continue;
+    const paths=list.map(({w,end})=>{const el=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"] path.wire`);return el?{el,L:el.getTotalLength(),fromEnd:end==='b'}:null}).filter(Boolean);
+    if(paths.length<2)continue;
+    const at=(p,d)=>p.el.getPointAtLength(p.fromEnd?Math.max(0,p.L-d):Math.min(p.L,d));
+    let join=at(paths[0],0);const reach=Math.min(...paths.map(p=>p.L));
+    for(let d=0;d<=reach;d+=2){const pts=paths.map(p=>at(p,d));if(pts.some(q=>Math.hypot(q.x-pts[0].x,q.y-pts[0].y)>1.2))break;join=pts[0]}
+    const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('class','junction-dot');dot.dataset.port=key;
+    dot.setAttribute('cx',String(join.x));dot.setAttribute('cy',String(join.y));dot.setAttribute('r','3.6');layer.appendChild(dot);
+  }
+}
 function render(){
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
@@ -267,6 +296,7 @@ function render(){
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
   });
   renderWires(signalState);
+  renderJunctionDots();
   if(typeof paintSim==='function')paintSim();
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
@@ -330,7 +360,8 @@ function appendChevronAt(group,q,reverse=false,className='flow-chevron'){
 }
 function adaptiveArrowDistances(path,duplex=false){
   const L=path.getTotalLength();
-  if(L<72) return [];
+  // A short directed wire still says which way it runs: one mark at its middle.
+  if(L<72) return L>=20?[L/2]:[];
 
   // Keep arrows away from terminals and scale density with actual wire length.
   const margin=Math.min(46,Math.max(26,L*.16));
@@ -354,7 +385,7 @@ function arrowPosesForPath(path,duplex=false){
   const L=path.getTotalLength();
   const distances=adaptiveArrowDistances(path,duplex);
   if(!distances.length)return [];
-  const margin=Math.min(46,Math.max(26,L*.16));
+  const margin=Math.min(L/2,Math.min(46,Math.max(26,L*.16)));
   const poses=[];
   distances.forEach((d,i)=>{
     const q=stableArrowPoint(path,d,margin,L-margin);
