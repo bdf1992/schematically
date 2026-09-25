@@ -94,8 +94,10 @@ Decided with the state space design (`STATE-SPACE.md`, *Ports*); not yet impleme
   `{id, side: left | right | top | bottom, t, flow, channels, label}`. Nothing is implied.
 - The `left` / `right` / `top` trio moves out of `06-attachment-core.js` into template data. Templates that want
   it declare it; a template may declare any number of ports on any side, or none.
-- `attachmentDefaults: 'standard'` stays readable as a legacy form: at load it expands into the three ports it
-  always meant, with the same ids, so existing Wires stay bound. Nothing new writes it. `none` keeps its meaning.
+- The stored forms keep their meaning, so no existing file changes: `attachmentDefaults: 'standard'` (explicit or
+  implied) is the template's declared ports plus the authored `attachmentPoints` as additions; `'none'` is the
+  authored `attachmentPoints` as the complete list. An edit supplies the complete list; the data core stores it as
+  additions when every template port is kept unchanged, otherwise as `'none'` plus the full list.
 - A port carries one or more named channels (default one, `main`). A Wire carries the channels its two ports
   share; binding two ports that share none is refused on every surface.
 - A Component bound to a state-space definition gets its ports from the definition's generated contract.
