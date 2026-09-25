@@ -35,6 +35,55 @@
     return {declared:POLICIES.includes(f.policy),policy:POLICIES.includes(f.policy)?f.policy:'fanout',by:['round-robin','channel','key'].includes(f.by)?f.by:'round-robin',key:typeof f.key==='string'?f.key:null,rate:isObject(f.rate)?f.rate:null,capacity:Number.isFinite(Number(f.capacity))?Number(f.capacity):null,releaseMs:Number.isFinite(Number(f.releaseMs))?Math.max(0,Number(f.releaseMs)):null};
   }
 
+  // Signal (SIGNAL-MODEL in GRAPH-MODEL.md §7). A level is binary {0,1} or continuous [0,1].
+  // Asserted: declared state, changed only by an operation (a lever, a source, a clock).
+  // Derived: computed from inputs as they change over time. Without config.signal the
+  // legacy signalMode decides, with the editor's default (absent = source).
+  const COMBINES=['or','and','not','max','min','mean','sum'];
+  const WAVES=['square','saw','triangle','sine'];
+  function signalConfig(c){
+    const raw=isObject(c.config?.signal)?c.config.signal:null,legacy=c.config?.signalMode;
+    const clockRaw=isObject(raw?.clock)?raw.clock:null;
+    const assertedSymbol=c.symbolId==='lever'||c.symbolId==='clock';
+    const mode=raw&&['asserted','derived'].includes(raw.mode)?raw.mode:(clockRaw||assertedSymbol?'asserted':raw?'derived':(legacy==='relay'||legacy==='passive')?'derived':'asserted');
+    const wave=clockRaw&&WAVES.includes(clockRaw.wave)?clockRaw.wave:'square';
+    const kind=raw&&['binary','continuous'].includes(raw.kind)?raw.kind:(clockRaw&&wave!=='square'?'continuous':'binary');
+    const value=Number.isFinite(Number(raw?.value))?Math.max(0,Math.min(1,Number(raw.value))):(raw||assertedSymbol?0:(mode==='asserted'?1:0));
+    const combine=raw&&COMBINES.includes(raw.combine)?raw.combine:(kind==='continuous'?'max':'or');
+    const clock=clockRaw?{periodMs:Number(clockRaw.periodMs),phaseMs:Math.max(0,Number(clockRaw.phaseMs)||0),duty:Number.isFinite(Number(clockRaw.duty))?Math.max(0,Math.min(1,Number(clockRaw.duty))):.5,wave,
+      sampleMs:Number(clockRaw.sampleMs)>0?Number(clockRaw.sampleMs):null,cycles:Number(clockRaw.cycles)>0?Math.floor(Number(clockRaw.cycles)):null}:null;
+    return {mode,kind,value,combine,clock,declared:!!raw,
+      threshold:Number.isFinite(Number(raw?.threshold))?Number(raw.threshold):.5,
+      epsilon:Number(raw?.epsilon)>0?Number(raw.epsilon):.001,
+      on:['+','-','±'].includes(raw?.on)?raw.on:null,channel:typeof raw?.channel==='string'?raw.channel:'edge',
+      emits:raw?.emits===false?false:!(legacy==='passive'&&!raw)};
+  }
+  // Access control on a plane: config.acl = {default: deny|allow, entries: [{principal, allow, deny}]}.
+  // A principal pattern is exact, 'prefix:*' or '*'. Order does not matter: a matching deny
+  // refuses, else a matching allow admits, else the default decides (deny unless declared).
+  const ACL_OPS=['enter','exit','read','write'];
+  function aclConfig(c){
+    const a=c.config?.acl;if(!isObject(a))return null;
+    const list=v=>Array.isArray(v)?v.map(String).filter(x=>ACL_OPS.includes(x)):[];
+    return {default:a.default==='allow'?'allow':'deny',entries:(Array.isArray(a.entries)?a.entries:[]).filter(isObject).map(e=>({principal:String(e.principal??''),allow:list(e.allow),deny:list(e.deny)}))};
+  }
+  function principalMatches(pattern,principal){
+    if(principal==null||principal==='')return false;
+    if(pattern==='*')return true;
+    return pattern.endsWith('*')?String(principal).startsWith(pattern.slice(0,-1)):pattern===String(principal);
+  }
+  function aclDecide(plane,principal,op){
+    const acl=plane.acl;if(!acl)return {ok:true};
+    const name=plane.label||plane.id;
+    if(principal==null||principal==='')return {ok:false,reason:`acl: no principal may ${op} ${name} anonymously`};
+    const matching=acl.entries.filter(e=>principalMatches(e.principal,principal));
+    const denied=matching.find(e=>e.deny.includes(op));
+    if(denied)return {ok:false,reason:`acl: ${principal} is denied ${op} on ${name}`,entry:denied.principal};
+    const allowed=matching.find(e=>e.allow.includes(op));
+    if(allowed)return {ok:true,entry:allowed.principal};
+    return acl.default==='allow'?{ok:true}:{ok:false,reason:`acl: ${principal} may not ${op} ${name}`};
+  }
+
   // The graph is derived from the normalized document on every call; it is never stored.
   function build(input){
     const doc=Data.makeDocument(clone(input||{}));
@@ -42,7 +91,9 @@
     for(const c of doc.components){
       nodes.set(c.id,{id:c.id,symbolId:c.symbolId,label:c.config?.label||'',parentId:c.parentId||null,canvasId:c.canvasId||Data.GLOBAL_CANVAS_ID,
         dimension:Number(c.form?.dimension??2),signalMode:c.config?.signalMode||null,flow:flowConfig(c),
-        behavior:isObject(c.config?.behavior)?clone(c.config.behavior):{},ports:c.config?.ports||{},placement:c.placement||null});
+        behavior:isObject(c.config?.behavior)?clone(c.config.behavior):{},ports:c.config?.ports||{},placement:c.placement||null,
+        signal:signalConfig(c),principal:typeof c.config?.principal==='string'&&c.config.principal?c.config.principal:null,acl:aclConfig(c),
+        interior:Data.componentCanvasId(c),open:c.form?.regions?.interior?.state==='open'});
       ends.set(c.id,0);
     }
     for(const w of doc.wires){
@@ -63,13 +114,23 @@
         // The same passability rule as the derived signal (src/25-signal.js wireDirectionActive).
         const reason=!canEmit(fp,fromPort)?`${from}.${fromPort} cannot emit`:!canReceive(tp,toPort)?`${to}.${toPort} cannot receive`:(!accessAllows(fp,op)||!accessAllows(tp,op))?`access refuses ${op}`:null;
         if(reason){blocked.push({wireId:w.id,from,to,reason});continue}
-        arcs.push({wireId:w.id,from,fromPort,to,toPort,latencyMs:latency,accepts,operation:op,control:activeConnection(tp,toPort)?.flow==='control'||toPort==='control'});
+        arcs.push({wireId:w.id,canvasId:w.canvasId||Data.GLOBAL_CANVAS_ID,from,fromPort,to,toPort,latencyMs:latency,accepts,operation:op,control:activeConnection(tp,toPort)?.flow==='control'||toPort==='control'});
       }
     }
     const out=new Map(),inc=new Map();
     for(const id of nodes.keys()){out.set(id,[]);inc.set(id,[])}
     for(const a of arcs){out.get(a.from).push(a);inc.get(a.to).push(a)}
-    return {doc,nodes,arcs,blocked,out,in:inc,ends};
+    const wireCanvas=new Map(doc.wires.map(w=>[w.id,w.canvasId||Data.GLOBAL_CANVAS_ID]));
+    return {doc,nodes,arcs,blocked,out,in:inc,ends,wireCanvas};
+  }
+  // The plane whose boundary a node stands on: the host of a boundary Point, or the node
+  // itself when it has an interior. A turn at that node from one side to the other is a crossing.
+  function crossingAt(g,nodeId,inWire,outCanvas){
+    const n=g.nodes.get(nodeId);if(!n||inWire==null)return null;
+    const plane=n.placement?.kind==='edge'?g.nodes.get(n.placement.hostId):(n.open?n:null);
+    if(!plane)return null;
+    const side=c=>c===plane.interior?'in':'out',a=side(g.wireCanvas.get(inWire)),b=side(outCanvas);
+    return a===b?null:{plane,op:a==='out'?'enter':'exit'};
   }
 
   function junctions(g){
@@ -181,6 +242,11 @@
     boundary:(g,a)=>boundary(g,a.componentId),
     untyped:(g)=>untyped(g),
     blocked:(g)=>({ok:true,blocked:g.blocked}),
+    acl:(g,a)=>{
+      if(a.componentId&&a.op){const plane=g.nodes.get(a.componentId);if(!plane)return refusal('UNKNOWN_NODE',`No component ${a.componentId}`);if(!ACL_OPS.includes(a.op))return refusal('UNKNOWN_OP',`op is one of ${ACL_OPS.join(', ')}`);return {ok:true,componentId:a.componentId,principal:a.principal??null,op:a.op,...aclDecide(plane,a.principal,a.op)}}
+      return {ok:true,planes:[...g.nodes.values()].filter(n=>n.acl).map(n=>({id:n.id,label:n.label,acl:n.acl})),principals:[...g.nodes.values()].filter(n=>n.principal).map(n=>({id:n.id,principal:n.principal}))};
+    },
+    signals:(g)=>({ok:true,signals:[...g.nodes.values()].map(n=>({id:n.id,label:n.label,mode:n.signal.mode,kind:n.signal.kind,combine:n.signal.mode==='derived'?n.signal.combine:null,value:n.signal.mode==='asserted'?n.signal.value:null,clock:n.signal.clock,on:n.signal.on,emits:n.signal.emits,declared:n.signal.declared}))}),
     export:(g,a)=>exportGraph(g,a.format||'jgf')
   };
   function query(doc,verb,args={}){
@@ -215,7 +281,10 @@
     const zero=cycles(g).cycles.filter(c=>!c.timed);
     if(zero.length)return refusal('ZERO_LATENCY_CYCLE','A message cycle must take time: give a wire latencyMs above 0 or pass through a buffer or hold',{cycles:zero});
     const handlers=Object.assign({},options.handlers||{});
-    const s=isObject(options.restore)?clone(options.restore):{time:0,seq:0,msgSeq:0,parkSeq:0,queue:[],messages:{},log:[],refusals:[],receipts:[],parked:{},effects:{},state:{}};
+    for(const n of g.nodes.values())if(n.signal.clock&&!(n.signal.clock.periodMs>0))return refusal('CLOCK_HAS_NO_PERIOD',`Clock ${n.label||n.id} needs config.signal.clock.periodMs above 0`,{node:n.id});
+    for(const n of g.nodes.values())if(n.symbolId==='clock'&&!n.signal.clock)return refusal('CLOCK_HAS_NO_PERIOD',`Clock ${n.label||n.id} needs config.signal.clock.periodMs above 0`,{node:n.id});
+    const restored=isObject(options.restore);
+    const s=restored?clone(options.restore):{time:0,seq:0,msgSeq:0,parkSeq:0,queue:[],messages:{},log:[],refusals:[],receipts:[],parked:{},effects:{},state:{},levels:{},inputs:{},levelVia:{},levelPrincipal:{},edges:[]};
     // Effect ledger outlives the run when handed in: replay identity is durable, the engine is not.
     if(isObject(options.effects))s.effects=clone(options.effects);
 
@@ -223,10 +292,14 @@
     const log=(event,fields)=>{s.log.push({at:s.time,event,...fields})};
     function newMessage(base,parent=null){
       const id=`m${++s.msgSeq}`;
-      const m={id,root:parent?parent.root:id,parent:parent?parent.id:null,channel:base.channel??parent?.channel??null,payload:clone(base.payload??parent?.payload??null),origin:parent?parent.origin:base.origin,at:s.time,status:'live',hops:parent?clone(parent.hops):[]};
+      const m={id,root:parent?parent.root:id,parent:parent?parent.id:null,principal:base.principal??parent?.principal??null,channel:base.channel??parent?.channel??null,payload:clone(base.payload??parent?.payload??null),origin:parent?parent.origin:base.origin,at:s.time,status:'live',hops:parent?clone(parent.hops):[]};
       s.messages[id]=m;return m;
     }
-    function schedule(at,event){s.queue.push({at,seq:++s.seq,...event});s.queue.sort((x,y)=>x.at-y.at||x.seq-y.seq)}
+    function schedule(at,event){
+      const e={at,seq:++s.seq,...event};let lo=0,hi=s.queue.length;
+      while(lo<hi){const mid=(lo+hi)>>1;if(s.queue[mid].at<=at)lo=mid+1;else hi=mid}
+      s.queue.splice(lo,0,e);
+    }
     function hop(m,node,event,extra={}){m.hops.push({at:s.time,node,event,...extra})}
     function refuse(m,node,reason){m.status='refused';hop(m,node,'refused',{reason});s.refusals.push({at:s.time,messageId:m.id,root:m.root,node,reason});log('refused',{messageId:m.id,node,reason})}
     function finish(m,node,status){m.status=status;hop(m,node,status);log(status,{messageId:m.id,node})}
@@ -234,8 +307,18 @@
     function outgoing(nodeId,m,viaWire,port){
       return g.out.get(nodeId).filter(a=>a.wireId!==viaWire&&(port==null||a.fromPort===port)&&(!m.channel||!a.accepts||a.accepts.includes(m.channel)));
     }
+    // The wire a message last arrived by at a node: the side it turns from.
+    function arrivedBy(m,nodeId){for(let i=m.hops.length-1;i>=0;i--){const h=m.hops[i];if(h.node===nodeId&&h.event==='arrived')return h.wireId;if(h.node!==nodeId)break}return null}
     function send(m,arc){
       const copy=newMessage({},m);
+      const cross=crossingAt(g,arc.from,arrivedBy(m,arc.from),arc.canvasId);
+      if(cross){
+        for(const op of [cross.op,...(arc.operation!=='none'?[arc.operation]:[])]){
+          const d=aclDecide(cross.plane,copy.principal,op);
+          if(!d.ok){hop(copy,arc.from,'sent',{wireId:arc.wireId,to:arc.to});refuse(copy,arc.from,d.reason);return null}
+        }
+        hop(copy,arc.from,'crossed',{plane:cross.plane.id,op:cross.op,principal:copy.principal});
+      }
       hop(copy,arc.from,'sent',{wireId:arc.wireId,to:arc.to});
       log('sent',{messageId:copy.id,from:arc.from,to:arc.to,wireId:arc.wireId});
       schedule(s.time+arc.latencyMs,{kind:'arrive',messageId:copy.id,node:arc.to,port:arc.toPort,wireId:arc.wireId});
@@ -257,6 +340,7 @@
         else{st.rr=(st.rr||0);chosen=[arcs[st.rr%arcs.length]];st.rr++}
       }
       if(policy==='select')return refuse(m,node.id,'select needs a handler (config.behavior.handler)');
+      if(node.principal)m.principal=node.principal; // a participant acts in its own name
       m.status='forwarded';hop(m,node.id,'forwarded',{policy,declared:node.flow.declared,to:chosen.map(a=>a.to)});
       for(const a of chosen)send(m,a);
     }
@@ -290,6 +374,11 @@
       if(arc?.control){
         const open=isObject(m.payload)&&'open' in m.payload?!!m.payload.open:true;
         st.open=open;finish(m,node.id,'controlled');log('control',{node:node.id,open});return;
+      }
+      // An asserted signal is changed by an operation: a message may set or toggle it.
+      if(node.signal.mode==='asserted'&&isObject(m.payload)&&('set' in m.payload||m.payload.toggle)){
+        const v=m.payload.toggle?1-(s.levels[node.id]??0):Number(m.payload.set);
+        setLevel(node,v,'message');finish(m,node.id,'asserted');return;
       }
       if(sym==='refuse')return refuse(m,node.id,'REFUSE terminal');
       if(sym==='observe'){finish(m,node.id,'observed');s.receipts.push({at:s.time,kind:'observation',node:node.id,messageId:m.id,root:m.root,channel:m.channel,payload:clone(m.payload)});return}
@@ -363,10 +452,75 @@
       if((st.queue||[]).length)schedule(s.time+(node.flow.releaseMs??DEFAULT_LATENCY_MS),{kind:'release',node:ev.node});else st.releasing=false;
     }
 
+    // ---- Levels: state that changes over time, and the edges (+ rising, − falling) it makes.
+    const quantize=(node,v)=>{v=Math.max(0,Math.min(1,Number(v)||0));return node.signal.kind==='binary'?(v>=node.signal.threshold?1:0):v};
+    function setLevel(node,v,cause){
+      const old=s.levels[node.id]??0;v=quantize(node,v);
+      if(Math.abs(v-old)<=(node.signal.kind==='binary'?0:node.signal.epsilon))return false;
+      s.levels[node.id]=v;
+      const polarity=v>old?'+':'-',edge={at:s.time,node:node.id,from:old,to:v,polarity,cause};
+      s.edges.push(edge);log('edge',{node:node.id,from:old,to:v,polarity,cause});
+      if(node.signal.on&&(node.signal.on==='±'||node.signal.on===polarity)){
+        // An edge may start work: it leaves the node as a message, like an inject.
+        const m=newMessage({channel:node.signal.channel,payload:{node:node.id,polarity,from:old,to:v,at:s.time},origin:node.id,principal:node.principal});
+        hop(m,node.id,'edge',{polarity});log('edge-message',{messageId:m.id,node:node.id,polarity});continueAt(node,m,null);
+      }
+      if(node.signal.emits)for(const a of g.out.get(node.id)){
+        const principal=node.principal??s.levelPrincipal[node.id]??null;
+        const cross=crossingAt(g,node.id,s.levelVia[node.id]??null,a.canvasId);
+        if(cross){const d=aclDecide(cross.plane,principal,cross.op);if(!d.ok){s.refusals.push({at:s.time,level:true,node:node.id,wireId:a.wireId,reason:d.reason});log('refused',{node:node.id,wireId:a.wireId,reason:d.reason,level:true});continue}}
+        schedule(s.time+a.latencyMs,{kind:'level',node:a.to,wireId:a.wireId,value:v,principal});
+      }
+      return true;
+    }
+    const COMBINE={or:v=>Math.max(0,...v),max:v=>Math.max(0,...v),and:v=>v.length?Math.min(...v):0,min:v=>v.length?Math.min(...v):0,
+      not:v=>1-Math.max(0,...v),mean:v=>v.length?v.reduce((a,b)=>a+b,0)/v.length:0,sum:v=>Math.min(1,v.reduce((a,b)=>a+b,0))};
+    function recompute(node){
+      const inputs=s.inputs[node.id]||{},arcs=g.in.get(node.id);
+      const data=arcs.filter(a=>!a.control).map(a=>inputs[a.wireId]??0),control=arcs.filter(a=>a.control).map(a=>inputs[a.wireId]??0);
+      const enabled=!control.length||Math.max(...control)>=node.signal.threshold;
+      return setLevel(node,enabled?COMBINE[node.signal.combine](data):0,'derived');
+    }
+    function levelArrive(ev){
+      const node=g.nodes.get(ev.node);if(!node)return;
+      (s.inputs[node.id]||(s.inputs[node.id]={}))[ev.wireId]=ev.value;
+      s.levelVia[node.id]=ev.wireId;s.levelPrincipal[node.id]=ev.principal;
+      if(node.signal.mode==='derived')recompute(node);
+    }
+    function waveAt(c,t){
+      if(t<c.phaseMs)return 0;
+      const u=(((t-c.phaseMs)/c.periodMs)%1+1)%1;
+      return c.wave==='square'?(u<c.duty?1:0):c.wave==='saw'?u:c.wave==='triangle'?(u<.5?2*u:2-2*u):.5-.5*Math.cos(2*Math.PI*u);
+    }
+    function nextClockTime(c,t){
+      if(t<c.phaseMs)return c.phaseMs;
+      if(c.wave!=='square')return t+(c.sampleMs||c.periodMs/16);
+      const k=Math.floor((t-c.phaseMs)/c.periodMs),start=c.phaseMs+k*c.periodMs,fall=start+c.duty*c.periodMs;
+      return t<fall&&fall>t?fall:start+c.periodMs;
+    }
+    function clockTick(ev){
+      const node=g.nodes.get(ev.node),c=node?.signal.clock;if(!c)return;
+      if(c.cycles&&s.time>=c.phaseMs+c.cycles*c.periodMs){setLevel(node,0,'clock');log('clock-stopped',{node:node.id});return}
+      setLevel(node,waveAt(c,s.time),'clock');
+      schedule(Math.max(s.time+1e-9,nextClockTime(c,s.time)),{kind:'clock',node:node.id});
+    }
+    function runAction(ev){
+      const a=ev.action||{};
+      if(a.set){const node=g.nodes.get(a.set.node);if(node)sim.set(a.set.node,a.set.value)}
+      else if(a.toggle){sim.set(a.toggle.node,1-(s.levels[a.toggle.node]??0))}
+    }
+    if(!restored){
+      // Power on: asserted levels drive out at time 0; clocks start their schedule.
+      for(const n of g.nodes.values()){
+        if(n.signal.clock)schedule(0,{kind:'clock',node:n.id});
+        else if(n.signal.mode==='asserted'&&n.signal.value>0)schedule(0,{kind:'action',action:{set:{node:n.id,value:n.signal.value}}});
+      }
+    }
+
     const sim={
-      inject(nodeId,{channel=null,payload=null,at=null}={}){
+      inject(nodeId,{channel=null,payload=null,at=null,principal=null}={}){
         if(!g.nodes.has(nodeId))return refusal('UNKNOWN_NODE',`No component ${nodeId}`);
-        const m=newMessage({channel,payload,origin:nodeId});
+        const m=newMessage({channel,payload,origin:nodeId,principal});
         hop(m,nodeId,'injected');log('injected',{messageId:m.id,node:nodeId,channel});
         schedule(at==null?s.time:Math.max(s.time,Number(at)),{kind:'inject',messageId:m.id,node:nodeId});
         return {ok:true,messageId:m.id};
@@ -378,6 +532,9 @@
           if(ev.kind==='arrive')arrive(ev);
           else if(ev.kind==='inject'){const m=s.messages[ev.messageId],node=g.nodes.get(ev.node);continueAt(node,m,null)}
           else if(ev.kind==='release')release(ev);
+          else if(ev.kind==='level')levelArrive(ev);
+          else if(ev.kind==='clock')clockTick(ev);
+          else if(ev.kind==='action')runAction(ev);
         }
         return {ok:true,processed:done,time:s.time,pending:s.queue.length};
       },
@@ -387,6 +544,25 @@
         if(until!==Infinity&&Number.isFinite(until))s.time=Math.max(s.time,until);
         return {ok:done<maxEvents||!s.queue.length,processed:done,time:s.time,pending:s.queue.length,parked:Object.keys(s.parked).length,...(done>=maxEvents&&s.queue.length?{code:'MAX_EVENTS',message:`stopped after ${maxEvents} events`}:{})};
       },
+      // Time is the driver: advance the clock, or take the next instant with everything due in it.
+      advance(ms){const until=s.time+Math.max(0,Number(ms)||0);return sim.run({until})},
+      tick(){if(!s.queue.length)return {ok:true,processed:0,time:s.time,pending:0};const t=s.queue[0].at;let n=0;while(s.queue.length&&s.queue[0].at===t){sim.step(1);n++}return {ok:true,processed:n,time:s.time,pending:s.queue.length}},
+      set(nodeId,value){
+        const node=g.nodes.get(nodeId);if(!node)return refusal('UNKNOWN_NODE',`No component ${nodeId}`);
+        if(node.signal.mode!=='asserted')return refusal('DERIVED_SIGNAL',`${node.label||nodeId} is derived from its inputs; only an asserted signal is set`);
+        const changed=setLevel(node,value,'set');return {ok:true,node:nodeId,value:s.levels[nodeId]??0,changed};
+      },
+      // Schedule an operation at a time: {set:{node,value}} | {toggle:{node}} | {inject:{node,channel,payload,principal}}.
+      at(time,action={}){
+        const t=Math.max(s.time,Number(time)||0);
+        if(action.inject){const r=sim.inject(action.inject.node,{...action.inject,at:t});return r}
+        if(!(action.set||action.toggle))return refusal('BAD_ACTION','An action is {set}, {toggle} or {inject}');
+        const id=(action.set||action.toggle).node;if(!g.nodes.has(id))return refusal('UNKNOWN_NODE',`No component ${id}`);
+        if(g.nodes.get(id).signal.mode!=='asserted')return refusal('DERIVED_SIGNAL',`${id} is derived; only an asserted signal is set`);
+        schedule(t,{kind:'action',action:clone(action)});return {ok:true,at:t};
+      },
+      levels:()=>Object.fromEntries([...g.nodes.values()].map(n=>[n.id,{value:s.levels[n.id]??0,kind:n.signal.kind,mode:n.signal.mode}])),
+      edges({node=null,since=null}={}){return {ok:true,edges:s.edges.filter(e=>(!node||e.node===node)&&(since==null||e.at>=since)).map(clone)}},
       parked:()=>Object.values(s.parked).map(clone),
       resume(parkId,{decision='approve',payload,reason}={}){
         const p=s.parked[parkId];if(!p)return refusal('UNKNOWN_PARK',`Nothing parked as ${parkId}`);
@@ -409,7 +585,7 @@
       refusals:()=>clone(s.refusals),
       receipts:()=>clone(s.receipts),
       log:()=>clone(s.log),
-      state:()=>({time:s.time,pending:s.queue.length,parked:Object.keys(s.parked).length,messages:Object.keys(s.messages).length,refusals:s.refusals.length,effects:Object.keys(s.effects).length}),
+      state:()=>({time:s.time,pending:s.queue.length,parked:Object.keys(s.parked).length,messages:Object.keys(s.messages).length,refusals:s.refusals.length,effects:Object.keys(s.effects).length,edges:s.edges.length,high:Object.values(s.levels).filter(v=>v>0).length}),
       // The full engine state as JSON; restore it with createSimulation(doc, {restore}).
       snapshot:()=>clone(s),
       setHandler(name,spec){handlers[name]=spec;return {ok:true,name}}
@@ -438,13 +614,21 @@
         made=createSimulation(doc,{handlers,restore:sim.snapshot()});if(!made.ok)return made;sim=made.sim;notes.push({step:i,restarted:true});
       }
       else if(step.reconcile)sim.reconcile(step.reconcile.effectKey,step.reconcile);
-      if(step.run||step.inject||step.resume||step.restart||step.reconcile)sim.run(step.run||{});
+      else if(step.set){const r=sim.set(step.set.node,step.set.value);if(!r.ok)return {...r,step:i}}
+      else if(step.at){const {time,...action}=step.at;const r=sim.at(time,action);if(!r.ok)return {...r,step:i}}
+      if(step.advance!=null)sim.advance(step.advance);
+      else if(step.tick!=null){for(let k=0;k<(Number(step.tick)||1);k++)sim.tick()}
+      else if(step.run||step.inject||step.resume||step.restart||step.reconcile||step.set)sim.run(step.run||{});
     }
     const checks=[],exp=sc.expect||{};
     for(const [node,n] of Object.entries(exp.taps||{})){const actual=sim.taps(node).arrivals.length;checks.push({name:`taps ${node}`,expected:n,actual,pass:actual===n})}
-    if(exp.refusals!=null){const actual=sim.refusals().length;checks.push({name:'refusals',expected:exp.refusals,actual,pass:actual===exp.refusals})}
+    if(exp.levelRefusals!=null){const actual=sim.refusals().filter(r=>r.level).length;checks.push({name:'level refusals',expected:exp.levelRefusals,actual,pass:actual===exp.levelRefusals})}
+    if(exp.refusals!=null){const actual=sim.refusals().filter(r=>!r.level).length;checks.push({name:'refusals',expected:exp.refusals,actual,pass:actual===exp.refusals})}
     if(exp.parked!=null){const actual=sim.parked().length;checks.push({name:'parked',expected:exp.parked,actual,pass:actual===exp.parked})}
     for(const [status,n] of Object.entries(exp.effects||{})){const actual=Object.values(sim.effects()).filter(e=>e.status===status).length;checks.push({name:`effects ${status}`,expected:n,actual,pass:actual===n})}
+    const levels=sim.levels();
+    for(const [node,v] of Object.entries(exp.levels||{})){const actual=levels[node]?.value;checks.push({name:`level ${node}`,expected:v,actual,pass:actual!=null&&Math.abs(actual-v)<1e-6})}
+    for(const [node,want] of Object.entries(exp.edges||{}))for(const [pol,n] of Object.entries(want)){const actual=sim.edges({node}).edges.filter(e=>e.polarity===pol).length;checks.push({name:`edges ${node} ${pol}`,expected:n,actual,pass:actual===n})}
     for(const [event,n] of Object.entries(exp.events||{})){const actual=sim.log().filter(e=>e.event===event).length;checks.push({name:`events ${event}`,expected:n,actual,pass:actual===n})}
     return {ok:checks.every(c=>c.pass),scenario:scenario?.id||sc.id||null,checks,state:sim.state(),refusals:sim.refusals(),receipts:sim.receipts(),notes};
   }
@@ -465,6 +649,10 @@
       },
       'sim.stop':()=>{const was=!!sim;sim=null;return {ok:true,stopped:was}},
       'sim.inject':(doc,a)=>need()||sim.inject(a.node,a),
+      'sim.set':(doc,a)=>need()||sim.set(a.node,a.value),
+      'sim.at':(doc,a)=>need()||sim.at(a.time,a),
+      'sim.advance':(doc,a)=>need()||sim.advance(a.ms),
+      'sim.tick':(doc,a)=>{const n=need();if(n)return n;let r;for(let k=0;k<(Number(a.n)||1);k++)r=sim.tick();return r},
       'sim.step':(doc,a)=>need()||sim.step(Number(a.n)||1),
       'sim.run':(doc,a)=>need()||sim.run({until:a.until==null?Infinity:Number(a.until),maxEvents:Number(a.maxEvents)||10000}),
       'sim.resume':(doc,a)=>need()||sim.resume(a.parkId,a),
@@ -472,7 +660,7 @@
       'sim.inspect':(doc,a)=>{
         const n=need();if(n)return n;
         const what=a.what||'state',stale=startedRevision!=null&&doc.revision!==startedRevision;
-        const views={state:()=>({ok:true,...sim.state(),stale,startedAt,revision:startedRevision}),parked:()=>({ok:true,parked:sim.parked()}),log:()=>({ok:true,log:sim.log()}),effects:()=>({ok:true,effects:sim.effects()}),refusals:()=>({ok:true,refusals:sim.refusals()}),receipts:()=>({ok:true,receipts:sim.receipts()}),trace:()=>sim.trace(a.id),taps:()=>sim.taps(a.id),lineage:()=>sim.lineage(a.id),snapshot:()=>({ok:true,snapshot:sim.snapshot()})};
+        const views={state:()=>({ok:true,...sim.state(),stale,startedAt,revision:startedRevision}),parked:()=>({ok:true,parked:sim.parked()}),log:()=>({ok:true,log:sim.log()}),effects:()=>({ok:true,effects:sim.effects()}),refusals:()=>({ok:true,refusals:sim.refusals()}),receipts:()=>({ok:true,receipts:sim.receipts()}),trace:()=>sim.trace(a.id),levels:()=>({ok:true,time:sim.state().time,levels:sim.levels()}),edges:()=>sim.edges({node:a.id||null,since:a.since??null}),taps:()=>sim.taps(a.id),lineage:()=>sim.lineage(a.id),snapshot:()=>({ok:true,snapshot:sim.snapshot()})};
         return views[what]?views[what]():refusal('UNKNOWN_VIEW',`Unknown view ${what}`,{views:Object.keys(views)});
       },
       'sim.scenario':(doc,a)=>{
@@ -490,12 +678,16 @@
       {name:'schematic.graph.query',description:`Read-only graph query. verb: ${Object.keys(QUERIES).join(' | ')}. args e.g. {from,to} for paths/cut/reach, {componentId} for boundary, {format: jgf|dot|graphml} for export.`,inputSchema:obj({verb:{type:'string',enum:Object.keys(QUERIES)},args:{type:'object'}},['verb'])},
       {name:'schematic.sim.start',description:'Start a message simulation over the current document. handlers maps a handler name to {kind: stub | fixture}; scenarioId borrows a saved scenario\'s handlers. A handler a node names but nobody registered refuses its messages.',inputSchema:obj({handlers:{type:'object'},scenarioId:{type:'string'}})},
       {name:'schematic.sim.stop',description:'Discard the running simulation.',inputSchema:obj({})},
-      {name:'schematic.sim.inject',description:'Emit a message from a component (it leaves by that component\'s outgoing wires).',inputSchema:obj({node:{type:'string'},channel:{type:'string'},payload:{},at:{type:'number'}},['node'])},
+      {name:'schematic.sim.inject',description:'Emit a message from a component (it leaves by that component\'s outgoing wires). principal names who acts; a plane with an ACL checks it at its boundary.',inputSchema:obj({node:{type:'string'},channel:{type:'string'},payload:{},at:{type:'number'},principal:{type:'string'}},['node'])},
+      {name:'schematic.sim.set',description:'Assert a signal: set a lever, source or other asserted node to a level (binary 0|1, continuous 0..1). A derived signal is refused: it is computed from its inputs.',inputSchema:obj({node:{type:'string'},value:{type:'number',minimum:0,maximum:1}},['node','value'])},
+      {name:'schematic.sim.at',description:'Schedule an operation at a simulation time (ms): {set:{node,value}} | {toggle:{node}} | {inject:{node,channel,payload,principal}}.',inputSchema:obj({time:{type:'number'},set:{type:'object'},toggle:{type:'object'},inject:{type:'object'}},['time'])},
+      {name:'schematic.sim.advance',description:'Drive the clock: advance simulation time by ms, processing everything due (clocks, levels, messages).',inputSchema:obj({ms:{type:'number',minimum:0}},['ms'])},
+      {name:'schematic.sim.tick',description:'Take the next instant n times: process every event due at the next scheduled time.',inputSchema:obj({n:{type:'integer',minimum:1}})},
       {name:'schematic.sim.step',description:'Process the next n events.',inputSchema:obj({n:{type:'integer',minimum:1}})},
       {name:'schematic.sim.run',description:'Process events until the queue is empty, a time is reached, or maxEvents.',inputSchema:obj({until:{type:'number'},maxEvents:{type:'integer',minimum:1}})},
       {name:'schematic.sim.resume',description:'Resume a message parked at a human step: decision approve | reject, optional payload merged in.',inputSchema:obj({parkId:{type:'string'},decision:{type:'string',enum:['approve','reject']},payload:{},reason:{type:'string'}},['parkId'])},
       {name:'schematic.sim.reconcile',description:'Settle an ambiguous effect: confirmed true records it as done (it will not repeat), false clears it for retry.',inputSchema:obj({effectKey:{type:'string'},confirmed:{type:'boolean'},result:{}},['effectKey','confirmed'])},
-      {name:'schematic.sim.inspect',description:'Read simulation state. what: state | parked | log | effects | refusals | receipts | trace | taps | lineage | snapshot; id names the message (trace, lineage) or component (taps).',inputSchema:obj({what:{type:'string'},id:{type:'string'}})},
+      {name:'schematic.sim.inspect',description:'Read simulation state. what: state | levels | edges | parked | log | effects | refusals | receipts | trace | taps | lineage | snapshot; id names the message (trace, lineage) or component (taps, edges).',inputSchema:obj({what:{type:'string'},id:{type:'string'}})},
       {name:'schematic.sim.scenario',description:'Run a saved scenario (document.references kind scenario) or an inline one in a fresh engine and return its checks as evidence.',inputSchema:obj({id:{type:'string'},scenario:{type:'object'},handlers:{type:'object'}})},
       {name:'schematic.sim.scenarios',description:'List the scenarios saved in the document.',inputSchema:obj({})}
     ];

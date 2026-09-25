@@ -619,7 +619,7 @@ function isDescendantOf(nodeId,parentId){
 
   return false;
 }
-const INLINE_TERMINAL_Y={act:32,hold:32,buffer:32,gate:32,switch:38,limit:32,observe:42,receipt:24};
+const INLINE_TERMINAL_Y={act:32,hold:32,buffer:32,gate:32,switch:38,limit:32,observe:42,receipt:24,clock:32,lever:40};
 function componentInlineTerminalY(node){return INLINE_TERMINAL_Y[node?.symbolId]??null}
 function componentInlineGraphicBox(node){
   const p=componentConfig(node).presentation,size=p.size;

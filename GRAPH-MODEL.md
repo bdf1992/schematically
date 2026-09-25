@@ -301,6 +301,103 @@ Settled details:
 - `expect` counts taps, refusals, parked messages, effects by status, and log events.
   The run returns each check with its expected and actual values.
 
+## Signals, time and the clock (built 2026-09-25)
+
+Messages are events. **Levels** are state. Both run on one engine and one clock.
+
+### What a level is
+
+| | Binary | Continuous |
+| --- | --- | --- |
+| Values | 0 or 1 | 0 to 1 |
+| Edge `+` | 0 → 1 | the level rises by more than `epsilon` |
+| Edge `−` | 1 → 0 | the level falls by more than `epsilon` |
+
+A level is either asserted or derived.
+
+**Asserted.** The state is declared and changes only by an operation. Examples: a
+`LEVER`, a source, a `CLOCK`.
+- Operations: `sim.set(node, value)`, a scheduled `sim.at(time, {set | toggle})`, or a
+  message whose payload is `{set: v}` or `{toggle: true}`.
+- Declared in the document as `config.signal = {value, kind}`.
+- Setting a derived signal is refused with `DERIVED_SIGNAL`.
+
+**Derived.** Computed from the node's inputs as they change over time:
+`config.signal = {mode: 'derived', kind, combine, threshold}`.
+- `combine` is one of `or`, `and`, `not`, `max`, `min`, `mean`, `sum`.
+- A binary node thresholds a continuous input.
+- An input on a `control` point gates the output: the output is 0 unless the control
+  level is at or above `threshold`.
+
+**Legacy components.** Without `config.signal`, the legacy `signalMode` decides, with the
+editor's own default: an absent mode is a source.
+- `source` is asserted at 1.
+- `relay` is derived by `or`.
+- `passive` is derived and drives nothing out.
+
+### How levels travel
+
+Levels move over the same arcs as messages, after each wire's latency, and obey the
+same passability rules. Every change is recorded as an **edge**: `{at, node, from, to,
+polarity, cause}`, readable with `sim.edges({node, since})`.
+
+An edge can start work. `config.signal.on: '+' | '-' | '±'` makes the node emit a
+message on that polarity, on `config.signal.channel` (default `edge`). This is how a
+step-based effect or a schedule is modelled: a clock's rising edge is a job.
+
+### Clocks and driving time
+
+A **clock** is an asserted node with
+`config.signal.clock = {periodMs, phaseMs, duty, wave, sampleMs, cycles}`.
+- `wave` is `square` (binary), or `saw`, `triangle` or `sine` (continuous, sampled every
+  `sampleMs`).
+- `cycles` stops the clock after that many periods.
+- A clock without a period is refused with `CLOCK_HAS_NO_PERIOD`.
+
+**Time is the driver.**
+- `sim.advance(ms)` runs everything due up to `now + ms`.
+- `sim.tick()` takes the next instant and everything due in it.
+- `sim.at(time, action)` schedules an operation.
+
+The editor, an agent (MCP `schematic.sim.advance` / `tick` / `at` / `set`) and an outside
+process drive the same engine, which makes it the control plane of the canvas.
+
+**Power on.** At time 0, asserted levels above 0 drive out, and clocks start. A snapshot
+keeps levels, inputs, edges and the clock's schedule.
+
+## Access control on a plane (built 2026-09-25)
+
+A plane (any Component with an open interior) may declare
+`config.acl = {default: 'deny' | 'allow', entries: [{principal, allow: [ops], deny: [ops]}]}`.
+
+- The operations are `enter`, `exit`, `read` and `write`.
+- A principal pattern is exact (`svc:mailer`), a prefix (`svc:*`), or `*`.
+- **Order does not matter.** Any matching deny refuses. Otherwise any matching allow
+  admits. Otherwise the default applies, which is deny unless declared.
+- **An anonymous crossing is refused.** A plane with an ACL admits no one who does not
+  say who they are.
+
+**Who is acting.**
+- A message carries a `principal`. It is set on `inject` and inherited by its copies.
+- A component with `config.principal` acts in its own name: messages it forwards carry
+  its principal.
+- A level carries the principal of the node driving it.
+
+**Where it is checked.** The check happens where a message or a level turns from one side
+of the plane's boundary to the other: at a boundary Point of the plane, or at the plane's
+own port.
+- Crossing from outside to inside is `enter`; from inside to outside is `exit`.
+- A wire with a `read` or `write` operation is checked for that operation too.
+- A refusal names the principal, the operation and the plane. Refused levels are listed
+  with `level: true`.
+
+`graph.query('acl')` lists the planes with an ACL and the principals in the document.
+`graph.query('acl', {componentId, principal, op})` answers one question without running
+anything.
+
+Example 09's run admits `intake:*` and lets only `svc:mailer` leave. The graph test
+swaps Notify's principal for `ai:rogue` and shows the approved proof refused at the exit.
+
 ## Print AI mapping (example 09)
 
 `examples/09-print-ai-proof-run.sov` models the Print AI deck's (2026-09-23) active run:
@@ -314,6 +411,7 @@ scenarios are the deck's claims, run as evidence.
 | Participant AI workflow, adopted and opaque | a Component naming an external handler (`ingest`). It is stubbed in simulation, and in live it will be registered with the relay. |
 | Eval / judgement | a `GATE` with a handler (`evaluate`) whose refusal stops the run before any person is asked |
 | Monitoring | a fan-out junction (`split`) into an `OBSERVE` (`monitor`) that records observations off the action path |
+| ACLs enforce authority, not the prompt | the run's `config.acl`: `intake:*` may enter, only `svc:mailer` may exit; every participant acts under `config.principal` |
 | Human gate, where waiting is not computing | `behavior.human` on `review`: the message parks, and the engine is idle until `resume` |
 | Mediated effect with stable replay identity | `behavior.effect` on `notify`, keyed by `payload.caseId` |
 | Evidence | a `RECEIPT` (`evidence`), plus the engine's log, traces and refusals |

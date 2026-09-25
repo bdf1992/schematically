@@ -14,7 +14,8 @@
       "y": 330,
       "config": {
         "label": "Case · Customer proof 48219",
-        "signalMode": "source"
+        "signalMode": "source",
+        "principal": "intake:case-48219"
       }
     },
     {
@@ -33,6 +34,23 @@
       "config": {
         "label": "Run · Proof-resolution @ v3",
         "attachmentDefaults": "none",
+        "acl": {
+          "default": "deny",
+          "entries": [
+            {
+              "principal": "intake:*",
+              "allow": [
+                "enter"
+              ]
+            },
+            {
+              "principal": "svc:mailer",
+              "allow": [
+                "exit"
+              ]
+            }
+          ]
+        },
         "presentation": {
           "graphic": {
             "kind": "none"
@@ -133,6 +151,7 @@
       "config": {
         "label": "Ingest · AI workflow",
         "signalMode": "relay",
+        "principal": "ai:ingest",
         "behavior": {
           "handler": "ingest"
         }
@@ -200,6 +219,7 @@
       "config": {
         "label": "Human review",
         "signalMode": "relay",
+        "principal": "human:reviewer",
         "behavior": {
           "human": {
             "prompt": "Approve the proof for the customer?"
@@ -229,6 +249,7 @@
       "config": {
         "label": "Notify customer · effect",
         "signalMode": "relay",
+        "principal": "svc:mailer",
         "behavior": {
           "handler": "send-email",
           "effect": {
@@ -399,7 +420,8 @@
             "confirmed": 1
           },
           "parked": 0,
-          "refusals": 0
+          "refusals": 0,
+          "levelRefusals": 0
         }
       }
     },

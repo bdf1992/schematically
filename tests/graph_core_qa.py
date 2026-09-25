@@ -34,6 +34,11 @@ for(const sc of print.references.filter(r=>r.kind==='scenario')){const r=G.runSc
 {const sc=print.references.find(r=>r.id==='s-approve').data;const a=G.createSimulation(print,{handlers:sc.handlers}).sim;a.inject('case',sc.steps[0].inject);a.run();a.resume(a.parked()[0].id);a.run();
  const b=G.createSimulation(print,{handlers:sc.handlers,effects:a.effects()}).sim;b.inject('case',sc.steps[0].inject);b.run();b.resume(b.parked()[0].id);b.run();
  assert.equal(b.taps('customer').arrivals.length,0);assert.equal(b.log().filter(e=>e.event==='effect-replayed').length,1)}
+// The run's ACL: only the mailer service may carry work out. A notify acting as anyone else is refused at the exit.
+{const mut=structuredClone(print);mut.components.find(c=>c.id==='notify').config.principal='ai:rogue';
+ const r=G.runScenario(mut,print.references.find(r=>r.id==='s-approve'));assert.equal(r.ok,false);assert.ok(r.refusals.some(x=>/ai:rogue may not exit Run/.test(x.reason)),r.refusals)}
+// Every scenario of the clocked-signals example passes.
+{const ten=load('examples/10-clocked-signals.sov');for(const sc of ten.references){const r=G.runScenario(ten,sc);assert.equal(r.ok,true,sc.id+' '+JSON.stringify(r.checks))}}
 // A handler nobody registered refuses; it never passes through silently.
 {const {sim}=G.createSimulation(print,{handlers:{}});sim.inject('case',{payload:{caseId:'1',proof:'good'}});sim.run();
  assert.match(sim.refusals()[0].reason,/no handler registered: ingest/);assert.equal(sim.taps('customer').arrivals.length,0)}
@@ -96,6 +101,75 @@ const hub=(policy,extra={})=>doc([A('src'),{...P('j'),config:{signalMode:'relay'
  const {sim}=G.createSimulation(ring(5));sim.inject('a');const out=sim.run({maxEvents:50});assert.equal(out.code,'MAX_EVENTS');assert.equal(G.query(ring(5),'order').code,'CYCLE')}
 // Direction and port flow: an in-only port cannot emit, so the wire is blocked and nothing flows.
 {const d=doc([A('a'),A('b',{signalMode:'passive'})],[{id:'w1',a:'a',aSide:'in',b:'b',bSide:'in'}]);assert.match(G.query(d,'blocked').blocked[0].reason,/cannot emit/)}
+
+// ---- Signals: levels, edges, clocks, asserted versus derived.
+const L=(id,value=0,extra={})=>({id,symbolId:'lever',x:0,y:0,config:{signal:{value},...extra}});
+const DV=(id,signal={},extra={})=>({id,symbolId:'act',x:0,y:0,config:{signal:{mode:'derived',...signal},...extra}});
+const CK=(id,clock,signal={})=>({id,symbolId:'clock',x:0,y:0,config:{signal:{clock,...signal}}});
+const Wz=(id,a,b,bSide='in',lat=0)=>({id,a,aSide:'out',b,bSide,config:{latencyMs:lat}});
+// A square clock ANDed with a lever: the output follows the clock only while the lever is up.
+{const d=doc([CK('clk',{periodMs:100,duty:.5}),L('lev',1),DV('and',{combine:'and'})],[Wz('w1','clk','and'),Wz('w2','lev','and')]);
+ const {sim}=G.createSimulation(d);sim.advance(299);
+ const e=sim.edges({node:'clk'}).edges;assert.deepEqual(e.map(x=>x.polarity+x.at),['+0','-50','+100','-150','+200','-250']);
+ assert.deepEqual(sim.edges({node:'and'}).edges.map(x=>x.polarity+x.at),['+0','-50','+100','-150','+200','-250']);
+ sim.set('lev',0);sim.advance(100);assert.equal(sim.levels().and.value,0);assert.ok(sim.edges({node:'and'}).edges.every(x=>x.at<300||x.polarity==='-'));
+ assert.equal(sim.set('and',1).code,'DERIVED_SIGNAL','a derived signal is computed, never set')}
+// Continuous: a sine rises (+) and falls (−) in small steps; a binary threshold of it makes one + and one − per period.
+{const d=doc([CK('wave',{periodMs:100,wave:'sine',sampleMs:10}),DV('level',{kind:'continuous',combine:'max'}),DV('bit',{kind:'binary',threshold:.5})],[Wz('w1','wave','level'),Wz('w2','wave','bit')]);
+ const {sim}=G.createSimulation(d);sim.advance(199);
+ const lv=sim.edges({node:'level'}).edges;assert.ok(lv.filter(e=>e.polarity==='+').length>=8&&lv.filter(e=>e.polarity==='-').length>=8,'continuous rises and falls');
+ assert.ok(lv.every(e=>e.to>=0&&e.to<=1));assert.equal(sim.levels().level.kind,'continuous');
+ assert.deepEqual(sim.edges({node:'bit'}).edges.map(e=>e.polarity),['+','-','+','-']);
+ assert.ok(Object.values(sim.levels()).every(l=>l.kind==='continuous'||[0,1].includes(l.value)),'binary levels are 0 or 1')}
+// Scheduling: a clock's rising edge starts work, as a message.
+{const d=doc([CK('tick',{periodMs:1000,duty:.1,cycles:3},{on:'+',channel:'job'}),A('job',{signalMode:'passive'})],[Wz('w1','tick','job')]);
+ const {sim}=G.createSimulation(d);sim.advance(10000);
+ assert.equal(sim.taps('job').arrivals.filter(m=>m.channel==='job').length,3,'three periods, three jobs');
+ assert.equal(sim.state().pending,0,'a clock with cycles stops')}
+// An asserted signal is changed by an operation: set, a scheduled action, or a message.
+{const d=doc([L('lev'),DV('out'),A('ctl')],[Wz('w1','lev','out'),{id:'w2',a:'ctl',aSide:'out',b:'lev',bSide:'in'}]);
+ const {sim}=G.createSimulation(d);sim.at(50,{set:{node:'lev',value:1}});sim.at(80,{toggle:{node:'lev'}});sim.advance(100);
+ assert.deepEqual(sim.edges({node:'out'}).edges.map(e=>e.polarity+e.at),['+50','-80']);
+ sim.inject('ctl',{payload:{toggle:true}});sim.run();assert.equal(sim.levels().lev.value,1);assert.equal(sim.levels().out.value,1)}
+// A control point gates a derived level.
+{const d=doc([L('data',1),L('en'),DV('sw')],[Wz('w1','data','sw'),Wz('w2','en','sw','control')]);
+ const {sim}=G.createSimulation(d);sim.run();assert.equal(sim.levels().sw.value,0,'closed without control');
+ sim.set('en',1);sim.run();assert.equal(sim.levels().sw.value,1)}
+// A clock needs a period; absence is refused, not defaulted.
+assert.equal(G.createSimulation(doc([{id:'c',symbolId:'clock',x:0,y:0}],[])).code,'CLOCK_HAS_NO_PERIOD');
+// Restarting mid-run keeps levels and the clock's schedule.
+{const d=doc([CK('clk',{periodMs:100})],[]);const a=G.createSimulation(d).sim;a.advance(120);
+ const b=G.createSimulation(d,{restore:a.snapshot()}).sim;b.advance(100);assert.deepEqual(b.edges({node:'clk'}).edges.map(e=>e.polarity+e.at),['+0','-50','+100','-150','+200'])}
+
+// ---- Access control on a plane: messages and levels crossing its boundary.
+const planeDoc=(acl,leverValue=1)=>doc([
+  {id:'vault',symbolId:'plane',x:400,y:200,form:{dimension:2,regions:{interior:{state:'open'}}},config:{label:'Vault',attachmentDefaults:'none',...(acl?{acl}:{})}},
+  {id:'door',symbolId:'point',x:250,y:200,canvasId:'canvas:component:vault',parentId:'vault',placement:{kind:'edge',hostId:'vault',side:'left',t:.5},form:{dimension:0},config:{signalMode:'relay',ports:{out:{face:'both',connections:[{id:'connection-1',flow:'duplex',access:'read-write'}]}}}},
+  {...A('inside'),canvasId:'canvas:component:vault',parentId:'vault',config:{signalMode:'relay'}},
+  A('outside'),{...L('lever',leverValue),config:{signal:{value:leverValue},principal:'svc:ops'}},L('anon',1)],
+  [{id:'k1',a:'outside',aSide:'out',b:'door',bSide:'out',canvasId:'canvas:global'},{id:'k2',a:'door',aSide:'out',b:'inside',bSide:'in',canvasId:'canvas:component:vault'},
+   {id:'k3',a:'lever',aSide:'out',b:'door',bSide:'out',canvasId:'canvas:global'},{id:'k4',a:'anon',aSide:'out',b:'door',bSide:'out',canvasId:'canvas:global'}]);
+{const acl={entries:[{principal:'svc:*',allow:['enter']},{principal:'svc:intruder',deny:['enter']}]};
+ const d=planeDoc(acl);const {sim}=G.createSimulation(d);
+ sim.inject('outside',{principal:'svc:ops',payload:1});sim.inject('outside',{principal:'eve',payload:2});sim.inject('outside',{payload:3});sim.run();
+ const got=sim.taps('inside').arrivals.filter(m=>m.channel!=='edge').map(m=>m.payload);assert.deepEqual(got,[1]);
+ const reasons=sim.refusals().map(r=>r.reason);
+ assert.ok(reasons.some(r=>/eve may not enter Vault/.test(r)),reasons);assert.ok(reasons.some(r=>/no principal may enter Vault anonymously/.test(r)),reasons);
+ // Levels cross under the driving node's principal: the principalled lever drives the inside level...
+ assert.equal(sim.levels().inside.value,1,'svc:ops lever drives the inside level');
+ // ...and when only the anonymous lever drives the door, its level stops there.
+ {const {sim:s2}=G.createSimulation(planeDoc(acl,0));s2.run();assert.ok(s2.refusals().some(r=>r.level&&r.node==='door'&&/anonymously/.test(r.reason)),'anonymous level refused at the door');assert.equal(s2.levels().inside.value,0)}
+ assert.deepEqual(G.query(d,'acl',{componentId:'vault',principal:'svc:intruder',op:'enter'}).ok,false);
+ assert.equal(G.query(d,'acl',{componentId:'vault',principal:'svc:ops',op:'enter'}).ok,true);
+ assert.equal(G.query(d,'acl').planes[0].id,'vault')}
+// Mutation: without the ACL every principal gets in.
+{const {sim}=G.createSimulation(planeDoc(null));sim.inject('outside',{principal:'eve',payload:2});sim.run();assert.equal(sim.taps('inside').arrivals.filter(m=>m.payload===2).length,1)}
+// Exit is checked on the way out.
+{const d=doc([{id:'room',symbolId:'plane',x:400,y:200,form:{dimension:2,regions:{interior:{state:'open'}}},config:{attachmentDefaults:'none',label:'Room',acl:{entries:[{principal:'*',allow:['enter']}]}}},
+   {id:'gate',symbolId:'point',x:550,y:200,canvasId:'canvas:component:room',parentId:'room',placement:{kind:'edge',hostId:'room',side:'right',t:.5},form:{dimension:0},config:{ports:{out:{face:'both',connections:[{id:'connection-1',flow:'duplex',access:'read-write'}]}}}},
+   {...A('worker'),canvasId:'canvas:component:room',parentId:'room'},A('world',{signalMode:'passive'})],
+   [{id:'e1',a:'worker',aSide:'out',b:'gate',bSide:'out',canvasId:'canvas:component:room'},{id:'e2',a:'gate',aSide:'out',b:'world',bSide:'in',canvasId:'canvas:global'}]);
+ const {sim}=G.createSimulation(d);sim.inject('worker',{principal:'svc:a'});sim.run();assert.match(sim.refusals().find(r=>!r.level).reason,/svc:a may not exit Room/);assert.equal(sim.taps('world').arrivals.length,0)}
 
 // One session dispatches every tool the server and browser serve.
 {const s=G.createSession();assert.equal(s.execute('schematic.sim.inject',print,{node:'case'}).code,'NO_SIMULATION');
