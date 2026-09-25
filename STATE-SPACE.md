@@ -364,8 +364,9 @@ A Component hosted on a Path (`placement.kind: wire`, `wireId + t`) is a **tap**
 Decided before building the first runtime, so the contract names outcomes, not choices:
 
 - **Signal state** is kept per `(entity, port, channel)`. Every binary channel starts `false`; the starting state is implied by the document and is not recorded.
-- **Who does what on arrival.** A Component bound to a definition *evaluates*. A Point *relays*: a value arriving on its `self` port is emitted onto every other Path on that port, in each direction `self` emits, but never back onto the Path it arrived on. Any other Component *absorbs*: it holds the value and emits nothing.
-- **Sources are registered inputs.** A run's inputs are `{entity, point, channel?, value, at}`: at tick `at`, the port takes `value` and emits it. An input and a Path arrival at the same port and tick: the input wins, and the arrival is recorded as `overridden`.
+- **Power-on.** Tick 0 is always processed, even with no inputs at it. Its evaluate phase evaluates *every* device, whether or not an input changed, from the state committed after tick 0's inputs. Outputs that differ from the starting `false` are recorded and emit as usual. Without this an inverting device (NOT, NAND) would never leave its starting state. *(Found by the customer review of slice 1b.)*
+- **Who does what on arrival.** A Component bound to a definition *evaluates*. A Point *relays*: the value its `self` port takes in a tick is emitted onto every Path on that port, in each direction `self` emits, except the Paths that delivered to that port in that tick (so a duplex junction never echoes, even back to a Path whose value lost the merge). Any other Component *absorbs*: it holds the value and emits nothing.
+- **Sources are registered inputs.** A run's inputs are `{entity, point, channel?, value, at}`: at tick `at`, the port takes `value` and emits it. An input and a Path arrival (or a queue's arrivals) at the same port and tick: the input wins, and each arrival is recorded as `overridden`. An input on a port a definition owns as an output is refused at start (`INPUT_INVALID`): a device's output is the device's.
 - **Emission.** When a port's value changes and the port emits, one arrival is scheduled per bound Path, per direction that Path carries out of this port (see *Ports*), per shared channel, at `t + path delay`.
 - **Device delay.** A device evaluates in the evaluate phase of tick `t`. With device delay 0 its output ports change in that phase and emit (arriving at `t + path delay`, which is ≥ `t + 1`). With device delay `d > 0` the output change is scheduled for the update phase of tick `t + d`, and emits then.
 - **Time jumps.** One step is the next tick that has scheduled work. Logical time skips empty ticks.
@@ -377,7 +378,8 @@ Decided before building the first runtime, so the contract names outcomes, not c
   - each registered input;
   - each stochastic order draw.
 
-  Every entry carries the hash of the one before it. Derived records are the fold's output. The trace carries them for audit, and replay must reproduce them byte for byte.
+  Every entry carries the hash of the one before it; the start entry also carries the run's budget, so it is covered by the chain. A stochastic order draw is a ledger `draw` entry (the ledger is the record of chance), not a state record. Derived records are the fold's output.
+- **Traces.** A trace carries `through`, the last tick processed (`null` before any), and `head`, the hash of the last ledger entry. Replay processes exactly the ticks up to `through`, so a trace taken mid-run replays. `records` is optional: when present, replay must reproduce them byte for byte; when absent, the trace is still complete and replay recomputes them. A consistently truncated ledger is only detectable against a head hash held elsewhere, which is why run receipts (slice 1c) return `head`.
 
 ### Stepping and settling
 
