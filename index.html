@@ -108,6 +108,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 /* Sections: lines are ink; solid regions are material, space regions a wash. */
 .node .section-line{stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:1.2}
 .node .fill-solid{fill:var(--section-solid)}.node .fill-space{fill:var(--section-space)}
+.through-mark{fill:var(--panel);stroke:var(--component-boundary-color,var(--canvas-ink));stroke-width:1.4;pointer-events:none}
 .wire-section{fill:none;stroke-linecap:butt;stroke-linejoin:round;pointer-events:none}
 .wire-section.line{stroke:var(--canvas-ink)}.wire-section.band-solid{stroke:var(--section-wire-solid)}.wire-section.band-space{stroke:var(--canvas-tone)}
 .wire-group.sectioned .wire{stroke:transparent}.wire-group.sectioned .wire-voltage{display:none}
@@ -930,6 +931,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
                 <option value="2">2D · Plane</option>
               </select>
             </label>
+            <label data-dims="0" id="formPointPositionRow" hidden title="On a multi-line boundary a point sits on a line or across a band; that decides which side it reaches">Position
+              <select id="formPointPosition" aria-label="Position on the host's section"></select>
+            </label>
             <label data-dims="2" title="The lines of the boundary and the regions between them (SECTION-MODEL.md)">Section
               <select id="formSection">
                 <option value="derived">From frame &amp; interior</option>
@@ -1075,6 +1079,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       <div id="portSettingsFields" class="settings-surface" hidden>
         <div class="settings-head"><b>Attachment settings</b><span>Boundary face and signal behavior</span></div>
         <div class="settings-grid settings-grid-compact">
+          <label id="barPortPositionRow" hidden title="On a multi-line boundary a point sits on a line or across a band; that decides which side it reaches">Position
+            <select id="barPortPosition" aria-label="Position on the boundary's section"></select>
+          </label>
           <label>Face
             <select id="barPortFace" aria-label="Port face" title="Inside/outside face">
               <option value="external">Outside</option>
@@ -1763,10 +1770,51 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     }
     return {outside:containingCanvasId(component),inside:componentCanvasId(component)};
   }
+  // Where a point sits on a multi-line boundary (SECTION-MODEL.md): on a line, or through a
+  // band. Declared as at: {line} | {through} (an id or an index); without one the face places
+  // it: external on the outer line, internal on the inner line, both through the outer band.
+  function sectionPosition(section,at,face){
+    const n=section.lines.length,idx=(list,v)=>typeof v==='number'?(v>=0&&v<list.length?v:-1):list.findIndex(x=>x.id===v);
+    if(isObject(at)){
+      if(at.line!=null){const i=idx(section.lines,at.line);if(i>=0)return {line:i,declared:true}}
+      if(at.through!=null){const k=idx(section.bands,at.through);if(k>=0)return {through:k,declared:true}}
+    }
+    if(face==='internal')return {line:n-1};
+    if(face==='both')return {through:0};
+    return {line:0};
+  }
+  // The regions a position touches: 0 is beyond the outer line, 1..n-1 the bands, n the core.
+  // A line separates two regions; a through-point spans its band and touches both neighbours.
+  function sectionRegionsTouched(pos){return pos.line!=null?[pos.line,pos.line+1]:[pos.through,pos.through+2]}
+  // The multi-line boundary a point sits on: its host's (a boundary Point) or its own (a card's port).
+  function boundarySection(doc,component){
+    const placement=component?.placement||{};
+    const owner=placement.kind==='edge'&&placement.hostId?doc.components.find(c=>c.id===placement.hostId):(Number(component?.form?.dimension??2)===2&&!['wire','path'].includes(placement.kind)?component:null);
+    const section=owner?componentSection(owner):null;
+    return section&&section.lines.length>=2?{owner,section,at:placement.kind==='edge'?placement.at:null}:null;
+  }
+  function pointSectionPosition(doc,componentId,portId){
+    const component=doc.components.find(c=>c.id===componentId);if(!component)return null;
+    const b=boundarySection(doc,component);if(!b)return null;
+    const port=attachmentPointConfig(doc,componentId,portId)||{};
+    return {...sectionPosition(b.section,b.at||port.at,port.face||'external'),lines:b.section.lines.length,owner:b.owner.id};
+  }
   function portExposedCanvasIds(doc,componentId,portId){
     const component=doc.components.find(c=>c.id===componentId);if(!component)return [];
     const port=attachmentPointConfig(doc,componentId,portId);if(!port)return [];
     const face=port.face||'external',surfaces=attachmentHostSurfaces(doc,component);
+    // On a multi-line boundary a point is exposed to the space regions its position touches;
+    // the face decides only on a one-line boundary, which has no thickness to sit in.
+    const b=boundarySection(doc,component);
+    if(b){
+      const n=b.section.lines.length,pos=sectionPosition(b.section,b.at||port.at,face),out=[];
+      for(const r of sectionRegionsTouched(pos)){
+        if(r===0)out.push(surfaces.outside);
+        else if(r===n&&b.section.core?.fill==='space')out.push(surfaces.inside);
+        // A space band would be a surface of its own; band surfaces are not built yet.
+      }
+      return [...new Set(out)];
+    }
     if(face==='internal')return [surfaces.inside];
     if(face==='both')return [...new Set([surfaces.outside,surfaces.inside])];
     return [surfaces.outside];
@@ -2013,7 +2061,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });
 /* END src/05-data-core.js */
 </script>
@@ -2911,6 +2959,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const byId=new Map(doc.components.map(c=>[c.id,c])),frozen=[];
     const inScope=canvas=>doc.components.filter(c=>!hosted(c)&&(c.canvasId||Data.GLOBAL_CANVAS_ID)===canvas);
     const isContainer=c=>c.form?.regions?.interior?.state==='open'&&Number(c.form?.dimension??2)===2;
+    // A container drawing its own symbol keeps it clear of its children; a section's skin counts too.
+    const topRoom=c=>{const g=c?.config?.presentation?.graphic?.kind;const s=Data.componentSection?Data.componentSection(c):null;
+      return (g&&g!=='none'?64:18)+(s&&s.lines.length>=2?s.bands.reduce((a,b)=>a+b.thickness,0):0)};
     function rep(id,canvas){
       let c=byId.get(id),guard=0;
       while(c&&guard++<64){
@@ -2923,8 +2974,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     function layoutCanvas(canvas){
       const members=inScope(canvas),boxes=new Map();
       for(const c of members){
-        // Arranging fits a container to what it holds.
-        if(isContainer(c)&&inScope(interiorOf(c.id)).length){const inner=layoutCanvas(interiorOf(c.id));boxes.set(c.id,{w:Math.max(160,inner.w+pad*2),h:Math.max(120,inner.h+pad*2+18),inner})}
+        // Arranging fits a container to what it holds, with room on top for its own symbol.
+        if(isContainer(c)&&inScope(interiorOf(c.id)).length){const inner=layoutCanvas(interiorOf(c.id)),top=topRoom(c);boxes.set(c.id,{w:Math.max(160,inner.w+pad*2),h:Math.max(120,inner.h+pad*2+top),inner,top})}
         else boxes.set(c.id,{...size(c),inner:null});
       }
       const ids=members.map(c=>c.id),succ=new Map(ids.map(i=>[i,new Set()])),pred=new Map(ids.map(i=>[i,new Set()]));
@@ -2957,6 +3008,13 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         const need=text.length*7+48+(w.config?.direction==='duplex'?14:0);
         for(let l=la;l<lb;l++)labelGap.set(l,Math.max(labelGap.get(l)||0,need));
       }
+      // A container's boundary Points label the crossing outside its edge: that side needs room too.
+      const pointLabel=(hostId,side)=>Math.max(0,...doc.components.filter(k=>k.placement?.kind==='edge'&&k.placement.hostId===hostId&&k.placement.side===side).map(k=>String(k.config?.label||'').length*7+32));
+      for(const u of ids){
+        const l=layer.get(u),left=pointLabel(u,'left'),right=pointLabel(u,'right');
+        if(left&&l>0)labelGap.set(l-1,Math.max(labelGap.get(l-1)||0,left));
+        if(right)labelGap.set(l,Math.max(labelGap.get(l)||0,right));
+      }
       const x=new Map(),y=new Map();let cx=0;
       layers.forEach((L,l)=>{const w=Math.max(0,...L.map(u=>boxes.get(u).w));for(const u of L)x.set(u,cx+w/2);cx+=w+Math.max(gapX,labelGap.get(l)||0)});
       for(const L of layers){
@@ -2980,11 +3038,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         // Hosted children ride along with their host.
         if(r.isDefault)for(const k of doc.components)if(hosted(k)&&k.placement?.hostId===u){k.x=num(k.x,0)+(X-g.x);k.y=num(k.y,0)+(Y-g.y)}
         setGeometry(doc,r.id,u,{x:X,y:Y,w:b.w,h:b.h});
-        if(b.inner)write(b.inner,X-b.w/2+pad,Y-b.h/2+pad+18);
+        if(b.inner)write(b.inner,X-b.w/2+pad,Y-b.h/2+pad+b.top);
       }
     }
     const res=layoutCanvas(scopeCanvas);
-    if(scope){const g=geometry(doc,r.id,scope)||entityGeometry(byId.get(scope));const w=Math.max(160,res.w+pad*2),h=Math.max(120,res.h+pad*2+18);setGeometry(doc,r.id,scope,{w,h});write(res,g.x-w/2+pad,g.y-h/2+pad+18)}
+    if(scope){const g=geometry(doc,r.id,scope)||entityGeometry(byId.get(scope)),top=topRoom(byId.get(scope));const w=Math.max(160,res.w+pad*2),h=Math.max(120,res.h+pad*2+top);setGeometry(doc,r.id,scope,{w,h});write(res,g.x-w/2+pad,g.y-h/2+pad+top)}
     else{
       // Keep the diagram where it was: the new layout starts at the old top-left.
       const placed=res.ids.map(u=>geometry(doc,r.id,u)).filter(Boolean);
@@ -3138,7 +3196,7 @@ const barWireInMarker=document.getElementById('barWireInMarker');
 const barWireInColor=document.getElementById('barWireInColor');
 const barAddWirePortBtn=document.getElementById('barAddWirePortBtn');
 const barPortLabel=document.getElementById('barPortLabel');
-const barPortFace=document.getElementById('barPortFace');
+const barPortFace=document.getElementById('barPortFace'),barPortPosition=document.getElementById('barPortPosition'),barPortPositionRow=document.getElementById('barPortPositionRow'),formPointPosition=document.getElementById('formPointPosition'),formPointPositionRow=document.getElementById('formPointPositionRow');
 const barPortMarkers=document.getElementById('barPortMarkers');
 const barDeleteSelection=document.getElementById('barDeleteSelection');
 const zoomOutBtn = document.getElementById('zoomOutBtn');
@@ -4339,6 +4397,15 @@ function refreshCanvasScopeControl(){
   // Canvas is model state, not a persistent toolbar mode/readout.
 }
 
+// A point on a multi-line boundary chooses its line or band; hidden on a one-line boundary.
+function syncSectionPositionSelect(select,row,owner,compat){
+  if(!select||!row)return;
+  const pos=owner?SovSchematicData.pointSectionPosition(diagram,owner.id,compat):null;row.hidden=!pos;if(!pos)return;
+  const host=nodes.find(n=>n.id===pos.owner),s=SovSchematicData.componentSection(host);select.replaceChildren();
+  s.lines.forEach((l,i)=>{const o=document.createElement('option');o.value=`line:${i}`;o.textContent=i===0?'Outer line · reaches outside':i===s.lines.length-1?`Inner line · reaches ${s.core?.fill==='space'?'inside':'nothing (solid core)'}`:`Line ${i} · between bands`;select.appendChild(o)});
+  s.bands.forEach((b,k)=>{const o=document.createElement('option');o.value=`through:${k}`;o.textContent=`Through ${b.role||'band'} ${k+1} (${b.fill}) · a crossing`;select.appendChild(o)});
+  select.value=pos.line!=null?`line:${pos.line}`:`through:${pos.through}`;
+}
 function syncSelectionFormState(kind,entity){
   if(kind==='port'||!entity){barFormState.hidden=true;return}
   barFormState.hidden=false;barFormState.disabled=false;barFormState.classList.remove('wire-form');
@@ -4358,6 +4425,7 @@ function syncComponentVisualPanel(n){
   const f=componentForm(n);
   formDimension.value=String(f.dimension);formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
   formSection.value=sectionPresetName(f,2);
+  syncSectionPositionSelect(formPointPosition,formPointPositionRow,n,'out');
   formInteriorState.value=f.regions.interior.state;formFrameMode.value=f.frame.mode;formFrameThickness.value=String(f.frame.thickness);formFrameDepth.value=String(f.frame.depth);
   formAttachments.value=Attachment.attachmentDefaults(n);
   // Settings are shown per dimension: a Point has no size or frame, a Path no height or interior.
@@ -4509,6 +4577,7 @@ function showPortBar(info){
   const ch=portConnection(port);
   barPortLabel.value=port.label||'';
   barPortFace.value=port.face||'external';
+  syncSectionPositionSelect(barPortPosition,barPortPositionRow,info.owner,info.port&&Attachment.resolveSpec(info.owner,info.pointId)?.compatId||'out');
   barPortMarkers.textContent=portMarkerSummaryText(info);
   setSlotChip(barPortColorSlot,ch.colorSlot);
   barPortFlow.value=ch.flow;
@@ -5313,6 +5382,12 @@ function componentGlyphAxis(n){
   const stem=GLYPH_CONTROL_STEM[n.symbolId];
   return {y:y0+axis*scale,left:x0+8*scale,right:x0+88*scale,stroke:4*scale,stemTop:stem==null?null:y0+stem*scale,stemX:x0+48*scale};
 }
+// How far inside the outline a position on a section sits: to its line, or to its band's middle.
+function sectionPointInset(host,pos){
+  if(!host||!pos)return 0;const s=SovSchematicData.componentSection(host);if(!s||s.lines.length<2)return 0;
+  const sum=k=>s.bands.slice(0,k).reduce((a,b)=>a+b.thickness,0);
+  return pos.line!=null?sum(pos.line):sum(pos.through)+(s.bands[pos.through]?.thickness||0)/2;
+}
 function componentPortLocalPosition(n,pointId){
   const size=componentSize(n),spec=Attachment.resolveSpec(n,pointId);if(!spec)return{x:0,y:0};
   const cfg=componentConfig(n),pcfg=cfg.ports[spec.compatId],effective=Attachment.effectiveDimension(n);
@@ -5323,7 +5398,8 @@ function componentPortLocalPosition(n,pointId){
   }
   // A point sits on the boundary itself, so a wire meets the body edge with no gap; the face
   // is shown by the point's style, not by standing it off the edge.
-  const faceOffset=0,t=Math.max(0,Math.min(1,Number.isFinite(Number(spec.t))?Number(spec.t):.5));
+  // On a multi-line boundary a point sits on its line, or across its band: inset from the outline.
+  const faceOffset=-sectionPointInset(n,SovSchematicData.pointSectionPosition(diagram,n.id,spec.compatId)),t=Math.max(0,Math.min(1,Number.isFinite(Number(spec.t))?Number(spec.t):.5));
   const alongX=-size.w/2+size.w*t;
   // An unplaced side point meets the symbol on its axis, so wire, edge and glyph are one line.
   const axis=!spec.placed&&spec.role==='boundary'&&!spec.authored&&(spec.side==='left'||spec.side==='right')?componentGlyphAxis(n):null;
@@ -5369,7 +5445,9 @@ function nearestPointOnComponentEdge(host,x,y){
 function syncComponentAttachedPose(node){
   const placement=componentPlacement(node);if(!['path','edge'].includes(placement.kind))return;const host=nodes.find(n=>n.id===placement.hostId)||parentComponent(node);if(!host)return;let q=null;
   if(placement.kind==='path'){const half=Math.max(24,componentSize(host).w/2),local=-half+half*2*placement.t,world=rotateVectorByDegrees(local,0,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)}}
-  else{const {w,h}=componentSize(host),side=placement.side||'top',u=Math.max(0,Math.min(1,placement.t));let lx=0,ly=0,a=0;if(side==='top'||side==='bottom'){lx=-w/2+w*u;ly=side==='top'?-h/2:h/2}else{lx=side==='left'?-w/2:w/2;ly=-h/2+h*u;a=90}const world=rotateVectorByDegrees(lx,ly,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)+a}}
+  else{const {w,h}=componentSize(host),side=placement.side||'top',u=Math.max(0,Math.min(1,placement.t));let lx=0,ly=0,a=0;
+    const inset=sectionPointInset(host,SovSchematicData.pointSectionPosition(diagram,node.id,'out'));
+    if(side==='top'||side==='bottom'){lx=-w/2+w*u;ly=side==='top'?-h/2+inset:h/2-inset}else{lx=side==='left'?-w/2+inset:w/2-inset;ly=-h/2+h*u;a=90}const world=rotateVectorByDegrees(lx,ly,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)+a}}
   node.x=q.x;node.y=q.y;wireHostPoseCache.set(node.id,{...q,hostId:host.id,t:placement.t});
 }
 function componentHostCandidateAtPoint(node,x=node.x,y=node.y){
@@ -5735,9 +5813,11 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   const targetNode=nodes.find(n=>n.id===targetId);
   const routedWire=wireId?wires.find(x=>x.id===wireId):null;
   // A free end has no boundary to leave; the route starts exactly there.
-  const SA=sourceNode?routeLead(A,B,aSide,sourceNode,wireEndpointInward(routedWire,sourceNode)):A, SB=targetNode?routeLead(B,A,bSide,targetNode,wireEndpointInward(routedWire,targetNode)):B;
   // A carrier on a Component's interior runs inside it: that interior is its whole surface.
   const fence=routeFence(routedWire);
+  // A lead never leaves the fence: a card near the core's edge gets a shorter lead, not a detour.
+  const inFence=P=>fence?{x:Math.max(fence.l+2,Math.min(fence.r-2,P.x)),y:Math.max(fence.t+2,Math.min(fence.b-2,P.y))}:P;
+  const SA=sourceNode?inFence(routeLead(A,B,aSide,sourceNode,wireEndpointInward(routedWire,sourceNode))):A, SB=targetNode?inFence(routeLead(B,A,bSide,targetNode,wireEndpointInward(routedWire,targetNode))):B;
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
   const otherRects=nodes
     .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
@@ -5818,7 +5898,8 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
        anchor:routeAnchor(points)
      }))
      .sort((a,b)=>a.score-b.score);
-    chosen=fallback[0];
+    // Prefer a perimeter that clears every body; only when none does is the cheapest taken.
+    chosen=fallback.find(f=>pathValid(f.points,obstacles))||fallback[0];
   }
 
   return {
@@ -5843,18 +5924,26 @@ function routeLead(P,Q,portId,node,inward){
   }
   const unit=stubPos(P,portId,1,node,inward),nx=unit.x-P.x,ny=unit.y-P.y;
   const ahead=(Q.x-P.x)*nx+(Q.y-P.y)*ny;
-  const d=ahead>0?Math.max(4,Math.min(ROUTE_LEAD,ahead/2)):ROUTE_LEAD;
+  let d=ahead>0?Math.max(4,Math.min(ROUTE_LEAD,ahead/2)):ROUTE_LEAD;
+  // Nor into a body in front of it: stop short of the first card the lead would enter.
+  for(const other of nodes){
+    if(other.id===node.id||componentForm(other).dimension!==2||isDescendantOf(node.id,other.id)||isEffectivelyHidden(other))continue;
+    const R=componentBounds(other,10);
+    for(let s=2;s<=d;s+=2){const x=P.x+nx*s,y=P.y+ny*s;if(x>R.l&&x<R.r&&y>R.t&&y<R.b){d=Math.max(4,s/2);break}}
+  }
   return {x:P.x+nx*d,y:P.y+ny*d};
 }
 function routeFence(wire){
   const surface=wire?.canvasId||'';
   if(!surface.startsWith('canvas:component:'))return null;
   const owner=nodes.find(n=>componentCanvas(n).id===surface);
-  return owner?componentBounds(owner,-4):null;
+  // The interior is the core: inside the innermost line of the owner's section.
+  return owner?componentBounds(owner,-4-(typeof componentSectionInset==='function'?componentSectionInset(owner):0)):null;
 }
 function routeInsideFence(points,fence){
   if(!fence)return true;
-  return points.every(p=>p.x>=fence.l-.5&&p.x<=fence.r+.5&&p.y>=fence.t-.5&&p.y<=fence.b+.5);
+  // The ends sit where their points are (a through-point sits in the skin); the route between stays in.
+  return points.slice(1,-1).every(p=>p.x>=fence.l-.5&&p.x<=fence.r+.5&&p.y>=fence.t-.5&&p.y<=fence.b+.5);
 }
 function routePath(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSeed=0,occupied=[]){
   return pathD(routePoints(A,B,aSide,bSide,sourceId,targetId,laneSeed,occupied).points);
@@ -6326,6 +6415,10 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     // A Point that carries wires is structure (a terminal, a junction) and is drawn solid; an
     // empty Point stays an open ring, an attachment waiting for a wire.
     const ends=wires.reduce((k,w)=>k+(w.a===n.id?1:0)+(w.b===n.id?1:0),0);
+    // A through-point spans its band: a capsule across the skin, the channel it is.
+    {const pos=componentPlacement(n).kind==='edge'?SovSchematicData.pointSectionPosition(diagram,n.id,'out'):null;
+     if(pos&&pos.through!=null){const host=nodes.find(h=>h.id===pos.owner),s=SovSchematicData.componentSection(host),T=s.bands[pos.through]?.thickness||8;
+       const cap=document.createElementNS('http://www.w3.org/2000/svg','rect');cap.setAttribute('class','through-mark');cap.setAttribute('x','-4.5');cap.setAttribute('y',String(-T/2-3));cap.setAttribute('width','9');cap.setAttribute('height',String(T+6));cap.setAttribute('rx','4.5');g.appendChild(cap)}}
     point.setAttribute('class','dimensional-point-body port attachment-point'+(ends?' carries':'')+(ends>=3?' junction':''));point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(ends?(ends>=3?4.5:4):Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
     const display=String(cfg.label||'').trim()||componentTypeCaption(n,s);
     if(display){
@@ -6419,6 +6512,10 @@ function render(){
       let vis=null;const selfPoint=componentForm(n).dimension===0&&pointId==='self';
       if(selfPoint){vis=g.querySelector('.dimensional-point-body');if(vis){vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}}
       else{vis=document.createElementNS('http://www.w3.org/2000/svg','circle');vis.setAttribute('class','port attachment-point');vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.setAttribute('cx',localX);vis.setAttribute('cy',localY);vis.setAttribute('r','5');vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}
+      {const pos=componentForm(n).dimension===2?SovSchematicData.pointSectionPosition(diagram,n.id,point.compatId):null;
+       if(pos&&pos.through!=null){const s=SovSchematicData.componentSection(n),T=s.bands[pos.through]?.thickness||8,side=point.side,vertical=side==='left'||side==='right';
+         const cap=document.createElementNS('http://www.w3.org/2000/svg','rect');cap.setAttribute('class','through-mark');
+         cap.setAttribute('x',String(vertical?localX-T/2-3:localX-4.5));cap.setAttribute('y',String(vertical?localY-4.5:localY-T/2-3));cap.setAttribute('width',String(vertical?T+6:9));cap.setAttribute('height',String(vertical?9:T+6));cap.setAttribute('rx','4.5');g.appendChild(cap)}}
       g.appendChild(hit);if(!selfPoint)g.appendChild(vis);
       if(selfPoint){
         // A 0D form is both a movable object and an attachment. The inner grip moves it
@@ -6861,7 +6958,7 @@ function layoutMetrics(options={}){
   }
   // A label across one of its own card's inner lines is as unreadable as one across another card.
   for(const t of texts){
-    if(!t.owner)continue;const lines=nodeEl(t.owner)?.querySelectorAll(':scope > .section-line')||[];
+    const lines=t.owner?(nodeEl(t.owner)?.querySelectorAll(':scope > .section-line')||[]):workspace.querySelectorAll('.node > .section-line');
     for(const l of lines){const L=layoutWorldBox(l);if(L&&layoutOverlap(t.box,L)&&!(t.box.l>L.l&&t.box.r<L.r&&t.box.t>L.t&&t.box.b<L.b)){add('text-collision',[t.owner],`"${t.text}" crosses its own section line`);break}}
   }
   for(const t of texts)if(t.el.dataset.truncated)add('text-truncated',[t.owner],`"${t.el.querySelector('title')?.textContent||t.text}" is cut to fit`);
@@ -6906,6 +7003,9 @@ function layoutMetrics(options={}){
     const canvasOwner=String(w.canvasId||'').startsWith('canvas:component:')?String(w.canvasId).slice('canvas:component:'.length):null;
     const own=canvasOwner&&body.get(canvasOwner);
     if(own&&pts.some(p=>!layoutInside(p,own,-1)))add('route-escape',[w.id,canvasOwner],`leaves the interior of ${nodes.find(n=>n.id===canvasOwner)?.config?.label||canvasOwner}`);
+    // A route may leave and meet its own end cards at their ports, but never run through them.
+    const inner=pts.slice(Math.min(pts.length,4),Math.max(0,pts.length-4));
+    for(const end of [w.a,w.b]){const n=end&&nodes.find(x=>x.id===end);if(!n||!is2D(n)||componentAcceptsChildren(n))continue;const R=body.get(n.id);if(R&&inner.some(p=>layoutInside(p,R,3))){add('route-through-node',[w.id,n.id],`runs through its own end ${n.config?.label||n.id}`);break}}
     const exempt=new Set([w.a,w.b,canvasOwner,...ancestors(w.a),...ancestors(w.b)].filter(Boolean));
     for(const n of visible){
       if(exempt.has(n.id)||!is2D(n))continue;
@@ -6913,6 +7013,11 @@ function layoutMetrics(options={}){
       if(inner){if(pts.some(p=>layoutInside(p,R,2))&&pts.some(p=>!layoutInside(p,R,-2)))add('route-through-node',[w.id,n.id],`crosses the boundary of ${n.config?.label||n.id} without a point`);continue}
       if(pts.some(p=>layoutInside(p,R,2)))add('route-through-node',[w.id,n.id],`passes through ${n.config?.label||n.id}`);
     }
+  }
+  // A container's own symbol is drawn inside it: a route there crosses the symbol.
+  for(const {w,pts} of routes)for(const n of visible){
+    if(!componentAcceptsChildren(n))continue;const gl=nodeEl(n.id)?.querySelector(':scope > .glyph');if(!gl)continue;
+    const G=layoutWorldBox(gl);if(G&&pts.some(p=>layoutInside(p,G,4))){add('route-through-node',[w.id,n.id],`crosses the symbol of ${n.config?.label||n.id}`)}
   }
   for(let i=0;i<routes.length;i++)for(let j=i+1;j<routes.length;j++){
     const A=routes[i],B=routes[j],shared=[A.w.a,A.w.b].some(x=>x&&(x===B.w.a||x===B.w.b));
@@ -6928,6 +7033,13 @@ function layoutMetrics(options={}){
   // Wires sharing one point of a card must be marked as joined.
   {const shared=new Map();for(const w of wires)for(const [id,side] of [[w.a,w.aSide],[w.b,w.bSide]]){const n=id&&nodes.find(x=>x.id===id);if(!n||componentForm(n).dimension===0)continue;const k=`${id}|${side}`;shared.set(k,(shared.get(k)||0)+1)}
    for(const [k,count] of shared)if(count>=2&&!workspace.querySelector(`.junction-dot[data-port="${CSS.escape(k)}"]`))add('unmarked-junction',[k.split('|')[0]],`${count} wires meet at ${k.split('|')[1]} with no junction mark`)}
+  // A child lives in its container's core: its body must not cross into the skin or beyond.
+  for(const n of visible){
+    const owner=String(n.canvasId||'').startsWith('canvas:component:')?nodes.find(x=>x.id===String(n.canvasId).slice(17)):null;
+    if(!owner||!is2D(n)||n.placement?.kind==='edge')continue;
+    const inset=typeof componentSectionInset==='function'?componentSectionInset(owner):0,C=componentBounds(owner,-inset),B=body.get(n.id);
+    if(B&&(B.l<C.l-.5||B.r>C.r+.5||B.t<C.t-.5||B.b>C.b+.5))add('node-overlap',[n.id,owner.id],`crosses ${inset?'the skin':'the boundary'} of ${owner.config?.label||owner.id}`);
+  }
   // Points drawn on top of each other read as one.
   {const pts=visible.filter(n=>componentForm(n).dimension===0);
    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++)if(Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y)<12)add('node-overlap',[pts[i].id,pts[j].id],'points drawn on top of each other')}
@@ -7679,6 +7791,18 @@ barPortSide.addEventListener('change',()=>{
   barPortSide.value=side;
   statusEl.textContent='0D attachment position is derived from its host form';
 });
+// Place a point on a line or across a band: a boundary Point's placement, or a card port's config.
+function setSectionPosition(owner,compat,value){
+  if(!owner||mutationBlocked(owner,'Change position'))return false;
+  const [kind,i]=String(value).split(':'),at=kind==='through'?{through:Number(i)}:{line:Number(i)};
+  setHistoryHint('Change position on the boundary');
+  if(componentForm(owner).dimension===0&&componentPlacement(owner).kind==='edge')owner.placement.at=at;
+  else{const p=componentConfig(owner).ports[compat];if(!p)return false;p.at=at}
+  // Which side a point reaches is decided by where it sits; wires follow the new exposure.
+  syncAllNodeBoundaryContext();routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();return true;
+}
+barPortPosition?.addEventListener('change',()=>{const info=selectedPortInfo();if(!info)return;setSectionPosition(info.owner,Attachment.resolveSpec(info.owner,info.pointId)?.compatId||'out',barPortPosition.value);selectPortRef(selectedPortInfo()||info)});
+formPointPosition?.addEventListener('change',()=>{const n=nodes.find(x=>x.id===selected);if(!n)return;setSectionPosition(n,'out',formPointPosition.value);selectNode(n.id,{focus:false});openSelectionSettings('component');syncComponentVisualPanel(n)});
 barPortFace.addEventListener('change',()=>{
   const info=selectedPortInfo();if(!info||mutationBlocked(info.owner,'Change Port face'))return;setHistoryHint('Change Port face');
   info.port.face=barPortFace.value;

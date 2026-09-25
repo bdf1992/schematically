@@ -111,7 +111,7 @@ MUTANTS=[
     {
       'name':'terminal-stands-off-the-edge',
       'file':'src/30-canvas.js',
-      'old':'const faceOffset=0,t=',
+      'old':'const faceOffset=-sectionPointInset(n,SovSchematicData.pointSectionPosition(diagram,n.id,spec.compatId)),t=',
       'new':'const faceOffset=4,t=',
       'test':'tests/boundary_attachment_qa.py'
     },
@@ -184,6 +184,13 @@ MUTANTS=[
       'old':"for(const c of input.components||[]){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)",
       'new':"for(const c of []){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)",
       'test':'tests/sections_qa.py'
+    },
+    {
+      'name':'section-position-ignored',
+      'file':'src/05-data-core.js',
+      'old':"const b=boundarySection(doc,component);\n    if(b){",
+      'new':"const b=null;\n    if(b){",
+      'test':'tests/section_exposure_qa.py'
     },
 ]
 

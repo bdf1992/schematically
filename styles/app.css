@@ -101,6 +101,7 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 /* Sections: lines are ink; solid regions are material, space regions a wash. */
 .node .section-line{stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:1.2}
 .node .fill-solid{fill:var(--section-solid)}.node .fill-space{fill:var(--section-space)}
+.through-mark{fill:var(--panel);stroke:var(--component-boundary-color,var(--canvas-ink));stroke-width:1.4;pointer-events:none}
 .wire-section{fill:none;stroke-linecap:butt;stroke-linejoin:round;pointer-events:none}
 .wire-section.line{stroke:var(--canvas-ink)}.wire-section.band-solid{stroke:var(--section-wire-solid)}.wire-section.band-space{stroke:var(--canvas-tone)}
 .wire-group.sectioned .wire{stroke:transparent}.wire-group.sectioned .wire-voltage{display:none}

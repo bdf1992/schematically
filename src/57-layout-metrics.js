@@ -73,7 +73,7 @@ function layoutMetrics(options={}){
   }
   // A label across one of its own card's inner lines is as unreadable as one across another card.
   for(const t of texts){
-    if(!t.owner)continue;const lines=nodeEl(t.owner)?.querySelectorAll(':scope > .section-line')||[];
+    const lines=t.owner?(nodeEl(t.owner)?.querySelectorAll(':scope > .section-line')||[]):workspace.querySelectorAll('.node > .section-line');
     for(const l of lines){const L=layoutWorldBox(l);if(L&&layoutOverlap(t.box,L)&&!(t.box.l>L.l&&t.box.r<L.r&&t.box.t>L.t&&t.box.b<L.b)){add('text-collision',[t.owner],`"${t.text}" crosses its own section line`);break}}
   }
   for(const t of texts)if(t.el.dataset.truncated)add('text-truncated',[t.owner],`"${t.el.querySelector('title')?.textContent||t.text}" is cut to fit`);
@@ -118,6 +118,9 @@ function layoutMetrics(options={}){
     const canvasOwner=String(w.canvasId||'').startsWith('canvas:component:')?String(w.canvasId).slice('canvas:component:'.length):null;
     const own=canvasOwner&&body.get(canvasOwner);
     if(own&&pts.some(p=>!layoutInside(p,own,-1)))add('route-escape',[w.id,canvasOwner],`leaves the interior of ${nodes.find(n=>n.id===canvasOwner)?.config?.label||canvasOwner}`);
+    // A route may leave and meet its own end cards at their ports, but never run through them.
+    const inner=pts.slice(Math.min(pts.length,4),Math.max(0,pts.length-4));
+    for(const end of [w.a,w.b]){const n=end&&nodes.find(x=>x.id===end);if(!n||!is2D(n)||componentAcceptsChildren(n))continue;const R=body.get(n.id);if(R&&inner.some(p=>layoutInside(p,R,3))){add('route-through-node',[w.id,n.id],`runs through its own end ${n.config?.label||n.id}`);break}}
     const exempt=new Set([w.a,w.b,canvasOwner,...ancestors(w.a),...ancestors(w.b)].filter(Boolean));
     for(const n of visible){
       if(exempt.has(n.id)||!is2D(n))continue;
@@ -125,6 +128,11 @@ function layoutMetrics(options={}){
       if(inner){if(pts.some(p=>layoutInside(p,R,2))&&pts.some(p=>!layoutInside(p,R,-2)))add('route-through-node',[w.id,n.id],`crosses the boundary of ${n.config?.label||n.id} without a point`);continue}
       if(pts.some(p=>layoutInside(p,R,2)))add('route-through-node',[w.id,n.id],`passes through ${n.config?.label||n.id}`);
     }
+  }
+  // A container's own symbol is drawn inside it: a route there crosses the symbol.
+  for(const {w,pts} of routes)for(const n of visible){
+    if(!componentAcceptsChildren(n))continue;const gl=nodeEl(n.id)?.querySelector(':scope > .glyph');if(!gl)continue;
+    const G=layoutWorldBox(gl);if(G&&pts.some(p=>layoutInside(p,G,4))){add('route-through-node',[w.id,n.id],`crosses the symbol of ${n.config?.label||n.id}`)}
   }
   for(let i=0;i<routes.length;i++)for(let j=i+1;j<routes.length;j++){
     const A=routes[i],B=routes[j],shared=[A.w.a,A.w.b].some(x=>x&&(x===B.w.a||x===B.w.b));
@@ -140,6 +148,13 @@ function layoutMetrics(options={}){
   // Wires sharing one point of a card must be marked as joined.
   {const shared=new Map();for(const w of wires)for(const [id,side] of [[w.a,w.aSide],[w.b,w.bSide]]){const n=id&&nodes.find(x=>x.id===id);if(!n||componentForm(n).dimension===0)continue;const k=`${id}|${side}`;shared.set(k,(shared.get(k)||0)+1)}
    for(const [k,count] of shared)if(count>=2&&!workspace.querySelector(`.junction-dot[data-port="${CSS.escape(k)}"]`))add('unmarked-junction',[k.split('|')[0]],`${count} wires meet at ${k.split('|')[1]} with no junction mark`)}
+  // A child lives in its container's core: its body must not cross into the skin or beyond.
+  for(const n of visible){
+    const owner=String(n.canvasId||'').startsWith('canvas:component:')?nodes.find(x=>x.id===String(n.canvasId).slice(17)):null;
+    if(!owner||!is2D(n)||n.placement?.kind==='edge')continue;
+    const inset=typeof componentSectionInset==='function'?componentSectionInset(owner):0,C=componentBounds(owner,-inset),B=body.get(n.id);
+    if(B&&(B.l<C.l-.5||B.r>C.r+.5||B.t<C.t-.5||B.b>C.b+.5))add('node-overlap',[n.id,owner.id],`crosses ${inset?'the skin':'the boundary'} of ${owner.config?.label||owner.id}`);
+  }
   // Points drawn on top of each other read as one.
   {const pts=visible.filter(n=>componentForm(n).dimension===0);
    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++)if(Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y)<12)add('node-overlap',[pts[i].id,pts[j].id],'points drawn on top of each other')}

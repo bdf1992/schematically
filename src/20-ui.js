@@ -164,6 +164,15 @@ function refreshCanvasScopeControl(){
   // Canvas is model state, not a persistent toolbar mode/readout.
 }
 
+// A point on a multi-line boundary chooses its line or band; hidden on a one-line boundary.
+function syncSectionPositionSelect(select,row,owner,compat){
+  if(!select||!row)return;
+  const pos=owner?SovSchematicData.pointSectionPosition(diagram,owner.id,compat):null;row.hidden=!pos;if(!pos)return;
+  const host=nodes.find(n=>n.id===pos.owner),s=SovSchematicData.componentSection(host);select.replaceChildren();
+  s.lines.forEach((l,i)=>{const o=document.createElement('option');o.value=`line:${i}`;o.textContent=i===0?'Outer line · reaches outside':i===s.lines.length-1?`Inner line · reaches ${s.core?.fill==='space'?'inside':'nothing (solid core)'}`:`Line ${i} · between bands`;select.appendChild(o)});
+  s.bands.forEach((b,k)=>{const o=document.createElement('option');o.value=`through:${k}`;o.textContent=`Through ${b.role||'band'} ${k+1} (${b.fill}) · a crossing`;select.appendChild(o)});
+  select.value=pos.line!=null?`line:${pos.line}`:`through:${pos.through}`;
+}
 function syncSelectionFormState(kind,entity){
   if(kind==='port'||!entity){barFormState.hidden=true;return}
   barFormState.hidden=false;barFormState.disabled=false;barFormState.classList.remove('wire-form');
@@ -183,6 +192,7 @@ function syncComponentVisualPanel(n){
   const f=componentForm(n);
   formDimension.value=String(f.dimension);formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
   formSection.value=sectionPresetName(f,2);
+  syncSectionPositionSelect(formPointPosition,formPointPositionRow,n,'out');
   formInteriorState.value=f.regions.interior.state;formFrameMode.value=f.frame.mode;formFrameThickness.value=String(f.frame.thickness);formFrameDepth.value=String(f.frame.depth);
   formAttachments.value=Attachment.attachmentDefaults(n);
   // Settings are shown per dimension: a Point has no size or frame, a Path no height or interior.
@@ -334,6 +344,7 @@ function showPortBar(info){
   const ch=portConnection(port);
   barPortLabel.value=port.label||'';
   barPortFace.value=port.face||'external';
+  syncSectionPositionSelect(barPortPosition,barPortPositionRow,info.owner,info.port&&Attachment.resolveSpec(info.owner,info.pointId)?.compatId||'out');
   barPortMarkers.textContent=portMarkerSummaryText(info);
   setSlotChip(barPortColorSlot,ch.colorSlot);
   barPortFlow.value=ch.flow;

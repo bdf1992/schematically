@@ -8,8 +8,9 @@
 - drawing
 - settings controls
 
+**Also built:** exposure by position.
+
 **Not yet built:**
-- exposure by position
 - hosting in bands
 - span ends
 - carriers in lanes
@@ -17,7 +18,7 @@
 See "As built" at the end of this doc.
 
 Status: **v1 built**. The record, the presets, the drawing and the settings controls
-exist; exposure by position, band hosting and span ends are still proposed. It refines `FORM-MODEL.md` and
+exist, and so does exposure by position. Band hosting and span ends are still proposed. It refines `FORM-MODEL.md` and
 changes parts of `ATTACHMENT-POINT-MODEL.md`, `CANVAS-MODEL.md` and
 `HOST-SURFACE-MODEL.md`. Those changes are listed under "What this changes" below.
 
@@ -298,11 +299,44 @@ lifted clear of the section.
 `examples/11-sections.sov` shows every preset. `tests/sections_qa.py` covers the whole
 of v1.
 
+### Exposure by position (built 2026-09-25)
+
+**Declaring a position.**
+- A point on a multi-line boundary declares where it sits: `at: {line}` or
+  `at: {through}` (an id or an index).
+  - A card's own port takes it on `config.ports.<id>.at`.
+  - A boundary Point takes it on `placement.at`.
+- Without a declaration, the **face places it**, which is the migration: `external` on
+  the outer line, `internal` on the inner line, `both` through the outer band. Every
+  legacy document keeps its exposure.
+
+**Exposure** comes from `portExposedCanvasIds` in the data core. Every surface uses it,
+so reachability, wire refusals, the simulation and the ACL all follow.
+- A point is exposed to the space regions its position touches.
+- The region beyond the outer line is the containing surface.
+- A space core is the interior surface.
+- A through-point on a coated card reaches only the outside, because its core is solid.
+- A space band has no surface of its own yet, so crossing a double wall is not
+  possible in v1.
+
+**Drawing.**
+- A point on an inner line is drawn on that line.
+- A through-point is drawn at its band's middle, as a capsule spanning the band.
+- The interior fence for routes is the core, so wires stay inside the skin. A route's
+  own ends may sit in the skin.
+
+**Editing.** Position selects appear in the port settings (a card's own port) and in the
+component settings (a boundary Point). They offer each line and each band, and each
+change is one history step.
+
+**The audit** now also refuses a child whose body crosses its container's skin.
+
+`examples/12-membrane.sov` shows it: a channel and a pore through the skin, and a receptor
+on the outer line that cannot reach inside. It is covered by `tests/section_exposure_qa.py`.
+
 ### Not yet built
 
-- **Exposure by position** (points on inner lines, through-points in a skin).
-  Face-based exposure still applies on every form.
-- **Hosting in bands.**
+- **Hosting in bands**, and space bands as surfaces.
 - **Span ends** (`span-ref`) and mouths.
 - **Carriers routed inside lanes.**
 - **Asymmetric open sections.**

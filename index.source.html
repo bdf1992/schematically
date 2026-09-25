@@ -428,6 +428,9 @@
                 <option value="2">2D · Plane</option>
               </select>
             </label>
+            <label data-dims="0" id="formPointPositionRow" hidden title="On a multi-line boundary a point sits on a line or across a band; that decides which side it reaches">Position
+              <select id="formPointPosition" aria-label="Position on the host's section"></select>
+            </label>
             <label data-dims="2" title="The lines of the boundary and the regions between them (SECTION-MODEL.md)">Section
               <select id="formSection">
                 <option value="derived">From frame &amp; interior</option>
@@ -573,6 +576,9 @@
       <div id="portSettingsFields" class="settings-surface" hidden>
         <div class="settings-head"><b>Attachment settings</b><span>Boundary face and signal behavior</span></div>
         <div class="settings-grid settings-grid-compact">
+          <label id="barPortPositionRow" hidden title="On a multi-line boundary a point sits on a line or across a band; that decides which side it reaches">Position
+            <select id="barPortPosition" aria-label="Position on the boundary's section"></select>
+          </label>
           <label>Face
             <select id="barPortFace" aria-label="Port face" title="Inside/outside face">
               <option value="external">Outside</option>

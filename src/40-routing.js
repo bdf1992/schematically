@@ -278,9 +278,11 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   const targetNode=nodes.find(n=>n.id===targetId);
   const routedWire=wireId?wires.find(x=>x.id===wireId):null;
   // A free end has no boundary to leave; the route starts exactly there.
-  const SA=sourceNode?routeLead(A,B,aSide,sourceNode,wireEndpointInward(routedWire,sourceNode)):A, SB=targetNode?routeLead(B,A,bSide,targetNode,wireEndpointInward(routedWire,targetNode)):B;
   // A carrier on a Component's interior runs inside it: that interior is its whole surface.
   const fence=routeFence(routedWire);
+  // A lead never leaves the fence: a card near the core's edge gets a shorter lead, not a detour.
+  const inFence=P=>fence?{x:Math.max(fence.l+2,Math.min(fence.r-2,P.x)),y:Math.max(fence.t+2,Math.min(fence.b-2,P.y))}:P;
+  const SA=sourceNode?inFence(routeLead(A,B,aSide,sourceNode,wireEndpointInward(routedWire,sourceNode))):A, SB=targetNode?inFence(routeLead(B,A,bSide,targetNode,wireEndpointInward(routedWire,targetNode))):B;
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
   const otherRects=nodes
     .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
@@ -361,7 +363,8 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
        anchor:routeAnchor(points)
      }))
      .sort((a,b)=>a.score-b.score);
-    chosen=fallback[0];
+    // Prefer a perimeter that clears every body; only when none does is the cheapest taken.
+    chosen=fallback.find(f=>pathValid(f.points,obstacles))||fallback[0];
   }
 
   return {
@@ -386,18 +389,26 @@ function routeLead(P,Q,portId,node,inward){
   }
   const unit=stubPos(P,portId,1,node,inward),nx=unit.x-P.x,ny=unit.y-P.y;
   const ahead=(Q.x-P.x)*nx+(Q.y-P.y)*ny;
-  const d=ahead>0?Math.max(4,Math.min(ROUTE_LEAD,ahead/2)):ROUTE_LEAD;
+  let d=ahead>0?Math.max(4,Math.min(ROUTE_LEAD,ahead/2)):ROUTE_LEAD;
+  // Nor into a body in front of it: stop short of the first card the lead would enter.
+  for(const other of nodes){
+    if(other.id===node.id||componentForm(other).dimension!==2||isDescendantOf(node.id,other.id)||isEffectivelyHidden(other))continue;
+    const R=componentBounds(other,10);
+    for(let s=2;s<=d;s+=2){const x=P.x+nx*s,y=P.y+ny*s;if(x>R.l&&x<R.r&&y>R.t&&y<R.b){d=Math.max(4,s/2);break}}
+  }
   return {x:P.x+nx*d,y:P.y+ny*d};
 }
 function routeFence(wire){
   const surface=wire?.canvasId||'';
   if(!surface.startsWith('canvas:component:'))return null;
   const owner=nodes.find(n=>componentCanvas(n).id===surface);
-  return owner?componentBounds(owner,-4):null;
+  // The interior is the core: inside the innermost line of the owner's section.
+  return owner?componentBounds(owner,-4-(typeof componentSectionInset==='function'?componentSectionInset(owner):0)):null;
 }
 function routeInsideFence(points,fence){
   if(!fence)return true;
-  return points.every(p=>p.x>=fence.l-.5&&p.x<=fence.r+.5&&p.y>=fence.t-.5&&p.y<=fence.b+.5);
+  // The ends sit where their points are (a through-point sits in the skin); the route between stays in.
+  return points.slice(1,-1).every(p=>p.x>=fence.l-.5&&p.x<=fence.r+.5&&p.y>=fence.t-.5&&p.y<=fence.b+.5);
 }
 function routePath(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSeed=0,occupied=[]){
   return pathD(routePoints(A,B,aSide,bSide,sourceId,targetId,laneSeed,occupied).points);

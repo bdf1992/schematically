@@ -188,6 +188,9 @@
     const byId=new Map(doc.components.map(c=>[c.id,c])),frozen=[];
     const inScope=canvas=>doc.components.filter(c=>!hosted(c)&&(c.canvasId||Data.GLOBAL_CANVAS_ID)===canvas);
     const isContainer=c=>c.form?.regions?.interior?.state==='open'&&Number(c.form?.dimension??2)===2;
+    // A container drawing its own symbol keeps it clear of its children; a section's skin counts too.
+    const topRoom=c=>{const g=c?.config?.presentation?.graphic?.kind;const s=Data.componentSection?Data.componentSection(c):null;
+      return (g&&g!=='none'?64:18)+(s&&s.lines.length>=2?s.bands.reduce((a,b)=>a+b.thickness,0):0)};
     function rep(id,canvas){
       let c=byId.get(id),guard=0;
       while(c&&guard++<64){
@@ -200,8 +203,8 @@
     function layoutCanvas(canvas){
       const members=inScope(canvas),boxes=new Map();
       for(const c of members){
-        // Arranging fits a container to what it holds.
-        if(isContainer(c)&&inScope(interiorOf(c.id)).length){const inner=layoutCanvas(interiorOf(c.id));boxes.set(c.id,{w:Math.max(160,inner.w+pad*2),h:Math.max(120,inner.h+pad*2+18),inner})}
+        // Arranging fits a container to what it holds, with room on top for its own symbol.
+        if(isContainer(c)&&inScope(interiorOf(c.id)).length){const inner=layoutCanvas(interiorOf(c.id)),top=topRoom(c);boxes.set(c.id,{w:Math.max(160,inner.w+pad*2),h:Math.max(120,inner.h+pad*2+top),inner,top})}
         else boxes.set(c.id,{...size(c),inner:null});
       }
       const ids=members.map(c=>c.id),succ=new Map(ids.map(i=>[i,new Set()])),pred=new Map(ids.map(i=>[i,new Set()]));
@@ -234,6 +237,13 @@
         const need=text.length*7+48+(w.config?.direction==='duplex'?14:0);
         for(let l=la;l<lb;l++)labelGap.set(l,Math.max(labelGap.get(l)||0,need));
       }
+      // A container's boundary Points label the crossing outside its edge: that side needs room too.
+      const pointLabel=(hostId,side)=>Math.max(0,...doc.components.filter(k=>k.placement?.kind==='edge'&&k.placement.hostId===hostId&&k.placement.side===side).map(k=>String(k.config?.label||'').length*7+32));
+      for(const u of ids){
+        const l=layer.get(u),left=pointLabel(u,'left'),right=pointLabel(u,'right');
+        if(left&&l>0)labelGap.set(l-1,Math.max(labelGap.get(l-1)||0,left));
+        if(right)labelGap.set(l,Math.max(labelGap.get(l)||0,right));
+      }
       const x=new Map(),y=new Map();let cx=0;
       layers.forEach((L,l)=>{const w=Math.max(0,...L.map(u=>boxes.get(u).w));for(const u of L)x.set(u,cx+w/2);cx+=w+Math.max(gapX,labelGap.get(l)||0)});
       for(const L of layers){
@@ -257,11 +267,11 @@
         // Hosted children ride along with their host.
         if(r.isDefault)for(const k of doc.components)if(hosted(k)&&k.placement?.hostId===u){k.x=num(k.x,0)+(X-g.x);k.y=num(k.y,0)+(Y-g.y)}
         setGeometry(doc,r.id,u,{x:X,y:Y,w:b.w,h:b.h});
-        if(b.inner)write(b.inner,X-b.w/2+pad,Y-b.h/2+pad+18);
+        if(b.inner)write(b.inner,X-b.w/2+pad,Y-b.h/2+pad+b.top);
       }
     }
     const res=layoutCanvas(scopeCanvas);
-    if(scope){const g=geometry(doc,r.id,scope)||entityGeometry(byId.get(scope));const w=Math.max(160,res.w+pad*2),h=Math.max(120,res.h+pad*2+18);setGeometry(doc,r.id,scope,{w,h});write(res,g.x-w/2+pad,g.y-h/2+pad+18)}
+    if(scope){const g=geometry(doc,r.id,scope)||entityGeometry(byId.get(scope)),top=topRoom(byId.get(scope));const w=Math.max(160,res.w+pad*2),h=Math.max(120,res.h+pad*2+top);setGeometry(doc,r.id,scope,{w,h});write(res,g.x-w/2+pad,g.y-h/2+pad+top)}
     else{
       // Keep the diagram where it was: the new layout starts at the old top-left.
       const placed=res.ids.map(u=>geometry(doc,r.id,u)).filter(Boolean);

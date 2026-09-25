@@ -70,7 +70,7 @@ const barWireInMarker=document.getElementById('barWireInMarker');
 const barWireInColor=document.getElementById('barWireInColor');
 const barAddWirePortBtn=document.getElementById('barAddWirePortBtn');
 const barPortLabel=document.getElementById('barPortLabel');
-const barPortFace=document.getElementById('barPortFace');
+const barPortFace=document.getElementById('barPortFace'),barPortPosition=document.getElementById('barPortPosition'),barPortPositionRow=document.getElementById('barPortPositionRow'),formPointPosition=document.getElementById('formPointPosition'),formPointPositionRow=document.getElementById('formPointPositionRow');
 const barPortMarkers=document.getElementById('barPortMarkers');
 const barDeleteSelection=document.getElementById('barDeleteSelection');
 const zoomOutBtn = document.getElementById('zoomOutBtn');

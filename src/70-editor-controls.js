@@ -23,6 +23,18 @@ barPortSide.addEventListener('change',()=>{
   barPortSide.value=side;
   statusEl.textContent='0D attachment position is derived from its host form';
 });
+// Place a point on a line or across a band: a boundary Point's placement, or a card port's config.
+function setSectionPosition(owner,compat,value){
+  if(!owner||mutationBlocked(owner,'Change position'))return false;
+  const [kind,i]=String(value).split(':'),at=kind==='through'?{through:Number(i)}:{line:Number(i)};
+  setHistoryHint('Change position on the boundary');
+  if(componentForm(owner).dimension===0&&componentPlacement(owner).kind==='edge')owner.placement.at=at;
+  else{const p=componentConfig(owner).ports[compat];if(!p)return false;p.at=at}
+  // Which side a point reaches is decided by where it sits; wires follow the new exposure.
+  syncAllNodeBoundaryContext();routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();return true;
+}
+barPortPosition?.addEventListener('change',()=>{const info=selectedPortInfo();if(!info)return;setSectionPosition(info.owner,Attachment.resolveSpec(info.owner,info.pointId)?.compatId||'out',barPortPosition.value);selectPortRef(selectedPortInfo()||info)});
+formPointPosition?.addEventListener('change',()=>{const n=nodes.find(x=>x.id===selected);if(!n)return;setSectionPosition(n,'out',formPointPosition.value);selectNode(n.id,{focus:false});openSelectionSettings('component');syncComponentVisualPanel(n)});
 barPortFace.addEventListener('change',()=>{
   const info=selectedPortInfo();if(!info||mutationBlocked(info.owner,'Change Port face'))return;setHistoryHint('Change Port face');
   info.port.face=barPortFace.value;

@@ -457,10 +457,51 @@
     }
     return {outside:containingCanvasId(component),inside:componentCanvasId(component)};
   }
+  // Where a point sits on a multi-line boundary (SECTION-MODEL.md): on a line, or through a
+  // band. Declared as at: {line} | {through} (an id or an index); without one the face places
+  // it: external on the outer line, internal on the inner line, both through the outer band.
+  function sectionPosition(section,at,face){
+    const n=section.lines.length,idx=(list,v)=>typeof v==='number'?(v>=0&&v<list.length?v:-1):list.findIndex(x=>x.id===v);
+    if(isObject(at)){
+      if(at.line!=null){const i=idx(section.lines,at.line);if(i>=0)return {line:i,declared:true}}
+      if(at.through!=null){const k=idx(section.bands,at.through);if(k>=0)return {through:k,declared:true}}
+    }
+    if(face==='internal')return {line:n-1};
+    if(face==='both')return {through:0};
+    return {line:0};
+  }
+  // The regions a position touches: 0 is beyond the outer line, 1..n-1 the bands, n the core.
+  // A line separates two regions; a through-point spans its band and touches both neighbours.
+  function sectionRegionsTouched(pos){return pos.line!=null?[pos.line,pos.line+1]:[pos.through,pos.through+2]}
+  // The multi-line boundary a point sits on: its host's (a boundary Point) or its own (a card's port).
+  function boundarySection(doc,component){
+    const placement=component?.placement||{};
+    const owner=placement.kind==='edge'&&placement.hostId?doc.components.find(c=>c.id===placement.hostId):(Number(component?.form?.dimension??2)===2&&!['wire','path'].includes(placement.kind)?component:null);
+    const section=owner?componentSection(owner):null;
+    return section&&section.lines.length>=2?{owner,section,at:placement.kind==='edge'?placement.at:null}:null;
+  }
+  function pointSectionPosition(doc,componentId,portId){
+    const component=doc.components.find(c=>c.id===componentId);if(!component)return null;
+    const b=boundarySection(doc,component);if(!b)return null;
+    const port=attachmentPointConfig(doc,componentId,portId)||{};
+    return {...sectionPosition(b.section,b.at||port.at,port.face||'external'),lines:b.section.lines.length,owner:b.owner.id};
+  }
   function portExposedCanvasIds(doc,componentId,portId){
     const component=doc.components.find(c=>c.id===componentId);if(!component)return [];
     const port=attachmentPointConfig(doc,componentId,portId);if(!port)return [];
     const face=port.face||'external',surfaces=attachmentHostSurfaces(doc,component);
+    // On a multi-line boundary a point is exposed to the space regions its position touches;
+    // the face decides only on a one-line boundary, which has no thickness to sit in.
+    const b=boundarySection(doc,component);
+    if(b){
+      const n=b.section.lines.length,pos=sectionPosition(b.section,b.at||port.at,face),out=[];
+      for(const r of sectionRegionsTouched(pos)){
+        if(r===0)out.push(surfaces.outside);
+        else if(r===n&&b.section.core?.fill==='space')out.push(surfaces.inside);
+        // A space band would be a surface of its own; band surfaces are not built yet.
+      }
+      return [...new Set(out)];
+    }
     if(face==='internal')return [surfaces.inside];
     if(face==='both')return [...new Set([surfaces.outside,surfaces.inside])];
     return [surfaces.outside];
@@ -707,5 +748,5 @@
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
 });

@@ -140,6 +140,11 @@ All of this is optional data. `GRAPH-MODEL.md` specifies it in full.
   `config.acl = {entries: [{principal: 'svc:*', allow: ['enter', 'exit']}]}`.
   - The operations are `enter`, `exit`, `read` and `write`.
   - A deny always wins, and the default is deny.
+- **A section:** `form.section` (presets `disk`, `circle`, `section`, `coated`,
+  `double-wall` for 2D; `line`, `strip`, `lanes`, `pipe` for wires, in `SECTION-MODEL.md`).
+  On a multi-line boundary a point sits on a line or through a band:
+  `placement.at = {line: 'L1'}` or `{through: 'B1'}`, or `config.ports.<id>.at` for a card's
+  own port. That position decides what the point reaches.
 - **A participant:** `config.principal: 'ai:ingest'` makes a component act in that name
   when it forwards work.
 

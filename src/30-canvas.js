@@ -658,6 +658,12 @@ function componentGlyphAxis(n){
   const stem=GLYPH_CONTROL_STEM[n.symbolId];
   return {y:y0+axis*scale,left:x0+8*scale,right:x0+88*scale,stroke:4*scale,stemTop:stem==null?null:y0+stem*scale,stemX:x0+48*scale};
 }
+// How far inside the outline a position on a section sits: to its line, or to its band's middle.
+function sectionPointInset(host,pos){
+  if(!host||!pos)return 0;const s=SovSchematicData.componentSection(host);if(!s||s.lines.length<2)return 0;
+  const sum=k=>s.bands.slice(0,k).reduce((a,b)=>a+b.thickness,0);
+  return pos.line!=null?sum(pos.line):sum(pos.through)+(s.bands[pos.through]?.thickness||0)/2;
+}
 function componentPortLocalPosition(n,pointId){
   const size=componentSize(n),spec=Attachment.resolveSpec(n,pointId);if(!spec)return{x:0,y:0};
   const cfg=componentConfig(n),pcfg=cfg.ports[spec.compatId],effective=Attachment.effectiveDimension(n);
@@ -668,7 +674,8 @@ function componentPortLocalPosition(n,pointId){
   }
   // A point sits on the boundary itself, so a wire meets the body edge with no gap; the face
   // is shown by the point's style, not by standing it off the edge.
-  const faceOffset=0,t=Math.max(0,Math.min(1,Number.isFinite(Number(spec.t))?Number(spec.t):.5));
+  // On a multi-line boundary a point sits on its line, or across its band: inset from the outline.
+  const faceOffset=-sectionPointInset(n,SovSchematicData.pointSectionPosition(diagram,n.id,spec.compatId)),t=Math.max(0,Math.min(1,Number.isFinite(Number(spec.t))?Number(spec.t):.5));
   const alongX=-size.w/2+size.w*t;
   // An unplaced side point meets the symbol on its axis, so wire, edge and glyph are one line.
   const axis=!spec.placed&&spec.role==='boundary'&&!spec.authored&&(spec.side==='left'||spec.side==='right')?componentGlyphAxis(n):null;
@@ -714,7 +721,9 @@ function nearestPointOnComponentEdge(host,x,y){
 function syncComponentAttachedPose(node){
   const placement=componentPlacement(node);if(!['path','edge'].includes(placement.kind))return;const host=nodes.find(n=>n.id===placement.hostId)||parentComponent(node);if(!host)return;let q=null;
   if(placement.kind==='path'){const half=Math.max(24,componentSize(host).w/2),local=-half+half*2*placement.t,world=rotateVectorByDegrees(local,0,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)}}
-  else{const {w,h}=componentSize(host),side=placement.side||'top',u=Math.max(0,Math.min(1,placement.t));let lx=0,ly=0,a=0;if(side==='top'||side==='bottom'){lx=-w/2+w*u;ly=side==='top'?-h/2:h/2}else{lx=side==='left'?-w/2:w/2;ly=-h/2+h*u;a=90}const world=rotateVectorByDegrees(lx,ly,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)+a}}
+  else{const {w,h}=componentSize(host),side=placement.side||'top',u=Math.max(0,Math.min(1,placement.t));let lx=0,ly=0,a=0;
+    const inset=sectionPointInset(host,SovSchematicData.pointSectionPosition(diagram,node.id,'out'));
+    if(side==='top'||side==='bottom'){lx=-w/2+w*u;ly=side==='top'?-h/2+inset:h/2-inset}else{lx=side==='left'?-w/2+inset:w/2-inset;ly=-h/2+h*u;a=90}const world=rotateVectorByDegrees(lx,ly,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)+a}}
   node.x=q.x;node.y=q.y;wireHostPoseCache.set(node.id,{...q,hostId:host.id,t:placement.t});
 }
 function componentHostCandidateAtPoint(node,x=node.x,y=node.y){
