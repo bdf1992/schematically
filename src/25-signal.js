@@ -38,7 +38,9 @@ function wireDirectionActive(w,direction,signalState){
 function computeSignalState(){
   let active=new Set();
   nodes.forEach(n=>{ if(normalizeSignalMode(componentConfig(n))==='source') active.add(n.id); });
-  for(let pass=0;pass<6;pass++){
+  // Activation only grows, so it settles within one pass per node; a fixed pass count would
+  // leave the far end of a long chain dark.
+  for(let pass=0;pass<=nodes.length;pass++){
     const probe={active,colors:new Map(nodes.map(n=>[n.id,componentConfig(n).color]))};
     const next=new Set(active);
     for(const n of nodes){

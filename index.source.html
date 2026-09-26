@@ -7,142 +7,7 @@
 <link rel="stylesheet" href="styles/app.css">
 </head>
 <body>
-<svg class="hidden-symbols" aria-hidden="true"><defs><symbol id="sym-blank" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round">
-    <path d="M48 18v28M34 32h28"/>
-  </g>
-</symbol>
-<symbol id="sym-ground" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M48 8v18"/>
-    <path d="M24 28h48"/>
-    <path d="M31 38h34"/>
-    <path d="M39 48h18"/>
-  </g>
-</symbol>
-<symbol id="sym-point" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
-    <circle cx="48" cy="32" r="9"/>
-    <circle cx="48" cy="32" r="2.5" fill="currentColor" stroke="none"/>
-  </g>
-</symbol>
-<symbol id="sym-port" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
-    <path d="M8 32h28M60 32h28"/>
-    <circle cx="48" cy="32" r="12"/>
-  </g>
-</symbol>
-<symbol id="sym-path" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
-    <path d="M12 32h72"/>
-    <circle cx="12" cy="32" r="4" fill="currentColor" stroke="none"/>
-    <circle cx="84" cy="32" r="4" fill="currentColor" stroke="none"/>
-  </g>
-</symbol>
-<symbol id="sym-plane" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="14" y="10" width="68" height="44" rx="5"/>
-    <path d="M26 22h44M26 32h44M26 42h28" stroke-width="2.5" opacity=".5"/>
-  </g>
-</symbol>
-<symbol id="sym-join" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
-    <path d="M8 32h80M48 8v48"/>
-  </g>
-  <circle cx="48" cy="32" r="6" fill="currentColor"/>
-</symbol>
-<symbol id="sym-cross" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
-    <path d="M8 32h30"/>
-    <path d="M58 32h30"/>
-    <path d="M48 8v16"/>
-    <path d="M48 40v16"/>
-    <path d="M38 32c0-8 20-8 20 0"/>
-  </g>
-</symbol>
-<symbol id="sym-hold" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
-    <path d="M8 32h24M64 32h24"/>
-    <path d="M38 16v32M58 16v32"/>
-  </g>
-</symbol>
-<symbol id="sym-buffer" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 32h24M64 32h24"/>
-    <path d="M34 18h28v28H34z"/>
-    <path d="M40 38c6-12 10-12 16 0"/>
-  </g>
-</symbol>
-<symbol id="sym-act" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 32h20M68 32h20"/>
-    <path d="M28 14l40 18-40 18z"/>
-  </g>
-</symbol>
-<symbol id="sym-gate" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 32h22M66 32h22"/>
-    <path d="M48 8v10"/>
-    <path d="M48 18l18 14-18 14-18-14z"/>
-  </g>
-</symbol>
-<symbol id="sym-switch" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
-    <path d="M8 38h24M64 38h24"/>
-    <circle cx="34" cy="38" r="4" fill="currentColor"/>
-    <circle cx="62" cy="38" r="4" fill="currentColor"/>
-    <path d="M36 36l22-18"/>
-    <path d="M48 8v10"/>
-  </g>
-</symbol>
-<symbol id="sym-limit" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 32h18l8-12 10 24 10-24 10 24 8-12h16"/>
-  </g>
-</symbol>
-<symbol id="sym-one-way" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 32h80"/>
-    <path d="M48 22l12 10-12 10"/>
-  </g>
-</symbol>
-<symbol id="sym-return" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M14 24h60"/>
-    <path d="M66 16l10 8-10 8"/>
-    <path d="M82 40H22"/>
-    <path d="M30 32l-10 8 10 8"/>
-  </g>
-</symbol>
-<symbol id="sym-observe" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
-    <path d="M8 42h80"/>
-    <path d="M48 42V24"/>
-    <circle cx="48" cy="16" r="8"/>
-  </g>
-</symbol>
-<symbol id="sym-receipt" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 24h80"/>
-    <path d="M48 24v12"/>
-    <rect x="38" y="36" width="20" height="18" rx="2"/>
-    <path d="M43 45h10"/>
-  </g>
-</symbol>
-<symbol id="sym-authority" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M48 8v16"/>
-    <circle cx="48" cy="32" r="8"/>
-    <path d="M48 40v16"/>
-    <path d="M40 32h16"/>
-  </g>
-</symbol>
-<symbol id="sym-refuse" viewBox="0 0 96 64">
-  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
-    <path d="M8 32h44"/>
-    <path d="M54 12v40"/>
-  </g>
-</symbol></defs></svg>
+<svg class="hidden-symbols" aria-hidden="true"><defs><!-- glyph symbols are generated from the notation (src/03-notation-core.js, installNotationSymbols) --></defs></svg>
 <div class="app">
 <header>
   <div class="brand">SOV SCHEMATIC</div>
@@ -216,6 +81,7 @@
     <button class="btn zoom-readout" id="zoomReadout" title="Current zoom">100%</button>
     <button class="btn" id="zoomInBtn" title="Zoom in (+)">+</button>
     <button class="btn" id="fitBtn" title="Fit diagram (Home)">Fit</button>
+    <select id="layoutSelect" title="Layout: one diagram, arranged for each reader" aria-label="Layout"></select>
     <button class="btn" id="resetZoomBtn" title="Reset zoom (Shift+Home or 0)">Reset</button>
     <button class="btn" id="paletteBtn" title="Palette and color theme" aria-expanded="false">Palette</button>
     <div class="palette-settings" id="paletteSettings" hidden>
@@ -229,6 +95,7 @@
       </label>
       <label class="palette-row"><span>Palette</span>
         <select id="colorPaletteInput">
+          <option value="okabe-ito">Okabe–Ito · colour-blind safe</option>
           <option value="spectrum">Spectrum</option>
           <option value="cool">Cool</option>
           <option value="warm">Warm</option>
@@ -267,6 +134,15 @@
       <details class="mini-disclosure"><summary><span class="info-dot">i</span> Drag modifiers</summary><div>Shift = half grid · Ctrl/Cmd = double grid · Alt = free.</div></details>
     </div>
     <button class="btn active" id="flowBtn" title="Show circuit direction">Flow</button>
+    <div class="toolbar-separator" aria-hidden="true"></div>
+    <div class="sim-transport" role="group" aria-label="Simulation clock">
+      <button class="btn" id="legendBtn" title="Show what the marks, colours, glyphs and shapes mean">Legend</button>
+      <button class="btn" id="simPlayBtn" title="Run the clock">▶</button>
+      <button class="btn" id="simStepBtn" title="Next instant">⏭</button>
+      <button class="btn" id="simResetBtn" title="Stop and reset the clock">⟲</button>
+      <select id="simSpeed" title="Clock speed" aria-label="Clock speed"><option value="0.25">¼×</option><option value="1" selected>1×</option><option value="4">4×</option><option value="16">16×</option></select>
+      <output id="simTime" aria-live="polite">clock stopped</output>
+    </div>
   </div>
 </header>
 
@@ -297,6 +173,8 @@
     <g id="ghostLayer" aria-hidden="true"></g>
     <g id="paletteDropLayer" aria-hidden="true"></g>
     <g id="nodes"></g>
+    <g id="junctionLayer" aria-hidden="true"></g>
+    <g id="simLayer"></g>
   </svg>
   <div class="quick-search" id="quickSearch" hidden>
     <input id="quickSearchInput" type="text" autocomplete="off" spellcheck="false" placeholder="Search objects or run a command…" aria-label="Search and commands">
@@ -385,6 +263,20 @@
                 <option value="2">2D · Plane</option>
               </select>
             </label>
+            <label data-dims="0" id="formPointPositionRow" hidden title="On a multi-line boundary a point sits on a line or across a band; that decides which side it reaches">Position
+              <select id="formPointPosition" aria-label="Position on the host's section"></select>
+            </label>
+            <label data-dims="2" title="The lines of the boundary and the regions between them (SECTION-MODEL.md)">Section
+              <select id="formSection">
+                <option value="derived">From frame &amp; interior</option>
+                <option value="disk">Disk · one line, solid</option>
+                <option value="circle">Circle · one line, space</option>
+                <option value="section">Section · skin around space</option>
+                <option value="coated">Coated · skin around solid</option>
+                <option value="double-wall">Double wall · 4 lines</option>
+                <option value="custom" disabled>Custom (authored)</option>
+              </select>
+            </label>
             <label data-dims="2">Interior
               <select id="formInteriorState">
                 <option value="closed">Closed</option>
@@ -404,6 +296,22 @@
             <button id="portsAddBtn" class="bar-action settings-action" type="button" title="Add a port on the right side">Add port</button>
           </div>
           <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
+        </details>
+        <details class="form-settings" id="accessSettings">
+          <summary><b>Access</b><span class="helper-snippet">principal · access list</span></summary>
+          <label class="settings-wide">Acts as <input id="accessPrincipal" type="text" maxlength="64" placeholder="e.g. svc:mailer · empty = inherits" spellcheck="false"></label>
+          <div id="accessAclBlock" data-dims="2">
+            <label class="settings-wide">Access list
+              <select id="accessAclMode">
+                <option value="none">None · anyone crosses</option>
+                <option value="deny">Deny unless allowed</option>
+                <option value="allow">Allow unless denied</option>
+              </select>
+            </label>
+            <div id="accessEntries" class="access-entries"></div>
+            <button class="btn" type="button" id="accessAddEntry">Add principal</button>
+            <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Access rules</summary><div>Checked where work or a level crosses this plane's boundary. Patterns: exact, prefix:*, or *. A deny always wins; no principal is refused.</div></details>
+          </div>
         </details>
         <details class="form-settings">
           <summary><b>Appearance</b><span class="helper-snippet">graphic · size · material</span></summary>
@@ -430,8 +338,8 @@
               <option value="none">Hidden</option>
             </select>
           </label>
-          <label data-dims="12">Width <input id="visualWidth" type="number" min="80" max="520" step="8"></label>
-          <label data-dims="2">Height <input id="visualHeight" type="number" min="64" max="420" step="8"></label>
+          <label data-dims="12">Width <input id="visualWidth" type="number" min="80" step="8"></label>
+          <label data-dims="2">Height <input id="visualHeight" type="number" min="64" step="8"></label>
           <label data-dims="2">Interior <button id="visualInteriorColor" class="color-slot-chip" type="button" aria-label="Interior palette slot"></button></label>
           <label data-dims="2">Material
             <select id="formMaterial">
@@ -467,6 +375,15 @@
       <div id="wireSettingsFields" class="settings-surface" hidden>
         <div class="settings-head"><b>Wire settings</b><span>Endpoint mapping and return semantics</span></div>
         <div class="settings-grid settings-grid-compact">
+          <label title="Lines across the wire (SECTION-MODEL.md)">Section
+            <select id="barWireSection" aria-label="Wire section">
+              <option value="line">Line · one line</option>
+              <option value="strip">Strip · two lines, solid</option>
+              <option value="lanes">Lanes · two lines, space</option>
+              <option value="pipe">Pipe · four lines</option>
+              <option value="custom" disabled>Custom (authored)</option>
+            </select>
+          </label>
           <label>Return
             <select id="barConnectionReciprocity" aria-label="Connection reciprocity" title="Return rule">
               <option value="none">No return rule</option>
@@ -499,6 +416,9 @@
       <div id="portSettingsFields" class="settings-surface" hidden>
         <div class="settings-head"><b>Attachment settings</b><span>Boundary face and signal behavior</span></div>
         <div class="settings-grid settings-grid-compact">
+          <label id="barPortPositionRow" hidden title="On a multi-line boundary a point sits on a line or across a band; that decides which side it reaches">Position
+            <select id="barPortPosition" aria-label="Position on the boundary's section"></select>
+          </label>
           <label>Face
             <select id="barPortFace" aria-label="Port face" title="Inside/outside face">
               <option value="external">Outside</option>
@@ -531,6 +451,8 @@
     <div class="color-slot-panel" id="colorSlotPanel" hidden></div>
   </div>
   <div class="hint" id="hint">Drag body: move · corner grip: resize · Point: drag centre to move, drag ring to wire · drop a Point on a Path, Plane edge, or Wire to attach it</div>
+  <aside id="legendPanel" class="legend-panel" aria-label="Legend" hidden></aside>
+  <div id="narrationBar" class="narration-bar" role="status" aria-live="polite" hidden></div>
 </main>
 
 <aside class="inspector">
@@ -600,9 +522,13 @@
 
 <script type="application/json" id="sov-packs">[]</script>
 <script src="src/03-canonical.js"></script>
+<script src="src/03-notation-core.js"></script>
 <script src="src/06-attachment-core.js"></script>
 <script src="src/05-data-core.js"></script>
 <script src="src/07-state-space.js"></script>
+<script src="src/07-graph-core.js"></script>
+<script src="src/08-layout-core.js"></script>
+<script src="src/09-colour-core.js"></script>
 <script src="src/00-state.js"></script>
 <script src="src/10-model.js"></script>
 <script src="src/15-editor-kernel.js"></script>
@@ -612,10 +538,16 @@
 <script src="src/40-routing.js"></script>
 <script src="src/50-selection.js"></script>
 <script src="src/55-render.js"></script>
+<script src="src/57-layout-metrics.js"></script>
+<script src="src/58-layouts.js"></script>
+<script src="src/59-contrast.js"></script>
 <script src="src/60-interactions.js"></script>
 <script src="src/70-editor-controls.js"></script>
 <script src="src/75-persistence.js"></script>
 <script src="src/80-bootstrap.js"></script>
+<script src="src/65-sim-control.js"></script>
+<script src="src/66-narration.js"></script>
+<script src="src/67-legend.js"></script>
 <script src="src/85-api.js"></script>
 </body>
 </html>

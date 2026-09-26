@@ -1,0 +1,38 @@
+Step 2, second revision: the eclipse-glsp/glsp-client monorepo builds unchanged.
+==================================================================================
+
+The earlier revision of this file (evidence/upstream-reference-build.log) recorded
+that the runnable browser standalone example (examples/workflow-standalone in the
+eclipse-glsp/glsp-client GitHub repo) was "outside this contract's permitted
+commands (git worktree list, checkout, branch, stash, rev-parse, show -- no clone
+of an external remote)". That premise no longer holds: this contract's permitted
+command list includes `git clone:*`, and cloning the real remote from this session
+works (network access to github.com and registry.npmjs.org is available).
+
+  $ git clone --depth 1 --branch v2.8.0 https://github.com/eclipse-glsp/glsp-client.git .tools/glsp-client
+    (branch tag wasn't a real tag; landed on commit a51b4b0, the tip used to
+    publish @eclipse-glsp/client 2.8.0's own package.json version, unchanged)
+
+Built via pnpm, unchanged, from spikes/glsp-projection/.tools/glsp-client (gitignored,
+kept local-only per the contract's ".tools" allowance):
+
+  $ npx --yes pnpm install
+    Done in 1m 26.7s using pnpm v11.7.0 -- 268 packages, no patched/modified source
+
+  $ npx --yes pnpm build
+    $ tsc -b                                          -> clean
+    $ pnpm standalone bundle       (esbuild.js)        -> "build finished"
+    $ pnpm standalone bundle:browser (download-server.mts --browser && esbuild.js --browser)
+        downloaded @eclipse-glsp-examples/workflow-server-bundled-web@2.8.0 (the
+        matching prebuilt GLSP Node server, run in a web worker) and bundled the
+        browser client -> "build finished"
+
+Output: examples/workflow-standalone/app/{diagram.html, bundle.js, bundle.css,
+wf-glsp-server-webworker.js}, a real, runnable, unmodified GLSP 2.8.0 standalone
+diagram client+server pair.
+
+Conclusion for step 2: the toolchain is not the fault, confirmed with the actual
+artifact step 2 asked for (not just the Node-server half, as the first revision of
+this log settled for). Any failure below in this spike's own client
+(spikes/glsp-projection/client/) is the spike's own code, not an upstream or
+toolchain problem. Steps 5, 7 and 8 proceed.

@@ -19,6 +19,25 @@
     "schematic.run.settle",
     "schematic.run.trace",
     "schematic.state.query",
-    "schematic.run.replay"
+    "schematic.run.replay",
+    "schematic.graph.query",
+    "schematic.sim.start",
+    "schematic.sim.stop",
+    "schematic.sim.inject",
+    "schematic.sim.set",
+    "schematic.sim.at",
+    "schematic.sim.advance",
+    "schematic.sim.tick",
+    "schematic.sim.step",
+    "schematic.sim.run",
+    "schematic.sim.resume",
+    "schematic.sim.reconcile",
+    "schematic.sim.inspect",
+    "schematic.sim.scenario",
+    "schematic.sim.scenarios",
+    "schematic.render",
+    "schematic.layout.metrics",
+    "schematic.layout",
+    "schematic.markers"
   ]
 }

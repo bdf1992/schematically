@@ -32,7 +32,11 @@ with sync_playwright() as p:
     assert state['direction']=='duplex' and state['duplex'],state
     # Endpoint channel tags use physical attachment geometry even though 0.1 storage
     # retains legacy in/out aliases.
+    # A single-connection end has nothing to distinguish, so it draws no channel tag.
     page.evaluate('render()');page.wait_for_timeout(50)
+    assert page.evaluate("document.querySelectorAll('.endpoint-channel-tag').length")==0
+    # Two connections on each port: now the tags mark which one this wire uses.
+    page.evaluate('''()=>{for(const [id,port] of [['a','out'],['b','in']]){const p=componentConfig(nodes.find(n=>n.id===id)).ports[port];p.connectionCount=2;normalizePortConnections(p)}render()}''');page.wait_for_timeout(50)
     marker_geometry=page.evaluate('''()=>{
       const w=wires[0],a=nodes.find(n=>n.id===w.a),b=nodes.find(n=>n.id===w.b),A=portPos(a,w.aSide),B=portPos(b,w.bSide);
       const tags=[...document.querySelectorAll('.wire-group[data-wire-id="'+w.id+'"] .endpoint-channel-tag')];

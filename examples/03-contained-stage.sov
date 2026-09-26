@@ -87,8 +87,8 @@
         "signalMode": "source",
         "presentation": {
           "size": {
-            "w": 520,
-            "h": 330
+            "w": 260,
+            "h": 220
           }
         },
         "ports": {
@@ -168,8 +168,8 @@
       "id": "c2",
       "type": "buffer",
       "symbolId": "buffer",
-      "x": 390,
-      "y": 300,
+      "x": 480,
+      "y": 358,
       "canvasId": "canvas:component:c1",
       "canvas": {
         "id": "canvas:component:c2",
@@ -243,8 +243,8 @@
             "svg": ""
           },
           "size": {
-            "w": 112,
-            "h": 84
+            "w": 150,
+            "h": 90
           },
           "labelMode": "boundary",
           "interiorColorSlot": 0,

@@ -2,18 +2,26 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import {spawn} from 'node:child_process';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 // Absolute paths are not valid ESM specifiers on Windows; import by file:// URL everywhere.
 await import(pathToFileURL(path.join(HERE,'../src/03-canonical.js')).href);
+await import(pathToFileURL(path.join(HERE,'../src/03-notation-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/06-attachment-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/05-data-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/07-state-space.js')).href);
-const Data=globalThis.SovSchematicData;
+await import(pathToFileURL(path.join(HERE,'../src/07-graph-core.js')).href);
+await import(pathToFileURL(path.join(HERE,'../src/08-layout-core.js')).href);
+const Layout=globalThis.SovSchematicLayout;
+const Data=globalThis.SovSchematicData,Graph=globalThis.SovSchematicGraph;
 if(!Data)throw new Error('SovSchematicData core failed to load');
 const State=globalThis.SovSchematicStateSpace;
 if(!State)throw new Error('SovSchematicStateSpace failed to load');
+if(!Graph)throw new Error('SovSchematicGraph core failed to load');
+// Graph queries and the simulation are read-only over the document; one session per server.
+const graphSession=Graph.createSession();
 
 const args=process.argv.slice(2);
 const arg=(name,fallback)=>{const i=args.indexOf(name);return i>=0&&args[i+1]?args[i+1]:fallback};
@@ -65,16 +73,51 @@ function json(res,status,value,headers={}){
 function bodyJson(req){return new Promise((resolve,reject)=>{let chunks='';req.setEncoding('utf8');req.on('data',c=>{chunks+=c;if(chunks.length>5_000_000){reject(new Error('request too large'));req.destroy()}});req.on('end',()=>{try{resolve(chunks?JSON.parse(chunks):{})}catch(e){reject(e)}});req.on('error',reject)})}
 function rpcResult(id,result){return {jsonrpc:'2.0',id,result}}
 function rpcError(id,code,message,data){return {jsonrpc:'2.0',id,error:{code,message,...(data===undefined?{}:{data})}}}
-function toolPayload(value,isError=false){return {content:[{type:'text',text:JSON.stringify(value,null,2)}],structuredContent:value,isError}}
+function toolPayload(value,isError=false,image=null){
+  // A picture goes back as image content so an agent that can see receives it as an image.
+  if(image){const {png,...rest}=value;return {content:[{type:'image',data:image,mimeType:'image/png'},{type:'text',text:JSON.stringify(rest,null,2)}],structuredContent:rest,isError}}
+  return {content:[{type:'text',text:JSON.stringify(value,null,2)}],structuredContent:value,isError}}
+// Pictures and layout metrics need a browser; the server asks scripts/render_service.py, which
+// runs the editor's own renderer in headless Chromium. Without one the call is refused, typed.
+const RENDER_PYTHON=process.env.SOV_RENDER_PYTHON||'python3';
+function renderDocument(formats,args={}){
+  return new Promise(resolve=>{
+    let out='',err='';const child=spawn(RENDER_PYTHON,[path.join(HERE,'../scripts/render_service.py')],{cwd:path.join(HERE,'..')});
+    const timer=setTimeout(()=>{child.kill();resolve({ok:false,code:'RENDER_TIMEOUT',message:'render took longer than 90s'})},90000);
+    child.stdout.on('data',d=>out+=d);child.stderr.on('data',d=>err+=d);
+    child.on('error',e=>{clearTimeout(timer);resolve({ok:false,code:'RENDERER_UNAVAILABLE',message:`cannot start ${RENDER_PYTHON}: ${e.message}`})});
+    child.on('close',()=>{clearTimeout(timer);try{resolve(JSON.parse(out.trim().split('\n').pop()))}catch(_){resolve({ok:false,code:'RENDER_FAILED',message:(err||out).trim().split('\n').pop()||'no output'})}});
+    child.stdin.end(JSON.stringify({document:Data.clone(documentState),formats,appearance:args.appearance||'light',scale:args.scale??2,pad:args.pad??48,view:args.view||null,legend:args.legend===true||args.legend==='true'||args.legend==='1',narration:args.narration!=null&&args.narration!==''&&Number.isInteger(Number(args.narration))?Number(args.narration):null}));
+  });
+}
+const RENDER_TOOLS=[
+  {name:'schematic.render',description:'Render the document as the editor exports it: format svg (text) or png (an image, returned as image content for agents that can see). appearance light|dark; scale for png.',inputSchema:{type:'object',properties:{format:{type:'string',enum:['svg','png']},appearance:{type:'string',enum:['light','dark']},scale:{type:'number',minimum:.25,maximum:4},view:{type:'string',description:'A layout id (schematic.layout op list); default: the document\'s default layout'},legend:{type:'boolean',description:'Put the legend (what the marks, colours, glyphs and shapes used mean) below the picture'},narration:{type:'integer',minimum:0,description:'Put narration line i below the picture'}},additionalProperties:false}},
+  {name:'schematic.layout.metrics',description:'Measure how the document presents (LAYOUT-MODEL.md §5): a 0-10 score and every finding (overflow, collisions, route escapes, crossings, jogs, unmarked junctions...), each naming the ids it measured.',inputSchema:{type:'object',properties:{view:{type:'string'}},additionalProperties:false}}
+];
+async function executeRenderTool(name,args={}){
+  if(name==='schematic.layout.metrics'){const r=await renderDocument(['metrics'],args);return r.ok?{ok:true,value:r.metrics,mutates:false}:{ok:false,value:r,mutates:false}}
+  const format=args.format==='png'?'png':'svg';const r=await renderDocument([format,'metrics'],args);
+  if(!r.ok)return {ok:false,value:r,mutates:false};
+  return {ok:true,value:format==='png'?{format,png:r.png,score:r.metrics.score,counts:r.metrics.counts}:{format,svg:r.svg,score:r.metrics.score,counts:r.metrics.counts},mutates:false,image:format==='png'?r.png:null};
+}
 function executeTool(name,args={}){
   const ran=runTool(name,args);
   if(ran)return {ok:ran.ok,value:ran,mutates:false};
+  if(RENDER_TOOLS.some(t=>t.name===name))return executeRenderTool(name,args);
+  if(name==='schematic.layout'){
+    const {op,...rest}=args,readOnly=Layout.isReadOnly(op),before=readOnly?null:cloneDoc();
+    const value=Layout.execute(documentState,op,rest);
+    if(value.ok&&!readOnly){recordHistory(before);Data.touch(documentState)}
+    return {ok:value.ok!==false,value,mutates:value.ok!==false&&!readOnly};
+  }
+  if(graphSession.names.includes(name)){const value=graphSession.execute(name,documentState,args);return {ok:value.ok!==false,value,mutates:false}}
   if(name==='schematic.history.undo'){const prev=historyUndo.pop();if(!prev)return {ok:false,value:{error:'Nothing to undo'},mutates:false};historyRedo.push(cloneDoc());Data.replaceDocument(documentState,prev);return {ok:true,value:Data.clone(documentState),mutates:true}}
   if(name==='schematic.history.redo'){const next=historyRedo.pop();if(!next)return {ok:false,value:{error:'Nothing to redo'},mutates:false};historyUndo.push(cloneDoc());Data.replaceDocument(documentState,next);return {ok:true,value:Data.clone(documentState),mutates:true}}
   if(name==='schematic.checkpoint.list')return {ok:true,value:checkpointStore().map(({document,...meta})=>meta),mutates:false};
   if(name==='schematic.checkpoint.create'){pushHistory();const store=checkpointStore(),snap=cloneDoc();snap.meta=snap.meta||{};snap.meta.checkpoints=[];const cp={id:`cp-${Date.now()}`,name:String(args.name||`Checkpoint ${store.length+1}`),createdAt:new Date().toISOString(),revision:documentState.revision||0,document:snap};store.push(cp);Data.touch(documentState);return {ok:true,value:{...cp,document:undefined},mutates:true}}
   if(name==='schematic.checkpoint.restore'){const cp=checkpointStore().find(x=>x.id===args.id);if(!cp)return {ok:false,value:{error:'Checkpoint not found'},mutates:false};pushHistory();const store=Data.clone(checkpointStore());Data.replaceDocument(documentState,cp.document);documentState.meta=documentState.meta||{};documentState.meta.checkpoints=store;Data.touch(documentState);return {ok:true,value:Data.clone(documentState),mutates:true}}
   if(name==='schematic.document.get')return {ok:true,value:Data.clone(documentState),mutates:false};
+  if(name==='schematic.markers')return {ok:true,value:Data.markersFor(documentState),mutates:false};
   if(name==='schematic.document.replace'){
     const incoming=Data.makeDocument(args.document||{}),valid=Data.validateDocument(incoming);
     if(!valid.ok)return {ok:false,value:{error:valid.errors.join('; ')},mutates:false};
@@ -85,7 +128,7 @@ function executeTool(name,args={}){
   }[name];
   if(!map)return {ok:false,value:{error:`Unknown tool: ${name}`},mutates:false};
   const mutates=['create','update','delete'].includes(map.op),before=mutates?cloneDoc():null;
-  const receipt=Data.applyOperation(documentState,{schema:Data.OPERATION_SCHEMA,id:`mcp-${Date.now()}`,op:map.op,resource:args.resource,resourceId:args.id??null,value:args.value??null,patch:args.patch??null,query:args.query??{}});
+  const receipt=Data.applyOperation(documentState,{schema:Data.OPERATION_SCHEMA,id:`mcp-${Date.now()}`,op:map.op,resource:args.resource,resourceId:args.id??null,value:args.value??null,patch:args.patch??null,query:args.query??{},ifRevision:args.ifRevision});
   if(receipt.ok&&mutates)recordHistory(before);
   return {ok:receipt.ok,value:receipt,mutates:receipt.ok&&mutates};
 }
@@ -93,11 +136,11 @@ async function handleMcp(req,res){
   let rpc;try{rpc=await bodyJson(req)}catch(e){return json(res,400,rpcError(null,-32700,'Parse error',e.message),{'MCP-Protocol-Version':MCP_VERSION})}
   const id=rpc.id??null,method=rpc.method;
   if(method==='server/discover')return json(res,200,rpcResult(id,{protocolVersion:MCP_VERSION,serverInfo:{name:'soveraeign-schematic',version:'0.1.24'},capabilities:{tools:{listChanged:false}},instructions:'CRUD against SOV Schematic document@0.1. File packages use package@0.1.'}),{'MCP-Protocol-Version':MCP_VERSION});
-  if(method==='tools/list'){const extra=[{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}}];return json(res,200,rpcResult(id,{tools:[...Data.operationTools(),...extra,...RUN_TOOLS]}),{'MCP-Protocol-Version':MCP_VERSION});}
+  if(method==='tools/list'){const extra=[{name:'schematic.markers',description:'List validation markers for the current document, derived from schematic.document validation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}}];return json(res,200,rpcResult(id,{tools:[...Data.operationTools(),...extra,...RUN_TOOLS,...Graph.tools(),...RENDER_TOOLS,Layout.tool()]}),{'MCP-Protocol-Version':MCP_VERSION});}
   if(method==='tools/call'){
     const name=rpc.params?.name,args=rpc.params?.arguments||{};
-    const result=executeTool(name,args);if(result.mutates)saveDocument();
-    return json(res,200,rpcResult(id,toolPayload(result.value,!result.ok)),{'MCP-Protocol-Version':MCP_VERSION});
+    const result=await executeTool(name,args);if(result.mutates)saveDocument();
+    return json(res,200,rpcResult(id,toolPayload(result.value,!result.ok,result.image||null)),{'MCP-Protocol-Version':MCP_VERSION});
   }
   return json(res,404,rpcError(id,-32601,'Method not found'),{'MCP-Protocol-Version':MCP_VERSION});
 }
@@ -131,6 +174,23 @@ async function handleApi(req,res,url){
     if(route==='schematic.run.replay')return send(runs.replay(b.value));
     if(route==='schematic.run.start')return send(runs.start(b.value),201);
     return send(runs.query(id,b.value));
+  }
+  if(req.method==='GET'&&(url.pathname==='/api/v1/render.svg'||url.pathname==='/api/v1/render.png')){
+    const format=url.pathname.endsWith('.png')?'png':'svg',r=await renderDocument([format],Object.fromEntries(url.searchParams.entries()));
+    if(!r.ok)return json(res,r.code==='RENDERER_UNAVAILABLE'?503:500,r);
+    const body=format==='png'?Buffer.from(r.png,'base64'):Buffer.from(r.svg,'utf8');
+    res.writeHead(200,{'content-type':format==='png'?'image/png':'image/svg+xml; charset=utf-8','content-length':body.length,'access-control-allow-origin':'*'});return res.end(body);
+  }
+  if(req.method==='GET'&&url.pathname==='/api/v1/layout/metrics'){const r=await renderDocument(['metrics']);return r.ok?json(res,200,r.metrics):json(res,r.code==='RENDERER_UNAVAILABLE'?503:500,r)}
+  if(parts[2]==='graph'&&parts[3]&&['GET','POST'].includes(req.method)){
+    const args=req.method==='POST'?await bodyJson(req):Object.fromEntries(url.searchParams.entries());
+    const value=graphSession.execute('schematic.graph.query',documentState,{verb:parts[3],args});return json(res,value.ok===false?400:200,value);
+  }
+  if(parts[2]==='sim'&&parts[3]&&req.method==='POST'){
+    const value=graphSession.execute(`schematic.sim.${parts[3]}`,documentState,await bodyJson(req));return json(res,value.ok===false?(value.code==='UNKNOWN_TOOL'?404:400):200,value);
+  }
+  if(parts[2]==='sim'&&parts[3]==='inspect'&&req.method==='GET'){
+    const value=graphSession.execute('schematic.sim.inspect',documentState,Object.fromEntries(url.searchParams.entries()));return json(res,value.ok===false?400:200,value);
   }
   if(parts[0]==='api'&&parts[1]==='v1'&&parts[2]){
     const resource=resourceFromPath(parts[2]);if(!resource)return json(res,404,{error:'resource not found'});

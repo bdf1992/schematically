@@ -230,6 +230,9 @@ workspace.classList.toggle('show-flow',showFlow);
 flowBtn.classList.toggle('active',showFlow);
 refreshCanvasScopeControl();
 applyGridSettings();
+// Resize may fire between inline modules while the document is still parsing.
+// Register after the renderer has loaded, since label scale also places labels.
+new ResizeObserver(syncLabelScale).observe(workspace);
 applyCamera();
 applyColorEngine();
 
