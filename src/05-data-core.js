@@ -403,26 +403,30 @@
     if(spec.label)port.label=spec.label;
     return port;
   }
-  // A Point's `self` declaration in its stored form: no side or t.
+  // A Point's `self` declaration in its stored form: no side or t, and no flow when it is the
+  // default `duplex`, so the placeholder form, the clean form and either with an explicit
+  // `flow: 'duplex'` all store (and hash) the same.
   function storedSelf(declared){
-    const port={id:'self'};if(declared.flow)port.flow=declared.flow;
+    const port={id:'self'};if(declared.flow&&declared.flow!=='duplex')port.flow=declared.flow;
     port.channels=declared.channels.map(c=>c.merge===undefined?{id:c.id}:{id:c.id,merge:clone(c.merge)});
     return port;
   }
   // An end's raw stored reference, the way normalizeWireEndpoints reads one: a real
-  // (non-free) attachment's pointId, otherwise the compatibility side.
+  // (non-free) attachment's pointId, otherwise the compatibility side. `byPoint` says which.
   function endRawRef(wire,end){
     const att=wire?.[end+'Attachment'];
     if(isFreeEndpoint(att))return null;
-    const value=att?.pointId??wire?.[end+'Side'];
-    return value==null?null:String(value);
+    const byPoint=att?.pointId!=null,value=byPoint?att.pointId:wire?.[end+'Side'];
+    return value==null?null:{ref:String(value),byPoint};
   }
   // Loading cleans, never refuses: a stored list is rewritten into exactly the authored
   // ports the loader exposes (t coerced and clamped, an invalid flow read as duplex, empty
   // channels read as main, entries without a valid side dropped). An entry an id or compat
   // id collision would otherwise drop is instead kept under a fresh id (`<id>~2`, ...) when
   // a bound Wire end refers to it (by its original id or its declared compat id) and that
-  // reference names no surviving port's id, and that Wire end is rebound to the fresh id; a
+  // reference names no surviving port (a `pointId` names a port by id; a compatibility side
+  // names one by id or compat id, so a Wire stored as `in` stays on the template's `left`
+  // beside an authored duplicate `in`), and that Wire end is rebound to the fresh id; a
   // colliding entry no Wire needs is dropped, as before, so a Wire on a duplicated id stays
   // on the original port. Cleaning stays idempotent: once ids no longer collide, nothing
   // further moves.
@@ -438,14 +442,16 @@
       return component;
     }
     const specs=Attachment.authoredPointSpecs(component,{keepCollisions:true});
-    const surviving=new Set(Attachment.templatePointSpecs(component).concat(specs.filter(spec=>!spec.originalId)).map(spec=>spec.id));
+    const survivors=Attachment.templatePointSpecs(component).concat(specs.filter(spec=>!spec.originalId));
+    const survivingIds=new Set(survivors.map(spec=>spec.id)),survivingNames=new Set(survivors.flatMap(spec=>[spec.id,spec.compatId]));
     const wires=Array.isArray(doc?.wires)?doc.wires:[];
     const keepColliding=spec=>{
       let needed=false;
       for(const wire of wires)for(const end of ['a','b']){
         if(wire[end]!==component.id)continue;
-        const ref=endRawRef(wire,end);
-        if(ref==null||(ref!==spec.originalId&&ref!==spec.compatId)||surviving.has(ref))continue;
+        const raw=endRawRef(wire,end);if(raw==null)continue;
+        const ref=raw.ref;
+        if((ref!==spec.originalId&&ref!==spec.compatId)||(raw.byPoint?survivingIds:survivingNames).has(ref))continue;
         needed=true;
         const att=wire[end+'Attachment'];
         if(isFreeEndpoint(att))continue;
@@ -509,6 +515,30 @@
       if(additions.length)config.attachmentPoints=additions;else delete config.attachmentPoints;
     }else{config.attachmentDefaults='none';config.attachmentPoints=full}
     return component;
+  }
+  // A Point (0D) declares its one port, `self`, as a single `{id: 'self', flow?, channels}`
+  // entry with no side or t (STATE-SPACE.md "A Point declares its one port too"). An edit is
+  // checked strictly: one entry, id `self`, no other keys, a valid flow, and channels as a
+  // declared port's (non-empty, unique non-empty ids, a valid merge). An empty list removes
+  // the declaration. It is stored in the clean form (`storedSelf`); `self` itself always stays.
+  function setSelfPort(component){
+    const config=component.config,list=config.attachmentPoints;
+    if(!Array.isArray(list))throw new Error('PORTS_INVALID: attachmentPoints must be an array');
+    if(!list.length){delete config.attachmentPoints;return component}
+    if(list.length!==1)throw new Error('PORTS_INVALID: a Point declares exactly one port, self');
+    const raw=list[0];
+    if(!isObject(raw)||raw.id!=='self')throw new Error('PORTS_INVALID: a Point declares only its port self');
+    const extra=Object.keys(raw).filter(key=>!['id','flow','channels'].includes(key));
+    if(extra.length)throw new Error(`PORTS_INVALID: a Point's self port is {id, flow?, channels} and has no ${extra.join(', ')}`);
+    if(raw.flow!==undefined&&!Attachment.PORT_FLOWS.includes(raw.flow))throw new Error(`PORTS_INVALID: port self has invalid flow ${raw.flow}`);
+    // The channel rules are a declared port's; a placeholder side makes the entry checkable by them.
+    const [checked]=normalizeDeclaredPorts([{id:'self',side:'left',flow:raw.flow,channels:raw.channels}]);
+    config.attachmentPoints=[storedSelf({flow:raw.flow,channels:checked.channels})];
+    return component;
+  }
+  // The one path an edit's port list takes: a Point's `self`, or a declared port list.
+  function setEditedPorts(doc,component){
+    return Attachment.intrinsicDimension(component)===0?setSelfPort(component):setDeclaredPorts(doc,component);
   }
   function normalizeComponentForm(value={},legacyCanvas=null){
     const form=isObject(value)?clone(value):{};
@@ -605,7 +635,7 @@
     // An authored port list is checked and stored in the smallest form, exactly as update does.
     if(value.config?.attachmentPoints!==undefined){
       if(!Array.isArray(value.config.attachmentPoints))throw new Error('PORTS_INVALID: attachmentPoints must be an array');
-      config.attachmentPoints=clone(value.config.attachmentPoints);setDeclaredPorts(doc,component);
+      config.attachmentPoints=clone(value.config.attachmentPoints);setEditedPorts(doc,component);
     }
     // A bound definition (`id@version`) is kept only on a copy, so a pasted or duplicated bound Component stays bound.
     if(copy)assertDefinitionValue(value.config?.definition);else assertDefinitionPatch(value,false);
@@ -855,7 +885,7 @@
       if(isObject(patch?.config)&&patch.config.attachmentPoints!==undefined){
         if(!Array.isArray(patch.config.attachmentPoints))throw new Error('PORTS_INVALID: attachmentPoints must be an array');
         candidate.config.attachmentPoints=clone(patch.config.attachmentPoints);
-        setDeclaredPorts(doc,candidate);
+        setEditedPorts(doc,candidate);
       }
       adoptLabelMode(candidate,current.config?.label);
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
@@ -985,5 +1015,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {validateMerge,cleanStoredPorts,assertWiresSurviveEdit,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch};
+  return {validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch};
 });

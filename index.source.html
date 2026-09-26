@@ -376,7 +376,7 @@
       <div id="componentSettingsFields" class="settings-surface">
         <div class="settings-head"><b>Component settings</b><span>Form first · appearance second</span></div>
         <details class="form-settings" id="formSettings" open>
-          <summary><b>Form</b><span class="helper-snippet">dimension · interior · attachments</span></summary>
+          <summary><b>Form</b><span class="helper-snippet">dimension · interior · attachments · ports</span></summary>
           <div class="settings-grid settings-grid-compact">
             <label>Dimension
               <select id="formDimension">
@@ -397,6 +397,11 @@
                 <option value="none">None · hosted Points only</option>
               </select>
             </label>
+          </div>
+          <div class="ports-settings" id="portsSettings" hidden>
+            <div class="ports-head"><b>Ports</b><span class="helper-snippet">side · position · flow · channels</span></div>
+            <div class="ports-list" id="portsList" role="list" aria-label="Ports"></div>
+            <button id="portsAddBtn" class="bar-action settings-action" type="button" title="Add a port on the right side">Add port</button>
           </div>
           <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
         </details>

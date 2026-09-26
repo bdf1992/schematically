@@ -88,7 +88,14 @@ barFormState.addEventListener('click',()=>{
   }
 });
 function updateSelectedComponentForm(mutator){
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Form edit'))return;setHistoryHint('Edit Component Form');
+  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Form edit'))return;
+  // A Component bound to a definition keeps the ports the definition gave it: a Form edit that
+  // would change them (a change of dimension) is refused by the data core's owned-port rule.
+  if(componentDefinitionOwner(n)){
+    const trial=SovSchematicData.clone(n);mutator(trial.form,trial);
+    try{SovSchematicData.assertDefinitionPortsKept(n,{form:trial.form},trial)}catch(error){syncComponentVisualPanel(n);statusEl.textContent=error.message;return}
+  }
+  setHistoryHint('Edit Component Form');
   const f=componentForm(n),beforeOpen=f.regions.interior.state==='open',beforeDimension=f.dimension;mutator(f,n);
   if(f.dimension<2)f.regions.interior.state='closed';componentForm(n);
   if(beforeOpen&&f.regions.interior.state==='closed'){
@@ -108,11 +115,76 @@ formAttachments.addEventListener('change',()=>{
   if(next==='none'&&Attachment.attachmentDefaults(n)!=='none'&&wiresOnBuiltinPoints(n).length){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent='Detach Wires from built-in points first';return}
   // Any Wire the switch would orphan or leave between ports sharing no channel refuses it (data core).
   const trial=SovSchematicData.clone(n);if(next==='none')trial.config.attachmentDefaults='none';else delete trial.config.attachmentDefaults;
-  try{SovSchematicData.assertWiresSurviveEdit(diagram,n,trial)}catch(error){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent=error.message;return}
+  try{SovSchematicData.assertDefinitionPortsKept(n,{config:{attachmentDefaults:next}},trial);SovSchematicData.assertWiresSurviveEdit(diagram,n,trial)}catch(error){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent=error.message;return}
   setHistoryHint('Change attachment defaults');
   if(next==='none')n.config.attachmentDefaults='none';else delete n.config.attachmentDefaults;
   SovSchematicData.reconcileComponentWirePorts(diagram,n.id);componentConfig(n);
   routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
+});
+// --- Ports ------------------------------------------------------------------
+// Every Ports edit sends the Component's complete port list through the data core's component
+// update, which stores it in the smallest form and applies every refusal. One edit is one history
+// transition; a refusal changes nothing, puts its message in the status line, and the rebuilt rows
+// show the record as it still is. A port is moved only here (side, t): dragging a port starts a Wire.
+function componentPortList(n){
+  return Attachment.pointSpecs(n).map(spec=>{
+    const port={id:spec.id};if(spec.compatId&&spec.compatId!==spec.id)port.compatId=spec.compatId;
+    Object.assign(port,{side:spec.side,t:spec.t,flow:spec.flow,channels:SovSchematicData.clone(spec.channels||[{id:'main'}])});
+    if(spec.label)port.label=spec.label;
+    return port;
+  });
+}
+function applyComponentPorts(n,ports,label,extraConfig=null){
+  if(mutationBlocked(n,label)){syncPortsPanel(n);return false}
+  commitHistoryCapture();
+  const patch={config:{...(extraConfig||{}),attachmentDefaults:'none',attachmentPoints:ports}};
+  const receipt=SovSchematicData.applyOperation(diagram,{schema:SovSchematicData.OPERATION_SCHEMA,id:`ports-${Date.now()}`,op:'update',resource:'component',resourceId:n.id,patch});
+  const current=()=>nodes.find(x=>x.id===n.id)||n;
+  if(!receipt.ok){statusEl.textContent=receipt.error?.message||'Port edit refused';syncPortsPanel(current());return false}
+  normalizeRuntimeAfterCrud();commitHistoryCapture(label);
+  selectNode(n.id,{focus:false});openSelectionSettings('component');
+  statusEl.textContent=label;
+  return true;
+}
+function selectedPortsComponent(){const n=nodes.find(x=>x.id===selected);return componentPortsEditable(n)?n:null}
+function editSelectedPort(portId,mutate,label,extraConfig=null){
+  const n=selectedPortsComponent();if(!n)return;
+  const ports=componentPortList(n),port=ports.find(p=>p.id===portId);if(!port){syncPortsPanel(n);return}
+  mutate(port,ports);
+  applyComponentPorts(n,ports.filter(p=>!p.removed),label,extraConfig);
+}
+function portChannelsFromText(text,before){
+  const kept=new Map((before||[]).map(c=>[c.id,c]));
+  return String(text||'').split(',').map(x=>x.trim()).filter(Boolean).map(id=>kept.has(id)?SovSchematicData.clone(kept.get(id)):{id});
+}
+portsList.addEventListener('change',e=>{
+  const row=e.target.closest('.ports-row');if(!row)return;const portId=row.dataset.portId,el=e.target;
+  if(el.classList.contains('port-label')){
+    // The label is also written to the port's contract, the label the canvas draws, in the same update.
+    const n=selectedPortsComponent(),spec=n?Attachment.resolveSpec(n,portId):null,value=el.value.slice(0,24);
+    editSelectedPort(portId,port=>{if(value)port.label=value;else delete port.label},'Relabel port',spec?{ports:{[spec.compatId]:{label:value}}}:null);
+  }else if(el.classList.contains('port-side'))editSelectedPort(portId,port=>{port.side=el.value},'Move port');
+  else if(el.classList.contains('port-t'))editSelectedPort(portId,port=>{port.t=el.value.trim()===''?null:Number(el.value)},'Move port');
+  else if(el.classList.contains('port-flow'))editSelectedPort(portId,port=>{port.flow=el.value},'Change port flow');
+  else if(el.classList.contains('port-channels'))editSelectedPort(portId,port=>{port.channels=portChannelsFromText(el.value,port.channels)},'Change port channels');
+});
+portsList.addEventListener('click',e=>{
+  const button=e.target.closest('.port-remove');if(!button||button.disabled)return;
+  editSelectedPort(button.closest('.ports-row').dataset.portId,port=>{port.removed=true},'Remove port');
+});
+// A new port: id p1, p2, ... (the first free), on the right, at the first free position of
+// .5, .25, .75, .125, .375, .625, .875 on that side (else .5), duplex, on the main channel.
+const NEW_PORT_POSITIONS=[.5,.25,.75,.125,.375,.625,.875];
+function newPortFor(ports){
+  const taken=new Set(ports.flatMap(p=>[p.id,p.compatId||p.id]));
+  let i=1;while(taken.has(`p${i}`))i++;
+  const used=new Set(ports.filter(p=>p.side==='right').map(p=>p.t));
+  return {id:`p${i}`,side:'right',t:NEW_PORT_POSITIONS.find(t=>!used.has(t))??.5,flow:'duplex',channels:[{id:'main'}]};
+}
+portsAddBtn.addEventListener('click',()=>{
+  const n=selectedPortsComponent();if(!n||portsAddBtn.disabled)return;
+  const ports=componentPortList(n),port=newPortFor(ports);
+  applyComponentPorts(n,[...ports,port],'Add port');
 });
 formMaterial.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.body.material=formMaterial.value}));
 formBodyThickness.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.body.thickness=Math.max(0,Number(formBodyThickness.value)||0)}));

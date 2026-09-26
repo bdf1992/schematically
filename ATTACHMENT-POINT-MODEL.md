@@ -89,7 +89,7 @@ folding carriers into one record kind is a file-format transition, not a runtime
 ## Declared ports (landed, 2026-09-25)
 
 Decided with the state space design (`STATE-SPACE.md`, *Ports*); the data model landed with contract 0b-1
-(issue #45). The ports UI (0b-2) and definition-generated ports (slice 1a) are still to come.
+(issue #45), definition-generated ports with slice 1a, and the ports UI with contract 0b-2 (*The Ports panel*, below).
 
 What is implemented:
 
@@ -124,9 +124,12 @@ What is implemented:
   (`<id>~2`, `<id>~3`, ...: the first not taken), whenever a bound Wire end still refers to it, by the entry's
   original id or by its declared compat id, and that reference is not the id of a surviving port: that end is
   rebound to the fresh id by `pointId`, so it never resolves through a different, colliding entry's compat id
-  instead. A reference that names a surviving port's id stays on that port (a Wire on one of two `a` entries stays
-  on the first; #47), so a bound Component's owned ports stay the contract's. A collision no bound Wire needs is
-  still dropped, as before. This keeps cleaning idempotent: once ids no longer collide, nothing further moves.
+  instead. A reference that names a surviving port stays on that port (a Wire on one of two `a` entries stays
+  on the first; #47), so a bound Component's owned ports stay the contract's. A `pointId` names a surviving port by
+  its id; a reference stored only as a compatibility side (`aSide`/`bSide`) names one by its id or its compat id, so a
+  Wire stored as `in` beside an authored duplicate `in` stays on the template's `left` and no `in~2` is made (0b-2).
+  A collision no bound Wire needs is still dropped, as before. This keeps cleaning idempotent: once ids no longer
+  collide, nothing further moves.
 - **Retype.** `applySymbol` gives the new template's ports in template order, an authored port with the same id
   replacing the template's (keeping its side, t, flow, channels and label), then the remaining authored ports in
   stored order, stored in the smallest form. A Component bound to a definition is not retyped (`DEFINITION_PORTS`):
@@ -154,5 +157,35 @@ What is implemented:
 - **Form panel.** The attachments control is unchanged: `standard` restores the template's ports, and `none`
   removes them, refused while a Wire ends on one.
 
-Still planned: a Wire carrying several channels at run time, ports generated from a bound definition, and the
-editor gestures to add, move, relabel and remove ports.
+- **A Point's `self`.** A component `update` (or `create`) on a Point may set `attachmentPoints` to the single entry
+  `{id: 'self', flow?, channels}`, checked like a declared port's channels and flow and stored in the clean form, which
+  leaves out a `flow` equal to the default `duplex`; loading cleans the placeholder form the same way, so every form of
+  one declaration has one `documentHash`. `CHANNEL_MISMATCH` applies against bound Wires; `self` always stays.
+
+### The Ports panel (landed, contract 0b-2)
+
+A 2D Component's settings panel has a **Ports** section below the Attachments control; it is hidden for 0D and 1D
+Components (by effective dimension). It lists every effective port in order, one row each: the id (read-only), label,
+side (`left | right | top | bottom`), position `t` (0-1, step 0.05), flow (`in | out | duplex | control | trigger`),
+channels (comma-separated ids) and a Remove button. "Add port" appends `p1`, `p2`, ... (the first id free as an id or
+compat id) on the right, at the first of .5, .25, .75, .125, .375, .625, .875 no other right-side port uses (else
+.5), duplex, on `main`; it is drawn at once and is immediately wireable.
+
+- **One path.** Every edit sends the Component's complete port list, with `attachmentDefaults: none`, through the data
+  core's component `update`, which stores it in the smallest form and applies every refusal. One edit is one history
+  transition. A refusal (`t` outside 0-1, an empty or repeated channel list, `PORT_IN_USE` for removing a port a Wire
+  ends on, `CHANNEL_MISMATCH`) changes nothing, the rows are rebuilt from the record so the edited row reverts, and
+  the refusal is the status line. A label edit also writes the port contract's label (`config.ports[compatId].label`,
+  the label the canvas draws) in the same update.
+- **Moving a port** happens only here (side, `t`): dragging a port starts a Wire.
+- **Definition-owned ports.** On a Component with `config.definition`, the id, flow, channels and Remove controls are
+  disabled with a title naming the definition, and "Add port" is disabled; label, side and `t` stay editable.
+- **Guarded gestures.** Settling (dragging) a bound Component on a Wire, a Path or a Plane boundary, or any host that
+  would change the ports it exposes, is refused with `DEFINITION_PORTS` in the status line, and every Component the
+  gesture moved returns to where it was; the Form panel's dimension and Attachments controls refuse the same way; the
+  bar retype was already refused (`applySymbol`). All of them ask the data core's owned-port rule
+  (`assertDefinitionPortsKept`). Not yet guarded: an arrow-key move that ends within reach of a Wire settles the
+  Component there (`finishKeyboardMove` in `30-canvas.js`, outside contract 0b-2); `checkDocument` still reports the
+  result (`DEFINITION_PORTS`).
+
+Still planned: a Wire carrying several channels at run time, and the channel-merge editor.

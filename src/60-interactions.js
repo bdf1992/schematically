@@ -120,7 +120,9 @@ function beginActiveNodeDrag(e,g,n){
   const roots=selectedComponentIds.has(n.id)?selectedRootComponents():[n];
   const moved=new Set([n.id,...descendantsOf(n.id).map(x=>x.id)]),groupOrigins=[];
   for(const root of roots){for(const item of [root,...descendantsOf(root.id)]){if(moved.has(item.id))continue;moved.add(item.id);groupOrigins.push({node:item,x:item.x,y:item.y})}}
-  activeNodeDragState={id:n.id,node:n,el:g,pointerId:e.pointerId,startPointer:{x:startPointer.x,y:startPointer.y},pointer:{x:startPointer.x,y:startPointer.y},origin:{x:n.x,y:n.y},originCanvasId:n.canvasId||GLOBAL_CANVAS_ID,descendantOrigins:descendantsOf(n.id).map(child=>({node:child,x:child.x,y:child.y})),groupOrigins,groupRootIds:roots.map(x=>x.id),modifiers:modifierSnapshot(e),startedAt:performance.now(),hostCandidate:null,hostCandidateKey:'',hostReady:false,hostDwellTimer:null};
+  // Where every moved Component started, so a refused settle can put them all back.
+  const startPositions=[n,...descendantsOf(n.id),...groupOrigins.map(item=>item.node)].map(item=>({node:item,x:item.x,y:item.y}));
+  activeNodeDragState={id:n.id,node:n,el:g,pointerId:e.pointerId,startPositions,startPointer:{x:startPointer.x,y:startPointer.y},pointer:{x:startPointer.x,y:startPointer.y},origin:{x:n.x,y:n.y},originCanvasId:n.canvasId||GLOBAL_CANVAS_ID,descendantOrigins:descendantsOf(n.id).map(child=>({node:child,x:child.x,y:child.y})),groupOrigins,groupRootIds:roots.map(x=>x.id),modifiers:modifierSnapshot(e),startedAt:performance.now(),hostCandidate:null,hostCandidateKey:'',hostReady:false,hostDwellTimer:null};
   try{workspace.setPointerCapture(e.pointerId)}catch(_){}
   applyNodeDragPosition(activeNodeDragState);scheduleDragVisualRefresh();
 }
@@ -134,23 +136,48 @@ function updateActiveNodeDrag(e){
   armHostCandidate(state,target);
   if(settleTimer){clearTimeout(settleTimer);settleTimer=null}scheduleDragVisualRefresh();scheduleDragSettle(state.modifiers);
 }
+// A Component bound to a definition keeps the ports the definition gave it. Settling it on a
+// host that would change the ports it exposes (a Wire, a Path or a Plane boundary lowers its
+// effective dimension) is refused by the data core's owned-port rule; the message is returned.
+function settleHostPlacement(candidate){
+  if(candidate?.kind==='wire')return {canvasId:candidate.canvasId,placement:{kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t}};
+  if(candidate?.kind==='path'||candidate?.kind==='edge')return {canvasId:candidate.canvasId,placement:{kind:candidate.kind,hostId:candidate.entity.id,t:candidate.placement.t,...(candidate.kind==='edge'?{side:candidate.placement.side}:{})}};
+  if(candidate?.kind==='component')return {canvasId:candidate.canvasId,placement:{kind:'surface'}};
+  return {canvasId:GLOBAL_CANVAS_ID,placement:{kind:'surface'}};
+}
+function definitionSettleRefusal(node,candidate){
+  if(!componentDefinitionOwner(node))return null;
+  const trial=SovSchematicData.clone(node),host=settleHostPlacement(candidate);trial.canvasId=host.canvasId;trial.placement=host.placement;
+  try{SovSchematicData.assertDefinitionPortsKept(node,{placement:host.placement},trial);return null}catch(error){return error.message}
+}
 function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
   const state=activeNodeDragState;if(!state)return;if(!force&&e?.pointerId!=null&&e.pointerId!==state.pointerId)return;
-  const pointerId=state.pointerId;let fault=null;
+  const pointerId=state.pointerId;let fault=null,refusal=null;
   try{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     settleActiveComponent(e||state.modifiers);
+    // Every root's host is decided first; one refused settle refuses the whole gesture.
+    const plan=[];
     for(const id of state.groupRootIds||[state.node.id]){
-      const root=nodes.find(n=>n.id===id);if(!root)continue;const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID;
+      const root=nodes.find(n=>n.id===id);if(!root)continue;
       let candidate;
       if(root.id===state.node.id){
         candidate=state.hostReady?state.hostCandidate:null;
         if(!candidate){const current=componentHostCandidateAtPoint(root);if(current?.canvasId===state.originCanvasId)candidate=current}
-        applyComponentHost(root,candidate);
-      }else candidate=updateContainmentFor(root);
+      }else candidate=componentHostCandidateAtPoint(root);
+      plan.push({root,candidate});
+    }
+    refusal=plan.map(({root,candidate})=>definitionSettleRefusal(root,candidate)).find(Boolean)||null;
+    if(refusal){
+      // The gesture is refused: every moved Component returns to where it started.
+      for(const item of state.startPositions||[]){item.node.x=item.x;item.node.y=item.y}
+      routeCache.clear();arrowPoseCache.clear();
+    }else for(const {root,candidate} of plan){
+      const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID;
+      applyComponentHost(root,candidate);
       const afterCanvas=root.canvasId||GLOBAL_CANVAS_ID;if(beforeCanvas!==afterCanvas)setHistoryHint(candidate?.kind==='wire'?'Settle Component on Wire':candidate?.kind==='component'?'Settle Component in Component':'Detach Component')
     }
-    clearHostCandidateArm(state);settleDraggedRoutes();
+    clearHostCandidateArm(state);if(refusal)render();else settleDraggedRoutes();
   }catch(err){fault=err;console.error('Recovered Component drag failure',err)}
   finally{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
@@ -160,7 +187,7 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
     try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
     restoreSelectionBarAfterGesture();scheduleHistoryCapture();
   }
-  statusEl.textContent=fault?'Recovered drag error · ready':reason?`Select · ${reason}`:'Select';
+  statusEl.textContent=fault?'Recovered drag error · ready':refusal?refusal:reason?`Select · ${reason}`:'Select';
 }
 function bindNode(g,n){
   g.addEventListener('pointerdown',e=>{

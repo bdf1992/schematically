@@ -856,8 +856,53 @@ const out={
   stranger:look(withSelf({id:'self',channels:[{id:'main',merge:{combine:'first',order:{kind:'declared',paths:['w9']}}}]})),
   shape:look(withSelf({id:'self',channels:[{id:'main',merge:{combine:'or',order:{kind:'stochastic'}}}]})),
   channel:look(withSelf({id:'self',channels:[{id:'aux'}]})),
-  plusPort:look((()=>{const d=withSelf({id:'self',channels:[{id:'main',merge:{combine:'or'}}]});d.components[2].config.attachmentPoints.push({id:'x',side:'left',t:.5,flow:'in'});return d})())
+  plusPort:look((()=>{const d=withSelf({id:'self',channels:[{id:'main',merge:{combine:'or'}}]});d.components[2].config.attachmentPoints.push({id:'x',side:'left',t:.5,flow:'in'});return d})()),
+  stated:look(withSelf({id:'self',side:'left',t:.5,flow:'in',channels:[{id:'main',merge}]}))
 };
+// Contract 0b-2, step 7: the four forms of one declaration - placeholder or clean, each with or
+// without an explicit flow 'duplex' - load to one stored form and give one documentHash.
+{
+  const forms={clean:{id:'self',channels:[{id:'main',merge}]},cleanDuplex:{id:'self',flow:'duplex',channels:[{id:'main',merge}]},
+    placeholder:{id:'self',side:'left',t:.5,channels:[{id:'main',merge}]},placeholderDuplex:{id:'self',side:'left',t:.5,flow:'duplex',channels:[{id:'main',merge}]}};
+  out.canonical={};
+  for(const [key,entry] of Object.entries(forms)){
+    const raw=withSelf(entry),n=D.normalizeDocument(clone(raw));
+    out.canonical[key]={hash:D.documentHash(n),reloaded:D.documentHash(D.documentFromFilePayload(clone(D.compactDocument(n)))),stored:n.components[2].config.attachmentPoints};
+  }
+}
+// Contract 0b-2, step 6: a component update on a Point sets its `self` through the data core.
+{
+  const d=D.normalizeDocument(base()),upd=(id,patch)=>{const before=clone(d),rc=D.applyOperation(d,{op:'update',resource:'component',resourceId:id,patch});
+    return {ok:rc.ok,msg:rc.error?.message||'',stored:d.components.find(c=>c.id===id).config.attachmentPoints??null,same:JSON.stringify(before.components)===JSON.stringify(d.components),rev:rc.revisionAfter===rc.revisionBefore}};
+  const set=list=>({config:{attachmentPoints:list}});
+  const r={};
+  r.merge=upd('J',set([{id:'self',channels:[{id:'main',merge:{combine:'or'}}]}]));
+  r.duplex=upd('J',set([{id:'self',flow:'duplex',channels:[{id:'main',merge:{combine:'and'}}]}]));
+  r.flow=upd('J',set([{id:'self',flow:'in',channels:[{id:'main'},{id:'aux'}]}]));
+  r.bare=upd('S1',set([{id:'self'}]));
+  r.ports=D.canonicalAttachmentPointDescriptors(d.components.find(c=>c.id==='J')).map(s=>[s.id,s.flow??null,s.channels]);
+  r.refused={
+    mismatch:upd('J',set([{id:'self',channels:[{id:'aux'}]}])),
+    emptyChannels:upd('J',set([{id:'self',channels:[]}])),
+    blankChannel:upd('J',set([{id:'self',channels:[{id:''}]}])),
+    repeatChannel:upd('J',set([{id:'self',channels:[{id:'main'},{id:'main'}]}])),
+    badFlow:upd('J',set([{id:'self',flow:'sideways',channels:[{id:'main'}]}])),
+    badMerge:upd('J',set([{id:'self',channels:[{id:'main',merge:{combine:'xor'}}]}])),
+    withSide:upd('J',set([{id:'self',side:'left',t:.5,channels:[{id:'main'}]}])),
+    otherId:upd('J',set([{id:'out',channels:[{id:'main'}]}])),
+    two:upd('J',set([{id:'self'},{id:'self'}]))
+  };
+  // Step 9: the declaration set by update round-trips through save and reload unchanged.
+  const saved=D.compactDocument(d),back=D.documentFromFilePayload(clone(saved));
+  r.roundTrip={saved:saved.components.find(c=>c.id==='J').config.attachmentPoints,back:back.components.find(c=>c.id==='J').config.attachmentPoints,
+    again:D.compactDocument(back).components.find(c=>c.id==='J').config.attachmentPoints,hash:D.documentHash(d)===D.documentHash(back),valid:D.validateDocument(back).ok,check:S.checkDocument(back,packs).refusals.map(x=>x.code)};
+  // An empty list removes the declaration; self stays.
+  r.cleared=upd('J',set([]));r.clearedPorts=D.canonicalAttachmentPointIdsForComponent(d.components.find(c=>c.id==='J'));
+  // A Point created with a declaration is checked and stored the same way.
+  const rc=D.applyOperation(d,{op:'create',resource:'component',value:{id:'P9',symbolId:'point',x:0,y:0,config:{attachmentPoints:[{id:'self',flow:'duplex',channels:[{id:'main',merge:{combine:'or'}}]}]}}});
+  r.create={ok:rc.ok,stored:d.components.find(c=>c.id==='P9')?.config.attachmentPoints??null};
+  out.update=r;
+}
 process.stdout.write(JSON.stringify(out));
 """
 
@@ -870,10 +915,13 @@ def check_point_self() -> None:
     # The clean form loads as written, exposes exactly `self` with its channels, and compacts to itself.
     assert r['clean']['stored'] == clean and r['clean']['compact'] == clean and json.loads(r['clean']['reload']) == clean, r['clean']
     assert r['clean']['ports'] == [['self', None, clean[0]['channels']]] and r['clean']['valid'] and r['clean']['check'] == [], r['clean']
-    # The placeholder form (side/t) loads clean; a stated flow is kept.
-    ph = [{'id': 'self', 'flow': 'duplex', 'channels': [{'id': 'main', 'merge': merge}]}]
-    assert r['placeholder']['stored'] == ph and r['placeholder']['compact'] == ph and json.loads(r['placeholder']['reload']) == ph, r['placeholder']
-    assert r['placeholder']['ports'] == [['self', 'duplex', ph[0]['channels']]] and r['placeholder']['check'] == [], r['placeholder']
+    # The placeholder form (side/t) loads clean. A stated flow is kept unless it is the default
+    # `duplex`, which the clean form leaves out (contract 0b-2, step 7).
+    assert r['placeholder']['stored'] == clean and r['placeholder']['compact'] == clean and json.loads(r['placeholder']['reload']) == clean, r['placeholder']
+    assert r['placeholder']['ports'] == [['self', None, clean[0]['channels']]] and r['placeholder']['check'] == [], r['placeholder']
+    stated = [{'id': 'self', 'flow': 'in', 'channels': [{'id': 'main', 'merge': merge}]}]
+    assert r['stated']['stored'] == stated and r['stated']['compact'] == stated and json.loads(r['stated']['reload']) == stated, r['stated']
+    assert r['stated']['ports'] == [['self', 'in', stated[0]['channels']]], r['stated']
     assert r['bare']['stored'] == [{'id': 'self', 'channels': [{'id': 'main'}]}] and r['bare']['ports'][0][0] == 'self', r['bare']
     # checkDocument reads the self declaration: a declared order naming a stranger, a bad merge shape, no shared channel.
     assert r['stranger']['check'] == ['MERGE_INVALID'], r['stranger']
@@ -881,6 +929,32 @@ def check_point_self() -> None:
     assert r['channel']['check'] == ['CHANNEL_MISMATCH', 'CHANNEL_MISMATCH'], r['channel']
     # Its exposed port stays exactly self, whatever else the list holds.
     assert [p[0] for p in r['plusPort']['ports']] == ['self'] and r['plusPort']['stored'][0] == {'id': 'self', 'channels': [{'id': 'main', 'merge': {'combine': 'or'}}]}, r['plusPort']
+
+    # Contract 0b-2, step 7: placeholder and clean forms, each with or without flow 'duplex', are one
+    # document once loaded: one stored form, one documentHash, also after a save and reload.
+    cf = r['canonical']
+    hashes = {v['hash'] for v in cf.values()} | {v['reloaded'] for v in cf.values()}
+    assert len(hashes) == 1, cf
+    assert all(v['stored'] == clean for v in cf.values()), cf
+
+    # Contract 0b-2, step 6: a component update on a Point sets its self declaration.
+    up = r['update']
+    assert up['merge']['ok'] and up['merge']['stored'] == [{'id': 'self', 'channels': [{'id': 'main', 'merge': {'combine': 'or'}}]}], up['merge']
+    assert up['duplex']['ok'] and up['duplex']['stored'] == [{'id': 'self', 'channels': [{'id': 'main', 'merge': {'combine': 'and'}}]}], up['duplex']
+    assert up['flow']['ok'] and up['flow']['stored'] == [{'id': 'self', 'flow': 'in', 'channels': [{'id': 'main'}, {'id': 'aux'}]}], up['flow']
+    assert up['bare']['ok'] and up['bare']['stored'] == [{'id': 'self', 'channels': [{'id': 'main'}]}], up['bare']
+    assert up['ports'] == [['self', 'in', [{'id': 'main'}, {'id': 'aux'}]]], up['ports']
+    want = {'mismatch': 'CHANNEL_MISMATCH', 'emptyChannels': 'non-empty array', 'blankChannel': 'channel without an id', 'repeatChannel': 'repeats channel main',
+            'badFlow': 'invalid flow sideways', 'badMerge': 'MERGE_INVALID', 'withSide': 'has no side, t', 'otherId': 'only its port self', 'two': 'exactly one port'}
+    for key, text in want.items():
+        got = up['refused'][key]
+        assert got['ok'] is False and text in got['msg'] and got['same'] and got['rev'], (key, got)
+        assert 'PORT_IN_USE' not in got['msg'], (key, got)
+    rt = up['roundTrip']
+    want_rt = [{'id': 'self', 'flow': 'in', 'channels': [{'id': 'main'}, {'id': 'aux'}]}]
+    assert rt['saved'] == want_rt and rt['back'] == want_rt and rt['again'] == want_rt and rt['hash'] and rt['valid'] and rt['check'] == [], rt
+    assert up['cleared']['ok'] and up['cleared']['stored'] is None and up['clearedPorts'] == ['self'], (up['cleared'], up['clearedPorts'])
+    assert up['create'] == {'ok': True, 'stored': [{'id': 'self', 'channels': [{'id': 'main', 'merge': {'combine': 'or'}}]}]}, up['create']
 
 
 def main() -> None:
