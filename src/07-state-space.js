@@ -149,20 +149,44 @@
       return {orderDependent,order:orderDependent?clone(parameters.order??{kind:'stochastic'}):null};
     }
   };
+  // No floating point in a run. A level is a boolean on a binary channel and an integer 0..LEVEL on a
+  // continuous one, LEVEL being 2^20: binary fractions (a half, a quarter turn) are exact and halving is
+  // a shift. Every combine, threshold, wave and time is integer arithmetic, so a run is the same bytes
+  // on every engine. An authored fraction (a threshold of .5, a latency of 2.5 ms) is converted to an
+  // integer once, where the document is read.
+  const LEVEL=1<<20;
+  const toLevel=x=>Math.max(0,Math.min(LEVEL,Math.round(Number(x)*LEVEL)||0));
+  const levelOf=v=>v===true?LEVEL:Number.isSafeInteger(v)?Math.max(0,Math.min(LEVEL,v)):0;
+  const idiv=(a,b)=>(a-a%b)/b;
+  // An output equals what its port holds: booleans exactly (absent is false), levels within epsilon (absent is 0).
+  const sameLevel=(value,held,epsilon)=>typeof value==='number'?Math.abs(value-levelOf(held))<=epsilon:value===(held===true);
+  // cos(2*pi*u/LEVEL) in LEVEL units, from integers only: fold u into the first quarter turn (exact,
+  // LEVEL being a power of two), then the Taylor series at scale LEVEL; every product stays far below
+  // 2^53 and every division is an exact integer division. TWO_PI is 2*pi*2^20, rounded once.
+  const TWO_PI=6588397;
+  function cosLevel(u){
+    u=((u%LEVEL)+LEVEL)%LEVEL;if(u>LEVEL/2)u=LEVEL-u;
+    let sign=1;if(u>LEVEL/4){u=LEVEL/2-u;sign=-1}
+    const x=idiv(u*TWO_PI,LEVEL),x2=idiv(x*x,LEVEL);
+    let term=LEVEL,sum=LEVEL;
+    for(let k=1;k<=7;k++){term=-idiv(idiv(term*x2,LEVEL),(2*k-1)*(2*k));sum+=term}
+    return sign*Math.max(-LEVEL,Math.min(LEVEL,sum));
+  }
   // combine@1: the graph core's level model as a pattern. Every incoming Wire is its own input (the
   // latest level it delivered); control inputs gate: open when any is at or over the threshold. The
   // output is the combine over the data inputs, 0 while closed. COMBINES are the graph core's.
   const COMBINE_OPS={or:v=>Math.max(0,...v),max:v=>Math.max(0,...v),and:v=>v.length?Math.min(...v):0,min:v=>v.length?Math.min(...v):0,
-    not:v=>1-Math.max(0,...v),nand:v=>1-(v.length?Math.min(...v):0),nor:v=>1-Math.max(0,...v),buffer:v=>Math.max(0,...v),
-    xor:v=>v.filter(x=>x>=.5).length%2,mean:v=>v.length?v.reduce((a,b)=>a+b,0)/v.length:0,sum:v=>Math.min(1,v.reduce((a,b)=>a+b,0))};
+    not:v=>LEVEL-Math.max(0,...v),nand:v=>LEVEL-(v.length?Math.min(...v):0),nor:v=>LEVEL-Math.max(0,...v),buffer:v=>Math.max(0,...v),
+    xor:v=>v.filter(x=>x>=LEVEL/2).length%2*LEVEL,mean:v=>v.length?idiv(v.reduce((a,b)=>a+b,0),v.length):0,sum:v=>Math.min(LEVEL,v.reduce((a,b)=>a+b,0))};
   const combinePattern={
     id:'combine',version:1,class:'exact',stateful:false,blastRadius:'local',
     validate(parameters){
       const errors=[];
       if(!isObject(parameters))return ['parameters must be an object'];
-      unknownKeys(parameters,['combine','threshold','data','control','outputs'],'parameters',errors);
+      unknownKeys(parameters,['combine','kind','threshold','epsilon','data','control','outputs'],'parameters',errors);
       if(!Object.keys(COMBINE_OPS).includes(parameters.combine))errors.push(`combine must be one of ${Object.keys(COMBINE_OPS).join(', ')}`);
-      if(typeof parameters.threshold!=='number'||!Number.isFinite(parameters.threshold))errors.push('threshold must be a number');
+      if(!['binary','continuous'].includes(parameters.kind))errors.push('kind must be binary or continuous');
+      for(const key of ['threshold','epsilon'])if(!Number.isSafeInteger(parameters[key])||parameters[key]<0||parameters[key]>LEVEL)errors.push(`${key} must be an integer 0..${LEVEL} (millionths)`);
       for(const key of ['data','control','outputs'])if(!Array.isArray(parameters[key])||!parameters[key].every(nonEmpty))errors.push(`${key} must be an array of port names`);
       return errors;
     },
@@ -171,11 +195,11 @@
       return {inputs:[...parameters.data.map(port('in')),...parameters.control.map(port('control'))],outputs:parameters.outputs.map(port('out')),state:null,
         observables:[{id:'logic.level',form:'binary',unit:null,blastRadius:'local',staleness:0}]};
     },
+    // A binary card quantizes at its threshold (a boolean); a continuous one keeps the level.
     evaluate(parameters,inputValues){
-      const level=name=>inputValues?.[name]===true?1:0;
-      const open=!parameters.control.length||Math.max(...parameters.control.map(level))>=parameters.threshold;
-      const v=open?COMBINE_OPS[parameters.combine](parameters.data.map(level)):0,out={};
-      for(const name of parameters.outputs)out[name]=v>=.5;
+      const open=!parameters.control.length||Math.max(...parameters.control.map(name=>levelOf(inputValues?.[name])))>=parameters.threshold;
+      const v=Math.max(0,Math.min(LEVEL,open?COMBINE_OPS[parameters.combine](parameters.data.map(name=>levelOf(inputValues?.[name]))):0)),out={};
+      for(const name of parameters.outputs)out[name]=parameters.kind==='continuous'?v:v>=parameters.threshold;
       return out;
     }
   };
@@ -458,26 +482,47 @@
       let specs=[];try{specs=Data.canonicalAttachmentPointDescriptors(c).filter(Boolean)}catch(_){specs=[]}
       const named=specs.filter(s=>NAME.test(s.id));
       const ins=named.filter(s=>specFlow(s)==='in').map(s=>s.id),outs=named.filter(s=>specFlow(s)==='out').map(s=>s.id);
-      // A square clock drives its out ports with scheduled edges (see clockEdge); other waves are continuous.
-      if(sig.clock){if(sig.clock.wave==='square'&&sig.clock.periodMs>0)for(const point of outs)out.clocks.push({entity:c.id,point,clock:clone(sig.clock)});continue}
-      if(sig.kind!=='binary')continue;
+      // A clock drives its out ports with scheduled samples (see clockEdge): edges for a square wave,
+      // levels every sampleMs for the continuous ones.
+      if(sig.clock){
+        // Clock times are whole milliseconds and its duty a level, fixed here.
+        const k=sig.clock,ms=x=>Math.max(0,Math.round(Number(x)||0));
+        const clock={wave:k.wave,periodMs:ms(k.periodMs),phaseMs:ms(k.phaseMs),duty:toLevel(k.duty),sampleMs:k.sampleMs?Math.max(1,ms(k.sampleMs)):null,cycles:k.cycles};
+        if(clock.periodMs>0)for(const point of outs)out.clocks.push({entity:c.id,point,clock});
+        continue;
+      }
       if(sig.mode==='derived'){
         if(!outs.length)continue;
         // One definition per card: its inputs are the Wires that reach it (topology fills data/control).
         const ref=`implied.${sig.combine}[${c.id}]@1`;
         out.definitions[ref]={id:ref.slice(0,-2),version:1,pattern:'combine@1',delay:0,
-          parameters:{combine:sig.combine,threshold:sig.threshold,data:[],control:[],outputs:outs}};
+          parameters:{combine:sig.combine,kind:sig.kind,threshold:toLevel(sig.threshold),epsilon:toLevel(sig.epsilon),data:[],control:[],outputs:outs}};
         out.bind[c.id]=ref;
-      }else for(const point of outs)out.sources.push({entity:c.id,point,channel:'main',value:sig.value>=sig.threshold,at:0});
+      }else for(const point of outs)out.sources.push({entity:c.id,point,channel:'main',value:sig.kind==='continuous'?toLevel(sig.value):toLevel(sig.value)>=toLevel(sig.threshold),at:0});
     }
     return out;
   }
   // A square clock's edges in ticks: rise at phase + k*period, fall duty*period later; after `cycles`
   // periods it falls and stops. Each processed edge schedules the next, always at least a tick on.
+  // The graph core's waves, sampled at whole milliseconds: saw, triangle and sine as levels.
+  function waveAt(c,ms){
+    if(ms<c.phaseMs)return 0;
+    const u=idiv(((ms-c.phaseMs)%c.periodMs)*LEVEL,c.periodMs);
+    return c.wave==='saw'?u:c.wave==='triangle'?(u<LEVEL/2?2*u:2*LEVEL-2*u):idiv(LEVEL-cosLevel(u),2);
+  }
+  // Whole milliseconds to ticks, rounding half up, in integers.
+  const msToTick=(ms,tickMs)=>idiv(2*ms+tickMs,2*tickMs);
   function clockEdge(source,tickMs,k,rising,after){
-    const c=source.clock,tick=ms=>Math.max(0,Math.round(ms/tickMs));
+    const c=source.clock,tick=ms=>Math.max(0,msToTick(ms,tickMs));
+    if(c.wave!=='square'){
+      // Sample k of a continuous wave, every sampleMs (default a sixteenth of the period) from the phase.
+      const step=c.sampleMs||Math.max(1,idiv(c.periodMs,16)),ms=c.phaseMs+k*step;
+      if(c.cycles&&ms>=c.phaseMs+c.cycles*c.periodMs)return null;
+      const at=tick(ms);
+      return {kind:'clock',at:after===null?at:Math.max(after+1,at),entity:source.entity,point:source.point,channel:'main',value:waveAt(c,ms),k};
+    }
     if(c.cycles&&k>=c.cycles)return null;
-    const at=tick(c.phaseMs+k*c.periodMs+(rising?0:c.duty*c.periodMs));
+    const at=tick(c.phaseMs+k*c.periodMs+(rising?0:idiv(c.duty*c.periodMs,LEVEL)));
     return {kind:'clock',at:after===null?at:Math.max(after+1,at),entity:source.entity,point:source.point,channel:'main',value:rising,k};
   }
   // What the run reads of the document, resolved once at start: each Wire's two ports, delay,
@@ -487,8 +532,8 @@
   function wireDelay(config,tickMs){
     if(config.delay!==undefined)return config.delay;
     const g=typeof globalThis!=='undefined'?globalThis:{},fallback=Number(g.SovSchematicGraph?.DEFAULT_LATENCY_MS??10);
-    const ms=Number.isFinite(Number(config.latencyMs))?Math.max(0,Number(config.latencyMs)):fallback;
-    return Math.max(1,Math.round(ms/tickMs));
+    const ms=Math.round(Number.isFinite(Number(config.latencyMs))?Math.max(0,Number(config.latencyMs)):fallback);
+    return Math.max(1,msToTick(ms,tickMs));
   }
   function topology(d,definitions,bind={},tickMs=1){
     const components={},merges={},wires=[];
@@ -559,7 +604,7 @@
     if(!natural(budget))return inputRefusal('budget must be an integer >= 0');
     if(o.walk!==undefined&&!['forward','reverse'].includes(o.walk))return inputRefusal('walk must be forward or reverse');
     const tickMs=o.tickMs===undefined?1:o.tickMs;
-    if(!(typeof tickMs==='number'&&Number.isFinite(tickMs)&&tickMs>0))return inputRefusal('tickMs must be a number above 0');
+    if(!(Number.isSafeInteger(tickMs)&&tickMs>0))return inputRefusal('tickMs must be an integer above 0 (whole milliseconds)');
     const rawInputs=o.inputs===undefined?[]:o.inputs;
     if(!Array.isArray(rawInputs))return inputRefusal('inputs must be an array');
     const inputs=[],seen=new Set();
@@ -654,7 +699,7 @@
   }
   function makeRecord(run,ctx,{entity,point,channel,kind,value,observer,rule,inputs,phase,rank=0}){
     const id=`${TMP}${ctx.tmp++}`;
-    ctx.records.push({phase,rank,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind,form:'binary',value,time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none'}});
+    ctx.records.push({phase,rank,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind,form:typeof value==='number'?'continuous':'binary',value,time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none'}});
     return id;
   }
   // Emission: one arrival per bound Wire, per direction it carries out of this port, per shared
@@ -734,12 +779,12 @@
   function evaluateDevice(run,ctx,entity,committed){
     const component=run.components[entity],definition=run.definitions[component.definition],p=pattern(definition.pattern);
     const values={},inputs=[];
-    for(const name of component.inputs){const key=portKey(entity,name,'main');values[name]=committed(key)===true;if(run.lastRecord[key])inputs.push(run.lastRecord[key])}
-    const out=p.evaluate(definition.parameters,values),delay=definition.delay||0;
+    for(const name of component.inputs){const key=portKey(entity,name,'main');values[name]=component.combine?committed(key):committed(key)===true;if(run.lastRecord[key])inputs.push(run.lastRecord[key])}
+    const out=p.evaluate(definition.parameters,values),delay=definition.delay||0,epsilon=definition.parameters.epsilon||0;
     for(const name of component.outputs){
       const key=portKey(entity,name,'main'),value=out[name];
       if(delay===0){
-        if(value===(run.signal[key]===true))continue;
+        if(sameLevel(value,run.signal[key],epsilon))continue;
         ctx.cost++;
         const id=makeRecord(run,ctx,{entity,point:name,channel:'main',kind:'derived',value,observer:`rule:${component.definition}`,rule:component.definition,inputs,phase:1});
         if(!ctx.evaluated.has(key))ctx.evaluated.set(key,run.signal[key]);
@@ -747,9 +792,9 @@
         emit(run,ctx,entity,name,'main',value,[],id,1);
       }else{
         // Transport delay: schedule every change from the latest value already on its way.
-        let latest=run.signal[key]===true,at=-1;
+        let latest=run.signal[key],at=-1;
         for(const item of run.pending)if(item.kind==='output'&&item.entity===entity&&item.point===name&&item.channel==='main'&&item.at>at){at=item.at;latest=item.value}
-        if(value!==latest){const item={kind:'output',at:ctx.t+delay,entity,point:name,channel:'main',value,rule:component.definition,inputs:inputs.slice()};run.pending.push(item);ctx.fresh.push(item)}
+        if(!sameLevel(value,latest,epsilon)){const item={kind:'output',at:ctx.t+delay,entity,point:name,channel:'main',value,rule:component.definition,inputs:inputs.slice()};run.pending.push(item);ctx.fresh.push(item)}
       }
     }
   }
@@ -773,7 +818,7 @@
       if(item.kind==='input'||item.kind==='clock')g.input=item;else if(item.kind==='output')g.output=item;else g.arrivals.push(item);
       if(item.kind==='clock'){
         const source=run.clocks[portKey(item.entity,item.point,item.channel)];
-        const next=source&&clockEdge(source,run.tickMs,item.value?item.k:item.k+1,!item.value,t);
+        const next=source&&(source.clock.wave==='square'?clockEdge(source,run.tickMs,item.value?item.k:item.k+1,!item.value,t):clockEdge(source,run.tickMs,item.k+1,null,t));
         if(next){run.pending.push(next);ctx.fresh.push(next)}
       }
     }
