@@ -512,10 +512,46 @@
   function nextTick(run){
     let t=run.tick===null?0:null;
     for(const item of run.pending)if(t===null||item.at<t)t=item.at;
-    for(const q of Object.values(run.queues))if(q.items.length&&(t===null||q.next<t))t=q.next;
+    for(const q of Object.values(run.queues))if(q.items.length>q.head&&(t===null||q.next<t))t=q.next;
     return t;
   }
-  function queuedCount(run){return run.pending.length+Object.values(run.queues).reduce((n,q)=>n+q.items.length,0)}
+  function queuedCount(run){return run.pending.length+Object.values(run.queues).reduce((n,q)=>n+(q.items.length-q.head),0)}
+  // A queue merge is plain JSON data — {next, items, head} — so a run stays a plain JSON-safe
+  // object through JSON.stringify/parse or structuredClone (STATE-SPACE.md, slice 1b). `items` is
+  // append-only (never spliced) and `head` counts how many of its front items are delivered, so
+  // appending is `items.push` and delivering is `head++`: both O(1), neither ever shifts or copies
+  // the array. `head` items of history accumulate at the front rather than being dropped, which
+  // `queueItems` (the one exported reader) skips past; nothing else reads `items`/`head` from
+  // outside this file (see step 7 of contract #52's amendment).
+  function makeQueue(next){return {next,items:[],head:0}}
+  function queueItems(q){return q.items.slice(q.head)}
+  // First access of a queue merge's key within a tick records what undoing it needs (never a copy
+  // of its items): whether the key existed, and if so its `next`, `head` and item count before this
+  // tick touches it. Every push, delivery and `next` update after this within the same tick reuses
+  // the same queue object, so one record per key per tick is enough.
+  function ensureQueue(run,ctx,key){
+    let q=run.queues[key];
+    if(q){
+      if(!ctx.queueUndo.has(key))ctx.queueUndo.set(key,{existed:true,queue:q,next:q.next,head:q.head,length:q.items.length});
+      return q;
+    }
+    q=makeQueue(ctx.t+1);
+    ctx.queueUndo.set(key,{existed:false,queue:q});
+    run.queues[key]=q;
+    return q;
+  }
+  // Undo a tick's queue merges from the per-key record: a queue this tick created is dropped
+  // entirely; one it found already there has its items truncated back to its length before the
+  // tick (discarding only what the tick appended) and its head and `next` put back, whether or not
+  // the tick's own cleanup already deleted it for running dry.
+  function undoQueues(run,log){
+    for(const [key,entry] of log){
+      if(!entry.existed){delete run.queues[key];continue}
+      const q=entry.queue;
+      q.items.length=entry.length;q.head=entry.head;q.next=entry.next;
+      run.queues[key]=q;
+    }
+  }
   function makeRecord(run,ctx,{entity,point,channel,kind,value,observer,rule,inputs,phase,rank=0}){
     const id=`${TMP}${ctx.tmp++}`;
     ctx.records.push({phase,rank,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind,form:'binary',value,time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none'}});
@@ -559,7 +595,7 @@
   // merged arrivals (or a queue's head). What loses is recorded with rule `overridden`.
   function updatePort(run,ctx,g){
     const key=portKey(g.entity,g.point,g.channel),old=run.signal[key]===true,role=run.components[g.entity]?.role;
-    const merge=run.merges[key]||DEFAULT_MERGE,queue=merge.combine==='queue'?(run.queues[key]||(run.queues[key]={next:ctx.t+1,items:[]})):null;
+    const merge=run.merges[key]||DEFAULT_MERGE,queue=merge.combine==='queue'?ensureQueue(run,ctx,key):null;
     const base={entity:g.entity,point:g.point,channel:g.channel,phase:0};
     let win=null;
     if(g.input)win={value:g.input.value,kind:'registered',observer:'input',rule:'input',inputs:[],always:true,exclude:[]};
@@ -574,8 +610,8 @@
         const value=merge.combine==='or'||merge.combine==='max'?sorted.some(a=>a.value):sorted.every(a=>a.value);
         win=sorted.length===1?{value,observer:`path:${sorted[0].wire}`,rule:'path',inputs:[sorted[0].from]}:{value,observer:'engine:merge@1',rule:'merge@1',inputs:sorted.map(a=>a.from)};
       }else if(queue){
-        if(g.arrivals.length){const ordered=g.arrivals.length>1?mergeOrder(run,ctx,g,merge):g.arrivals;if(!ordered)return;queue.items.push(...ordered.map(a=>({value:a.value,wire:a.wire,phase:a.phase,from:a.from})))}
-        if(queue.items.length){const head=queue.items.shift();win={value:head.value,observer:'engine:merge@1',rule:'merge@1',inputs:[head.from]};if(!arrived.includes(head.wire))arrived.push(head.wire)}
+        if(g.arrivals.length){const ordered=g.arrivals.length>1?mergeOrder(run,ctx,g,merge):g.arrivals;if(!ordered)return;for(const a of ordered)queue.items.push({value:a.value,wire:a.wire,phase:a.phase,from:a.from})}
+        if(queue.items.length>queue.head){const item=queue.items[queue.head++];win={value:item.value,observer:'engine:merge@1',rule:'merge@1',inputs:[item.from]};if(!arrived.includes(item.wire))arrived.push(item.wire)}
       }else if(g.arrivals.length===1){
         const a=g.arrivals[0];win={value:a.value,observer:`path:${a.wire}`,rule:'path',inputs:[a.from]};
       }else if(g.arrivals.length){
@@ -635,7 +671,7 @@
       const g=group(item.entity,item.point,item.channel);ctx.cost++;
       if(item.kind==='input')g.input=item;else if(item.kind==='output')g.output=item;else g.arrivals.push(item);
     }
-    for(const [key,q] of Object.entries(run.queues))if(q.items.length&&q.next===t){const [entity,point,channel]=JSON.parse(key);group(entity,point,channel)}
+    for(const [key,q] of Object.entries(run.queues))if(q.items.length>q.head&&q.next===t){const [entity,point,channel]=JSON.parse(key);group(entity,point,channel)}
     for(const key of walked(run,[...groups.keys()].sort())){updatePort(run,ctx,groups.get(key));if(ctx.diverged)return {ok:false,...ctx.diverged}}
     // Committed state is the signal after the update phase: what the evaluate phase overwrites is read from before it.
     const committed=key=>ctx.evaluated.has(key)?ctx.evaluated.get(key):run.signal[key];
@@ -651,27 +687,34 @@
     const records=sorted.map(x=>{x.record.provenance.inputs=resolveTmp(x.record.provenance.inputs,map);return x.record});
     for(const item of ctx.fresh){if(item.from!==undefined)item.from=resolveTmp(item.from,map);if(item.inputs!==undefined)item.inputs=resolveTmp(item.inputs,map)}
     for(const key of ctx.written)put(run.lastRecord,ctx.undoLast,key,resolveTmp(run.lastRecord[key],map));
-    for(const [key,q] of Object.entries(run.queues)){if(!q.items.length){delete run.queues[key];continue}for(const item of q.items)if(typeof item.from==='string'&&item.from.startsWith(TMP))item.from=map.get(item.from)}
+    // Only the queues this tick touched can hold a fresh (TMP) id or have run dry: resolve just the
+    // items this tick appended (never the ones already resolved by an earlier tick), by buffer index.
+    for(const [key,entry] of ctx.queueUndo){
+      const q=entry.queue,from=entry.existed?entry.length:0;
+      for(let i=from;i<q.items.length;i++){const item=q.items[i];if(typeof item.from==='string'&&item.from.startsWith(TMP))item.from=map.get(item.from)}
+      if(q.items.length===q.head)delete run.queues[key];
+    }
     run.pending=run.pending.map(x=>({x,k:pendingKey(x)})).sort((x,y)=>cmp(x.k,y.k)).map(d=>d.x);
     ctx.draws.sort((x,y)=>cmpList([x.entity,x.point,x.channel],[y.entity,y.point,y.channel]));
     return {ok:true,cost:ctx.cost,records,draws:ctx.draws};
   }
-  // One step is the earliest tick with scheduled work. Worked on a copy of the state a tick
-  // changes (signal, lastRecord, queues, pending, sequence); the ledger and records are only
-  // appended on commit, so a refused tick (BUDGET_SPENT, REPLAY_DIVERGED) leaves the run exactly
-  // as it was. The rest of the run is read-only during a tick and is shared, not copied.
+  // One step is the earliest tick with scheduled work. Signal and lastRecord writes go through an
+  // undo log (`put`/`undo`); a queue merge's buffer is appended and delivered in place, its own undo
+  // log (`queueUndo`) holding only what changed (see `ensureQueue`/`undoQueues`) — never a copy of a
+  // queue's items. Pending and sequence are restored from a reference kept before the tick. So a
+  // refused tick (BUDGET_SPENT, REPLAY_DIVERGED) leaves the run exactly as it was. The rest of the
+  // run is read-only during a tick and is shared, not copied.
   function step(run){
     if(!isObject(run)||run.runtimeVersion!==RUNTIME_VERSION)return {ok:false,code:'RUN_INVALID',message:`not a ${RUNTIME_VERSION} run`};
     const t=nextTick(run);
     if(t===null)return {ok:true,tick:null,records:[]};
-    const before={pending:run.pending,queues:run.queues,sequence:run.sequence};
-    const queues={};for(const [key,q] of Object.entries(run.queues))queues[key]={next:q.next,items:q.items.slice()};
-    run.queues=queues;
-    const ctx={t,cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null,fresh:[],written:[],evaluated:new Map(),undoSignal:new Map(),undoLast:new Map()};
+    const before={pending:run.pending,sequence:run.sequence};
+    const ctx={t,cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null,fresh:[],written:[],evaluated:new Map(),undoSignal:new Map(),undoLast:new Map(),queueUndo:new Map()};
     const result=processTick(run,t,ctx);
     const refused=!result.ok?result:run.spent+result.cost>run.budget?{ok:false,code:'BUDGET_SPENT',tick:t,left:null,message:`processing tick ${t} takes ${result.cost} events; ${run.budget-run.spent} of the budget ${run.budget} remain`}:null;
     if(refused){
       undo(run.signal,ctx.undoSignal);undo(run.lastRecord,ctx.undoLast);Object.assign(run,before);
+      undoQueues(run,ctx.queueUndo);
       if(refused.code==='BUDGET_SPENT')refused.left=queuedCount(run);
       return refused;
     }
@@ -771,7 +814,7 @@
     return Canonical.sha256Hex(Canonical.canonicalize({signal,queues:q,pending:p}));
   }
   const trueKeys=signal=>Object.keys(signal).filter(k=>signal[k]===true).sort();
-  function futureHash(run){return stateHash(run.tick,trueKeys(run.signal),Object.keys(run.queues).sort().map(k=>[k,run.queues[k].next,run.queues[k].items]),run.pending)}
+  function futureHash(run){return stateHash(run.tick,trueKeys(run.signal),Object.keys(run.queues).sort().map(k=>[k,run.queues[k].next,queueItems(run.queues[k])]),run.pending)}
   // A cheap 32-bit code (FNV-1a) of a string, and of a pending or queue item's future-determining
   // part, cached per item (items are never changed once scheduled). Codes only decide when the full
   // hash is worth computing; a collision costs a full hash, never a wrong result.
@@ -801,12 +844,15 @@
     const syncQueues=()=>{
       for(const [key,l] of logs)if(!run.queues[key])l.head=l.items.length;
       for(const key of Object.keys(run.queues)){
-        const items=run.queues[key].items,l=logOf(key),had=l.items.length-l.head;
-        let shift=had>0&&items[0]!==l.items[l.head]?1:0,add=items.length-(had-shift);
-        const fits=add>=0&&(had-shift===0||(items[0]===l.items[l.head+shift]&&items[had-shift-1]===l.items[l.items.length-1]));
-        if(!fits){l.head=l.items.length;shift=0;add=items.length}
+        // Read the engine's own `items`/`head` by index, not `queueItems`: this runs every tick, and
+        // materializing a queue's live items here would copy them just as step() must not.
+        const q=run.queues[key],items=q.items,qh=q.head,liveLen=items.length-qh,at=i=>items[qh+i];
+        const l=logOf(key),had=l.items.length-l.head;
+        let shift=had>0&&at(0)!==l.items[l.head]?1:0,add=liveLen-(had-shift);
+        const fits=add>=0&&(had-shift===0||(at(0)===l.items[l.head+shift]&&at(had-shift-1)===l.items[l.items.length-1]));
+        if(!fits){l.head=l.items.length;shift=0;add=liveLen}
         l.head+=shift;
-        for(let i=items.length-add;i<items.length;i++)append(l,items[i]);
+        for(let i=liveLen-add;i<liveLen;i++)append(l,at(i));
       }
     };
     const summary=t=>{
@@ -976,5 +1022,5 @@
     };
   }
 
-  return {RECORD_FORMAT,PACK_FORMAT,RUNTIME_VERSION,TRACE_FORMAT,RUN_RECEIPT_FORMAT,RUN_OPERATIONS,BUDGET_LIMIT,validateRecord,patterns,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument,startRun,step,settle,query,runReceipt,createRunRegistry,traceOf,replay,validateTrace};
+  return {RECORD_FORMAT,PACK_FORMAT,RUNTIME_VERSION,TRACE_FORMAT,RUN_RECEIPT_FORMAT,RUN_OPERATIONS,BUDGET_LIMIT,validateRecord,patterns,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument,startRun,step,settle,query,runReceipt,createRunRegistry,traceOf,replay,validateTrace,queueItems};
 });
