@@ -387,7 +387,9 @@ One `schematic.run.step` is **one tick**: the smallest unit whose result is dete
 
 - **quiet**: the queue is empty;
 - **oscillating `{period, subjects}`**: the run has entered a cycle. At each tick the runtime hashes the full state that determines the future: committed signal state, every `device.state`, and the pending queue with arrival times taken relative to the current tick. A repeated hash proves a cycle; committed signal state alone would not, because transitions still in flight can differ between two ticks that look the same. A NOT feeding itself ends here, not in budget exhaustion. Where a cycle passes through a port with stochastic order, draws are keyed by the absolute tick, which the state hash does not hold: `oscillating` then means the state recurred, not that the future is strictly periodic.
-- **budget spent**: a typed refusal naming what was left in the queue.
+- **budget spent**: what was left in the queue. A single `step` over budget is a refusal (`BUDGET_SPENT`); inside `settle` a budget stop is one of settle's three results, not a refusal.
+
+**Runs are addressed by handle.** A run's id is derived from its replay key, so two runs of the same document and inputs share it, and record ids and goldens depend on it. Each start on a surface therefore also gets a unique handle (`<runId>.<n>`), and surfaces address runs by handle: a second client's run never touches the first's. A replay is not registered and has no handle.
 
 ### Generative steps and attempts
 
