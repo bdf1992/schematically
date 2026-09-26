@@ -221,7 +221,9 @@ A `.sov` carries three pieces of authored state-space data, and nothing a run co
   `canonicalAttachmentPointDescriptors` reads them) would differ, which includes a change of host (`placement`) or
   of dimension (`form.dimension`), or when it would set `attachmentDefaults` to anything but `none` or change
   `symbolId`; `applySymbol` (the bar retype) refuses a bound Component the same way. Moving (`side`, `t`),
-  relabelling and channel `merge` edits are allowed. Setting `config.definition` to `null` unbinds and leaves the
+  relabelling and channel `merge` edits are allowed. Deleting a Component makes the Components on its interior fall
+  back to its canvas; a `delete` that would change a bound one's exposed ports that way (the canvas is a Wire's) is
+  refused with `DEFINITION_PORTS`, and nothing is deleted. Setting `config.definition` to `null` unbinds and leaves the
   ports as stored.
 - **`config.delay`** on a Wire: its propagation delay in logical ticks, an integer >= 1. Absent means 1 and is not
   written. A Wire `update` with `delay: null` removes it. A Wire `create` or `update` carrying any other value is

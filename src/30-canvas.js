@@ -715,8 +715,10 @@ function componentHostCandidateAtPoint(node,x=node.x,y=node.y){
   return best;
 }
 // The host a candidate gives a Component: its canvas and its placement kind. applyComponentHost
-// applies it; componentHostRefusal checks it first.
-function componentHostTarget(candidate){
+// applies it; componentHostRefusal checks it first. A `canvas` candidate is a fall-back onto a
+// canvas (see componentFallbackPlan); it keeps the Component's placement.
+function componentHostTarget(candidate,node=null){
+  if(candidate?.kind==='canvas')return {canvasId:candidate.canvasId,placement:SovSchematicData.clone(node?.placement)||{kind:'surface'}};
   if(['component','path','edge'].includes(candidate?.kind))return {canvasId:candidate.canvasId,placement:candidate.kind==='component'?{kind:'surface'}:{kind:candidate.kind,hostId:candidate.entity.id,t:candidate.placement.t,...(candidate.kind==='edge'?{side:candidate.placement.side}:{})}};
   if(candidate?.kind==='wire')return {canvasId:candidate.canvasId,placement:{kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t}};
   return {canvasId:GLOBAL_CANVAS_ID,placement:{kind:'surface'}};
@@ -726,7 +728,7 @@ function componentHostTarget(candidate){
 // effective dimension) is refused by the data core's owned-port rule. Returns the refusal, or null.
 function componentHostRefusal(node,candidate){
   if(!componentDefinitionOwner(node))return null;
-  const target=componentHostTarget(candidate),trial=SovSchematicData.clone(node);trial.canvasId=target.canvasId;trial.placement=target.placement;
+  const target=componentHostTarget(candidate,node),trial=SovSchematicData.clone(node);trial.canvasId=target.canvasId;trial.placement=target.placement;
   try{SovSchematicData.assertDefinitionPortsKept(node,{placement:target.placement},trial);return null}catch(error){return error.message}
 }
 // Every host change goes through here, checked before anything is applied. A refused host leaves
@@ -734,7 +736,9 @@ function componentHostRefusal(node,candidate){
 function applyComponentHost(node,candidate){
   if(!node)return null;
   const refusal=componentHostRefusal(node,candidate);if(refusal){statusEl.textContent=refusal;return {refused:refusal}}
-  if(candidate?.kind==='component'){
+  if(candidate?.kind==='canvas'){
+    node.canvasId=candidate.canvasId;node.parentId=canvasOwnerComponentId(candidate.canvasId);
+  }else if(candidate?.kind==='component'){
     node.canvasId=candidate.canvasId;node.parentId=candidate.entity.id;node.placement={kind:'surface',x:node.x,y:node.y};wireHostPoseCache.delete(node.id)
   }else if(candidate?.kind==='wire'){
     node.canvasId=candidate.canvasId;node.parentId=null;node.placement={kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t};node.x=candidate.placement.x;node.y=candidate.placement.y;
@@ -748,6 +752,20 @@ function applyComponentHost(node,candidate){
   }
   syncNodeBoundaryContext(node);for(const child of descendantsOf(node.id))syncNodeBoundaryContext(child);return candidate;
 }
+// When a host stops hosting (its interior closes, it is retyped or changes dimension, or it is
+// deleted), the Components on its interior fall back to the host's own canvas. The plan is decided
+// here, before the host edit; componentHostPlanRefusal checks every step with the hosting guard, and
+// applyComponentHostPlan applies them. One refused child refuses the whole edit.
+function componentFallbackPlan(host){
+  if(!host)return [];
+  const canvasId=host.canvasId||GLOBAL_CANVAS_ID;
+  return nodes.filter(q=>parentComponent(q)?.id===host.id).map(node=>({node,candidate:{kind:'canvas',canvasId}}));
+}
+function componentHostPlanRefusal(plan){
+  for(const {node,candidate} of plan||[]){const refusal=componentHostRefusal(node,candidate);if(refusal)return refusal}
+  return null;
+}
+function applyComponentHostPlan(plan){for(const {node,candidate} of plan||[])applyComponentHost(node,candidate)}
 function updateContainmentFor(node){if(!node)return null;return applyComponentHost(node,componentHostCandidateAtPoint(node))}
 function moveDescendantsWithState(state,dx,dy){
   for(const item of state.descendantOrigins||[]){

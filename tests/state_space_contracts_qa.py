@@ -691,6 +691,7 @@ const bound=()=>{const d=D.makeDocument({id:'b47'});mk(d,{id:'g',symbolId:'act',
   const barComponentType={value:'act',addEventListener:(ev,fn)=>{handler=fn}};
   const ctx=vm.createContext({SovSchematicData:D,Attachment:A,diagram:d,nodes:d.components,selected:'g',barComponentType,statusEl,GROUPS:{Primitives:['point','path','plane'],Components:['blank','act','hold','buffer','gate','switch','limit','receipt','observe']},
     mutationBlocked:()=>false,setHistoryHint:h=>hints.push(h),componentForm:n=>D.clone(n.form),wiresOnBuiltinPoints:()=>[],formHostsChildren:()=>false,
+    componentFallbackPlan:()=>[],componentHostPlanRefusal:()=>null,applyComponentHostPlan:()=>{}, // the hosting concern (30-canvas.js); nothing hosted here
     GLOBAL_CANVAS_ID:D.GLOBAL_CANVAS_ID,ensureComponentStructure:()=>{},routeCache:{clear(){}},arrowPoseCache:{clear(){}},render:()=>{},selectNode:()=>{},scheduleHistoryCapture:()=>captures.push(1)});
   vm.runInContext(src.slice(start,end),ctx,{filename:'60-interactions.js'});
   const bar={};
@@ -957,6 +958,33 @@ def check_point_self() -> None:
     assert up['create'] == {'ok': True, 'stored': [{'id': 'self', 'channels': [{'id': 'main', 'merge': {'combine': 'or'}}]}]}, up['create']
 
 
+# Contract 0b-2, amendment 2, step 14 (data core half): deleting a host whose interior Components would
+# fall back onto a Wire's canvas is refused when one of them is bound (DEFINITION_PORTS), on every surface.
+HOST_DELETE = r"""
+const S=require(process.argv[1]),D=globalThis.SovSchematicData,fs=require('fs');
+const packs=[S.loadPack(JSON.parse(fs.readFileSync(process.argv[2],'utf8'))).pack];
+const d=D.makeDocument({id:'hd'}),op=o=>D.applyOperation(d,o);
+op({op:'create',resource:'component',value:{id:'l1',symbolId:'point',x:0,y:0}});op({op:'create',resource:'component',value:{id:'l2',symbolId:'point',x:600,y:0}});
+op({op:'create',resource:'wire',value:{id:'lane',a:'l1',aSide:'self',b:'l2',bSide:'self'}});
+op({op:'create',resource:'component',value:{id:'pl',symbolId:'act',x:300,y:0,canvasId:'canvas:wire:lane',placement:{kind:'wire',wireId:'lane',t:.5},form:{dimension:2,regions:{interior:{state:'open'}}}}});
+op({op:'create',resource:'component',value:{id:'and',symbolId:'act',x:300,y:0,canvasId:'canvas:component:pl',parentId:'pl'}});
+const bound=S.applyBind(d,'and','logic.and@1',packs).ok;
+D.normalizeDocument(d);const before=JSON.stringify(d.components),rc=op({op:'delete',resource:'component',resourceId:'pl'});
+const refused={ok:rc.ok,msg:rc.error?.message||'',same:JSON.stringify(d.components)===before,rev:rc.revisionAfter===rc.revisionBefore};
+op({op:'update',resource:'component',resourceId:'and',patch:{config:{definition:null}}});
+const unbound=op({op:'delete',resource:'component',resourceId:'pl'});
+process.stdout.write(JSON.stringify({bound,refused,unbound:{ok:unbound.ok,canvasId:d.components.find(c=>c.id==='and').canvasId}}));
+"""
+
+
+def check_host_delete() -> None:
+    r = node(HOST_DELETE, str(ROOT / 'src/07-state-space.js'), str(ROOT / 'data/core.logic.pack.json'))
+    assert r['bound'], r
+    rf = r['refused']
+    assert rf['ok'] is False and 'DEFINITION_PORTS' in rf['msg'] and rf['same'] and rf['rev'], rf
+    assert r['unbound'] == {'ok': True, 'canvasId': 'canvas:wire:lane'}, r['unbound']
+
+
 def main() -> None:
     # 07 loads alone under node through a bare require, and brings its two cores with it.
     bare = node(BARE, str(ROOT / 'src/07-state-space.js'))
@@ -1120,6 +1148,7 @@ def main() -> None:
     check_amendment()
     check_binding()
     check_point_self()
+    check_host_delete()
     print('PASS state space contracts QA')
 
 

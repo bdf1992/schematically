@@ -927,8 +927,11 @@
     const arr=resourceArray(doc,resource),index=arr.findIndex(x=>x.id===id);if(index<0)return null;
     const removed=arr[index];assertUnlocked(removed,resource);
     if(resource==='component'){
-      const containing=removed.canvasId||GLOBAL_CANVAS_ID;
-      for(const child of doc.components)if(child.canvasId===componentCanvasId(removed)){child.canvasId=containing;child.parentId=removed.parentId??null;child.placement={kind:'surface',x:child.x,y:child.y};}
+      const containing=removed.canvasId||GLOBAL_CANVAS_ID,fallsBack=doc.components.filter(child=>child.canvasId===componentCanvasId(removed));
+      // The Components on its interior fall back to its canvas. A bound one whose exposed ports that
+      // would change (the canvas is a Wire's) refuses the deletion first (DEFINITION_PORTS).
+      for(const child of fallsBack){const trial=clone(child);trial.canvasId=containing;trial.placement={kind:'surface',x:child.x,y:child.y};assertDefinitionPortsKept(child,{placement:trial.placement},trial)}
+      for(const child of fallsBack){child.canvasId=containing;child.parentId=removed.parentId??null;child.placement={kind:'surface',x:child.x,y:child.y};}
       for(let i=doc.wires.length-1;i>=0;i--)if(doc.wires[i].a===id||doc.wires[i].b===id)remove(doc,'wire',doc.wires[i].id);
     }else if(resource==='wire'){
       const hostedCanvas=`canvas:wire:${id}`;

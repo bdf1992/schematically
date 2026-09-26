@@ -528,10 +528,16 @@ barComponentType.addEventListener('change',()=>{
   const f=componentForm(n),nextDimension=preset?.form?.dimension??2,nextDefaults=preset?.attachmentDefaults||'standard';
   const wouldRemoveBuiltins=f.dimension!==nextDimension||(nextDefaults==='none'&&Attachment.attachmentDefaults(n)!=='none');
   if(wouldRemoveBuiltins&&wiresOnBuiltinPoints(n).length){barComponentType.value=n.symbolId;statusEl.textContent='Detach Wires from built-in points first';return}
-  const beforeOpen=formHostsChildren(n);
-  // The data core refuses a retype that would remove a port a Wire ends on (PORT_IN_USE).
-  try{SovSchematicData.applySymbol(n,next,diagram)}catch(error){barComponentType.value=n.symbolId;statusEl.textContent=error.message;return}
-  if(beforeOpen&&!formHostsChildren(n)){const fallback=n.canvasId||GLOBAL_CANVAS_ID;for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}}
+  // The data core refuses a retype that would remove a port a Wire ends on (PORT_IN_USE). A retype
+  // that stops this Component hosting makes its Components fall back to its canvas: the hosting
+  // concern (30-canvas.js) decides and checks that before anything changes.
+  let plan=[];
+  try{
+    if(formHostsChildren(n)){const trial=SovSchematicData.clone(n);SovSchematicData.applySymbol(trial,next);if(!formHostsChildren(trial))plan=componentFallbackPlan(n)}
+    const refusal=componentHostPlanRefusal(plan);if(refusal)throw new Error(refusal);
+    SovSchematicData.applySymbol(n,next,diagram);
+  }catch(error){barComponentType.value=n.symbolId;statusEl.textContent=error.message;return}
+  applyComponentHostPlan(plan);
   SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
   ensureComponentStructure(n);
 

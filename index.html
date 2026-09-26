@@ -839,9 +839,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
               </select>
             </label>
             <label data-dims="2">Attachments
-              <select id="formAttachments" title="Built-in boundary points">
-                <option value="standard">Left · Right · Top</option>
-                <option value="none">None · hosted Points only</option>
+              <select id="formAttachments" title="The template's ports, or a custom port list">
+                <option value="standard">Template ports</option>
+                <option value="none">Custom ports</option>
               </select>
             </label>
           </div>
@@ -958,7 +958,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
               <option value="in">Input</option>
               <option value="out">Output</option>
               <option value="duplex">Input + Output</option>
-              <option value="control">Trigger</option>
+              <option value="control">Control</option>
+              <option value="trigger">Trigger</option>
             </select>
           </label>
           <label>Access
@@ -2302,8 +2303,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const arr=resourceArray(doc,resource),index=arr.findIndex(x=>x.id===id);if(index<0)return null;
     const removed=arr[index];assertUnlocked(removed,resource);
     if(resource==='component'){
-      const containing=removed.canvasId||GLOBAL_CANVAS_ID;
-      for(const child of doc.components)if(child.canvasId===componentCanvasId(removed)){child.canvasId=containing;child.parentId=removed.parentId??null;child.placement={kind:'surface',x:child.x,y:child.y};}
+      const containing=removed.canvasId||GLOBAL_CANVAS_ID,fallsBack=doc.components.filter(child=>child.canvasId===componentCanvasId(removed));
+      // The Components on its interior fall back to its canvas. A bound one whose exposed ports that
+      // would change (the canvas is a Wire's) refuses the deletion first (DEFINITION_PORTS).
+      for(const child of fallsBack){const trial=clone(child);trial.canvasId=containing;trial.placement={kind:'surface',x:child.x,y:child.y};assertDefinitionPortsKept(child,{placement:trial.placement},trial)}
+      for(const child of fallsBack){child.canvasId=containing;child.parentId=removed.parentId??null;child.placement={kind:'surface',x:child.x,y:child.y};}
       for(let i=doc.wires.length-1;i>=0;i--)if(doc.wires[i].a===id||doc.wires[i].b===id)remove(doc,'wire',doc.wires[i].id);
     }else if(resource==='wire'){
       const hostedCanvas=`canvas:wire:${id}`;
@@ -4447,7 +4451,7 @@ function syncPortsPanel(n){
   for(const spec of Attachment.pointSpecs(n)){
     const row=document.createElement('div');row.className='ports-row';row.dataset.portId=spec.id;row.setAttribute('role','listitem');
     const id=portPanelControl('input','port-id',`Port ${spec.id} id`,{type:'text',readonly:'',title:owned||'Port id'});id.value=spec.id;if(owner)id.disabled=true;
-    const label=portPanelControl('input','port-label',`Port ${spec.id} label`,{type:'text',maxlength:'24',placeholder:'Label',title:'Port label'});label.value=spec.label||ports[spec.compatId]?.label||'';
+    const label=portPanelControl('input','port-label',`Port ${spec.id} label`,{type:'text',maxlength:'24',placeholder:'Label',title:'Port label'});label.value=ports[spec.compatId]?.label??spec.label??''; // the drawn label, which every label edit writes
     const side=portPanelSelect('port-side',`Port ${spec.id} side`,PORT_PANEL_SIDES,spec.side);side.title='Side';
     const t=portPanelControl('input','port-t',`Port ${spec.id} position`,{type:'number',min:'0',max:'1',step:'0.05',title:'Position along the side, 0 to 1'});t.value=String(spec.t);
     const flow=portPanelSelect('port-flow',`Port ${spec.id} flow`,PORT_PANEL_FLOWS,spec.flow);flow.title=owned||'Flow';if(owner)flow.disabled=true;
@@ -4605,7 +4609,8 @@ function showPortBar(info){
   barPortFace.value=port.face||'external';
   barPortMarkers.textContent=portMarkerSummaryText(info);
   setSlotChip(barPortColorSlot,ch.colorSlot);
-  barPortFlow.value=ch.flow;
+  // One flow: the declared flow where the port declares one (a 1D endpoint does not), else the drawn one.
+  barPortFlow.value=Attachment.resolveSpec(info.owner,info.pointId||info.portId)?.flow||ch.flow;
   barPortAccess.value=ch.access;
   if(!selectionSettingsPanel.hidden)syncSelectionSettings('port');
   closeColorSlotPanel();
@@ -5462,8 +5467,10 @@ function componentHostCandidateAtPoint(node,x=node.x,y=node.y){
   return best;
 }
 // The host a candidate gives a Component: its canvas and its placement kind. applyComponentHost
-// applies it; componentHostRefusal checks it first.
-function componentHostTarget(candidate){
+// applies it; componentHostRefusal checks it first. A `canvas` candidate is a fall-back onto a
+// canvas (see componentFallbackPlan); it keeps the Component's placement.
+function componentHostTarget(candidate,node=null){
+  if(candidate?.kind==='canvas')return {canvasId:candidate.canvasId,placement:SovSchematicData.clone(node?.placement)||{kind:'surface'}};
   if(['component','path','edge'].includes(candidate?.kind))return {canvasId:candidate.canvasId,placement:candidate.kind==='component'?{kind:'surface'}:{kind:candidate.kind,hostId:candidate.entity.id,t:candidate.placement.t,...(candidate.kind==='edge'?{side:candidate.placement.side}:{})}};
   if(candidate?.kind==='wire')return {canvasId:candidate.canvasId,placement:{kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t}};
   return {canvasId:GLOBAL_CANVAS_ID,placement:{kind:'surface'}};
@@ -5473,7 +5480,7 @@ function componentHostTarget(candidate){
 // effective dimension) is refused by the data core's owned-port rule. Returns the refusal, or null.
 function componentHostRefusal(node,candidate){
   if(!componentDefinitionOwner(node))return null;
-  const target=componentHostTarget(candidate),trial=SovSchematicData.clone(node);trial.canvasId=target.canvasId;trial.placement=target.placement;
+  const target=componentHostTarget(candidate,node),trial=SovSchematicData.clone(node);trial.canvasId=target.canvasId;trial.placement=target.placement;
   try{SovSchematicData.assertDefinitionPortsKept(node,{placement:target.placement},trial);return null}catch(error){return error.message}
 }
 // Every host change goes through here, checked before anything is applied. A refused host leaves
@@ -5481,7 +5488,9 @@ function componentHostRefusal(node,candidate){
 function applyComponentHost(node,candidate){
   if(!node)return null;
   const refusal=componentHostRefusal(node,candidate);if(refusal){statusEl.textContent=refusal;return {refused:refusal}}
-  if(candidate?.kind==='component'){
+  if(candidate?.kind==='canvas'){
+    node.canvasId=candidate.canvasId;node.parentId=canvasOwnerComponentId(candidate.canvasId);
+  }else if(candidate?.kind==='component'){
     node.canvasId=candidate.canvasId;node.parentId=candidate.entity.id;node.placement={kind:'surface',x:node.x,y:node.y};wireHostPoseCache.delete(node.id)
   }else if(candidate?.kind==='wire'){
     node.canvasId=candidate.canvasId;node.parentId=null;node.placement={kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t};node.x=candidate.placement.x;node.y=candidate.placement.y;
@@ -5495,6 +5504,20 @@ function applyComponentHost(node,candidate){
   }
   syncNodeBoundaryContext(node);for(const child of descendantsOf(node.id))syncNodeBoundaryContext(child);return candidate;
 }
+// When a host stops hosting (its interior closes, it is retyped or changes dimension, or it is
+// deleted), the Components on its interior fall back to the host's own canvas. The plan is decided
+// here, before the host edit; componentHostPlanRefusal checks every step with the hosting guard, and
+// applyComponentHostPlan applies them. One refused child refuses the whole edit.
+function componentFallbackPlan(host){
+  if(!host)return [];
+  const canvasId=host.canvasId||GLOBAL_CANVAS_ID;
+  return nodes.filter(q=>parentComponent(q)?.id===host.id).map(node=>({node,candidate:{kind:'canvas',canvasId}}));
+}
+function componentHostPlanRefusal(plan){
+  for(const {node,candidate} of plan||[]){const refusal=componentHostRefusal(node,candidate);if(refusal)return refusal}
+  return null;
+}
+function applyComponentHostPlan(plan){for(const {node,candidate} of plan||[])applyComponentHost(node,candidate)}
 function updateContainmentFor(node){if(!node)return null;return applyComponentHost(node,componentHostCandidateAtPoint(node))}
 function moveDescendantsWithState(state,dx,dy){
   for(const item of state.descendantOrigins||[]){
@@ -7238,10 +7261,16 @@ barComponentType.addEventListener('change',()=>{
   const f=componentForm(n),nextDimension=preset?.form?.dimension??2,nextDefaults=preset?.attachmentDefaults||'standard';
   const wouldRemoveBuiltins=f.dimension!==nextDimension||(nextDefaults==='none'&&Attachment.attachmentDefaults(n)!=='none');
   if(wouldRemoveBuiltins&&wiresOnBuiltinPoints(n).length){barComponentType.value=n.symbolId;statusEl.textContent='Detach Wires from built-in points first';return}
-  const beforeOpen=formHostsChildren(n);
-  // The data core refuses a retype that would remove a port a Wire ends on (PORT_IN_USE).
-  try{SovSchematicData.applySymbol(n,next,diagram)}catch(error){barComponentType.value=n.symbolId;statusEl.textContent=error.message;return}
-  if(beforeOpen&&!formHostsChildren(n)){const fallback=n.canvasId||GLOBAL_CANVAS_ID;for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}}
+  // The data core refuses a retype that would remove a port a Wire ends on (PORT_IN_USE). A retype
+  // that stops this Component hosting makes its Components fall back to its canvas: the hosting
+  // concern (30-canvas.js) decides and checks that before anything changes.
+  let plan=[];
+  try{
+    if(formHostsChildren(n)){const trial=SovSchematicData.clone(n);SovSchematicData.applySymbol(trial,next);if(!formHostsChildren(trial))plan=componentFallbackPlan(n)}
+    const refusal=componentHostPlanRefusal(plan);if(refusal)throw new Error(refusal);
+    SovSchematicData.applySymbol(n,next,diagram);
+  }catch(error){barComponentType.value=n.symbolId;statusEl.textContent=error.message;return}
+  applyComponentHostPlan(plan);
   SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
   ensureComponentStructure(n);
 
@@ -7298,13 +7327,12 @@ barPortFace.addEventListener('change',()=>{
   componentConfig(info.owner);
   routeCache.clear();arrowPoseCache.clear();render();selectPortRef(selectedPortInfo()||info);
 });
+// Direction and label are the port's own values, written as the Ports panel writes them (see
+// setComponentPortFlow / setComponentPortLabel below). A 1D endpoint declares nothing, so only its
+// contract changes there.
 barPortFlow.addEventListener('change',()=>{
-  const info=selectedPortInfo();if(!info||mutationBlocked(info.owner,'Change Port direction'))return;setHistoryHint('Change Port direction');
-  normalizePortConnections(info.port);
-  const connection=info.port.connections[info.port.activeConnection];
-  connection.flow=barPortFlow.value;
-  componentConfig(info.owner);
-  renderWires();selectPortRef(selectedPortInfo()||info);
+  const info=selectedPortInfo();if(!info)return;
+  setComponentPortFlow(info.owner,info.pointId,barPortFlow.value,reselectPort(info));
 });
 barPortAccess.addEventListener('change',()=>{
   const info=selectedPortInfo();if(!info||mutationBlocked(info.owner,'Change Port access'))return;setHistoryHint('Change Port access');
@@ -7314,11 +7342,9 @@ barPortAccess.addEventListener('change',()=>{
   componentConfig(info.owner);
   render();selectPortRef(selectedPortInfo()||info);scheduleHistoryCapture();
 });
-barPortLabel.addEventListener('input',()=>{
-  const info=selectedPortInfo();if(!info||mutationBlocked(info.owner,'Edit Port label'))return;setHistoryHint('Edit Port label');
-  info.port.label=barPortLabel.value.slice(0,24);
-  componentConfig(info.owner);
-  render();selectPortRef(selectedPortInfo()||info,{focus:false});
+barPortLabel.addEventListener('change',()=>{
+  const info=selectedPortInfo();if(!info)return;
+  setComponentPortLabel(info.owner,info.pointId,barPortLabel.value,reselectPort(info));
 });
 barPortColorSlot.addEventListener('click',()=>openColorSlotPanel('port'));
 function deleteSelected(){
@@ -7339,8 +7365,13 @@ function deleteSelected(){
     const ids=selectedComponentIds.size?[...selectedComponentIds]:[selected];
     const targets=ids.map(id=>nodes.find(n=>n.id===id)).filter(Boolean);
     if(targets.some(isEntityLocked)){statusEl.textContent='Locked · delete refused';return}
+    // A deleted Component's interior falls back to its canvas: the hosting concern (30-canvas.js)
+    // checks every Component that would fall back before anything is deleted.
+    const roots=targets.filter(n=>!targets.some(other=>other.id!==n.id&&isDescendantOf(n.id,other.id)));
+    const refusal=componentHostPlanRefusal(roots.flatMap(root=>componentFallbackPlan(root)).filter(step=>!roots.includes(step.node)));
+    if(refusal){statusEl.textContent=refusal;return}
     setHistoryHint(targets.length>1?'Delete selection':'Delete Component');
-    for(const root of targets.filter(n=>!targets.some(other=>other.id!==n.id&&isDescendantOf(n.id,other.id))))SovSchematicData.remove(diagram,'component',root.id);
+    for(const root of roots)SovSchematicData.remove(diagram,'component',root.id);
     clearComponentSelectionSet();syncAllNodeBoundaryContext();
   }
 
@@ -7358,19 +7389,21 @@ barFormState.addEventListener('click',()=>{
 });
 function updateSelectedComponentForm(mutator){
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Form edit'))return;
-  // A Component bound to a definition keeps the ports the definition gave it: a Form edit that
-  // would change them (a change of dimension) is refused by the data core's owned-port rule.
-  if(componentDefinitionOwner(n)){
-    const trial=SovSchematicData.clone(n);mutator(trial.form,trial);
-    try{SovSchematicData.assertDefinitionPortsKept(n,{form:trial.form},trial)}catch(error){syncComponentVisualPanel(n);statusEl.textContent=error.message;return}
-  }
+  // Everything is decided on a trial first. A Component bound to a definition keeps the ports the
+  // definition gave it: a Form edit that would change them (a change of dimension) is refused by the
+  // data core's owned-port rule. When the edit closes the interior, its Components fall back to this
+  // Component's canvas, decided and checked by the hosting concern (30-canvas.js).
+  const trial=SovSchematicData.clone(n);mutator(trial.form,trial);if(Number(trial.form.dimension)<2)trial.form.regions.interior.state='closed';
+  const beforeOpen=componentForm(n).regions.interior.state==='open';
+  const plan=beforeOpen&&trial.form.regions.interior.state==='closed'?componentFallbackPlan(n):[];
+  try{
+    if(componentDefinitionOwner(n))SovSchematicData.assertDefinitionPortsKept(n,{form:trial.form},trial);
+    const refusal=componentHostPlanRefusal(plan);if(refusal)throw new Error(refusal);
+  }catch(error){syncComponentVisualPanel(n);statusEl.textContent=error.message;return}
   setHistoryHint('Edit Component Form');
-  const f=componentForm(n),beforeOpen=f.regions.interior.state==='open',beforeDimension=f.dimension;mutator(f,n);
+  const f=componentForm(n),beforeDimension=f.dimension;mutator(f,n);
   if(f.dimension<2)f.regions.interior.state='closed';componentForm(n);
-  if(beforeOpen&&f.regions.interior.state==='closed'){
-    const fallback=n.canvasId||GLOBAL_CANVAS_ID;
-    for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}
-  }
+  applyComponentHostPlan(plan);
   if(beforeDimension!==f.dimension)SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
   componentConfig(n);
   routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
@@ -7386,9 +7419,12 @@ formAttachments.addEventListener('change',()=>{
   const trial=SovSchematicData.clone(n);if(next==='none')trial.config.attachmentDefaults='none';else delete trial.config.attachmentDefaults;
   try{SovSchematicData.assertDefinitionPortsKept(n,{config:{attachmentDefaults:next}},trial);SovSchematicData.assertWiresSurviveEdit(diagram,n,trial)}catch(error){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent=error.message;return}
   setHistoryHint('Change attachment defaults');
+  // Choosing the template's ports where the Component's ports differ from them resets them.
+  const differs=next==='standard'&&JSON.stringify(componentPortList(n).slice(0,SovSchematicData.templatePorts(n.symbolId).length))!==JSON.stringify(SovSchematicData.normalizeDeclaredPorts(SovSchematicData.templatePorts(n.symbolId)));
   if(next==='none')n.config.attachmentDefaults='none';else delete n.config.attachmentDefaults;
   SovSchematicData.reconcileComponentWirePorts(diagram,n.id);componentConfig(n);
   routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
+  if(differs)statusEl.textContent='Reset to template ports';
 });
 // --- Ports ------------------------------------------------------------------
 // Every Ports edit sends the Component's complete port list through the data core's component
@@ -7403,52 +7439,102 @@ function componentPortList(n){
     return port;
   });
 }
-function applyComponentPorts(n,ports,label,extraConfig=null){
+// One component update from the port controls (panel or bar). `after` runs on success; the default
+// reselects the Component with its settings open.
+function applyComponentPortPatch(n,config,label,after=null){
   if(mutationBlocked(n,label)){syncPortsPanel(n);return false}
   commitHistoryCapture();
-  const patch={config:{...(extraConfig||{}),attachmentDefaults:'none',attachmentPoints:ports}};
-  const receipt=SovSchematicData.applyOperation(diagram,{schema:SovSchematicData.OPERATION_SCHEMA,id:`ports-${Date.now()}`,op:'update',resource:'component',resourceId:n.id,patch});
+  const receipt=SovSchematicData.applyOperation(diagram,{schema:SovSchematicData.OPERATION_SCHEMA,id:`ports-${Date.now()}`,op:'update',resource:'component',resourceId:n.id,patch:{config}});
   const current=()=>nodes.find(x=>x.id===n.id)||n;
-  if(!receipt.ok){statusEl.textContent=receipt.error?.message||'Port edit refused';syncPortsPanel(current());return false}
+  if(!receipt.ok){statusEl.textContent=receipt.error?.message||'Port edit refused';syncPortsPanel(current());if(after)after(false);return false}
   normalizeRuntimeAfterCrud();commitHistoryCapture(label);
-  selectNode(n.id,{focus:false});openSelectionSettings('component');
+  if(after)after(true);else{selectNode(n.id,{focus:false});openSelectionSettings('component')}
   statusEl.textContent=label;
   return true;
 }
+function applyComponentPorts(n,ports,label,extraConfig=null,after=null){
+  return applyComponentPortPatch(n,{...(extraConfig||{}),attachmentDefaults:'none',attachmentPoints:ports},label,after);
+}
+function reselectPort(info){return ()=>{const again=selectedPortInfo();if(again)selectPortRef(again,{focus:false})}}
 function selectedPortsComponent(){const n=nodes.find(x=>x.id===selected);return componentPortsEditable(n)?n:null}
-function editSelectedPort(portId,mutate,label,extraConfig=null){
-  const n=selectedPortsComponent();if(!n)return;
-  const ports=componentPortList(n),port=ports.find(p=>p.id===portId);if(!port){syncPortsPanel(n);return}
+function editComponentPort(n,portId,mutate,label,extraConfig=null,after=null){
+  if(!componentPortsEditable(n))return false;
+  const ports=componentPortList(n),port=ports.find(p=>p.id===portId);if(!port){syncPortsPanel(n);return false}
   mutate(port,ports);
-  applyComponentPorts(n,ports.filter(p=>!p.removed),label,extraConfig);
+  return applyComponentPorts(n,ports.filter(p=>!p.removed),label,extraConfig,after);
+}
+function editSelectedPort(portId,mutate,label,extraConfig=null){
+  const n=selectedPortsComponent();if(n)editComponentPort(n,portId,mutate,label,extraConfig);
+}
+// The port contract (`config.ports[compatId]`) holds what the canvas draws: the label, and the flow
+// of its active connection, which reads `in | out | duplex | control` (a `trigger` port is drawn
+// as `control`, the receiving flow it is closest to).
+function portContractMirror(n,spec,{label,flow}={}){
+  const contract=n.config?.ports?.[spec.compatId]||{},mirror={};
+  if(label!==undefined)mirror.label=label;
+  if(flow!==undefined&&Array.isArray(contract.connections)&&contract.connections.length){
+    const connections=SovSchematicData.clone(contract.connections),i=Math.max(0,Math.min(connections.length-1,Number(contract.activeConnection)||0));
+    connections[i].flow=flow==='trigger'?'control':flow;mirror.connections=connections;
+  }
+  return {ports:{[spec.compatId]:mirror}};
+}
+// A Point's `self` declaration with one field changed (the data core stores it in its clean form).
+function pointSelfList(n,change){
+  const declared=Attachment.selfDeclaration(n)||{id:'self',channels:[{id:'main'}]};
+  return [{id:'self',...(declared.flow?{flow:declared.flow}:{}),channels:SovSchematicData.clone(declared.channels),...change}];
+}
+// One flow: the declared `flow`, with the contract's drawn flow mirrored in the same update.
+function setComponentPortFlow(n,pointId,flow,after=null){
+  const spec=Attachment.resolveSpec(n,pointId);if(!spec)return false;
+  const mirror=portContractMirror(n,spec,{flow});
+  if(Attachment.effectiveDimension(n)===2)return editComponentPort(n,spec.id,port=>{port.flow=flow},'Change port flow',mirror,after);
+  if(Attachment.intrinsicDimension(n)===0)return applyComponentPortPatch(n,{...mirror,attachmentPoints:pointSelfList(n,{flow})},'Change port flow',after);
+  return applyComponentPortPatch(n,mirror,'Change port flow',after);
+}
+// One label: the declared `label` and the drawn label, written together. A Point's `self` and a 1D
+// endpoint declare no label, so only the drawn label is theirs.
+function setComponentPortLabel(n,pointId,value,after=null){
+  const spec=Attachment.resolveSpec(n,pointId);if(!spec)return false;
+  const label=String(value||'').slice(0,24),mirror=portContractMirror(n,spec,{label});
+  if(Attachment.effectiveDimension(n)===2)return editComponentPort(n,spec.id,port=>{if(label)port.label=label;else delete port.label},'Relabel port',mirror,after);
+  return applyComponentPortPatch(n,mirror,'Relabel port',after);
 }
 function portChannelsFromText(text,before){
   const kept=new Map((before||[]).map(c=>[c.id,c]));
   return String(text||'').split(',').map(x=>x.trim()).filter(Boolean).map(id=>kept.has(id)?SovSchematicData.clone(kept.get(id)):{id});
 }
 portsList.addEventListener('change',e=>{
-  const row=e.target.closest('.ports-row');if(!row)return;const portId=row.dataset.portId,el=e.target;
-  if(el.classList.contains('port-label')){
-    // The label is also written to the port's contract, the label the canvas draws, in the same update.
-    const n=selectedPortsComponent(),spec=n?Attachment.resolveSpec(n,portId):null,value=el.value.slice(0,24);
-    editSelectedPort(portId,port=>{if(value)port.label=value;else delete port.label},'Relabel port',spec?{ports:{[spec.compatId]:{label:value}}}:null);
-  }else if(el.classList.contains('port-side'))editSelectedPort(portId,port=>{port.side=el.value},'Move port');
-  else if(el.classList.contains('port-t'))editSelectedPort(portId,port=>{port.t=el.value.trim()===''?null:Number(el.value)},'Move port');
-  else if(el.classList.contains('port-flow'))editSelectedPort(portId,port=>{port.flow=el.value},'Change port flow');
-  else if(el.classList.contains('port-channels'))editSelectedPort(portId,port=>{port.channels=portChannelsFromText(el.value,port.channels)},'Change port channels');
+  const row=e.target.closest('.ports-row');if(!row)return;const portId=row.dataset.portId,el=e.target,value=el.value;
+  // A change fires as focus leaves the field (Tab, Shift+Tab, a click). The edit runs once focus has
+  // landed, so the rebuilt rows put it back on the control that was about to receive it.
+  setTimeout(()=>{
+    const n=selectedPortsComponent();if(!n)return;
+    if(el.classList.contains('port-label'))setComponentPortLabel(n,portId,value);
+    else if(el.classList.contains('port-side'))editSelectedPort(portId,port=>{port.side=value},'Move port');
+    else if(el.classList.contains('port-t'))editSelectedPort(portId,port=>{port.t=value.trim()===''?null:Number(value)},'Move port');
+    else if(el.classList.contains('port-flow'))setComponentPortFlow(n,portId,value);
+    else if(el.classList.contains('port-channels'))editSelectedPort(portId,port=>{port.channels=portChannelsFromText(value,port.channels)},'Change port channels');
+  },0);
 });
 portsList.addEventListener('click',e=>{
   const button=e.target.closest('.port-remove');if(!button||button.disabled)return;
   editSelectedPort(button.closest('.ports-row').dataset.portId,port=>{port.removed=true},'Remove port');
 });
 // A new port: id p1, p2, ... (the first free), on the right, at the first free position of
-// .5, .25, .75, .125, .375, .625, .875 on that side (else .5), duplex, on the main channel.
+// .5, .25, .75, .125, .375, .625, .875 on that side; once those are used, at the midpoint of the
+// largest free gap on that side (between its ports and the ends 0 and 1; ties to the lowest t).
+// Duplex, on the main channel.
 const NEW_PORT_POSITIONS=[.5,.25,.75,.125,.375,.625,.875];
+function largestGapMidpoint(ts){
+  const edges=[0,...[...new Set(ts)].sort((a,b)=>a-b),1];let best=null;
+  for(let i=1;i<edges.length;i++){const gap=edges[i]-edges[i-1];if(!best||gap>best.gap+1e-12)best={gap,t:(edges[i]+edges[i-1])/2}}
+  return best.t;
+}
 function newPortFor(ports){
   const taken=new Set(ports.flatMap(p=>[p.id,p.compatId||p.id]));
   let i=1;while(taken.has(`p${i}`))i++;
-  const used=new Set(ports.filter(p=>p.side==='right').map(p=>p.t));
-  return {id:`p${i}`,side:'right',t:NEW_PORT_POSITIONS.find(t=>!used.has(t))??.5,flow:'duplex',channels:[{id:'main'}]};
+  const ts=ports.filter(p=>p.side==='right').map(p=>p.t),used=new Set(ts);
+  return {id:`p${i}`,side:'right',t:NEW_PORT_POSITIONS.find(t=>!used.has(t))??largestGapMidpoint(ts),flow:'duplex',channels:[{id:'main'}]};
 }
 portsAddBtn.addEventListener('click',()=>{
   const n=selectedPortsComponent();if(!n||portsAddBtn.disabled)return;

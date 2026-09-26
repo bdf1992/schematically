@@ -219,7 +219,7 @@ function syncPortsPanel(n){
   for(const spec of Attachment.pointSpecs(n)){
     const row=document.createElement('div');row.className='ports-row';row.dataset.portId=spec.id;row.setAttribute('role','listitem');
     const id=portPanelControl('input','port-id',`Port ${spec.id} id`,{type:'text',readonly:'',title:owned||'Port id'});id.value=spec.id;if(owner)id.disabled=true;
-    const label=portPanelControl('input','port-label',`Port ${spec.id} label`,{type:'text',maxlength:'24',placeholder:'Label',title:'Port label'});label.value=spec.label||ports[spec.compatId]?.label||'';
+    const label=portPanelControl('input','port-label',`Port ${spec.id} label`,{type:'text',maxlength:'24',placeholder:'Label',title:'Port label'});label.value=ports[spec.compatId]?.label??spec.label??''; // the drawn label, which every label edit writes
     const side=portPanelSelect('port-side',`Port ${spec.id} side`,PORT_PANEL_SIDES,spec.side);side.title='Side';
     const t=portPanelControl('input','port-t',`Port ${spec.id} position`,{type:'number',min:'0',max:'1',step:'0.05',title:'Position along the side, 0 to 1'});t.value=String(spec.t);
     const flow=portPanelSelect('port-flow',`Port ${spec.id} flow`,PORT_PANEL_FLOWS,spec.flow);flow.title=owned||'Flow';if(owner)flow.disabled=true;
@@ -377,7 +377,8 @@ function showPortBar(info){
   barPortFace.value=port.face||'external';
   barPortMarkers.textContent=portMarkerSummaryText(info);
   setSlotChip(barPortColorSlot,ch.colorSlot);
-  barPortFlow.value=ch.flow;
+  // One flow: the declared flow where the port declares one (a 1D endpoint does not), else the drawn one.
+  barPortFlow.value=Attachment.resolveSpec(info.owner,info.pointId||info.portId)?.flow||ch.flow;
   barPortAccess.value=ch.access;
   if(!selectionSettingsPanel.hidden)syncSelectionSettings('port');
   closeColorSlotPanel();

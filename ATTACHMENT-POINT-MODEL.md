@@ -154,8 +154,10 @@ What is implemented:
   (`CHANNEL_MISMATCH`), so binding by gesture, `wire.create`, `wire.update`, carrier rebinding and document
   validation all refuse the same way. Ports without declared channels share `main`, so no existing document is
   refused.
-- **Form panel.** The attachments control is unchanged: `standard` restores the template's ports, and `none`
-  removes them, refused while a Wire ends on one.
+- **Form panel.** The attachments control reads "Template ports" (`standard`: the template's ports, then any
+  additions) and "Custom ports" (`none`: the authored list is the complete set). Choosing "Template ports" where the
+  ports differ from the template's resets them and says so ("Reset to template ports"); "Custom ports" is refused
+  while a Wire ends on a template port.
 
 - **A Point's `self`.** A component `update` (or `create`) on a Point may set `attachmentPoints` to the single entry
   `{id: 'self', flow?, channels}`, checked like a declared port's channels and flow and stored in the clean form, which
@@ -168,15 +170,24 @@ A 2D Component's settings panel has a **Ports** section below the Attachments co
 Components (by effective dimension). It lists every effective port in order, one row each: the id (read-only), label,
 side (`left | right | top | bottom`), position `t` (0-1, step 0.05), flow (`in | out | duplex | control | trigger`),
 channels (comma-separated ids) and a Remove button. "Add port" appends `p1`, `p2`, ... (the first id free as an id or
-compat id) on the right, at the first of .5, .25, .75, .125, .375, .625, .875 no other right-side port uses (else
-.5), duplex, on `main`; it is drawn at once and is immediately wireable.
+compat id) on the right, at the first of .5, .25, .75, .125, .375, .625, .875 no other right-side port uses, and once
+those are used at the midpoint of the largest free gap on that side (between its ports and the ends 0 and 1; ties to
+the lowest t), so added ports never stack; duplex, on `main`; it is drawn at once and is immediately wireable. An edit
+runs once focus has settled, so Tab and Shift+Tab move through a row as usual while each edit rebuilds the rows.
 
 - **One path.** Every edit sends the Component's complete port list, with `attachmentDefaults: none`, through the data
   core's component `update`, which stores it in the smallest form and applies every refusal. One edit is one history
   transition. A refusal (`t` outside 0-1, an empty or repeated channel list, `PORT_IN_USE` for removing a port a Wire
   ends on, `CHANNEL_MISMATCH`) changes nothing, the rows are rebuilt from the record so the edited row reverts, and
-  the refusal is the status line. A label edit also writes the port contract's label (`config.ports[compatId].label`,
-  the label the canvas draws) in the same update.
+  the refusal is the status line.
+- **One label.** A port's label is one value. The panel's label field and the port bar's label both write the declared
+  `label` and the drawn label (`config.ports[compatId].label`) together in one update, and both show the drawn label.
+  A Point's `self` and a 1D endpoint declare no label; for them only the drawn label is written.
+- **One flow.** A port's direction is its declared `flow`. The panel's flow and the port bar's Direction (which offers
+  `trigger`) both write it through the data core, with the contract's drawn flow (its active connection's) mirrored in
+  the same update (`trigger` is drawn as `control`), and both show it. A Component with no declared list stores the
+  list in the smallest form, as any port edit does; a Point's bar change sets its `self` declaration. A 1D endpoint
+  declares no flow; the bar changes only its drawn flow.
 - **Moving a port** happens only here (side, `t`): dragging a port starts a Wire.
 - **Definition-owned ports.** On a Component with `config.definition`, the id, flow, channels and Remove controls are
   disabled with a title naming the definition, and "Add port" is disabled; label, side and `t` stay editable.
@@ -188,5 +199,13 @@ compat id) on the right, at the first of .5, .25, .75, .125, .375, .625, .875 no
   history entry. A pointer drag asks the same guard for every root before applying any, so one refusal refuses the
   whole group. Settling into an open interior stays allowed. The Form panel's dimension and Attachments controls ask
   the same owned-port rule; the bar retype was already refused (`applySymbol`).
+- **Children fall back through the same guard.** When a Component stops hosting (its interior closes, it is retyped
+  or changes dimension, or it is deleted), the Components on its interior fall back to its own canvas.
+  `componentFallbackPlan` in `30-canvas.js` decides that before the edit, `componentHostPlanRefusal` checks every
+  child with the hosting guard, and `applyComponentHostPlan` applies it through `applyComponentHost`. One refused
+  child refuses the whole edit: nothing changes, `DEFINITION_PORTS` is the status line, and no history entry is left.
+  For example, a bound Component inside an open Component that sits on a Wire would otherwise fall onto the Wire's
+  canvas and expose `start`/`end`. Deleting such a host is refused by the data core too (`remove`), so the API, HTTP
+  and MCP refuse it the same way.
 
 Still planned: a Wire carrying several channels at run time, and the channel-merge editor.
