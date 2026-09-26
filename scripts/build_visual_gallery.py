@@ -28,6 +28,7 @@ KEEP = {  # record name.view -> gallery file
     'schmitt.level': 'level-schmitt.svg',
     'schmitt.loop-hys': 'loop-schmitt.svg',
     'learning.landscape': 'landscape-learning.svg',
+    'three.landscape-chairs-tables': 'landscape-slice-chairs-tables.svg',
     'learning.search-outline': 'search-outline.svg',
     'learning.search-tree': 'search-tree.svg',
     'week.timeline': 'timeline-week.svg',
@@ -42,6 +43,7 @@ def records() -> dict[str, dict]:
         'schmitt': record_logic(LG / 'schmitt.sov', [{'X': x} for x in noisy_wave(240)], None, 1, [], 'X'),
         'learning': record_optimize(OP / 'workshop.sov', OP / 'workshop.learning.opt.json', segments=32, starts=24, steps=41),
         'week': record_simulate(OP / 'workshop.sov', OP / 'workshop.learning.opt.json', {'chairs': 14, 'tables': 2}),
+        'three': record_optimize(OP / 'workshop3.sov', OP / 'workshop3.opt.json', segments=20, starts=12, steps=41),
     }
 
 

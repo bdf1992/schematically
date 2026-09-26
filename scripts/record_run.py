@@ -100,14 +100,22 @@ def noisy_wave(samples: int, seed: int = 6) -> list[float]:
 
 def record_optimize(doc_path: Path, model_path: Path | None, segments: int = 32, starts: int = 24,
                     steps: int = 81) -> dict:
+    import itertools
     doc, model = load(doc_path, model_path)
-    land = landscape(doc, model, steps=steps)
-    names = land['decisions']
     ls = local_search(doc, model, starts=starts, record=True)
-    at = lambda plan: [plan['activity'][names[0]], plan['activity'][names[1]]]  # noqa: E731
+    names = ls['free']
+    at = lambda plan: {n: plan['activity'][n] for n in names}  # noqa: E731
     frac = solve(doc, model, segments=segments, relax=True, marginals=False)
     whole = solve(doc, model, segments=segments, marginals=False)
     naive = solve(doc, model, segments=segments, linear=True, marginals=False)
+    # Two decisions: the landscape is the whole problem. More: one slice per pair, the other
+    # decisions held at the proven whole-unit plan (so whole-unit dots in a slice are real plans),
+    # or at the fractional optimum when there are no whole units.
+    anchor = at(whole['plan'] if whole.get('whole_units') else frac['plan'])
+    landscapes = []
+    for i, j in itertools.combinations(range(len(names)), 2):
+        held = {n: anchor[n] for k, n in enumerate(names) if k not in (i, j)}
+        landscapes.append(landscape(doc, model, steps=steps, pair=(i, j), held=held))
     lp = build(doc, model, segments=segments)
     log: list = []
     bb = branch_and_bound(lp['c'], lp['A_ub'], lp['b_ub'], lp['A_eq'], lp['b_eq'], lp['upper'],
@@ -125,9 +133,9 @@ def record_optimize(doc_path: Path, model_path: Path | None, segments: int = 32,
     return {
         'schema': SCHEMA, 'kind': 'optimize', 'document': _doc_ref(doc_path),
         'model': {'path': (model_path or doc_path.with_suffix('.opt.json')).name, 'fingerprint': model_fingerprint(model)},
-        'unit': model.get('unit', ''), 'landscape': land,
-        'climbs': [{'path': [[round(p[0], 4), round(p[1], 4)] for p in c['path']], 'optimum': c['optimum']} for c in ls['climbs']],
-        'optima': [{'at': [o['free'][names[0]], o['free'][names[1]]], 'value': o['value'], 'starts': o['starts'],
+        'unit': model.get('unit', ''), 'decisions': names, 'landscapes': landscapes,
+        'climbs': [{'path': [[round(v, 4) for v in p] for p in c['path']], 'optimum': c['optimum']} for c in ls['climbs']],
+        'optima': [{'at': dict(o['free']), 'value': o['value'], 'starts': o['starts'],
                     'certificate': 'local'} for o in ls['optima']],
         'plans': [
             {'name': 'fractional optimum', 'at': at(frac['plan']), 'value': frac['evaluated']['value'], 'certificate': 'proven',

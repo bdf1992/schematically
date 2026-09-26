@@ -212,8 +212,16 @@ function topLevels(vmax) {
   return [0.95, 0.985].map(f => Math.floor(vmax * f / step) * step);
 }
 
-export function landscape(rec) {
-  const L = rec.landscape, [dx, dy] = L.decisions; const W = 760, H = 520, left = 56, right = 640, top = 20, bottom = 470;
+// A landscape is the whole problem for two decisions, or a slice for more: the other decisions
+// are held (L.held), and anything whose held coordinates differ is drawn projected, dashed and
+// said so, because it is not a plan in this picture.
+const heldKey = held => Object.entries(held).map(([k, v]) => `${k}=${r2(v)}`).join(',');
+const inSlice = (at, held) => Object.entries(held).every(([k, v]) => Math.abs(at[k] - v) < 1e-6);
+
+export function landscape(rec, L) {
+  const [dx, dy] = L.decisions; const W = 760, H = 520, left = 56, right = 640, top = 24, bottom = 470;
+  const ia = rec.decisions.indexOf(dx), ib = rec.decisions.indexOf(dy);
+  const sliced = Object.keys(L.held).length > 0;
   const X = lin(L.x[0], L.x[L.x.length - 1], left, right), Y = lin(L.y[0], L.y[L.y.length - 1], bottom, top);
   const [hid, hdef] = hatchDef();
   let vmax = 0; L.value.forEach(r => r.forEach(v => { if (v !== null && v > vmax) vmax = v; }));
@@ -222,7 +230,6 @@ export function landscape(rec) {
   const shade = v => r2(0.05 + 0.85 * Math.pow(v / vmax, 3));
   L.value.forEach((row, i) => row.forEach((v, j) => { if (v === null) return;
     body += el('rect', {x: X(L.x[i]) - cw / 2, y: Y(L.y[j]) - ch / 2, width: cw + 0.4, height: ch + 0.4, fill: '--v-hi', 'fill-opacity': shade(v)}); }));
-  // limits: where each limit's slack is zero
   for (const [name, grid] of Object.entries(L.slack)) {
     const segs = contour(L.x, L.y, grid, 0);
     if (!segs.length) continue;
@@ -231,7 +238,6 @@ export function landscape(rec) {
     const mid = segs[Math.floor(segs.length * 0.3)][0];
     body += text(X(mid[0]) + 6, Y(mid[1]) - 6, name, 'ink');
   }
-  // labelled contours near the top
   for (const lv of topLevels(vmax)) {
     const segs = contour(L.x, L.y, L.value, lv);
     if (!segs.length) continue;
@@ -241,55 +247,67 @@ export function landscape(rec) {
     const at = segs.reduce((best, s) => s[0][0] < best[0] ? s[0] : best, segs[0][0]);
     body += text(X(at[0]) - 6, Y(at[1]) + 14, `${rec.unit === 'USD' ? '$' : ''}${lv}`, 'ink', {'text-anchor': 'end'});
   }
-  // climbs
+  // climbs, projected onto this pair when the model has more decisions
   rec.climbs.forEach((c, k) => { const col = c.optimum === 0 ? '--v-hi' : '--v-s2';
-    body += tag('g', {'data-climb': k, 'data-optimum': c.optimum}, el('path', {d: c.path.map((p, i) => `${i ? 'L' : 'M'}${r2(X(p[0]))} ${r2(Y(p[1]))}`).join(''), fill: 'none', stroke: col, 'stroke-width': 1.3, opacity: 0.85}) +
-      el('rect', {x: X(c.path[0][0]) - 3, y: Y(c.path[0][1]) - 3, width: 6, height: 6, fill: '--v-canvas', stroke: col, 'stroke-width': 1.3})); });
-  // whole-unit plans
+    const pts = c.path.map(p => [p[ia], p[ib]]);
+    body += tag('g', {'data-climb': k, 'data-optimum': c.optimum, 'data-projected': sliced ? 1 : 0},
+      el('path', {d: pts.map((p, i) => `${i ? 'L' : 'M'}${r2(X(p[0]))} ${r2(Y(p[1]))}`).join(''), fill: 'none', stroke: col, 'stroke-width': 1.3, opacity: sliced ? 0.45 : 0.85, 'stroke-dasharray': sliced ? '4 3' : null}) +
+      el('rect', {x: X(pts[0][0]) - 3, y: Y(pts[0][1]) - 3, width: 6, height: 6, fill: '--v-canvas', stroke: col, 'stroke-width': 1.3}) +
+      (sliced ? title('climb, projected onto this slice') : '')); });
   const provenWhole = rec.plans.find(p => p.name === 'whole-unit optimum');
-  L.whole.forEach(w => { const [a, b] = w.at; const best = provenWhole && provenWhole.at[0] === a && provenWhole.at[1] === b;
-    body += tag('g', {'data-whole': `${a},${b}`, 'data-local': w.local ? 1 : 0, 'data-link': w.local ? `plan:${a},${b}` : null},
+  const hk = heldKey(L.held);
+  L.whole.forEach(w => { const [a, b] = w.at;
+    const best = provenWhole && inSlice(provenWhole.at, L.held) && provenWhole.at[dx] === a && provenWhole.at[dy] === b;
+    body += tag('g', {'data-whole': `${a},${b}`, 'data-local': w.local ? 1 : 0, 'data-link': w.local ? `plan:${dx}=${a},${dy}=${b}${hk ? ',' + hk : ''}` : null},
       el('circle', {cx: X(a), cy: Y(b), r: 1.9, fill: '--v-ink'}) +
       (w.local ? el('circle', {cx: X(a), cy: Y(b), r: 5.5, fill: best ? '--v-ink' : 'none', stroke: '--v-ink', 'stroke-width': 1.7}) : '') +
       el('circle', {cx: X(a), cy: Y(b), r: 7, fill: 'transparent'}) +
-      title(`${a} ${dx}, ${b} ${dy}: ${w.value.toFixed(2)}${w.local ? (best ? ' (proven whole-unit optimum)' : ' (local optimum)') : ''}`)); });
-  // climb optima (local), proven and naive plans
-  rec.optima.forEach((o, k) => { body += tag('g', {'data-link': `optimum:${k}`}, el('circle', {cx: X(o.at[0]), cy: Y(o.at[1]), r: 6.5, fill: '--v-canvas', stroke: k === 0 ? '--v-hi' : '--v-s2', 'stroke-width': 2.2}) +
-    title(`climb optimum (local): ${r2(o.at[0])} ${dx}, ${r2(o.at[1])} ${dy}, ${o.value.toFixed(2)}, ${o.starts} starts`)); });
+      title(`${a} ${dx}, ${b} ${dy}${hk ? ` (${hk})` : ''}: ${w.value.toFixed(2)}${w.local ? (best ? ' (proven whole-unit optimum)' : sliced ? ' (local optimum in this slice)' : ' (local optimum)') : ''}`)); });
+  const where = at => sliced && !inSlice(at, L.held) ? ' (outside this slice; projected)' : '';
+  rec.optima.forEach((o, k) => { const out = sliced && !inSlice(o.at, L.held);
+    body += tag('g', {'data-link': `optimum:${k}`, 'data-in-slice': out ? 0 : 1}, el('circle', {cx: X(o.at[dx]), cy: Y(o.at[dy]), r: 6.5, fill: '--v-canvas', stroke: k === 0 ? '--v-hi' : '--v-s2', 'stroke-width': 2.2, 'stroke-dasharray': out ? '3 2' : null}) +
+      title(`climb optimum (local): ${rec.decisions.map(n => `${r2(o.at[n])} ${n}`).join(', ')}, ${o.value.toFixed(2)}, ${o.starts} starts${where(o.at)}`)); });
   for (const p of rec.plans) {
-    const [a, b] = p.at, x = X(a), y = Y(b), key = `plan:${p.name}`;
+    const a = p.at[dx], b = p.at[dy], x = X(a), y = Y(b), out = sliced && !inSlice(p.at, L.held), dash = out ? '3 2' : null;
     let mark;
-    if (!p.feasible) mark = el('circle', {cx: x, cy: y, r: 8, fill: 'none', stroke: '--v-s2', 'stroke-width': 2.4});
-    else if (p.certificate === 'naive') mark = el('path', {d: `M${r2(x - 6)} ${r2(y - 6)}l12 12m0-12l-12 12`, stroke: '--v-ink', 'stroke-width': 2.4});
-    else if (p.name === 'fractional optimum') mark = el('path', {d: `M${r2(x)} ${r2(y - 8)}l8 8l-8 8l-8-8Z`, fill: '--v-ink'});
-    else mark = el('circle', {cx: x, cy: y, r: 6.5, fill: '--v-ink'});
-    body += tag('g', {'data-plan': p.name, 'data-link': key, 'data-at': `${r2(a)},${r2(b)}`, 'data-certificate': p.certificate, 'data-feasible': p.feasible ? 1 : 0},
-      mark + title(`${p.name} (${p.certificate}${p.feasible ? '' : ', breaks a limit'}): ${r2(a)} ${dx}, ${r2(b)} ${dy}, ${p.value.toFixed(2)}`));
+    if (!p.feasible) mark = el('circle', {cx: x, cy: y, r: 8, fill: 'none', stroke: '--v-s2', 'stroke-width': 2.4, 'stroke-dasharray': dash});
+    else if (p.certificate === 'naive') mark = el('path', {d: `M${r2(x - 6)} ${r2(y - 6)}l12 12m0-12l-12 12`, stroke: '--v-ink', 'stroke-width': 2.4, opacity: out ? 0.5 : null});
+    else if (p.name === 'fractional optimum') mark = el('path', {d: `M${r2(x)} ${r2(y - 8)}l8 8l-8 8l-8-8Z`, fill: out ? 'none' : '--v-ink', stroke: '--v-ink', 'stroke-width': 1.6, 'stroke-dasharray': dash});
+    else mark = el('circle', {cx: x, cy: y, r: 6.5, fill: out ? 'none' : '--v-ink', stroke: '--v-ink', 'stroke-width': 1.6, 'stroke-dasharray': dash});
+    body += tag('g', {'data-plan': p.name, 'data-link': `plan:${p.name}`, 'data-at': `${r2(a)},${r2(b)}`, 'data-certificate': p.certificate,
+      'data-feasible': p.feasible ? 1 : 0, 'data-in-slice': out ? 0 : 1},
+      mark + title(`${p.name} (${p.certificate}${p.feasible ? '' : ', breaks a limit'}): ${rec.decisions.map(n => `${r2(p.at[n])} ${n}`).join(', ')}, ${p.value.toFixed(2)}${where(p.at)}`));
   }
   body += el('path', {d: `M${left} ${bottom}H${right}M${left} ${top}V${bottom}`, stroke: '--v-line'});
   const xstep = (L.x[L.x.length - 1] - L.x[0]) > 12 ? 4 : 2, ystep = (L.y[L.y.length - 1] - L.y[0]) > 12 ? 4 : 2;
   for (let v = L.x[0]; v <= L.x[L.x.length - 1] + 1e-9; v += xstep) body += text(X(v), bottom + 16, String(r2(v)), 'lbl', {'text-anchor': 'middle'});
   for (let v = L.y[0]; v <= L.y[L.y.length - 1] + 1e-9; v += ystep) body += text(left - 6, Y(v) + 4, String(r2(v)), 'lbl', {'text-anchor': 'end'});
-  body += text(right, bottom + 34, dx, 'lbl', {'text-anchor': 'end'}) + text(left, top - 6, dy, 'lbl');
-  // key
-  const kx = 668; body += text(kx, 34, 'value', 'ink');
-  for (let i = 0; i <= 20; i++) body += el('rect', {x: kx, y: 44 + (20 - i) * 9, width: 16, height: 9, fill: '--v-hi', 'fill-opacity': shade(i / 20 * vmax)});
-  body += text(kx + 22, 52, `${Math.round(vmax)}`) + text(kx + 22, 232, '0');
-  body += el('rect', {x: kx, y: 252, width: 16, height: 14, fill: `url(#${hid})`, stroke: '--v-line'}) + text(kx + 22, 263, 'breaks');
-  body += text(kx + 22, 277, 'a limit');
-  return svg(W, H, `Landscape of ${rec.document.path}`, body, 'landscape');
+  body += text(right, bottom + 34, dx, 'lbl', {'text-anchor': 'end'}) + text(left, top - 8, dy, 'lbl');
+  if (sliced) body += tag('text', {x: right, y: top - 8, class: 'ink', 'text-anchor': 'end', 'data-slice': hk}, esc(`slice: ${Object.entries(L.held).map(([k, v]) => `${k} held at ${r2(v)}`).join(', ')}`));
+  const kx = 668; body += text(kx, 38, 'value', 'ink');
+  for (let i = 0; i <= 20; i++) body += el('rect', {x: kx, y: 48 + (20 - i) * 9, width: 16, height: 9, fill: '--v-hi', 'fill-opacity': shade(i / 20 * vmax)});
+  body += text(kx + 22, 56, `${Math.round(vmax)}`) + text(kx + 22, 236, '0');
+  body += el('rect', {x: kx, y: 256, width: 16, height: 14, fill: `url(#${hid})`, stroke: '--v-line'}) + text(kx + 22, 267, 'breaks');
+  body += text(kx + 22, 281, 'a limit');
+  if (sliced) body += el('circle', {cx: kx + 8, cy: 306, r: 6, fill: 'none', stroke: '--v-ink', 'stroke-dasharray': '3 2'}) + text(kx + 22, 310, 'projected');
+  return svg(W, H, `Landscape of ${rec.document.path}${sliced ? `, ${dx} by ${dy} slice` : ''}`, body, 'landscape');
 }
 
 export function landscapeTable(rec) {
-  const [dx, dy] = rec.landscape.decisions;
-  const rows = [];
+  const names = rec.decisions, rows = [];
   for (const p of rec.plans) rows.push({key: `plan:${p.name}`, name: p.name, at: p.at, value: p.value, kind: p.certificate + (p.feasible ? '' : ', breaks a limit'), bad: !p.feasible});
   const best = rec.plans.find(p => p.name === 'whole-unit optimum');
-  rec.landscape.whole.filter(w => w.local && !(best && best.at[0] === w.at[0] && best.at[1] === w.at[1])).sort((a, b) => b.value - a.value).forEach((w, i) =>
-    rows.push({key: `plan:${w.at[0]},${w.at[1]}`, name: `local optimum ${i + 1}`, at: w.at, value: w.value, kind: 'local'}));
+  const same = (a, b) => names.every(n => Math.abs(a[n] - b[n]) < 1e-6);
+  for (const L of rec.landscapes) {
+    const [dx, dy] = L.decisions, hk = heldKey(L.held), sliced = hk !== '';
+    L.whole.filter(w => w.local).map(w => ({...w, full: {...L.held, [dx]: w.at[0], [dy]: w.at[1]}}))
+      .filter(w => !(best && same(best.at, w.full))).sort((a, b) => b.value - a.value)
+      .forEach((w, i) => rows.push({key: `plan:${dx}=${w.at[0]},${dy}=${w.at[1]}${hk ? ',' + hk : ''}`,
+        name: sliced ? `local in ${dx} × ${dy} slice ${i + 1}` : `local optimum ${i + 1}`, at: w.full, value: w.value, kind: 'local'}));
+  }
   rec.optima.forEach((o, k) => rows.push({key: `optimum:${k}`, name: `climb end ${k + 1} (${o.starts} starts)`, at: o.at, value: o.value, kind: 'local', bad: k > 0}));
-  const body = rows.map(r => `<tr data-link="${esc(r.key)}"${r.bad ? ' class="bad"' : ''}><td>${esc(r.name)}</td><td class="num">${r2(r.at[0])}</td><td class="num">${r2(r.at[1])}</td><td class="num">${r.value.toFixed(2)}</td><td>${esc(r.kind)}</td></tr>`).join('');
-  return `<table class="sov-log"><thead><tr><th>plan</th><th>${esc(dx)}</th><th>${esc(dy)}</th><th>${esc(rec.unit || 'value')}</th><th>kind</th></tr></thead><tbody>${body}</tbody></table>`;
+  const body = rows.map(r => `<tr data-link="${esc(r.key)}"${r.bad ? ' class="bad"' : ''}><td>${esc(r.name)}</td>${names.map(n => `<td class="num">${r2(r.at[n])}</td>`).join('')}<td class="num">${r.value.toFixed(2)}</td><td>${esc(r.kind)}</td></tr>`).join('');
+  return `<table class="sov-log"><thead><tr><th>plan</th>${names.map(n => `<th>${esc(n)}</th>`).join('')}<th>${esc(rec.unit || 'value')}</th><th>kind</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
 // Search: every node coloured by how close its bound came to the final incumbent (the gradient
@@ -441,7 +459,12 @@ export function viewsFor(rec) {
     return out;
   }
   if (rec.kind === 'optimize') return [
-    {name: 'landscape', title: 'Landscape', svg: landscape(rec), html: landscapeTable(rec)},
+    ...rec.landscapes.map((L, i) => {
+      const sliced = Object.keys(L.held).length > 0;
+      return {name: sliced ? `landscape-${L.decisions[0]}-${L.decisions[1]}` : 'landscape',
+        title: sliced ? `Landscape slice: ${L.decisions[0]} by ${L.decisions[1]}, ${Object.entries(L.held).map(([k, v]) => `${k} held at ${r2(v)}`).join(', ')}` : 'Landscape',
+        svg: landscape(rec, L), html: i === rec.landscapes.length - 1 ? landscapeTable(rec) : undefined};
+    }),
     {name: 'search-outline', title: 'Search outline', svg: searchOutline(rec)},
     {name: 'search-tree', title: 'Search tree', svg: searchTree(rec)},
   ];

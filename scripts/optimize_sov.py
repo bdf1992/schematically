@@ -897,8 +897,13 @@ def local_search(doc: dict, model: dict, starts: int = 24, seed: int = 0, iterat
     return result
 
 
-def landscape(doc: dict, model: dict, steps: int = 81) -> dict:
-    """The true value of every plan over a model's two free decisions, for the landscape view.
+def landscape(doc: dict, model: dict, steps: int = 81, pair: tuple[int, int] | None = None,
+              held: dict[str, float] | None = None) -> dict:
+    """The true value of every plan over two free decisions, for the landscape view.
+
+    With exactly two free decisions this is the whole problem. With more it is a slice: `pair`
+    names the two decisions drawn (indexes into the decision list) and `held` fixes every other
+    decision at a value; everything reported is true only inside that slice.
 
     Samples a steps x steps grid over the decisions' box. Each point is expanded to a full plan,
     valued on the true curves, and checked against every limit. For each named limit (a
@@ -908,10 +913,25 @@ def landscape(doc: dict, model: dict, steps: int = 81) -> dict:
     step (one more or fewer of either, or a swap) improves it.
     """
     space = _decision_space(doc, model)
-    if len(space['free']) != 2:
-        raise Refusal('NOT_TWO_DECISIONS', f'a landscape needs two free decisions; this model has {len(space["free"])}',
-                      'use the outline or table views for other models')
-    lp, n, upper, expand, plan_of = space['lp'], space['n'], space['upper'], space['expand'], space['plan_of']
+    names = space['names']
+    if len(names) < 2:
+        raise Refusal('NOT_TWO_DECISIONS', f'a landscape needs at least two free decisions; this model has {len(names)}',
+                      'use the outline or table views for this model')
+    pair = tuple(pair) if pair is not None else (0, 1)
+    others = [k for k in range(len(names)) if k not in pair]
+    held = dict(held or {})
+    missing = [names[k] for k in others if names[k] not in held]
+    if missing:
+        raise Refusal('SLICE_NOT_HELD', f'a slice through {names[pair[0]]} and {names[pair[1]]} must hold '
+                      f'{", ".join(missing)} at a value', 'pass held={name: value} for every other decision')
+    lp, n, upper, plan_of = space['lp'], space['n'], space['upper'], space['plan_of']
+
+    def expand(yy: list[float]) -> list[float]:
+        y = [0.0] * len(names)
+        y[pair[0]], y[pair[1]] = yy
+        for k in others:
+            y[k] = float(held[names[k]])
+        return space['expand'](y)
     free_set = set(space['free'])
     limits = []                                               # (name, function x -> slack)
     for rname, res in model.get('resources', {}).items():
@@ -930,7 +950,7 @@ def landscape(doc: dict, model: dict, steps: int = 81) -> dict:
         return all(v >= -1e-9 for j, v in enumerate(x) if j not in free_set) and \
             all(f(x) >= -1e-6 for _, f in limits)
 
-    (lo0, hi0), (lo1, hi1) = space['box']
+    (lo0, hi0), (lo1, hi1) = space['box'][pair[0]], space['box'][pair[1]]
     xs = [lo0 + (hi0 - lo0) * i / (steps - 1) for i in range(steps)]
     ys = [lo1 + (hi1 - lo1) * j / (steps - 1) for j in range(steps)]
     value, slack = [], {name: [] for name, _ in limits}
@@ -947,7 +967,8 @@ def landscape(doc: dict, model: dict, steps: int = 81) -> dict:
             slack[name].append(srows[name])
     whole = []
     ints = {cid for cid, spec in model.get('stages', {}).items() if spec.get('integer')}
-    if set(space['names']) <= ints:
+    held_whole = all(abs(float(held[names[k]]) - round(float(held[names[k]]))) < 1e-9 for k in others)
+    if set(names) <= ints and held_whole:
         vals = {}
         for a in range(int(lo0), int(hi0) + 1):
             for b in range(int(lo1), int(hi1) + 1):
@@ -958,7 +979,8 @@ def landscape(doc: dict, model: dict, steps: int = 81) -> dict:
         for (a, b), v in sorted(vals.items()):
             local = all(vals.get((a + da, b + db), -math.inf) <= v + 1e-9 for da, db in steps_)
             whole.append({'at': [a, b], 'value': round(v, 4), 'local': local})
-    return {'decisions': space['names'], 'x': [round(v, 6) for v in xs], 'y': [round(v, 6) for v in ys],
+    return {'decisions': [names[pair[0]], names[pair[1]]], 'held': {names[k]: held[names[k]] for k in others},
+            'x': [round(v, 6) for v in xs], 'y': [round(v, 6) for v in ys],
             'value': value, 'slack': slack, 'whole': whole}
 
 

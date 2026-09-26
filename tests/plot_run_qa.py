@@ -13,6 +13,8 @@ claim is checked here against the record, not against the renderer's own arithme
   - level: each output lane's switch count is the record's count, and the Schmitt trigger
     switches less than the comparator;
   - landscape: every plan marker sits at its record position with its certificate, every
+    slice of a three-decision model holds the others at the whole-unit plan, says so, marks
+    what lies outside it as projected, and holds the true value of the plans it names; every
     whole-unit local optimum is ringed and nothing else is, and every limit is drawn;
   - search: one outline row per logged node, dead exactly when pruned or infeasible, the
     gradient in [0, 1] with the incumbent at 0;
@@ -125,7 +127,10 @@ def check_views() -> None:
         'schmitt': record_logic(lg / 'schmitt.sov', [{'X': x} for x in noisy_wave(240)], None, 1, [], 'X'),
         'learning': record_optimize(op / 'workshop.sov', op / 'workshop.learning.opt.json', segments=20, starts=12, steps=41),
         'week': record_simulate(op / 'workshop.sov', op / 'workshop.learning.opt.json', {'chairs': 14, 'tables': 2}),
+        'three': record_optimize(op / 'workshop3.sov', op / 'workshop3.opt.json', segments=20, starts=8, steps=21),
     }
+    from optimize_sov import load
+    load3 = load(op / 'workshop3.sov', op / 'workshop3.opt.json')
     for rec in records.values():
         assert rec['schema'] == 'soveraeign.schematic/run@0.0-draft' and rec['document']['fingerprint'].startswith('sem1:')
     with tempfile.TemporaryDirectory() as tmp:
@@ -157,21 +162,54 @@ def check_views() -> None:
     cmp_, hys = expected
     assert hys < cmp_, expected
 
-    # landscape
+    # landscape (two decisions: the whole problem, one view)
     rec = records['learning']
+    assert len(rec['landscapes']) == 1 and rec['landscapes'][0]['held'] == {}
+    L = rec['landscapes'][0]
+    dx, dy = L['decisions']
     land = views['learning.landscape']
     marks = {n.attrib['data-plan']: n.attrib for n in nodes(land, 'data-plan')}
     for p in rec['plans']:
         m = marks[p['name']]
         x, y = map(float, m['data-at'].split(','))
-        assert abs(x - p['at'][0]) < 0.01 and abs(y - p['at'][1]) < 0.01, (p, m)
+        assert abs(x - p['at'][dx]) < 0.01 and abs(y - p['at'][dy]) < 0.01, (p, m)
         assert m['data-certificate'] == p['certificate'] and m['data-feasible'] == ('1' if p['feasible'] else '0')
+        assert m['data-in-slice'] == '1'
     ringed = sorted(n.attrib['data-whole'] for n in nodes(land, 'data-whole') if n.attrib['data-local'] == '1')
-    assert ringed == sorted(f'{w["at"][0]},{w["at"][1]}' for w in rec['landscape']['whole'] if w['local']), ringed
+    assert ringed == sorted(f'{w["at"][0]},{w["at"][1]}' for w in L['whole'] if w['local']), ringed
     assert len(ringed) == 6, ringed
     drawn = {n.attrib['data-limit'] for n in nodes(land, 'data-limit')}
-    assert drawn == set(rec['landscape']['slack']), (drawn, rec['landscape']['slack'].keys())
+    assert drawn == set(L['slack']), (drawn, L['slack'].keys())
     assert len(nodes(land, 'data-climb')) == len(rec['climbs'])
+    assert not nodes(land, 'data-slice'), 'the whole problem is not labelled a slice'
+
+    # landscape slices (three decisions): one per pair, the third held at the whole-unit plan
+    rec3 = records['three']
+    best = next(p for p in rec3['plans'] if p['name'] == 'whole-unit optimum')
+    assert len(rec3['landscapes']) == 3, len(rec3['landscapes'])
+    for L in rec3['landscapes']:
+        (held_name, held_value), = L['held'].items()
+        assert held_value == best['at'][held_name], (L['held'], best['at'])
+        view = views[f'three.landscape-{L["decisions"][0]}-{L["decisions"][1]}']
+        label = nodes(view, 'data-slice')
+        assert label and held_name in label[0].attrib['data-slice'], 'a slice says what it holds'
+        marks = {n.attrib['data-plan']: n.attrib for n in nodes(view, 'data-plan')}
+        for p in rec3['plans']:
+            inside = abs(p['at'][held_name] - held_value) < 1e-6
+            assert marks[p['name']]['data-in-slice'] == ('1' if inside else '0'), (p['name'], L['held'])
+        assert marks['whole-unit optimum']['data-in-slice'] == '1'
+        assert all(n.attrib['data-projected'] == '1' for n in nodes(view, 'data-climb'))
+        # the grid holds the true value of the plan it names, recomputed here
+        doc3, model3 = load3
+        from optimize_sov import _decision_space, true_value
+        space = _decision_space(doc3, model3)
+        i, j = 7, 5
+        y = [0.0] * len(space['names'])
+        y[space['names'].index(L['decisions'][0])] = L['x'][i]
+        y[space['names'].index(L['decisions'][1])] = L['y'][j]
+        y[space['names'].index(held_name)] = held_value
+        if L['value'][i][j] is not None:
+            assert abs(true_value(doc3, model3, space['plan_of'](space['expand'](y)))['value'] - L['value'][i][j]) < 1e-3
 
     # search: outline and tree
     log = rec['search']['nodes']
