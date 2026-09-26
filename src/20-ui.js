@@ -212,12 +212,14 @@ function portPanelSelect(className,label,values,value){
 function syncPortsPanel(n){
   const show=componentPortsEditable(n);portsSettings.hidden=!show;
   if(!show){portsList.replaceChildren();return}
-  const focused=document.activeElement?.closest?.('.ports-row')?[document.activeElement.closest('.ports-row').dataset.portId,[...document.activeElement.classList].find(c=>c.startsWith('port-'))]:null;
+  // Focus is put back on the same control of the same port, and only in the same Component's rows.
+  const focusRow=document.activeElement?.closest?.('.ports-row');
+  const focused=focusRow&&focusRow.dataset.componentId===n.id?[focusRow.dataset.portId,[...document.activeElement.classList].find(c=>c.startsWith('port-'))]:null;
   const owner=componentDefinitionOwner(n),ports=n.config?.ports||{};
   const owned=owner?`Owned by the definition ${owner}: unbind it to change this`:null;
   const rows=[];
   for(const spec of Attachment.pointSpecs(n)){
-    const row=document.createElement('div');row.className='ports-row';row.dataset.portId=spec.id;row.setAttribute('role','listitem');
+    const row=document.createElement('div');row.className='ports-row';row.dataset.portId=spec.id;row.dataset.componentId=n.id;row.setAttribute('role','listitem');
     const id=portPanelControl('input','port-id',`Port ${spec.id} id`,{type:'text',readonly:'',title:owned||'Port id'});id.value=spec.id;if(owner)id.disabled=true;
     const label=portPanelControl('input','port-label',`Port ${spec.id} label`,{type:'text',maxlength:'24',placeholder:'Label',title:'Port label'});label.value=ports[spec.compatId]?.label??spec.label??''; // the drawn label, which every label edit writes
     const side=portPanelSelect('port-side',`Port ${spec.id} side`,PORT_PANEL_SIDES,spec.side);side.title='Side';
@@ -377,13 +379,21 @@ function showPortBar(info){
   barPortFace.value=port.face||'external';
   barPortMarkers.textContent=portMarkerSummaryText(info);
   setSlotChip(barPortColorSlot,ch.colorSlot);
-  // One flow: the declared flow where the port declares one (a 1D endpoint does not), else the drawn one.
-  barPortFlow.value=Attachment.resolveSpec(info.owner,info.pointId||info.portId)?.flow||ch.flow;
+  barPortFlow.value=portShownFlow(info);
   barPortAccess.value=ch.access;
   if(!selectionSettingsPanel.hidden)syncSelectionSettings('port');
   closeColorSlotPanel();
   positionSelectionBar();
 }
+// One flow, shown the same by the port bar and the inspector: the declared flow, else the port's
+// default (a Point's `self` is `duplex`, as checkDocument and the runtime read it). A 1D endpoint
+// declares nothing and its bar edits only the drawn flow, so it shows the drawn flow.
+function portShownFlow(info){
+  const spec=Attachment.resolveSpec(info.owner,info.pointId||info.portId);
+  if(!spec||spec.role==='endpoint')return portConnection(info.port).flow;
+  return spec.flow||spec.defaultFlow||'duplex';
+}
+function portFlowText(flow){return [...barPortFlow.options].find(o=>o.value===flow)?.textContent||flow}
 function portDisplayName(info){return componentConfig(info.owner).label||byId(info.owner.symbolId).name}
 
 function restoreSelectedSurface(){

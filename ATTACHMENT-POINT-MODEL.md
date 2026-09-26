@@ -173,7 +173,9 @@ channels (comma-separated ids) and a Remove button. "Add port" appends `p1`, `p2
 compat id) on the right, at the first of .5, .25, .75, .125, .375, .625, .875 no other right-side port uses, and once
 those are used at the midpoint of the largest free gap on that side (between its ports and the ends 0 and 1; ties to
 the lowest t), so added ports never stack; duplex, on `main`; it is drawn at once and is immediately wireable. An edit
-runs once focus has settled, so Tab and Shift+Tab move through a row as usual while each edit rebuilds the rows.
+runs once focus has settled, so Tab and Shift+Tab move through a row as usual while each edit rebuilds the rows. Its
+target (the row's Component and port) is bound when its `change` fires, so it lands there whatever is selected by the
+time it runs; if that Component is gone by then, the edit is dropped and the status line says so.
 
 - **One path.** Every edit sends the Component's complete port list, with `attachmentDefaults: none`, through the data
   core's component `update`, which stores it in the smallest form and applies every refusal. One edit is one history
@@ -182,10 +184,13 @@ runs once focus has settled, so Tab and Shift+Tab move through a row as usual wh
   the refusal is the status line.
 - **One label.** A port's label is one value. The panel's label field and the port bar's label both write the declared
   `label` and the drawn label (`config.ports[compatId].label`) together in one update, and both show the drawn label.
-  A Point's `self` and a 1D endpoint declare no label; for them only the drawn label is written.
+  A Point's `self` and a 1D endpoint declare no label; for them only the drawn label is written. The bar's label
+  binds its port when editing starts and commits once, when it is left by Tab, Enter or a click elsewhere, even a
+  click that changes the selection.
 - **One flow.** A port's direction is its declared `flow`. The panel's flow and the port bar's Direction (which offers
   `trigger`) both write it through the data core, with the contract's drawn flow (its active connection's) mirrored in
-  the same update (`trigger` is drawn as `control`), and both show it. A Component with no declared list stores the
+  the same update (`trigger` is drawn as `control`), and both show it, as does the inspector's Direction line. A port
+  that declares no flow shows its default: `duplex` for a Point's `self`, as `checkDocument` and the runtime read it. A Component with no declared list stores the
   list in the smallest form, as any port edit does; a Point's bar change sets its `self` declaration. A 1D endpoint
   declares no flow; the bar changes only its drawn flow.
 - **Moving a port** happens only here (side, `t`): dragging a port starts a Wire.

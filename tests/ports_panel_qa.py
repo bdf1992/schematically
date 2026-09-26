@@ -613,6 +613,99 @@ with sync_playwright() as p:
     assert ts[:7] == [.5, .25, .75, .125, .375, .625, .875] and ts[7:] == [.0625, .1875, .3125], ts
     pg.close()
 
+    # --- Amendment 3 --------------------------------------------------------------------------
+    pg = fresh()
+    # On the grid (24), so the clicks that select them do not also snap them into a history entry.
+    pg.evaluate("""()=>{const A=SovSchematicAPI;A.create('component',{id:'g',symbolId:'act',x:432,y:360});
+      A.create('component',{id:'k',symbolId:'act',x:168,y:768});A.create('component',{id:'pt',symbolId:'point',x:912,y:696});render()}""")
+    pg.wait_for_timeout(300)
+    K_UNTOUCHED = pg.evaluate("()=>JSON.stringify(nodes.find(n=>n.id==='k').config)")
+
+    def click_k(pg):
+        """A real click on the other Component `k`; it must be what lies under the pointer."""
+        k = pg.evaluate("()=>{const n=nodes.find(x=>x.id==='k');return {x:n.x-30,y:n.y+20}}")
+        c = client(pg, k['x'], k['y'])
+        assert pg.evaluate("([x,y])=>document.elementFromPoint(x,y)?.closest('.node')?.dataset.id", [c['x'], c['y']]) == 'k'
+        pg.mouse.click(c['x'], c['y'])
+        pg.wait_for_timeout(450)
+
+    # Step 21 (probe22), for each panel field: edit g's port, then click k before the edit has run.
+    # The edit lands on g's port, k is untouched, and there is one history entry.
+    for label, cls, value, check in (
+        ('label', 'port-label', 'XG', lambda s: s['label'] == 'XG'),
+        ('t', 'port-t', '0.35', lambda s: s['t'] == .35),
+        ('channels', 'port-channels', 'main, bus', lambda s: s['channels'] == ['main', 'bus']),
+        ('side', 'port-side', 'bottom', lambda s: s['side'] == 'bottom'),
+        ('flow', 'port-flow', 'trigger', lambda s: s['flow'] == 'trigger'),
+    ):
+        open_panel(pg, 'g')
+        c = pg.evaluate(UNDO_COUNT)
+        if cls in ('port-side', 'port-flow'):
+            row(pg, 'right', cls).select_option(value)
+        else:
+            row(pg, 'right', cls).fill(value)
+        click_k(pg)
+        assert pg.evaluate('()=>selected') == 'k', (label, pg.evaluate('()=>selected'))
+        spec = next(x for x in pg.evaluate(STATE, 'g')['specs'] if x['id'] == 'right')
+        assert check(spec), (label, spec)
+        assert pg.evaluate("()=>JSON.stringify(nodes.find(n=>n.id==='k').config)") == K_UNTOUCHED, label
+        assert pg.evaluate(UNDO_COUNT) == c + 1, (label, pg.evaluate('()=>historyState.undo.map(x=>x.label)'))
+
+    # Step 22 (probe23): type in the bar's label, then click k. The edit lands on g's port, once.
+    pg.evaluate("()=>{selectNode(null);selectPort('g','top');openSelectionSettings('port')}")
+    c = pg.evaluate(UNDO_COUNT)
+    pg.locator('#barPortLabel').click()
+    pg.keyboard.press('Control+a')
+    pg.keyboard.type('Bar-g')
+    click_k(pg)
+    assert pg.evaluate("()=>{const n=nodes.find(x=>x.id==='g'),s=Attachment.resolveSpec(n,'top');return [s.label??null,n.config.ports.control.label]}") == ['Bar-g', 'Bar-g']
+    assert pg.evaluate("()=>JSON.stringify(nodes.find(n=>n.id==='k').config)") == K_UNTOUCHED
+    assert pg.evaluate(UNDO_COUNT) == c + 1, pg.evaluate('()=>historyState.undo.map(x=>x.label)')
+    # Leaving by Tab commits it too, once.
+    pg.evaluate("()=>{selectNode(null);selectPort('g','top');openSelectionSettings('port')}")
+    c = pg.evaluate(UNDO_COUNT)
+    pg.locator('#barPortLabel').click()
+    pg.keyboard.press('Control+a')
+    pg.keyboard.type('Tabbed')
+    pg.keyboard.press('Tab')
+    pg.wait_for_timeout(450)
+    assert pg.evaluate("()=>nodes.find(x=>x.id==='g').config.ports.control.label") == 'Tabbed'
+    assert pg.evaluate(UNDO_COUNT) == c + 1
+
+    # Step 23: a Point with no declared flow shows duplex in the bar and the inspector; choosing out stores it.
+    pg.evaluate("()=>{selectNode(null);selectPort('pt','self');openSelectionSettings('port')}")
+    assert pg.evaluate("()=>nodes.find(x=>x.id==='pt').config.attachmentPoints??null") is None
+    assert pg.evaluate('()=>barPortFlow.value') == 'duplex'
+    assert pg.locator('#pFlow').inner_text() == 'Input + Output', pg.locator('#pFlow').inner_text()
+    pg.locator('#barPortFlow').select_option('out')
+    pg.wait_for_timeout(200)
+    assert pg.evaluate("()=>nodes.find(x=>x.id==='pt').config.attachmentPoints") == [{'id': 'self', 'flow': 'out', 'channels': [{'id': 'main'}]}]
+    assert pg.evaluate('()=>barPortFlow.value') == 'out' and pg.locator('#pFlow').inner_text() == 'Output'
+
+    # Undo and redo right after a deferred edit: the edit has landed first, and both restore exactly.
+    open_panel(pg, 'g')
+    h, c = pg.evaluate(HASH), pg.evaluate(UNDO_COUNT)
+    row(pg, 'left', 'port-label').fill('U1')
+    row(pg, 'left', 'port-label').press('Enter')
+    pg.locator('#quickUndoBtn').click()
+    pg.wait_for_timeout(200)
+    assert pg.evaluate(HASH) == h and pg.evaluate(UNDO_COUNT) == c, 'undo right after a deferred edit'
+    pg.locator('#quickRedoBtn').click()
+    pg.wait_for_timeout(200)
+    assert pg.evaluate("()=>nodes.find(x=>x.id==='g').config.ports.in.label") == 'U1' and pg.evaluate(UNDO_COUNT) == c + 1
+
+    # An edit whose Component is deleted before it runs is dropped, and the status line says so. The
+    # deletion is made in the same task as the change, which is the only way to beat the deferral.
+    pg.evaluate("()=>{SovSchematicAPI.create('component',{id:'gone',symbolId:'act',x:700,y:200});render()}")
+    open_panel(pg, 'gone')
+    row(pg, 'right', 'port-label').fill('late')
+    pg.evaluate("""()=>{const el=document.querySelector('#portsList .ports-row[data-port-id="right"] .port-label');
+      el.dispatchEvent(new Event('change',{bubbles:true}));SovSchematicAPI.delete('component','gone')}""")
+    pg.wait_for_timeout(200)
+    assert status(pg) == 'Port edit dropped: gone no longer exists', status(pg)
+    assert pg.evaluate("()=>nodes.some(n=>n.id==='gone')") is False
+    pg.close()
+
     assert not errors, errors
     browser.close()
     print('PASS ports panel QA')
