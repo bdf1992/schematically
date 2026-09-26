@@ -807,6 +807,36 @@ with sync_playwright() as p:
     assert pg.locator('#barPortFlow').is_enabled()
     pg.close()
 
+    # A gate's glyph terminals keep their directions through a Ports edit: on the half adder, adding
+    # one port to each gate from the panel stores a, b, y as in, in, out, beside the new duplex port.
+    pg = browser.new_page(viewport={'width': 1400, 'height': 900})
+    pg.on('pageerror', lambda exc: errors.append(str(exc)))
+    pg.set_content(HTML, wait_until='load')
+    pg.wait_for_timeout(300)
+    adder = (ROOT / 'examples/13-half-adder.sov').read_text(encoding='utf-8')
+    pg.evaluate("(text)=>{SovSchematicAPI.file.open(text,'13-half-adder.sov');render()}", adder)
+    pg.wait_for_timeout(200)
+    TERMINALS = [('a', 'in'), ('b', 'in'), ('y', 'out')]
+    for gate in ('sum-gate', 'carry-gate'):
+        before = pg.evaluate(STATE, gate)
+        assert [x['id'] for x in before['specs']] == ['a', 'b', 'y'] and before['stored'] is None, (gate, before)
+        # Selecting a gate card (selectNode) throws on dev too: the inspector looks the glyph symbol up
+        # in SYMBOLS, which has no logic gates (filed separately). So the gate is made the selection
+        # directly and its panel filled, and the panel's own Add port button is clicked, which runs its
+        # real handler. The data change is synchronous; the selection is cleared in the same task, so
+        # the deferred refresh does not reselect the gate through selectNode.
+        pg.evaluate("(id)=>{closeSelectionSettings();selectedComponentIds.clear();selectedComponentIds.add(id);selected=id;openSelectionSettings('component')}", gate)
+        pg.wait_for_timeout(150)
+        assert pg.evaluate(ROWS) == ['a', 'b', 'y'], (gate, pg.evaluate(ROWS))
+        assert pg.evaluate('()=>!portsAddBtn.disabled'), gate
+        pg.evaluate("()=>{portsAddBtn.click();closeSelectionSettings();selectedComponentIds.clear();selected=null}")
+        pg.wait_for_timeout(450)
+        s = pg.evaluate(STATE, gate)
+        assert [(x['id'], x['flow']) for x in s['specs']] == TERMINALS + [('p1', 'duplex')], (gate, s['specs'])
+        assert s['mode'] == 'none' and [(x['id'], x['flow']) for x in s['stored']] == TERMINALS + [('p1', 'duplex')], (gate, s['mode'], s['stored'])
+        assert all(x['channels'] == ['main'] for x in s['specs']), (gate, s['specs'])
+    pg.close()
+
     assert not errors, errors
     browser.close()
     print('PASS ports panel QA')
