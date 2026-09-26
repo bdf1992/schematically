@@ -3,7 +3,8 @@
   "id": "logic-accumulator4",
   "revision": 0,
   "meta": {
-    "title": "4-bit accumulator: an adder feeding a register feeding back; each clock adds X"
+    "title": "4-bit accumulator: an adder feeding a register feeding back; each clock adds X",
+    "qualifier": "ACC4"
   },
   "components": [
     {
@@ -197,7 +198,17 @@
             "t": 0.8333,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 14.22H30\"/><path d=\"M6 18.67H30\"/><path d=\"M6 23.11H30\"/><path d=\"M6 27.56H30\"/><path d=\"M6 32.0H30\"/><path d=\"M6 36.44H30\"/><path d=\"M6 40.89H30\"/><path d=\"M6 45.33H30\"/><path d=\"M6 49.78H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 16.0H90\"/><path d=\"M66 24.0H90\"/><path d=\"M66 32.0H90\"/><path d=\"M66 40.0H90\"/><path d=\"M66 48.0H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">\u03a34</text>"
+          },
+          "size": {
+            "w": 112,
+            "h": 168
+          }
+        }
       }
     },
     {
@@ -265,7 +276,17 @@
             "t": 0.8,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 16.0H30\"/><path d=\"M6 24.0H30\"/><path d=\"M6 32.0H30\"/><path d=\"M6 40.0H30\"/><path d=\"M6 48.0H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 17.0H90\"/><path d=\"M66 27.0H90\"/><path d=\"M66 37.0H90\"/><path d=\"M66 47.0H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"11\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">RG4</text>"
+          },
+          "size": {
+            "w": 112,
+            "h": 104
+          }
+        }
       }
     },
     {

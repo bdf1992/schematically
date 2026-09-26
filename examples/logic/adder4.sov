@@ -3,7 +3,8 @@
   "id": "logic-adder4",
   "revision": 0,
   "meta": {
-    "title": "4-bit ripple-carry adder: four full adders"
+    "title": "4-bit ripple-carry adder: four full adders",
+    "qualifier": "\u03a34"
   },
   "components": [
     {
@@ -173,7 +174,13 @@
             "t": 0.6667,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 18.67H30\"/><path d=\"M6 32.0H30\"/><path d=\"M6 45.33H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22.0H90\"/><path d=\"M66 42.0H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">FA</text>"
+          }
+        }
       }
     },
     {
@@ -230,7 +237,13 @@
             "t": 0.6667,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 18.67H30\"/><path d=\"M6 32.0H30\"/><path d=\"M6 45.33H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22.0H90\"/><path d=\"M66 42.0H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">FA</text>"
+          }
+        }
       }
     },
     {
@@ -287,7 +300,13 @@
             "t": 0.6667,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 18.67H30\"/><path d=\"M6 32.0H30\"/><path d=\"M6 45.33H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22.0H90\"/><path d=\"M66 42.0H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">FA</text>"
+          }
+        }
       }
     },
     {
@@ -344,7 +363,13 @@
             "t": 0.6667,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 18.67H30\"/><path d=\"M6 32.0H30\"/><path d=\"M6 45.33H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22.0H90\"/><path d=\"M66 42.0H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">FA</text>"
+          }
+        }
       }
     },
     {

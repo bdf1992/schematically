@@ -3,7 +3,8 @@
   "id": "logic-full-adder",
   "revision": 0,
   "meta": {
-    "title": "Full adder: two half adders and an OR"
+    "title": "Full adder: two half adders and an OR",
+    "qualifier": "FA"
   },
   "components": [
     {
@@ -83,7 +84,13 @@
             "t": 0.6667,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22.0H30\"/><path d=\"M6 42.0H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22.0H90\"/><path d=\"M66 42.0H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">HA</text>"
+          }
+        }
       }
     },
     {
@@ -121,7 +128,13 @@
             "t": 0.6667,
             "defaultFlow": "out"
           }
-        ]
+        ],
+        "presentation": {
+          "graphic": {
+            "kind": "custom",
+            "svg": "<path d=\"M6 22.0H30\"/><path d=\"M6 42.0H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22.0H90\"/><path d=\"M66 42.0H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">HA</text>"
+          }
+        }
       }
     },
     {

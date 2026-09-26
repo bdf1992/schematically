@@ -16,14 +16,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'examples' / 'logic'
+sys.path.insert(0, str(ROOT / 'scripts'))
+from logic_glyphs import composite_glyph  # noqa: E402
+
 PACK = json.loads((ROOT / 'packs' / 'logic' / 'gates.json').read_text(encoding='utf-8'))['gates']
 
 
 class Doc:
     """A circuit being described: inputs on the left, parts in columns, outputs on the right."""
 
-    def __init__(self, ident: str, title: str):
-        self.ident, self.title = ident, title
+    def __init__(self, ident: str, title: str, qualifier: str | None = None):
+        self.ident, self.title, self.qualifier = ident, title, qualifier
         self.components: list[dict] = []
         self.wires: list[dict] = []
         self.pins: dict[str, tuple[list[str], list[str]]] = {}
@@ -64,6 +67,10 @@ class Doc:
             # The gate's glyph from the pack, carried as a custom graphic (VISUAL-LANGUAGE.md).
             config['presentation'] = {'graphic': {'kind': 'custom', 'svg': glyph,
                                                   **({'svgSmall': glyph_small} if glyph_small and glyph_small != glyph else {})}}
+            many = max(len(ins), len(outs))
+            if many > 3:
+                # A part with many pins grows so its attachment points stay apart.
+                config['presentation']['size'] = {'w': 112, 'h': 16 * many + 24}
         self.components.append({'id': cid, 'symbolId': symbol, 'x': x, 'y': y, 'config': config})
         self.pins[cid] = (ins, outs)
         return cid
@@ -75,7 +82,10 @@ class Doc:
 
     def part(self, cid: str, composite: str, col: int, label: str) -> str:
         ins, outs = composite_pins(composite)
-        return self._part(cid, col, label, {'composite': composite}, ins, outs, symbol='act')
+        # Drawn as an IEC box with the composite's own qualifier (meta.qualifier), one stub per pin.
+        qualifier = json.loads(_BUILT[composite])['meta'].get('qualifier', label[:3])
+        return self._part(cid, col, label, {'composite': composite}, ins, outs, symbol='act',
+                          glyph=composite_glyph(qualifier, len(ins), len(outs)))
 
     def wire(self, src: str, dst: str) -> None:
         """'cid' or 'cid.pin' for each end; an input's pin is out, an output's is in."""
@@ -87,7 +97,7 @@ class Doc:
 
     def write(self, name: str) -> tuple[Path, str]:
         doc = {'schema': 'soveraeign.schematic/document@0.1', 'id': self.ident, 'revision': 0,
-               'meta': {'title': self.title}, 'components': self.components, 'wires': self.wires, 'references': []}
+               'meta': {'title': self.title, **({'qualifier': self.qualifier} if self.qualifier else {})}, 'components': self.components, 'wires': self.wires, 'references': []}
         return OUT / name, json.dumps(doc, indent=2) + '\n'
 
 
@@ -118,7 +128,7 @@ def gallery() -> Doc:
 
 
 def half_adder() -> Doc:
-    d = Doc('logic-half-adder', 'Half adder: S = A xor B, C = A and B')
+    d = Doc('logic-half-adder', 'Half adder: S = A xor B, C = A and B', 'HA')
     a, b = d.input('A'), d.input('B')
     x, n = d.gate('x', 'xor', 1), d.gate('n', 'and', 1)
     for g in (x, n):
@@ -130,7 +140,7 @@ def half_adder() -> Doc:
 
 
 def full_adder() -> Doc:
-    d = Doc('logic-full-adder', 'Full adder: two half adders and an OR')
+    d = Doc('logic-full-adder', 'Full adder: two half adders and an OR', 'FA')
     a, b, cin = d.input('A'), d.input('B'), d.input('Cin')
     h1, h2 = d.part('ha1', 'half-adder.sov', 1, 'HALF ADDER'), d.part('ha2', 'half-adder.sov', 2, 'HALF ADDER')
     o = d.gate('carry', 'or', 3)
@@ -146,7 +156,7 @@ def full_adder() -> Doc:
 
 
 def ripple(width: int, part: str, part_width: int, ident: str, title: str) -> Doc:
-    d = Doc(ident, title)
+    d = Doc(ident, title, f'Σ{width}')
     a = [d.input(f'A{i}') for i in range(width)]
     b = [d.input(f'B{i}') for i in range(width)]
     carry = d.input('Cin')
@@ -231,7 +241,7 @@ def sr_latch() -> Doc:
 
 
 def register4() -> Doc:
-    d = Doc('logic-register4', '4-bit register: four D flip-flops on one clock')
+    d = Doc('logic-register4', '4-bit register: four D flip-flops on one clock', 'RG4')
     data = [d.input(f'D{i}') for i in range(4)]
     clk = d.input('CLK')
     for i in range(4):
@@ -243,7 +253,7 @@ def register4() -> Doc:
 
 
 def accumulator4() -> Doc:
-    d = Doc('logic-accumulator4', '4-bit accumulator: an adder feeding a register feeding back; each clock adds X')
+    d = Doc('logic-accumulator4', '4-bit accumulator: an adder feeding a register feeding back; each clock adds X', 'ACC4')
     x = [d.input(f'X{i}') for i in range(4)]
     clk = d.input('CLK')
     zero = d.gate('zero', 'false', 1)

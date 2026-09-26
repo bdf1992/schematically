@@ -3,7 +3,8 @@
   "id": "logic-half-adder",
   "revision": 0,
   "meta": {
-    "title": "Half adder: S = A xor B, C = A and B"
+    "title": "Half adder: S = A xor B, C = A and B",
+    "qualifier": "HA"
   },
   "components": [
     {

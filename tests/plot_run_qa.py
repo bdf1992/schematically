@@ -68,6 +68,18 @@ def check_glyphs() -> None:
             if 'gate' in logic:
                 svg = c['config']['presentation']['graphic']['svg']
                 assert svg == PACK['gates'][logic['gate']]['glyph'], (doc_path.name, c['id'])
+            if 'composite' in logic:
+                # A composite draws as an IEC box with its document's qualifier and a stub per pin.
+                from logic_glyphs import composite_glyph
+                inner = json.loads((doc_path.parent / logic['composite']).read_text(encoding='utf-8'))
+                ins = [x for x in inner['components'] if x.get('config', {}).get('logic', {}).get('kind') == 'input']
+                outs = [x for x in inner['components'] if x.get('config', {}).get('logic', {}).get('kind') == 'output']
+                q = inner['meta']['qualifier']
+                svg = c['config']['presentation']['graphic']['svg']
+                assert svg == composite_glyph(q, len(ins), len(outs)), (doc_path.name, c['id'])
+                root = ET.fromstring(f'<svg xmlns="http://www.w3.org/2000/svg">{svg}</svg>')
+                assert all(n.tag.replace(SVG, '') in tags for n in root.iter()), c['id']
+                assert svg.count('H30"/>') == len(ins) and svg.count('H90"/>') == len(outs), (c['id'], len(ins), len(outs))
 
 
 def value_at(changes: list, t: float) -> int:

@@ -3,7 +3,8 @@
   "id": "logic-register4",
   "revision": 0,
   "meta": {
-    "title": "4-bit register: four D flip-flops on one clock"
+    "title": "4-bit register: four D flip-flops on one clock",
+    "qualifier": "RG4"
   },
   "components": [
     {

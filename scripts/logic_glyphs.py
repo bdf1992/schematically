@@ -110,6 +110,19 @@ def iec(name: str, gate: dict) -> str:
     return rect(ins, outs, q, **opts)
 
 
+def composite_glyph(qualifier: str, n_in: int, n_out: int) -> str:
+    """An IEC box for a composite part: one stub per pin, the composite's qualifier inside.
+
+    A composite is a document used as one part (a half adder inside a full adder). It draws in
+    the rectangle family, since it has no classic shape, with its own qualifier (HA, FA, Σ4).
+    Pins are spread evenly down each side, however many there are.
+    """
+    def spread(n: int) -> list[float]:
+        return [round(12 + 40 * (i + 0.5) / n, 2) for i in range(n)] if n else []
+    size = 14 if len(qualifier) <= 2 else 11 if len(qualifier) <= 4 else 9
+    return rect(spread(n_in), spread(n_out), qualifier, size)
+
+
 def glyphs(pack: dict) -> dict[str, dict[str, str]]:
     out = {}
     for name, gate in sorted(pack['gates'].items()):
