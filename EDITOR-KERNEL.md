@@ -6,7 +6,7 @@ The editor kernel is deliberately separate from schematic semantics.
 
 - **History**: debounced semantic snapshots, undo, redo. Pointer-frame noise is not history.
 - **Checkpoint**: named persisted version inside a `.sov` document.
-- **Selection**: single, Shift multi-select, Shift marquee.
+- **Selection**: single, Shift multi-select, Shift marquee. Pressing a selected member and dragging moves the whole selection as one transition; a press that does not drag selects that member alone.
 - **Clipboard**: copies selected Component subtrees plus Wires whose endpoints are both inside the copied set.
 - **Hosting settle**: containment is established on release with a visible prospective-host ghost.
 - **Pin**: geometry cannot move/resize; content/settings remain editable.

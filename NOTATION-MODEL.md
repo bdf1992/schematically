@@ -175,7 +175,7 @@ contrast (`scripts/contrast_audit.py`).
 | Part | Where | Test |
 | --- | --- | --- |
 | Notations, tokens, glyphs and terminals, the `logic` notation | `src/03-notation-core.js` (no DOM; the server loads it) | `tests/notation_qa.py` |
-| Symbols generated from the notation; pins, leads, terminal points | `src/10-model.js` (`installNotationSymbols`), `src/30-canvas.js`, `src/06-attachment-core.js` | `tests/notation_qa.py`, `tests/boundary_attachment_qa.py` |
+| Symbols generated from the notation; pins, leads, terminal points | `src/10-model.js` (`installNotationSymbols`, `symbolOf`), `src/30-canvas.js`, `src/05-data-core.js` (`templatePorts`: a gate's terminals are its template ports) | `tests/notation_qa.py`, `tests/boundary_attachment_qa.py`, `tests/ports_panel_qa.py` |
 | Radius offset from inside; elevation shadows; recess and raised bevels | `src/55-render.js` | `tests/notation_qa.py`, `tests/sections_qa.py` |
 | Type roles, sentence case, subtitle, Markdown body | `src/55-render.js`, `styles/app.css` | `tests/typography_qa.py` |
 | Narration track | `src/66-narration.js`; pictures in `src/75-persistence.js` | `tests/typography_qa.py` |

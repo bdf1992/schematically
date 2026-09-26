@@ -32,7 +32,7 @@ function cleanupPaletteGesture({status='Select'}={}){
 }
 function makePaletteFloat(symbolId){
   removePaletteFloat();
-  const s=byId(symbolId),el=document.createElement('div');
+  const s=symbolOf(symbolId),el=document.createElement('div');
   el.className='palette-drag-float';
   el.dataset.paletteGhost='true';
   el.innerHTML=`${glyph(symbolId)}<b>${s.name}</b>`;
@@ -40,7 +40,7 @@ function makePaletteFloat(symbolId){
   return el;
 }
 function drawPaletteDropGhost(symbolId,p){
-  const s=byId(symbolId),preset=SovSchematicData.templatePreset(symbolId),dim=preset?.form?.dimension??2;
+  const s=symbolOf(symbolId),preset=SovSchematicData.templatePreset(symbolId),dim=preset?.form?.dimension??2;
   paletteDropLayer.replaceChildren();
   const g=document.createElementNS('http://www.w3.org/2000/svg','g');
   g.setAttribute('class','component-drop-ghost');
@@ -229,7 +229,7 @@ function buildSymbolPalette(){
     const h=document.createElement('h2');h.textContent=group;section.appendChild(h);
     const grid=document.createElement('div');grid.className='symbol-grid'+(group==='Primitives'?' primitive-grid':'');section.appendChild(grid);
     ids.forEach(id=>{
-      const g=notation.glyphs?.[id],s=byId(id)||{name:g?.title||id,family:g?.family||'',role:'',diagram_class:''};
+      const g=notation.glyphs?.[id],s=symbolOf(id);
       const b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
       b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
       const caption=preset?`${preset.form.dimension}D · ${sentenceCase(s.role)}`:[s.family,s.diagram_class].filter(Boolean).map(sentenceCase).join(' · ');
@@ -605,7 +605,7 @@ function componentAcceptsChildren(n){return formHostsChildren(n)}
 function parentComponent(node){const ownerId=canvasOwnerComponentId(node?.canvasId||GLOBAL_CANVAS_ID);return ownerId?nodes.find(n=>n.id===ownerId)||null:null}
 function componentDisplayName(node){
   if(!node)return '—';
-  return componentConfig(node).label||byId(node.symbolId).name||node.id;
+  return componentConfig(node).label||symbolOf(node.symbolId).name||node.id;
 }
 function componentScopePath(node){
   if(!node)return 'world';const host=componentHostDescriptor(node);

@@ -66,11 +66,9 @@
   }
   function templatePointSpecs(entity){
     if(attachmentDefaults(entity)==='none')return [];
-    // A glyph that declares its terminals as points (NOTATION-MODEL.md §2) gives the card one
-    // point per terminal: a two-input gate has two inputs.
-    // A terminal is shaped like a declared template port: its flow is its default flow, on `main`.
-    const glyphPoints=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation?.pointsFor?.(entity?.symbolId)?.map(p=>({...p,flow:p.defaultFlow,channels:[{id:'main'}]}));
-    if(glyphPoints)return glyphPoints.map(p=>({...p,role:'boundary'}));
+    // The template's ports come from the one lookup the data core registers (`templatePorts`): the
+    // typed Component trio, or, for a glyph that declares its terminals as points (NOTATION-MODEL.md
+    // §2), one declared port per terminal, so a two-input gate has two inputs (issue #54).
     const declared=templatePortsOf(entity?.symbolId,entity);
     return (Array.isArray(declared)?declared:[]).map(raw=>declaredSpec(raw)).filter(Boolean);
   }
