@@ -313,7 +313,7 @@ const timeline=run=>run.records.map(r=>[r.time.logical,r.subject.entity,r.subjec
       d.wires.push(w('p1','G','q','J','self'),w('p2','G','q','J','self'),w('p3','J','self','O','self'));return D.normalizeDocument(d)};
     const a=started({doc:grow(),packs,budget:30000});let t0=process.hrtime.bigint();const r=S.settle(a);const ms=Number(process.hrtime.bigint()-t0)/1e6;
     const b=started({doc:grow(),packs,budget:30000});t0=process.hrtime.bigint();let s;while((s=S.step(b)).ok&&s.tick!==null);const stepMs=Number(process.hrtime.bigint()-t0)/1e6;
-    out.grow={result:r,ms,stepMs,tick:a.tick,stepTick:b.tick,queue:Object.values(a.queues).map(q=>q.items.length),same:canon(a)===canon(b)};
+    out.grow={result:r,ms,stepMs,tick:a.tick,stepTick:b.tick,queue:Object.values(a.queues).map(q=>S.queueItems(q).length),same:canon(a)===canon(b)};
   }
   // Settle against brute force: the smallest p with the committed signal state at t equal to that at
   // t + p for every t from the first occurrence on, over a long horizon, on three cycles.
@@ -387,6 +387,7 @@ def main() -> None:
     names = sorted(p.name for p in STATE.iterdir())
     assert names == ['and.00.sovtrace', 'and.01.sovtrace', 'and.10.sovtrace', 'and.11.sovtrace', 'and.sov',
                      'bench.inputs.json', 'bench.sov', 'bench.sovtrace',
+                     'grow.sov', 'grow.sovtrace',
                      'merge.declared.sovtrace', 'merge.or.sov', 'merge.or.sovtrace', 'merge.sov',
                      'merge.stochastic.sov', 'merge.stochastic.sovtrace',
                      'not-loop.sov', 'not-loop.sovtrace', 'not.0.sovtrace', 'not.1.sovtrace', 'not.sov'], names
