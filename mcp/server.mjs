@@ -9,8 +9,11 @@ const HERE=path.dirname(fileURLToPath(import.meta.url));
 await import(pathToFileURL(path.join(HERE,'../src/03-canonical.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/06-attachment-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/05-data-core.js')).href);
+await import(pathToFileURL(path.join(HERE,'../src/07-state-space.js')).href);
 const Data=globalThis.SovSchematicData;
 if(!Data)throw new Error('SovSchematicData core failed to load');
+const State=globalThis.SovSchematicStateSpace;
+if(!State)throw new Error('SovSchematicStateSpace failed to load');
 
 const args=process.argv.slice(2);
 const arg=(name,fallback)=>{const i=args.indexOf(name);return i>=0&&args[i+1]?args[i+1]:fallback};
@@ -23,6 +26,29 @@ function loadDocument(){
   try{return Data.documentFromFilePayload(JSON.parse(fs.readFileSync(FILE,'utf8')))}catch(_){return Data.makeDocument({id:'schematic-1'})}
 }
 let documentState=loadDocument();
+// Runs live beside the document, not in it: an in-memory registry, every run started from the
+// current document, packs read from data/*.pack.json (file-name order) at start.
+const PACK_DIR=path.join(HERE,'../data');
+const packsJson=fs.readdirSync(PACK_DIR).filter(name=>name.endsWith('.pack.json')).sort().map(name=>JSON.parse(fs.readFileSync(path.join(PACK_DIR,name),'utf8')));
+const runs=State.createRunRegistry({packs:packsJson,document:()=>Data.clone(documentState)});
+const runId={type:'string',minLength:1,description:'a run id from schematic.run.start'};
+const RUN_TOOLS=[
+  {name:'schematic.run.start',description:'Start a run of the current document (never changes it). Returns a run receipt.',inputSchema:{type:'object',properties:{inputs:{type:'array',items:{type:'object',properties:{entity:{type:'string'},point:{type:'string'},channel:{type:'string'},value:{type:'boolean'},at:{type:'integer',minimum:0}},required:['entity','point','value','at'],additionalProperties:false}},seed:{type:'string'},budget:{type:'integer',minimum:0}},additionalProperties:false}},
+  {name:'schematic.run.step',description:'Process one tick of a run. Returns a run receipt.',inputSchema:{type:'object',properties:{runId},required:['runId'],additionalProperties:false}},
+  {name:'schematic.run.settle',description:'Step a run until quiet, oscillating or budget spent. Returns a run receipt.',inputSchema:{type:'object',properties:{runId},required:['runId'],additionalProperties:false}},
+  {name:'schematic.run.trace',description:'The trace of a run (.sovtrace), in a run receipt.',inputSchema:{type:'object',properties:{runId},required:['runId'],additionalProperties:false}},
+  {name:'schematic.state.query',description:'Records of a run whose subject matches; passive. Returns a run receipt.',inputSchema:{type:'object',properties:{runId,entity:{type:'string',minLength:1},point:{type:'string',minLength:1},channel:{type:'string',minLength:1},observable:{type:'string',minLength:1}},required:['runId','entity','observable'],additionalProperties:false}},
+  {name:'schematic.run.replay',description:'Replay a trace against the current document. Returns a run receipt.',inputSchema:{type:'object',properties:{trace:{type:'object'}},required:['trace'],additionalProperties:false}}
+];
+function runTool(name,args){
+  if(name==='schematic.run.start')return runs.start(args);
+  if(name==='schematic.run.step')return runs.step(args.runId);
+  if(name==='schematic.run.settle')return runs.settle(args.runId);
+  if(name==='schematic.run.trace')return runs.trace(args.runId);
+  if(name==='schematic.state.query'){const {runId,...subject}=args;return runs.query(runId,subject)}
+  if(name==='schematic.run.replay')return runs.replay(args.trace);
+  return null;
+}
 let historyUndo=[],historyRedo=[];
 const cloneDoc=()=>Data.makeDocument(Data.clone(documentState));
 function recordHistory(snapshot){historyUndo.push(snapshot);if(historyUndo.length>120)historyUndo.shift();historyRedo=[]}
@@ -41,6 +67,8 @@ function rpcResult(id,result){return {jsonrpc:'2.0',id,result}}
 function rpcError(id,code,message,data){return {jsonrpc:'2.0',id,error:{code,message,...(data===undefined?{}:{data})}}}
 function toolPayload(value,isError=false){return {content:[{type:'text',text:JSON.stringify(value,null,2)}],structuredContent:value,isError}}
 function executeTool(name,args={}){
+  const ran=runTool(name,args);
+  if(ran)return {ok:ran.ok,value:ran,mutates:false};
   if(name==='schematic.history.undo'){const prev=historyUndo.pop();if(!prev)return {ok:false,value:{error:'Nothing to undo'},mutates:false};historyRedo.push(cloneDoc());Data.replaceDocument(documentState,prev);return {ok:true,value:Data.clone(documentState),mutates:true}}
   if(name==='schematic.history.redo'){const next=historyRedo.pop();if(!next)return {ok:false,value:{error:'Nothing to redo'},mutates:false};historyUndo.push(cloneDoc());Data.replaceDocument(documentState,next);return {ok:true,value:Data.clone(documentState),mutates:true}}
   if(name==='schematic.checkpoint.list')return {ok:true,value:checkpointStore().map(({document,...meta})=>meta),mutates:false};
@@ -65,7 +93,7 @@ async function handleMcp(req,res){
   let rpc;try{rpc=await bodyJson(req)}catch(e){return json(res,400,rpcError(null,-32700,'Parse error',e.message),{'MCP-Protocol-Version':MCP_VERSION})}
   const id=rpc.id??null,method=rpc.method;
   if(method==='server/discover')return json(res,200,rpcResult(id,{protocolVersion:MCP_VERSION,serverInfo:{name:'soveraeign-schematic',version:'0.1.24'},capabilities:{tools:{listChanged:false}},instructions:'CRUD against SOV Schematic document@0.1. File packages use package@0.1.'}),{'MCP-Protocol-Version':MCP_VERSION});
-  if(method==='tools/list'){const extra=[{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}}];return json(res,200,rpcResult(id,{tools:[...Data.operationTools(),...extra]}),{'MCP-Protocol-Version':MCP_VERSION});}
+  if(method==='tools/list'){const extra=[{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}}];return json(res,200,rpcResult(id,{tools:[...Data.operationTools(),...extra,...RUN_TOOLS]}),{'MCP-Protocol-Version':MCP_VERSION});}
   if(method==='tools/call'){
     const name=rpc.params?.name,args=rpc.params?.arguments||{};
     const result=executeTool(name,args);if(result.mutates)saveDocument();
@@ -83,6 +111,20 @@ async function handleApi(req,res,url){
       const input=await bodyJson(req),incoming=Data.makeDocument(input),valid=Data.validateDocument(incoming);if(!valid.ok)return json(res,400,{ok:false,errors:valid.errors});
       const before=cloneDoc();Data.replaceDocument(documentState,incoming);Data.touch(documentState);recordHistory(before);saveDocument();return json(res,200,Data.clone(documentState));
     }
+  }
+  // Runs: a receipt always; 201 on a start, 404 for an unknown run id, 409 for any other refusal.
+  if(parts[0]==='api'&&parts[1]==='v1'&&(parts[2]==='runs'||parts[2]==='replay')){
+    const send=(receipt,status=200)=>json(res,receipt.ok?status:receipt.error?.code==='RUN_NOT_FOUND'?404:409,receipt);
+    const id=parts[3]===undefined?undefined:decodeURIComponent(parts[3]),verb=parts[4];
+    if(parts[2]==='replay'&&parts.length===3&&req.method==='POST')return send(runs.replay(await bodyJson(req)));
+    if(parts[2]==='runs'&&parts.length===3&&req.method==='POST')return send(runs.start(await bodyJson(req)),201);
+    if(parts[2]==='runs'&&parts.length===5){
+      if(verb==='step'&&req.method==='POST')return send(runs.step(id));
+      if(verb==='settle'&&req.method==='POST')return send(runs.settle(id));
+      if(verb==='trace'&&req.method==='GET')return send(runs.trace(id));
+      if(verb==='query'&&req.method==='POST')return send(runs.query(id,await bodyJson(req)));
+    }
+    return json(res,404,{error:'not found'});
   }
   if(parts[0]==='api'&&parts[1]==='v1'&&parts[2]){
     const resource=resourceFromPath(parts[2]);if(!resource)return json(res,404,{error:'resource not found'});

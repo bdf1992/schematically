@@ -306,3 +306,35 @@ to `through` and returns the recomputed records. Golden runs live in `examples/s
 `and.11.sovtrace`; `not.sov` with `not.0` and `not.1.sovtrace`; `not-loop.sov` with `not-loop.sovtrace` (budget
 40, taken at `BUDGET_SPENT`); and `merge.sov`, `merge.or.sov`, `merge.stochastic.sov` with `merge.declared`,
 `merge.or` and `merge.stochastic.sovtrace`.
+
+## Settle, query and the run receipt (slice 1c, `STATE-SPACE.md`)
+
+`settle(run)` steps until one of three results: `{kind: 'quiet'}` (nothing scheduled); `{kind: 'oscillating', period,
+subjects}` (the state that determines the future repeated: after each processed tick the runtime hashes the committed
+signal state, the queue buffers and the pending schedule with times relative to that tick, provenance left out;
+`period` is the ticks between the repeat and its first occurrence, `subjects` the sorted `entity.port.channel` whose
+committed value changed within that period); or `{kind: 'budget', left}` when a step is refused with `BUDGET_SPENT`.
+Any other refusal is returned as is. `not-loop.sov` (budget 40) settles as `{kind: 'oscillating', period: 2, subjects:
+['G.a.main', 'G.q.main']}`. A stochastic merge draw is keyed by the absolute tick, which the hash does not hold: on a
+cycle through such a port, `oscillating` means the state repeated.
+
+`query(run, {entity, point?, channel?, observable})` returns every record of the run whose subject matches (an omitted
+`point` or `channel` matches any) and whose `observable` is the one asked, in record order, as copies; it refuses with
+`QUERY_INVALID` and never writes to the run.
+
+Every run operation on every surface returns one receipt, `soveraeign.schematic/run-receipt@0.1` (schema
+`formats/schematic.run-receipt.schema.json`, built by `runReceipt(operation, run, result, tickBefore?)`):
+`{schema, operation, runId, ok, tickBefore, tickAfter, head, result, error}`. `operation` is the tool name
+(`schematic.run.start`, `.step`, `.settle`, `.trace`, `schematic.state.query`, `schematic.run.replay`); `head` is the
+ledger head hash after the operation; `error` is `{code, message}` on a refusal (then `result` is null); `runId`,
+the ticks and `head` are null when there is no run. `result` is, per operation: start, the start entry's body
+`{replayKey, budget}`; step, `{tick, records}`; settle, the result above; trace, the trace; query, the records; replay,
+`{records}`.
+
+Runs live beside the document, never in it. `createRunRegistry({packs, document})` is the registry each surface keeps
+in memory: runs keyed by run id (a start with the same replay key replaces that run), every run started from
+`document()`, the surface's current document, and `packs` the raw pack JSON (a pack that does not load refuses every
+start and replay with `PACK_INVALID`). An unknown run id is refused with `RUN_NOT_FOUND`. No run operation captures
+history, changes the document or its revision, or saves recovery. The browser reads its packs from
+`<script type="application/json" id="sov-packs">`, into which `build.py` inlines every `data/*.pack.json`; the MCP/HTTP
+server reads `data/*.pack.json` at start.

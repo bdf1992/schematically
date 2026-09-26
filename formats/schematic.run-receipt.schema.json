@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "soveraeign.schematic/run-receipt@0.1",
+  "title": "SOV Schematic Run Receipt",
+  "description": "Documentation only: receipts are built by runReceipt in src/07-state-space.js. The one receipt every run operation returns on every surface (browser API, HTTP, MCP): schematic.run.start, .step, .settle, .trace, schematic.state.query and schematic.run.replay (STATE-SPACE.md, Surfaces). Running never changes the document, its revision, history or recovery. The HTTP status is the only surface-specific field and is not part of the receipt.",
+  "type": "object",
+  "required": [
+    "schema",
+    "operation",
+    "runId",
+    "ok",
+    "tickBefore",
+    "tickAfter",
+    "head",
+    "result",
+    "error"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "soveraeign.schematic/run-receipt@0.1"
+    },
+    "operation": {
+      "enum": [
+        "schematic.run.start",
+        "schematic.run.step",
+        "schematic.run.settle",
+        "schematic.run.trace",
+        "schematic.state.query",
+        "schematic.run.replay"
+      ]
+    },
+    "runId": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{12}$",
+      "description": "the run's id (the first 12 hex digits of its replay key's hash); null when no run was found or started"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "tickBefore": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "the run's last processed tick before the operation (null before any, and for start and replay)"
+    },
+    "tickAfter": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "the run's last processed tick after the operation"
+    },
+    "head": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "the hash of the run's last ledger entry after the operation, which a truncated trace cannot match"
+    },
+    "result": {
+      "description": "null on a refusal. start: the start ledger entry's body {replayKey, budget}; step: {tick, records}; settle: {kind: quiet} | {kind: oscillating, period, subjects} | {kind: budget, left}; trace: the trace (trace@0.1); state.query: the matching state records, in record order; replay: {records}"
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": ["code", "message"],
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "RUN_NOT_FOUND, INPUT_INVALID, PACK_INVALID, QUERY_INVALID, RUN_INVALID, RUN_REFUSED, MERGE_FORM, BUDGET_SPENT (step), TRACE_INVALID, REPLAY_KEY_MISMATCH or REPLAY_DIVERGED"
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

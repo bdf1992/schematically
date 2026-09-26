@@ -1030,6 +1030,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 </aside>
 </div>
 
+<script type="application/json" id="sov-packs">[{"format":"soveraeign.schematic/pack@0.1","id":"core.logic","version":1,"definitions":[{"id":"logic.not","version":1,"pattern":"truth_table@1","delay":0,"parameters":{"inputs":["a"],"outputs":["q"],"table":[[0,1],[1,0]]},"projection":{"label":"NOT"}},{"id":"logic.and","version":1,"pattern":"truth_table@1","delay":0,"parameters":{"inputs":["a","b"],"outputs":["q"],"table":[[0,0,0],[0,1,0],[1,0,0],[1,1,1]]},"projection":{"label":"AND"}},{"id":"logic.or","version":1,"pattern":"truth_table@1","delay":0,"parameters":{"inputs":["a","b"],"outputs":["q"],"table":[[0,0,0],[0,1,1],[1,0,1],[1,1,1]]},"projection":{"label":"OR"}},{"id":"logic.xor","version":1,"pattern":"truth_table@1","delay":0,"parameters":{"inputs":["a","b"],"outputs":["q"],"table":[[0,0,0],[0,1,1],[1,0,1],[1,1,0]]},"projection":{"label":"XOR"}}]}]</script>
 <script data-beta-module="src/03-canonical.js">
 /* BEGIN src/03-canonical.js */
 'use strict';
@@ -2357,7 +2358,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 // envelope, the closed pattern registry (truth_table@1, merge@1), definitions and the minimal
 // pack envelope, contracts generated from pattern + parameters, ports generated from a bound
 // definition, and the load checks. Slice 1b, the first runs: the hash-chained ledger, the
-// replay key, two-phase ticks with merges, the trace and replay. No settle, no surfaces.
+// replay key, two-phase ticks with merges, the trace and replay. Slice 1c: settle, the passive
+// state query, the run receipt and the run registry each surface keeps beside its document, never in it.
 // Pure: no DOM, no pack data (packs are passed in), validation hand-written.
 (function(root,factory){
   let Canonical=root.SovSchematicCanonical;
@@ -3107,13 +3109,134 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(run.tick!==trace.through)return {ok:false,code:'REPLAY_DIVERGED',tick:run.tick,message:`the recomputed run ends at tick ${run.tick}, the trace at ${trace.through}`};
     const n=Math.max(run.ledger.length,trace.ledger.length);
     for(let i=0;i<n;i++)if(Canonical.canonicalize(run.ledger[i]??null)!==Canonical.canonicalize(trace.ledger[i]??null))return {ok:false,code:'REPLAY_DIVERGED',entry:i,message:`ledger entry ${i} differs from the recomputed run`};
-    if(trace.records===undefined)return {ok:true,records:run.records};
+    if(trace.records===undefined)return {ok:true,records:run.records,run};
     const m=Math.max(run.records.length,trace.records.length);
     for(let i=0;i<m;i++)if(Canonical.canonicalize(run.records[i]??null)!==Canonical.canonicalize(trace.records[i]??null))return {ok:false,code:'REPLAY_DIVERGED',record:i,message:`record ${i} differs from the recomputed run`};
-    return {ok:true,records:run.records};
+    return {ok:true,records:run.records,run};
   }
 
-  return {RECORD_FORMAT,PACK_FORMAT,RUNTIME_VERSION,TRACE_FORMAT,validateRecord,patterns,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument,startRun,step,traceOf,replay,validateTrace};
+  // --- Slice 1c (STATE-SPACE.md "Stepping and settling", "Surfaces").
+  // The state that determines the future, hashed after a processed tick: committed signal state (a
+  // key absent is false, so only the true keys are listed), the queue buffers and the pending
+  // schedule, every time taken relative to that tick. Provenance (record ids) names the past and
+  // changes no value, so it is left out; with it no state could ever repeat.
+  function futureHash(run){
+    const t=run.tick,signal=Object.keys(run.signal).filter(k=>run.signal[k]===true).sort();
+    const queues=Object.keys(run.queues).sort().map(k=>{const q=run.queues[k];return [k,q.next-t,q.items.map(x=>[x.value,x.wire,x.phase])]});
+    const pending=run.pending.map(x=>{const {from,inputs,at,...rest}=x;rest.at=at-t;return Canonical.canonicalize(rest)}).sort();
+    return Canonical.sha256Hex(Canonical.canonicalize({signal,queues,pending}));
+  }
+  // settle(run): steps until quiet ({kind: 'quiet'}), a repeated future-state hash ({kind:
+  // 'oscillating', period, subjects}: period the ticks between the repeat and its first occurrence,
+  // subjects the sorted `entity.port.channel` whose committed value changed within that period), or
+  // a step refused with BUDGET_SPENT ({kind: 'budget', left}). Any other refusal is returned as is.
+  function settle(run){
+    if(!isObject(run)||run.runtimeVersion!==RUNTIME_VERSION)return {ok:false,code:'RUN_INVALID',message:`not a ${RUNTIME_VERSION} run`};
+    const seen=new Map(),changes=[],shadow={};
+    for(const key of Object.keys(run.signal))if(run.signal[key]===true)shadow[key]=true;
+    if(run.tick!==null)seen.set(futureHash(run),run.tick);
+    for(;;){
+      const r=step(run);
+      if(!r.ok)return r.code==='BUDGET_SPENT'?{kind:'budget',left:r.left}:r;
+      if(r.tick===null)return {kind:'quiet'};
+      const changed=new Set();
+      for(const record of r.records){
+        if(record.provenance.rule==='overridden')continue;
+        const s=record.subject,key=portKey(s.entity,s.point,s.channel),now=run.signal[key]===true;
+        if(now!==(shadow[key]===true)){changed.add(`${s.entity}.${s.point}.${s.channel}`);if(now)shadow[key]=true;else delete shadow[key]}
+      }
+      changes.push([r.tick,changed]);
+      const hash=futureHash(run),first=seen.get(hash);
+      if(first!==undefined){
+        const subjects=new Set();
+        for(const [tick,set] of changes)if(tick>first&&tick<=r.tick)for(const x of set)subjects.add(x);
+        return {kind:'oscillating',period:r.tick-first,subjects:[...subjects].sort()};
+      }
+      seen.set(hash,r.tick);
+    }
+  }
+  // query(run, {entity, point?, channel?, observable}): every record of the run whose subject
+  // matches (an omitted point or channel matches any) and whose observable is the one asked, in
+  // record order, as copies. Passive: it reads the run and writes nothing.
+  const QUERY_KEYS=['entity','point','channel','observable'];
+  function query(run,subject){
+    if(!isObject(run)||run.runtimeVersion!==RUNTIME_VERSION)return {ok:false,code:'RUN_INVALID',message:`not a ${RUNTIME_VERSION} run`};
+    const bad=message=>({ok:false,code:'QUERY_INVALID',message});
+    if(!isObject(subject))return bad('the query must be an object {entity, point?, channel?, observable}');
+    const extra=Object.keys(subject).filter(k=>!QUERY_KEYS.includes(k));
+    if(extra.length)return bad(`unknown key ${extra[0]}`);
+    for(const key of ['entity','observable'])if(!nonEmpty(subject[key]))return bad(`${key} must be a non-empty string`);
+    for(const key of ['point','channel'])if(subject[key]!==undefined&&!nonEmpty(subject[key]))return bad(`${key} must be a non-empty string when given`);
+    const out=[];
+    for(const record of run.records){
+      const s=record.subject;
+      if(s.entity===subject.entity&&(subject.point===undefined||s.point===subject.point)&&(subject.channel===undefined||s.channel===subject.channel)&&record.observable===subject.observable)out.push(copy(record));
+    }
+    return out;
+  }
+  // The one receipt for run operations: {schema, operation, runId, ok, tickBefore, tickAfter, head,
+  // result, error}. `head` is the ledger head after the operation; `error` is {code, message} on a
+  // refusal (`result` null); runId, ticks and head are null when there is no run. `tickBefore`
+  // defaults to the run's tick (an operation that processes no tick).
+  const RUN_RECEIPT_FORMAT='soveraeign.schematic/run-receipt@0.1';
+  const RUN_OPERATIONS=['schematic.run.start','schematic.run.step','schematic.run.settle','schematic.run.trace','schematic.state.query','schematic.run.replay'];
+  function runReceipt(operation,run,result,tickBefore){
+    if(!RUN_OPERATIONS.includes(operation))throw new Error(`RUN_OPERATION_UNKNOWN: ${operation}`);
+    const has=isObject(run)&&run.runtimeVersion===RUNTIME_VERSION&&Array.isArray(run.ledger)&&run.ledger.length>0;
+    const refused=isObject(result)&&result.ok===false,tickAfter=has?run.tick:null;
+    let value=null;
+    if(!refused){
+      if(operation==='schematic.run.start')value=has?copy(run.ledger[0].body):null;
+      else if(isObject(result)){value={};for(const k of Object.keys(result))if(k!=='ok'&&k!=='run'&&result[k]!==undefined)value[k]=copy(result[k])}
+      else value=result===undefined?null:copy(result);
+    }
+    return {schema:RUN_RECEIPT_FORMAT,operation,runId:has?run.id:null,ok:!refused,tickBefore:tickBefore===undefined?tickAfter:tickBefore,tickAfter,
+      head:has?run.ledger[run.ledger.length-1].hash:null,result:value,error:refused?{code:String(result.code),message:String(result.message??result.code)}:null};
+  }
+  // A surface's run registry, kept beside its document and never in it: runs keyed by run id (a
+  // start with the same replay key replaces that run), each started from the function `document`, the
+  // surface's current document; packs are the raw pack JSON the surface was given; one that does
+  // not load refuses every start and replay (PACK_INVALID). Every method returns a run receipt, and
+  // none of them touches the document, its revision, history or recovery.
+  const START_KEYS=['inputs','seed','budget'];
+  function createRunRegistry(options){
+    const o=isObject(options)?options:{};
+    const loaded=Array.isArray(o.packs)?o.packs.map(p=>loadPack(p)):null;
+    const packs=loaded?loaded.filter(x=>x.ok).map(x=>x.pack):[];
+    const packErrors=loaded?loaded.flatMap(x=>x.errors):[refusal('PACK_INVALID','packs','the surface was given no pack list')];
+    const packRefusal=packErrors.length?{ok:false,code:'PACK_INVALID',message:`the surface's packs do not load: ${packErrors.map(e=>`${e.subject}: ${e.message}`).join('; ')}`}:null;
+    const current=typeof o.document==='function'?o.document:()=>null;
+    const runs=new Map();
+    const found=(operation,runId,act)=>{
+      const run=typeof runId==='string'?runs.get(runId):undefined;
+      return run?act(run):runReceipt(operation,null,{ok:false,code:'RUN_NOT_FOUND',message:`no run ${JSON.stringify(runId===undefined?null:runId)} on this surface`});
+    };
+    return {
+      start(args){
+        const op='schematic.run.start';
+        if(packRefusal)return runReceipt(op,null,packRefusal);
+        const a=args===undefined?{}:args;
+        if(!isObject(a))return runReceipt(op,null,inputRefusal('start takes an object {inputs?, seed?, budget?}'));
+        const extra=Object.keys(a).filter(k=>!START_KEYS.includes(k));
+        if(extra.length)return runReceipt(op,null,inputRefusal(`unknown key ${extra[0]}`));
+        const started=startRun({doc:current(),packs,inputs:a.inputs,seed:a.seed,budget:a.budget});
+        if(started.ok)runs.set(started.run.id,started.run);
+        return runReceipt(op,started.ok?started.run:null,started);
+      },
+      step:runId=>found('schematic.run.step',runId,run=>{const before=run.tick;return runReceipt('schematic.run.step',run,step(run),before)}),
+      settle:runId=>found('schematic.run.settle',runId,run=>{const before=run.tick;return runReceipt('schematic.run.settle',run,settle(run),before)}),
+      trace:runId=>found('schematic.run.trace',runId,run=>runReceipt('schematic.run.trace',run,traceOf(run))),
+      query:(runId,subject)=>found('schematic.state.query',runId,run=>runReceipt('schematic.state.query',run,query(run,subject))),
+      replay(trace){
+        const op='schematic.run.replay';
+        if(packRefusal)return runReceipt(op,null,packRefusal);
+        const r=replay({trace,doc:current(),packs});
+        return runReceipt(op,r.ok?r.run:null,r,null);
+      }
+    };
+  }
+
+  return {RECORD_FORMAT,PACK_FORMAT,RUNTIME_VERSION,TRACE_FORMAT,RUN_RECEIPT_FORMAT,RUN_OPERATIONS,validateRecord,patterns,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument,startRun,step,settle,query,runReceipt,createRunRegistry,traceOf,replay,validateTrace};
 });
 /* END src/07-state-space.js */
 </script>
@@ -8055,6 +8178,15 @@ function runtimeCrud(operation){
   }
   return SovSchematicData.clone(receipt);
 }
+// Runs live beside the document, not in it (STATE-SPACE.md "Surfaces"): the page's run registry
+// starts every run from snapshotDocument() and reads packs from the build's sov-packs tag. No run
+// operation captures history, changes the document or its revision, or saves recovery.
+let pageRunRegistry=null;
+function pagePacks(){
+  const tag=document.getElementById('sov-packs');if(!tag)return undefined;
+  try{return JSON.parse(tag.textContent||'[]')}catch(_){return undefined}
+}
+function pageRuns(){return pageRunRegistry||(pageRunRegistry=SovSchematicStateSpace.createRunRegistry({packs:pagePacks(),document:()=>snapshotDocument()}))}
 function apiOperation(op,resource,resourceId,value,patch,query){return runtimeCrud({schema:SovSchematicData.OPERATION_SCHEMA,id:`browser-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,op,resource,resourceId,value,patch,query})}
 
 const SovSchematicAPI={
@@ -8083,6 +8215,10 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  run:{
+    start:(args)=>pageRuns().start(args),step:(runId)=>pageRuns().step(runId),settle:(runId)=>pageRuns().settle(runId),
+    trace:(runId)=>pageRuns().trace(runId),query:(runId,subject)=>pageRuns().query(runId,subject),replay:(trace)=>pageRuns().replay(trace)
+  },
   tools:()=>SovSchematicData.operationTools()
 };
 window.SovSchematicAPI=SovSchematicAPI;
