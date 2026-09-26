@@ -15,7 +15,13 @@
       "config": {
         "label": "Case · Customer proof 48219",
         "signalMode": "source",
-        "principal": "intake:case-48219"
+        "principal": "intake:case-48219",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          }
+        }
       }
     },
     {
@@ -255,6 +261,12 @@
           "effect": {
             "key": "payload.caseId"
           }
+        },
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          }
         }
       }
     },
@@ -273,11 +285,17 @@
     {
       "id": "customer",
       "symbolId": "act",
-      "x": 1110,
+      "x": 1140,
       "y": 490,
       "config": {
         "label": "Customer · external service",
-        "signalMode": "passive"
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          }
+        }
       }
     }
   ],

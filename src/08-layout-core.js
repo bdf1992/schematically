@@ -213,7 +213,7 @@
       // the difference of the two terminals' offsets from their cards' centres.
       const portDy=(q,u)=>{
         const w=doc.wires.find(x=>(x.a===q&&x.b===u)||(x.b===q&&x.a===u));if(!w||!notation)return 0;
-        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c),{subtitle:!!String(c?.config?.subtitle||'').trim()})?.dy||0};
+        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c),{subtitle:!!String(c?.config?.subtitle||'').trim(),title:String(c?.config?.label||''),type:notation.tokens?.type})?.dy||0};
         const [qp,up]=w.a===q?[w.aSide,w.bSide]:[w.bSide,w.aSide];
         return off(q,qp)-off(u,up);
       };
@@ -277,7 +277,9 @@
       }
       const minY=Math.min(0,...ids.map(u=>y.get(u)-boxes.get(u).h/2));
       if(minY<0)for(const u of ids)y.set(u,y.get(u)-minY);
-      const W=ids.length?Math.max(...ids.map(u=>x.get(u)+boxes.get(u).w/2)):0,H=ids.length?Math.max(...ids.map(u=>y.get(u)+boxes.get(u).h/2)):0;
+      // A canvas is at least as wide as the longest wire label drawn in it (12px captions, bold).
+      const labelW=Math.max(0,...doc.wires.filter(w=>(w.canvasId||Data.GLOBAL_CANVAS_ID)===canvas&&w.config?.label).map(w=>String(w.config.label).length*7.4+24+(w.config?.direction==='duplex'?14:0)));
+      const W=Math.max(labelW,ids.length?Math.max(...ids.map(u=>x.get(u)+boxes.get(u).w/2)):0),H=ids.length?Math.max(...ids.map(u=>y.get(u)+boxes.get(u).h/2)):0;
       return {w:W,h:H,ids,x,y,boxes};
     }
     // Write positions: a canvas is laid out in local coordinates, then translated into place.

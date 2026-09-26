@@ -72,6 +72,17 @@
   const cleanString=(value,fallback='')=>typeof value==='string'?value:fallback;
   const num=(value,fallback=0)=>Number.isFinite(Number(value))?Number(value):fallback;
 
+  // One dimension policy for files, CRUD and browser projection. Finite authored
+  // extents above the minima have no editor-only ceiling (large hosts are valid).
+  function normalizePresentationSize(size={}){
+    return {w:Math.max(80,num(size?.w,112)),h:Math.max(64,num(size?.h,84))};
+  }
+  function normalizeComponentSize(component){
+    const presentation=component.config?.presentation;
+    if(presentation?.size)presentation.size=normalizePresentationSize(presentation.size);
+    return component;
+  }
+
   function nextId(items,prefix){
     let max=0;
     for(const item of items||[]){
@@ -119,6 +130,7 @@
     for(const component of doc.components){
       normalizeComponentIdentity(component);
       applyTemplatePreset(component);
+      normalizeComponentSize(component);
       component.form=normalizeComponentForm(component.form,component.canvas);
       if(!isObject(component.canvas))component.canvas={};
       component.canvas.id=`canvas:component:${component.id||'unknown'}`;component.canvas.scope='local';component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
@@ -397,6 +409,7 @@
     component.form=normalizeComponentForm(isObject(value.form)?value.form:preset.form,value.canvas);
     if(['source','relay','passive'].includes(value.config?.signalMode))config.signalMode=value.config.signalMode;
     if(isObject(value.config?.presentation))config.presentation=clone(value.config.presentation);
+    normalizeComponentSize(component);
     // An authored choice stays on the runtime record either way, so a later normalization
     // pass cannot replace a Plane's authored 'standard' with its preset 'none'.
     if(['standard','none'].includes(value.config?.attachmentDefaults))config.attachmentDefaults=value.config.attachmentDefaults;
@@ -652,7 +665,7 @@
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
       candidate.form=normalizeComponentForm(candidate.form,candidate.canvas);candidate.canvas.state=candidate.form.regions.interior.state;
       ensureAttachmentPortConfigs(candidate);
-      if(candidate.config?.presentation?.size){candidate.config.presentation.size.w=Math.max(80,num(candidate.config.presentation.size.w,112));candidate.config.presentation.size.h=Math.max(64,num(candidate.config.presentation.size.h,84));}
+      normalizeComponentSize(candidate);
     }else if(resource==='wire'){
       // A patch may rebind an end (a/aSide or aAttachment ref) or free it (aAttachment {kind:'free'}).
       for(const end of ['a','b']){
@@ -695,8 +708,17 @@
   }
   function touch(doc){doc.revision=Math.max(0,Math.trunc(num(doc.revision,0)))+1;doc.meta=doc.meta||{};doc.meta.updatedAt=nowIso();return doc.revision}
   function makeReceipt(op,ok,result,revisionBefore,error=null){return {schema:RECEIPT_SCHEMA,operationId:op.id||null,ok,revisionBefore,revisionAfter:result?.revisionAfter??revisionBefore,result:result?.value??result??null,error:error?{message:String(error.message||error)}:null}}
+  // ifRevision is the document revision the caller observed. Absent/null/undefined means
+  // no check is made; a mismatch on a mutating op refuses the write before it happens.
   function applyOperation(document,operation={}){
-    const doc=normalizeDocument(document),op={schema:OPERATION_SCHEMA,id:operation.id||`op-${Date.now()}`,op:operation.op,resource:operation.resource,resourceId:operation.resourceId??operation.idValue??null,value:clone(operation.value),patch:clone(operation.patch),query:clone(operation.query||{})};
+    const op={schema:OPERATION_SCHEMA,id:operation.id||`op-${Date.now()}`,op:operation.op,resource:operation.resource,resourceId:operation.resourceId??operation.idValue??null,value:clone(operation.value),patch:clone(operation.patch),query:clone(operation.query||{}),ifRevision:operation.ifRevision};
+    // Check the raw revision before normalizeDocument touches anything: normalization backfills
+    // legacy shapes in place, and a refused write must leave the document exactly as it was.
+    const rawRevision=Math.max(0,Math.trunc(num(document?.revision,0)));
+    if(typeof op.ifRevision==='number'&&op.ifRevision!==rawRevision&&['create','update','delete'].includes(op.op)){
+      return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:false,revisionBefore:rawRevision,revisionAfter:rawRevision,result:null,error:{message:`Stale revision: expected ${op.ifRevision}, document is at ${rawRevision}`}};
+    }
+    const doc=normalizeDocument(document);
     const before=doc.revision;
     try{
       let value,mutates=false;
@@ -750,17 +772,41 @@
     }
     return {ok:errors.length===0,errors};
   }
+  // Labels an existing validateDocument error string with the id of the element it names and a
+  // short rule name, so a view can place it without knowing what validateDocument checks.
+  function markerElementId(document,message){
+    const named=message.match(/^(?:wire|component|reference) ([^\s:]+)/);
+    if(named)return named[1];
+    const duplicate=message.match(/^duplicate (?:component|wire|reference) id: (.+)$/);
+    if(duplicate)return duplicate[1];
+    return document?.id??null;
+  }
+  function markerRule(message){
+    if(/^schema must equal/.test(message))return 'document-schema';
+    if(/^(?:components|wires|references) must be an array$/.test(message))return 'document-shape';
+    if(/missing id$/.test(message))return 'identity';
+    if(/^duplicate (?:component|wire|reference) id:/.test(message))return 'identity';
+    if(/missing endpoint component:/.test(message))return 'wire-endpoint';
+    if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
+    return 'boundary-legality';
+  }
+  // Straight from validateDocument's own findings; no legality is re-derived here.
+  function markersFor(document){
+    const check=validateDocument(document);
+    if(check.ok)return [];
+    return check.errors.map(message=>({id:markerElementId(document,message),severity:'error',message,rule:markerRule(message)}));
+  }
   function operationTools(){
     const resourceSchema={type:'string',enum:['component','wire','reference']};
     return [
       {name:'schematic.list',description:'List schematic resources.',inputSchema:{type:'object',properties:{resource:resourceSchema,query:{type:'object'}},required:['resource'],additionalProperties:false}},
       {name:'schematic.get',description:'Read one schematic resource by id.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'}},required:['resource','id'],additionalProperties:false}},
-      {name:'schematic.create',description:'Create a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,value:{type:'object'}},required:['resource','value'],additionalProperties:false}},
-      {name:'schematic.update',description:'Patch a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},patch:{type:'object'}},required:['resource','id','patch'],additionalProperties:false}},
-      {name:'schematic.delete',description:'Delete a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'}},required:['resource','id'],additionalProperties:false}},
+      {name:'schematic.create',description:'Create a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,value:{type:'object'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','value'],additionalProperties:false}},
+      {name:'schematic.update',description:'Patch a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},patch:{type:'object'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','id','patch'],additionalProperties:false}},
+      {name:'schematic.delete',description:'Delete a component, wire, or reference.',inputSchema:{type:'object',properties:{resource:resourceSchema,id:{type:'string'},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['resource','id'],additionalProperties:false}},
       {name:'schematic.document.get',description:'Return the entire schematic document.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,normalizePresentationSize,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,markersFor,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });

@@ -16,8 +16,9 @@
       // World units. Selected and highlighted states multiply these, never replace them.
       stroke:{structure:1.5,section:1.25,flow:2.25,symbol:2.6},
       space:{labelClear:10,bevel:3.5,pin:14},
-      // Text roles (NOTATION-MODEL.md §4). Sizes are at zoom 1; the canvas clamps them on screen.
-      type:{title:{size:10,weight:600},subtitle:{size:8.5,weight:400},body:{size:9,weight:400},caption:{size:9,weight:600},narration:{size:15,weight:500}},
+      // Text roles (NOTATION-MODEL.md §4). `size` is the base at zoom 1; on screen every role is
+      // clamped to `screen` (a subtitle keeps its own lower floor, so it stays under its title).
+      type:{screen:{min:12,max:16},title:{size:10,weight:600},subtitle:{size:8.5,weight:400,min:8},body:{size:9,weight:400},caption:{size:9,weight:600},narration:{size:15,weight:500}},
       // One soft shadow per level: a root card is lifted 1, a card inside it 2, and so on.
       elevation:{
         light:[null,{dy:2,blur:3,opacity:.16},{dy:3,blur:5,opacity:.2},{dy:4.5,blur:7,opacity:.22}],
@@ -138,9 +139,16 @@
   }
   // The glyph box inside a card of `size`, and where a terminal sits relative to the card's
   // centre. One formula for the renderer and the layout engine, so a laid-out wire is straight.
+  // The size a role is drawn at zoom 1: its base, held inside the screen range.
+  function drawnSize(type,role){const t=type?.[role]||{},lo=t.min??type?.screen?.min??0,hi=type?.screen?.max??Infinity;return Math.max(lo,Math.min(hi,t.size||10))}
   // The glyph leaves the card's foot to its title, and a line more for a subtitle.
-  function glyphBox(g,size,{subtitle=false}={}){
-    const many=g?.points==='terminals',w=Math.min(size.w*.72,108),h=Math.max(24,Math.min(size.h*(many?.7:.55),70,size.h-2*(20+(subtitle?11:0))));
+  // The glyph leaves the card's foot to its title (one or two lines, from its length at the title
+  // size) and a line more for a subtitle. Centred on the axis, so the room is kept on both sides.
+  function glyphBox(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type}={}){
+    const ts=drawnSize(type,'title'),ss=drawnSize(type,'subtitle'),avail=Math.max(1,size.w-12);
+    const lines=Math.max(1,Math.min(2,Math.ceil(String(title||'').length*ts*.6/avail)));
+    const foot=8+lines*ts*1.15+(subtitle?ss*1.3:0);
+    const many=g?.points==='terminals',w=Math.min(size.w*.72,108),h=Math.max(24,Math.min(size.h*(many?.7:.55),70,size.h-2*foot));
     return {w,h,scale:Math.min(w/96,h/64)};
   }
   function glyphAxis(g){
@@ -153,5 +161,5 @@
     const {scale}=glyphBox(g,size,opts);return {dx:(t.at[0]-48)*scale,dy:(t.at[1]-axis)*scale};
   }
   function terminal(g,idOrRole){return (g?.terminals||[]).find(t=>t.id===idOrRole)||(g?.terminals||[]).find(t=>t.role===idOrRole)||null}
-  return {BUILTIN,MARGIN,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
+  return {BUILTIN,MARGIN,drawnSize,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
 });

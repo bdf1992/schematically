@@ -62,9 +62,11 @@ deutan and tritan simulation (about two and a half just-noticeable differences).
 | 07-plane-with-points.sov | light | 32 | 0 | 0 |
 | 08-gated-service.sov | light | 58 | 0 | 0 |
 | 09-print-ai-proof-run.sov | light | 81 | 0 | 0 |
+| 09-proposed-service-review.sov | light | 37 | 0 | 0 |
 | 10-clocked-signals.sov | light | 65 | 0 | 0 |
 | 11-sections.sov | light | 61 | 0 | 0 |
 | 12-membrane.sov | light | 53 | 0 | 0 |
+| 13-half-adder.sov | light | 62 | 0 | 0 |
 | blank.sov | light | 0 | 0 | 0 |
 | 01-source-hold.sov | dark | 14 | 0 | 0 |
 | 02-duplex-buffer.sov | dark | 17 | 0 | 0 |
@@ -75,13 +77,20 @@ deutan and tritan simulation (about two and a half just-noticeable differences).
 | 07-plane-with-points.sov | dark | 32 | 0 | 0 |
 | 08-gated-service.sov | dark | 58 | 0 | 0 |
 | 09-print-ai-proof-run.sov | dark | 81 | 0 | 0 |
+| 09-proposed-service-review.sov | dark | 37 | 0 | 5 |
 | 10-clocked-signals.sov | dark | 65 | 0 | 0 |
 | 11-sections.sov | dark | 61 | 0 | 0 |
 | 12-membrane.sov | dark | 53 | 0 | 0 |
+| 13-half-adder.sov | dark | 62 | 0 | 0 |
 | blank.sov | dark | 0 | 0 | 0 |
 
-**Overall: PASS**
+**Overall: FAIL**
 
+- 09-proposed-service-review.sov (dark): mark-contrast ['admit'] wire 1.92:1 < 3:1 (#386e9b on #3e4041: body)
+- 09-proposed-service-review.sov (dark): mark-contrast ['admit'] flow-chevron 1.92:1 < 3:1 (#386e9b on #3e4041: body)
+- 09-proposed-service-review.sov (dark): mark-contrast ['admit'] flow-chevron 1.92:1 < 3:1 (#386e9b on #3e4041: body)
+- 09-proposed-service-review.sov (dark): mark-contrast ['entry'] dimensional-point-body 1.92:1 < 3:1 (#386e9b on #3e4041: body)
+- 09-proposed-service-review.sov (dark): mark-contrast ['check'] body 1.92:1 < 3:1 (#386e9b on #3e4041: body)
 
 ## Sources
 

@@ -19,6 +19,7 @@ Tools:
 - `schematic.delete`
 - `schematic.document.get`
 - `schematic.document.replace`
+- `schematic.markers`
 
 Graph and simulation (`GRAPH-MODEL.md`, read-only over the document):
 
@@ -53,11 +54,17 @@ HTTP: `GET /api/v1/render.svg`, `GET /api/v1/render.png?appearance=dark&scale=2`
 
 Resources: `component`, `wire`, `reference`.
 
+`schematic.markers` returns `{id, severity, message, rule}` for each current validation finding, delegating to the same `Data.markersFor` the browser API uses — the tool invents no legality of its own.
+
 ## HTTP
 
 `GET /api/v1/formats` advertises document, package, workspace, operation, and receipt schemas.
 
 The server persists the canonical `.sov` document. `.sovpak` is a transport/package format around that same document rather than a second mutable authority.
+
+### Optimistic concurrency
+
+`schematic.create`, `schematic.update`, and `schematic.delete` accept an optional `ifRevision` (number): the document revision the caller last observed. It is optional — omit it and the write applies unconditionally, as before. When present and it does not match the document's current revision, the write is refused: the tool call returns `ok:false` with `error.message` of the form `Stale revision: expected <ifRevision>, document is at <current>`, and nothing is mutated.
 
 ## Boundary rule
 

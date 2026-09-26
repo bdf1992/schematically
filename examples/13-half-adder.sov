@@ -35,7 +35,7 @@
    "id": "sum-gate",
    "symbolId": "xor2",
    "x": 480,
-   "y": 207.19,
+   "y": 206.61,
    "config": {
     "label": "Sum gate",
     "subtitle": "a ⊕ b",
@@ -51,7 +51,7 @@
    "id": "carry-gate",
    "symbolId": "and2",
    "x": 480,
-   "y": 412.81,
+   "y": 413.39,
    "config": {
     "label": "Carry gate",
     "subtitle": "a · b",
@@ -67,7 +67,7 @@
    "id": "sum",
    "symbolId": "observe",
    "x": 800,
-   "y": 207.19,
+   "y": 206.61,
    "config": {
     "label": "Sum",
     "signal": {
@@ -79,7 +79,7 @@
    "id": "carry",
    "symbolId": "observe",
    "x": 800,
-   "y": 412.81,
+   "y": 413.39,
    "config": {
     "label": "Carry",
     "signal": {

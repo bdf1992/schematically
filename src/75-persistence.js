@@ -329,6 +329,9 @@ function withPictureLabels(fn){
   try{return fn()}finally{workspace.style.setProperty('--zoom',prev);render()}
 }
 function renderStandaloneSvg(opts={}){return withPictureLabels(()=>renderStandaloneSvgNow(opts))}
+// The snapshot (file.svg, File > Export SVG): the canvas exactly as on screen, labels where the
+// reader sees them. render.svg makes a picture instead, with labels at their base size.
+function snapshotSvg(opts={}){return renderStandaloneSvgNow(opts)}
 function renderStandaloneSvgNow(opts={}){
   if (typeof cancelWireDrag === 'function') cancelWireDrag();
   const live = workspace;
@@ -383,7 +386,7 @@ function renderStandaloneSvgNow(opts={}){
   clone.querySelector('#simLayer')?.replaceChildren();
   clone.querySelectorAll('.level-high').forEach(x => x.classList.remove('level-high'));
   clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
-  clone.querySelectorAll('.port-hit,.wire-hit').forEach(x => x.remove());
+  clone.querySelectorAll('.port-hit,.wire-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
   // A still picture cannot show travel: a packet frozen mid-wire reads as a junction.
   // Packets stay only when the file is made to loop (--loop).
   if (!opts.packets) clone.querySelectorAll('.wire-packet').forEach(x => x.remove());
@@ -435,7 +438,7 @@ function appendPictureBlocks(svg,{x,y,w},opts={}){
   return used;
 }
 function exportSvgFile(){
-  triggerDownload(renderStandaloneSvg({pad:48}),`${fileBaseName()}.svg`,'image/svg+xml');
+  triggerDownload(snapshotSvg({pad:48}),`${fileBaseName()}.svg`,'image/svg+xml');
 }
 // A raster of the same picture, for readers that cannot take SVG (chat, issue trackers).
 function renderStandalonePng(opts={}){

@@ -1,0 +1,319 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "proposed-service-review",
+  "meta": {
+    "title": "Proposed service review",
+    "description": "A participant submits a request through an explicit boundary. A scoped grant controls a check before state/history is written. This diagram describes a proposal; it does not execute authority or external effects. Slots: C5 requests/actions; C6 authority/control; C4 observations/evidence; C1 reserved for refusal/protection; M1 hosts. Inspect an unused standard port before removing it."
+  },
+  "components": [
+    {
+      "id": "service",
+      "symbolId": "plane",
+      "x": 680,
+      "y": 370,
+      "config": {
+        "label": "SERVICE / proposal",
+        "colorSlot": 0,
+        "signalMode": "passive",
+        "presentation": {
+          "interiorColorSlot": 0,
+          "size": {
+            "w": 800,
+            "h": 540
+          },
+          "graphic": {
+            "kind": "none"
+          }
+        },
+        "ports": {}
+      },
+      "editor": {
+        "pinned": true
+      }
+    },
+    {
+      "id": "team",
+      "symbolId": "act",
+      "x": 100,
+      "y": 430,
+      "config": {
+        "label": "Team",
+        "colorSlot": 10,
+        "signalMode": "passive",
+        "presentation": {
+          "interiorColorSlot": 0,
+          "graphic": {
+            "kind": "custom",
+            "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 64\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"><circle cx=\"34\" cy=\"19\" r=\"10\"/><circle cx=\"67\" cy=\"23\" r=\"8\"/><path d=\"M14 55v-8c0-18 40-18 40 0v8M59 38c17-5 23 6 23 17\"/></g></svg>"
+          }
+        },
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          },
+          "control": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10,
+                "flow": "control",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "entry",
+      "symbolId": "point",
+      "x": 280,
+      "y": 430,
+      "parentId": "service",
+      "canvasId": "canvas:component:service",
+      "placement": {
+        "kind": "edge",
+        "hostId": "service",
+        "side": "left",
+        "t": 0.6111111111111112
+      },
+      "config": {
+        "label": "request",
+        "colorSlot": 10,
+        "signalMode": "passive",
+        "ports": {
+          "out": {
+            "face": "both",
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10,
+                "flow": "duplex",
+                "access": "write"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "check",
+      "symbolId": "gate",
+      "x": 510,
+      "y": 430,
+      "config": {
+        "label": "Check",
+        "colorSlot": 10,
+        "signalMode": "passive",
+        "presentation": {
+          "interiorColorSlot": 0
+        },
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          },
+          "control": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 11,
+                "flow": "control",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service"
+    },
+    {
+      "id": "history",
+      "symbolId": "hold",
+      "x": 890,
+      "y": 430,
+      "config": {
+        "label": "History",
+        "colorSlot": 9,
+        "signalMode": "passive",
+        "presentation": {
+          "interiorColorSlot": 0,
+          "graphic": {
+            "kind": "custom",
+            "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 64\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"><ellipse cx=\"48\" cy=\"12\" rx=\"30\" ry=\"9\"/><path d=\"M18 12v38c0 12 60 12 60 0V12M18 30c0 12 60 12 60 0M18 46c0 12 60 12 60 0\"/></g></svg>"
+          }
+        },
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          },
+          "control": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9,
+                "flow": "control",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service"
+    },
+    {
+      "id": "grant",
+      "symbolId": "authority",
+      "x": 510,
+      "y": 230,
+      "config": {
+        "label": "Scope",
+        "colorSlot": 11,
+        "signalMode": "passive",
+        "presentation": {
+          "interiorColorSlot": 0
+        },
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 11,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 11,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          },
+          "control": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 11,
+                "flow": "control",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service",
+      "editor": {
+        "pinned": true
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "request",
+      "a": "team",
+      "aSide": "out",
+      "b": "entry",
+      "bSide": "out",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "submit",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "admit",
+      "a": "entry",
+      "aSide": "out",
+      "b": "check",
+      "bSide": "in",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "control",
+      "a": "grant",
+      "aSide": "out",
+      "b": "check",
+      "bSide": "control",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "scope",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "record",
+      "a": "check",
+      "aSide": "out",
+      "b": "history",
+      "bSide": "in",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "record",
+        "forwardOperation": "write"
+      }
+    }
+  ],
+  "references": []
+}

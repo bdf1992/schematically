@@ -104,16 +104,20 @@ function fitComponentLabels(g,n){
   if(componentForm(n).dimension!==2)return;
   const size=componentSize(n),max=size.w-12-componentSectionInset(n)*2;
   for(const t of g.querySelectorAll(':scope > text.component-label,:scope > text.outside-label')){
-    const full=t.textContent;if(!full||t.getComputedTextLength()<=max)continue;
+    // Fit at the label's base size: the on-screen clamp changes its size with zoom, and a label
+    // must not wrap or cut differently as the reader zooms.
+    const role=t.classList.contains('outside-label')?'caption':'title',base=SovSchematicNotation.drawnSize(SovSchematicNotation.tokens(diagram).type,role);
+    const k=base/(parseFloat(getComputedStyle(t).fontSize)||base),len=()=>t.getComputedTextLength()*k;
+    const full=t.textContent;if(!full||len()<=max)continue;
     const words=full.split(/\s+/),lines=[''];
     for(const word of words){
       const trial=lines.at(-1)?lines.at(-1)+' '+word:word;
       t.textContent=trial;
-      if(t.getComputedTextLength()<=max||!lines.at(-1))lines[lines.length-1]=trial;else lines.push(word);
+      if(len()<=max||!lines.at(-1))lines[lines.length-1]=trial;else lines.push(word);
     }
     if(lines.length>2)lines.splice(1,lines.length-1,lines.slice(1).join(' '));
     t.textContent=lines[lines.length-1];
-    while(t.getComputedTextLength()>max&&t.textContent.length>1){t.textContent=t.textContent.slice(0,-2)+'…';t.dataset.truncated='true'}
+    while(len()>max&&t.textContent.length>1){t.textContent=t.textContent.slice(0,-2)+'…';t.dataset.truncated='true'}
     lines[lines.length-1]=t.textContent;
     const em=parseFloat(getComputedStyle(t).fontSize)||9,x=t.getAttribute('x')||'0',outside=t.classList.contains('outside-label');
     t.textContent='';
@@ -159,7 +163,8 @@ function appendComponentText(g,n,cfg,s){
     if(subtitle&&labelMode!=='none'){
       const u=document.createElementNS('http://www.w3.org/2000/svg','text');u.setAttribute('class','component-subtitle');u.setAttribute('text-anchor','middle');
       const y=Number(t.getAttribute('y'))||0,below=labelMode==='outside'||(componentAcceptsChildren(n)&&t.getAttribute('y')&&y<0);
-      u.setAttribute('x','0');u.setAttribute('y',String(below?y+11:y));if(!below)t.setAttribute('y',String(y-11));
+      const step=SovSchematicNotation.drawnSize(SovSchematicNotation.tokens(diagram).type,'subtitle')*1.3;
+      u.setAttribute('x','0');u.setAttribute('y',String(below?y+step:y));if(!below)t.setAttribute('y',String(y-step));
       u.textContent=subtitle;g.appendChild(u);
     }
   }
@@ -248,6 +253,9 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   g.style.setProperty('--component-boundary-color',boundaryColor);
   g.style.setProperty('--component-interior-ink',ensureContrast(interiorColor,materialFill,3));
   g.style.setProperty('--component-interior-fill',materialFill);
+  // Text on the card is its colour darkened (or lightened) until it reads: WCAG's 4.5:1 for text,
+  // where the outline and glyph only need 3:1.
+  g.style.setProperty('--component-text-color',ensureContrast(boundaryColor,materialFill,4.6));
   const backdrop=componentBackdropMode(n);g.dataset.backdrop=backdrop;
   if(form.dimension===0){
     const pointCfg=componentAttachmentPoint(n,'self')?.config,point=document.createElementNS('http://www.w3.org/2000/svg','circle');
@@ -339,7 +347,35 @@ function applyNotationTokens(){
   // Derived weights are computed here, not with calc(): a computed calc() is not a length a reader can parse.
   workspace.style.setProperty('--stroke-structure-container',`${+(T.stroke.structure*1.2).toFixed(2)}px`);
   workspace.style.setProperty('--stroke-structure-selected',`${+(T.stroke.structure*1.9).toFixed(2)}px`);
-  for(const [role,t] of Object.entries(T.type||{})){workspace.style.setProperty(`--type-${role}-size`,`${t.size}px`);workspace.style.setProperty(`--type-${role}-weight`,String(t.weight))}
+  for(const [role,t] of Object.entries(T.type||{})){if(role==='screen')continue;workspace.style.setProperty(`--type-${role}-size`,`${t.size}px`);workspace.style.setProperty(`--type-${role}-weight`,String(t.weight))}
+}
+function markersById(){
+  const byId=new Map();
+  for(const marker of SovSchematicData.markersFor(diagram)){
+    const list=byId.get(marker.id);if(list)list.push(marker);else byId.set(marker.id,[marker]);
+  }
+  return byId;
+}
+function appendMarkerBadge(host,markers,x,y){
+  const badge=document.createElementNS('http://www.w3.org/2000/svg','g');
+  badge.setAttribute('class','marker-badge');
+  badge.setAttribute('transform',`translate(${x} ${y})`);
+  badge.setAttribute('title',markers.map(m=>m.message).join('; '));
+  const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  dot.setAttribute('class','marker-badge-dot');dot.setAttribute('r','7');
+  badge.appendChild(dot);
+  const mark=document.createElementNS('http://www.w3.org/2000/svg','text');
+  mark.setAttribute('class','marker-badge-mark');mark.setAttribute('text-anchor','middle');mark.setAttribute('y','3');mark.textContent='!';
+  badge.appendChild(mark);
+  host.appendChild(badge);
+}
+function markerCountEl(){
+  let el=document.getElementById('markerCount');
+  if(!el&&statusEl?.parentElement){
+    el=document.createElement('span');el.id='markerCount';el.className='marker-count';
+    statusEl.parentElement.insertBefore(el,statusEl.nextSibling);
+  }
+  return el;
 }
 function render(){
   applyNotationTokens();
@@ -347,6 +383,7 @@ function render(){
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
   const componentSignals=signalState.colors;
+  const markers=markersById();
   nodesG.innerHTML='';
   const unplacedIds=new Set(typeof layoutUnplacedIds==='function'?layoutUnplacedIds():[]);
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
@@ -359,6 +396,7 @@ function render(){
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
     renderComponentVisual(g,n,cfg,s,signalColor);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
+    {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
       const pointId=point.id,pcfg=point.config,local=componentPortLocalPosition(n,pointId);
       const localX=local.x,localY=local.y;
@@ -388,7 +426,8 @@ function render(){
     appendComponentLeads(g,n);appendTerminalMarks(g,n);
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
   });
-  renderWires(signalState);
+  renderWires(signalState,markers);
+  {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
   renderJunctionDots();
   if(typeof paintSim==='function')paintSim();
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
@@ -613,7 +652,75 @@ function clearWireVisualFocus(){
   document.querySelectorAll('.wire-group').forEach(g=>g.classList.remove('muted'));
   if(!(typeof selected==='string'&&selected.startsWith('wire:'))) clearEndpointFocus();
 }
-function renderWires(signalState=computeSignalState()){
+// Projection-only geometry: keep the exact points used to paint each path. Label
+// layout never asks the router for another route or writes into the document.
+const wireLabelPaths=new Map();
+function placeWireLabels(){
+  const matrix=workspace.getScreenCTM();if(!matrix)return;
+  const inverse=matrix.inverse(),clearance=6;
+  const screen=p=>new DOMPoint(p.x,p.y).matrixTransform(matrix);
+  const visible=el=>{
+    for(let cur=el;cur&&cur!==workspace;cur=cur.parentElement){
+      const style=getComputedStyle(cur);
+      if(style.display==='none'||style.visibility==='hidden'||Number(style.opacity)===0)return false;
+    }
+    return true;
+  };
+  const rect=el=>{const r=el.getBoundingClientRect();return {l:r.left,r:r.right,t:r.top,b:r.bottom}};
+  const intersects=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
+  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.component-label,.outside-label,.internal-text')].filter(visible).map(rect);
+  const entries=[...wireLabelPaths].filter(([path])=>path.isConnected&&visible(path)).map(([path,points])=>({path,points:points.map(screen)}));
+  // A slab intersection also handles diagonal carrier segments without sampling.
+  const crosses=(box,a,b)=>{
+    let lo=0,hi=1;
+    for(const [start,delta,min,max] of [[a.x,b.x-a.x,box.l,box.r],[a.y,b.y-a.y,box.t,box.b]]){
+      if(Math.abs(delta)<1e-9){if(start<min||start>max)return false;continue}
+      const u=(min-start)/delta,v=(max-start)/delta;
+      lo=Math.max(lo,Math.min(u,v));hi=Math.min(hi,Math.max(u,v));if(lo>hi)return false;
+    }
+    return true;
+  };
+  for(const entry of entries){
+    const {path,points}=entry,label=path.parentElement.querySelector('.connection-label');
+    if(!label||!visible(label))continue;
+    const bounds=rect(label),width=bounds.r-bounds.l,height=bounds.b-bounds.t;
+    const anchor=screen({x:Number(label.getAttribute('x')),y:Number(label.getAttribute('y'))});
+    const offset={x:bounds.l-anchor.x,y:bounds.t-anchor.y};
+    const midpoint=screen(path.getPointAtLength(path.getTotalLength()/2)),candidates=[];
+    const beside=(p,a,b)=>{
+      if(Math.abs(a.y-b.y)<.01){
+        candidates.push({l:p.x-width/2,t:p.y-clearance-height},{l:p.x-width/2,t:p.y+clearance});
+      }else if(Math.abs(a.x-b.x)<.01){
+        candidates.push({l:p.x-clearance-width,t:p.y-height/2},{l:p.x+clearance,t:p.y-height/2});
+      }
+    };
+    const total=path.getTotalLength(),before=screen(path.getPointAtLength(Math.max(0,total/2-.1))),after=screen(path.getPointAtLength(Math.min(total,total/2+.1)));
+    beside(midpoint,before,after);
+    for(let i=1;i<points.length;i++)beside({x:(points[i-1].x+points[i].x)/2,y:(points[i-1].y+points[i].y)/2},points[i-1],points[i]);
+    let chosen=null,distance=Infinity;
+    for(const candidate of candidates){
+      candidate.r=candidate.l+width;candidate.b=candidate.t+height;
+      const padded={l:candidate.l-clearance,r:candidate.r+clearance,t:candidate.t-clearance,b:candidate.b+clearance};
+      if(obstacles.some(box=>intersects(padded,box)))continue;
+      if(entries.some(other=>other!==entry&&other.points.slice(1).some((p,i)=>crosses(padded,other.points[i],p))))continue;
+      const d=Math.hypot(candidate.l+width/2-midpoint.x,candidate.t+height/2-midpoint.y);
+      if(d<distance-1e-6){chosen=candidate;distance=d}
+    }
+    if(chosen){
+      const position=new DOMPoint(chosen.l-offset.x,chosen.t-offset.y).matrixTransform(inverse);
+      label.setAttribute('x',String(position.x));label.setAttribute('y',String(position.y));
+    }
+    // A crowded path retains its existing label position. Later labels still
+    // avoid that occupied space, and the finite candidate list bounds the work.
+    obstacles.push(rect(label));
+  }
+}
+function renderWires(signalState=computeSignalState(),markers=markersById()){
+  const previousLabels=new Map([...wireLabelPaths.keys()].map(path=>{
+    const label=path.parentElement?.querySelector('.connection-label');
+    return [path.parentElement?.dataset.wireId,label?{text:label.textContent,d:path.getAttribute('d'),x:label.getAttribute('x'),y:label.getAttribute('y')}:null];
+  }));
+  wireLabelPaths.clear();
   wiresG.innerHTML='';
   nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
   clearEndpointFocus();
@@ -660,6 +767,7 @@ function renderWires(signalState=computeSignalState()){
     const {points,snapshot}=routes.get(i);
     // A multi-line wire is a band, not a line: it does not hop.
     const d=SovSchematicData.normalizeSection(w.form?.section,1)?.lines?.length>=2?pathD(points):pathWithHops(points,hops.get(i));
+    const wireMarkers=markers.get(w.id);
 
     const signal=wireSignalColors(w,signalState);
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
@@ -686,6 +794,7 @@ function renderWires(signalState=computeSignalState()){
     const base=document.createElementNS('http://www.w3.org/2000/svg','path');
     base.setAttribute('d',d);
     base.setAttribute('class','wire'+(selected===`wire:${i}`?' selected':''));
+    wireLabelPaths.set(base,clonePoints(points));
 
     const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
     hit.setAttribute('d',d); hit.setAttribute('class','wire-hit');
@@ -702,6 +811,10 @@ function renderWires(signalState=computeSignalState()){
     }
     group.appendChild(voltage);
     group.appendChild(base);
+    if(wireMarkers){
+      const top=Math.min(...points.map(p=>p.y)),right=Math.max(...points.map(p=>p.x));
+      appendMarkerBadge(group,wireMarkers,right,top);
+    }
     {const L=base.getTotalLength();for(const hosted of nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&n.id!==activeNodeDrag)){
       const placement=componentPlacement(hosted),len=Math.max(1,Math.min(L-1,L*placement.t)),q=base.getPointAtLength(len),angle=pathTangentAngleAtLength(base,len);
       hosted.x=q.x;hosted.y=q.y;wireHostPoseCache.set(hosted.id,{x:q.x,y:q.y,angle,wireId:w.id,t:placement.t});
@@ -749,7 +862,13 @@ function renderWires(signalState=computeSignalState()){
     }
 
     if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'return required':'return expected';group.appendChild(mark)}
-    if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13-(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0));label.setAttribute('text-anchor','middle');label.textContent=(cfg.direction==='duplex'?'↔ ':'')+cfg.label;group.appendChild(label)}
+    if(cfg.label){
+      // A label keeps the place clearance gave it while its text and route stand (wire-label clearance).
+      const text=(cfg.direction==='duplex'?'↔ ':'')+cfg.label,lift=13+(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0);
+      const q=pointAngleAtDistance(base,base.getTotalLength()*.5),previous=previousLabels.get(w.id),label=document.createElementNS('http://www.w3.org/2000/svg','text');
+      const keep=previous?.text===text&&previous.d===d;
+      label.setAttribute('class','connection-label');label.setAttribute('x',keep?previous.x:q.x);label.setAttribute('y',keep?previous.y:q.y-lift);label.setAttribute('text-anchor','middle');label.textContent=text;group.appendChild(label);
+    }
     // Channel markers belong to bound ends; a free end has no port to mark.
     if(a&&endpointShowsChannelTag(w,'a')){
       const markerA=document.createElementNS('http://www.w3.org/2000/svg','text');
@@ -783,4 +902,5 @@ function renderWires(signalState=computeSignalState()){
     group.addEventListener('pointerleave',()=>{if(selected!==`wire:${i}`)clearWireVisualFocus()});
     if(selected===`wire:${i}`) focusWireVisual(i);
   });
+  placeWireLabels();
 }
