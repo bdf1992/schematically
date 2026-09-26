@@ -77,8 +77,11 @@ def check_glyphs_survive() -> None:
             root = ET.fromstring(r['target'].read_text(encoding='utf-8'))
             gates = [c for c in json.loads((ROOT / 'examples' / 'logic' / 'gates.sov').read_text())['components']
                      if 'gate' in c.get('config', {}).get('logic', {})]
-            custom = [g for g in root.iter(f'{SVG}g') if g.attrib.get('class') == 'custom-graphic']
+            custom = [g for g in root.iter(f'{SVG}g') if 'custom-graphic' in g.attrib.get('class', '').split()]
+            # One glyph per gate, and it is the full one: an export draws at the document's own
+            # scale, so the small variant is hidden and dropped from the file.
             assert len(custom) == len(gates), (appearance, len(custom), len(gates))
+            assert not any('glyph-small' in g.attrib.get('class', '') for g in custom), appearance
 
 
 def main() -> int:

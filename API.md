@@ -51,7 +51,7 @@ Every mutation produces the same revisioned receipt semantics as MCP/HTTP adapte
 
 ## Editor/history API
 
-`window.SovSchematicAPI` additionally exposes `history.list/undo/redo`, `checkpoints.list/create/restore`, semantic selection clipboard helpers, and view appearance/global-rate accessors. MCP exposes history undo/redo and checkpoint list/create/restore for its file-backed document.
+`window.SovSchematicAPI` additionally exposes `history.list/undo/redo`, `checkpoints.list/create/restore`, semantic selection clipboard helpers, and view appearance/global-rate/zoom accessors (`view.zoom()`, `view.setZoom(z)`). MCP exposes history undo/redo and checkpoint list/create/restore for its file-backed document.
 
 
 ### Access axis

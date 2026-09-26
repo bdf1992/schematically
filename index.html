@@ -124,6 +124,9 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .wire-group.muted{opacity:.13}
 .wire-group.dormant{opacity:.46}
 .wire-group.dormant .wire-voltage{opacity:.16}
+.node .custom-graphic.glyph-small{display:none}
+.node.glyph-compact .custom-graphic.glyph-full{display:none}
+.node.glyph-compact .custom-graphic.glyph-small{display:inline}
 .wire{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:pointer;transition:stroke-width .1s,opacity .1s}
 .wire-voltage{fill:none;stroke:var(--voltage-ink,var(--wire-ink,var(--canvas-ink)));stroke-width:8;stroke-linecap:round;stroke-linejoin:round;opacity:.10;pointer-events:none}
 .wire-hit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
@@ -2431,6 +2434,7 @@ function componentConfig(n){
   if(!['symbol','custom','none'].includes(presentation.graphic.kind))presentation.graphic.kind='symbol';
   if(typeof presentation.graphic.ref!=='string')presentation.graphic.ref=`sym-${n.symbolId||'blank'}`;
   if(typeof presentation.graphic.svg!=='string')presentation.graphic.svg='';
+  if(presentation.graphic.svgSmall!==undefined&&typeof presentation.graphic.svgSmall!=='string')delete presentation.graphic.svgSmall;
   if(!presentation.size)presentation.size={w:112,h:84};
   presentation.size.w=Math.max(80,Math.min(520,Number(presentation.size.w)||112));
   presentation.size.h=Math.max(64,Math.min(420,Number(presentation.size.h)||84));
@@ -3617,6 +3621,7 @@ function applyCamera(){
   workspace.setAttribute('viewBox',`${camera.x} ${camera.y} ${camera.w} ${camera.h}`);
   workspace.style.setProperty('--zoom',String(currentZoom())); // labels clamp their screen size against this (app.css)
   zoomReadout.textContent=`${Math.round(currentZoom()*100)}%`;
+  if(typeof applyGlyphSizeRule==='function')applyGlyphSizeRule();
   requestAnimationFrame(positionSelectionBar);
 }
 function setPanMode(active){
@@ -4809,7 +4814,7 @@ function sanitizeSvgElement(source){
   else for(const child of [...source.children||[]]){const safe=sanitizeSvgElement(child);if(safe)target.appendChild(safe)}
   return target;
 }
-function appendCustomSvgFragment(group,markup,box){
+function appendCustomSvgFragment(group,markup,box,variant=''){
   const raw=String(markup||'').trim();if(!raw)return false;
   const wrapped=/^<svg[\s>]/i.test(raw)?raw:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64">${raw}</svg>`;
   const doc=new DOMParser().parseFromString(wrapped,'image/svg+xml');
@@ -4822,7 +4827,7 @@ function appendCustomSvgFragment(group,markup,box){
   const tx=box.x+(box.w-vw*scale)/2-vx*scale;
   const ty=box.y+(box.h-vh*scale)/2-vy*scale;
   const safeGroup=document.createElementNS('http://www.w3.org/2000/svg','g');
-  safeGroup.setAttribute('class','custom-graphic');safeGroup.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`);safeGroup.setAttribute('fill','none');safeGroup.setAttribute('stroke','currentColor');safeGroup.setAttribute('stroke-width','2');
+  safeGroup.setAttribute('class','custom-graphic'+(variant?` glyph-${variant}`:''));safeGroup.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`);safeGroup.setAttribute('fill','none');safeGroup.setAttribute('stroke','currentColor');safeGroup.setAttribute('stroke-width','2');
   for(const child of [...root.children]){const safe=sanitizeSvgElement(child);if(safe)safeGroup.appendChild(safe)}
   if(!safeGroup.children.length)return false;
   group.appendChild(safeGroup);return true;
@@ -4831,7 +4836,14 @@ function appendComponentGraphic(g,n,cfg){
   const p=cfg.presentation;
   if(p.graphic.kind==='none')return;
   const box=componentInlineGraphicBox(n);
-  if(p.graphic.kind==='custom'&&appendCustomSvgFragment(g,p.graphic.svg,box))return;
+  if(p.graphic.kind==='custom'){
+    // A glyph may carry a small-size variant (VISUAL-LANGUAGE.md: a gate switches to its IEC
+    // rectangle when drawn under GLYPH_MIN_PX). Both are drawn; applyGlyphSizeRule shows one.
+    const small=typeof p.graphic.svgSmall==='string'&&p.graphic.svgSmall.trim();
+    if(small&&appendCustomSvgFragment(g,p.graphic.svg,box,'full')&&appendCustomSvgFragment(g,p.graphic.svgSmall,box,'small')){g.dataset.glyphH=String(box.h);return}
+    g.querySelectorAll('.custom-graphic').forEach(x=>x.remove());
+    if(appendCustomSvgFragment(g,p.graphic.svg,box))return;
+  }
   const use=document.createElementNS('http://www.w3.org/2000/svg','use');
   use.setAttribute('class','glyph');use.setAttribute('href',`#${(p.graphic.ref||`sym-${n.symbolId}`).replace(/^#/,'')}`);
   use.setAttribute('x',box.x);use.setAttribute('y',box.y);use.setAttribute('width',box.w);use.setAttribute('height',box.h);
@@ -4939,6 +4951,13 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   }
   appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);
 }
+const GLYPH_MIN_PX=40;
+// Show each component's small glyph when its full glyph would be drawn under GLYPH_MIN_PX on
+// screen. Runs after every render and every camera change; `zoom` overrides the camera
+// (an export draws at the document's own scale, zoom 1).
+function applyGlyphSizeRule(zoom=currentZoom()){
+  for(const g of nodesG.querySelectorAll('.node[data-glyph-h]'))g.classList.toggle('glyph-compact',Number(g.dataset.glyphH)*zoom<GLYPH_MIN_PX);
+}
 function render(){
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
@@ -4978,6 +4997,7 @@ function render(){
     }
     bindNode(g,n); nodesG.appendChild(g);
   });
+  applyGlyphSizeRule();
   renderWires(signalState);
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
@@ -6220,6 +6240,7 @@ function collectPackageAssets(){
     const graphic=component.config?.presentation?.graphic;
     if(graphic?.kind==='custom'&&typeof graphic.svg==='string'&&graphic.svg.trim()){
       assets.push({id:`component:${component.id}:graphic`,kind:'svg',mime:'image/svg+xml',ownerId:component.id,text:graphic.svg});
+      if(typeof graphic.svgSmall==='string'&&graphic.svgSmall.trim())assets.push({id:`component:${component.id}:graphic-small`,kind:'svg',mime:'image/svg+xml',ownerId:component.id,text:graphic.svgSmall});
     }
   }
   return assets;
@@ -6749,7 +6770,7 @@ const SovSchematicAPI={
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
-  view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  view:{zoom:()=>currentZoom(),setZoom:(value)=>{zoomAt(Number(value)/currentZoom());return currentZoom()},appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
   tools:()=>SovSchematicData.operationTools()
 };
 window.SovSchematicAPI=SovSchematicAPI;

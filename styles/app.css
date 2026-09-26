@@ -117,6 +117,9 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 8px;c
 .wire-group.muted{opacity:.13}
 .wire-group.dormant{opacity:.46}
 .wire-group.dormant .wire-voltage{opacity:.16}
+.node .custom-graphic.glyph-small{display:none}
+.node.glyph-compact .custom-graphic.glyph-full{display:none}
+.node.glyph-compact .custom-graphic.glyph-small{display:inline}
 .wire{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:pointer;transition:stroke-width .1s,opacity .1s}
 .wire-voltage{fill:none;stroke:var(--voltage-ink,var(--wire-ink,var(--canvas-ink)));stroke-width:8;stroke-linecap:round;stroke-linejoin:round;opacity:.10;pointer-events:none}
 .wire-hit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}

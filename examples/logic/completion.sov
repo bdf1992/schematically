@@ -67,7 +67,8 @@
         "presentation": {
           "graphic": {
             "kind": "custom",
-            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H48A20 20 0 0 1 48 52H28Z\"/><path d=\"M68 32H90\"/>"
+            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H48A20 20 0 0 1 48 52H28Z\"/><path d=\"M68 32H90\"/>",
+            "svgSmall": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">&amp;</text>"
           }
         }
       }

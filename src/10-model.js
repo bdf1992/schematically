@@ -319,6 +319,7 @@ function componentConfig(n){
   if(!['symbol','custom','none'].includes(presentation.graphic.kind))presentation.graphic.kind='symbol';
   if(typeof presentation.graphic.ref!=='string')presentation.graphic.ref=`sym-${n.symbolId||'blank'}`;
   if(typeof presentation.graphic.svg!=='string')presentation.graphic.svg='';
+  if(presentation.graphic.svgSmall!==undefined&&typeof presentation.graphic.svgSmall!=='string')delete presentation.graphic.svgSmall;
   if(!presentation.size)presentation.size={w:112,h:84};
   presentation.size.w=Math.max(80,Math.min(520,Number(presentation.size.w)||112));
   presentation.size.h=Math.max(64,Math.min(420,Number(presentation.size.h)||84));

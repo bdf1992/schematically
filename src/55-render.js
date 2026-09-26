@@ -30,7 +30,7 @@ function sanitizeSvgElement(source){
   else for(const child of [...source.children||[]]){const safe=sanitizeSvgElement(child);if(safe)target.appendChild(safe)}
   return target;
 }
-function appendCustomSvgFragment(group,markup,box){
+function appendCustomSvgFragment(group,markup,box,variant=''){
   const raw=String(markup||'').trim();if(!raw)return false;
   const wrapped=/^<svg[\s>]/i.test(raw)?raw:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64">${raw}</svg>`;
   const doc=new DOMParser().parseFromString(wrapped,'image/svg+xml');
@@ -43,7 +43,7 @@ function appendCustomSvgFragment(group,markup,box){
   const tx=box.x+(box.w-vw*scale)/2-vx*scale;
   const ty=box.y+(box.h-vh*scale)/2-vy*scale;
   const safeGroup=document.createElementNS('http://www.w3.org/2000/svg','g');
-  safeGroup.setAttribute('class','custom-graphic');safeGroup.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`);safeGroup.setAttribute('fill','none');safeGroup.setAttribute('stroke','currentColor');safeGroup.setAttribute('stroke-width','2');
+  safeGroup.setAttribute('class','custom-graphic'+(variant?` glyph-${variant}`:''));safeGroup.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`);safeGroup.setAttribute('fill','none');safeGroup.setAttribute('stroke','currentColor');safeGroup.setAttribute('stroke-width','2');
   for(const child of [...root.children]){const safe=sanitizeSvgElement(child);if(safe)safeGroup.appendChild(safe)}
   if(!safeGroup.children.length)return false;
   group.appendChild(safeGroup);return true;
@@ -52,7 +52,14 @@ function appendComponentGraphic(g,n,cfg){
   const p=cfg.presentation;
   if(p.graphic.kind==='none')return;
   const box=componentInlineGraphicBox(n);
-  if(p.graphic.kind==='custom'&&appendCustomSvgFragment(g,p.graphic.svg,box))return;
+  if(p.graphic.kind==='custom'){
+    // A glyph may carry a small-size variant (VISUAL-LANGUAGE.md: a gate switches to its IEC
+    // rectangle when drawn under GLYPH_MIN_PX). Both are drawn; applyGlyphSizeRule shows one.
+    const small=typeof p.graphic.svgSmall==='string'&&p.graphic.svgSmall.trim();
+    if(small&&appendCustomSvgFragment(g,p.graphic.svg,box,'full')&&appendCustomSvgFragment(g,p.graphic.svgSmall,box,'small')){g.dataset.glyphH=String(box.h);return}
+    g.querySelectorAll('.custom-graphic').forEach(x=>x.remove());
+    if(appendCustomSvgFragment(g,p.graphic.svg,box))return;
+  }
   const use=document.createElementNS('http://www.w3.org/2000/svg','use');
   use.setAttribute('class','glyph');use.setAttribute('href',`#${(p.graphic.ref||`sym-${n.symbolId}`).replace(/^#/,'')}`);
   use.setAttribute('x',box.x);use.setAttribute('y',box.y);use.setAttribute('width',box.w);use.setAttribute('height',box.h);
@@ -160,6 +167,13 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   }
   appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);
 }
+const GLYPH_MIN_PX=40;
+// Show each component's small glyph when its full glyph would be drawn under GLYPH_MIN_PX on
+// screen. Runs after every render and every camera change; `zoom` overrides the camera
+// (an export draws at the document's own scale, zoom 1).
+function applyGlyphSizeRule(zoom=currentZoom()){
+  for(const g of nodesG.querySelectorAll('.node[data-glyph-h]'))g.classList.toggle('glyph-compact',Number(g.dataset.glyphH)*zoom<GLYPH_MIN_PX);
+}
 function render(){
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
@@ -199,6 +213,7 @@ function render(){
     }
     bindNode(g,n); nodesG.appendChild(g);
   });
+  applyGlyphSizeRule();
   renderWires(signalState);
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();

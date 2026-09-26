@@ -168,6 +168,7 @@ function collectPackageAssets(){
     const graphic=component.config?.presentation?.graphic;
     if(graphic?.kind==='custom'&&typeof graphic.svg==='string'&&graphic.svg.trim()){
       assets.push({id:`component:${component.id}:graphic`,kind:'svg',mime:'image/svg+xml',ownerId:component.id,text:graphic.svg});
+      if(typeof graphic.svgSmall==='string'&&graphic.svgSmall.trim())assets.push({id:`component:${component.id}:graphic-small`,kind:'svg',mime:'image/svg+xml',ownerId:component.id,text:graphic.svgSmall});
     }
   }
   return assets;

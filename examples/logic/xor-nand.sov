@@ -67,7 +67,8 @@
         "presentation": {
           "graphic": {
             "kind": "custom",
-            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>"
+            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>",
+            "svgSmall": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M70 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">&amp;</text>"
           }
         }
       }
@@ -105,7 +106,8 @@
         "presentation": {
           "graphic": {
             "kind": "custom",
-            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>"
+            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>",
+            "svgSmall": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M70 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">&amp;</text>"
           }
         }
       }
@@ -143,7 +145,8 @@
         "presentation": {
           "graphic": {
             "kind": "custom",
-            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>"
+            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>",
+            "svgSmall": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M70 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">&amp;</text>"
           }
         }
       }
@@ -181,7 +184,8 @@
         "presentation": {
           "graphic": {
             "kind": "custom",
-            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>"
+            "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>",
+            "svgSmall": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M70 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">&amp;</text>"
           }
         }
       }

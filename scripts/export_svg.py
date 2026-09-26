@@ -213,6 +213,8 @@ def export_documents(paths: list[Path], out_dir: Path | None = None, appearance:
             page.evaluate('([t,n])=>window.SovSchematicAPI.file.open(t,n)', [text, src.name])
             page.evaluate('()=>{ if (typeof fitDiagram === "function") fitDiagram(); }')
             page.wait_for_timeout(300)
+            # An export draws the document at its own scale: full glyphs, whatever the camera.
+            page.evaluate('()=>{ if (typeof applyGlyphSizeRule === "function") applyGlyphSizeRule(1); }')
             if logic is not None:
                 state = logic_state(src, logic)
                 page.evaluate(STATE_JS, {'wires': state['wires'], 'monochrome': monochrome})
