@@ -989,7 +989,7 @@ def main() -> None:
     # 07 loads alone under node through a bare require, and brings its two cores with it.
     bare = node(BARE, str(ROOT / 'src/07-state-space.js'))
     assert bare['global'] == 'object' and bare['data'] == 'object', bare
-    assert bare['patterns'] == ['truth_table@1', 'merge@1'], bare
+    assert bare['patterns'] == ['truth_table@1', 'merge@1', 'combine@1'], bare
     for key in ('validateRecord', 'patterns', 'pattern', 'loadPack', 'resolveDefinition', 'contractOf', 'bindDefinition', 'checkDocument'):
         assert key in bare['keys'], (key, bare['keys'])
     src = (ROOT / 'src/07-state-space.js').read_text(encoding='utf-8')
@@ -1037,6 +1037,7 @@ def main() -> None:
     assert r['patterns'] == [
         {'id': 'truth_table', 'version': 1, 'class': 'exact', 'stateful': False, 'blastRadius': 'local', 'validate': 'function', 'derive': 'function'},
         {'id': 'merge', 'version': 1, 'class': 'exact', 'stateful': False, 'blastRadius': 'local', 'validate': 'function', 'derive': 'function'},
+        {'id': 'combine', 'version': 1, 'class': 'exact', 'stateful': False, 'blastRadius': 'local', 'validate': 'function', 'derive': 'function'},
     ], r['patterns']
     assert r['patternLookup'] == {'tt': 'truth_table', 'merge': 'merge', 'missing': None, 'bare': None}, r['patternLookup']
     main_ch = [{'id': 'main'}]

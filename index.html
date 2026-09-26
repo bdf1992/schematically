@@ -2895,7 +2895,37 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       return {orderDependent,order:orderDependent?clone(parameters.order??{kind:'stochastic'}):null};
     }
   };
-  const PATTERNS=[truthTable,merge].map(p=>Object.freeze(p));
+  // combine@1: the graph core's level model as a pattern. Every incoming Wire is its own input (the
+  // latest level it delivered); control inputs gate: open when any is at or over the threshold. The
+  // output is the combine over the data inputs, 0 while closed. COMBINES are the graph core's.
+  const COMBINE_OPS={or:v=>Math.max(0,...v),max:v=>Math.max(0,...v),and:v=>v.length?Math.min(...v):0,min:v=>v.length?Math.min(...v):0,
+    not:v=>1-Math.max(0,...v),nand:v=>1-(v.length?Math.min(...v):0),nor:v=>1-Math.max(0,...v),buffer:v=>Math.max(0,...v),
+    xor:v=>v.filter(x=>x>=.5).length%2,mean:v=>v.length?v.reduce((a,b)=>a+b,0)/v.length:0,sum:v=>Math.min(1,v.reduce((a,b)=>a+b,0))};
+  const combinePattern={
+    id:'combine',version:1,class:'exact',stateful:false,blastRadius:'local',
+    validate(parameters){
+      const errors=[];
+      if(!isObject(parameters))return ['parameters must be an object'];
+      unknownKeys(parameters,['combine','threshold','data','control','outputs'],'parameters',errors);
+      if(!Object.keys(COMBINE_OPS).includes(parameters.combine))errors.push(`combine must be one of ${Object.keys(COMBINE_OPS).join(', ')}`);
+      if(typeof parameters.threshold!=='number'||!Number.isFinite(parameters.threshold))errors.push('threshold must be a number');
+      for(const key of ['data','control','outputs'])if(!Array.isArray(parameters[key])||!parameters[key].every(nonEmpty))errors.push(`${key} must be an array of port names`);
+      return errors;
+    },
+    derive(parameters){
+      const port=flow=>id=>({id,flow,channels:[{id:'main'}],observable:'logic.level',form:'binary'});
+      return {inputs:[...parameters.data.map(port('in')),...parameters.control.map(port('control'))],outputs:parameters.outputs.map(port('out')),state:null,
+        observables:[{id:'logic.level',form:'binary',unit:null,blastRadius:'local',staleness:0}]};
+    },
+    evaluate(parameters,inputValues){
+      const level=name=>inputValues?.[name]===true?1:0;
+      const open=!parameters.control.length||Math.max(...parameters.control.map(level))>=parameters.threshold;
+      const v=open?COMBINE_OPS[parameters.combine](parameters.data.map(level)):0,out={};
+      for(const name of parameters.outputs)out[name]=v>=.5;
+      return out;
+    }
+  };
+  const PATTERNS=[truthTable,merge,combinePattern].map(p=>Object.freeze(p));
   const refOf=p=>`${p.id}@${p.version}`;
   function patterns(){return PATTERNS.slice()}
   function pattern(ref){return PATTERNS.find(p=>refOf(p)===ref)||null}
@@ -3155,17 +3185,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   const specChannels=spec=>(Array.isArray(spec?.channels)&&spec.channels.length?spec.channels:[{id:'main'}]).map(c=>c.id);
   const specFlow=spec=>spec.flow||spec.defaultFlow||'duplex';
-  // The document's signal model is behaviour too. A Component with no bound definition that declares
-  // a signal (a gate glyph's combine, a lever, a config.signal) is read through the graph core's own
-  // signalConfig: a derived binary card becomes a truth_table@1 device over its in and out ports, an
-  // asserted one drives its level onto its out ports at power-on. One model, one engine.
-  const BINARY_COMBINE={and:v=>v.every(Boolean),min:v=>v.every(Boolean),or:v=>v.some(Boolean),max:v=>v.some(Boolean),
-    buffer:v=>v.some(Boolean),not:v=>!v.some(Boolean),nor:v=>!v.some(Boolean),nand:v=>!v.every(Boolean),xor:v=>v.filter(Boolean).length%2===1};
-  function combineTable(combine,n,m){
-    const rows=[];
-    for(let k=0;k<2**n;k++){const bits=[...Array(n)].map((_,i)=>(k>>(n-1-i))&1);const out=BINARY_COMBINE[combine](bits.map(Boolean))?1:0;rows.push([...bits,...Array(m).fill(out)])}
-    return rows;
-  }
+  // The document's signal model is behaviour too. A non-Point Component with no bound definition is
+  // read through the graph core's own signalConfig (its declared signal, a gate glyph's combine, or
+  // the editor's default): a derived card becomes a combine@1 device over the Wires that reach it, an
+  // asserted one drives its level onto its out ports at power-on, a square clock schedules its edges.
   function impliedDevices(d){
     const g=typeof globalThis!=='undefined'?globalThis:{},G=g.SovSchematicGraph,N=g.SovSchematicNotation,out={definitions:{},bind:{},sources:[],clocks:[]};
     if(!G?.signalConfig)return out;
@@ -3185,10 +3208,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(sig.clock){if(sig.clock.wave==='square'&&sig.clock.periodMs>0)for(const point of outs)out.clocks.push({entity:c.id,point,clock:clone(sig.clock)});continue}
       if(sig.kind!=='binary')continue;
       if(sig.mode==='derived'){
-        if(!BINARY_COMBINE[sig.combine]||!ins.length||ins.length>8||!outs.length||outs.length>8)continue;
-        const ref=`implied.${sig.combine}(${ins.join(',')})>(${outs.join(',')})@1`;
-        if(!out.definitions[ref])out.definitions[ref]={id:ref.slice(0,-2),version:1,pattern:'truth_table@1',delay:0,
-          parameters:{inputs:ins,outputs:outs,table:combineTable(sig.combine,ins.length,outs.length)}};
+        if(!outs.length)continue;
+        // One definition per card: its inputs are the Wires that reach it (topology fills data/control).
+        const ref=`implied.${sig.combine}[${c.id}]@1`;
+        out.definitions[ref]={id:ref.slice(0,-2),version:1,pattern:'combine@1',delay:0,
+          parameters:{combine:sig.combine,threshold:sig.threshold,data:[],control:[],outputs:outs}};
         out.bind[c.id]=ref;
       }else for(const point of outs)out.sources.push({entity:c.id,point,channel:'main',value:sig.value>=sig.threshold,at:0});
     }
@@ -3219,7 +3243,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const component of d.components){
       const config=isObject(component.config)?component.config:{};
       const ref=config.definition!==undefined&&config.definition!==null?config.definition:(bind[component.id]??null);
-      if(ref){const def=definitions[ref];components[component.id]={role:'device',definition:ref,inputs:def.parameters.inputs.slice(),outputs:def.parameters.outputs.slice()}}
+      if(ref){const def=definitions[ref],combine=def.pattern==='combine@1';
+        components[component.id]={role:'device',definition:ref,combine,inputs:combine?[]:def.parameters.inputs.slice(),outputs:def.parameters.outputs.slice()}}
       else components[component.id]={role:component.symbolId==='point'?'point':'absorb'};
       // A channel merge is read where checkDocument reads it: the stored port list, by port id.
       for(const port of Array.isArray(config.attachmentPoints)?config.attachmentPoints:[]){
@@ -3241,12 +3266,22 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const direction=['none','forward','reverse','duplex'].includes(config.direction)?config.direction:wire.duplex?'duplex':'forward';
       const declared=direction==='none'?[]:direction==='duplex'?['forward','reverse']:[direction];
       const theirs=new Set(ends.b.channels);
-      wires.push({id:wire.id,a:{entity:ends.a.entity,point:ends.a.point},b:{entity:ends.b.entity,point:ends.b.point},delay:wireDelay(config,tickMs),
-        forward:declared.includes('forward')&&EMITS.includes(ends.a.flow)&&RECEIVES.includes(ends.b.flow),
-        reverse:declared.includes('reverse')&&EMITS.includes(ends.b.flow)&&RECEIVES.includes(ends.a.flow),
+      const forward=declared.includes('forward')&&EMITS.includes(ends.a.flow)&&RECEIVES.includes(ends.b.flow);
+      const reverse=declared.includes('reverse')&&EMITS.includes(ends.b.flow)&&RECEIVES.includes(ends.a.flow);
+      // A Wire that reaches a combine device lands on its own input, `<port>:<wire>`: the device reads
+      // each Wire's latest level, as the graph core does, and never a merge of them.
+      const land=(end,into)=>{
+        const c=components[ends[end].entity];
+        if(!into||!c?.combine)return {entity:ends[end].entity,point:ends[end].point};
+        const name=`${ends[end].point}:${wire.id}`,params=definitions[c.definition].parameters;
+        (ends[end].flow==='control'||ends[end].point==='control'?params.control:params.data).push(name);c.inputs.push(name);
+        return {entity:ends[end].entity,point:name};
+      };
+      wires.push({id:wire.id,a:land('a',reverse),b:land('b',forward),delay:wireDelay(config,tickMs),forward,reverse,
         channels:ends.a.channels.filter(c=>theirs.has(c))});
     }
     wires.sort((x,y)=>cmp(x.id,y.id));
+    for(const c of Object.values(components))if(c.combine){const p=definitions[c.definition].parameters;p.data.sort();p.control.sort();c.inputs.sort()}
     return {components,merges,wires};
   }
   function inputRefusal(message){return {ok:false,code:'INPUT_INVALID',message}}
