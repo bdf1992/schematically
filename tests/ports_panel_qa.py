@@ -331,6 +331,54 @@ with sync_playwright() as p:
     moved = page.evaluate(STATE, 'and')
     assert moved['x'] != start['x'] and moved['placement'] == 'surface' and moved['specs'] == start['specs'], moved
 
+    # --- Amendment 1, steps 12-13: an arrow-key move is refused by the same hosting guard -------
+    # A lane between two Points; the bound Component sits three grid steps above the lane's middle
+    # run, clear of it, and Ctrl+ArrowDown moves it three grid steps (72px at the default grid, as
+    # measured in this build), onto the lane, so the move would settle it on the Wire. Setup places
+    # it; the click that selects it settles first.
+    LANE_MID = "()=>{const p=renderedWirePath(wires.find(w=>w.id==='lane2')),q=p.getPointAtLength(p.getTotalLength()/2);return {x:q.x,y:q.y}}"
+    page.evaluate("""()=>{const A=SovSchematicAPI,g=canvasGridSize;
+      A.create('component',{id:'l3',symbolId:'point',x:26*g,y:36*g});A.create('component',{id:'l4',symbolId:'point',x:54*g,y:36*g});
+      A.create('wire',{id:'lane2',a:'l3',aSide:'self',b:'l4',bSide:'self'});render()}""")
+    mid = page.evaluate(LANE_MID)
+    page.evaluate("([x,y])=>{const g=canvasGridSize,n=nodes.find(n=>n.id==='and');n.x=Math.round(x/g)*g;n.y=y-3*g;render()}", [mid['x'], mid['y']])
+    page.wait_for_timeout(450)
+    open_panel(page, 'and')
+    page.evaluate('()=>closeSelectionSettings()')
+    page.wait_for_timeout(450)
+    start = page.evaluate(STATE, 'and')
+    assert page.evaluate(LANE_MID) == mid and start['y'] + 3 * 24 == mid['y'], (page.evaluate(LANE_MID), mid, start['y'])
+    h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
+    page.keyboard.press('Control+ArrowDown')
+    page.wait_for_timeout(300)
+    after = page.evaluate(STATE, 'and')
+    assert (after['x'], after['y'], after['canvasId'], after['placement']) == (start['x'], start['y'], start['canvasId'], start['placement']), (start, after, status(page))
+    assert after['specs'] == start['specs'], after
+    refused(page, h, c, 'DEFINITION_PORTS', 'arrow-key settle on wire')
+    # An unbound Component making the same move settles on the Wire: the guard is only the definition's.
+    page.evaluate("([x,y])=>{const g=canvasGridSize;SovSchematicAPI.create('component',{id:'free2',symbolId:'act',x:Math.round(x/g)*g-10*g,y:y-3*g});render()}", [mid['x'], mid['y']])
+    page.wait_for_timeout(450)
+    open_panel(page, 'free2')
+    page.evaluate('()=>closeSelectionSettings()')
+    page.keyboard.press('Control+ArrowDown')
+    page.wait_for_timeout(300)
+    assert page.evaluate(STATE, 'free2')['placement'] == 'wire', page.evaluate(STATE, 'free2')
+    # Settling into an open interior by arrow keys stays allowed: up into the Plane `pl` (open by preset).
+    page.evaluate("()=>{const n=nodes.find(x=>x.id==='and');n.x=1008;n.y=432;render()}")
+    page.wait_for_timeout(450)
+    open_panel(page, 'and')
+    page.evaluate('()=>closeSelectionSettings()')
+    page.wait_for_timeout(450)
+    start = page.evaluate(STATE, 'and')
+    for _ in range(6):
+        page.keyboard.press('Control+ArrowUp')
+        page.wait_for_timeout(200)
+        if page.evaluate(STATE, 'and')['canvasId'] != start['canvasId']:
+            break
+    inside = page.evaluate(STATE, 'and')
+    assert inside['canvasId'] == 'canvas:component:pl' and inside['placement'] == 'surface' and inside['specs'] == start['specs'], inside
+    assert 'DEFINITION_PORTS' not in status(page), status(page)
+
     # --- Step 9, the panel half: a Point's declared self survives an edit in its panel, save and reload.
     page.evaluate("""()=>{SovSchematicAPI.create('component',{id:'J',symbolId:'point',x:1100,y:420,
       config:{attachmentPoints:[{id:'self',flow:'in',channels:[{id:'main',merge:{combine:'or'}}]}]}});render()}""")

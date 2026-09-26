@@ -180,12 +180,13 @@ compat id) on the right, at the first of .5, .25, .75, .125, .375, .625, .875 no
 - **Moving a port** happens only here (side, `t`): dragging a port starts a Wire.
 - **Definition-owned ports.** On a Component with `config.definition`, the id, flow, channels and Remove controls are
   disabled with a title naming the definition, and "Add port" is disabled; label, side and `t` stay editable.
-- **Guarded gestures.** Settling (dragging) a bound Component on a Wire, a Path or a Plane boundary, or any host that
-  would change the ports it exposes, is refused with `DEFINITION_PORTS` in the status line, and every Component the
-  gesture moved returns to where it was; the Form panel's dimension and Attachments controls refuse the same way; the
-  bar retype was already refused (`applySymbol`). All of them ask the data core's owned-port rule
-  (`assertDefinitionPortsKept`). Not yet guarded: an arrow-key move that ends within reach of a Wire settles the
-  Component there (`finishKeyboardMove` in `30-canvas.js`, outside contract 0b-2); `checkDocument` still reports the
-  result (`DEFINITION_PORTS`).
+- **Guarded gestures.** One hosting guard, `componentHostRefusal` in `30-canvas.js`, is checked by
+  `applyComponentHost` (the one place a Component's host changes) before anything is applied. It asks the data core's
+  owned-port rule (`assertDefinitionPortsKept`), so settling a bound Component on a Wire, a Path or a Plane boundary,
+  or any host that would change the ports it exposes, is refused with `DEFINITION_PORTS` in the status line, by a
+  pointer drag or an arrow-key move alike, and every Component the gesture moved returns to where it was, with no
+  history entry. A pointer drag asks the same guard for every root before applying any, so one refusal refuses the
+  whole group. Settling into an open interior stays allowed. The Form panel's dimension and Attachments controls ask
+  the same owned-port rule; the bar retype was already refused (`applySymbol`).
 
 Still planned: a Wire carrying several channels at run time, and the channel-merge editor.

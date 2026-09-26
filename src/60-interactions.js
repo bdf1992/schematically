@@ -136,20 +136,6 @@ function updateActiveNodeDrag(e){
   armHostCandidate(state,target);
   if(settleTimer){clearTimeout(settleTimer);settleTimer=null}scheduleDragVisualRefresh();scheduleDragSettle(state.modifiers);
 }
-// A Component bound to a definition keeps the ports the definition gave it. Settling it on a
-// host that would change the ports it exposes (a Wire, a Path or a Plane boundary lowers its
-// effective dimension) is refused by the data core's owned-port rule; the message is returned.
-function settleHostPlacement(candidate){
-  if(candidate?.kind==='wire')return {canvasId:candidate.canvasId,placement:{kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t}};
-  if(candidate?.kind==='path'||candidate?.kind==='edge')return {canvasId:candidate.canvasId,placement:{kind:candidate.kind,hostId:candidate.entity.id,t:candidate.placement.t,...(candidate.kind==='edge'?{side:candidate.placement.side}:{})}};
-  if(candidate?.kind==='component')return {canvasId:candidate.canvasId,placement:{kind:'surface'}};
-  return {canvasId:GLOBAL_CANVAS_ID,placement:{kind:'surface'}};
-}
-function definitionSettleRefusal(node,candidate){
-  if(!componentDefinitionOwner(node))return null;
-  const trial=SovSchematicData.clone(node),host=settleHostPlacement(candidate);trial.canvasId=host.canvasId;trial.placement=host.placement;
-  try{SovSchematicData.assertDefinitionPortsKept(node,{placement:host.placement},trial);return null}catch(error){return error.message}
-}
 function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
   const state=activeNodeDragState;if(!state)return;if(!force&&e?.pointerId!=null&&e.pointerId!==state.pointerId)return;
   const pointerId=state.pointerId;let fault=null,refusal=null;
@@ -167,7 +153,8 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
       }else candidate=componentHostCandidateAtPoint(root);
       plan.push({root,candidate});
     }
-    refusal=plan.map(({root,candidate})=>definitionSettleRefusal(root,candidate)).find(Boolean)||null;
+    // The hosting guard (componentHostRefusal, 30-canvas.js) is asked for every root before any is applied.
+    refusal=plan.map(({root,candidate})=>componentHostRefusal(root,candidate)).find(Boolean)||null;
     if(refusal){
       // The gesture is refused: every moved Component returns to where it started.
       for(const item of state.startPositions||[]){item.node.x=item.x;item.node.y=item.y}
