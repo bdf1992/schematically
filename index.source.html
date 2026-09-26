@@ -296,9 +296,26 @@
             <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Access rules</summary><div>Checked where work or a level crosses this plane's boundary. Patterns: exact, prefix:*, or *. A deny always wins; no principal is refused.</div></details>
           </div>
         </details>
-        <details class="form-settings">
-          <summary><b>Appearance</b><span class="helper-snippet">graphic · size · material</span></summary>
-          <div class="settings-grid settings-grid-compact">
+        <!-- Appearance is tiered by how often a field is reached for (#23): the frequent three first,
+             size next, the Form's material and frame behind one disclosure, text and SVG behind another. -->
+        <details class="form-settings" id="appearanceSettings">
+          <summary><b>Appearance</b><span class="helper-snippet">label · graphic · signal · size</span></summary>
+          <div class="settings-grid settings-grid-three appearance-tier" id="appearanceFrequent">
+          <label>Label
+            <select id="visualLabelMode" title="Where the label is drawn">
+              <option value="boundary">Boundary</option>
+              <option value="inside">Inside</option>
+              <option value="outside">Outside</option>
+              <option value="none">Hidden</option>
+            </select>
+          </label>
+          <label data-dims="12">Graphic
+            <select id="visualGraphicMode" title="What is drawn inside the Component">
+              <option value="symbol">Symbol</option>
+              <option value="custom">Custom SVG</option>
+              <option value="none">None</option>
+            </select>
+          </label>
           <label>Signal
             <select id="barComponentSignalMode" aria-label="Component signal mode" title="Signal behavior">
               <option value="source">Source</option>
@@ -306,52 +323,49 @@
               <option value="passive">Passive</option>
             </select>
           </label>
-          <label data-dims="12">Graphic
-            <select id="visualGraphicMode">
-              <option value="symbol">Symbol</option>
-              <option value="custom">Custom SVG</option>
-              <option value="none">None</option>
-            </select>
-          </label>
-          <label>Label
-            <select id="visualLabelMode">
-              <option value="boundary">Boundary</option>
-              <option value="inside">Inside</option>
-              <option value="outside">Outside</option>
-              <option value="none">Hidden</option>
-            </select>
-          </label>
+          </div>
+          <div class="settings-grid settings-grid-three appearance-tier" id="appearanceGeometry" data-dims="12" title="Size follows the handles on the canvas; type a number to set it exactly">
           <label data-dims="12">Width <input id="visualWidth" type="number" min="80" step="8"></label>
           <label data-dims="2">Height <input id="visualHeight" type="number" min="64" step="8"></label>
           <label data-dims="2">Interior <button id="visualInteriorColor" class="color-slot-chip" type="button" aria-label="Interior palette slot"></button></label>
-          <label data-dims="2">Material
-            <select id="formMaterial">
-              <option value="generic">Generic</option>
-              <option value="canvas">Canvas</option>
-              <option value="paper">Paper</option>
-              <option value="panel">Panel</option>
-              <option value="wood">Wood</option>
-              <option value="metal">Metal</option>
-              <option value="glass">Glass</option>
-              <option value="custom">Custom</option>
-            </select>
-          </label>
-          <label>Thickness <input id="formBodyThickness" type="number" min="0" max="128" step="1" title="Point radius · Path stroke · Plane depth"></label>
-          <label data-dims="2">Frame
-            <select id="formFrameMode">
-              <option value="none">None</option>
-              <option value="frame">Frame</option>
-              <option value="shell">Shell</option>
-            </select>
-          </label>
-          <label data-dims="2">Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
-          <label data-dims="2">Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
-        </div>
-        <label class="settings-wide" data-dims="12">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
-        <label class="settings-wide" id="visualSvgRow">SVG · viewBox 0 0 96 64
-          <textarea id="visualSvgMarkup" spellcheck="false" placeholder="&lt;path d=&quot;...&quot;/&gt;"></textarea>
-        </label>
-        <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> SVG rules</summary><div>Custom SVG is sanitized and kept inside the Component boundary.</div></details>
+          </div>
+          <details class="mini-disclosure appearance-disclosure" id="appearanceFormTier">
+            <summary><span class="info-dot">+</span> Form appearance <span class="helper-snippet">material · thickness · frame</span></summary>
+            <div class="settings-grid settings-grid-compact appearance-tier">
+            <label data-dims="2">Material
+              <select id="formMaterial">
+                <option value="generic">Generic</option>
+                <option value="canvas">Canvas</option>
+                <option value="paper">Paper</option>
+                <option value="panel">Panel</option>
+                <option value="wood">Wood</option>
+                <option value="metal">Metal</option>
+                <option value="glass">Glass</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label>Thickness <input id="formBodyThickness" type="number" min="0" max="128" step="1" title="Point radius · Path stroke · Plane depth"></label>
+            <label data-dims="2">Frame
+              <select id="formFrameMode">
+                <option value="none">None</option>
+                <option value="frame">Frame</option>
+                <option value="shell">Shell</option>
+              </select>
+            </label>
+            <label data-dims="2">Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
+            <label data-dims="2">Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
+            </div>
+          </details>
+          <details class="mini-disclosure appearance-disclosure" id="appearanceAdvancedTier">
+            <summary><span class="info-dot">+</span> Advanced <span class="helper-snippet">text · SVG</span></summary>
+            <div class="appearance-tier">
+            <label class="settings-wide" data-dims="12">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
+            <label class="settings-wide" id="visualSvgRow">SVG · viewBox 0 0 96 64
+              <textarea id="visualSvgMarkup" spellcheck="false" placeholder="&lt;path d=&quot;...&quot;/&gt;"></textarea>
+            </label>
+            <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> SVG rules</summary><div>Custom SVG is sanitized and kept inside the Component boundary.</div></details>
+            </div>
+          </details>
         </details>
       </div>
 

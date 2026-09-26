@@ -9,7 +9,8 @@ function mutateSelectedPresentation(mutator,{reroute=false}={}){
   render();selectNode(n.id,{focus:!preserveEditorFocus});scheduleHistoryCapture();
   openSelectionSettings('component');syncComponentVisualPanel(n);
 }
-visualGraphicMode.addEventListener('change',()=>mutateSelectedPresentation(p=>{p.graphic.kind=visualGraphicMode.value;visualSvgRow.hidden=p.graphic.kind!=='custom'}));
+// Choosing Custom SVG opens the Advanced tier, where the SVG lives (#23), so the choice has somewhere to go.
+visualGraphicMode.addEventListener('change',()=>mutateSelectedPresentation(p=>{p.graphic.kind=visualGraphicMode.value;visualSvgRow.hidden=p.graphic.kind!=='custom';if(p.graphic.kind==='custom')appearanceAdvancedTier.open=true}));
 visualLabelMode.addEventListener('change',()=>mutateSelectedPresentation(p=>p.labelMode=visualLabelMode.value));
 visualWidth.addEventListener('change',()=>mutateSelectedPresentation(p=>p.size.w=visualWidth.value,{reroute:true}));
 visualHeight.addEventListener('change',()=>mutateSelectedPresentation(p=>p.size.h=visualHeight.value,{reroute:true}));

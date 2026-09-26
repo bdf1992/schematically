@@ -287,6 +287,8 @@ function rectOverlapArea(a,b){if(!a||!b)return 0;const w=Math.min(a.right,b.righ
 function placeSelectionSettingsPanel(){
   const panel=selectionSettingsPanel;if(panel.hidden||selectionBar.hidden)return;
   const bar=selectionBar.getBoundingClientRect(),wrap=document.querySelector('.workspace-wrap').getBoundingClientRect();
+  // The panel never outgrows the workspace: with several sections open it scrolls inside (#23).
+  panel.style.maxHeight=`${Math.max(120,Math.floor(wrap.height-16))}px`;
   const w=panel.offsetWidth||360,h=panel.offsetHeight||240,gap=6,margin=8,entity=selectedEntityScreenRect();
   const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
   const anchorRight=Math.max(bar.right,entity?.right??bar.right),anchorLeft=Math.min(bar.left,entity?.left??bar.left);
@@ -306,6 +308,9 @@ function placeSelectionSettingsPanel(){
   panel.dataset.place=pick.place;panel.style.transform='none';
   panel.style.left=`${pick.left-bar.left}px`;panel.style.top=`${pick.top-bar.top}px`;
 }
+// Opening or closing a section changes the panel's height, so it is placed again (#22, #23). `toggle`
+// does not bubble; the capture listener on the panel still sees every section's.
+selectionSettingsPanel.addEventListener('toggle',()=>placeSelectionSettingsPanel(),true);
 function selectedSurfaceKind(){
   if(typeof selected==='string'&&selected.startsWith('wire:'))return 'wire';
   if(isAttachmentSelectionValue(selected))return 'port';
