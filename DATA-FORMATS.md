@@ -117,9 +117,12 @@ The loader never writes template ports into the stored array, and never refuses 
 into exactly the authored ports it exposes (`t` coerced to a number and clamped to `0..1`, an invalid `flow` read as
 `duplex`, absent or empty `channels` read as `main`, entries with no valid side dropped). An entry whose id or
 compat id collides with an earlier one is dropped too, unless a bound Wire end refers to it (by its original id or
-its declared compat id) and that reference is not the id of a surviving port: that entry is instead kept under a
-fresh id (`<id>~2`, `<id>~3`, ...) and the Wire end is rebound to it by `pointId`, so loading never unbinds a Wire
-on a collision. A Wire on a duplicated id (two entries `a`) stays on the surviving `a`, and the copy is dropped.
+its declared compat id) and that reference names no surviving port: that entry is instead kept under a fresh id
+(`<id>~2`, `<id>~3`, ...) and the Wire end is rebound to it by `pointId`, so loading never unbinds a Wire on a
+collision. A `pointId` reference names a surviving port by its id; a reference stored only as `aSide`/`bSide` names
+one by its id or its compat id. A Wire on a duplicated id (two entries `a`) stays on the surviving `a`, and the copy
+is dropped; a Wire stored as `bSide: "in"` beside an authored duplicate `in` stays on the template's `left` (whose
+compat id is `in`), and no `in~2` is made.
 A retype keeps the new template's ports in order, an authored port with a template id replacing it, followed by the
 remaining authored ports, stored in the smallest form. It is refused with `PORT_IN_USE` when it would leave a bound
 Wire end resolving to a different port id than before (a compat-id match to a different port counts as moving it),
@@ -131,6 +134,10 @@ refused for a repeated id or compat id, an invalid side, t or flow, or a repeate
 (a port list, `attachmentDefaults: none`, a retype) is refused with `PORT_IN_USE` when it would remove a port a Wire
 ends on or move it to a different port id, and with `CHANNEL_MISMATCH` when it would leave a Wire between two ports
 sharing no channel, so a saved document always passes validation. See `ATTACHMENT-POINT-MODEL.md`, *Declared ports*.
+
+The editor's Ports panel (in a 2D Component's settings, below Attachments) sends every edit the same way: the
+complete port list, with `attachmentDefaults: none`, through the component `update`, which stores it in the smallest
+form. See `ATTACHMENT-POINT-MODEL.md`, *The Ports panel*.
 
 
 ## Compact records (dev, 2026-09-01)
@@ -214,7 +221,9 @@ A `.sov` carries three pieces of authored state-space data, and nothing a run co
   `canonicalAttachmentPointDescriptors` reads them) would differ, which includes a change of host (`placement`) or
   of dimension (`form.dimension`), or when it would set `attachmentDefaults` to anything but `none` or change
   `symbolId`; `applySymbol` (the bar retype) refuses a bound Component the same way. Moving (`side`, `t`),
-  relabelling and channel `merge` edits are allowed. Setting `config.definition` to `null` unbinds and leaves the
+  relabelling and channel `merge` edits are allowed. Deleting a Component makes the Components on its interior fall
+  back to its canvas; a `delete` that would change a bound one's exposed ports that way (the canvas is a Wire's) is
+  refused with `DEFINITION_PORTS`, and nothing is deleted. Setting `config.definition` to `null` unbinds and leaves the
   ports as stored.
 - **`config.delay`** on a Wire: its propagation delay in logical ticks, an integer >= 1. Absent means 1 and is not
   written. A Wire `update` with `delay: null` removes it. A Wire `create` or `update` carrying any other value is
@@ -223,8 +232,14 @@ A `.sov` carries three pieces of authored state-space data, and nothing a run co
 - **A Point's `self`.** A Point (0D) has one port, `self`, and may declare it, to give it channels and merges, as a
   single `attachmentPoints` entry `{id: 'self', flow?, channels}` with no `side` or `t`. Loading reads the placeholder
   form the first runtime wrote (with `side`/`t`) the same way and cleans it to this form; `compactDocument` writes this
-  form. The Point still exposes exactly `self`; its declared channels and merges are what `checkDocument` and the
-  runtime read.
+  form. A `flow` equal to the default `duplex` is left out of the clean form, so the placeholder and clean forms, each
+  with or without an explicit `flow: "duplex"`, store and hash (`documentHash`) the same. A component `create` or
+  `update` on a Point may set it: `attachmentPoints` is then exactly one entry, `{id: 'self', flow?, channels}` (any
+  other key, another id or a second entry is refused with `PORTS_INVALID`), checked like a declared port's (a valid
+  flow; channels a non-empty list of unique, non-empty ids; a valid `merge`), stored in the clean form, and refused
+  with `CHANNEL_MISMATCH` when a bound Wire would share no channel. An empty list removes the declaration. `self`
+  itself always stays, so `PORT_IN_USE` never arises. The Point still exposes exactly `self`; its declared channels
+  and merges are what `checkDocument` and the runtime read.
 
 ```json
 {"id": "self", "channels": [{"id": "main", "merge": {"combine": "or"}}]}

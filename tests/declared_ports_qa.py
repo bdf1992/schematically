@@ -308,6 +308,31 @@ out.planePreset=D.templatePreset('plane');
   out.followUps=r;
 }
 
+// Contract 0b-2, step 8 (#47 follow-up): the surviving set holds compat ids too. A Wire stored as
+// `in` (the compat id of the template's `left`) beside an authored duplicate `in` stays on `left`;
+// no `in~2` is made. A Wire naming `in` by pointId still names the authored entry by id (#46).
+{
+  const r={};
+  const file=wire=>({schema:D.DOCUMENT_SCHEMA,id:'compatEdge',revision:0,references:[],components:[
+    {id:'p',symbolId:'point',x:0,y:0},
+    {id:'g',symbolId:'act',x:300,y:0,config:{attachmentPoints:[{id:'in',side:'bottom',t:.25,flow:'in'}]}}
+  ],wires:[{id:'w',a:'p',aSide:'self',b:'g',...wire}]});
+  const view=d=>{const g=d.components.find(c=>c.id==='g');return {ids:ids(g),stored:g.config.attachmentPoints??null,wire:[d.wires[0].bAttachment.pointId,d.wires[0].bSide],side:A.resolveSpec(g,d.wires[0].bAttachment.pointId).side}};
+  for(const [key,wire] of Object.entries({side:{bSide:'in'},pointId:{bAttachment:{pointId:'in'}}})){
+    const once=D.documentFromFilePayload(clone(file(wire))),twice=D.normalizeDocument(D.normalizeDocument(clone(once))),back=reload(once);
+    r[key]={once:view(once),twice:view(twice),back:view(back),valid:D.validateDocument(once).ok};
+  }
+  out.compatEdge=r;
+}
+
+// Contract 0b-2, step 9: compactDocument output for every example is unchanged (hashes taken at f676563).
+out.compactHashes={};
+for(const file of JSON.parse(process.argv[5])){
+  const raw=JSON.parse(fs.readFileSync(file,'utf8')),compact=D.compactDocument(D.documentFromFilePayload(raw));
+  if(!(raw.document||raw).meta?.updatedAt&&compact.meta)delete compact.meta.updatedAt; // makeDocument stamps a missing one with now
+  out.compactHashes[file]=globalThis.SovSchematicCanonical.sha256Hex(globalThis.SovSchematicCanonical.canonicalize(compact));
+}
+
 // Step 5 + 9: every example round-trips with the same port ids, bound ports and stored forms.
 out.examples={};
 for(const file of JSON.parse(process.argv[4])){
@@ -319,6 +344,27 @@ for(const file of JSON.parse(process.argv[4])){
 }
 console.log(JSON.stringify(out));
 """
+
+
+# compactDocument(documentFromFilePayload(file)), canonicalized and hashed, as the code at f676563
+# (before contract 0b-2) wrote it; contract 0b-2, step 9 keeps every one unchanged.
+COMPACT_HASHES = {
+    'examples/01-source-hold.sov': 'f84a33ba9687de18bcc2b4eec58318047102d7452f48d993dca61bc715141f0b',
+    'examples/02-duplex-buffer.sov': 'a3514bf517c8bbce3f3db07e67af0f6dbc463b88ae799d2bb677d1186ccd810b',
+    'examples/03-contained-stage.sov': '967a85e9c65922b7acc2b7059d064f49411f1c247b8467aae15764d693ea497a',
+    'examples/04-boundary-port.sov': '07c55423ef8cd7f64782846913904d76fed7aae85c13d2b13558164ce793bff3',
+    'examples/05-rate-chain.sov': '15de44503e19699b89fffc09fb23643ba3c73e322063074901fad00b16c21e87',
+    'examples/06-read-write-evidence.sov': '9dd86dd27f104d07f7e621a33895dad6f7be4ae0c9e6ad35670f0444e5e202fd',
+    'examples/07-plane-with-points.sov': 'f4b02c71f1325791cd31c96461ade1352c14edd8f6ab38fce2c100b2c1ca5362',
+    'examples/08-gated-service.sov': '8533d19c195e349fcc583372b6f92c65fd9b3ecd3c9b39249d2acdfa96c80933',
+    'examples/blank.sov': 'd2d0606caeaecb459544b398f92a7c3c80dc124822565db17a9886ed07581e2e',
+    'examples/state/and.sov': 'c8db904a557ff9c2b5f53b8edcbf06f984472685c9a33fa5dc3e92c4138a1b4f',
+    'examples/state/merge.or.sov': '1faa851f526622cf44bbf66398a52dcc077bf92a4daf56d94d1996bc4dcb417b',
+    'examples/state/merge.sov': 'ac82f767cd90b6bf6628f24ec480c0099288fc4e259062b7d666167842ec2d38',
+    'examples/state/merge.stochastic.sov': '1a6ef98b5fcd3228571d11d6e96da8425959da7ebf68aec713c88113a46c0c10',
+    'examples/state/not-loop.sov': '51b5caa23a859d91371ed13d3142284e9d89dd57a83f1df8e5c07054089b48bd',
+    'examples/state/not.sov': 'b2a3cfece5eec2af2e4696bec7b15ebdd148b90e58b682f78e71852222a1c2fd',
+}
 
 
 def typed_symbols() -> list[str]:
@@ -362,7 +408,7 @@ def main() -> None:
 
     examples = sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'examples').glob('*.sov'))
     assert examples, 'no examples'
-    r = node(CORE, str(ROOT / 'src/05-data-core.js'), json.dumps(typed_symbols()), json.dumps(TRIO), json.dumps(examples))
+    r = node(CORE, str(ROOT / 'src/05-data-core.js'), json.dumps(typed_symbols()), json.dumps(TRIO), json.dumps(examples), json.dumps(sorted(COMPACT_HASHES)))
 
     # Step 2: every typed template declares the trio; the Plane declares none.
     assert len(r['symbols']) >= 10, r['symbols']
@@ -499,6 +545,21 @@ def main() -> None:
     assert rr['ok'] is False and 'PORT_IN_USE' in rr['msg'] and 'would move' in rr['msg'] and rr['ids'] == ['in'] and rr['wire'] == 'in', rr
     pe = fu['pointException']
     assert pe['ok'] is True and pe['msg'] == '' and pe['ids'] == ['self'] and pe['wire'] == 'self', pe
+
+    # Contract 0b-2, step 8: a Wire stored as `in` stays on the template's `left`; no `in~2`.
+    ce = r['compatEdge']
+    on_left = {'ids': ['left', 'right', 'top', 'in~2'], 'stored': [{'id': 'in~2', 'side': 'bottom', 't': .25, 'flow': 'in', 'channels': m}], 'wire': ['in~2', 'in~2'], 'side': 'bottom'}
+    stays = {'ids': ['left', 'right', 'top'], 'stored': [], 'wire': ['left', 'in'], 'side': 'left'}
+    for key in ('once', 'twice', 'back'):
+        # Saving drops the emptied list, so the reloaded record has none.
+        assert ce['side'][key] == ({**stays, 'stored': None} if key == 'back' else stays), (key, ce['side'][key])
+        # By pointId the reference names the authored entry's id, which #46 keeps under a fresh id.
+        assert ce['pointId'][key] == on_left, (key, ce['pointId'][key])
+    assert ce['side']['valid'] and ce['pointId']['valid'], ce
+
+    # Contract 0b-2, step 9: compactDocument output for every example is unchanged.
+    assert set(COMPACT_HASHES) >= set(examples), sorted(set(examples) - set(COMPACT_HASHES))
+    assert r['compactHashes'] == COMPACT_HASHES, {k: v for k, v in r['compactHashes'].items() if COMPACT_HASHES.get(k) != v}
 
     # Steps 5 + 9: every example round-trips unchanged; stored forms are saved as authored.
     for file, ex in r['examples'].items():

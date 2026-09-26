@@ -253,6 +253,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .settings-action{margin-top:8px}
 .settings-readout{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:10px;color:var(--muted)}
 .settings-note{margin-top:7px}
+.ports-settings{padding:0 8px 8px}
+.ports-settings[hidden]{display:none}
+.ports-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline;font-size:10px;margin-bottom:4px}
+.ports-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:6px 0;border-top:1px solid var(--line)}
+.ports-row .port-channels{grid-column:span 2}
+.ports-row input[readonly],.ports-row :disabled{color:var(--muted);background:var(--hover)}
+.ports-row input,.ports-row select,.ports-row button{min-width:0}
+.ports-row .port-remove{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font-size:10px;cursor:pointer;min-height:29px}
+.ports-row .port-remove:hover:not(:disabled){background:var(--hover)}
 .color-slot-panel{z-index:36}
 
 /* Diegetic component transforms live on the selected object, not in the command bar. */

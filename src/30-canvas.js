@@ -488,12 +488,14 @@ function keyboardMoveStep(e){
   if(e.shiftKey) return Math.max(1,canvasGridSize/2);
   return canvasGridSize;
 }
+let keyboardMoveStart=null; // where a keyboard move started, so a refused host can put it back
 function beginKeyboardMove(node){
   if(!node) return;
   if(keyboardMoveNodeId===node.id) return;
 
   if(keyboardMoveNodeId) finishKeyboardMove({});
   keyboardMoveNodeId=node.id;
+  keyboardMoveStart=[node,...descendantsOf(node.id)].map(item=>({node:item,x:item.x,y:item.y}));
   activeNodeDrag=node.id;
   captureDragSnapshots(node.id);
   workspace.classList.add('dragging-node');
@@ -531,14 +533,16 @@ function finishKeyboardMove(mods){
   // Arrow-key steps are intentionally aligned to the selected grid unless Alt
   // was used. Settling still applies the same rule for consistency.
   settleActiveComponent(mods);
-  const movedNode=nodes.find(n=>n.id===keyboardMoveNodeId);if(movedNode)updateContainmentFor(movedNode);
-  settleDraggedRoutes();
+  const movedNode=nodes.find(n=>n.id===keyboardMoveNodeId),hosted=movedNode?updateContainmentFor(movedNode):null;
+  // A refused host refuses the move: the Component and what it carries return to where it started.
+  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();render()}
+  else settleDraggedRoutes();
 
-  keyboardMoveNodeId=null;
+  keyboardMoveNodeId=null;keyboardMoveStart=null;
   activeNodeDrag=null;
   dragRouteSnapshots.clear();
   workspace.classList.remove('dragging-node');
-  statusEl.textContent='Select';
+  statusEl.textContent=hosted?.refused||'Select';
   renderWires();
   positionSelectionBar();
 }
@@ -710,9 +714,31 @@ function componentHostCandidateAtPoint(node,x=node.x,y=node.y){
   for(const w of wires){if(entityEditorState(w).hidden||ownedIds.has(w.a)||ownedIds.has(w.b))continue;const q=nearestPointOnSvgPath(renderedWirePath(w),x,y);if(q&&q.distance<=24)consider({kind:'wire',entity:w,canvasId:wireCanvas(w).id,placement:q})}
   return best;
 }
+// The host a candidate gives a Component: its canvas and its placement kind. applyComponentHost
+// applies it; componentHostRefusal checks it first. A `canvas` candidate is a fall-back onto a
+// canvas (see componentFallbackPlan); it keeps the Component's placement.
+function componentHostTarget(candidate,node=null){
+  if(candidate?.kind==='canvas')return {canvasId:candidate.canvasId,placement:SovSchematicData.clone(node?.placement)||{kind:'surface'}};
+  if(['component','path','edge'].includes(candidate?.kind))return {canvasId:candidate.canvasId,placement:candidate.kind==='component'?{kind:'surface'}:{kind:candidate.kind,hostId:candidate.entity.id,t:candidate.placement.t,...(candidate.kind==='edge'?{side:candidate.placement.side}:{})}};
+  if(candidate?.kind==='wire')return {canvasId:candidate.canvasId,placement:{kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t}};
+  return {canvasId:GLOBAL_CANVAS_ID,placement:{kind:'surface'}};
+}
+// The one hosting guard. A Component bound to a definition keeps the ports the definition gave
+// it: a host that would change the ports it exposes (a Wire, a Path or a Plane boundary lowers its
+// effective dimension) is refused by the data core's owned-port rule. Returns the refusal, or null.
+function componentHostRefusal(node,candidate){
+  if(!componentDefinitionOwner(node))return null;
+  const target=componentHostTarget(candidate,node),trial=SovSchematicData.clone(node);trial.canvasId=target.canvasId;trial.placement=target.placement;
+  try{SovSchematicData.assertDefinitionPortsKept(node,{placement:target.placement},trial);return null}catch(error){return error.message}
+}
+// Every host change goes through here, checked before anything is applied. A refused host leaves
+// the Component as it was and returns {refused: message}; otherwise it returns the candidate.
 function applyComponentHost(node,candidate){
   if(!node)return null;
-  if(candidate?.kind==='component'){
+  const refusal=componentHostRefusal(node,candidate);if(refusal){statusEl.textContent=refusal;return {refused:refusal}}
+  if(candidate?.kind==='canvas'){
+    node.canvasId=candidate.canvasId;node.parentId=canvasOwnerComponentId(candidate.canvasId);
+  }else if(candidate?.kind==='component'){
     node.canvasId=candidate.canvasId;node.parentId=candidate.entity.id;node.placement={kind:'surface',x:node.x,y:node.y};wireHostPoseCache.delete(node.id)
   }else if(candidate?.kind==='wire'){
     node.canvasId=candidate.canvasId;node.parentId=null;node.placement={kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t};node.x=candidate.placement.x;node.y=candidate.placement.y;
@@ -726,6 +752,20 @@ function applyComponentHost(node,candidate){
   }
   syncNodeBoundaryContext(node);for(const child of descendantsOf(node.id))syncNodeBoundaryContext(child);return candidate;
 }
+// When a host stops hosting (its interior closes, it is retyped or changes dimension, or it is
+// deleted), the Components on its interior fall back to the host's own canvas. The plan is decided
+// here, before the host edit; componentHostPlanRefusal checks every step with the hosting guard, and
+// applyComponentHostPlan applies them. One refused child refuses the whole edit.
+function componentFallbackPlan(host){
+  if(!host)return [];
+  const canvasId=host.canvasId||GLOBAL_CANVAS_ID;
+  return nodes.filter(q=>parentComponent(q)?.id===host.id).map(node=>({node,candidate:{kind:'canvas',canvasId}}));
+}
+function componentHostPlanRefusal(plan){
+  for(const {node,candidate} of plan||[]){const refusal=componentHostRefusal(node,candidate);if(refusal)return refusal}
+  return null;
+}
+function applyComponentHostPlan(plan){for(const {node,candidate} of plan||[])applyComponentHost(node,candidate)}
 function updateContainmentFor(node){if(!node)return null;return applyComponentHost(node,componentHostCandidateAtPoint(node))}
 function moveDescendantsWithState(state,dx,dy){
   for(const item of state.descendantOrigins||[]){

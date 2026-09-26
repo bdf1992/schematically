@@ -44,6 +44,7 @@ BROWSER=[
     'tests/plane_boundary_routing_qa.py',
     'tests/tray_settle_qa.py',
     'tests/beta20_ports_history_qa.py',
+    'tests/ports_panel_qa.py',
     'tests/grid_visibility_qa.py',
     'tests/editor_kernel_qa.py',
     'tests/editor_kernel_extended_qa.py',
