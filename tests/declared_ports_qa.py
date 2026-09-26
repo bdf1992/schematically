@@ -359,6 +359,7 @@ COMPACT_HASHES = {
     'examples/08-gated-service.sov': 'ed2e6c8878e672fb67c175b6c75d726fe5195879a6ede7a68cc09aaee28fc4a1',
     'examples/09-print-ai-proof-run.sov': '1df300a574a517cc0650283cfe3b9dada19c52ef9ec2898560ffb4a28d1516b8',
     'examples/09-proposed-service-review.sov': '24814d24173f6be4a4260f48986ee259b05b64ec896289511d27152d31f70296',
+    'examples/09-typed-captions.sov': 'b6f660620d668d7d17c96320c00a2cd00e4b139536585f2ca08faf7bf02486fe',
     'examples/10-clocked-signals.sov': 'a9a88907e855171c205d6fb221f96334eaf5b510e310585205c5b576e8646919',
     'examples/11-sections.sov': 'cf375a292c5d2f419fc581f5b49986ba968db8cb177441a42f8dec80885c92a0',
     'examples/12-membrane.sov': '1c6e3971833dd6dc65281a5e91c0e67f489005a139eb59d18292fb62455a642f',

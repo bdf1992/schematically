@@ -38,7 +38,8 @@ Engineering release estimate grounded in the current automated suite and manual 
 - render semantic idempotence: **PASS**
 - drag lifecycle stress: **PASS — 46 repeated drags**
 - Light/Dark + duplex visual: **PASS**
-- golden corpus: **PASS — 7/7 documents**
+- golden corpus: **PASS — 10/10 documents**
+- golden corpus rendered text: **PASS — 10 documents, 101 text nodes**
 - mutation watcher: **PASS — 9/9 targeted mutants killed**
 - JavaScript/MCP syntax: **PASS**
 

@@ -74,6 +74,7 @@ BROWSER=[
     'tests/appearance_color_scheme_qa.py',
     'tests/agent_api_mcp_golden_qa.py',
     'tests/state_space_surfaces_qa.py',
+    'tests/golden_rendered_text_qa.py',
     'tests/skills_conformance_qa.py',
     'tests/render_idempotence_qa.py',
     'tests/region_dimensions_qa.py',
