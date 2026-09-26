@@ -3155,15 +3155,52 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   const specChannels=spec=>(Array.isArray(spec?.channels)&&spec.channels.length?spec.channels:[{id:'main'}]).map(c=>c.id);
   const specFlow=spec=>spec.flow||spec.defaultFlow||'duplex';
+  // The document's signal model is behaviour too. A Component with no bound definition that declares
+  // a signal (a gate glyph's combine, a lever, a config.signal) is read through the graph core's own
+  // signalConfig: a derived binary card becomes a truth_table@1 device over its in and out ports, an
+  // asserted one drives its level onto its out ports at power-on. One model, one engine.
+  const BINARY_COMBINE={and:v=>v.every(Boolean),min:v=>v.every(Boolean),or:v=>v.some(Boolean),max:v=>v.some(Boolean),
+    buffer:v=>v.some(Boolean),not:v=>!v.some(Boolean),nor:v=>!v.some(Boolean),nand:v=>!v.every(Boolean),xor:v=>v.filter(Boolean).length%2===1};
+  function combineTable(combine,n,m){
+    const rows=[];
+    for(let k=0;k<2**n;k++){const bits=[...Array(n)].map((_,i)=>(k>>(n-1-i))&1);const out=BINARY_COMBINE[combine](bits.map(Boolean))?1:0;rows.push([...bits,...Array(m).fill(out)])}
+    return rows;
+  }
+  function impliedDevices(d){
+    const g=typeof globalThis!=='undefined'?globalThis:{},G=g.SovSchematicGraph,N=g.SovSchematicNotation,out={definitions:{},bind:{},sources:[]};
+    if(!G?.signalConfig)return out;
+    let glyphs={};try{const r=N?N.resolve(d):null;glyphs=r?.ok?(r.notation?.glyphs||{}):{}}catch(_){glyphs={}}
+    for(const c of d.components){
+      const config=isObject(c.config)?c.config:{};
+      if(config.definition!==undefined&&config.definition!==null)continue;
+      const glyph=glyphs[c.symbolId]||null;
+      // A Point relays what reaches it (the engine's own 'point' role); every card has a signal,
+      // declared or the editor's default (STATE-SPACE.md, What signalMode becomes).
+      if(c.symbolId==='point')continue;
+      const sig=G.signalConfig(c,glyph);
+      if(sig.kind!=='binary'||sig.clock)continue;
+      let specs=[];try{specs=Data.canonicalAttachmentPointDescriptors(c).filter(Boolean)}catch(_){specs=[]}
+      const named=specs.filter(s=>NAME.test(s.id));
+      const ins=named.filter(s=>specFlow(s)==='in').map(s=>s.id),outs=named.filter(s=>specFlow(s)==='out').map(s=>s.id);
+      if(sig.mode==='derived'){
+        if(!BINARY_COMBINE[sig.combine]||!ins.length||ins.length>8||!outs.length||outs.length>8)continue;
+        const ref=`implied.${sig.combine}(${ins.join(',')})>(${outs.join(',')})@1`;
+        if(!out.definitions[ref])out.definitions[ref]={id:ref.slice(0,-2),version:1,pattern:'truth_table@1',delay:0,
+          parameters:{inputs:ins,outputs:outs,table:combineTable(sig.combine,ins.length,outs.length)}};
+        out.bind[c.id]=ref;
+      }else for(const point of outs)out.sources.push({entity:c.id,point,channel:'main',value:sig.value>=sig.threshold,at:0});
+    }
+    return out;
+  }
   // What the run reads of the document, resolved once at start: each Wire's two ports, delay,
   // the directions it carries and the channels it shares; each Component's role; each merge.
-  function topology(d,definitions){
+  function topology(d,definitions,bind={}){
     const components={},merges={},wires=[];
     const specOf=(component,pointId)=>{try{return Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&(s.id===pointId||s.compatId===pointId))||null}catch(_){return null}};
     const byId=new Map(d.components.map(c=>[c.id,c]));
     for(const component of d.components){
       const config=isObject(component.config)?component.config:{};
-      const ref=config.definition!==undefined&&config.definition!==null?config.definition:null;
+      const ref=config.definition!==undefined&&config.definition!==null?config.definition:(bind[component.id]??null);
       if(ref){const def=definitions[ref];components[component.id]={role:'device',definition:ref,inputs:def.parameters.inputs.slice(),outputs:def.parameters.outputs.slice()}}
       else components[component.id]={role:component.symbolId==='point'?'point':'absorb'};
       // A channel merge is read where checkDocument reads it: the stored port list, by port id.
@@ -3238,17 +3275,22 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       seen.add(key);inputs.push(input);
     }
     inputs.sort((x,y)=>cmpList([x.at,x.entity,x.point,x.channel],[y.at,y.entity,y.point,y.channel]));
-    const refs=[...new Set(d.components.map(c=>c.config?.definition).filter(ref=>ref!==undefined&&ref!==null))].sort();
+    const implied=impliedDevices(d);
+    const bound=[...new Set(d.components.map(c=>c.config?.definition).filter(ref=>ref!==undefined&&ref!==null))];
+    const refs=[...new Set([...bound,...Object.keys(implied.definitions)])].sort();
     const definitions={};
-    for(const ref of refs){const def=resolveDefinition(ref,o.packs);if(def.delay===undefined)def.delay=0;definitions[ref]=def}
+    for(const ref of bound){const def=resolveDefinition(ref,o.packs);if(def.delay===undefined)def.delay=0;definitions[ref]=def}
+    Object.assign(definitions,clone(implied.definitions));
     const replayKey={documentId:d.id,documentHash:Data.documentHash(d),definitions:refs,runtimeVersion:RUNTIME_VERSION,traceFormat:TRACE_FORMAT,inputs,seed};
-    const shape=topology(d,definitions);
+    const shape=topology(d,definitions,implied.bind);
+    // A declared level is an input the document makes: a caller's input on the same port and tick wins.
+    const sources=implied.sources.filter(x=>!seen.has(JSON.stringify([x.at,x.entity,x.point,x.channel])));
     const run={
       id:Canonical.sha256Hex(Canonical.canonicalize(replayKey)).slice(0,12),
       runtimeVersion:RUNTIME_VERSION,doc:d,definitions,components:shape.components,merges:shape.merges,wires:shape.wires,
       seed,budget,spent:0,tick:null,walk:o.walk||'forward',
       signal:{},lastRecord:{},queues:{},sequence:0,ledger:[],records:[],replayDraws:null,
-      pending:inputs.map(x=>({kind:'input',...x}))
+      pending:[...inputs,...sources].sort((x,y)=>cmpList([x.at,x.entity,x.point,x.channel],[y.at,y.entity,y.point,y.channel])).map(x=>({kind:'input',...x}))
     };
     appendEntry(run,'start',{replayKey:clone(replayKey),budget});
     for(const input of inputs)appendEntry(run,'input',clone(input));
@@ -4469,7 +4511,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
 
-  return {POLICIES,DEFAULT_LATENCY_MS,build,query,queries:Object.keys(QUERIES),createSimulation,runScenario,createSession,tools};
+  return {POLICIES,DEFAULT_LATENCY_MS,COMBINES,signalConfig,build,query,queries:Object.keys(QUERIES),createSimulation,runScenario,createSession,tools};
 });
 /* END src/07-graph-core.js */
 </script>

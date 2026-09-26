@@ -702,5 +702,5 @@
     ];
   }
 
-  return {POLICIES,DEFAULT_LATENCY_MS,build,query,queries:Object.keys(QUERIES),createSimulation,runScenario,createSession,tools};
+  return {POLICIES,DEFAULT_LATENCY_MS,COMBINES,signalConfig,build,query,queries:Object.keys(QUERIES),createSimulation,runScenario,createSession,tools};
 });
