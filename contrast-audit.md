@@ -30,19 +30,19 @@ deutan and tritan simulation (about two and a half just-noticeable differences).
 | Light | Reading | warm | 4.01:1 | 4:1 | 0.030 / 0.019 / 0.011 / 0.013 | no | PASS (hue family) |
 | Light | Reading | earth | 4.01:1 | 4:1 | 0.042 / 0.017 / 0.017 / 0.021 | no | PASS (hue family) |
 | Light | Reading | mono | 9.89:1 | 4:1 | 0.042 / 0.042 / 0.042 / 0.042 | n/a (mono) | PASS |
-| Dark | Pastel | okabe-ito | 3.25:1 | 3.25:1 | 0.184 / 0.111 / 0.110 / 0.111 | yes | PASS |
+| Dark | Pastel | okabe-ito | 6.03:1 | 3.25:1 | 0.132 / 0.076 / 0.075 / 0.075 | yes | PASS |
 | Dark | Pastel | spectrum | 7.45:1 | 3.25:1 | 0.086 / 0.045 / 0.019 / 0.053 | no | PASS (hue family) |
 | Dark | Pastel | cool | 7.26:1 | 3.25:1 | 0.037 / 0.018 / 0.007 / 0.038 | no | PASS (hue family) |
 | Dark | Pastel | warm | 6.64:1 | 3.25:1 | 0.031 / 0.012 / 0.013 / 0.016 | no | PASS (hue family) |
 | Dark | Pastel | earth | 7.20:1 | 3.25:1 | 0.032 / 0.021 / 0.010 / 0.017 | no | PASS (hue family) |
 | Dark | Pastel | mono | 9.24:1 | 3.25:1 | 0.040 / 0.040 / 0.040 / 0.040 | n/a (mono) | PASS |
-| Dark | Subtle | okabe-ito | 3.53:1 | 3.5:1 | 0.180 / 0.109 / 0.110 / 0.110 | yes | PASS |
+| Dark | Subtle | okabe-ito | 6.02:1 | 3.5:1 | 0.122 / 0.074 / 0.074 / 0.075 | yes | PASS |
 | Dark | Subtle | spectrum | 7.14:1 | 3.5:1 | 0.084 / 0.045 / 0.019 / 0.054 | no | PASS (hue family) |
 | Dark | Subtle | cool | 6.99:1 | 3.5:1 | 0.035 / 0.015 / 0.006 / 0.036 | no | PASS (hue family) |
 | Dark | Subtle | warm | 6.38:1 | 3.5:1 | 0.031 / 0.011 / 0.014 / 0.017 | no | PASS (hue family) |
 | Dark | Subtle | earth | 6.93:1 | 3.5:1 | 0.032 / 0.022 / 0.010 / 0.017 | no | PASS (hue family) |
 | Dark | Subtle | mono | 8.84:1 | 3.5:1 | 0.040 / 0.040 / 0.040 / 0.040 | n/a (mono) | PASS |
-| Dark | Reading | okabe-ito | 4.01:1 | 4:1 | 0.185 / 0.114 / 0.109 / 0.116 | yes | PASS |
+| Dark | Reading | okabe-ito | 6.32:1 | 4:1 | 0.125 / 0.076 / 0.075 / 0.075 | yes | PASS |
 | Dark | Reading | spectrum | 7.38:1 | 4:1 | 0.091 / 0.048 / 0.020 / 0.058 | no | PASS (hue family) |
 | Dark | Reading | cool | 7.23:1 | 4:1 | 0.039 / 0.021 / 0.009 / 0.040 | no | PASS (hue family) |
 | Dark | Reading | warm | 6.50:1 | 4:1 | 0.033 / 0.014 / 0.014 / 0.017 | no | PASS (hue family) |
@@ -77,20 +77,15 @@ deutan and tritan simulation (about two and a half just-noticeable differences).
 | 07-plane-with-points.sov | dark | 32 | 0 | 0 |
 | 08-gated-service.sov | dark | 58 | 0 | 0 |
 | 09-print-ai-proof-run.sov | dark | 81 | 0 | 0 |
-| 09-proposed-service-review.sov | dark | 37 | 0 | 5 |
+| 09-proposed-service-review.sov | dark | 37 | 0 | 0 |
 | 10-clocked-signals.sov | dark | 65 | 0 | 0 |
 | 11-sections.sov | dark | 61 | 0 | 0 |
 | 12-membrane.sov | dark | 53 | 0 | 0 |
 | 13-half-adder.sov | dark | 62 | 0 | 0 |
 | blank.sov | dark | 0 | 0 | 0 |
 
-**Overall: FAIL**
+**Overall: PASS**
 
-- 09-proposed-service-review.sov (dark): mark-contrast ['admit'] wire 1.92:1 < 3:1 (#386e9b on #3e4041: body)
-- 09-proposed-service-review.sov (dark): mark-contrast ['admit'] flow-chevron 1.92:1 < 3:1 (#386e9b on #3e4041: body)
-- 09-proposed-service-review.sov (dark): mark-contrast ['admit'] flow-chevron 1.92:1 < 3:1 (#386e9b on #3e4041: body)
-- 09-proposed-service-review.sov (dark): mark-contrast ['entry'] dimensional-point-body 1.92:1 < 3:1 (#386e9b on #3e4041: body)
-- 09-proposed-service-review.sov (dark): mark-contrast ['check'] body 1.92:1 < 3:1 (#386e9b on #3e4041: body)
 
 ## Sources
 

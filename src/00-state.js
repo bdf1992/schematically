@@ -163,7 +163,7 @@ const BASE_PALETTES={
   earth:['#8A6348','#A3814D','#7E8E55','#5F8677','#687C86','#806C78']
 };
 const DARK_SURFACE_PALETTES={
-  'okabe-ito':['#AD5200','#F7C07A','#0CA86E','#00BDFF','#1C598C','#FF79BB'],
+  'okabe-ito':['#D07807','#FBAC31','#039843','#36BEFE','#5671AC','#FF1782'],
   spectrum:['#FF7A7D','#E8AA58','#9AC86C','#62C9C1','#82A9F2','#B88CE5'],
   cool:['#74B8E2','#69D0CB','#82C9AE','#91AFE8','#A19BE1','#B58FC8'],
   warm:['#F37C78','#ED966A','#E8B660','#D6A071','#CE858E','#C77F9E'],
@@ -246,8 +246,12 @@ function themeColor(hex,theme=colorEngine.theme,appearance=surfaceAppearance()){
   else if(theme==='subtle')candidate=mixHex([hex,'#7D7D78'],[.80,.20]);
   else candidate=mixHex([hex,'#111111'],[.94,.06]);
   minimum=themeContrastFloor(theme);
-  return ensureContrast(candidate,canvasTone(theme,appearance),minimum);
+  const onCanvas=ensureContrast(candidate,canvasTone(theme,appearance),minimum);
+  // In dark mode a card is lighter than the canvas: a colour drawn on a card (its outline, a wire
+  // inside a container) must hold 3:1 against the card too, not only against the canvas.
+  return appearance==='dark'?ensureContrast(onCanvas,DARK_CARD_SURFACE,3):onCanvas;
 }
+const DARK_CARD_SURFACE='#484B4E';
 function activeMonoPalette(){
   const base=surfaceAppearance()==='dark'?DARK_SURFACE_MONO:LIGHT_SURFACE_MONO;
   return base.map(c=>themeColor(c));

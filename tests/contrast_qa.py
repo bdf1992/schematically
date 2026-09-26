@@ -52,6 +52,9 @@ PAGE = r"""()=>{
   const A=window.SovSchematicAPI,out={palettes:[]};
   for(const appearance of ['light','dark']){A.view.setAppearance(appearance);
     for(const theme of ['pastel','subtle','reading'])for(const palette of ['okabe-ito','spectrum']){A.view.setColour({theme,palette});out.palettes.push(A.view.paletteAudit())}}
+  // In dark mode a card is lighter than the canvas: every colour slot holds 3:1 on a card too.
+  A.view.setAppearance('dark');out.onCard=[];
+  for(const theme of ['pastel','subtle','reading']){A.view.setColour({theme,palette:'okabe-ito'});out.onCard.push(Math.min(...activePalette().slice(6).map(c=>SovSchematicColour.contrast(c,DARK_CARD_SURFACE))))}
   A.view.setAppearance('light');A.view.setColour({theme:'pastel',palette:'okabe-ito'});
   out.default=A.view.colour();
   const load=()=>{A.document.replace({schema:SovSchematicData.DOCUMENT_SCHEMA,id:'planted',components:[{id:'a',symbolId:'act',x:100,y:200,config:{label:'Source'}},{id:'b',symbolId:'act',x:400,y:200,config:{label:'Sink'}}],wires:[{id:'w',a:'a',aSide:'out',b:'b',bSide:'in'}]});fitDiagram()};
@@ -76,6 +79,7 @@ with sync_playwright() as p:
 assert not errors, errors
 
 assert r['default']['palette'] == 'okabe-ito', r['default']
+assert all(v >= 3 for v in r['onCard']), ('dark colour slots on a card', r['onCard'])
 for a in r['palettes']:
     assert not [f for f in a['failures'] if f['kind'] == 'contrast'], (a['appearance'], a['theme'], a['palette'], a['failures'])
     if a['palette'] == 'okabe-ito':
