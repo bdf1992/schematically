@@ -918,7 +918,10 @@
       normalizeWireForm(candidate);
       candidate.duplex=candidate.config?.direction==='duplex';
     }
-    arr[index]=candidate;
+    // The record keeps its identity: an editor holding it (a gesture that has just begun, a bound
+    // listener) keeps holding the updated record, not a stale copy.
+    for(const key of Object.keys(current))delete current[key];
+    Object.assign(current,candidate);
     if(resource==='component')reconcileComponentWirePorts(doc,id);
     if(resource==='wire')migrateLegacyWirePointAttachments(doc);
     return clone(arr[index]);

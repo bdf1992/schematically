@@ -172,10 +172,15 @@ side (`left | right | top | bottom`), position `t` (0-1, step 0.05), flow (`in |
 channels (comma-separated ids) and a Remove button. "Add port" appends `p1`, `p2`, ... (the first id free as an id or
 compat id) on the right, at the first of .5, .25, .75, .125, .375, .625, .875 no other right-side port uses, and once
 those are used at the midpoint of the largest free gap on that side (between its ports and the ends 0 and 1; ties to
-the lowest t), so added ports never stack; duplex, on `main`; it is drawn at once and is immediately wireable. An edit
-runs once focus has settled, so Tab and Shift+Tab move through a row as usual while each edit rebuilds the rows. Its
-target (the row's Component and port) is bound when its `change` fires, so it lands there whatever is selected by the
-time it runs; if that Component is gone by then, the edit is dropped and the status line says so.
+the lowest t), so added ports never stack; duplex, on `main`; it is drawn at once and is immediately wireable.
+
+An edit is never pending. Its target (the row's Component and port) is bound when its `change` fires, and its data
+change and history transition happen inside that event; a pointerdown anywhere else first blurs a focused port field,
+in the capture phase, so the edit commits before the click can change the selection, start a drag, undo, save or
+delete. Only the refresh (the canvas render, the panel or bar rebuild, focus) waits until the event is over; it
+changes neither data nor history, so Tab and Shift+Tab move through a row as usual while each edit rebuilds the rows.
+If the bound Component no longer exists, the edit is dropped and the status line says so. A component `update` keeps
+the record's identity, so a gesture that began on it keeps holding the updated record.
 
 - **One path.** Every edit sends the Component's complete port list, with `attachmentDefaults: none`, through the data
   core's component `update`, which stores it in the smallest form and applies every refusal. One edit is one history
@@ -185,14 +190,15 @@ time it runs; if that Component is gone by then, the edit is dropped and the sta
 - **One label.** A port's label is one value. The panel's label field and the port bar's label both write the declared
   `label` and the drawn label (`config.ports[compatId].label`) together in one update, and both show the drawn label.
   A Point's `self` and a 1D endpoint declare no label; for them only the drawn label is written. The bar's label
-  binds its port when editing starts and commits once, when it is left by Tab, Enter or a click elsewhere, even a
-  click that changes the selection.
+  binds its port when editing starts and commits once, when it is left by Tab, Enter or a click elsewhere (committed
+  in the click's capture phase, before the click does anything else).
 - **One flow.** A port's direction is its declared `flow`. The panel's flow and the port bar's Direction (which offers
   `trigger`) both write it through the data core, with the contract's drawn flow (its active connection's) mirrored in
   the same update (`trigger` is drawn as `control`), and both show it, as does the inspector's Direction line. A port
   that declares no flow shows its default: `duplex` for a Point's `self`, as `checkDocument` and the runtime read it. A Component with no declared list stores the
-  list in the smallest form, as any port edit does; a Point's bar change sets its `self` declaration. A 1D endpoint
-  declares no flow; the bar changes only its drawn flow.
+  list in the smallest form, as any port edit does; a Point's bar change sets its `self` declaration. A Path end's
+  direction is its role (`start` receives, `end` emits): the bar and the inspector show that effective flow, and the
+  bar's Direction is disabled there, with a title saying so.
 - **Moving a port** happens only here (side, `t`): dragging a port starts a Wire.
 - **Definition-owned ports.** On a Component with `config.definition`, the id, flow, channels and Remove controls are
   disabled with a title naming the definition, and "Add port" is disabled; label, side and `t` stay editable.

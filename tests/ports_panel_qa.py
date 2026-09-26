@@ -199,10 +199,12 @@ with sync_playwright() as p:
     # Remove: refused while a Wire ends on the port, allowed otherwise.
     h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
     row(page, 'left', 'port-remove').click()
+    page.wait_for_timeout(60)  # the rows are rebuilt after the edit's event (step 25)
     refused(page, h, c, 'PORT_IN_USE', 'remove in use')
     assert page.evaluate(ROWS) == ['left', 'right', 'top']
     h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
     row(page, 'top', 'port-remove').click()
+    page.wait_for_timeout(60)  # the rows are rebuilt after the edit's event (step 25)
     assert page.evaluate(ROWS) == ['left', 'right']
     assert page.locator('.node[data-id="g"] circle.attachment-point[data-point="top"]').count() == 0
     one_transition(page, h, c, 'remove', 'g')
@@ -211,6 +213,7 @@ with sync_playwright() as p:
     # by `right`), duplex on main. It is drawn and immediately wireable.
     h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
     page.locator('#portsAddBtn').click()
+    page.wait_for_timeout(60)  # the rows are rebuilt after the edit's event (step 25)
     s = page.evaluate(STATE, 'g')
     assert s['specs'][-1] == {'id': 'p1', 'side': 'right', 't': .25, 'flow': 'duplex', 'channels': ['main'], 'label': None}, s['specs']
     assert page.evaluate(ROWS) == ['left', 'right', 'p1']
@@ -238,6 +241,7 @@ with sync_playwright() as p:
     open_panel(page, 'g')
     h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
     row(page, 'p2', 'port-remove').click()
+    page.wait_for_timeout(60)  # the rows are rebuilt after the edit's event (step 25)
     refused(page, h, c, 'PORT_IN_USE', 'remove p2 in use')
 
     # A Plane starts with no ports; Add port gives it p1 at .5.
@@ -245,6 +249,7 @@ with sync_playwright() as p:
     open_panel(page, 'pl')
     assert page.evaluate(ROWS) == []
     page.locator('#portsAddBtn').click()
+    page.wait_for_timeout(60)  # the rows are rebuilt after the edit's event (step 25)
     s = page.evaluate(STATE, 'pl')
     assert s['specs'] == [{'id': 'p1', 'side': 'right', 't': .5, 'flow': 'duplex', 'channels': ['main'], 'label': None}], s
 
@@ -704,6 +709,102 @@ with sync_playwright() as p:
     pg.wait_for_timeout(200)
     assert status(pg) == 'Port edit dropped: gone no longer exists', status(pg)
     assert pg.evaluate("()=>nodes.some(n=>n.id==='gone')") is False
+    pg.close()
+
+    # --- Amendment 4: an edit is never pending --------------------------------------------------
+    HIST = '()=>historyState.undo.map(x=>x.label)'
+    G_RIGHT = "()=>{const n=nodes.find(x=>x.id==='g');return [Attachment.resolveSpec(n,'right').label??null,n.config.ports.out.label]}"
+
+    def a4_page():
+        pg = fresh()
+        pg.evaluate("""()=>{const A=SovSchematicAPI;A.create('component',{id:'g',symbolId:'act',x:432,y:360});
+          A.create('component',{id:'k',symbolId:'act',x:168,y:768});
+          A.create('component',{id:'R',symbolId:'act',x:912,y:768,form:{dimension:1}});render()}""")
+        pg.wait_for_timeout(300)
+        return pg
+
+    def drag_g(pg, dx, dy):
+        n = pg.evaluate("()=>{const n=nodes.find(x=>x.id==='g');return {x:n.x,y:n.y}}")
+        a, b = client(pg, n['x'] - 36, n['y'] + 24), client(pg, n['x'] - 36 + dx, n['y'] + 24 + dy)
+        assert pg.evaluate("([x,y])=>document.elementFromPoint(x,y)?.closest('.node')?.dataset.id", [a['x'], a['y']]) == 'g'
+        pg.mouse.move(a['x'], a['y'])
+        pg.mouse.down()
+        pg.mouse.move(a['x'] - 10, a['y'] - 10, steps=2)
+        pg.mouse.move(b['x'], b['y'], steps=8)
+        pg.mouse.up()
+        pg.wait_for_timeout(500)
+        return n
+
+    # probe26: type in g's label (no Enter), then click Undo. The label edit is committed first and
+    # Undo removes exactly it; Redo restores it.
+    pg = a4_page()
+    open_panel(pg, 'g')
+    h0, c0, hist0 = pg.evaluate(HASH), pg.evaluate(UNDO_COUNT), pg.evaluate(HIST)
+    row(pg, 'right', 'port-label').fill('U2')
+    pg.locator('#quickUndoBtn').click()
+    pg.wait_for_timeout(300)
+    assert pg.evaluate(HASH) == h0 and pg.evaluate(HIST) == hist0, (pg.evaluate(HIST), hist0)
+    assert pg.evaluate('()=>historyState.redo.length') == 1 and pg.evaluate(G_RIGHT) == [None, '']
+    pg.locator('#quickRedoBtn').click()
+    pg.wait_for_timeout(300)
+    assert pg.evaluate(G_RIGHT) == ['U2', 'U2'] and pg.evaluate(UNDO_COUNT) == c0 + 1 and pg.evaluate(HIST)[-1] == 'Relabel port'
+    pg.close()
+
+    # probe27, panel and bar: with an edit typed, dragging g 200px moves it; the history holds the
+    # label entry, then one Move entry.
+    for where in ('panel', 'bar'):
+        pg = a4_page()
+        if where == 'panel':
+            open_panel(pg, 'g')
+            row(pg, 'right', 'port-label').fill('D1')
+        else:
+            pg.evaluate("()=>{selectPort('g','right');openSelectionSettings('port')}")
+            pg.wait_for_timeout(150)
+            pg.locator('#barPortLabel').click()
+            pg.keyboard.press('Control+a')
+            pg.keyboard.type('D1')
+        c = pg.evaluate(UNDO_COUNT)
+        before = drag_g(pg, -200, 200)
+        after = pg.evaluate("()=>{const n=nodes.find(x=>x.id==='g');return {x:n.x,y:n.y}}")
+        assert abs(after['x'] - (before['x'] - 200)) <= 24 and abs(after['y'] - (before['y'] + 200)) <= 24, (where, before, after)
+        assert pg.evaluate(G_RIGHT) == ['D1', 'D1'], (where, pg.evaluate(G_RIGHT))
+        assert pg.evaluate(HIST)[-2:] == ['Relabel port', 'Move Component'] and pg.evaluate(UNDO_COUNT) == c + 2, (where, pg.evaluate(HIST))
+        pg.close()
+
+    # An edit committed by Save: the saved file carries it.
+    pg = a4_page()
+    open_panel(pg, 'g')
+    row(pg, 'right', 'port-label').fill('Saved')
+    pg.locator('#fileBtn').click()
+    with pg.expect_download() as info:
+        pg.locator('#fileSaveBtn').click()
+    saved = json.loads(Path(info.value.path()).read_text(encoding='utf-8'))
+    doc = saved.get('document', saved)
+    g_saved = next(c for c in doc['components'] if c['id'] == 'g')
+    assert g_saved['config']['ports']['out']['label'] == 'Saved' and any(p.get('label') == 'Saved' for p in g_saved['config']['attachmentPoints']), g_saved['config']
+    # An edit committed by Delete of another Component: selecting k commits it, then k is deleted.
+    open_panel(pg, 'g')
+    row(pg, 'right', 'port-label').fill('Kept')
+    c = pg.evaluate(UNDO_COUNT)
+    k = pg.evaluate("()=>{const n=nodes.find(x=>x.id==='k');return {x:n.x-30,y:n.y+20}}")
+    kc = client(pg, k['x'], k['y'])
+    pg.mouse.click(kc['x'], kc['y'])
+    pg.wait_for_timeout(450)
+    assert pg.evaluate('()=>selected') == 'k'
+    pg.locator('#barDeleteSelection').click()
+    pg.wait_for_timeout(300)
+    assert pg.evaluate("()=>nodes.some(n=>n.id==='k')") is False and pg.evaluate(G_RIGHT) == ['Kept', 'Kept']
+    assert pg.evaluate(HIST)[-2:] == ['Relabel port', 'Delete Component'] and pg.evaluate(UNDO_COUNT) == c + 2, pg.evaluate(HIST)
+
+    # Step 26: a Path end's Direction shows its effective flow and is disabled, with a title saying why.
+    for pid, flow, text in (('start', 'in', 'Input'), ('end', 'out', 'Output')):
+        pg.evaluate("(pid)=>{selectNode(null);selectPort('R',pid);openSelectionSettings('port')}", pid)
+        pg.wait_for_timeout(100)
+        assert pg.evaluate('()=>barPortFlow.value') == flow and pg.locator('#pFlow').inner_text() == text, pid
+        assert pg.locator('#barPortFlow').is_disabled() and 'role' in pg.locator('#barPortFlow').get_attribute('title'), pid
+    # A 2D port's Direction stays editable.
+    pg.evaluate("()=>{selectNode(null);selectPort('g','right');openSelectionSettings('port')}")
+    assert pg.locator('#barPortFlow').is_enabled()
     pg.close()
 
     assert not errors, errors

@@ -50,17 +50,23 @@ let barLabelEdit=null;
 function barLabelTarget(){const info=selectedPortInfo();return info?{componentId:info.owner.id,pointId:info.pointId,value:null}:null}
 function commitBarLabel(){
   const edit=barLabelEdit;barLabelEdit=null;if(!edit||edit.value===null)return;
-  setTimeout(()=>{
-    const n=nodes.find(x=>x.id===edit.componentId);if(!n){statusEl.textContent=`Port edit dropped: ${edit.componentId} no longer exists`;return}
-    setComponentPortLabel(n,edit.pointId,edit.value,ok=>{const again=selectedPortInfo();if(again&&again.owner.id===n.id&&again.pointId===edit.pointId)selectPortRef(again,{focus:false})});
-  },0);
+  const n=nodes.find(x=>x.id===edit.componentId);if(!n){statusEl.textContent=`Port edit dropped: ${edit.componentId} no longer exists`;return}
+  setComponentPortLabel(n,edit.pointId,edit.value,ok=>{const again=selectedPortInfo();if(again&&again.owner.id===n.id&&again.pointId===edit.pointId)selectPortRef(again,{focus:false})});
 }
 barPortLabel.addEventListener('focus',()=>{barLabelEdit=barLabelTarget()});
 barPortLabel.addEventListener('input',()=>{if(!barLabelEdit)barLabelEdit=barLabelTarget();if(barLabelEdit)barLabelEdit.value=barPortLabel.value});
 barPortLabel.addEventListener('change',commitBarLabel);
 barPortLabel.addEventListener('blur',commitBarLabel);
-// A click elsewhere may change the selection (and the bar) before the field's change fires.
-window.addEventListener('pointerdown',e=>{if(barLabelEdit&&e.target!==barPortLabel)commitBarLabel()},true);
+// No port edit is pending when another handler runs: a pointerdown anywhere but the focused port
+// field (the panel's or the bar's label) blurs it first, in the capture phase, so its edit commits
+// (its change, and the bar label's blur) before the click can change the selection, start a drag,
+// undo, save or delete.
+window.addEventListener('pointerdown',e=>{
+  const field=document.activeElement;
+  if(!field||field===e.target||field.contains?.(e.target))return;
+  if(field===barPortLabel||portsList.contains(field))field.blur();
+  if(barLabelEdit)commitBarLabel();
+},true);
 barPortColorSlot.addEventListener('click',()=>openColorSlotPanel('port'));
 function deleteSelected(){
   cancelWireDrag();
@@ -154,18 +160,33 @@ function componentPortList(n){
     return port;
   });
 }
-// One component update from the port controls (panel or bar). `after` runs on success; the default
-// reselects the Component with its settings open.
+// The runtime projections a CRUD edit needs, as normalizeRuntimeAfterCrud (85-api.js) makes them,
+// without its render: a port edit's render waits for the deferred refresh (see below), so an edit
+// committed inside a pointerdown does not rebuild the canvas under the gesture that is starting.
+function normalizeRuntimeAfterPortEdit(){
+  for(const n of nodes){ensureComponentStructure(n);componentCanvas(n)}
+  syncAllNodeBoundaryContext();
+  for(const n of nodes)componentConfig(n);
+  for(const w of wires){wireCanvas(w);connectionConfig(w)}
+  routeCache.clear();arrowPoseCache.clear();dragRouteSnapshots.clear();
+  persistenceFingerprint=semanticFingerprint();
+  updateRevisionReadout();
+}
+// One component update from the port controls (panel or bar). An edit is never pending: the data
+// change and its history transition happen now, inside the event that commits it. Only the refresh
+// (render, the panel or bar rebuild, focus) waits for the event to finish, and it changes neither
+// data nor history. `after` runs in that refresh; the default refreshes the Component's settings if
+// it is still the one selected.
 function applyComponentPortPatch(n,config,label,after=null){
   const showing=()=>selected===n.id; // the panel shows this Component
-  if(mutationBlocked(n,label)){if(showing())syncPortsPanel(n);return false}
+  const refreshPanel=()=>setTimeout(()=>{if(showing())syncPortsPanel(nodes.find(x=>x.id===n.id)||n)},0);
+  if(mutationBlocked(n,label)){refreshPanel();return false}
   commitHistoryCapture();
   const receipt=SovSchematicData.applyOperation(diagram,{schema:SovSchematicData.OPERATION_SCHEMA,id:`ports-${Date.now()}`,op:'update',resource:'component',resourceId:n.id,patch:{config}});
-  const current=()=>nodes.find(x=>x.id===n.id)||n;
-  if(!receipt.ok){statusEl.textContent=receipt.error?.message||'Port edit refused';if(showing())syncPortsPanel(current());if(after)after(false);return false}
-  normalizeRuntimeAfterCrud();commitHistoryCapture(label);
-  if(after)after(true);else{selectNode(n.id,{focus:false});openSelectionSettings('component')}
+  if(!receipt.ok){statusEl.textContent=receipt.error?.message||'Port edit refused';refreshPanel();if(after)setTimeout(()=>after(false),0);return false}
+  normalizeRuntimeAfterPortEdit();commitHistoryCapture(label);
   statusEl.textContent=label;
+  setTimeout(()=>{render();if(after)after(true);else if(showing()){selectNode(n.id,{focus:false});openSelectionSettings('component')}},0);
   return true;
 }
 function applyComponentPorts(n,ports,label,extraConfig=null,after=null){
@@ -175,7 +196,7 @@ function reselectPort(info){return ()=>{const again=selectedPortInfo();if(again)
 function selectedPortsComponent(){const n=nodes.find(x=>x.id===selected);return componentPortsEditable(n)?n:null}
 function editComponentPort(n,portId,mutate,label,extraConfig=null,after=null){
   if(!componentPortsEditable(n))return false;
-  const ports=componentPortList(n),port=ports.find(p=>p.id===portId);if(!port){if(selected===n.id)syncPortsPanel(n);return false}
+  const ports=componentPortList(n),port=ports.find(p=>p.id===portId);if(!port){setTimeout(()=>{if(selected===n.id)syncPortsPanel(n)},0);return false}
   mutate(port,ports);
   return applyComponentPorts(n,ports.filter(p=>!p.removed),label,extraConfig,after);
 }
@@ -202,7 +223,8 @@ function setComponentPortFlow(n,pointId,flow,after=null){
   const mirror=portContractMirror(n,spec,{flow});
   if(Attachment.effectiveDimension(n)===2)return editComponentPort(n,spec.id,port=>{port.flow=flow},'Change port flow',mirror,after);
   if(Attachment.intrinsicDimension(n)===0)return applyComponentPortPatch(n,{...mirror,attachmentPoints:pointSelfList(n,{flow})},'Change port flow',after);
-  return applyComponentPortPatch(n,mirror,'Change port flow',after);
+  // A Path end's direction is its role (start receives, end emits); it is not a setting.
+  statusEl.textContent=PATH_END_FLOW_TITLE;return false;
 }
 // One label: the declared `label` and the drawn label, written together. A Point's `self` and a 1D
 // endpoint declare no label, so only the drawn label is theirs.
@@ -220,19 +242,16 @@ portsList.addEventListener('change',e=>{
   const row=e.target.closest('.ports-row');if(!row)return;
   // The edit's target is bound now, when the change fires: the row's own Component and port.
   const componentId=row.dataset.componentId,portId=row.dataset.portId,el=e.target,value=el.value;
-  // A change fires as focus leaves the field (Tab, Shift+Tab, a click). The edit runs once focus has
-  // landed, so the rebuilt rows put it back on the control that was about to receive it; it applies to
-  // the bound target whatever is selected by then, and the panel is refreshed only if it still shows it.
-  setTimeout(()=>{
-    const n=nodes.find(x=>x.id===componentId);
-    if(!n){statusEl.textContent=`Port edit dropped: ${componentId} no longer exists`;return}
-    const after=()=>{if(selected===n.id){selectNode(n.id,{focus:false});openSelectionSettings('component')}};
-    if(el.classList.contains('port-label'))setComponentPortLabel(n,portId,value,after);
-    else if(el.classList.contains('port-side'))editComponentPort(n,portId,port=>{port.side=value},'Move port',null,after);
-    else if(el.classList.contains('port-t'))editComponentPort(n,portId,port=>{port.t=value.trim()===''?null:Number(value)},'Move port',null,after);
-    else if(el.classList.contains('port-flow'))setComponentPortFlow(n,portId,value,after);
-    else if(el.classList.contains('port-channels'))editComponentPort(n,portId,port=>{port.channels=portChannelsFromText(value,port.channels)},'Change port channels',null,after);
-  },0);
+  // A change fires as focus leaves the field (Tab, Shift+Tab, a click; a click elsewhere blurs it
+  // first, see below). The edit applies now, to the bound target; the rebuilt rows come after focus
+  // has landed, so they put it back on the control that was about to receive it.
+  const n=nodes.find(x=>x.id===componentId);
+  if(!n){statusEl.textContent=`Port edit dropped: ${componentId} no longer exists`;return}
+  if(el.classList.contains('port-label'))setComponentPortLabel(n,portId,value);
+  else if(el.classList.contains('port-side'))editComponentPort(n,portId,port=>{port.side=value},'Move port');
+  else if(el.classList.contains('port-t'))editComponentPort(n,portId,port=>{port.t=value.trim()===''?null:Number(value)},'Move port');
+  else if(el.classList.contains('port-flow'))setComponentPortFlow(n,portId,value);
+  else if(el.classList.contains('port-channels'))editComponentPort(n,portId,port=>{port.channels=portChannelsFromText(value,port.channels)},'Change port channels');
 });
 portsList.addEventListener('click',e=>{
   const button=e.target.closest('.port-remove');if(!button||button.disabled)return;

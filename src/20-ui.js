@@ -380,19 +380,22 @@ function showPortBar(info){
   barPortMarkers.textContent=portMarkerSummaryText(info);
   setSlotChip(barPortColorSlot,ch.colorSlot);
   barPortFlow.value=portShownFlow(info);
+  const pathEnd=portIsPathEnd(info);barPortFlow.disabled=pathEnd;barPortFlow.title=pathEnd?PATH_END_FLOW_TITLE:'Input/output behavior';
   barPortAccess.value=ch.access;
   if(!selectionSettingsPanel.hidden)syncSelectionSettings('port');
   closeColorSlotPanel();
   positionSelectionBar();
 }
 // One flow, shown the same by the port bar and the inspector: the declared flow, else the port's
-// default (a Point's `self` is `duplex`, as checkDocument and the runtime read it). A 1D endpoint
-// declares nothing and its bar edits only the drawn flow, so it shows the drawn flow.
+// default (a Point's `self` is `duplex`, a Path's `start` is `in` and `end` is `out`), the flow
+// checkDocument and the runtime read. A Path end's direction is its role, so the bar does not edit it.
 function portShownFlow(info){
   const spec=Attachment.resolveSpec(info.owner,info.pointId||info.portId);
-  if(!spec||spec.role==='endpoint')return portConnection(info.port).flow;
+  if(!spec)return portConnection(info.port).flow;
   return spec.flow||spec.defaultFlow||'duplex';
 }
+const PATH_END_FLOW_TITLE="A Path end's direction comes from its role: start receives, end emits";
+function portIsPathEnd(info){return Attachment.resolveSpec(info.owner,info.pointId||info.portId)?.role==='endpoint'}
 function portFlowText(flow){return [...barPortFlow.options].find(o=>o.value===flow)?.textContent||flow}
 function portDisplayName(info){return componentConfig(info.owner).label||byId(info.owner.symbolId).name}
 
