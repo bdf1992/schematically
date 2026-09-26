@@ -5,10 +5,10 @@ The branch merges `dev` at `0cd9831` into the state-space runtime at `f6e312d`. 
 by side; nothing was migrated between them. Everything below is known and not finished. Each item
 names where it comes from and what would close it.
 
-## 1. One open failure: a dev example is not saved as authored
+## 1. A dev example was not saved as authored (closed on this branch)
 
 `tests/declared_ports_qa.py` (the runtime's round-trip check, "stored forms are saved as authored")
-fails on dev's new `examples/09-proposed-service-review.sov`:
+failed on dev's new `examples/09-proposed-service-review.sov`:
 
 ```
 AssertionError: ('examples/09-proposed-service-review.sov', [['service', 'none', None], ...], [['service', None, None], ...])
@@ -19,11 +19,13 @@ The Plane `service` authors no `attachmentDefaults`. Loading fills in the Plane 
 saved file gains `"attachmentDefaults": "none"`. The runtime at `f6e312d` and `dev` at `0cd9831` save it
 the same way (checked on exports of both), so the merge did not cause it: the runtime's rule meets a
 file it never saw. Every other Plane in `examples/` authors `"attachmentDefaults": "none"` and passes.
-Examples may not be changed under this task's contract, and the assertion may not be weakened.
 
-Close by one of: add `"attachmentDefaults": "none"` to `service` in that example (as every other Plane
-example has it) and recompute its pin; or decide that a Plane's preset mode is not written on save, which
-changes `compactDocument` for every Plane and so every pin that has one.
+Closed by the launcher's ruling of 2026-09-26: `service` now authors `"attachmentDefaults": "none"`, the
+value load already filled in, and nothing else in the file changed. Its pin was recomputed with the
+unchanged pin code and did not move (`24814d24173f6be4a4260f48986ee259b05b64ec896289511d27152d31f70296`
+before and after the edit), because the saved form already carried `'none'`; the file now matches it.
+The other route, not writing a Plane's preset mode on save, was not taken: it would change
+`compactDocument` for every Plane and so every pin that has one.
 
 ## 2. Unmigrated overlap
 
