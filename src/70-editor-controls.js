@@ -160,33 +160,24 @@ function componentPortList(n){
     return port;
   });
 }
-// The runtime projections a CRUD edit needs, as normalizeRuntimeAfterCrud (85-api.js) makes them,
-// without its render: a port edit's render waits for the deferred refresh (see below), so an edit
-// committed inside a pointerdown does not rebuild the canvas under the gesture that is starting.
-function normalizeRuntimeAfterPortEdit(){
-  for(const n of nodes){ensureComponentStructure(n);componentCanvas(n)}
-  syncAllNodeBoundaryContext();
-  for(const n of nodes)componentConfig(n);
-  for(const w of wires){wireCanvas(w);connectionConfig(w)}
-  routeCache.clear();arrowPoseCache.clear();dragRouteSnapshots.clear();
-  persistenceFingerprint=semanticFingerprint();
-  updateRevisionReadout();
-}
 // One component update from the port controls (panel or bar). An edit is never pending: the data
 // change and its history transition happen now, inside the event that commits it. Only the refresh
 // (render, the panel or bar rebuild, focus) waits for the event to finish, and it changes neither
-// data nor history. `after` runs in that refresh; the default refreshes the Component's settings if
-// it is still the one selected.
+// data nor history. `after` runs in that refresh; the default refreshes the Component's selection
+// if it is still the one selected, and rebuilds its settings only if the panel is still open. The
+// refresh never opens the panel: the click that committed the edit may be the one that closed it.
 function applyComponentPortPatch(n,config,label,after=null){
-  const showing=()=>selected===n.id; // the panel shows this Component
-  const refreshPanel=()=>setTimeout(()=>{if(showing())syncPortsPanel(nodes.find(x=>x.id===n.id)||n)},0);
+  const showing=()=>selected===n.id; // this Component is still the one selected
+  const panelOpen=()=>showing()&&!selectionSettingsPanel.hidden;
+  const refreshPanel=()=>setTimeout(()=>{if(panelOpen())syncPortsPanel(nodes.find(x=>x.id===n.id)||n)},0);
   if(mutationBlocked(n,label)){refreshPanel();return false}
   commitHistoryCapture();
   const receipt=SovSchematicData.applyOperation(diagram,{schema:SovSchematicData.OPERATION_SCHEMA,id:`ports-${Date.now()}`,op:'update',resource:'component',resourceId:n.id,patch:{config}});
   if(!receipt.ok){statusEl.textContent=receipt.error?.message||'Port edit refused';refreshPanel();if(after)setTimeout(()=>after(false),0);return false}
-  normalizeRuntimeAfterPortEdit();commitHistoryCapture(label);
+  // The runtime projections as every CRUD edit makes them; the render waits for the refresh below.
+  normalizeRuntimeAfterCrud({render:false});commitHistoryCapture(label);
   statusEl.textContent=label;
-  setTimeout(()=>{render();if(after)after(true);else if(showing()){selectNode(n.id,{focus:false});openSelectionSettings('component')}},0);
+  setTimeout(()=>{render();if(after)after(true);else if(showing()){const open=panelOpen();selectNode(n.id,{focus:false});if(open)openSelectionSettings('component')}},0);
   return true;
 }
 function applyComponentPorts(n,ports,label,extraConfig=null,after=null){

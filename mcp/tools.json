@@ -19,6 +19,7 @@
     "schematic.run.settle",
     "schematic.run.trace",
     "schematic.state.query",
-    "schematic.run.replay"
+    "schematic.run.replay",
+    "schematic.run.drop"
   ]
 }

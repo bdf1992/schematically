@@ -159,6 +159,20 @@ rebuilds:
 Files that still carry the full projections load identically; nothing is removed
 from the reader.
 
+Saved documents carry authored truth only, and a document is the same document
+wherever it is held (contract #50). The editor fills runtime defaults into the
+records it holds (editor state, palette slots, presentation, wire markers and
+channel indexes, clamped sizes, settled points), but none of them reaches a file,
+`document.get()`, a checkpoint's document or a run: the editor keeps the compact
+form of the document it opened or was given (`compactDocument` of the same load
+`node` and the server make) beside its own compact form right after opening, and a
+snapshot is the opened form with only what changed since carried over, key by key
+(records matched by id). So a document opened and not edited, or edited and undone
+back, saves exactly `compactDocument` of the file loaded headless, hashes the same
+(`documentHash`) on every surface, and opening does not change its revision. History
+and checkpoint restores keep the opened form; opening a file, `document.replace`,
+New and recovery replace it.
+
 ### Default records
 
 A default point contract is one connection, outside face, no label. Only the points
@@ -340,7 +354,8 @@ cycle through such a port, `oscillating` means the state repeated.
 Every run operation on every surface returns one receipt, `soveraeign.schematic/run-receipt@0.1` (schema
 `formats/schematic.run-receipt.schema.json`, built by `runReceipt(operation, run, result, tickBefore?, handle?)`):
 `{schema, operation, runId, handle, ok, tickBefore, tickAfter, head, result, error}`. `operation` is the tool name
-(`schematic.run.start`, `.step`, `.settle`, `.trace`, `schematic.state.query`, `schematic.run.replay`); `runId` is the
+(`schematic.run.start`, `.step`, `.settle`, `.trace`, `schematic.state.query`, `schematic.run.replay`, and a registry's
+`schematic.run.drop`); `runId` is the
 run's content-derived id and `handle` its address on the surface (null for a replay, a refusal with no run, and a
 receipt built outside a registry); `head` is the ledger head hash after the operation; `error` is `{code, message,
 details?}` on a refusal (then `result` is null), `details` holding what the refusal names besides its code and message:
@@ -357,7 +372,10 @@ it) but are two runs, and neither touches the other. Step, settle, trace and que
 `document()`, the surface's current document, and `packs` is the raw pack JSON: a pack that does not load refuses every
 start and replay with `PACK_INVALID`, and an empty list refuses a document that references a definition with
 `PACK_INVALID`, "this page carries no packs". A start through a registry with a budget over `BUDGET_LIMIT`
-(1,000,000) is refused with `INPUT_INVALID`; `startRun` itself is not capped. No run operation captures history,
+(1,000,000) is refused with `INPUT_INVALID`; `startRun` itself is not capped. A registry holds at most 64 runs
+(`RUN_LIMIT`): a start beyond that is refused with `RUN_LIMIT` and nothing is evicted. `drop(handle)` removes a run and
+returns its receipt as it stood (`operation` `schematic.run.drop`, `result` null; `RUN_NOT_FOUND` for an unknown
+handle), after which a start succeeds. No run operation captures history,
 changes the document or its revision, or saves recovery. The browser reads its packs from `<script
 type="application/json" id="sov-packs">`, into which `build.py` inlines every `data/*.pack.json`; the MCP/HTTP server
 reads `data/*.pack.json` at start.

@@ -1,4 +1,5 @@
-"""The editor's Ports panel (contract 0b-2, steps 1-5, the panel half of step 9, and amendments 1-2).
+"""The editor's Ports panel (contract 0b-2, steps 1-5, the panel half of step 9, and amendments 1-2;
+contract #50 step 7, the settings toggle clicked with an edit typed).
 
 A 2D Component's settings panel lists its effective ports, one row each, and every edit sends the
 complete port list through the data core's component update: one edit is one history transition,
@@ -805,6 +806,33 @@ with sync_playwright() as p:
     # A 2D port's Direction stays editable.
     pg.evaluate("()=>{selectNode(null);selectPort('g','right');openSelectionSettings('port')}")
     assert pg.locator('#barPortFlow').is_enabled()
+    pg.close()
+
+    # Contract #50 step 7: with a Ports edit typed (not committed), a real click on the bar's settings
+    # toggle commits the edit, once, and closes the panel. The deferred refresh rebuilds only a panel
+    # that is still open and never opens one: the panel stays closed after it has run.
+    pg = a4_page()
+    open_panel(pg, 'g')
+    c = pg.evaluate(UNDO_COUNT)
+    row(pg, 'right', 'port-label').fill('Closed')
+    pg.locator('#barSelectionSettings').click()
+    pg.wait_for_timeout(450)
+    assert pg.evaluate(G_RIGHT) == ['Closed', 'Closed'], pg.evaluate(G_RIGHT)
+    assert pg.evaluate(HIST)[-1] == 'Relabel port' and pg.evaluate(UNDO_COUNT) == c + 1, pg.evaluate(HIST)
+    assert pg.evaluate('()=>selectionSettingsPanel.hidden') is True, 'the settings toggle did not close the panel'
+    assert pg.evaluate("()=>barSelectionSettings.getAttribute('aria-expanded')") == 'false'
+    assert pg.evaluate('()=>selected') == 'g' and pg.evaluate('()=>!selectionBar.hidden')
+    # The same edit with the panel left open: the refresh rebuilds the open panel, which shows the edit.
+    open_panel(pg, 'g')
+    row(pg, 'right', 'port-label').fill('Open')
+    row(pg, 'right', 'port-label').press('Tab')
+    pg.wait_for_timeout(450)
+    assert pg.evaluate('()=>!selectionSettingsPanel.hidden') and row(pg, 'right', 'port-label').input_value() == 'Open'
+    assert pg.evaluate(G_RIGHT) == ['Open', 'Open'], pg.evaluate(G_RIGHT)
+    # A refresh that runs after the panel was closed by other means leaves it closed.
+    pg.evaluate("""()=>{const n=nodes.find(x=>x.id==='g');setComponentPortLabel(n,'right','Late');closeSelectionSettings()}""")
+    pg.wait_for_timeout(300)
+    assert pg.evaluate(G_RIGHT) == ['Late', 'Late'] and pg.evaluate('()=>selectionSettingsPanel.hidden') is True
     pg.close()
 
     assert not errors, errors

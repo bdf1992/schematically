@@ -10,7 +10,13 @@ tests/agent_api_mcp_golden_qa.py starts it), in three documents:
   their details; a trace of a run with no inputs, kept for the next document;
 - examples/state/not-loop.sov: start (budget 40) and settle to oscillating; replay the and.sov trace
   (REPLAY_KEY_MISMATCH with its fields); an unknown handle; a run id used as a handle;
-- and.sov with a Path delay 0: a start refused with RUN_REFUSED and its refusals.
+- and.sov with a Path delay 0: a start refused with RUN_REFUSED and its refusals;
+- and.sov again (contract #50 step 5): 64 starts fill the registry, the 65th is refused with RUN_LIMIT (HTTP
+  409), a drop frees a place and the next start succeeds; a dropped handle is RUN_NOT_FOUND to drop and to step.
+
+Every surface runs the raw example file (contract #50 step 4): the browser opens it, and the server is started
+with it as its file. A document is the same document wherever it is held, so the run ids, hashes and receipts
+agree, and the and.sov trace is the golden and.11.sovtrace's replay key and records.
 
 Every run receipt must be identical across the three surfaces; the only surface-specific field is
 the HTTP status. Afterwards the document, its revision and the history are unchanged on every
@@ -34,7 +40,8 @@ ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / 'examples/state'
 RECEIPT = 'soveraeign.schematic/run-receipt@0.1'
 RUN_TOOLS = ['schematic.run.start', 'schematic.run.step', 'schematic.run.settle', 'schematic.run.trace',
-             'schematic.state.query', 'schematic.run.replay']
+             'schematic.state.query', 'schematic.run.replay', 'schematic.run.drop']
+RUN_LIMIT = 64
 AND_INPUTS = [{'entity': 'A', 'point': 'self', 'value': True, 'at': 0}, {'entity': 'B', 'point': 'self', 'value': True, 'at': 0}]
 Q = {'entity': 'Q', 'observable': 'logic.level'}
 OSCILLATING = {'kind': 'oscillating', 'period': 2, 'subjects': ['G.a.main', 'G.q.main']}
@@ -48,7 +55,8 @@ def bad_document():
     return json.dumps(doc)
 
 
-DOCUMENTS = [('and', (STATE / 'and.sov').read_text(encoding='utf-8')), ('loop', (STATE / 'not-loop.sov').read_text(encoding='utf-8')), ('bad', bad_document())]
+DOCUMENTS = [('and', (STATE / 'and.sov').read_text(encoding='utf-8')), ('loop', (STATE / 'not-loop.sov').read_text(encoding='utf-8')), ('bad', bad_document()),
+             ('limit', (STATE / 'and.sov').read_text(encoding='utf-8'))]
 
 
 def tamper(trace):
@@ -77,6 +85,11 @@ SCENARIO = {
         ('tampered', 'replay', ('tampered', 'trace')),
         ('plain', 'start', {}),
         ('plainTrace', 'trace', '@plain'),
+        ('drop2', 'drop', '@start2'),
+        ('dropAgain', 'drop', '@start2'),
+        ('stepDropped', 'step', '@start2'),
+        ('dropUnknown', 'drop', 'no-such-run'),
+        ('traceKept', 'trace', '@start'),
     ],
     'loop': [
         ('start', 'start', {'budget': 40}),
@@ -88,6 +101,11 @@ SCENARIO = {
     'bad': [
         ('refused', 'start', {}),
     ],
+    'limit': [*[(f'fill{i}', 'start', {}) for i in range(1, RUN_LIMIT + 1)],
+              ('over', 'start', {}),
+              ('drop', 'drop', '@fill1'),
+              ('after', 'start', {}),
+              ('overAgain', 'start', {})],
 }
 
 
@@ -159,7 +177,7 @@ BROWSER_CALL = '''([operation,value])=>{
   if(operation==='query')return R.query(value[0],value[1]);
   if(operation==='start')return R.start(value);
   if(operation==='replay')return R.replay(value);
-  return R[operation](value);
+  return R[operation](value);  // step, settle, trace, drop
 }'''
 
 
@@ -188,14 +206,13 @@ def browser_scenario():
     return steps, states, docs, no_packs, built_tag
 
 
-def server_scenario(kind, docs):
-    """kind is 'http' or 'mcp'. One server per document, its file the document the browser holds
-    after opening the example: the editor fills defaults in on open (and advances the revision), so
-    that, not the example file, is the document every surface runs."""
+def server_scenario(kind):
+    """kind is 'http' or 'mcp'. One server per document, its file the raw example file: the same
+    document the browser opened (contract #50 step 4)."""
     steps, states, tools, malformed, carried = [], {}, None, {}, {}
     with tempfile.TemporaryDirectory() as td:
-        for name, _ in DOCUMENTS:
-            file = Path(td) / f'{name}.sov';file.write_text(json.dumps(docs[name]), encoding='utf-8')
+        for name, text in DOCUMENTS:
+            file = Path(td) / f'{name}.sov';file.write_text(text, encoding='utf-8')
             port = free_port();base = f'http://127.0.0.1:{port}'
             proc = subprocess.Popen(['node', str(ROOT / 'mcp/server.mjs'), '--port', str(port), '--file', str(file)], cwd=ROOT,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -220,11 +237,14 @@ def server_scenario(kind, docs):
                         if operation == 'replay':return tuple(reversed(http_json(base + '/api/v1/replay', 'POST', value)))
                         if operation == 'query':
                             return tuple(reversed(http_json(base + f'/api/v1/runs/{request.quote(value[0], safe="")}/query', 'POST', value[1])))
+                        if operation == 'drop':
+                            return tuple(reversed(http_json(base + f'/api/v1/runs/{request.quote(value, safe="")}', 'DELETE')))
                         method = 'GET' if operation == 'trace' else 'POST'
                         return tuple(reversed(http_json(base + f'/api/v1/runs/{request.quote(value, safe="")}/{operation}', method)))
                 else:
                     tool = {'start': 'schematic.run.start', 'step': 'schematic.run.step', 'settle': 'schematic.run.settle',
-                            'trace': 'schematic.run.trace', 'query': 'schematic.state.query', 'replay': 'schematic.run.replay'}
+                            'trace': 'schematic.run.trace', 'query': 'schematic.state.query', 'replay': 'schematic.run.replay',
+                            'drop': 'schematic.run.drop'}
                     def call(operation, value):
                         if operation == 'start':args = value
                         elif operation == 'replay':args = {'trace': value}
@@ -240,6 +260,7 @@ def server_scenario(kind, docs):
                     malformed['query'] = http_json(base + f'/api/v1/runs/{handle}/query', 'POST', raw=b'{entity')
                     malformed['uri'] = http_raw_path(port, 'POST', '/api/v1/runs/%E0%A4%A/step')
                     malformed['uriTrace'] = http_raw_path(port, 'GET', '/api/v1/runs/%ZZ/trace')
+                    malformed['uriDrop'] = http_raw_path(port, 'DELETE', '/api/v1/runs/%ZZ')
                     malformed['route'] = http_json(base + '/api/v1/runs/x/fly', 'POST', {})
                 states[name] = (before, state())
             finally:
@@ -251,16 +272,16 @@ def server_scenario(kind, docs):
 
 def main() -> None:
     browser, browser_states, docs, no_packs, built_tag = browser_scenario()
-    http_steps, http_states, tools, malformed = server_scenario('http', docs)
-    mcp_steps, mcp_states, _, _ = server_scenario('mcp', docs)
+    http_steps, http_states, tools, malformed = server_scenario('http')
+    mcp_steps, mcp_states, _, _ = server_scenario('mcp')
 
-    # The six tools are listed in mcp/tools.json and in tools/list, each with an inputSchema.
+    # The seven tools are listed in mcp/tools.json and in tools/list, each with an inputSchema.
     manifest = json.loads((ROOT / 'mcp/tools.json').read_text(encoding='utf-8'))['tools']
     served = {t['name']: t for t in tools}
     for name in RUN_TOOLS:
         assert name in manifest and name in served, name
         assert served[name]['inputSchema']['type'] == 'object', served[name]
-    for name in ('schematic.run.step', 'schematic.run.settle', 'schematic.run.trace', 'schematic.state.query'):
+    for name in ('schematic.run.step', 'schematic.run.settle', 'schematic.run.trace', 'schematic.state.query', 'schematic.run.drop'):
         assert served[name]['inputSchema']['required'][0] == 'handle', served[name]
 
     labels = [label for label, _, _ in browser]
@@ -293,10 +314,14 @@ def main() -> None:
     trace = r['and.trace']
     assert trace['ok'] and trace['result']['format'] == 'soveraeign.schematic/trace@0.1' and trace['result']['through'] == 2, trace
     assert trace['head'] == trace['result']['head'] == settled['head'] == start['head'], trace
-    # The same fold as the golden and.11.sovtrace (the document differs by the editor's defaults, so ids and hashes do not).
+    # The same fold as the golden and.11.sovtrace.
     golden = json.loads((STATE / 'and.11.sovtrace').read_text(encoding='utf-8'))
     fold = lambda t: [(x['time']['logical'], x['subject']['entity'], x['subject']['point'], x['value'], x['observer']) for x in t['records']]
     assert fold(trace['result']) == fold(golden) and trace['result']['replayKey']['inputs'] == golden['replayKey']['inputs'], fold(trace['result'])
+    # Contract #50: the raw file on every surface is the golden's document, so the replay key (document id and
+    # hash included) and the records, ids and hashes, are the golden's.
+    assert trace['result']['replayKey'] == golden['replayKey'], (trace['result']['replayKey'], golden['replayKey'])
+    assert canon(trace['result']['records']) == canon(golden['records']), 'the and.sov trace records differ from the golden'
     replayed = r['and.replay']
     assert replayed['ok'] and replayed['runId'] == start['runId'] and replayed['handle'] is None and replayed['head'] == trace['head'] and replayed['tickAfter'] == 2, replayed
     assert replayed['result'] == {'records': trace['result']['records']}, replayed
@@ -320,6 +345,22 @@ def main() -> None:
     assert bad['code'] == 'RUN_REFUSED' and [x['code'] for x in bad['details']['refusals']] == ['PATH_DELAY_INVALID'], bad
     loop = r['loop.settle']
     assert loop['ok'] and loop['result'] == OSCILLATING and loop['tickAfter'] == 2, loop
+    # Drop (contract #50 step 5): the dropped run's receipt, as it stood; then its handle is gone, the other kept.
+    dropped = r['and.drop2']
+    assert dropped['ok'] and dropped['operation'] == 'schematic.run.drop' and dropped['result'] is None and dropped['error'] is None, dropped
+    assert dropped['handle'] == second['handle'] and dropped['runId'] == second['runId'] and (dropped['tickBefore'], dropped['tickAfter']) == (0, 0), dropped
+    assert dropped['head'] == step2['head'], dropped
+    assert canon(r['and.traceKept']['result']) == canon(trace['result']), 'dropping one run touched another'
+    for key in ('and.dropAgain', 'and.stepDropped', 'and.dropUnknown'):
+        assert r[key]['ok'] is False and r[key]['error']['code'] == 'RUN_NOT_FOUND' and r[key]['handle'] is None, r[key]
+    assert r['and.dropAgain']['operation'] == r['and.dropUnknown']['operation'] == 'schematic.run.drop', r['and.dropAgain']
+    # The limit: 64 live runs; the 65th start is refused (HTTP 409), nothing evicted; a drop frees one place.
+    fills = [r[f'limit.fill{i}'] for i in range(1, RUN_LIMIT + 1)]
+    assert all(x['ok'] for x in fills) and len({x['handle'] for x in fills}) == RUN_LIMIT, [x['error'] for x in fills if not x['ok']]
+    for key in ('limit.over', 'limit.overAgain'):
+        assert r[key]['ok'] is False and r[key]['error']['code'] == 'RUN_LIMIT' and r[key]['runId'] is None and r[key]['handle'] is None, r[key]
+    assert r['limit.drop']['ok'] and r['limit.drop']['handle'] == fills[0]['handle'], r['limit.drop']
+    assert r['limit.after']['ok'] and r['limit.after']['handle'] == fills[0]['runId'] + f'.{RUN_LIMIT + 1}', r['limit.after']
     for key in ('loop.unknown', 'loop.byRunId'):
         unknown = r[key]
         assert unknown['ok'] is False and unknown['error']['code'] == 'RUN_NOT_FOUND' and 'details' not in unknown['error'], unknown
@@ -327,7 +368,7 @@ def main() -> None:
 
     # Over HTTP, malformed input gets a 400 run receipt, not a 500.
     for key, operation in (('start', 'schematic.run.start'), ('replay', 'schematic.run.replay'), ('query', 'schematic.state.query'),
-                           ('uri', 'schematic.run.step'), ('uriTrace', 'schematic.run.trace')):
+                           ('uri', 'schematic.run.step'), ('uriTrace', 'schematic.run.trace'), ('uriDrop', 'schematic.run.drop')):
         status, receipt = malformed[key]
         assert status == 400 and receipt['schema'] == RECEIPT and receipt['operation'] == operation, (key, status, receipt)
         assert receipt['ok'] is False and receipt['error']['code'] == 'INPUT_INVALID' and receipt['runId'] is None and receipt['handle'] is None, (key, receipt)

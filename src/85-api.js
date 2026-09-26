@@ -1,7 +1,10 @@
 'use strict';
 // 0.1 Beta concern: browser API adapter over the canonical CRUD/document core.
 
-function normalizeRuntimeAfterCrud(){
+// The runtime projections a CRUD edit needs. `render:false` leaves the render to the caller: a port
+// edit from the settings panel renders in its deferred refresh (70-editor-controls.js), so an edit
+// committed inside a pointerdown does not rebuild the canvas under the gesture that is starting.
+function normalizeRuntimeAfterCrud({render:draw=true}={}){
   for(const n of nodes){ensureComponentStructure(n);componentCanvas(n)}
   // Boundary context must be final before attachment descriptors are projected;
   // otherwise render() would rewrite descriptor external types and become a
@@ -12,7 +15,7 @@ function normalizeRuntimeAfterCrud(){
   routeCache.clear();arrowPoseCache.clear();dragRouteSnapshots.clear();
   persistenceFingerprint=semanticFingerprint();
   updateRevisionReadout();
-  render();
+  if(draw)render();
 }
 function runtimeCrud(operation){
   const mutates=['create','update','delete'].includes(operation.op);
@@ -65,7 +68,8 @@ const SovSchematicAPI={
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
   run:{
     start:(args)=>pageRuns().start(args),step:(handle)=>pageRuns().step(handle),settle:(handle)=>pageRuns().settle(handle),
-    trace:(handle)=>pageRuns().trace(handle),query:(handle,subject)=>pageRuns().query(handle,subject),replay:(trace)=>pageRuns().replay(trace)
+    trace:(handle)=>pageRuns().trace(handle),query:(handle,subject)=>pageRuns().query(handle,subject),replay:(trace)=>pageRuns().replay(trace),
+    drop:(handle)=>pageRuns().drop(handle)
   },
   tools:()=>SovSchematicData.operationTools()
 };

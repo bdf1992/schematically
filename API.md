@@ -74,6 +74,7 @@ SovSchematicAPI.run.settle(handle)                  // quiet | oscillating {peri
 SovSchematicAPI.run.trace(handle)                   // the trace in `result`
 SovSchematicAPI.run.query(handle, {entity, point, channel, observable})   // point and channel optional
 SovSchematicAPI.run.replay(trace)
+SovSchematicAPI.run.drop(handle)                    // remove a run; its receipt as it stood, result null
 ```
 
 Each returns a run receipt, `soveraeign.schematic/run-receipt@0.1` (`DATA-FORMATS.md`), identical to the one HTTP and
@@ -82,13 +83,17 @@ the run's content-derived `runId` and a new `handle`, `<runId>.<n>` with `n` cou
 settle, trace and query take the handle (`RUN_NOT_FOUND` otherwise, a bare run id included), so two starts with the same
 inputs are two runs and never touch each other. A replay is not registered: its receipt has `handle: null`. A run always
 starts from the current document (`document.get()`), and replay replays against it. A budget over 1,000,000 is refused
-with `INPUT_INVALID` (the engine's `startRun` itself has no cap). A refused receipt's `error.details` carries what the
+with `INPUT_INVALID` (the engine's `startRun` itself has no cap). The registry holds at most 64 runs: a start beyond
+that is refused with `RUN_LIMIT` and nothing is evicted; `drop(handle)` removes a run (`RUN_NOT_FOUND` for an unknown
+handle), after which a start succeeds. A refused receipt's `error.details` carries what the
 refusal names (`refusals`, `{tick, left}`, `fields`, `entry`, ...). None of these calls captures history, changes the
 document or its revision, or saves recovery. Packs come from the page's `<script type="application/json"
 id="sov-packs">`, which `build.py` fills from `data/*.pack.json`; the unbuilt `index.source.html` carries an empty list,
 so a start or replay of a document that references a definition there is refused with `PACK_INVALID`, "this page
 carries no packs".
 
-The editor fills defaults into a document it opens and advances its revision, so a document opened in the browser
-hashes differently from the same file loaded by `node` or the server: a trace recorded against the file does not
-replay against the opened document (`REPLAY_KEY_MISMATCH`, `documentHash`).
+A document is the same document wherever it is held. The editor fills runtime defaults into the records it holds,
+but `document.get()` (and so every run, and every file it saves) carries the document as authored: opened and not
+edited, it equals `compactDocument` of the same file loaded by `node` or the server, its `documentHash` is the file's,
+and opening does not change its revision. A trace recorded against the file therefore replays against the opened
+document, and one recorded in the browser replays on the server.
