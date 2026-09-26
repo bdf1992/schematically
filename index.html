@@ -320,6 +320,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .settings-surface label{display:flex;flex-direction:column;gap:3px;font-size:9px;color:var(--muted);letter-spacing:.03em}
 .settings-surface input,.settings-surface select,.settings-surface textarea{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font-size:10px;padding:5px;outline:none;min-height:29px}
 .settings-surface textarea{height:72px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+/* A value the Form section only reads out (dimension comes with the type, #20): laid out like an input, not editable. */
+.settings-surface .form-readout{display:flex;align-items:center;min-height:29px;padding:5px;border:1px dashed var(--line);border-radius:6px;font-size:10px;color:var(--ink);cursor:default}
 .settings-wide{margin-top:7px}
 .settings-check{justify-content:flex-end;flex-direction:row!important;align-items:center;gap:6px!important}
 .settings-check input{min-height:0}
@@ -712,21 +714,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         <div class="selection-bar-fields" id="componentBarFields">
       <div class="icon-select component-template-select" aria-label="Component template">
         <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3"></rect><path d="M3 12h3M18 12h3M12 3v3M12 18v3"></path></svg></span>
-        <select id="barComponentType" class="bar-select bar-type" aria-label="Component template" title="Component template">
-        <optgroup label="Primitives">
-        <option value="point">Point</option>
-        <option value="path">Path</option>
-        <option value="plane">Plane</option>
-        </optgroup>
-        <option value="blank">Untyped</option>
-        <option value="act">Act</option>
-        <option value="hold">Hold</option>
-        <option value="buffer">Buffer</option>
-        <option value="gate">Gate</option>
-        <option value="switch">Switch</option>
-        <option value="limit">Limit</option>
-        <option value="receipt">Receipt</option>
-        </select>
+        <!-- Options come from the symbol catalog, the same list as the palette (20-ui.js syncComponentTypeOptions). -->
+        <select id="barComponentType" class="bar-select bar-type" aria-label="Component type" title="Component type · dimension comes with it"></select>
       </div>
       <input id="barComponentLabel" class="bar-input bar-label" type="text" placeholder="Label" aria-label="Component label" title="Component label">
       <button id="barComponentColorSlot" class="color-slot-chip" type="button" title="Boundary color" aria-label="Component boundary palette slot"></button>
@@ -782,14 +771,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       <div id="componentSettingsFields" class="settings-surface">
         <div class="settings-head"><b>Component settings</b><span>Form first · appearance second</span></div>
         <details class="form-settings" id="formSettings" open>
-          <summary><b>Form</b><span class="helper-snippet">dimension · interior · attachments · ports</span></summary>
+          <summary><b>Form</b><span class="helper-snippet">type · interior · attachments · ports</span></summary>
           <div class="settings-grid settings-grid-compact">
-            <label>Dimension
-              <select id="formDimension">
-                <option value="0">0D · Point</option>
-                <option value="1">1D · Path</option>
-                <option value="2">2D · Plane</option>
-              </select>
+            <label title="Dimension comes with the type; change the type in the selection bar">Dimension
+              <output id="formDimensionReadout" class="form-readout"></output>
             </label>
             <label data-dims="0" id="formPointPositionRow" hidden title="On a multi-line boundary a point sits on a line or across a band; that decides which side it reaches">Position
               <select id="formPointPosition" aria-label="Position on the host's section"></select>
@@ -823,7 +808,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
             <div class="ports-list" id="portsList" role="list" aria-label="Ports"></div>
             <button id="portsAddBtn" class="bar-action settings-action" type="button" title="Add a port on the right side">Add port</button>
           </div>
-          <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
+          <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. It comes with the type: every entry in the type list carries its dimension. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
         </details>
         <details class="form-settings" id="accessSettings">
           <summary><b>Access</b><span class="helper-snippet">principal · access list</span></summary>
@@ -5147,7 +5132,7 @@ const visualText=document.getElementById('visualText');
 const visualSvgRow=document.getElementById('visualSvgRow');
 const visualSvgMarkup=document.getElementById('visualSvgMarkup');
 const formSettings=document.getElementById('formSettings');
-const formDimension=document.getElementById('formDimension');
+const formDimensionReadout=document.getElementById('formDimensionReadout');
 const formAttachments=document.getElementById('formAttachments');
 const formMaterial=document.getElementById('formMaterial');
 const formBodyThickness=document.getElementById('formBodyThickness');
@@ -5428,6 +5413,19 @@ function symbolOf(symbolId){
   const g=SovSchematicNotation.glyphOf(activeNotation(),symbolId);
   return {id:symbolId,name:g?.title||String(symbolId||''),family:g?.family||'',role:'',diagram_class:'',meaning:g?.meaning||'',verbs:[],properties:[]};
 }
+// The one list of what a Component can be, in the order it is shown: Point, Path, Plane, then the
+// Component types, the Signals, then the glyphs the active notation adds. The palette and the bar's
+// type control both read it, so they never diverge (issue #20). Every entry carries the dimension
+// its type gives; dimension is a property of the type, never chosen apart from it.
+function symbolCatalog(){
+  const notation=activeNotation(),own=Object.keys(notation.glyphs||{}).filter(id=>!byId(id));
+  const groups=[...Object.entries(GROUPS),...(own.length?[[notation.name||notation.id,own]]:[])];
+  return groups.map(([group,ids])=>({group,entries:ids.map(id=>{
+    const symbol=symbolOf(id),preset=SovSchematicData.templatePreset(id);
+    return {id,group,symbol,preset,name:notation.glyphs?.[id]?.title||sentenceCase(symbol.name),dimension:preset?.form?.dimension??2,carrier:!!preset?.carrier};
+  })}));
+}
+function symbolCatalogEntry(symbolId){for(const {entries} of symbolCatalog()){const e=entries.find(x=>x.id===symbolId);if(e)return e}return null}
 const Attachment=SovSchematicAttachment;
 function componentAttachmentPointIds(n){return Attachment.pointIds(n)}
 function componentAttachmentPoints(n){return Attachment.descriptors(n,componentConfig(n).ports)}
@@ -6457,11 +6455,24 @@ function syncSectionPositionSelect(select,row,owner,compat){
   s.bands.forEach((b,k)=>{const o=document.createElement('option');o.value=`through:${k}`;o.textContent=`Through ${b.role||'band'} ${k+1} (${b.fill}) · a crossing`;select.appendChild(o)});
   select.value=pos.line!=null?`line:${pos.line}`:`through:${pos.through}`;
 }
+// The bar's type control offers the same list as the palette (symbolCatalog, issue #20): one
+// optgroup per group, each entry named with the dimension its type gives. Rebuilt when the notation
+// changes, as the palette is; the dimension read-outs (the bar badge, the Form section) follow it.
+let typeOptionsNotationKey=null;
+function syncComponentTypeOptions(){
+  const key=activeNotation().id;if(typeOptionsNotationKey===key&&barComponentType.options.length)return;typeOptionsNotationKey=key;
+  barComponentType.replaceChildren();
+  for(const {group,entries} of symbolCatalog()){
+    const og=document.createElement('optgroup');og.label=group;
+    for(const e of entries){const o=document.createElement('option');o.value=e.id;o.textContent=`${e.name} · ${e.dimension}D`;og.appendChild(o)}
+    barComponentType.appendChild(og);
+  }
+}
 function syncSelectionFormState(kind,entity){
   if(kind==='port'||!entity){barFormState.hidden=true;return}
   barFormState.hidden=false;barFormState.disabled=false;barFormState.classList.remove('wire-form');
   if(kind==='component'){
-    const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;barFormState.title=`${formDimensionLabel(f)} · configure Form`;
+    const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;barFormState.title=`${formDimensionLabel(f)} · comes with the type · configure Form`;
     barFormState.classList.toggle('active',f.frame.mode!=='none'||f.regions.interior.state==='open');
   }else{
     barFormState.textContent='1D';barFormState.title='Wire Form · 1D path · configure Wire settings';barFormState.classList.add('wire-form');
@@ -6474,7 +6485,7 @@ function syncComponentVisualPanel(n){
   visualText.value=p.text;visualSvgMarkup.value=p.graphic.svg;visualSvgRow.hidden=p.graphic.kind!=='custom';
   setSlotChip(visualInteriorColor,p.interiorColorSlot);
   const f=componentForm(n);
-  formDimension.value=String(f.dimension);formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
+  formDimensionReadout.textContent=`${formDimensionLabel(f)} · ${symbolCatalogEntry(n.symbolId)?.name||symbolOf(n.symbolId).name}`;formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
   formSection.value=sectionPresetName(f,2);
   syncSectionPositionSelect(formPointPosition,formPointPositionRow,n,'out');
   formInteriorState.value=f.regions.interior.state;formFrameMode.value=f.frame.mode;formFrameThickness.value=String(f.frame.thickness);formFrameDepth.value=String(f.frame.depth);
@@ -6586,7 +6597,7 @@ function showComponentBar(n){
   const cfg=componentConfig(n);
   selectionBar.hidden=false;
   componentBarFields.hidden=false;connectionBarFields.hidden=true;portBarFields.hidden=true;
-  barComponentType.value=n.symbolId;
+  syncComponentTypeOptions();barComponentType.value=n.symbolId;
   barComponentLabel.value=cfg.label;
   setSlotChip(barComponentColorSlot,cfg.colorSlot);
   syncSelectionFormState('component',n);
@@ -7054,22 +7065,20 @@ let paletteNotationKey=null;
 function buildSymbolPalette(){
   const notation=activeNotation();if(paletteNotationKey===notation.id&&palette.childElementCount)return;paletteNotationKey=notation.id;
   palette.replaceChildren();
-  const own=Object.keys(notation.glyphs||{}).filter(id=>!byId(id));
-  const groups=[...Object.entries(GROUPS),...(own.length?[[notation.name||notation.id,own]]:[])];
-  for(const [group,ids] of groups){
+  // The same list the bar's type control offers (symbolCatalog, issue #20), one section per group.
+  for(const {group,entries} of symbolCatalog()){
     const section=document.createElement('div'); section.className='section';
     section.dataset.group=group.toLowerCase();
     const h=document.createElement('h2');h.textContent=group;section.appendChild(h);
     const grid=document.createElement('div');grid.className='symbol-grid'+(group==='Primitives'?' primitive-grid':'');section.appendChild(grid);
-    ids.forEach(id=>{
-      const g=notation.glyphs?.[id],s=symbolOf(id);
-      const b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
+    for(const {id,symbol:s,preset,name:title,dimension} of entries){
+      const b=document.createElement('button');
       b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
-      const caption=preset?`${preset.form.dimension}D · ${sentenceCase(s.role)}`:[s.family,s.diagram_class].filter(Boolean).map(sentenceCase).join(' · ');
-      b.innerHTML=glyph(id);const name=document.createElement('b');name.textContent=g?.title||sentenceCase(s.name);const small=document.createElement('small');small.textContent=caption;b.append(name,small);
+      const caption=preset?`${dimension}D · ${sentenceCase(s.role)}`:[s.family,s.diagram_class].filter(Boolean).map(sentenceCase).join(' · ');
+      b.innerHTML=glyph(id);const name=document.createElement('b');name.textContent=title;const small=document.createElement('small');small.textContent=caption;b.append(name,small);
       bindPaletteComponent(b,id);
       grid.appendChild(b);
-    });
+    }
     palette.appendChild(section);
   }
 }
@@ -10367,7 +10376,8 @@ workspace.addEventListener('pointerdown',e=>{if(e.target===workspace && !panDrag
 barComponentType.addEventListener('change',()=>{
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'type change'))return;setHistoryHint('Change Component type');
   const next=barComponentType.value;
-  if(!GROUPS.Components.includes(next)&&!GROUPS.Primitives.includes(next)){barComponentType.value=n.symbolId;return}
+  // The bar offers exactly the catalog (symbolCatalog, issue #20); anything else is not a type.
+  if(!symbolCatalogEntry(next)){barComponentType.value=n.symbolId;return}
 
   // A Path is a carrier drawn from the palette; a Component is not retyped into one (#19).
   const preset=SovSchematicData.templatePreset(next);
@@ -10563,7 +10573,7 @@ barWireSection?.addEventListener('change',()=>{
   if(v==='line')delete w.form.section;else if(v!=='custom')w.form.section=SovSchematicData.sectionPreset(v,1);
   routeCache.clear();renderWires();const i=wires.indexOf(w);selectWire(i,{focus:false});scheduleHistoryCapture();
 });
-formDimension.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.dimension=Number(formDimension.value);f.body.kind=['point','path','surface'][f.dimension]}));
+// Dimension has no control of its own: it comes with the type, chosen in the bar (issue #20).
 formAttachments.addEventListener('change',()=>{
   // Built-in 2D points are template defaults. Turning them off is refused while a Wire
   // still ends on one, so the change never silently orphans a carrier.

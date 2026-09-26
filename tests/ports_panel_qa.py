@@ -293,13 +293,14 @@ with sync_playwright() as p:
     page.locator('#formAttachments').select_option('standard')
     refused(page, h, c, 'DEFINITION_PORTS', 'bound attachments')
     assert page.evaluate('()=>formAttachments.value') == 'none'
-    h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
-    page.locator('#formDimension').select_option('0')
-    refused(page, h, c, 'DEFINITION_PORTS', 'bound dimension')
-    assert page.evaluate('()=>formDimension.value') == '2'
-    h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
-    page.locator('#barComponentType').select_option('gate')
-    refused(page, h, c, 'DEFINITION_PORTS', 'bound retype')
+    # Dimension has no control of its own (#20): it changes only with the type, and a retype to a
+    # 2D type or to a Point is refused alike.
+    assert page.evaluate("()=>document.getElementById('formDimension')") is None
+    for target in ('gate', 'point'):
+        h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
+        page.locator('#barComponentType').select_option(target)
+        refused(page, h, c, 'DEFINITION_PORTS', f'bound retype to {target}')
+        assert page.evaluate('()=>barComponentType.value') == 'act'
 
     # --- Step 5: settling a bound Component on a Wire is refused ----------------------------
     page.evaluate('()=>{closeSelectionSettings()}')
@@ -438,8 +439,9 @@ with sync_playwright() as p:
         return armed
 
     # Step 14: the review's case. An unbound `pl` on a Wire with its interior open hosts a bound `and`;
-    # closing pl's interior, retyping pl, changing its dimension or deleting it would make `and` fall
-    # back onto the Wire's canvas (ports start/end). Each is refused: nothing changes, no history.
+    # closing pl's interior, retyping pl (to a 2D type or to a Point, which is how its dimension
+    # changes, #20) or deleting it would make `and` fall back onto the Wire's canvas (ports
+    # start/end). Each is refused: nothing changes, no history.
     for mode in ('interior', 'retype', 'dimension', 'delete'):
         pg = fresh()
         pg.evaluate("""()=>{const A=SovSchematicAPI;
@@ -472,7 +474,7 @@ with sync_playwright() as p:
         elif mode == 'retype':
             pg.locator('#barComponentType').select_option('gate')
         elif mode == 'dimension':
-            pg.locator('#formDimension').select_option('1')
+            pg.locator('#barComponentType').select_option('point')
         else:
             pg.locator('#barDeleteSelection').click()
         pg.wait_for_timeout(450)
@@ -485,7 +487,7 @@ with sync_playwright() as p:
         elif mode == 'retype':
             assert pg.evaluate('()=>barComponentType.value') == 'act'
         elif mode == 'dimension':
-            assert pg.evaluate('()=>formDimension.value') == '2'
+            assert pg.evaluate('()=>barComponentType.value') == 'act' and pg.evaluate('()=>barFormState.textContent') == '2D'
         # An unbound child falls back as before: with `and` unbound, the same edit goes through.
         if mode == 'interior':
             pg.evaluate("()=>{SovSchematicAPI.update('component','and',{config:{definition:null}})}")

@@ -173,11 +173,24 @@ function syncSectionPositionSelect(select,row,owner,compat){
   s.bands.forEach((b,k)=>{const o=document.createElement('option');o.value=`through:${k}`;o.textContent=`Through ${b.role||'band'} ${k+1} (${b.fill}) · a crossing`;select.appendChild(o)});
   select.value=pos.line!=null?`line:${pos.line}`:`through:${pos.through}`;
 }
+// The bar's type control offers the same list as the palette (symbolCatalog, issue #20): one
+// optgroup per group, each entry named with the dimension its type gives. Rebuilt when the notation
+// changes, as the palette is; the dimension read-outs (the bar badge, the Form section) follow it.
+let typeOptionsNotationKey=null;
+function syncComponentTypeOptions(){
+  const key=activeNotation().id;if(typeOptionsNotationKey===key&&barComponentType.options.length)return;typeOptionsNotationKey=key;
+  barComponentType.replaceChildren();
+  for(const {group,entries} of symbolCatalog()){
+    const og=document.createElement('optgroup');og.label=group;
+    for(const e of entries){const o=document.createElement('option');o.value=e.id;o.textContent=`${e.name} · ${e.dimension}D`;og.appendChild(o)}
+    barComponentType.appendChild(og);
+  }
+}
 function syncSelectionFormState(kind,entity){
   if(kind==='port'||!entity){barFormState.hidden=true;return}
   barFormState.hidden=false;barFormState.disabled=false;barFormState.classList.remove('wire-form');
   if(kind==='component'){
-    const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;barFormState.title=`${formDimensionLabel(f)} · configure Form`;
+    const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;barFormState.title=`${formDimensionLabel(f)} · comes with the type · configure Form`;
     barFormState.classList.toggle('active',f.frame.mode!=='none'||f.regions.interior.state==='open');
   }else{
     barFormState.textContent='1D';barFormState.title='Wire Form · 1D path · configure Wire settings';barFormState.classList.add('wire-form');
@@ -190,7 +203,7 @@ function syncComponentVisualPanel(n){
   visualText.value=p.text;visualSvgMarkup.value=p.graphic.svg;visualSvgRow.hidden=p.graphic.kind!=='custom';
   setSlotChip(visualInteriorColor,p.interiorColorSlot);
   const f=componentForm(n);
-  formDimension.value=String(f.dimension);formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
+  formDimensionReadout.textContent=`${formDimensionLabel(f)} · ${symbolCatalogEntry(n.symbolId)?.name||symbolOf(n.symbolId).name}`;formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
   formSection.value=sectionPresetName(f,2);
   syncSectionPositionSelect(formPointPosition,formPointPositionRow,n,'out');
   formInteriorState.value=f.regions.interior.state;formFrameMode.value=f.frame.mode;formFrameThickness.value=String(f.frame.thickness);formFrameDepth.value=String(f.frame.depth);
@@ -302,7 +315,7 @@ function showComponentBar(n){
   const cfg=componentConfig(n);
   selectionBar.hidden=false;
   componentBarFields.hidden=false;connectionBarFields.hidden=true;portBarFields.hidden=true;
-  barComponentType.value=n.symbolId;
+  syncComponentTypeOptions();barComponentType.value=n.symbolId;
   barComponentLabel.value=cfg.label;
   setSlotChip(barComponentColorSlot,cfg.colorSlot);
   syncSelectionFormState('component',n);

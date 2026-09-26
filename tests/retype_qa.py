@@ -63,10 +63,11 @@ with sync_playwright() as p:
     assert reference['point']['points'] == ['out'] and reference['plane']['points'] == [], reference
     assert reference['act']['points'] == ['in', 'out', 'control'] and reference['act']['dimension'] == 2, reference['act']
 
-    # The bar offers a static option list; it can only retype to what it offers (#18, #20
-    # make that list data). The API takes every Component type.
+    # The bar offers the symbol catalog, the same list as the palette (#20): every primitive and
+    # every Component type. The API takes the same.
+    page.evaluate("()=>{SovSchematicAPI.create('component',{id:'probe',symbolId:'act',x:100,y:100});render();selectNode('probe');SovSchematicAPI.delete('component','probe')}")
     bar_offers = page.evaluate("()=>[...barComponentType.options].map(o=>o.value)")
-    assert set(PRIMITIVES) <= set(bar_offers) and 'act' in bar_offers, bar_offers
+    assert set(PRIMITIVES + COMPONENTS) <= set(bar_offers), bar_offers
 
     for surface, retype in (('api', retype_api), ('bar', retype_bar)):
         for primitive in PRIMITIVES:
