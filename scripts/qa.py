@@ -10,10 +10,14 @@ import time
 ROOT=Path(__file__).resolve().parents[1]
 
 STATIC=[
+    'tests/canonical_qa.py',
     'tests/dimensional_form_qa.py',
     'tests/pre_repo_hardening_qa.py',
     'tests/author_offline_qa.py',
     'tests/file_load_presets_qa.py',
+    'tests/declared_ports_qa.py',
+    'tests/state_space_contracts_qa.py',
+    'tests/state_space_run_qa.py',
     'tests/file_load_wire_canvas_qa.py',
     'tests/desktop_shell_qa.py',
     'tests/optimize_sov_qa.py',

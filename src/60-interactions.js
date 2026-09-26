@@ -515,7 +515,8 @@ barComponentType.addEventListener('change',()=>{
   const wouldRemoveBuiltins=f.dimension!==nextDimension||(nextDefaults==='none'&&Attachment.attachmentDefaults(n)!=='none');
   if(wouldRemoveBuiltins&&wiresOnBuiltinPoints(n).length){barComponentType.value=n.symbolId;statusEl.textContent='Detach Wires from built-in points first';return}
   const beforeOpen=formHostsChildren(n);
-  SovSchematicData.applySymbol(n,next);
+  // The data core refuses a retype that would remove a port a Wire ends on (PORT_IN_USE).
+  try{SovSchematicData.applySymbol(n,next,diagram)}catch(error){barComponentType.value=n.symbolId;statusEl.textContent=error.message;return}
   if(beforeOpen&&!formHostsChildren(n)){const fallback=n.canvasId||GLOBAL_CANVAS_ID;for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}}
   SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
   ensureComponentStructure(n);

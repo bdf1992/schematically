@@ -25,7 +25,8 @@
             "kind": "none"
           }
         },
-        "ports": {}
+        "ports": {},
+        "attachmentDefaults": "none"
       },
       "editor": {
         "pinned": true

@@ -1041,6 +1041,153 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 </aside>
 </div>
 
+<script data-beta-module="src/03-canonical.js">
+/* BEGIN src/03-canonical.js */
+'use strict';
+// 0.1 Beta concern: canonical JSON encoding (RFC 8785 / JCS for the value set in use),
+// a synchronous pure-JS SHA-256, and the seeded draw used by merges and QA.
+// This module is intentionally pure: no DOM, no dependencies, no async.
+(function(root,factory){
+  const api=factory();
+  root.SovSchematicCanonical=api;
+  if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof globalThis!=='undefined'?globalThis:this,function(){
+  function unsupported(){
+    const e=new Error('CANONICAL_UNSUPPORTED: value is not a canonicalizable JSON value');
+    e.code='CANONICAL_UNSUPPORTED';
+    return e;
+  }
+  function isPlainObject(value){
+    if(value===null||typeof value!=='object'||Array.isArray(value))return false;
+    const proto=Object.getPrototypeOf(value);
+    return proto===Object.prototype||proto===null;
+  }
+  // RFC 8785: object keys sorted by UTF-16 code unit; JS's default string
+  // comparison (and Array#sort's default comparator on strings) is exactly that.
+  function encodeValue(value){
+    if(value===null)return 'null';
+    const t=typeof value;
+    if(t==='boolean')return value?'true':'false';
+    if(t==='number'){
+      if(!Number.isFinite(value))throw unsupported();
+      return JSON.stringify(value); // -0 -> '0', 1e21 -> '1e+21', matches JCS number form
+    }
+    if(t==='string')return JSON.stringify(value);
+    if(t==='undefined'||t==='function'||t==='symbol'||t==='bigint')throw unsupported();
+    if(Array.isArray(value))return '['+value.map(encodeValue).join(',')+']';
+    if(t==='object'){
+      if(!isPlainObject(value))throw unsupported();
+      const keys=Object.keys(value).sort();
+      return '{'+keys.map(k=>JSON.stringify(k)+':'+encodeValue(value[k])).join(',')+'}';
+    }
+    throw unsupported();
+  }
+  function canonicalize(value){return encodeValue(value)}
+
+  // --- SHA-256 (FIPS 180-4), synchronous, no dependencies ---
+  const K=[
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ];
+  function rotr(n,x){return ((x>>>n)|(x<<(32-n)))>>>0}
+  function utf8Bytes(str){
+    const bytes=[];
+    for(let i=0;i<str.length;i++){
+      let code=str.charCodeAt(i);
+      if(code>=0xd800&&code<=0xdbff&&i+1<str.length){
+        const next=str.charCodeAt(i+1);
+        if(next>=0xdc00&&next<=0xdfff){
+          code=0x10000+(code-0xd800)*0x400+(next-0xdc00);
+          i++;
+        }
+      }
+      if(code<0x80)bytes.push(code);
+      else if(code<0x800)bytes.push(0xc0|(code>>6),0x80|(code&0x3f));
+      else if(code<0x10000)bytes.push(0xe0|(code>>12),0x80|((code>>6)&0x3f),0x80|(code&0x3f));
+      else bytes.push(0xf0|(code>>18),0x80|((code>>12)&0x3f),0x80|((code>>6)&0x3f),0x80|(code&0x3f));
+    }
+    return bytes;
+  }
+  function sha256Bytes(bytes){
+    let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+    const msgLen=bytes.length;
+    const padded=bytes.slice();
+    padded.push(0x80);
+    while(padded.length%64!==56)padded.push(0);
+    const bitLen=msgLen*8;
+    const lenHigh=Math.floor(bitLen/0x100000000)>>>0;
+    const lenLow=bitLen>>>0;
+    for(let i=3;i>=0;i--)padded.push((lenHigh>>>(i*8))&0xff);
+    for(let i=3;i>=0;i--)padded.push((lenLow>>>(i*8))&0xff);
+    const w=new Array(64);
+    for(let base=0;base<padded.length;base+=64){
+      for(let t=0;t<16;t++){
+        const o=base+t*4;
+        w[t]=((padded[o]<<24)|(padded[o+1]<<16)|(padded[o+2]<<8)|padded[o+3])>>>0;
+      }
+      for(let t=16;t<64;t++){
+        const s0=rotr(7,w[t-15])^rotr(18,w[t-15])^(w[t-15]>>>3);
+        const s1=rotr(17,w[t-2])^rotr(19,w[t-2])^(w[t-2]>>>10);
+        w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0;
+      }
+      let a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
+      for(let t=0;t<64;t++){
+        const S1=rotr(6,e)^rotr(11,e)^rotr(25,e);
+        const ch=(e&f)^((~e)&g);
+        const temp1=(h+S1+ch+K[t]+w[t])>>>0;
+        const S0=rotr(2,a)^rotr(13,a)^rotr(22,a);
+        const maj=(a&b)^(a&c)^(b&c);
+        const temp2=(S0+maj)>>>0;
+        h=g;g=f;f=e;e=(d+temp1)>>>0;d=c;c=b;b=a;a=(temp1+temp2)>>>0;
+      }
+      h0=(h0+a)>>>0;h1=(h1+b)>>>0;h2=(h2+c)>>>0;h3=(h3+d)>>>0;
+      h4=(h4+e)>>>0;h5=(h5+f)>>>0;h6=(h6+g)>>>0;h7=(h7+h)>>>0;
+    }
+    return [h0,h1,h2,h3,h4,h5,h6,h7];
+  }
+  function toHex(words){return words.map(w=>w.toString(16).padStart(8,'0')).join('')}
+  function sha256Hex(text){return toHex(sha256Bytes(utf8Bytes(String(text))))}
+
+  // --- Seeded draw: rejection-sampled Fisher-Yates over a SHA-256 word stream ---
+  function drawOrder(seed,keyParts,items){
+    const decorated=items.map(item=>({item,key:canonicalize(item)}));
+    decorated.sort((a,b)=>a.key<b.key?-1:a.key>b.key?1:0);
+    const out=decorated.map(d=>d.item);
+    let counter=0,words=[],idx=0;
+    function nextWord(){
+      if(idx>=words.length){
+        const hex=sha256Hex(canonicalize([seed,...keyParts,counter]));
+        counter++;
+        words=[];
+        for(let i=0;i<8;i++)words.push(parseInt(hex.slice(i*8,i*8+8),16)>>>0);
+        idx=0;
+      }
+      return words[idx++];
+    }
+    function drawIndex(i){
+      const range=i+1;
+      const limit=Math.floor(4294967296/range)*range;
+      let w;
+      do{w=nextWord()}while(w>=limit);
+      return w%range;
+    }
+    for(let i=out.length-1;i>0;i--){
+      const j=drawIndex(i);
+      const tmp=out[i];out[i]=out[j];out[j]=tmp;
+    }
+    return out;
+  }
+
+  return {canonicalize,sha256Hex,drawOrder};
+});
+/* END src/03-canonical.js */
+</script>
 <script data-beta-module="src/06-attachment-core.js">
 /* BEGIN src/06-attachment-core.js */
 'use strict';
@@ -1062,52 +1209,114 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(placement.kind==='edge'||placement.kind==='path')return 1;
     return 2;
   }
-  // 2D built-in points (left/right/top) are template defaults, not an ontology.
-  // `config.attachmentDefaults='none'` exposes no built-ins: the surface is then
-  // attachable only through hosted 0D Points and data-declared boundary points.
+  // A 2D Component's ports are declared data, never assumed here. Under
+  // `config.attachmentDefaults='standard'` (explicit or implied) it exposes its
+  // template's declared ports, then its authored `config.attachmentPoints` as
+  // additions; under 'none' the authored list is the complete set. The data core
+  // registers the template lookup (`useTemplatePorts`), so this module holds no
+  // port set of its own and stays free of DOM, rendering and editor state.
   const ATTACHMENT_DEFAULT_MODES=new Set(['standard','none']);
+  const PORT_SIDES=['left','right','top','bottom'];
+  const PORT_FLOWS=['in','out','control','duplex','trigger'];
+  const DEFAULT_CHANNELS=[{id:'main'}];
+  let templatePortsOf=()=>[];
+  function useTemplatePorts(lookup){templatePortsOf=typeof lookup==='function'?lookup:()=>[];return templatePortsOf}
   function attachmentDefaults(entity){
     const mode=entity?.config?.attachmentDefaults;
     return ATTACHMENT_DEFAULT_MODES.has(mode)?mode:'standard';
   }
+  // Absent channels read as the one default channel, `main`. A channel's `merge` (the
+  // merge@1 parameters for same-tick fan-in) is carried as written; the data core checks
+  // it on edit and the state space reports it at load.
+  function portChannels(port){
+    const out=[],seen=new Set();
+    for(const c of Array.isArray(port?.channels)?port.channels:[]){
+      const id=String(c?.id??'').trim();if(!id||seen.has(id))continue;
+      seen.add(id);const channel={id};
+      if(c&&typeof c==='object'&&c.merge!==undefined)channel.merge=JSON.parse(JSON.stringify(c.merge));
+      out.push(channel);
+    }
+    return out.length?out:DEFAULT_CHANNELS.map(c=>({...c}));
+  }
+  function channelIds(spec){return portChannels(spec).map(c=>c.id)}
   // Connectivity follows the lower-dimensional host when a richer form is settled onto it.
   // A 2D ACT hosted by a Wire therefore exposes only the Wire-aligned 1D endpoints.
   function effectiveDimension(entity){return Math.min(intrinsicDimension(entity),hostDimension(entity))}
+  function declaredSpec(raw,{authored=false}={}){
+    if(!raw||typeof raw!=='object')return null;
+    const id=String(raw.id||'').trim();if(!id)return null;
+    const side=PORT_SIDES.includes(raw.side)?raw.side:null;if(!side)return null;
+    const compatId=String(raw.compatId||id).trim()||id;
+    const t=Math.max(0,Math.min(1,Number.isFinite(Number(raw.t))?Number(raw.t):.5));
+    // `flow` is the direction; legacy `defaultFlow` is read only when `flow` is absent.
+    const flowRaw=raw.flow!==undefined?raw.flow:raw.defaultFlow;
+    const flow=PORT_FLOWS.includes(flowRaw)?flowRaw:'duplex';
+    const spec={id,compatId,side,role:'boundary',defaultFlow:flow,flow,t,channels:portChannels(raw)};
+    if(typeof raw.label==='string'&&raw.label)spec.label=raw.label;
+    if(authored)spec.authored=true;
+    return spec;
+  }
+  function templatePointSpecs(entity){
+    if(attachmentDefaults(entity)==='none')return [];
+    const declared=templatePortsOf(entity?.symbolId,entity);
+    return (Array.isArray(declared)?declared:[]).map(raw=>declaredSpec(raw)).filter(Boolean);
+  }
+  // A Point (0D) has one port, `self`. It may declare it, to give it channels and merges, as a
+  // single `config.attachmentPoints` entry `{id: 'self', flow?, channels}` with no side or t (a
+  // placeholder side/t, as the first runtime wrote, is read the same way and cleaned on load).
+  function selfDeclaration(entity){
+    const list=Array.isArray(entity?.config?.attachmentPoints)?entity.config.attachmentPoints:[];
+    const raw=list.find(p=>p&&typeof p==='object'&&String(p.id??'').trim()==='self');
+    if(!raw)return null;
+    const declared={id:'self'};
+    if(PORT_FLOWS.includes(raw.flow))declared.flow=raw.flow;
+    declared.channels=portChannels(raw);
+    return declared;
+  }
   function basePointSpecs(d,entity=null){
-    if(d===0)return [{id:'self',compatId:'out',side:'point',role:'self',defaultFlow:'duplex',t:.5}];
+    if(d===0){
+      const spec={id:'self',compatId:'out',side:'point',role:'self',defaultFlow:'duplex',t:.5},declared=selfDeclaration(entity);
+      if(declared){spec.channels=declared.channels;if(declared.flow){spec.flow=declared.flow;spec.defaultFlow=declared.flow}}
+      return [spec];
+    }
     if(d===1)return [
       {id:'start',compatId:'in',side:'left',role:'endpoint',defaultFlow:'in',t:0},
       {id:'end',compatId:'out',side:'right',role:'endpoint',defaultFlow:'out',t:1}
     ];
-    if(attachmentDefaults(entity)==='none')return [];
-    return [
-      {id:'left',compatId:'in',side:'left',role:'boundary',defaultFlow:'in',t:.5},
-      {id:'right',compatId:'out',side:'right',role:'boundary',defaultFlow:'out',t:.5},
-      {id:'top',compatId:'control',side:'top',role:'boundary',defaultFlow:'control',t:.5}
-    ];
+    return templatePointSpecs(entity);
   }
-  function customPointSpecs(entity,d,base){
-    // 0.1 RC seam: built-in dimensional points are defaults, not a permanent
-    // cardinality ceiling. Full cell/facet grammar remains post-RC; a 2D
-    // template may already declare extra boundary attachment points as data.
+  function customPointSpecs(entity,d,base,{keepCollisions=false}={}){
+    // Authored ports: additions to the template's under 'standard', the whole set under
+    // 'none'. Only a 2D surface exposes them. An entry that names no valid side is not
+    // exposed. An entry whose id is already taken (as an id or a compatId) is dropped,
+    // unless `keepCollisions` asks it kept: it is then exposed under a fresh id
+    // (`<id>~2`, `<id>~3`, ...: the first not taken), tagged `originalId` so a caller
+    // (load cleaning) can decide whether a bound Wire still needs it. A compatId already
+    // taken falls back to the entry's own id.
     if(d!==2)return [];
     const authored=Array.isArray(entity?.config?.attachmentPoints)?entity.config.attachmentPoints:[];
-    const usedIds=new Set(base.map(x=>x.id)),usedCompat=new Set(base.map(x=>x.compatId));
+    const used=new Set(base.flatMap(x=>[x.id,x.compatId]));
     const out=[];
     for(const raw of authored){
-      if(!raw||typeof raw!=='object')continue;
-      const id=String(raw.id||'').trim();if(!id||usedIds.has(id))continue;
-      const side=['left','right','top','bottom'].includes(raw.side)?raw.side:null;if(!side)continue;
-      let compatId=String(raw.compatId||id).trim()||id;
-      if(usedCompat.has(compatId))compatId=id;
-      if(usedCompat.has(compatId))continue;
-      const t=Math.max(0,Math.min(1,Number.isFinite(Number(raw.t))?Number(raw.t):.5));
-      const defaultFlow=['in','out','control','duplex','trigger'].includes(raw.defaultFlow)?raw.defaultFlow:'duplex';
-      out.push({id,compatId,side,role:'boundary',defaultFlow,t,authored:true});
-      usedIds.add(id);usedCompat.add(compatId);
+      const spec=declaredSpec(raw,{authored:true});if(!spec)continue;
+      if(used.has(spec.id)){
+        if(!keepCollisions)continue;
+        const originalId=spec.id;
+        let n=2,candidate=`${originalId}~${n}`;
+        while(used.has(candidate))candidate=`${originalId}~${++n}`;
+        spec.id=candidate;spec.originalId=originalId;
+      }
+      if(used.has(spec.compatId)||spec.compatId===spec.id)spec.compatId=spec.id;
+      out.push(spec);
+      used.add(spec.id);used.add(spec.compatId);
     }
     return out;
   }
+  // The authored ports a 2D surface of this record exposes, whatever its current host.
+  // `{keepCollisions:true}` keeps a colliding entry under a fresh id (`originalId` marks
+  // it) instead of dropping it; load cleaning uses this to decide, per Wire, whether the
+  // entry is still needed.
+  function authoredPointSpecs(entity,opts){return customPointSpecs(entity,2,templatePointSpecs(entity),opts)}
   function pointSpecs(entity){
     const d=effectiveDimension(entity),base=basePointSpecs(d,entity);
     return [...base,...customPointSpecs(entity,d,base)];
@@ -1155,7 +1364,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(end==='a')wire.aSide=spec.compatId;else wire.bSide=spec.compatId;
     return wire[key];
   }
-  return {intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
+  return {PORT_SIDES,PORT_FLOWS,useTemplatePorts,selfDeclaration,portChannels,channelIds,declaredSpec,templatePointSpecs,authoredPointSpecs,intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
 });
 /* END src/06-attachment-core.js */
 </script>
@@ -1167,11 +1376,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 (function(root,factory){
   let Attachment=root.SovSchematicAttachment;
   if(!Attachment&&typeof module!=='undefined'&&module.exports)Attachment=require('./06-attachment-core.js');
-  const api=factory(Attachment);
+  let Canonical=root.SovSchematicCanonical;
+  if(!Canonical&&typeof module!=='undefined'&&module.exports)Canonical=require('./03-canonical.js');
+  const api=factory(Attachment,Canonical);
   root.SovSchematicData=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(Attachment){
+})(typeof globalThis!=='undefined'?globalThis:this,function(Attachment,Canonical){
   if(!Attachment)throw new Error('SovSchematicAttachment core is required');
+  if(!Canonical)throw new Error('SovSchematicCanonical core is required');
   const DOCUMENT_SCHEMA='soveraeign.schematic/document@0.1';
   const WORKSPACE_SCHEMA='soveraeign.schematic/workspace@0.1';
   const PACKAGE_SCHEMA='soveraeign.schematic/package@0.1';
@@ -1189,6 +1401,17 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},size:{w:240,h:64}}},
     plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}}
   };
+  // Declared ports: `{id, compatId?, side: left|right|top|bottom, t: 0..1,
+  // flow: in|out|control|duplex|trigger, channels: [{id}], label?}`. The typed Component
+  // template declares the left/right/top trio; the primitives declare none of their own
+  // (a Plane's default is 'none'; an authored 'standard' on it keeps meaning the
+  // Component template's ports, as it always has).
+  const declaredPort=(id,compatId,side,flow)=>({id,compatId,side,t:.5,flow,channels:[{id:'main'}]});
+  const COMPONENT_TEMPLATE={ports:[declaredPort('left','in','left','in'),declaredPort('right','out','right','out'),declaredPort('top','control','top','control')]};
+  function templatePorts(symbolId){
+    const preset=TEMPLATE_PRESETS[normalizeSymbolId(symbolId)];
+    return clone(Array.isArray(preset?.ports)?preset.ports:COMPONENT_TEMPLATE.ports);
+  }
   // Loading a file applies the same preset rule as makeComponent: a preset field fills in
   // only where the record supplied nothing, so a sparse authored Plane or Point loads the
   // way an API-created one is born, and a full saved record is left exactly as written.
@@ -1284,6 +1507,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const component of doc.components){
       normalizeComponentIdentity(component);
       applyTemplatePreset(component);
+      cleanStoredPorts(doc,component);
       normalizeComponentSize(component);
       component.form=normalizeComponentForm(component.form,component.canvas);
       if(!isObject(component.canvas))component.canvas={};
@@ -1445,6 +1669,231 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     }
     return changed;
   }
+  // The attachment mode a record has when it authors none: its template's default.
+  function defaultAttachmentMode(symbolId){return templatePreset(symbolId)?.attachmentDefaults==='none'?'none':'standard'}
+  // A complete port list supplied by an edit or a creation, checked strictly: a value that
+  // is present must be valid. `flow` is the direction; legacy `defaultFlow` is read only when
+  // `flow` is absent. Absent t reads as .5, absent flow as 'duplex', absent channels as
+  // `[{id:'main'}]`, as the loader has always read them.
+  function normalizeDeclaredPorts(list){
+    if(!Array.isArray(list))throw new Error('PORTS_INVALID: attachmentPoints must be an array');
+    const ids=new Set(),compat=new Set(),out=[];
+    for(const raw of list){
+      if(!isObject(raw))throw new Error('PORTS_INVALID: a port must be an object');
+      const id=cleanString(raw.id,'').trim();if(!id)throw new Error('PORTS_INVALID: a port needs an id');
+      const compatId=cleanString(raw.compatId,'').trim()||id;
+      if(ids.has(id)||compat.has(compatId)||ids.has(compatId)||compat.has(id))throw new Error(`PORTS_INVALID: two ports share the id ${ids.has(id)||compat.has(id)?id:compatId}`);
+      if(!Attachment.PORT_SIDES.includes(raw.side))throw new Error(`PORTS_INVALID: port ${id} has invalid side ${raw.side}`);
+      const t=raw.t===undefined?.5:typeof raw.t==='number'?raw.t:NaN;
+      if(!Number.isFinite(t)||t<0||t>1)throw new Error(`PORTS_INVALID: port ${id} has invalid t ${raw.t}`);
+      // `flow` is the port's direction; legacy `defaultFlow` is read only when `flow` is absent.
+      const flow=raw.flow!==undefined?raw.flow:raw.defaultFlow!==undefined?raw.defaultFlow:'duplex';
+      if(!Attachment.PORT_FLOWS.includes(flow))throw new Error(`PORTS_INVALID: port ${id} has invalid flow ${flow}`);
+      let channels=[{id:'main'}];
+      if(raw.channels!==undefined){
+        if(!Array.isArray(raw.channels)||!raw.channels.length)throw new Error(`PORTS_INVALID: port ${id} channels must be a non-empty array`);
+        const seen=new Set();channels=[];
+        for(const channel of raw.channels){
+          const cid=isObject(channel)?cleanString(channel.id,'').trim():'';
+          if(!cid)throw new Error(`PORTS_INVALID: port ${id} has a channel without an id`);
+          if(seen.has(cid))throw new Error(`PORTS_INVALID: port ${id} repeats channel ${cid}`);
+          seen.add(cid);
+          if(channel.merge===undefined){channels.push({id:cid});continue}
+          const mergeErrors=validateMerge(channel.merge);
+          if(mergeErrors.length)throw new Error(`MERGE_INVALID: port ${id} channel ${cid}: ${mergeErrors.join('; ')}`);
+          channels.push({id:cid,merge:clone(channel.merge)});
+        }
+      }
+      if(raw.label!==undefined&&typeof raw.label!=='string')throw new Error(`PORTS_INVALID: port ${id} label must be a string`);
+      const port={id};if(compatId!==id)port.compatId=compatId;
+      Object.assign(port,{side:raw.side,t,flow,channels});
+      if(raw.label)port.label=raw.label;
+      ids.add(id);compat.add(compatId);out.push(port);
+    }
+    return out;
+  }
+  // merge@1 parameters, the same-tick fan-in rule a port channel may declare
+  // (STATE-SPACE.md "Merge and ordering"). The state space's merge@1 pattern validates
+  // with this function, so an edit here and a load check there refuse the same shapes.
+  const MERGE_ORDER_FREE=['or','and','min','max','sum'],MERGE_ORDER_DEPENDENT=['first','last','queue'];
+  const MERGE_ORDER_KINDS=['declared','stochastic','observed'];
+  function validateMerge(parameters){
+    if(!isObject(parameters))return ['merge must be an object'];
+    const errors=[];
+    for(const key of Object.keys(parameters))if(!['combine','order'].includes(key))errors.push(`unknown merge key ${key}`);
+    const combine=parameters.combine;
+    if(![...MERGE_ORDER_FREE,...MERGE_ORDER_DEPENDENT].includes(combine))errors.push(`combine must be one of ${[...MERGE_ORDER_FREE,...MERGE_ORDER_DEPENDENT].join(', ')}`);
+    if(parameters.order===undefined)return errors;
+    if(MERGE_ORDER_FREE.includes(combine))errors.push(`order is refused on the order-free combine ${combine}`);
+    const order=parameters.order;
+    if(!isObject(order)){errors.push('order must be an object');return errors}
+    if(!MERGE_ORDER_KINDS.includes(order.kind)){errors.push(`order.kind must be one of ${MERGE_ORDER_KINDS.join(', ')}`);return errors}
+    const allowed=order.kind==='declared'?['kind','paths']:['kind'];
+    for(const key of Object.keys(order))if(!allowed.includes(key))errors.push(`unknown order key ${key} for kind ${order.kind}`);
+    if(order.kind==='declared'){
+      const paths=order.paths;
+      if(!Array.isArray(paths)||!paths.length)errors.push('order.paths must be a non-empty array of wire ids');
+      else{
+        if(!paths.every(x=>typeof x==='string'&&x.length>0))errors.push('order.paths must hold non-empty wire ids');
+        else if(new Set(paths).size!==paths.length)errors.push('order.paths repeats a wire id');
+      }
+    }
+    return errors;
+  }
+  // A Wire's propagation delay (STATE-SPACE.md "Two-phase ticks"): absent means 1; a value an
+  // edit supplies must be an integer >= 1. An update's `delay: null` removes it (`clearable`).
+  // Loading keeps a stored value as written, for the state space's load check to report.
+  function assertPathDelay(config,clearable=false){
+    if(!isObject(config)||config.delay===undefined||(clearable&&config.delay===null))return;
+    if(!(Number.isInteger(config.delay)&&config.delay>=1))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
+  }
+  // `config.definition` is null (unbound) or an `id@version` string, anywhere it is written
+  // (DEFINITION_INVALID). Only the binding path (`applyBinding`) sets it to a non-null value: a
+  // plain component update or create may clear it or leave it alone (DEFINITION_BIND_REQUIRED).
+  const DEFINITION_REF=/^.+@[1-9][0-9]*$/;
+  function assertDefinitionValue(value){
+    if(value===undefined||value===null)return;
+    if(typeof value!=='string'||!DEFINITION_REF.test(value))throw new Error(`DEFINITION_INVALID: config.definition must be null or an id@version string, not ${JSON.stringify(value)}`);
+  }
+  function assertDefinitionPatch(patch,binding){
+    const has=isObject(patch?.config)&&Object.prototype.hasOwnProperty.call(patch.config,'definition'),value=has?patch.config.definition:undefined;
+    assertDefinitionValue(value);
+    if(binding){if(value==null)throw new Error('DEFINITION_INVALID: a binding sets config.definition');return}
+    if(value!=null)throw new Error(`DEFINITION_BIND_REQUIRED: config.definition ${value} is set only by binding (applyBind), not by update or create`);
+  }
+  // A Component bound to a definition (`config.definition`) has ports the definition owns. An
+  // update other than unbinding (`config.definition: null`) may move, relabel and set channel
+  // merges on them, but may not change the type, the attachment mode, or the ports it exposes,
+  // compared by `canonicalAttachmentPointDescriptors` (ids, flows, channel ids), so a change of
+  // host (`placement`) or of dimension (`form.dimension`) is refused too (DEFINITION_PORTS).
+  function exposedPortKey(component){
+    return canonicalAttachmentPointDescriptors(component).map(s=>[s.id,s.flow||s.defaultFlow||'duplex',Attachment.channelIds(s)]).sort((x,y)=>x[0]<y[0]?-1:x[0]>y[0]?1:0);
+  }
+  function assertDefinitionPortsKept(current,patch,candidate){
+    const bound=current?.config?.definition;
+    if(bound===undefined||bound===null||patch?.config?.definition===null)return;
+    const refuse=why=>{throw new Error(`DEFINITION_PORTS: ${current.id} is bound to ${bound}; ${why}`)};
+    const nextSymbol=patch?.symbolId??patch?.type;
+    if(nextSymbol!==undefined&&normalizeSymbolId(nextSymbol)!==normalizeSymbolId(current.symbolId))refuse('its type may not change');
+    if(patch?.config?.attachmentDefaults!==undefined&&patch.config.attachmentDefaults!=='none')refuse('its attachment mode stays none');
+    if(!candidate)return;
+    if(JSON.stringify(exposedPortKey(current))!==JSON.stringify(exposedPortKey(candidate)))refuse('the ports it exposes (ids, flows, channel ids) may not change');
+  }
+  const samePort=(x,y)=>JSON.stringify([x.id,x.compatId||x.id,x.side,x.t,x.flow,x.channels,x.label||''])===JSON.stringify([y.id,y.compatId||y.id,y.side,y.t,y.flow,y.channels,y.label||'']);
+  // A spec in the stored declared-port shape.
+  function storedPort(spec){
+    const port={id:spec.id};if(spec.compatId&&spec.compatId!==spec.id)port.compatId=spec.compatId;
+    Object.assign(port,{side:spec.side,t:spec.t,flow:spec.flow,channels:(spec.channels||[{id:'main'}]).map(c=>c.merge===undefined?{id:c.id}:{id:c.id,merge:clone(c.merge)})});
+    if(spec.label)port.label=spec.label;
+    return port;
+  }
+  // A Point's `self` declaration in its stored form: no side or t.
+  function storedSelf(declared){
+    const port={id:'self'};if(declared.flow)port.flow=declared.flow;
+    port.channels=declared.channels.map(c=>c.merge===undefined?{id:c.id}:{id:c.id,merge:clone(c.merge)});
+    return port;
+  }
+  // An end's raw stored reference, the way normalizeWireEndpoints reads one: a real
+  // (non-free) attachment's pointId, otherwise the compatibility side.
+  function endRawRef(wire,end){
+    const att=wire?.[end+'Attachment'];
+    if(isFreeEndpoint(att))return null;
+    const value=att?.pointId??wire?.[end+'Side'];
+    return value==null?null:String(value);
+  }
+  // Loading cleans, never refuses: a stored list is rewritten into exactly the authored
+  // ports the loader exposes (t coerced and clamped, an invalid flow read as duplex, empty
+  // channels read as main, entries without a valid side dropped). An entry an id or compat
+  // id collision would otherwise drop is instead kept under a fresh id (`<id>~2`, ...) when
+  // a bound Wire end refers to it (by its original id or its declared compat id) and that
+  // reference names no surviving port's id, and that Wire end is rebound to the fresh id; a
+  // colliding entry no Wire needs is dropped, as before, so a Wire on a duplicated id stays
+  // on the original port. Cleaning stays idempotent: once ids no longer collide, nothing
+  // further moves.
+  function cleanStoredPorts(doc,component){
+    const config=component?.config;if(!isObject(config)||!Array.isArray(config.attachmentPoints))return component;
+    // A Point's `self` declaration is kept in its clean form, `{id: 'self', flow?, channels}`,
+    // first; any other entry is cleaned as a declared port, as before.
+    const self=Attachment.intrinsicDimension(component)===0?Attachment.selfDeclaration(component):null;
+    if(self){
+      const rest=config.attachmentPoints.filter(p=>!(isObject(p)&&String(p.id??'').trim()==='self'));
+      config.attachmentPoints=rest;cleanStoredPorts(doc,component);
+      config.attachmentPoints=[storedSelf(self),...config.attachmentPoints];
+      return component;
+    }
+    const specs=Attachment.authoredPointSpecs(component,{keepCollisions:true});
+    const surviving=new Set(Attachment.templatePointSpecs(component).concat(specs.filter(spec=>!spec.originalId)).map(spec=>spec.id));
+    const wires=Array.isArray(doc?.wires)?doc.wires:[];
+    const keepColliding=spec=>{
+      let needed=false;
+      for(const wire of wires)for(const end of ['a','b']){
+        if(wire[end]!==component.id)continue;
+        const ref=endRawRef(wire,end);
+        if(ref==null||(ref!==spec.originalId&&ref!==spec.compatId)||surviving.has(ref))continue;
+        needed=true;
+        const att=wire[end+'Attachment'];
+        if(isFreeEndpoint(att))continue;
+        wire[end+'Attachment']={kind:'attachment-ref',componentId:component.id,pointId:spec.id};
+        wire[end+'Side']=spec.compatId;
+      }
+      return needed;
+    };
+    const kept=specs.filter(spec=>!spec.originalId||keepColliding(spec));
+    for(const spec of kept)delete spec.originalId;
+    config.attachmentPoints=kept.map(storedPort);
+    return component;
+  }
+  // Every component edit (update, retype, the 'none' switch, a port list) is checked against
+  // the Wires that end on the component: an end whose port the edit removes is refused
+  // (PORT_IN_USE), and so is an end left on a port sharing no channel with the port at the
+  // Wire's other end (CHANNEL_MISMATCH). When the edit is a retype (a symbolId change) that
+  // leaves the effective dimension unchanged, a bound end must resolve to the exact same
+  // port id as before (PORT_IN_USE otherwise): a name that would move it to a different id
+  // by compat-id resolution is refused, not followed silently. Only a change of effective
+  // dimension may move a port by compat id (left/in -> start; a typed Component's out ->
+  // a Point's self), as reconciliation has always rebound it.
+  function assertWiresSurviveEdit(doc,before,after){
+    const dimensionChanged=Attachment.effectiveDimension(before)!==Attachment.effectiveDimension(after);
+    const resolveEnd=(component,wire,end,edited)=>{
+      const ref=wire[end+'Attachment']?.pointId||wire[end+'Side'];
+      return Attachment.resolveSpec(component,ref)||(edited&&dimensionChanged?Attachment.resolveSpec(component,wire[end+'Side']):null);
+    };
+    for(const wire of doc.wires||[])for(const end of ['a','b']){
+      if(wire[end]!==after.id||!wireEndBound(wire,end))continue;
+      const spec=resolveEnd(after,wire,end,true);
+      if(!spec)throw new Error(`PORT_IN_USE: wire ${wire.id} ends on port ${wire[end+'Attachment']?.pointId||wire[end+'Side']} of ${after.id}`);
+      if(!dimensionChanged){
+        const beforeSpec=resolveEnd(before,wire,end,false);
+        if(beforeSpec&&spec.id!==beforeSpec.id)throw new Error(`PORT_IN_USE: wire ${wire.id} would move from port ${beforeSpec.id} to ${spec.id} of ${after.id}`);
+      }
+      const other=end==='a'?'b':'a';if(!wireEndBound(wire,other))continue;
+      const otherComponent=wire[other]===after.id?after:doc.components.find(c=>c.id===wire[other]);
+      const otherSpec=otherComponent?resolveEnd(otherComponent,wire,other,wire[other]===after.id):null;
+      if(!otherSpec)continue;
+      const theirs=new Set(Attachment.channelIds(otherSpec));
+      if(!Attachment.channelIds(spec).some(id=>theirs.has(id)))throw new Error(`CHANNEL_MISMATCH: wire ${wire.id} would join ports ${spec.id} and ${otherSpec.id}, which share no channel`);
+    }
+  }
+  // An edit sets a Component's complete port list: `attachmentPoints` under 'none', or the
+  // additions under 'standard'. It is stored in the smallest form: 'standard' plus the
+  // additions when every template port is kept unchanged, otherwise 'none' plus the full
+  // list. Removing a port a Wire ends on is refused.
+  function setDeclaredPorts(doc,component){
+    const config=component.config,symbolId=component.symbolId;
+    const mode=['standard','none'].includes(config.attachmentDefaults)?config.attachmentDefaults:defaultAttachmentMode(symbolId);
+    const template=normalizeDeclaredPorts(templatePorts(symbolId));
+    const supplied=Array.isArray(config.attachmentPoints)?config.attachmentPoints:[];
+    const full=normalizeDeclaredPorts(mode==='none'?supplied:[...template,...supplied]);
+    // Order is kept: 'standard' only when the list begins with the template's ports, in
+    // template order and unchanged; otherwise 'none' and the list exactly as given.
+    const kept=template.length<=full.length&&template.every((port,i)=>samePort(port,full[i]));
+    if(kept){
+      const additions=full.slice(template.length);
+      if(defaultAttachmentMode(symbolId)==='none')config.attachmentDefaults='standard';else delete config.attachmentDefaults;
+      if(additions.length)config.attachmentPoints=additions;else delete config.attachmentPoints;
+    }else{config.attachmentDefaults='none';config.attachmentPoints=full}
+    return component;
+  }
   function normalizeComponentForm(value={},legacyCanvas=null){
     const form=isObject(value)?clone(value):{};
     const legacyOpen=legacyCanvas?.state==='open';
@@ -1473,11 +1922,19 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // glyph. Identity, position, placement, label, colour, editor state, authored attachment
   // points, the annotation, and a custom glyph on a Component stay. Creating a record
   // with the carrier preset (`symbolId:'path'`, the static 1D rail) is admissible here;
-  // retyping an existing Component into a carrier is refused by `update` and the bar.
-  function applySymbol(component,symbolId){
+  // retyping an existing Component into a carrier is refused by `update` and the bar, and
+  // retyping a bound Component is refused here (DEFINITION_PORTS). With `doc`, the retype is checked first against the Wires that end on the component
+  // and refused (nothing changed) when it would remove a port one of them ends on.
+  function applySymbol(component,symbolId,doc=null){
+    // A bound Component's ports are the definition's: it is not retyped (DEFINITION_PORTS).
+    const bound=component?.config?.definition;
+    if(bound!==undefined&&bound!==null)throw new Error(`DEFINITION_PORTS: ${component.id} is bound to ${bound}; its type may not change`);
+    if(doc){const trial=clone(component);applySymbol(trial,symbolId);assertWiresSurviveEdit(doc,component,trial)}
     const next=normalizeSymbolId(symbolId),preset=templatePreset(next)||{};
     if(!isObject(component.config))component.config={};
     const config=component.config,before=isObject(config.presentation)?config.presentation:{};
+    // The authored ports, as the record exposes them before the retype.
+    const authored=Array.isArray(config.attachmentPoints)?Attachment.authoredPointSpecs(component).map(storedPort):[];
     component.symbolId=next;component.type=next==='blank'?null:next;component.incomplete=next==='blank';
     component.form=normalizeComponentForm(preset.form||{dimension:2});
     config.signalMode=preset.signalMode||'source';
@@ -1487,11 +1944,22 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(Number.isInteger(before.interiorColorSlot))presentation.interiorColorSlot=before.interiorColorSlot;
     config.presentation=presentation;
     if(preset.attachmentDefaults==='none')config.attachmentDefaults='none';else delete config.attachmentDefaults;
+    // The new template's ports in template order, an authored port with a template id
+    // replacing it, then the remaining authored ports in stored order; stored in the
+    // smallest form. The loader's rules settle any id or compatId the two lists share.
+    if(authored.length){
+      const template=defaultAttachmentMode(next)==='none'?[]:templatePorts(next),byId=new Map(authored.map(p=>[p.id,p])),templateIds=new Set(template.map(p=>p.id));
+      const merged={config:{attachmentDefaults:'none',attachmentPoints:[...template.map(p=>byId.get(p.id)||p),...authored.filter(p=>!templateIds.has(p.id))]}};
+      config.attachmentPoints=Attachment.authoredPointSpecs(merged).map(storedPort);config.attachmentDefaults='none';
+      setDeclaredPorts(null,component);
+    }else delete config.attachmentPoints;
     if(isObject(component.boundary?.inside))component.boundary.inside.type=component.type;
     if(isObject(component.canvas)){component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state}
     return ensureAttachmentPortConfigs(component);
   }
-  function makeComponent(doc,value={}){
+  // `copy` is the paste and Duplicate path: it copies a bound Component's record as-is, so its
+  // `config.definition` is kept. Any other creation may not set one (DEFINITION_BIND_REQUIRED).
+  function makeComponent(doc,value={},{copy=false}={}){
     const symbolId=normalizeSymbolId(value.symbolId||value.type);
     const preset=templatePreset(symbolId)||{};
     const id=cleanString(value.id,nextId(doc.components,'c'));
@@ -1519,7 +1987,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // An authored choice stays on the runtime record either way, so a later normalization
     // pass cannot replace a Plane's authored 'standard' with its preset 'none'.
     if(['standard','none'].includes(value.config?.attachmentDefaults))config.attachmentDefaults=value.config.attachmentDefaults;
-    if(Array.isArray(value.config?.attachmentPoints)&&value.config.attachmentPoints.length)config.attachmentPoints=clone(value.config.attachmentPoints);
+    // An authored port list is checked and stored in the smallest form, exactly as update does.
+    if(value.config?.attachmentPoints!==undefined){
+      if(!Array.isArray(value.config.attachmentPoints))throw new Error('PORTS_INVALID: attachmentPoints must be an array');
+      config.attachmentPoints=clone(value.config.attachmentPoints);setDeclaredPorts(doc,component);
+    }
+    // A bound definition (`id@version`) is kept only on a copy, so a pasted or duplicated bound Component stays bound.
+    if(copy)assertDefinitionValue(value.config?.definition);else assertDefinitionPatch(value,false);
+    if(value.config?.definition!==undefined)config.definition=clone(value.config.definition);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -1536,8 +2011,13 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     delete c.canvas;delete c.boundary;delete c.parts;delete c.type;delete c.incomplete;
     if(isObject(c.config)){
       delete c.config.color;
+      if(c.config.definition===null)delete c.config.definition; // null is unbound
       // 'none' is always stored; 'standard' only where it overrides a preset of 'none' (a Plane).
       if(c.config.attachmentDefaults==='standard'&&(templatePreset(c.symbolId)?.attachmentDefaults||'standard')==='standard')delete c.config.attachmentDefaults;
+      if(Array.isArray(c.config.attachmentPoints)&&Attachment.intrinsicDimension(c)===0){
+        const self=Attachment.selfDeclaration(c);
+        if(self)c.config.attachmentPoints=c.config.attachmentPoints.map(p=>isObject(p)&&String(p.id??'').trim()==='self'?storedSelf(self):p);
+      }
       if(Array.isArray(c.config.attachmentPoints)&&!c.config.attachmentPoints.length)delete c.config.attachmentPoints;
       if(isObject(c.config.presentation))for(const key of DERIVED_PRESENTATION_KEYS)delete c.config.presentation[key];
       if(isObject(c.config.ports))for(const port of Object.values(c.config.ports)){
@@ -1565,6 +2045,19 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     doc.wires=(doc.wires||[]).map(compactWire);
     if(isObject(doc.meta)&&Array.isArray(doc.meta.checkpoints))doc.meta.checkpoints=doc.meta.checkpoints.map(cp=>isObject(cp)&&isObject(cp.document)?{...cp,document:compactDocument(cp.document)}:cp);
     return doc;
+  }
+  // Document identity is content, not revision (STATE-SPACE.md "Document identity is content"):
+  // the replay key hashes compactDocument() with revision and timestamps/checkpoints removed,
+  // so undo restoring older content with an older revision still hashes by what it contains.
+  function documentHash(doc){
+    const x=compactDocument(doc);
+    delete x.revision;
+    if(isObject(x.meta)){
+      delete x.meta.updatedAt;
+      delete x.meta.savedAt;
+      delete x.meta.checkpoints;
+    }
+    return Canonical.sha256Hex(Canonical.canonicalize(x));
   }
   function attachmentPointConfig(doc,componentId,pointId){
     const component=doc.components.find(c=>c.id===componentId);if(!component)return null;
@@ -1597,8 +2090,20 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const aSet=portExposedCanvasIds(doc,a,aSide),bSet=new Set(portExposedCanvasIds(doc,b,bSide));
     const shared=aSet.filter(x=>bSet.has(x));
     if(!shared.length)return {ok:false,canvasId:null,reason:'Boundary blocks implicit reach-through'};
+    const channels=sharedChannelIds(doc,a,aSide,b,bSide);
+    if(!channels.length)return {ok:false,canvasId:null,reason:'CHANNEL_MISMATCH: the two ports share no channel'};
     shared.sort((x,y)=>(x===GLOBAL_CANVAS_ID?1:0)-(y===GLOBAL_CANVAS_ID?1:0));
-    return {ok:true,canvasId:shared[0]};
+    return {ok:true,canvasId:shared[0],channels};
+  }
+  // A Wire carries the channels its two ports share, matched by channel id. A port that
+  // declares none carries the default channel, `main`.
+  function sharedChannelIds(doc,a,aSide,b,bSide){
+    const ids=(componentId,side)=>{
+      const component=doc.components.find(c=>c.id===componentId),spec=component?Attachment.resolveSpec(component,side):null;
+      return Attachment.channelIds(spec);
+    };
+    const bSet=new Set(ids(b,bSide));
+    return ids(a,aSide).filter(id=>bSet.has(id));
   }
   // A Wire is a carrier Path: a 1D form whose two ends are each bound to an attachment
   // point (`{kind:'attachment-ref',componentId,pointId}`) or free (`{kind:'free',x,y}`).
@@ -1662,6 +2167,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   function makeWire(doc,value={}){
     const id=cleanString(value.id,nextId(doc.wires,'k'));
+    assertPathDelay(value.config);
     const wire={id,a:cleanString(value.a)||null,b:cleanString(value.b)||null,aSide:value.aSide??null,bSide:value.bSide??null,aAttachment:isObject(value.aAttachment)?clone(value.aAttachment):null,bAttachment:isObject(value.bAttachment)?clone(value.bAttachment):null};
     if(!wire.a&&!wire.aAttachment&&!wire.b&&!wire.bAttachment)throw new Error('wire.create requires a and b component ids, or free endpoints');
     for(const end of ['a','b'])if(!wire[end]&&!wire[end+'Attachment'])throw new Error(`wire.create requires ${end} (component id) or ${end}Attachment`);
@@ -1673,7 +2179,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       form:isObject(value.form)?clone(value.form):{dimension:1,body:{kind:'path',material:'generic',thickness:0}},
       lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
       net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
-      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,'')},
+      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{})},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
     });
@@ -1713,11 +2219,16 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(arr.some(x=>x.id===record.id))throw new Error(`${resource} id already exists: ${record.id}`);
     arr.push(record);return clone(record);
   }
-  function update(doc,resource,id,patch={}){
+  // `binding` is the binding path only (`applyBinding`): the one update that may set a non-null
+  // `config.definition`; the owned-port guard does not apply to it, the Wire checks do.
+  function update(doc,resource,id,patch={},{binding=false}={}){
     const arr=resourceArray(doc,resource),index=arr.findIndex(x=>x.id===id);if(index<0)throw new Error(`${resource} not found: ${id}`);
     const current=arr[index];assertUnlocked(current,resource);
+    if(binding&&resource!=='component')throw new Error('DEFINITION_INVALID: only a component binds a definition');
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource==='component'){
+      assertDefinitionPatch(patch,binding);
+      if(!binding)assertDefinitionPortsKept(current,patch,null);
       const nextSymbol=patch?.symbolId??patch?.type;
       if(nextSymbol!==undefined&&normalizeSymbolId(nextSymbol)!==normalizeSymbolId(current.symbolId)){
         // A Path is a carrier drawn from the palette; a Component is not retyped into one (#19).
@@ -1726,12 +2237,21 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         const rest=clone(patch);delete rest.symbolId;delete rest.type;deepMerge(candidate,rest);
       }
       normalizeComponentIdentity(candidate);
+      if(isObject(patch?.config)&&patch.config.attachmentPoints!==undefined){
+        if(!Array.isArray(patch.config.attachmentPoints))throw new Error('PORTS_INVALID: attachmentPoints must be an array');
+        candidate.config.attachmentPoints=clone(patch.config.attachmentPoints);
+        setDeclaredPorts(doc,candidate);
+      }
       adoptLabelMode(candidate,current.config?.label);
       candidate.canvas=candidate.canvas||{};candidate.canvas.id=`canvas:component:${id}`;candidate.canvas.ownerId=id;
       candidate.form=normalizeComponentForm(candidate.form,candidate.canvas);candidate.canvas.state=candidate.form.regions.interior.state;
       ensureAttachmentPortConfigs(candidate);
+      if(!binding)assertDefinitionPortsKept(current,patch,candidate);
+      assertWiresSurviveEdit(doc,current,candidate);
       normalizeComponentSize(candidate);
     }else if(resource==='wire'){
+      if(isObject(patch?.config))assertPathDelay(patch.config,true);
+      if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
       // A patch may rebind an end (a/aSide or aAttachment ref) or free it (aAttachment {kind:'free'}).
       for(const end of ['a','b']){
         const key=end+'Attachment',patched=patch?.[key];
@@ -1799,6 +2319,23 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:value,error:null};
     }catch(error){return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:false,revisionBefore:before,revisionAfter:doc.revision,result:null,error:{message:String(error.message||error)}}}
   }
+  // The binding path (`applyBind` in the state space calls it): applies a binding patch,
+  // `{config:{definition, attachmentDefaults:'none', attachmentPoints}}`, to a 2D Component with the
+  // Wire checks every component edit runs. It is not a CRUD operation: no surface's `update`
+  // reaches it. Returns a receipt; a refusal carries its code and changes nothing.
+  const refusalCode=message=>(String(message||'').match(/^([A-Z][A-Z0-9_]*):/)||[])[1]||null;
+  function applyBinding(document,componentId,patch){
+    const doc=normalizeDocument(document),before=doc.revision,id=`bind-${Date.now()}`;
+    try{
+      const config=isObject(patch)&&Object.keys(patch).length===1?patch.config:null;
+      if(!isObject(config)||Object.keys(config).some(key=>!['definition','attachmentDefaults','attachmentPoints'].includes(key))||config.attachmentDefaults!=='none'||!Array.isArray(config.attachmentPoints))throw new Error('DEFINITION_INVALID: a binding patch is {config:{definition, attachmentDefaults: none, attachmentPoints}}');
+      const component=doc.components.find(c=>c.id===componentId);if(!component)throw new Error(`COMPONENT_NOT_FOUND: component ${componentId} not found`);
+      if(Attachment.effectiveDimension(component)!==2)throw new Error(`DEFINITION_NOT_BINDABLE: ${componentId} is ${Attachment.effectiveDimension(component)}D; only a 2D Component binds a definition`);
+      const value=update(doc,'component',componentId,patch,{binding:true});
+      touch(doc);
+      return {schema:RECEIPT_SCHEMA,operationId:id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:value,error:null};
+    }catch(error){const message=String(error.message||error);return {schema:RECEIPT_SCHEMA,operationId:id,ok:false,revisionBefore:before,revisionAfter:doc.revision,result:null,error:{code:refusalCode(message),message}}}
+  }
   function replaceDocument(target,input){
     const incoming=makeDocument(clone(input));
     const components=target.components,wires=target.wires,references=target.references;
@@ -1865,9 +2402,732 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,normalizePresentationSize,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,markersFor,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
+  return {validateMerge,cleanStoredPorts,assertWiresSurviveEdit,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor};
 });
 /* END src/05-data-core.js */
+</script>
+<script data-beta-module="src/07-state-space.js">
+/* BEGIN src/07-state-space.js */
+'use strict';
+// State space concern (STATE-SPACE.md). Slice 1a, the contract layer: the state record
+// envelope, the closed pattern registry (truth_table@1, merge@1), definitions and the minimal
+// pack envelope, contracts generated from pattern + parameters, ports generated from a bound
+// definition, and the load checks. Slice 1b, the first runs: the hash-chained ledger, the
+// replay key, two-phase ticks with merges, the trace and replay. No settle, no surfaces.
+// Pure: no DOM, no pack data (packs are passed in), validation hand-written.
+(function(root,factory){
+  let Canonical=root.SovSchematicCanonical;
+  if(!Canonical&&typeof module!=='undefined'&&module.exports)Canonical=require('./03-canonical.js');
+  let Data=root.SovSchematicData;
+  if(!Data&&typeof module!=='undefined'&&module.exports)Data=require('./05-data-core.js');
+  const api=factory(Canonical,Data);
+  root.SovSchematicStateSpace=api;
+  if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof globalThis!=='undefined'?globalThis:this,function(Canonical,Data){
+  if(!Canonical)throw new Error('SovSchematicCanonical core is required');
+  if(!Data)throw new Error('SovSchematicData core is required');
+  const RECORD_FORMAT='soveraeign.schematic/state-record@0.1';
+  const PACK_FORMAT='soveraeign.schematic/pack@0.1';
+  const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
+  const isObject=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
+  const nonEmpty=value=>typeof value==='string'&&value.length>0;
+  const natural=value=>Number.isInteger(value)&&value>=0;
+  const same=(x,y)=>{try{return Canonical.canonicalize(x)===Canonical.canonicalize(y)}catch(_){return false}};
+  function unknownKeys(value,allowed,where,errors){
+    for(const key of Object.keys(value))if(!allowed.includes(key))errors.push(`${where}: unknown key ${key}`);
+  }
+
+  // --- The state record (STATE-SPACE.md "The state record"). Any other key, at any level, is refused.
+  const VANTAGES=['space','point','relative'];
+  const KINDS=['registered','measured','derived','predicted'];
+  const FORMS=['binary','continuous','categorical'];
+  const TIME_MODES=['observed','predicted'];
+  const PERTURBATIONS=['none','disturbed','created'];
+  const RECORD_KEYS=['format','id','subject','vantage','reference','observable','kind','form','value','time','certainty','observer','provenance','perturbation'];
+  function validateRecord(record){
+    const errors=[];
+    if(!isObject(record))return {ok:false,errors:['record must be an object']};
+    unknownKeys(record,RECORD_KEYS,'record',errors);
+    if(record.format!==RECORD_FORMAT)errors.push(`format must equal ${RECORD_FORMAT}`);
+    if(!nonEmpty(record.id))errors.push('id must be a non-empty string');
+    const subject=record.subject;
+    if(!isObject(subject))errors.push('subject must be an object');
+    else{
+      unknownKeys(subject,['entity','run','point','channel','attempt'],'subject',errors);
+      for(const key of ['entity','run'])if(!nonEmpty(subject[key]))errors.push(`subject.${key} must be a non-empty string`);
+      for(const key of ['point','channel'])if(subject[key]!==undefined&&!nonEmpty(subject[key]))errors.push(`subject.${key} must be a non-empty string`);
+      if(subject.attempt!==undefined&&!natural(subject.attempt))errors.push('subject.attempt must be an integer >= 0');
+    }
+    if(!VANTAGES.includes(record.vantage))errors.push(`vantage must be one of ${VANTAGES.join(', ')}`);
+    if(record.vantage==='relative'){if(!nonEmpty(record.reference))errors.push('reference must be a non-empty string when vantage is relative')}
+    else if(record.reference!==undefined)errors.push('reference is only allowed when vantage is relative');
+    if(!nonEmpty(record.observable))errors.push('observable must be a non-empty string');
+    if(!KINDS.includes(record.kind))errors.push(`kind must be one of ${KINDS.join(', ')}`);
+    if(!FORMS.includes(record.form))errors.push(`form must be one of ${FORMS.join(', ')}`);
+    else{
+      const v=record.value;
+      if(record.form==='binary'&&typeof v!=='boolean')errors.push('value must be a boolean for form binary');
+      if(record.form==='continuous'&&!(typeof v==='number'&&Number.isFinite(v)))errors.push('value must be a finite number for form continuous');
+      if(record.form==='categorical'&&typeof v!=='string')errors.push('value must be a string for form categorical');
+    }
+    const time=record.time;
+    if(!isObject(time))errors.push('time must be an object');
+    else{
+      unknownKeys(time,['logical','sequence','mode'],'time',errors);
+      for(const key of ['logical','sequence'])if(!natural(time[key]))errors.push(`time.${key} must be an integer >= 0`);
+      if(!TIME_MODES.includes(time.mode))errors.push(`time.mode must be one of ${TIME_MODES.join(', ')}`);
+    }
+    const certainty=record.certainty;
+    if(!isObject(certainty))errors.push('certainty must be an object');
+    else{unknownKeys(certainty,['kind'],'certainty',errors);if(certainty.kind!=='exact')errors.push('certainty.kind must be exact')}
+    if(!nonEmpty(record.observer))errors.push('observer must be a non-empty string');
+    const provenance=record.provenance;
+    if(!isObject(provenance))errors.push('provenance must be an object');
+    else{
+      unknownKeys(provenance,['rule','inputs','threshold'],'provenance',errors);
+      if(provenance.threshold!==undefined&&!(typeof provenance.threshold==='number'&&Number.isFinite(provenance.threshold)))errors.push('provenance.threshold must be a finite number');
+      if(!nonEmpty(provenance.rule))errors.push('provenance.rule must be a non-empty string');
+      if(!Array.isArray(provenance.inputs)||!provenance.inputs.every(nonEmpty))errors.push('provenance.inputs must be an array of non-empty strings');
+    }
+    if(!PERTURBATIONS.includes(record.perturbation))errors.push(`perturbation must be one of ${PERTURBATIONS.join(', ')}`);
+    return {ok:errors.length===0,errors};
+  }
+
+  // --- Patterns: a small closed set; a definition instantiates one with parameters.
+  const NAME=/^[a-z][a-z0-9_]*$/;
+  function checkNames(value,key,errors){
+    if(!Array.isArray(value)||value.length<1||value.length>8){errors.push(`${key} must be an array of 1 to 8 names`);return false}
+    let ok=true;
+    for(const name of value)if(typeof name!=='string'||!NAME.test(name)){errors.push(`${key}: ${JSON.stringify(name)} is not a name matching ${NAME.source}`);ok=false}
+    if(ok&&new Set(value).size!==value.length){errors.push(`${key} repeats a name`);ok=false}
+    return ok;
+  }
+  const truthTable={
+    id:'truth_table',version:1,class:'exact',stateful:false,blastRadius:'local',
+    validate(parameters){
+      const errors=[];
+      if(!isObject(parameters))return ['parameters must be an object'];
+      unknownKeys(parameters,['inputs','outputs','table'],'parameters',errors);
+      const inputsOk=checkNames(parameters.inputs,'inputs',errors),outputsOk=checkNames(parameters.outputs,'outputs',errors);
+      if(inputsOk&&outputsOk){
+        const overlap=parameters.outputs.filter(name=>parameters.inputs.includes(name));
+        if(overlap.length)errors.push(`outputs overlap inputs: ${overlap.join(', ')}`);
+      }
+      const table=parameters.table;
+      if(!Array.isArray(table)){errors.push('table must be an array of rows');return errors}
+      if(!inputsOk||!outputsOk)return errors;
+      const n=parameters.inputs.length,width=n+parameters.outputs.length,seen=new Set();
+      table.forEach((row,i)=>{
+        if(!Array.isArray(row)||row.length!==width){errors.push(`table row ${i} must be an array of ${width} cells`);return}
+        if(!row.every(cell=>cell===0||cell===1)){errors.push(`table row ${i} must hold only 0 and 1`);return}
+        const key=row.slice(0,n).join('');
+        if(seen.has(key))errors.push(`table row ${i} repeats the input combination ${key}`);
+        seen.add(key);
+      });
+      if(!errors.length&&seen.size!==2**n)errors.push(`table covers ${seen.size} of the ${2**n} input combinations`);
+      return errors;
+    },
+    derive(parameters){
+      const port=flow=>id=>({id,flow,channels:[{id:'main'}],observable:'logic.level',form:'binary'});
+      return {
+        inputs:parameters.inputs.map(port('in')),
+        outputs:parameters.outputs.map(port('out')),
+        state:null,
+        observables:[{id:'logic.level',form:'binary',unit:null,blastRadius:'local',staleness:0}]
+      };
+    },
+    evaluate(parameters,inputValues){
+      const n=parameters.inputs.length;
+      const key=parameters.inputs.map(name=>{
+        const v=inputValues?.[name];
+        if(typeof v!=='boolean')throw new Error(`EVALUATE_INPUT: input ${name} must be a boolean`);
+        return v?1:0;
+      }).join('');
+      const row=parameters.table.find(r=>r.slice(0,n).join('')===key);
+      if(!row)throw new Error(`EVALUATE_INPUT: the table has no row for ${key}`);
+      const out={};parameters.outputs.forEach((name,i)=>{out[name]=row[n+i]===1});
+      return out;
+    }
+  };
+  const merge={
+    id:'merge',version:1,class:'exact',stateful:false,blastRadius:'local',
+    // One validator for a channel merge, shared with the data core's edit check.
+    validate(parameters){return Data.validateMerge(parameters)},
+    derive(parameters){
+      const orderDependent=!['or','and','min','max','sum'].includes(parameters.combine);
+      return {orderDependent,order:orderDependent?clone(parameters.order??{kind:'stochastic'}):null};
+    }
+  };
+  const PATTERNS=[truthTable,merge].map(p=>Object.freeze(p));
+  const refOf=p=>`${p.id}@${p.version}`;
+  function patterns(){return PATTERNS.slice()}
+  function pattern(ref){return PATTERNS.find(p=>refOf(p)===ref)||null}
+
+  // --- Definitions and packs (STATE-SPACE.md "Definitions").
+  const AUTHORED_KEYS=['id','version','pattern','parameters','delay','ports','projection'];
+  const DERIVED_KEYS=['inputs','outputs','state','observables'];
+  const SIDES=['left','right','top','bottom'];
+  const refusal=(code,subject,message)=>({code,subject,message});
+  function definitionRef(definition){return `${definition?.id}@${definition?.version}`}
+  // A definition's refusals, [] when it is valid.
+  function checkDefinition(definition){
+    const subject=isObject(definition)&&nonEmpty(definition.id)?definitionRef(definition):'definition';
+    if(!isObject(definition))return [refusal('DEFINITION_INVALID',subject,'a definition must be an object')];
+    const out=[],bad=message=>out.push(refusal('DEFINITION_INVALID',subject,message));
+    for(const key of Object.keys(definition))if(!AUTHORED_KEYS.includes(key)&&!DERIVED_KEYS.includes(key))bad(`unknown key ${key}`);
+    if(!nonEmpty(definition.id))bad('id must be a non-empty string');
+    if(!(Number.isInteger(definition.version)&&definition.version>=1))bad('version must be an integer >= 1');
+    if(definition.delay!==undefined&&!natural(definition.delay))bad('delay must be an integer >= 0');
+    if(definition.projection!==undefined&&!isObject(definition.projection))bad('projection must be an object');
+    if(definition.ports!==undefined){
+      if(!isObject(definition.ports))bad('ports must be an object of port id to {side, t, label?}');
+      else for(const [id,place] of Object.entries(definition.ports)){
+        if(!isObject(place)){bad(`ports.${id} must be an object`);continue}
+        for(const key of Object.keys(place))if(!['side','t','label'].includes(key))bad(`ports.${id}: unknown key ${key}`);
+        if(!SIDES.includes(place.side))bad(`ports.${id}.side must be one of ${SIDES.join(', ')}`);
+        if(!(typeof place.t==='number'&&place.t>=0&&place.t<=1))bad(`ports.${id}.t must be a number in 0..1`);
+        if(place.label!==undefined&&typeof place.label!=='string')bad(`ports.${id}.label must be a string`);
+      }
+    }
+    const p=typeof definition.pattern==='string'?pattern(definition.pattern):null;
+    if(!p){out.push(refusal('PATTERN_UNKNOWN',subject,`pattern ${JSON.stringify(definition.pattern)} is not registered`));return out}
+    const paramErrors=p.validate(definition.parameters);
+    if(paramErrors.length){out.push(refusal('PARAMETERS_INVALID',subject,paramErrors.join('; ')));return out}
+    const derived=p.derive(definition.parameters);
+    for(const key of DERIVED_KEYS)if(definition[key]!==undefined&&!same(definition[key],derived[key]))out.push(refusal('CONTRACT_MISMATCH',subject,`stated ${key} differs from what ${definition.pattern} derives`));
+    if(isObject(definition.ports)){
+      const ids=new Set([...(derived.inputs||[]),...(derived.outputs||[])].map(x=>x.id));
+      for(const id of Object.keys(definition.ports))if(!ids.has(id))bad(`ports.${id} names no port of the contract`);
+    }
+    return out;
+  }
+  function loadPack(json){
+    const errors=[];
+    if(!isObject(json))return {ok:false,pack:null,errors:[refusal('PACK_INVALID','pack','a pack must be an object')]};
+    const subject=nonEmpty(json.id)?json.id:'pack';
+    for(const key of Object.keys(json))if(!['format','id','version','definitions'].includes(key))errors.push(refusal('PACK_INVALID',subject,`unknown key ${key}`));
+    if(json.format!==PACK_FORMAT)errors.push(refusal('PACK_INVALID',subject,`format must equal ${PACK_FORMAT}`));
+    if(!nonEmpty(json.id))errors.push(refusal('PACK_INVALID',subject,'id must be a non-empty string'));
+    if(!(Number.isInteger(json.version)&&json.version>=1))errors.push(refusal('PACK_INVALID',subject,'version must be an integer >= 1'));
+    if(!Array.isArray(json.definitions))errors.push(refusal('PACK_INVALID',subject,'definitions must be an array'));
+    else{
+      const refs=new Set();
+      for(const definition of json.definitions){
+        errors.push(...checkDefinition(definition));
+        if(isObject(definition)){const ref=definitionRef(definition);if(refs.has(ref))errors.push(refusal('DEFINITION_INVALID',ref,'the pack defines this id@version twice'));refs.add(ref)}
+      }
+    }
+    if(errors.length)return {ok:false,pack:null,errors};
+    const pack=clone(json);
+    for(const definition of pack.definitions)if(definition.delay===undefined)definition.delay=0;
+    return {ok:true,pack,errors:[]};
+  }
+  function packList(packs){return Array.isArray(packs)?packs:isObject(packs)?[packs]:[]}
+  function resolveDefinition(ref,packs){
+    if(typeof ref!=='string')return null;
+    for(const pack of packList(packs))for(const definition of Array.isArray(pack?.definitions)?pack.definitions:[]){
+      if(isObject(definition)&&definitionRef(definition)===ref)return clone(definition);
+    }
+    return null;
+  }
+  // The derived contract, with each generated port's placement: from `ports[id]` when the
+  // definition gives it, else inputs spread evenly on the left and outputs on the right.
+  function contractOf(definition){
+    const p=pattern(definition?.pattern);if(!p)throw new Error(`PATTERN_UNKNOWN: ${definition?.pattern}`);
+    const contract=p.derive(definition.parameters),placed=isObject(definition.ports)?definition.ports:{};
+    const place=(list,side)=>list.map((port,i)=>{
+      const given=placed[port.id],out={...port,side:given?given.side:side,t:given?given.t:(i+1)/(list.length+1)};
+      if(given&&typeof given.label==='string')out.label=given.label;
+      return out;
+    });
+    if(Array.isArray(contract.inputs))contract.inputs=place(contract.inputs,'left');
+    if(Array.isArray(contract.outputs))contract.outputs=place(contract.outputs,'right');
+    return contract;
+  }
+  function contractPorts(contract){return [...(contract.inputs||[]),...(contract.outputs||[])]}
+
+  // --- Binding. `bindDefinition` builds the binding patch for inspection and applies nothing;
+  // `applyBind` builds it the same way, checks it and applies it through the data core's binding
+  // path (`Data.applyBinding`), the only way `config.definition` becomes non-null.
+  // A contract with no inputs and no outputs (merge@1's, for one) generates no ports: nothing binds to it.
+  function bindable(contract){return contractPorts(contract).length>0}
+  // Only a 2D Component binds: a Point, a Path, or a Component hosted on a Path exposes no declared ports.
+  function bindDefinition(doc,componentId,ref,packs){
+    const definition=resolveDefinition(ref,packs);
+    if(!definition)return {ok:false,code:'DEFINITION_UNRESOLVED',message:`definition ${ref} is not in the packs`};
+    const component=(doc?.components||[]).find(c=>c?.id===componentId);
+    if(!component)return {ok:false,code:'COMPONENT_NOT_FOUND',message:`component ${componentId} not found`};
+    const dimension=Data.effectiveDimension(component);
+    if(dimension!==2)return {ok:false,code:'DEFINITION_NOT_BINDABLE',message:`${componentId} is ${dimension}D; only a 2D Component binds a definition`};
+    const problems=checkDefinition(definition);
+    if(problems.length)return {ok:false,code:problems[0].code,message:problems[0].message};
+    const contract=contractOf(definition);
+    if(!bindable(contract))return {ok:false,code:'DEFINITION_NOT_BINDABLE',message:`definition ${ref} (${definition.pattern}) generates no ports`};
+    const attachmentPoints=contractPorts(contract).map(port=>{
+      const stored={id:port.id,side:port.side,t:port.t,flow:port.flow,channels:port.channels.map(c=>({id:c.id}))};
+      if(port.label)stored.label=port.label;
+      return stored;
+    });
+    // Rebinding carries each existing channel merge to the same port id and channel id, and
+    // is refused when the new contract drops a port or channel that holds one.
+    const byId=new Map(attachmentPoints.map(p=>[p.id,p]));
+    for(const spec of Data.canonicalAttachmentPointDescriptors(component)){
+      for(const channel of spec?.channels||[]){
+        if(channel.merge===undefined)continue;
+        const target=byId.get(spec.id)?.channels.find(c=>c.id===channel.id);
+        if(!target)return {ok:false,code:'MERGE_IN_USE',message:`port ${spec.id} channel ${channel.id} of ${componentId} holds a merge, and ${ref} has no such port and channel`};
+        target.merge=clone(channel.merge);
+      }
+    }
+    return {schema:Data.OPERATION_SCHEMA,op:'update',resource:'component',resourceId:componentId,patch:{config:{definition:ref,attachmentDefaults:'none',attachmentPoints}}};
+  }
+  // Binds `ref` to the Component: resolves the definition, builds the patch as bindDefinition
+  // does, verifies its ports equal the contract, and applies it through the binding path.
+  // Returns a receipt: ok, or refused with `error.code` (nothing changed, no revision).
+  const contractPortKey=port=>[port.id,port.flow||port.defaultFlow||'duplex',(port.channels||[{id:'main'}]).map(c=>c.id)];
+  function applyBind(doc,componentId,ref,packs){
+    const revision=Number.isInteger(doc?.revision)?doc.revision:0;
+    const refused=(code,message)=>({schema:Data.RECEIPT_SCHEMA,operationId:null,ok:false,revisionBefore:revision,revisionAfter:revision,result:null,error:{code,message:`${code}: ${message}`}});
+    if(!isObject(doc))return refused('DOCUMENT_INVALID','a document must be an object');
+    const operation=bindDefinition(doc,componentId,ref,packs);
+    if(operation.ok===false)return refused(operation.code,operation.message);
+    const want=contractPorts(contractOf(resolveDefinition(ref,packs))).map(contractPortKey).sort();
+    const have=operation.patch.config.attachmentPoints.map(contractPortKey).sort();
+    if(!same(want,have))return refused('DEFINITION_PORTS',`the binding patch's ports ${JSON.stringify(have)} differ from the contract of ${ref} ${JSON.stringify(want)}`);
+    return Data.applyBinding(doc,componentId,operation.patch);
+  }
+
+  // --- Load checks (STATE-SPACE.md "Invariants", at load). Never throws, never mutates doc.
+  const EMITS=['out','duplex'],RECEIVES=['in','duplex','control','trigger'];
+  function checkDocument(doc,packs){
+    const refusals=[];
+    const refuse=(code,subject,message)=>refusals.push(refusal(code,subject,message));
+    if(!isObject(doc))return {ok:false,refusals:[refusal('DOCUMENT_INVALID','document','a document must be an object')]};
+    let d;
+    try{d=Data.normalizeDocument(clone(doc))}
+    catch(error){return {ok:false,refusals:[refusal('DOCUMENT_INVALID','document',String(error?.message||error))]}}
+    const components=new Map(d.components.map(c=>[c.id,c]));
+    const specOf=(componentId,pointId)=>{
+      const component=components.get(componentId);if(!component)return null;
+      try{return Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&(s.id===pointId||s.compatId===pointId))||null}catch(_){return null}
+    };
+    const endPoint=(wire,end)=>Data.wireEndBound(wire,end)?(wire[end+'Attachment']?.pointId||wire[end+'Side']):null;
+    for(const wire of d.wires){
+      try{
+        const subject=`wire:${wire.id}`,config=isObject(wire.config)?wire.config:{};
+        if(config.delay!==undefined&&!(Number.isInteger(config.delay)&&config.delay>=1))refuse('PATH_DELAY_INVALID',subject,`config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
+        const aPoint=endPoint(wire,'a'),bPoint=endPoint(wire,'b');
+        if(!aPoint||!bPoint)continue; // a free end binds nothing
+        const aSpec=specOf(wire.a,aPoint),bSpec=specOf(wire.b,bPoint);
+        if(!aSpec||!bSpec)continue; // an unreachable end is the data core's validation
+        const flow=spec=>spec.flow||spec.defaultFlow||'duplex';
+        const direction=['none','forward','reverse','duplex'].includes(config.direction)?config.direction:wire.duplex?'duplex':'forward';
+        const aFlow=flow(aSpec),bFlow=flow(bSpec);
+        // Refused only when none of the Wire's declared directions is admitted by both flows:
+        // a duplex Wire from an out port to an in port carries forward only.
+        const carries={forward:EMITS.includes(aFlow)&&RECEIVES.includes(bFlow),reverse:EMITS.includes(bFlow)&&RECEIVES.includes(aFlow)};
+        const declared=direction==='none'?[]:direction==='duplex'?['forward','reverse']:[direction];
+        const admitted=!declared.length||declared.some(x=>carries[x]);
+        if(!admitted)refuse('PATH_DIRECTION_FLOW',subject,`direction ${direction} is not admitted by ports ${wire.a}.${aSpec.id} (${aFlow}) and ${wire.b}.${bSpec.id} (${bFlow})`);
+        const theirs=new Set((bSpec.channels||[{id:'main'}]).map(c=>c.id));
+        if(!(aSpec.channels||[{id:'main'}]).some(c=>theirs.has(c.id)))refuse('CHANNEL_MISMATCH',subject,`ports ${wire.a}.${aSpec.id} and ${wire.b}.${bSpec.id} share no channel`);
+      }catch(error){refuse('DOCUMENT_INVALID',`wire:${wire?.id}`,String(error?.message||error))}
+    }
+    for(const component of d.components){
+      try{
+        const config=isObject(component.config)?component.config:{};
+        if(config.definition!==undefined&&config.definition!==null){ // null is unbound
+          const subject=`component:${component.id}`;
+          const definition=resolveDefinition(config.definition,packs);
+          const problems=definition?checkDefinition(definition):[];
+          if(!definition)refuse('DEFINITION_UNRESOLVED',subject,`definition ${JSON.stringify(config.definition)} is not in the packs`);
+          else if(problems.length)refuse('DEFINITION_INVALID',subject,`definition ${config.definition} does not validate: ${problems.map(x=>`${x.code} ${x.message}`).join('; ')}`);
+          else if(!bindable(contractOf(definition)))refuse('DEFINITION_NOT_BINDABLE',subject,`definition ${config.definition} (${definition.pattern}) generates no ports`);
+          else{
+            const key=port=>[port.id,port.flow||port.defaultFlow||'duplex',(port.channels||[{id:'main'}]).map(c=>c.id)];
+            const want=contractPorts(contractOf(definition)).map(key).sort();
+            const have=Data.canonicalAttachmentPointDescriptors(component).map(key).sort();
+            if(!same(want,have))refuse('DEFINITION_PORTS',subject,`ports ${JSON.stringify(have)} differ from the contract of ${config.definition} ${JSON.stringify(want)}`);
+          }
+        }
+        for(const port of Array.isArray(config.attachmentPoints)?config.attachmentPoints:[]){
+          for(const channel of Array.isArray(port?.channels)?port.channels:[]){
+            if(!isObject(channel)||channel.merge===undefined)continue;
+            const subject=`component:${component.id}:${port.id}:${channel.id}`;
+            const errors=merge.validate(channel.merge);
+            if(errors.length){refuse('MERGE_INVALID',subject,errors.join('; '));continue}
+            if(channel.merge.order?.kind!=='declared')continue;
+            const ending=new Set(d.wires.filter(w=>['a','b'].some(end=>w[end]===component.id&&endPoint(w,end)!=null&&(endPoint(w,end)===port.id||endPoint(w,end)===port.compatId))).map(w=>w.id));
+            const strangers=channel.merge.order.paths.filter(id=>!ending.has(id));
+            if(strangers.length)refuse('MERGE_INVALID',subject,`declared order names wires that do not end on this port: ${strangers.join(', ')}`);
+          }
+        }
+      }catch(error){refuse('DOCUMENT_INVALID',`component:${component?.id}`,String(error?.message||error))}
+    }
+    return {ok:refusals.length===0,refusals};
+  }
+
+  // --- Runtime, slice 1b (STATE-SPACE.md "Runtime semantics (slice 1b)", "Two-phase ticks",
+  // "Merge and ordering"): the hash-chained ledger, the replay key, two-phase ticks with merges,
+  // recorded stochastic order draws, the trace and replay. A run is a plain JSON-safe object;
+  // step() advances it in place and nothing else is touched. Binary channels only.
+  const RUNTIME_VERSION='state-space@1';
+  const TRACE_FORMAT='soveraeign.schematic/trace@0.1';
+  const ZERO_HASH='0'.repeat(64);
+  const LEDGER_KINDS=['start','input','draw'];
+  const REPLAY_KEY_FIELDS=['documentId','documentHash','definitions','runtimeVersion','traceFormat','inputs','seed'];
+  const INPUT_KEYS=['entity','point','channel','value','at'];
+  const DEFAULT_MERGE=Object.freeze({combine:'last',order:Object.freeze({kind:'stochastic'})});
+  const cmp=(x,y)=>x<y?-1:x>y?1:0;
+  const cmpList=(x,y)=>{for(let i=0;i<Math.max(x.length,y.length);i++){const c=cmp(x[i],y[i]);if(c)return c}return 0};
+  const portKey=(entity,point,channel)=>JSON.stringify([entity,point,channel]);
+  const TMP='\u0000tmp:';
+  const walked=(run,list)=>run.walk==='reverse'?list.slice().reverse():list;
+  function ledgerHash(seq,kind,body,prev){return Canonical.sha256Hex(Canonical.canonicalize({seq,kind,body,prev}))}
+  function appendEntry(run,kind,body){
+    const seq=run.ledger.length,prev=seq?run.ledger[seq-1].hash:ZERO_HASH;
+    run.ledger.push({seq,kind,body,prev,hash:ledgerHash(seq,kind,body,prev)});
+  }
+  const specChannels=spec=>(Array.isArray(spec?.channels)&&spec.channels.length?spec.channels:[{id:'main'}]).map(c=>c.id);
+  const specFlow=spec=>spec.flow||spec.defaultFlow||'duplex';
+  // What the run reads of the document, resolved once at start: each Wire's two ports, delay,
+  // the directions it carries and the channels it shares; each Component's role; each merge.
+  function topology(d,definitions){
+    const components={},merges={},wires=[];
+    const specOf=(component,pointId)=>{try{return Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&(s.id===pointId||s.compatId===pointId))||null}catch(_){return null}};
+    const byId=new Map(d.components.map(c=>[c.id,c]));
+    for(const component of d.components){
+      const config=isObject(component.config)?component.config:{};
+      const ref=config.definition!==undefined&&config.definition!==null?config.definition:null;
+      if(ref){const def=definitions[ref];components[component.id]={role:'device',definition:ref,inputs:def.parameters.inputs.slice(),outputs:def.parameters.outputs.slice()}}
+      else components[component.id]={role:component.symbolId==='point'?'point':'absorb'};
+      // A channel merge is read where checkDocument reads it: the stored port list, by port id.
+      for(const port of Array.isArray(config.attachmentPoints)?config.attachmentPoints:[]){
+        for(const channel of Array.isArray(port?.channels)?port.channels:[]){
+          if(isObject(channel)&&channel.merge!==undefined)merges[portKey(component.id,port.id,channel.id)]=clone(channel.merge);
+        }
+      }
+    }
+    for(const wire of d.wires){
+      if(!Data.wireEndBound(wire,'a')||!Data.wireEndBound(wire,'b'))continue;
+      const ends={};
+      for(const end of ['a','b']){
+        const component=byId.get(wire[end]),spec=component?specOf(component,wire[end+'Attachment']?.pointId||wire[end+'Side']):null;
+        if(!spec)break;
+        ends[end]={entity:component.id,point:spec.id,flow:specFlow(spec),channels:specChannels(spec)};
+      }
+      if(!ends.a||!ends.b)continue;
+      const config=isObject(wire.config)?wire.config:{};
+      const direction=['none','forward','reverse','duplex'].includes(config.direction)?config.direction:wire.duplex?'duplex':'forward';
+      const declared=direction==='none'?[]:direction==='duplex'?['forward','reverse']:[direction];
+      const theirs=new Set(ends.b.channels);
+      wires.push({id:wire.id,a:{entity:ends.a.entity,point:ends.a.point},b:{entity:ends.b.entity,point:ends.b.point},delay:config.delay===undefined?1:config.delay,
+        forward:declared.includes('forward')&&EMITS.includes(ends.a.flow)&&RECEIVES.includes(ends.b.flow),
+        reverse:declared.includes('reverse')&&EMITS.includes(ends.b.flow)&&RECEIVES.includes(ends.a.flow),
+        channels:ends.a.channels.filter(c=>theirs.has(c))});
+    }
+    wires.sort((x,y)=>cmp(x.id,y.id));
+    return {components,merges,wires};
+  }
+  function inputRefusal(message){return {ok:false,code:'INPUT_INVALID',message}}
+  // A run: startRun({doc, packs, inputs, seed, budget}). `walk: 'reverse'` reverses the order in
+  // which the engine walks ports, devices and Wires within a phase; no outcome depends on it.
+  function startRun(options){
+    const o=isObject(options)?options:{};
+    const checked=checkDocument(o.doc,o.packs);
+    if(!checked.ok)return {ok:false,code:'RUN_REFUSED',message:`the document does not pass its load checks: ${checked.refusals.map(r=>r.code).join(', ')}`,refusals:checked.refusals};
+    const d=Data.normalizeDocument(clone(o.doc));
+    for(const component of d.components){
+      for(const port of Array.isArray(component.config?.attachmentPoints)?component.config.attachmentPoints:[]){
+        for(const channel of Array.isArray(port?.channels)?port.channels:[]){
+          if(channel?.merge?.combine==='sum')return {ok:false,code:'MERGE_FORM',subject:`component:${component.id}:${port.id}:${channel.id}`,message:`combine sum is not defined on binary channels (${component.id}.${port.id}.${channel.id}); slice 1b runs binary channels only`};
+        }
+      }
+    }
+    const seed=o.seed===undefined?'0':o.seed;
+    if(typeof seed!=='string')return inputRefusal('seed must be a string');
+    const budget=o.budget===undefined?10000:o.budget;
+    if(!natural(budget))return inputRefusal('budget must be an integer >= 0');
+    if(o.walk!==undefined&&!['forward','reverse'].includes(o.walk))return inputRefusal('walk must be forward or reverse');
+    const rawInputs=o.inputs===undefined?[]:o.inputs;
+    if(!Array.isArray(rawInputs))return inputRefusal('inputs must be an array');
+    const inputs=[],seen=new Set();
+    for(let i=0;i<rawInputs.length;i++){
+      const raw=rawInputs[i];
+      if(!isObject(raw))return inputRefusal(`input ${i} must be an object`);
+      const extra=Object.keys(raw).filter(k=>!INPUT_KEYS.includes(k));
+      if(extra.length)return inputRefusal(`input ${i}: unknown key ${extra[0]}`);
+      const component=d.components.find(c=>c.id===raw.entity);
+      if(!component)return inputRefusal(`input ${i}: unknown entity ${JSON.stringify(raw.entity)}`);
+      let spec=null;try{spec=Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&typeof raw.point==='string'&&(s.id===raw.point||s.compatId===raw.point))||null}catch(_){spec=null}
+      if(!spec)return inputRefusal(`input ${i}: ${raw.entity} has no port ${JSON.stringify(raw.point)}`);
+      const bound=component.config?.definition;
+      if(bound!==undefined&&bound!==null&&(resolveDefinition(bound,o.packs)?.parameters?.outputs||[]).includes(spec.id))return inputRefusal(`input ${i}: ${component.id}.${spec.id} is an output of ${bound}; a device's output is the device's`);
+      const channel=raw.channel===undefined?'main':raw.channel;
+      if(!specChannels(spec).includes(channel))return inputRefusal(`input ${i}: port ${raw.entity}.${spec.id} has no channel ${JSON.stringify(channel)}`);
+      if(typeof raw.value!=='boolean')return inputRefusal(`input ${i}: value must be a boolean (binary channels only)`);
+      if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
+      const input={entity:component.id,point:spec.id,channel,value:raw.value,at:raw.at};
+      const key=JSON.stringify([input.at,input.entity,input.point,input.channel]);
+      if(seen.has(key))return inputRefusal(`input ${i}: a second input at (${input.entity}, ${input.point}, ${input.channel}, ${input.at})`);
+      seen.add(key);inputs.push(input);
+    }
+    inputs.sort((x,y)=>cmpList([x.at,x.entity,x.point,x.channel],[y.at,y.entity,y.point,y.channel]));
+    const refs=[...new Set(d.components.map(c=>c.config?.definition).filter(ref=>ref!==undefined&&ref!==null))].sort();
+    const definitions={};
+    for(const ref of refs){const def=resolveDefinition(ref,o.packs);if(def.delay===undefined)def.delay=0;definitions[ref]=def}
+    const replayKey={documentId:d.id,documentHash:Data.documentHash(d),definitions:refs,runtimeVersion:RUNTIME_VERSION,traceFormat:TRACE_FORMAT,inputs,seed};
+    const shape=topology(d,definitions);
+    const run={
+      id:Canonical.sha256Hex(Canonical.canonicalize(replayKey)).slice(0,12),
+      runtimeVersion:RUNTIME_VERSION,doc:d,definitions,components:shape.components,merges:shape.merges,wires:shape.wires,
+      seed,budget,spent:0,tick:null,walk:o.walk||'forward',
+      signal:{},lastRecord:{},queues:{},sequence:0,ledger:[],records:[],replayDraws:null,
+      pending:inputs.map(x=>({kind:'input',...x}))
+    };
+    appendEntry(run,'start',{replayKey:clone(replayKey),budget});
+    for(const input of inputs)appendEntry(run,'input',clone(input));
+    return {ok:true,run};
+  }
+  // Power-on: tick 0 is always processed, even with nothing scheduled at it.
+  function nextTick(run){
+    let t=run.tick===null?0:null;
+    for(const item of run.pending)if(t===null||item.at<t)t=item.at;
+    for(const q of Object.values(run.queues))if(q.items.length&&(t===null||q.next<t))t=q.next;
+    return t;
+  }
+  function queuedCount(run){return run.pending.length+Object.values(run.queues).reduce((n,q)=>n+q.items.length,0)}
+  function makeRecord(run,ctx,{entity,point,channel,kind,value,observer,rule,inputs,phase,rank=0}){
+    const id=`${TMP}${ctx.tmp++}`;
+    ctx.records.push({phase,rank,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind,form:'binary',value,time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none'}});
+    return id;
+  }
+  // Emission: one arrival per bound Wire, per direction it carries out of this port, per shared
+  // channel, at t + path delay; never back onto a Wire in `exclude`.
+  function emit(run,ctx,entity,point,channel,value,exclude,from,phase){
+    for(const wire of walked(run,run.wires)){
+      if(exclude.includes(wire.id)||!wire.channels.includes(channel))continue;
+      for(const [end,other,dir] of [['a','b','forward'],['b','a','reverse']]){
+        if(!wire[dir]||wire[end].entity!==entity||wire[end].point!==point)continue;
+        run.pending.push({kind:'arrival',at:ctx.t+wire.delay,entity:wire[other].entity,point:wire[other].point,channel,value,wire:wire.id,phase,from});
+      }
+    }
+  }
+  // Merge order: the declared Paths first (in their declared order), the rest by a seeded draw
+  // keyed by (seed, tick, entity, port, channel), recorded in the ledger (and, in replay, read from it).
+  function mergeOrder(run,ctx,g,merge){
+    const tag=a=>g.arrivals.filter(x=>x.wire===a.wire).length>1?`${a.wire}#${a.phase}`:a.wire;
+    const items=g.arrivals.map(a=>({a,id:tag(a)})).sort((x,y)=>cmp(x.id,y.id));
+    const declared=merge.order?.kind==='declared'?merge.order.paths:[];
+    const first=[];for(const path of declared)for(const item of items)if(item.a.wire===path)first.push(item);
+    const rest=items.filter(item=>!declared.includes(item.a.wire));
+    let restOrder=rest.map(item=>item.id);
+    if(rest.length>1){
+      const paths=restOrder.slice(),drawn=Canonical.drawOrder(run.seed,['merge',ctx.t,g.entity,g.point,g.channel],paths);
+      if(run.replayDraws){
+        const recorded=run.replayDraws.find(e=>e.body.tick===ctx.t&&e.body.entity===g.entity&&e.body.point===g.point&&e.body.channel===g.channel);
+        if(!recorded||!same(recorded.body.paths,paths)||!same(recorded.body.order,drawn)){
+          ctx.diverged={code:'REPLAY_DIVERGED',entry:recorded?recorded.seq:null,message:recorded?`the draw recorded at ledger entry ${recorded.seq} (${g.entity}.${g.point}.${g.channel}, tick ${ctx.t}) does not re-derive from the seed: recorded ${JSON.stringify(recorded.body.order)}, derived ${JSON.stringify(drawn)}`:`no draw is recorded for ${g.entity}.${g.point}.${g.channel} at tick ${ctx.t}`};
+          return null;
+        }
+        restOrder=recorded.body.order.slice();
+      }else restOrder=drawn;
+      ctx.draws.push({tick:ctx.t,entity:g.entity,point:g.point,channel:g.channel,paths,order:restOrder.slice()});
+    }
+    return [...first,...restOrder.map(id=>rest.find(item=>item.id===id))].map(item=>item.a);
+  }
+  // Update phase for one (entity, port, channel): input, else a device's delayed output, else the
+  // merged arrivals (or a queue's head). What loses is recorded with rule `overridden`.
+  function updatePort(run,ctx,g){
+    const key=portKey(g.entity,g.point,g.channel),old=run.signal[key]===true,role=run.components[g.entity]?.role;
+    const merge=run.merges[key]||DEFAULT_MERGE,queue=merge.combine==='queue'?(run.queues[key]||(run.queues[key]={next:ctx.t+1,items:[]})):null;
+    const base={entity:g.entity,point:g.point,channel:g.channel,phase:0};
+    let win=null;
+    if(g.input)win={value:g.input.value,kind:'registered',observer:'input',rule:'input',inputs:[],always:true,exclude:[]};
+    else if(g.output)win={value:g.output.value,kind:'derived',observer:`rule:${g.output.rule}`,rule:g.output.rule,inputs:g.output.inputs,emits:true,exclude:[]};
+    if(win){
+      for(const a of g.arrivals)makeRecord(run,ctx,{...base,kind:'derived',value:a.value,observer:`path:${a.wire}`,rule:'overridden',inputs:[a.from],rank:a.phase});
+    }else{
+      const arrived=g.arrivals.map(a=>a.wire);
+      const orderFree=['or','and','min','max'].includes(merge.combine);
+      if(orderFree&&g.arrivals.length){
+        const sorted=g.arrivals.slice().sort((x,y)=>cmpList([x.wire,x.phase],[y.wire,y.phase]));
+        const value=merge.combine==='or'||merge.combine==='max'?sorted.some(a=>a.value):sorted.every(a=>a.value);
+        win=sorted.length===1?{value,observer:`path:${sorted[0].wire}`,rule:'path',inputs:[sorted[0].from]}:{value,observer:'engine:merge@1',rule:'merge@1',inputs:sorted.map(a=>a.from)};
+      }else if(queue){
+        if(g.arrivals.length){const ordered=g.arrivals.length>1?mergeOrder(run,ctx,g,merge):g.arrivals;if(!ordered)return;queue.items.push(...ordered.map(a=>({value:a.value,wire:a.wire,phase:a.phase,from:a.from})))}
+        if(queue.items.length){const head=queue.items.shift();win={value:head.value,observer:'engine:merge@1',rule:'merge@1',inputs:[head.from]};if(!arrived.includes(head.wire))arrived.push(head.wire)}
+      }else if(g.arrivals.length===1){
+        const a=g.arrivals[0];win={value:a.value,observer:`path:${a.wire}`,rule:'path',inputs:[a.from]};
+      }else if(g.arrivals.length){
+        const ordered=mergeOrder(run,ctx,g,merge);if(!ordered)return;
+        const pick=merge.combine==='first'?ordered[0]:ordered[ordered.length-1];
+        win={value:pick.value,observer:'engine:merge@1',rule:'merge@1',inputs:ordered.map(a=>a.from)};
+      }
+      if(!win)return;
+      win.kind='derived';win.exclude=arrived;win.emits=role==='point';
+    }
+    if(queue)queue.next=ctx.t+1;
+    const id=makeRecord(run,ctx,{...base,kind:win.kind,value:win.value,observer:win.observer,rule:win.rule,inputs:win.inputs});
+    run.signal[key]=win.value;run.lastRecord[key]=id;
+    const changed=win.value!==old;
+    if(changed)ctx.changed.add(key);
+    if(win.always||(changed&&win.emits))emit(run,ctx,g.entity,g.point,g.channel,win.value,win.exclude,id,0);
+  }
+  // Evaluate phase: a device whose input port changed reads committed state only.
+  function evaluateDevice(run,ctx,entity,committed){
+    const component=run.components[entity],definition=run.definitions[component.definition],p=pattern(definition.pattern);
+    const values={},inputs=[];
+    for(const name of component.inputs){const key=portKey(entity,name,'main');values[name]=committed[key]===true;if(run.lastRecord[key])inputs.push(run.lastRecord[key])}
+    const out=p.evaluate(definition.parameters,values),delay=definition.delay||0;
+    for(const name of component.outputs){
+      const key=portKey(entity,name,'main'),value=out[name];
+      if(delay===0){
+        if(value===(run.signal[key]===true))continue;
+        ctx.cost++;
+        const id=makeRecord(run,ctx,{entity,point:name,channel:'main',kind:'derived',value,observer:`rule:${component.definition}`,rule:component.definition,inputs,phase:1});
+        run.signal[key]=value;run.lastRecord[key]=id;
+        emit(run,ctx,entity,name,'main',value,[],id,1);
+      }else{
+        // Transport delay: schedule every change from the latest value already on its way.
+        let latest=run.signal[key]===true,at=-1;
+        for(const item of run.pending)if(item.kind==='output'&&item.entity===entity&&item.point===name&&item.channel==='main'&&item.at>at){at=item.at;latest=item.value}
+        if(value!==latest)run.pending.push({kind:'output',at:ctx.t+delay,entity,point:name,channel:'main',value,rule:component.definition,inputs:inputs.slice()});
+      }
+    }
+  }
+  function resolveTmp(value,map){
+    if(typeof value==='string')return value.startsWith(TMP)?map.get(value):value;
+    if(Array.isArray(value))return value.map(x=>resolveTmp(x,map));
+    if(isObject(value)){const out={};for(const [k,v] of Object.entries(value))out[k]=resolveTmp(v,map);return out}
+    return value;
+  }
+  function processTick(run,t){
+    const ctx={t,cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null};
+    const due=run.pending.filter(x=>x.at===t);run.pending=run.pending.filter(x=>x.at!==t);
+    const groups=new Map();
+    const group=(entity,point,channel)=>{const key=portKey(entity,point,channel);if(!groups.has(key))groups.set(key,{entity,point,channel,input:null,output:null,arrivals:[]});return groups.get(key)};
+    for(const item of due){
+      const g=group(item.entity,item.point,item.channel);ctx.cost++;
+      if(item.kind==='input')g.input=item;else if(item.kind==='output')g.output=item;else g.arrivals.push(item);
+    }
+    for(const [key,q] of Object.entries(run.queues))if(q.items.length&&q.next===t){const [entity,point,channel]=JSON.parse(key);group(entity,point,channel)}
+    for(const key of walked(run,[...groups.keys()].sort())){updatePort(run,ctx,groups.get(key));if(ctx.diverged)return {ok:false,...ctx.diverged}}
+    const committed=clone(run.signal);
+    const devices=Object.keys(run.components).filter(id=>run.components[id].role==='device'&&(t===0||run.components[id].inputs.some(name=>ctx.changed.has(portKey(id,name,'main'))))).sort();
+    for(const entity of walked(run,devices))evaluateDevice(run,ctx,entity,committed);
+    // Sequence is assigned after the tick, from stable ids only; then every provisional id is resolved.
+    const sortKey=x=>[x.record.subject.entity,x.record.subject.point,x.record.subject.channel,x.record.observable,x.record.kind,x.phase,x.record.observer,x.rank,x.record.value?1:0];
+    ctx.records.sort((x,y)=>cmpList(sortKey(x),sortKey(y)));
+    const map=new Map();
+    for(const x of ctx.records){const seq=run.sequence++;map.set(x.record.id,`sr-${run.id}-${String(seq).padStart(6,'0')}`);x.record.id=map.get(x.record.id);x.record.time.sequence=seq}
+    const records=ctx.records.map(x=>{x.record.provenance.inputs=resolveTmp(x.record.provenance.inputs,map);return x.record});
+    run.pending=resolveTmp(run.pending,map);run.lastRecord=resolveTmp(run.lastRecord,map);run.queues=resolveTmp(run.queues,map);
+    for(const [key,q] of Object.entries(run.queues))if(!q.items.length)delete run.queues[key];
+    run.pending.sort((x,y)=>cmp(Canonical.canonicalize(x),Canonical.canonicalize(y)));
+    ctx.draws.sort((x,y)=>cmpList([x.entity,x.point,x.channel],[y.entity,y.point,y.channel]));
+    for(const draw of ctx.draws)appendEntry(run,'draw',draw);
+    run.records.push(...records);
+    run.tick=t;run.spent+=ctx.cost;
+    return {ok:true,cost:ctx.cost,records};
+  }
+  // One step is the earliest tick with scheduled work. Worked on a copy: a refused tick
+  // (BUDGET_SPENT, REPLAY_DIVERGED) leaves the run exactly as it was.
+  function step(run){
+    if(!isObject(run)||run.runtimeVersion!==RUNTIME_VERSION)return {ok:false,code:'RUN_INVALID',message:`not a ${RUNTIME_VERSION} run`};
+    const t=nextTick(run);
+    if(t===null)return {ok:true,tick:null,records:[]};
+    const {doc,...rest}=run,work=clone(rest);work.doc=doc;
+    const result=processTick(work,t);
+    if(!result.ok)return result;
+    if(run.spent+result.cost>run.budget)return {ok:false,code:'BUDGET_SPENT',tick:t,left:queuedCount(run),message:`processing tick ${t} takes ${result.cost} events; ${run.budget-run.spent} of the budget ${run.budget} remain`};
+    for(const key of Object.keys(work))run[key]=work[key];
+    return {ok:true,tick:t,records:clone(result.records)};
+  }
+  function traceOf(run){
+    return {format:TRACE_FORMAT,replayKey:clone(run.ledger[0].body.replayKey),documentRevision:run.doc.revision,budget:run.budget,through:run.tick,head:run.ledger[run.ledger.length-1].hash,ledger:clone(run.ledger),records:clone(run.records)};
+  }
+  // Shape and every hash link. The chain is recomputed from the start, so a change to any byte
+  // of an entry fails that entry and every entry after it.
+  function validateTrace(trace){
+    const errors=[];let entry=null;
+    const fail=(i,message)=>{errors.push(i===null?message:`ledger ${i}: ${message}`);if(i!==null&&entry===null)entry=i};
+    if(!isObject(trace))return {ok:false,entry,errors:['trace must be an object']};
+    unknownKeys(trace,['format','replayKey','documentRevision','budget','through','head','ledger','records'],'trace',errors);
+    if(trace.through!==null&&!natural(trace.through))errors.push('through must be null or an integer >= 0');
+    if(typeof trace.head!=='string'||!/^[0-9a-f]{64}$/.test(trace.head))errors.push('head must be a 64-digit hex hash');
+    if(trace.format!==TRACE_FORMAT)errors.push(`format must equal ${TRACE_FORMAT}`);
+    if(!natural(trace.documentRevision))errors.push('documentRevision must be an integer >= 0');
+    if(!natural(trace.budget))errors.push('budget must be an integer >= 0');
+    const key=trace.replayKey;
+    if(!isObject(key))errors.push('replayKey must be an object');
+    else{
+      unknownKeys(key,REPLAY_KEY_FIELDS,'replayKey',errors);
+      for(const field of ['documentId','documentHash','runtimeVersion','traceFormat','seed'])if(typeof key[field]!=='string')errors.push(`replayKey.${field} must be a string`);
+      if(!Array.isArray(key.definitions)||!key.definitions.every(nonEmpty))errors.push('replayKey.definitions must be an array of id@version strings');
+      if(!Array.isArray(key.inputs))errors.push('replayKey.inputs must be an array');
+    }
+    if(!Array.isArray(trace.ledger)||!trace.ledger.length)errors.push('ledger must be a non-empty array');
+    else{
+      let running=ZERO_HASH,broken=null;
+      trace.ledger.forEach((e,i)=>{
+        if(broken!==null){fail(i,`follows the broken link at entry ${broken}`);return}
+        if(!isObject(e)){fail(i,'an entry must be an object');broken=i;return}
+        const extra=Object.keys(e).filter(k=>!['seq','kind','body','prev','hash'].includes(k));
+        let bad=extra.length?`unknown key ${extra[0]}`:null;
+        if(!bad&&e.seq!==i)bad=`seq must be ${i}`;
+        if(!bad&&!LEDGER_KINDS.includes(e.kind))bad=`kind must be one of ${LEDGER_KINDS.join(', ')}`;
+        if(!bad&&(i===0)!==(e.kind==='start'))bad=i===0?'the first entry must be start':'only the first entry is start';
+        if(!bad&&e.prev!==running)bad='prev does not link to the entry before';
+        let hash=null;
+        if(!bad){try{hash=ledgerHash(e.seq,e.kind,e.body,e.prev)}catch(_){bad='body is not canonical JSON'}}
+        if(!bad&&e.hash!==hash)bad='hash does not match the entry';
+        if(bad){fail(i,bad);broken=i;return}
+        running=hash;
+      });
+      if(entry===null&&isObject(key)&&!same(trace.ledger[0].body,{replayKey:key,budget:trace.budget}))fail(0,'the start entry does not carry the replayKey and budget');
+      // A consistently truncated (or extended) ledger fails here: head names the entry the trace ends on.
+      if(entry===null&&trace.head!==trace.ledger[trace.ledger.length-1].hash){errors.push(`head does not equal the hash of the last ledger entry (${trace.ledger.length-1})`);entry=trace.ledger.length}
+    }
+    if(trace.records!==undefined&&!Array.isArray(trace.records))errors.push('records must be an array when present');
+    else if(trace.records!==undefined)trace.records.forEach((r,i)=>{const v=validateRecord(r);if(!v.ok)errors.push(`record ${i}: ${v.errors.join('; ')}`)});
+    return {ok:errors.length===0,entry,errors};
+  }
+  // Replay: the trace's replay key recomputed from doc, packs, its inputs and seed; the fold re-run
+  // through the trace's `through` tick, reading draws from the ledger; the ledger compared byte for
+  // byte, and the records too when the trace carries them.
+  function replay(options){
+    const o=isObject(options)?options:{};
+    const trace=o.trace,checked=validateTrace(trace);
+    if(!checked.ok)return {ok:false,code:'TRACE_INVALID',entry:checked.entry,errors:checked.errors,message:checked.entry===null?checked.errors[0]:`the trace fails at ledger entry ${checked.entry}: ${checked.errors[0]}`};
+    const key=trace.replayKey;
+    const started=startRun({doc:o.doc,packs:o.packs,inputs:key.inputs,seed:key.seed,budget:trace.budget});
+    if(!started.ok)return started;
+    const run=started.run,mine=run.ledger[0].body.replayKey;
+    const fields=REPLAY_KEY_FIELDS.filter(field=>!same(mine[field],key[field]));
+    if(fields.length)return {ok:false,code:'REPLAY_KEY_MISMATCH',fields,message:`the replay key differs in ${fields.join(', ')}`};
+    run.replayDraws=trace.ledger.filter(e=>e.kind==='draw').map(e=>({seq:e.seq,body:e.body}));
+    // Exactly the ticks up to `through`.
+    while(trace.through!==null){
+      const next=nextTick(run);
+      if(next===null||next>trace.through)break;
+      const r=step(run);
+      if(!r.ok){if(r.code==='BUDGET_SPENT')return {ok:false,code:'REPLAY_DIVERGED',tick:r.tick,message:`the trace processed tick ${r.tick}, which the recomputed run cannot within the budget ${trace.budget}`};return r}
+    }
+    run.replayDraws=null;
+    if(run.tick!==trace.through)return {ok:false,code:'REPLAY_DIVERGED',tick:run.tick,message:`the recomputed run ends at tick ${run.tick}, the trace at ${trace.through}`};
+    const n=Math.max(run.ledger.length,trace.ledger.length);
+    for(let i=0;i<n;i++)if(Canonical.canonicalize(run.ledger[i]??null)!==Canonical.canonicalize(trace.ledger[i]??null))return {ok:false,code:'REPLAY_DIVERGED',entry:i,message:`ledger entry ${i} differs from the recomputed run`};
+    if(trace.records===undefined)return {ok:true,records:run.records};
+    const m=Math.max(run.records.length,trace.records.length);
+    for(let i=0;i<m;i++)if(Canonical.canonicalize(run.records[i]??null)!==Canonical.canonicalize(trace.records[i]??null))return {ok:false,code:'REPLAY_DIVERGED',record:i,message:`record ${i} differs from the recomputed run`};
+    return {ok:true,records:run.records};
+  }
+
+  return {RECORD_FORMAT,PACK_FORMAT,RUNTIME_VERSION,TRACE_FORMAT,validateRecord,patterns,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument,startRun,step,traceOf,replay,validateTrace};
+});
+/* END src/07-state-space.js */
 </script>
 <script data-beta-module="src/04-logic-pack.js">
 /* BEGIN src/04-logic-pack.js */
@@ -3140,25 +4400,49 @@ function copySelection(){
   semanticClipboard={schema:'soveraeign.schematic/clipboard@0.1',createdAt:new Date().toISOString(),rootIds:data.roots.map(x=>x.id),components:data.components,wires:data.wires};
   statusEl.textContent=`Copied · ${data.components.length} Component${data.components.length===1?'':'s'}`;updateEditMenuState();return SovSchematicData.clone(semanticClipboard);
 }
+// A channel merge's declared order names Wires by id. On paste the copies' orders follow the
+// copied Wires (old id -> new id); a Wire that was not copied leaves the list, and an order left
+// with no path is removed so the merge falls back to its default order.
+function remapPastedMergeOrders(components,wireIdMap){
+  for(const component of components){
+    for(const port of Array.isArray(component?.config?.attachmentPoints)?component.config.attachmentPoints:[]){
+      for(const channel of Array.isArray(port?.channels)?port.channels:[]){
+        const order=channel?.merge?.order;
+        if(!order||order.kind!=='declared'||!Array.isArray(order.paths))continue;
+        const paths=order.paths.map(id=>wireIdMap.get(id)).filter(Boolean);
+        if(paths.length)order.paths=paths;else delete channel.merge.order;
+      }
+    }
+  }
+  return components;
+}
 function pasteClipboard({offset=32}={}){
   if(!semanticClipboard?.components?.length){statusEl.textContent='Clipboard empty';return []}
-  setHistoryHint('Paste');const idMap=new Map(),created=[];
+  // All or nothing: every record is built and checked against a staged copy of the document
+  // before any is inserted, so a refused record inserts nothing and leaves history as it was.
+  const stage={...diagram,components:nodes.slice(),wires:wires.slice()};
+  const idMap=new Map(),wireIdMap=new Map(),created=[],createdWires=[];
   const comps=semanticClipboard.components.slice().sort((a,b)=>nodeDepth(a)-nodeDepth(b));
-  for(const old of comps){
-    const value=SovSchematicData.clone(old);delete value.id;
-    value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
-    if(old.parentId&&idMap.has(old.parentId)){
-      value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
-      // A Point stuck to the copied host's boundary or path stays stuck to the copy.
-      if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
-    }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
-    const fresh=SovSchematicData.makeComponent(diagram,value);nodes.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
-  }
+  try{
+    for(const old of comps){
+      const value=SovSchematicData.clone(old);delete value.id;
+      value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
+      if(old.parentId&&idMap.has(old.parentId)){
+        value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
+        // A Point stuck to the copied host's boundary or path stays stuck to the copy.
+        if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
+      }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
+      // A copy keeps a bound Component's config.definition as-is (a plain create may not set one).
+      const fresh=SovSchematicData.makeComponent(stage,value,{copy:true});stage.components.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
+    }
+  }catch(error){statusEl.textContent=`Paste refused · ${error.message}`;return []}
   for(const old of semanticClipboard.wires||[]){
     if(!idMap.has(old.a)||!idMap.has(old.b))continue;
     const value=SovSchematicData.clone(old);delete value.id;value.a=idMap.get(old.a);value.b=idMap.get(old.b);
-    try{wires.push(SovSchematicData.makeWire(diagram,value))}catch(_){ }
+    try{const w=SovSchematicData.makeWire(stage,value);stage.wires.push(w);createdWires.push(w);wireIdMap.set(old.id,w.id)}catch(_){ }
   }
+  remapPastedMergeOrders(created,wireIdMap);
+  setHistoryHint('Paste');nodes.push(...created);wires.push(...createdWires);
   syncAllNodeBoundaryContext();setComponentSelection(created.filter(n=>semanticClipboard.rootIds.includes([...idMap.entries()].find(([,v])=>v===n.id)?.[0])).map(n=>n.id),created.at(-1)?.id);routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();statusEl.textContent=`Pasted · ${created.length} Component${created.length===1?'':'s'}`;return created;
 }
 function cutSelection(){if(!copySelection())return;setHistoryHint('Cut');deleteSelected();scheduleHistoryCapture()}
@@ -6485,7 +7769,8 @@ barComponentType.addEventListener('change',()=>{
   const wouldRemoveBuiltins=f.dimension!==nextDimension||(nextDefaults==='none'&&Attachment.attachmentDefaults(n)!=='none');
   if(wouldRemoveBuiltins&&wiresOnBuiltinPoints(n).length){barComponentType.value=n.symbolId;statusEl.textContent='Detach Wires from built-in points first';return}
   const beforeOpen=formHostsChildren(n);
-  SovSchematicData.applySymbol(n,next);
+  // The data core refuses a retype that would remove a port a Wire ends on (PORT_IN_USE).
+  try{SovSchematicData.applySymbol(n,next,diagram)}catch(error){barComponentType.value=n.symbolId;statusEl.textContent=error.message;return}
   if(beforeOpen&&!formHostsChildren(n)){const fallback=n.canvasId||GLOBAL_CANVAS_ID;for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}}
   SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
   ensureComponentStructure(n);
@@ -6620,6 +7905,9 @@ formAttachments.addEventListener('change',()=>{
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Attachment defaults edit'))return;
   const next=formAttachments.value==='none'?'none':'standard';
   if(next==='none'&&Attachment.attachmentDefaults(n)!=='none'&&wiresOnBuiltinPoints(n).length){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent='Detach Wires from built-in points first';return}
+  // Any Wire the switch would orphan or leave between ports sharing no channel refuses it (data core).
+  const trial=SovSchematicData.clone(n);if(next==='none')trial.config.attachmentDefaults='none';else delete trial.config.attachmentDefaults;
+  try{SovSchematicData.assertWiresSurviveEdit(diagram,n,trial)}catch(error){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent=error.message;return}
   setHistoryHint('Change attachment defaults');
   if(next==='none')n.config.attachmentDefaults='none';else delete n.config.attachmentDefaults;
   SovSchematicData.reconcileComponentWirePorts(diagram,n.id);componentConfig(n);

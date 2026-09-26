@@ -37,7 +37,28 @@
         "required": [
           "id"
         ],
-        "description": "Component records may include Port Connection access: none | read | write | read-write."
+        "description": "Component records may include Port Connection access: none | read | write | read-write.",
+        "properties": {
+          "config": {
+            "type": "object",
+            "properties": {
+              "attachmentDefaults": {
+                "enum": [
+                  "standard",
+                  "none"
+                ],
+                "description": "Legacy stored form of a 2D Component's port set. 'standard' (explicit, or implied on a typed template) = the template's declared ports followed by attachmentPoints as additions; 'none' = attachmentPoints is the complete list. A Plane's default is 'none'."
+              },
+              "attachmentPoints": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/declaredPort"
+                },
+                "description": "Declared ports: additions under 'standard', the complete list under 'none'."
+              }
+            }
+          }
+        }
       }
     },
     "wires": {
@@ -67,5 +88,78 @@
       "type": "object"
     }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "$defs": {
+    "declaredPort": {
+      "type": "object",
+      "required": [
+        "id",
+        "side"
+      ],
+      "description": "A declared 0D port on a 2D Component boundary. Edits supply t and flow; older files may omit t (0.5) and use defaultFlow in place of flow.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "compatId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Legacy port-contract key (config.ports); defaults to id."
+        },
+        "side": {
+          "enum": [
+            "left",
+            "right",
+            "top",
+            "bottom"
+          ]
+        },
+        "t": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "flow": {
+          "enum": [
+            "in",
+            "out",
+            "control",
+            "duplex",
+            "trigger"
+          ]
+        },
+        "defaultFlow": {
+          "enum": [
+            "in",
+            "out",
+            "control",
+            "duplex",
+            "trigger"
+          ],
+          "description": "Legacy alias of flow, read only when flow is absent; flow wins when both are present."
+        },
+        "channels": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "description": "Named channels, unique ids; absent means [{id:'main'}]. A Wire binds two ports only when they share a channel id."
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    }
+  }
 }
