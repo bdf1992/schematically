@@ -36,6 +36,7 @@ const visualInteriorColor=document.getElementById('visualInteriorColor');
 const visualText=document.getElementById('visualText');
 const visualSvgRow=document.getElementById('visualSvgRow');
 const visualSvgMarkup=document.getElementById('visualSvgMarkup');
+const appearanceAdvancedTier=document.getElementById('appearanceAdvancedTier');
 const formSettings=document.getElementById('formSettings');
 const formDimensionReadout=document.getElementById('formDimensionReadout');
 const formAttachments=document.getElementById('formAttachments');

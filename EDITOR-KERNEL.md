@@ -17,6 +17,7 @@ The editor kernel is deliberately separate from schematic semantics.
 - **Search**: blank-canvas typing opens search/command; nonmatches are temporarily desaturated.
 - **Objects**: fallback Inspector surface when nothing is selected.
 - **Appearance**: Light/Dark/System editor chrome. Authored schematic palette remains document semantics.
+- **Component settings**: the Appearance section is tiered by how often a field is reached for. Label, Graphic and Signal come first; Width, Height and Interior next, with the canvas handles as the primary way to size; Material, Thickness and the Frame fields sit behind one disclosure; Text and SVG behind a second, which opens itself when Custom SVG is chosen. Controls are 12px or larger.
 - **Rate**: global × source Component × Wire multiplier controls packet travel timing.
 
 ## Invariants

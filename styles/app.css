@@ -231,7 +231,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .type-note b{font-size:10px;letter-spacing:.06em}.type-note span,.micro-note{font-size:10px;color:var(--muted);line-height:1.4}
 .grammar-compact{padding-top:8px;padding-bottom:8px}.grammar-line{font-size:10px;color:var(--muted);line-height:1.35}.grammar-line b{color:var(--ink)}
 .help-stack{display:flex;flex-direction:column;gap:5px}.help-disclosure,.mini-disclosure,.inline-help{border:0;margin:0}.help-disclosure summary,.mini-disclosure summary,.inline-help summary{list-style:none;cursor:pointer}.help-disclosure summary::-webkit-details-marker,.mini-disclosure summary::-webkit-details-marker,.inline-help summary::-webkit-details-marker{display:none}
-.help-disclosure summary{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:7px;padding:5px 0;font-size:10px}.helper-snippet{color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.help-body{padding:3px 0 7px;font-size:9.5px;line-height:1.45;color:var(--muted)}.help-marks{word-spacing:4px}
+.help-disclosure summary{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:7px;padding:5px 0;font-size:10px}.helper-snippet{color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.help-body{padding:3px 0 7px;font-size:9.5px;line-height:1.45;color:var(--muted)}.help-marks{word-spacing:4px}
 .mini-disclosure{margin-top:6px;color:var(--muted);font-size:9px}.mini-disclosure summary,.inline-help summary{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:9px}.mini-disclosure>div,.inline-help>div{padding:5px 0 1px;line-height:1.4;color:var(--muted);font-size:9px}.inline-help{margin-top:7px}
 .syntax-row{display:flex;justify-content:space-between;gap:8px;padding:4px 0;font-size:10px}.syntax-row span:last-child{color:var(--muted);text-align:right}
 .kind-badge{display:inline-block;margin:0 0 10px;padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:9px;font-weight:800;letter-spacing:.1em}
@@ -293,15 +293,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .bar-settings[aria-expanded="true"]{background:var(--hover);border-color:#8a8a82}
 .selection-settings-panel{
   position:absolute;left:50%;top:calc(100% + 6px);transform:translateX(-50%);
-  z-index:34;width:360px;max-width:calc(100vw - 30px);padding:10px;
+  z-index:34;width:384px;max-width:calc(100vw - 30px);padding:10px;
   border:1px solid var(--line);border-radius:9px;background:var(--panel);
-  box-shadow:0 8px 22px rgba(0,0,0,.12);white-space:normal
+  box-shadow:0 8px 22px rgba(0,0,0,.12);white-space:normal;overflow-y:auto;overscroll-behavior:contain
 }
 .selection-settings-panel[hidden]{display:none}
 /* left/top/transform are set inline by placeSelectionSettingsPanel (20-ui.js) so the panel stays clear of the entity it edits (#22). */
 .settings-surface[hidden]{display:none}
 .form-settings{border:1px solid var(--line);border-radius:8px;background:var(--panel);margin:0 0 7px;overflow:hidden}
-.form-settings>summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;padding:7px 9px;background:var(--panel);font-size:10px}
+.form-settings>summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;padding:7px 9px;background:var(--panel);font-size:11px}
 .form-settings>summary::-webkit-details-marker{display:none}
 .form-settings>.settings-grid{padding:8px}
 .component-frame-inner{fill:none;stroke:var(--component-boundary-color);stroke-width:2;pointer-events:none;opacity:.9}
@@ -310,11 +310,26 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .settings-head span{font-size:9px;color:var(--muted);text-align:right}
 .settings-grid{display:grid;gap:7px 9px}
 .settings-grid-compact{grid-template-columns:1fr 1fr}
-.settings-surface label{display:flex;flex-direction:column;gap:3px;font-size:9px;color:var(--muted);letter-spacing:.03em}
-.settings-surface input,.settings-surface select,.settings-surface textarea{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font-size:10px;padding:5px;outline:none;min-height:29px}
+.settings-grid-three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.settings-grid-three input,.settings-grid-three select{width:100%;min-width:0}
+/* Controls read at 12px or more (#23); their labels at 10px. */
+.settings-surface label{display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--muted);letter-spacing:.03em}
+.settings-surface input,.settings-surface select,.settings-surface textarea{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font-size:12px;padding:5px;outline:none;min-height:30px}
+/* Appearance tiers (#23): the frequent row and the size row are open grids; the Form-appearance and
+   Advanced tiers are disclosures inside the section, closed until reached for. */
+.appearance-tier[hidden]{display:none}
+.form-settings>#appearanceGeometry{padding-top:0}
+.appearance-disclosure{margin:0;border-top:1px solid var(--line);color:var(--ink);font-size:11px}
+.appearance-disclosure>summary{display:flex;align-items:center;gap:7px;padding:7px 9px;color:var(--ink);font-size:11px;font-weight:600}
+.appearance-disclosure>summary .helper-snippet{font-weight:400;margin-left:auto}
+.appearance-disclosure[open]>summary .info-dot::before{content:'−'}
+.appearance-disclosure>summary .info-dot{font-size:0}
+.appearance-disclosure>summary .info-dot::before{content:'+';font-size:10px}
+.appearance-disclosure>.appearance-tier{padding:0 8px 8px}
+.appearance-disclosure>.appearance-tier .settings-wide:first-child{margin-top:0}
 .settings-surface textarea{height:72px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 /* A value the Form section only reads out (dimension comes with the type, #20): laid out like an input, not editable. */
-.settings-surface .form-readout{display:flex;align-items:center;min-height:29px;padding:5px;border:1px dashed var(--line);border-radius:6px;font-size:10px;color:var(--ink);cursor:default}
+.settings-surface .form-readout{display:flex;align-items:center;min-height:30px;padding:5px;border:1px dashed var(--line);border-radius:6px;font-size:12px;color:var(--ink);cursor:default}
 .settings-wide{margin-top:7px}
 .settings-check{justify-content:flex-end;flex-direction:row!important;align-items:center;gap:6px!important}
 .settings-check input{min-height:0}

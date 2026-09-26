@@ -127,7 +127,7 @@ def main():
                     assert actual['wires'][0][key] == doc['wires'][0][key]
             # Inspector and actual pointer resize may exceed the former ceiling.
             page.evaluate("selectNode('host',{focus:false});openSelectionSettings('component')")
-            page.locator('summary').filter(has_text='graphic · size · material').click()
+            page.locator('#appearanceSettings > summary').click()
             page.locator('#visualWidth').fill('1280')
             page.locator('#visualWidth').dispatch_event('change')
             page.locator('#visualHeight').fill('800')
