@@ -11,6 +11,11 @@ Point whose queue grows every period. Its trace at budget 30000 (examples/state/
 recorded by the engine at 6a39efd, before step() stopped copying a queue's items on every tick;
 stepping it stays byte-identical, stays linear to budget 100000, and a refused tick leaves it
 exactly as it was, the same as the bench.sov case above.
+
+Amendment 1 (round 2): a run is a plain JSON-safe object (STATE-SPACE.md, slice 1b), so it must
+keep stepping after a JSON round trip or structuredClone, at any point. ROUND_TRIP runs grow.sov
+and bench.sov with a JSON round-trip every 97 steps and a structuredClone every 89 steps, and checks
+the resulting trace is still byte-identical to the stored one.
 """
 from __future__ import annotations
 import json
@@ -104,9 +109,30 @@ out.budget={last:{ok:last.ok,code:last.code},again:JSON.stringify(again)===JSON.
 process.stdout.write(JSON.stringify(out));
 """
 
+# A run is a plain JSON-safe object (STATE-SPACE.md, slice 1b): a JSON round trip every 97 steps, or
+# a structuredClone every 89 (argv[7]: 'json' or 'sc'), and stepping continues to the same trace.
+# argv[8], when given, is an inputs file (bench.sov is only byte-identical with bench.inputs.json).
+ROUND_TRIP = r"""
+const S=require(process.argv[1]),D=globalThis.SovSchematicData,C=globalThis.SovSchematicCanonical,fs=require('fs');
+const dir=process.argv[3],sov=process.argv[4],traceFile=process.argv[5],budget=Number(process.argv[6]),mode=process.argv[7],inputsFile=process.argv[8];
+const pack=S.loadPack(JSON.parse(fs.readFileSync(process.argv[2],'utf8'))).pack,packs=[pack];
+const doc=D.normalizeDocument(JSON.parse(fs.readFileSync(dir+'/'+sov,'utf8')));
+const inputs=inputsFile?JSON.parse(fs.readFileSync(dir+'/'+inputsFile,'utf8')):[];
+const stored=fs.readFileSync(dir+'/'+traceFile,'utf8');
+const s=S.startRun({doc,packs,inputs,budget});if(!s.ok)throw new Error(JSON.stringify(s));
+let run=s.run,r,n=0;
+do{
+  if(mode==='json'&&n%97===5)run=JSON.parse(JSON.stringify(run));
+  if(mode==='sc'&&n%89===7)run=structuredClone(run);
+  r=S.step(run);n++;
+}while(r.ok&&r.tick!==null);
+const bytes=C.canonicalize(S.traceOf(run));
+process.stdout.write(JSON.stringify({same:bytes===stored,length:bytes.length,last:{ok:r.ok,code:r.code||null},through:run.tick,steps:n}));
+"""
 
-def node(js: str):
-    proc = subprocess.run(['node', '-e', js, str(ROOT / 'src/07-state-space.js'), str(ROOT / 'data/core.logic.pack.json'), str(STATE)],
+
+def node(js: str, *extra: str):
+    proc = subprocess.run(['node', '-e', js, str(ROOT / 'src/07-state-space.js'), str(ROOT / 'data/core.logic.pack.json'), str(STATE), *extra],
                           cwd=ROOT, capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout)
@@ -143,6 +169,16 @@ def main() -> None:
     gc = node(GROW_CHECKS)
     gb = gc['budget']
     assert gb['last'] == {'ok': False, 'code': 'BUDGET_SPENT'} and gb['again'] and gb['exact'] and gb['canon'] and gb['sameAsLastCommit'], gb
+
+    # Amendment 1: a run stays a plain JSON-safe object through a round trip, at any step.
+    for sov, trace_file, budget, inputs_file in (
+        ('grow.sov', 'grow.sovtrace', 30000, None),
+        ('bench.sov', 'bench.sovtrace', 20000, 'bench.inputs.json'),
+    ):
+        for mode in ('json', 'sc'):
+            rt = node(ROUND_TRIP, sov, trace_file, str(budget), mode, inputs_file or '')
+            assert rt['same'], f"{sov} round-tripped through {mode} diverges from {trace_file} ({rt['length']} bytes)"
+            print(f"{sov} round-trip ({mode}): byte-identical to {trace_file} through tick {rt['through']} ({rt['steps']} steps)")
 
     print('PASS state space perf QA')
 
