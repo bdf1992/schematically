@@ -13,6 +13,12 @@
     "schematic.history.redo",
     "schematic.checkpoint.list",
     "schematic.checkpoint.create",
-    "schematic.checkpoint.restore"
+    "schematic.checkpoint.restore",
+    "schematic.run.start",
+    "schematic.run.step",
+    "schematic.run.settle",
+    "schematic.run.trace",
+    "schematic.state.query",
+    "schematic.run.replay"
   ]
 }

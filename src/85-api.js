@@ -26,6 +26,15 @@ function runtimeCrud(operation){
   }
   return SovSchematicData.clone(receipt);
 }
+// Runs live beside the document, not in it (STATE-SPACE.md "Surfaces"): the page's run registry
+// starts every run from snapshotDocument() and reads packs from the build's sov-packs tag. No run
+// operation captures history, changes the document or its revision, or saves recovery.
+let pageRunRegistry=null;
+function pagePacks(){
+  const tag=document.getElementById('sov-packs');if(!tag)return undefined;
+  try{return JSON.parse(tag.textContent||'[]')}catch(_){return undefined}
+}
+function pageRuns(){return pageRunRegistry||(pageRunRegistry=SovSchematicStateSpace.createRunRegistry({packs:pagePacks(),document:()=>snapshotDocument()}))}
 function apiOperation(op,resource,resourceId,value,patch,query){return runtimeCrud({schema:SovSchematicData.OPERATION_SCHEMA,id:`browser-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,op,resource,resourceId,value,patch,query})}
 
 const SovSchematicAPI={
@@ -54,6 +63,10 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  run:{
+    start:(args)=>pageRuns().start(args),step:(handle)=>pageRuns().step(handle),settle:(handle)=>pageRuns().settle(handle),
+    trace:(handle)=>pageRuns().trace(handle),query:(handle,subject)=>pageRuns().query(handle,subject),replay:(trace)=>pageRuns().replay(trace)
+  },
   tools:()=>SovSchematicData.operationTools()
 };
 window.SovSchematicAPI=SovSchematicAPI;

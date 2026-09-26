@@ -230,6 +230,110 @@ const timeline=run=>run.records.map(r=>[r.time.logical,r.subject.entity,r.subjec
   out.chain=run.ledger.map((e,i)=>({seq:e.seq,prevOk:e.prev===(i?run.ledger[i-1].hash:'0'.repeat(64)),hashOk:e.hash===C.sha256Hex(canon({seq:e.seq,kind:e.kind,body:e.body,prev:e.prev})),keys:Object.keys(e).sort()}));
   out.jsonSafe=canon(JSON.parse(JSON.stringify(run)))===canon(run);
 }
+
+// Slice 1c: settle, query, the run receipt and the registry.
+{
+  const notPack=S.loadPack({format:'soveraeign.schematic/pack@0.1',id:'test.not2',version:1,definitions:[
+    {id:'test.not',version:2,pattern:'truth_table@1',delay:2,parameters:{inputs:['a'],outputs:['q'],table:[[0,1],[1,0]]}}]}).pack;
+  const loop2=()=>{const d=read('not-loop.sov');d.components.find(c=>c.id==='G').config.definition='test.not@2';return D.normalizeDocument(d)};
+  const and11=()=>started({doc:load('and.sov'),packs,inputs:vec('11')});
+  const s={};
+  {const run=and11();s.quiet={result:S.settle(run),tick:run.tick,again:S.settle(run),same:canon(S.traceOf(run))===fs.readFileSync(dir+'/and.11.sovtrace','utf8')}}
+  {const run=started({doc:load('not-loop.sov'),packs,budget:40});s.loop={result:S.settle(run),tick:run.tick,again:S.settle(run),tickAgain:run.tick}}
+  {const run=started({doc:load('not-loop.sov'),packs,budget:40});for(let i=0;i<5;i++)S.step(run);s.loopLate={result:S.settle(run),tick:run.tick}}
+  {const run=started({doc:loop2(),packs:[notPack]});s.loop2={result:S.settle(run),tick:run.tick,qs:run.records.filter(r=>r.subject.point==='q').map(r=>[r.time.logical,r.value])}}
+  {const run=started({doc:load('and.sov'),packs,inputs:vec('11'),budget:3});const r=S.settle(run);s.budget={result:r,tick:run.tick,spent:run.spent}}
+  {const run=started({doc:load('not-loop.sov'),packs,budget:1});s.budgetLoop={result:S.settle(run),tick:run.tick}}
+  s.invalid=S.settle({runtimeVersion:'x'});
+  s.bench=(()=>{const run=started({doc:load('bench.sov'),packs,inputs:read('bench.inputs.json'),budget:20000});const r=S.settle(run);return {kind:r.kind,period:r.period,subjects:(r.subjects||[]).length}})();
+  out.settle=s;
+  // query: passive, in record order, an omitted point or channel matches any.
+  {
+    const run=and11();S.settle(run);
+    const bytes=canon(run);const results=[];
+    for(let i=0;i<50;i++)results.push(canon(S.query(run,{entity:'G',observable:'logic.level'})));
+    out.query={passive:canon(run)===bytes,stable:new Set(results).size===1,
+      G:S.query(run,{entity:'G',observable:'logic.level'}).map(r=>r.id),all:run.records.filter(r=>r.subject.entity==='G').map(r=>r.id),
+      Gq:S.query(run,{entity:'G',point:'q',channel:'main',observable:'logic.level'}).map(r=>[r.subject.point,r.value]),
+      other:S.query(run,{entity:'G',observable:'logic.other'}),none:S.query(run,{entity:'Z',observable:'logic.level'}),
+      copies:(()=>{const q=S.query(run,{entity:'Q',observable:'logic.level'});q[0].value='x';return canon(run)===bytes})(),
+      refused:[S.query(run,null),S.query(run,{entity:'G'}),S.query(run,{entity:'',observable:'logic.level'}),S.query(run,{entity:'G',observable:'logic.level',at:1}),S.query(run,{entity:'G',point:3,observable:'logic.level'})].map(r=>r.code),
+      invalid:S.query({},{entity:'G',observable:'logic.level'}).code};
+  }
+  // runReceipt: the shape, and head equal to the trace's head after every operation.
+  {
+    const run=and11(),receipts=[];const head=()=>S.traceOf(run).head;
+    receipts.push([S.runReceipt('schematic.run.start',run,{ok:true,run}),head()]);
+    let before=run.tick;receipts.push([S.runReceipt('schematic.run.step',run,S.step(run),before),head()]);
+    before=run.tick;receipts.push([S.runReceipt('schematic.run.settle',run,S.settle(run),before),head()]);
+    receipts.push([S.runReceipt('schematic.state.query',run,S.query(run,{entity:'Q',observable:'logic.level'})),head()]);
+    receipts.push([S.runReceipt('schematic.run.trace',run,S.traceOf(run)),head()]);
+    const replayed=S.replay({trace:S.traceOf(run),doc:load('and.sov'),packs});
+    receipts.push([S.runReceipt('schematic.run.replay',replayed.run,replayed,null),head()]);
+    const refusedStep=S.step(null);
+    const spent=started({doc:load('not-loop.sov'),packs,budget:1});S.step(spent);before=spent.tick;
+    receipts.push([S.runReceipt('schematic.run.step',spent,S.step(spent),before),S.traceOf(spent).head]);
+    receipts.push([S.runReceipt('schematic.state.query',run,S.query(run,{entity:'Q'})),head()]);
+    receipts.push([S.runReceipt('schematic.run.start',null,S.startRun({doc:load('and.sov'),packs,budget:-1})),null]);
+    let unknown=null;try{S.runReceipt('schematic.run.go',run,{})}catch(e){unknown=String(e.message)}
+    out.receipt={receipts,unknown,format:S.RUN_RECEIPT_FORMAT,operations:S.RUN_OPERATIONS,runId:run.id,refusedStep:refusedStep.code};
+  }
+  // The registry: runs beside the document, addressed by handle, started from the current document.
+  {
+    const doc=load('and.sov'),docBytes=canon(doc);
+    const reg=S.createRunRegistry({packs:[packJson],document:()=>doc});
+    const a=reg.start({inputs:vec('11')}),b=reg.settle(a.handle),t=reg.trace(a.handle),q=reg.query(a.handle,{entity:'Q',observable:'logic.level'});
+    const rp=reg.replay(t.result);
+    // A second start with the same replay key is a second run: the first is untouched.
+    const again=reg.start({inputs:vec('11')}),firstAfter=reg.trace(a.handle),secondStep=reg.step(again.handle),firstAgain=reg.trace(a.handle);
+    out.registry={start:a,settle:b,trace:{head:t.head,traceHead:t.result.head,through:t.result.through,handle:t.handle},query:q.result.map(r=>r.value),
+      replay:{ok:rp.ok,runId:rp.runId,handle:rp.handle,head:rp.head,tickAfter:rp.tickAfter},byRunId:reg.step(a.runId).error.code,
+      again:{runId:again.runId,handle:again.handle,firstThrough:firstAfter.result.through,secondTick:secondStep.tickAfter,firstStill:firstAgain.result.through,firstBytes:canon(firstAgain.result)===canon(t.result)},
+      docUnchanged:canon(doc)===docBytes,
+      unknown:[reg.step('nope'),reg.settle(undefined),reg.trace(7),reg.query('nope',{entity:'Q',observable:'logic.level'})].map(r=>[r.operation,r.ok,r.error.code,r.runId,r.handle,r.head]),
+      extraKey:reg.start({walk:'reverse'}).error.code,notObject:reg.start(5).error.code,
+      cap:[reg.start({budget:S.BUDGET_LIMIT+1}).error,reg.start({budget:1e20}).error.code,reg.start({budget:S.BUDGET_LIMIT}).ok,S.BUDGET_LIMIT,S.startRun({doc,packs,budget:S.BUDGET_LIMIT*10}).ok],
+      badPack:S.createRunRegistry({packs:[{format:'x'}],document:()=>doc}).start({}).error.code,
+      noPacks:S.createRunRegistry({document:()=>doc}).replay(t.result).error.code,
+      emptyPacks:[S.createRunRegistry({packs:[],document:()=>doc}).start({}).error,S.createRunRegistry({packs:[],document:()=>doc}).replay(t.result).error,
+        S.createRunRegistry({packs:[],document:()=>load('merge.sov')}).start({inputs:mergeInputs}).ok]};
+    // error.details on each refusal kind.
+    const spent=reg.start({inputs:vec('11'),budget:1}),tampered=JSON.parse(JSON.stringify(t.result));tampered.ledger[1].hash='0'+tampered.ledger[1].hash.slice(1);
+    const other=S.createRunRegistry({packs:[packJson],document:()=>load('not-loop.sov')});
+    const badDoc=load('and.sov');badDoc.wires[0].config={...(badDoc.wires[0].config||{}),delay:0};
+    out.details={budget:reg.step(spent.handle).error,trace:reg.replay(tampered).error,key:reg.replay(other.trace(other.start({budget:40}).handle).result).error,
+      refused:S.createRunRegistry({packs:[packJson],document:()=>badDoc}).start({}).error,notFound:reg.step('x').error,input:reg.start({seed:1}).error};
+  }
+  // Settle is linear: a NOT loop fanning out on two Paths into a queue-merge Point grows the queue
+  // by one every few ticks; settle at budget 30000 is timed against stepping the same run.
+  {
+    const grow=()=>{const d=read('not-loop.sov');
+      d.components.push({id:'J',symbolId:'point',x:400,y:180,config:{label:'J',attachmentPoints:[{id:'self',channels:[{id:'main',merge:{combine:'queue'}}]}]}},{id:'O',symbolId:'point',x:520,y:180,config:{label:'O'}});
+      const w=(id,a,ap,b,bp)=>({id,a,aSide:ap,aAttachment:{kind:'attachment-ref',componentId:a,pointId:ap},b,bSide:bp,bAttachment:{kind:'attachment-ref',componentId:b,pointId:bp},config:{direction:'forward',delay:1}});
+      d.wires.push(w('p1','G','q','J','self'),w('p2','G','q','J','self'),w('p3','J','self','O','self'));return D.normalizeDocument(d)};
+    const a=started({doc:grow(),packs,budget:30000});let t0=process.hrtime.bigint();const r=S.settle(a);const ms=Number(process.hrtime.bigint()-t0)/1e6;
+    const b=started({doc:grow(),packs,budget:30000});t0=process.hrtime.bigint();let s;while((s=S.step(b)).ok&&s.tick!==null);const stepMs=Number(process.hrtime.bigint()-t0)/1e6;
+    out.grow={result:r,ms,stepMs,tick:a.tick,stepTick:b.tick,queue:Object.values(a.queues).map(q=>q.items.length),same:canon(a)===canon(b)};
+  }
+  // Settle against brute force: the smallest p with the committed signal state at t equal to that at
+  // t + p for every t from the first occurrence on, over a long horizon, on three cycles.
+  {
+    const packFor=delay=>S.loadPack({format:'soveraeign.schematic/pack@0.1',id:`test.not${delay}`,version:1,definitions:[{id:'test.not',version:delay+1,pattern:'truth_table@1',delay,parameters:{inputs:['a'],outputs:['q'],table:[[0,1],[1,0]]}}]}).pack;
+    const loopDoc=(delay,pathDelay)=>{const d=read('not-loop.sov');d.components[0].config.definition=`test.not@${delay+1}`;d.wires[0].config.delay=pathDelay;return D.normalizeDocument(d)};
+    const twoLoops=()=>{const d=read('not-loop.sov'),h=JSON.parse(JSON.stringify(d.components[0])),w=JSON.parse(JSON.stringify(d.wires[0]));
+      h.id='H';w.id='wH';w.a='H';w.b='H';w.aAttachment.componentId='H';w.bAttachment.componentId='H';d.wires[0].config.delay=2;w.config.delay=3;d.components.push(h);d.wires.push(w);return D.normalizeDocument(d)};
+    const cases=[['not-loop',load('not-loop.sov'),packs],['not-delay2',loopDoc(2,1),[packFor(2)]],['two-loops-2-3',twoLoops(),packs]];
+    out.brute=cases.map(([name,doc,ps])=>{
+      const run=started({doc,packs:ps,budget:100000}),res=S.settle(run),end=run.tick,first=end-res.period;
+      const b=started({doc,packs:ps,budget:100000}),at=new Map();const horizon=end+10*res.period+10;
+      for(;;){const s=S.step(b);if(!s.ok||s.tick===null||s.tick>horizon)break;at.set(s.tick,JSON.stringify(Object.keys(b.signal).filter(k=>b.signal[k]).sort()))}
+      const ticks=[...at.keys()].sort((x,y)=>x-y),state=t=>{let v='[]';for(const k of ticks){if(k>t)break;v=at.get(k)}return v};
+      let period=null;
+      for(let p=1;p<=4*res.period&&period===null;p++){let ok=true;for(let t=first;t+p<=horizon;t++)if(state(t)!==state(t+p)){ok=false;break}if(ok)period=p}
+      return {name,result:res,brute:period};
+    });
+  }
+}
 process.stdout.write(JSON.stringify(out));
 """
 
@@ -276,7 +380,8 @@ def main() -> None:
     assert api['fns'] == ['function'] * 5, api
     for key in ('RUNTIME_VERSION', 'startRun', 'step', 'traceOf', 'replay', 'validateTrace', 'checkDocument', 'bindDefinition'):
         assert key in api['keys'], (key, api['keys'])
-    assert 'settle' not in api['keys'], 'settle is slice 1c'
+    for key in ('settle', 'query', 'runReceipt', 'createRunRegistry', 'RUN_RECEIPT_FORMAT'):
+        assert key in api['keys'], (key, 'slice 1c exports it')
 
     # Step 8 + 9: every golden re-runs byte-identical (forward and reversed walk) and replays.
     names = sorted(p.name for p in STATE.iterdir())
@@ -515,11 +620,102 @@ def main() -> None:
         assert e['prevOk'] and e['hashOk'] and e['keys'] == ['body', 'hash', 'kind', 'prev', 'seq'], e
     assert r['jsonSafe'], 'a run must be JSON-safe'
 
+    # Slice 1c, settle: quiet, oscillating (with its period and subjects) and budget.
+    st = r['settle']
+    assert st['quiet'] == {'result': {'kind': 'quiet'}, 'tick': 2, 'again': {'kind': 'quiet'}, 'same': True}, st['quiet']
+    assert st['loop']['result'] == {'kind': 'oscillating', 'period': 2, 'subjects': ['G.a.main', 'G.q.main']} and st['loop']['tick'] == 2, st['loop']
+    assert st['loop']['again'] == st['loop']['result'] and st['loop']['tickAgain'] == 4, st['loop']
+    assert st['loopLate']['result'] == st['loop']['result'] and st['loopLate']['tick'] == 6, st['loopLate']
+    # A delay-2 NOT feeding itself through a delay-1 Path: q changes every 3 ticks, so the state repeats every 6.
+    assert st['loop2']['qs'] == [[2, True], [5, False]], st['loop2']
+    assert st['loop2']['result'] == {'kind': 'oscillating', 'period': 6, 'subjects': ['G.a.main', 'G.q.main']} and st['loop2']['tick'] == 6, st['loop2']
+    assert st['budget'] == {'result': {'kind': 'budget', 'left': 2}, 'tick': 0, 'spent': 2}, st['budget']
+    assert st['budgetLoop'] == {'result': {'kind': 'budget', 'left': 1}, 'tick': 0}, st['budgetLoop']
+    assert st['invalid']['ok'] is False and st['invalid']['code'] == 'RUN_INVALID', st['invalid']
+    assert st['bench']['kind'] in ('quiet', 'oscillating', 'budget'), st['bench']
+
+    # Slice 1c, query: passive (the run's canonical bytes unchanged after 50 queries), in record order.
+    qy = r['query']
+    assert qy['passive'] and qy['stable'] and qy['copies'], qy
+    assert qy['G'] == qy['all'] and len(qy['G']) == 3, qy
+    assert qy['Gq'] == [['q', True]] and qy['other'] == [] and qy['none'] == [], qy
+    assert qy['refused'] == ['QUERY_INVALID'] * 5 and qy['invalid'] == 'RUN_INVALID', qy
+
+    # Slice 1c, the run receipt: its shape, and head equal to the trace's head.
+    rc = r['receipt']
+    assert rc['format'] == 'soveraeign.schematic/run-receipt@0.1', rc['format']
+    assert rc['operations'] == ['schematic.run.start', 'schematic.run.step', 'schematic.run.settle', 'schematic.run.trace', 'schematic.state.query', 'schematic.run.replay'], rc['operations']
+    assert rc['unknown'] and 'RUN_OPERATION_UNKNOWN' in rc['unknown'], rc['unknown']
+    keys = ['error', 'handle', 'head', 'ok', 'operation', 'result', 'runId', 'schema', 'tickAfter', 'tickBefore']
+    for receipt, head in rc['receipts']:
+        assert sorted(receipt) == keys and receipt['schema'] == rc['format'], receipt
+        assert receipt['head'] == head, (receipt['operation'], receipt['head'], head)
+        if receipt['ok']:
+            assert receipt['error'] is None, receipt
+        else:
+            assert receipt['result'] is None and sorted(receipt['error']) in (['code', 'message'], ['code', 'details', 'message']) and receipt['error']['message'], receipt
+        assert receipt['handle'] is None, 'a receipt built outside a registry has no handle'
+    ops = [(x['operation'], x['ok'], x['tickBefore'], x['tickAfter']) for x, _ in rc['receipts']]
+    assert ops == [('schematic.run.start', True, None, None), ('schematic.run.step', True, None, 0), ('schematic.run.settle', True, 0, 2),
+                   ('schematic.state.query', True, 2, 2), ('schematic.run.trace', True, 2, 2), ('schematic.run.replay', True, None, 2),
+                   ('schematic.run.step', False, 0, 0), ('schematic.state.query', False, 2, 2), ('schematic.run.start', False, None, None)], ops
+    start, step, settle, query, trace, replayed, spent, badQuery, badStart = [x for x, _ in rc['receipts']]
+    assert start['result']['budget'] == 10000 and start['result']['replayKey']['inputs'] == [dict(i, channel='main') for i in (
+        {'entity': 'A', 'point': 'self', 'value': True, 'at': 0}, {'entity': 'B', 'point': 'self', 'value': True, 'at': 0})], start
+    assert step['result']['tick'] == 0 and len(step['result']['records']) == 2 and settle['result'] == {'kind': 'quiet'}, (step, settle)
+    assert [x['subject']['entity'] for x in query['result']] == ['Q'] and trace['result']['head'] == trace['head'], (query, trace)
+    assert replayed['runId'] == rc['runId'] and list(replayed['result']) == ['records'] and replayed['result']['records'] == trace['result']['records'], replayed
+    assert spent['error']['code'] == 'BUDGET_SPENT' and badQuery['error']['code'] == 'QUERY_INVALID', (spent, badQuery)
+    assert badStart['error']['code'] == 'INPUT_INVALID' and (badStart['runId'], badStart['head'], badStart['tickAfter']) == (None, None, None), badStart
+    assert rc['refusedStep'] == 'RUN_INVALID', rc['refusedStep']
+
+    # Slice 1c, the registry every surface keeps: addressed by handle, never touching the document.
+    rg = r['registry']
+    handle = re.compile(r'^[0-9a-f]{12}\.[1-9][0-9]*$')
+    assert rg['start']['ok'] and rg['start']['handle'] == rg['start']['runId'] + '.1' and handle.match(rg['start']['handle']), rg['start']
+    assert rg['settle']['result'] == {'kind': 'quiet'} and rg['settle']['runId'] == rg['start']['runId'] and rg['settle']['handle'] == rg['start']['handle'], rg
+    assert rg['trace'] == {'head': rg['settle']['head'], 'traceHead': rg['settle']['head'], 'through': 2, 'handle': rg['start']['handle']} and rg['query'] == [True], rg
+    assert rg['replay'] == {'ok': True, 'runId': rg['start']['runId'], 'handle': None, 'head': rg['settle']['head'], 'tickAfter': 2}, rg['replay']
+    assert rg['byRunId'] == 'RUN_NOT_FOUND', 'a run is addressed by its handle, not its run id'
+    assert rg['again'] == {'runId': rg['start']['runId'], 'handle': rg['start']['runId'] + '.2', 'firstThrough': 2, 'secondTick': 0, 'firstStill': 2, 'firstBytes': True}, rg['again']
+    assert rg['docUnchanged'], rg
+    for operation, ok, code, run_id, run_handle, head in rg['unknown']:
+        assert (ok, code, run_id, run_handle, head) == (False, 'RUN_NOT_FOUND', None, None, None), (operation, ok, code)
+    assert rg['extraKey'] == 'INPUT_INVALID' and rg['notObject'] == 'INPUT_INVALID', rg
+    cap, cap_huge, cap_ok, limit, engine_uncapped = rg['cap']
+    assert cap['code'] == 'INPUT_INVALID' and '1000000' in cap['message'] and cap_huge == 'INPUT_INVALID' and cap_ok and limit == 1000000 and engine_uncapped, rg['cap']
+    assert rg['badPack'] == 'PACK_INVALID' and rg['noPacks'] == 'PACK_INVALID', rg
+    empty_start, empty_replay, empty_plain = rg['emptyPacks']
+    for e in (empty_start, empty_replay):
+        assert e == {'code': 'PACK_INVALID', 'message': 'this page carries no packs', 'details': {'definitions': ['logic.and@1']}}, e
+    assert empty_plain, 'a document with no definitions runs without packs'
+    dt = r['details']
+    assert dt['budget'] == {'code': 'BUDGET_SPENT', 'message': dt['budget']['message'], 'details': {'tick': 0, 'left': 2}}, dt['budget']
+    assert dt['trace']['code'] == 'TRACE_INVALID' and dt['trace']['details']['entry'] == 1 and dt['trace']['details']['errors'], dt['trace']
+    assert dt['key']['code'] == 'REPLAY_KEY_MISMATCH' and dt['key']['details'] == {'fields': ['documentId', 'documentHash', 'definitions']}, dt['key']
+    assert dt['refused']['code'] == 'RUN_REFUSED' and [x['code'] for x in dt['refused']['details']['refusals']] == ['PATH_DELAY_INVALID'], dt['refused']
+    assert 'details' not in dt['notFound'] and 'details' not in dt['input'], (dt['notFound'], dt['input'])
+
+    # Slice 1c, settle is linear: the growing-queue case settles to budget in under 3 s.
+    gr = r['grow']
+    assert gr['result']['kind'] == 'budget' and gr['tick'] == gr['stepTick'] and gr['same'] and gr['queue'][0] > 1000, gr
+    print(f"growing-queue settle at budget 30000: {gr['ms'] / 1000:.3f} s (stepping alone {gr['stepMs'] / 1000:.3f} s); queue {gr['queue'][0]}")
+    assert gr['ms'] < 3000, f"settle took {gr['ms']:.0f} ms at budget 30000"
+    # Settle's period equals the brute-force period on three cycles.
+    brute = {b['name']: b for b in r['brute']}
+    assert [b['result']['period'] for b in r['brute']] == [2, 6, 12], r['brute']
+    for b in r['brute']:
+        assert b['result']['kind'] == 'oscillating' and b['result']['period'] == b['brute'], b
+
+    receipt_schema = json.loads((ROOT / 'formats/schematic.run-receipt.schema.json').read_text(encoding='utf-8'))
+    assert receipt_schema['$id'] == 'soveraeign.schematic/run-receipt@0.1' and sorted(receipt_schema['required']) == keys, receipt_schema
+
     # Step 6: the trace schema and the file format doc.
     schema = json.loads((ROOT / 'formats/schematic.trace.schema.json').read_text(encoding='utf-8'))
     assert schema['$id'] == 'soveraeign.schematic/trace@0.1' and sorted(schema['required']) == ['budget', 'documentRevision', 'format', 'head', 'ledger', 'replayKey', 'through'], schema
     formats = (ROOT / 'DATA-FORMATS.md').read_text(encoding='utf-8')
     assert '.sovtrace' in formats and 'soveraeign.schematic/trace@0.1' in formats, 'DATA-FORMATS.md must document .sovtrace'
+    assert 'soveraeign.schematic/run-receipt@0.1' in formats, 'DATA-FORMATS.md must name the run receipt'
     src = (ROOT / 'src/07-state-space.js').read_text(encoding='utf-8')
     assert 'Math.random' not in src and 'Date' not in src, 'the engine draws only from the seed and reads no clock'
     assert 'data-beta-module="src/07-state-space.js"' in (ROOT / 'index.html').read_text(encoding='utf-8'), 'index.html does not carry 07; run build.py'
