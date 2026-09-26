@@ -69,6 +69,6 @@ with sync_playwright() as p:
 
     b.close()
 
-(OUT / 'journey.json').write_text(json.dumps(STAGES, indent=2))
+(OUT / 'journey.json').write_text(json.dumps(STAGES, indent=2), encoding='utf-8', newline='\n')
 assert not errors, f'page errors during journey: {errors}'
 print(f'JOURNEY PASS: {len(STAGES)} stages, 0 page errors -> {OUT}')

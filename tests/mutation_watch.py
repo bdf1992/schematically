@@ -238,7 +238,7 @@ for mutant in MUTANTS:
         text=fp.read_text(encoding='utf-8')
         if mutant['old'] not in text:
             raise AssertionError(f"mutation target missing: {mutant['name']}")
-        fp.write_text(text.replace(mutant['old'],mutant['new'],1),encoding='utf-8')
+        fp.write_text(text.replace(mutant['old'],mutant['new'],1),encoding='utf-8',newline='\n')
         build=subprocess.run([sys.executable,str(dst/'build.py')],cwd=dst,capture_output=True,text=True,timeout=20)
         if build.returncode!=0:
             killed.append((mutant['name'],'build-failed'))

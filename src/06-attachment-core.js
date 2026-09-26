@@ -17,56 +17,119 @@
     if(placement.kind==='edge'||placement.kind==='path')return 1;
     return 2;
   }
-  // 2D built-in points (left/right/top) are template defaults, not an ontology.
-  // `config.attachmentDefaults='none'` exposes no built-ins: the surface is then
-  // attachable only through hosted 0D Points and data-declared boundary points.
+  // A 2D Component's ports are declared data, never assumed here. Under
+  // `config.attachmentDefaults='standard'` (explicit or implied) it exposes its
+  // template's declared ports, then its authored `config.attachmentPoints` as
+  // additions; under 'none' the authored list is the complete set. The data core
+  // registers the template lookup (`useTemplatePorts`), so this module holds no
+  // port set of its own and stays free of DOM, rendering and editor state.
   const ATTACHMENT_DEFAULT_MODES=new Set(['standard','none']);
+  const PORT_SIDES=['left','right','top','bottom'];
+  const PORT_FLOWS=['in','out','control','duplex','trigger'];
+  const DEFAULT_CHANNELS=[{id:'main'}];
+  let templatePortsOf=()=>[];
+  function useTemplatePorts(lookup){templatePortsOf=typeof lookup==='function'?lookup:()=>[];return templatePortsOf}
   function attachmentDefaults(entity){
     const mode=entity?.config?.attachmentDefaults;
     return ATTACHMENT_DEFAULT_MODES.has(mode)?mode:'standard';
   }
+  // Absent channels read as the one default channel, `main`. A channel's `merge` (the
+  // merge@1 parameters for same-tick fan-in) is carried as written; the data core checks
+  // it on edit and the state space reports it at load.
+  function portChannels(port){
+    const out=[],seen=new Set();
+    for(const c of Array.isArray(port?.channels)?port.channels:[]){
+      const id=String(c?.id??'').trim();if(!id||seen.has(id))continue;
+      seen.add(id);const channel={id};
+      if(c&&typeof c==='object'&&c.merge!==undefined)channel.merge=JSON.parse(JSON.stringify(c.merge));
+      out.push(channel);
+    }
+    return out.length?out:DEFAULT_CHANNELS.map(c=>({...c}));
+  }
+  function channelIds(spec){return portChannels(spec).map(c=>c.id)}
   // Connectivity follows the lower-dimensional host when a richer form is settled onto it.
   // A 2D ACT hosted by a Wire therefore exposes only the Wire-aligned 1D endpoints.
   function effectiveDimension(entity){return Math.min(intrinsicDimension(entity),hostDimension(entity))}
+  function declaredSpec(raw,{authored=false}={}){
+    if(!raw||typeof raw!=='object')return null;
+    const id=String(raw.id||'').trim();if(!id)return null;
+    const side=PORT_SIDES.includes(raw.side)?raw.side:null;if(!side)return null;
+    const compatId=String(raw.compatId||id).trim()||id;
+    const t=Math.max(0,Math.min(1,Number.isFinite(Number(raw.t))?Number(raw.t):.5));
+    // `flow` is the direction; legacy `defaultFlow` is read only when `flow` is absent.
+    const flowRaw=raw.flow!==undefined?raw.flow:raw.defaultFlow;
+    const flow=PORT_FLOWS.includes(flowRaw)?flowRaw:'duplex';
+    const spec={id,compatId,side,role:'boundary',defaultFlow:flow,flow,t,channels:portChannels(raw)};
+    if(typeof raw.label==='string'&&raw.label)spec.label=raw.label;
+    if(authored)spec.authored=true;
+    return spec;
+  }
+  function templatePointSpecs(entity){
+    if(attachmentDefaults(entity)==='none')return [];
+    // A glyph that declares its terminals as points (NOTATION-MODEL.md §2) gives the card one
+    // point per terminal: a two-input gate has two inputs.
+    // A terminal is shaped like a declared template port: its flow is its default flow, on `main`.
+    const glyphPoints=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation?.pointsFor?.(entity?.symbolId)?.map(p=>({...p,flow:p.defaultFlow,channels:[{id:'main'}]}));
+    if(glyphPoints)return glyphPoints.map(p=>({...p,role:'boundary'}));
+    const declared=templatePortsOf(entity?.symbolId,entity);
+    return (Array.isArray(declared)?declared:[]).map(raw=>declaredSpec(raw)).filter(Boolean);
+  }
+  // A Point (0D) has one port, `self`. It may declare it, to give it channels and merges, as a
+  // single `config.attachmentPoints` entry `{id: 'self', flow?, channels}` with no side or t (a
+  // placeholder side/t, as the first runtime wrote, is read the same way and cleaned on load).
+  function selfDeclaration(entity){
+    const list=Array.isArray(entity?.config?.attachmentPoints)?entity.config.attachmentPoints:[];
+    const raw=list.find(p=>p&&typeof p==='object'&&String(p.id??'').trim()==='self');
+    if(!raw)return null;
+    const declared={id:'self'};
+    if(PORT_FLOWS.includes(raw.flow))declared.flow=raw.flow;
+    declared.channels=portChannels(raw);
+    return declared;
+  }
   function basePointSpecs(d,entity=null){
-    if(d===0)return [{id:'self',compatId:'out',side:'point',role:'self',defaultFlow:'duplex',t:.5}];
+    if(d===0){
+      const spec={id:'self',compatId:'out',side:'point',role:'self',defaultFlow:'duplex',t:.5},declared=selfDeclaration(entity);
+      if(declared){spec.channels=declared.channels;if(declared.flow){spec.flow=declared.flow;spec.defaultFlow=declared.flow}}
+      return [spec];
+    }
     if(d===1)return [
       {id:'start',compatId:'in',side:'left',role:'endpoint',defaultFlow:'in',t:0},
       {id:'end',compatId:'out',side:'right',role:'endpoint',defaultFlow:'out',t:1}
     ];
-    if(attachmentDefaults(entity)==='none')return [];
-    // A glyph that declares its terminals as points (NOTATION-MODEL.md §2) gives the card one
-    // point per terminal: a two-input gate has two inputs.
-    const glyphPoints=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation?.pointsFor?.(entity?.symbolId);
-    if(glyphPoints)return glyphPoints.map(p=>({...p,role:'boundary'}));
-    return [
-      {id:'left',compatId:'in',side:'left',role:'boundary',defaultFlow:'in',t:.5},
-      {id:'right',compatId:'out',side:'right',role:'boundary',defaultFlow:'out',t:.5},
-      {id:'top',compatId:'control',side:'top',role:'boundary',defaultFlow:'control',t:.5}
-    ];
+    return templatePointSpecs(entity);
   }
-  function customPointSpecs(entity,d,base){
-    // 0.1 RC seam: built-in dimensional points are defaults, not a permanent
-    // cardinality ceiling. Full cell/facet grammar remains post-RC; a 2D
-    // template may already declare extra boundary attachment points as data.
+  function customPointSpecs(entity,d,base,{keepCollisions=false}={}){
+    // Authored ports: additions to the template's under 'standard', the whole set under
+    // 'none'. Only a 2D surface exposes them. An entry that names no valid side is not
+    // exposed. An entry whose id is already taken (as an id or a compatId) is dropped,
+    // unless `keepCollisions` asks it kept: it is then exposed under a fresh id
+    // (`<id>~2`, `<id>~3`, ...: the first not taken), tagged `originalId` so a caller
+    // (load cleaning) can decide whether a bound Wire still needs it. A compatId already
+    // taken falls back to the entry's own id.
     if(d!==2)return [];
     const authored=Array.isArray(entity?.config?.attachmentPoints)?entity.config.attachmentPoints:[];
-    const usedIds=new Set(base.map(x=>x.id)),usedCompat=new Set(base.map(x=>x.compatId));
+    const used=new Set(base.flatMap(x=>[x.id,x.compatId]));
     const out=[];
     for(const raw of authored){
-      if(!raw||typeof raw!=='object')continue;
-      const id=String(raw.id||'').trim();if(!id||usedIds.has(id))continue;
-      const side=['left','right','top','bottom'].includes(raw.side)?raw.side:null;if(!side)continue;
-      let compatId=String(raw.compatId||id).trim()||id;
-      if(usedCompat.has(compatId))compatId=id;
-      if(usedCompat.has(compatId))continue;
-      const t=Math.max(0,Math.min(1,Number.isFinite(Number(raw.t))?Number(raw.t):.5));
-      const defaultFlow=['in','out','control','duplex','trigger'].includes(raw.defaultFlow)?raw.defaultFlow:'duplex';
-      out.push({id,compatId,side,role:'boundary',defaultFlow,t,authored:true});
-      usedIds.add(id);usedCompat.add(compatId);
+      const spec=declaredSpec(raw,{authored:true});if(!spec)continue;
+      if(used.has(spec.id)){
+        if(!keepCollisions)continue;
+        const originalId=spec.id;
+        let n=2,candidate=`${originalId}~${n}`;
+        while(used.has(candidate))candidate=`${originalId}~${++n}`;
+        spec.id=candidate;spec.originalId=originalId;
+      }
+      if(used.has(spec.compatId)||spec.compatId===spec.id)spec.compatId=spec.id;
+      out.push(spec);
+      used.add(spec.id);used.add(spec.compatId);
     }
     return out;
   }
+  // The authored ports a 2D surface of this record exposes, whatever its current host.
+  // `{keepCollisions:true}` keeps a colliding entry under a fresh id (`originalId` marks
+  // it) instead of dropping it; load cleaning uses this to decide, per Wire, whether the
+  // entry is still needed.
+  function authoredPointSpecs(entity,opts){return customPointSpecs(entity,2,templatePointSpecs(entity),opts)}
   // A 2D boundary point may be moved anywhere on its host's perimeter:
   // `config.ports[compatId].boundary = {side, t}` places it; `placed` records that the
   // position is authored, so no default (such as a glyph's axis) overrides it.
@@ -125,5 +188,5 @@
     if(end==='a')wire.aSide=spec.compatId;else wire.bSide=spec.compatId;
     return wire[key];
   }
-  return {intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
+  return {PORT_SIDES,PORT_FLOWS,useTemplatePorts,selfDeclaration,portChannels,channelIds,declaredSpec,templatePointSpecs,authoredPointSpecs,intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
 });

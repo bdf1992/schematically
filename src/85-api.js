@@ -26,6 +26,15 @@ function runtimeCrud(operation){
   }
   return SovSchematicData.clone(receipt);
 }
+// Runs live beside the document, not in it (STATE-SPACE.md "Surfaces"): the page's run registry
+// starts every run from snapshotDocument() and reads packs from the build's sov-packs tag. No run
+// operation captures history, changes the document or its revision, or saves recovery.
+let pageRunRegistry=null;
+function pagePacks(){
+  const tag=document.getElementById('sov-packs');if(!tag)return undefined;
+  try{return JSON.parse(tag.textContent||'[]')}catch(_){return undefined}
+}
+function pageRuns(){return pageRunRegistry||(pageRunRegistry=SovSchematicStateSpace.createRunRegistry({packs:pagePacks(),document:()=>snapshotDocument()}))}
 // Graph queries and the message simulation read the live document; one session per page.
 const graphSession=SovSchematicGraph.createSession();
 function graphCall(name,args={}){return SovSchematicData.clone(graphSession.execute(name,snapshotDocument(),args))}
@@ -108,6 +117,10 @@ const SovSchematicAPI={
     inspect:(what='state',id)=>graphCall('schematic.sim.inspect',{what,id}),
     scenario:(idOrScenario,handlers)=>graphCall('schematic.sim.scenario',typeof idOrScenario==='string'?{id:idOrScenario,handlers}:{scenario:idOrScenario,handlers}),
     scenarios:()=>graphCall('schematic.sim.scenarios')
+  },
+  run:{
+    start:(args)=>pageRuns().start(args),step:(handle)=>pageRuns().step(handle),settle:(handle)=>pageRuns().settle(handle),
+    trace:(handle)=>pageRuns().trace(handle),query:(handle,subject)=>pageRuns().query(handle,subject),replay:(trace)=>pageRuns().replay(trace)
   },
   tools:()=>[...SovSchematicData.operationTools(),...SovSchematicGraph.tools()]
 };

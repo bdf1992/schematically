@@ -120,7 +120,9 @@ function beginActiveNodeDrag(e,g,n){
   const roots=selectedComponentIds.has(n.id)?selectedRootComponents():[n];
   const moved=new Set([n.id,...descendantsOf(n.id).map(x=>x.id)]),groupOrigins=[];
   for(const root of roots){for(const item of [root,...descendantsOf(root.id)]){if(moved.has(item.id))continue;moved.add(item.id);groupOrigins.push({node:item,x:item.x,y:item.y})}}
-  activeNodeDragState={id:n.id,node:n,el:g,pointerId:e.pointerId,startPointer:{x:startPointer.x,y:startPointer.y},pointer:{x:startPointer.x,y:startPointer.y},origin:{x:n.x,y:n.y},originCanvasId:n.canvasId||GLOBAL_CANVAS_ID,descendantOrigins:descendantsOf(n.id).map(child=>({node:child,x:child.x,y:child.y})),groupOrigins,groupRootIds:roots.map(x=>x.id),modifiers:modifierSnapshot(e),startedAt:performance.now(),hostCandidate:null,hostCandidateKey:'',hostReady:false,hostDwellTimer:null};
+  // Where every moved Component started, so a refused settle can put them all back.
+  const startPositions=[n,...descendantsOf(n.id),...groupOrigins.map(item=>item.node)].map(item=>({node:item,x:item.x,y:item.y}));
+  activeNodeDragState={id:n.id,node:n,el:g,pointerId:e.pointerId,startPositions,startPointer:{x:startPointer.x,y:startPointer.y},pointer:{x:startPointer.x,y:startPointer.y},origin:{x:n.x,y:n.y},originCanvasId:n.canvasId||GLOBAL_CANVAS_ID,descendantOrigins:descendantsOf(n.id).map(child=>({node:child,x:child.x,y:child.y})),groupOrigins,groupRootIds:roots.map(x=>x.id),modifiers:modifierSnapshot(e),startedAt:performance.now(),hostCandidate:null,hostCandidateKey:'',hostReady:false,hostDwellTimer:null};
   try{workspace.setPointerCapture(e.pointerId)}catch(_){}
   applyNodeDragPosition(activeNodeDragState);scheduleDragVisualRefresh();
 }
@@ -136,21 +138,33 @@ function updateActiveNodeDrag(e){
 }
 function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
   const state=activeNodeDragState;if(!state)return;if(!force&&e?.pointerId!=null&&e.pointerId!==state.pointerId)return;
-  const pointerId=state.pointerId;let fault=null;
+  const pointerId=state.pointerId;let fault=null,refusal=null;
   try{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     settleActiveComponent(e||state.modifiers);
+    // Every root's host is decided first; one refused settle refuses the whole gesture.
+    const plan=[];
     for(const id of state.groupRootIds||[state.node.id]){
-      const root=nodes.find(n=>n.id===id);if(!root)continue;const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID;
+      const root=nodes.find(n=>n.id===id);if(!root)continue;
       let candidate;
       if(root.id===state.node.id){
         candidate=state.hostReady?state.hostCandidate:null;
         if(!candidate){const current=componentHostCandidateAtPoint(root);if(current?.canvasId===state.originCanvasId)candidate=current}
-        applyComponentHost(root,candidate);
-      }else candidate=updateContainmentFor(root);
+      }else candidate=componentHostCandidateAtPoint(root);
+      plan.push({root,candidate});
+    }
+    // The hosting guard (componentHostRefusal, 30-canvas.js) is asked for every root before any is applied.
+    refusal=plan.map(({root,candidate})=>componentHostRefusal(root,candidate)).find(Boolean)||null;
+    if(refusal){
+      // The gesture is refused: every moved Component returns to where it started.
+      for(const item of state.startPositions||[]){item.node.x=item.x;item.node.y=item.y}
+      routeCache.clear();arrowPoseCache.clear();
+    }else for(const {root,candidate} of plan){
+      const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID;
+      applyComponentHost(root,candidate);
       const afterCanvas=root.canvasId||GLOBAL_CANVAS_ID;if(beforeCanvas!==afterCanvas)setHistoryHint(candidate?.kind==='wire'?'Settle Component on Wire':candidate?.kind==='component'?'Settle Component in Component':'Detach Component')
     }
-    clearHostCandidateArm(state);settleDraggedRoutes();
+    clearHostCandidateArm(state);if(refusal)render();else settleDraggedRoutes();
   }catch(err){fault=err;console.error('Recovered Component drag failure',err)}
   finally{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
@@ -160,7 +174,7 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
     try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
     restoreSelectionBarAfterGesture();scheduleHistoryCapture();
   }
-  statusEl.textContent=fault?'Recovered drag error · ready':reason?`Select · ${reason}`:'Select';
+  statusEl.textContent=fault?'Recovered drag error · ready':refusal?refusal:reason?`Select · ${reason}`:'Select';
 }
 // Alt-drag a boundary point to slide it around its card's perimeter, corners included. The
 // same edge resolver hosts a free Point on a boundary; Shift releases the eighth-of-a-side snap.
@@ -541,9 +555,16 @@ barComponentType.addEventListener('change',()=>{
   const f=componentForm(n),nextDimension=preset?.form?.dimension??2,nextDefaults=preset?.attachmentDefaults||'standard';
   const wouldRemoveBuiltins=f.dimension!==nextDimension||(nextDefaults==='none'&&Attachment.attachmentDefaults(n)!=='none');
   if(wouldRemoveBuiltins&&wiresOnBuiltinPoints(n).length){barComponentType.value=n.symbolId;statusEl.textContent='Detach Wires from built-in points first';return}
-  const beforeOpen=formHostsChildren(n);
-  SovSchematicData.applySymbol(n,next);
-  if(beforeOpen&&!formHostsChildren(n)){const fallback=n.canvasId||GLOBAL_CANVAS_ID;for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}}
+  // The data core refuses a retype that would remove a port a Wire ends on (PORT_IN_USE). A retype
+  // that stops this Component hosting makes its Components fall back to its canvas: the hosting
+  // concern (30-canvas.js) decides and checks that before anything changes.
+  let plan=[];
+  try{
+    if(formHostsChildren(n)){const trial=SovSchematicData.clone(n);SovSchematicData.applySymbol(trial,next);if(!formHostsChildren(trial))plan=componentFallbackPlan(n)}
+    const refusal=componentHostPlanRefusal(plan);if(refusal)throw new Error(refusal);
+    SovSchematicData.applySymbol(n,next,diagram);
+  }catch(error){barComponentType.value=n.symbolId;statusEl.textContent=error.message;return}
+  applyComponentHostPlan(plan);
   SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
   ensureComponentStructure(n);
 

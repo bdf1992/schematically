@@ -197,7 +197,53 @@ function syncComponentVisualPanel(n){
   formAttachments.value=Attachment.attachmentDefaults(n);
   // Settings are shown per dimension: a Point has no size or frame, a Path no height or interior.
   for(const el of componentSettingsFields.querySelectorAll('[data-dims]')){const dims=String(el.dataset.dims).split('').map(Number);el.hidden=!dims.includes(f.dimension)}
+  syncPortsPanel(n);
   if(typeof syncAccessPanel==='function')syncAccessPanel(n);
+}
+// --- Ports section ---------------------------------------------------------
+// The Ports section lists a 2D Component's effective ports, one row each, in order. It is a
+// projection only: every edit goes through the data core's component update (70-editor-controls.js),
+// and the rows are rebuilt from the record afterwards, so a refused edit reverts its row.
+const portsSettings=document.getElementById('portsSettings');
+const portsList=document.getElementById('portsList');
+const portsAddBtn=document.getElementById('portsAddBtn');
+const PORT_PANEL_SIDES=['left','right','top','bottom'];
+const PORT_PANEL_FLOWS=['in','out','duplex','control','trigger'];
+function componentPortsEditable(n){return !!n&&Attachment.effectiveDimension(n)===2}
+function componentDefinitionOwner(n){const ref=n?.config?.definition;return ref===undefined||ref===null?null:String(ref)}
+function portPanelControl(tag,className,label,attrs={}){
+  const el=document.createElement(tag);el.className=className;el.setAttribute('aria-label',label);
+  for(const [key,value] of Object.entries(attrs))if(value!==undefined&&value!==null)el.setAttribute(key,value);
+  return el;
+}
+function portPanelSelect(className,label,values,value){
+  const select=portPanelControl('select',className,label);
+  for(const v of values){const o=document.createElement('option');o.value=v;o.textContent=v;select.appendChild(o)}
+  select.value=value;return select;
+}
+function syncPortsPanel(n){
+  const show=componentPortsEditable(n);portsSettings.hidden=!show;
+  if(!show){portsList.replaceChildren();return}
+  // Focus is put back on the same control of the same port, and only in the same Component's rows.
+  const focusRow=document.activeElement?.closest?.('.ports-row');
+  const focused=focusRow&&focusRow.dataset.componentId===n.id?[focusRow.dataset.portId,[...document.activeElement.classList].find(c=>c.startsWith('port-'))]:null;
+  const owner=componentDefinitionOwner(n),ports=n.config?.ports||{};
+  const owned=owner?`Owned by the definition ${owner}: unbind it to change this`:null;
+  const rows=[];
+  for(const spec of Attachment.pointSpecs(n)){
+    const row=document.createElement('div');row.className='ports-row';row.dataset.portId=spec.id;row.dataset.componentId=n.id;row.setAttribute('role','listitem');
+    const id=portPanelControl('input','port-id',`Port ${spec.id} id`,{type:'text',readonly:'',title:owned||'Port id'});id.value=spec.id;if(owner)id.disabled=true;
+    const label=portPanelControl('input','port-label',`Port ${spec.id} label`,{type:'text',maxlength:'24',placeholder:'Label',title:'Port label'});label.value=ports[spec.compatId]?.label??spec.label??''; // the drawn label, which every label edit writes
+    const side=portPanelSelect('port-side',`Port ${spec.id} side`,PORT_PANEL_SIDES,spec.side);side.title='Side';
+    const t=portPanelControl('input','port-t',`Port ${spec.id} position`,{type:'number',min:'0',max:'1',step:'0.05',title:'Position along the side, 0 to 1'});t.value=String(spec.t);
+    const flow=portPanelSelect('port-flow',`Port ${spec.id} flow`,PORT_PANEL_FLOWS,spec.flow);flow.title=owned||'Flow';if(owner)flow.disabled=true;
+    const channels=portPanelControl('input','port-channels',`Port ${spec.id} channels`,{type:'text',placeholder:'main',title:owned||'Channel ids, comma-separated'});channels.value=Attachment.channelIds(spec).join(', ');if(owner)channels.disabled=true;
+    const remove=portPanelControl('button','port-remove',`Remove port ${spec.id}`,{type:'button',title:owned||`Remove port ${spec.id}`});remove.textContent='Remove';if(owner)remove.disabled=true;
+    row.append(id,label,side,t,flow,channels,remove);rows.push(row);
+  }
+  portsList.replaceChildren(...rows);
+  portsAddBtn.disabled=!!owner;portsAddBtn.title=owned||'Add a port on the right side';
+  if(focused){const again=portsList.querySelector(`.ports-row[data-port-id="${CSS.escape(focused[0])}"] .${focused[1]}`);if(again&&!again.disabled)again.focus()}
 }
 function syncSelectionSettings(kind){
   if(typeof syncEntityUtilityPanel==='function')syncEntityUtilityPanel(kind);
@@ -347,12 +393,24 @@ function showPortBar(info){
   syncSectionPositionSelect(barPortPosition,barPortPositionRow,info.owner,info.port&&Attachment.resolveSpec(info.owner,info.pointId)?.compatId||'out');
   barPortMarkers.textContent=portMarkerSummaryText(info);
   setSlotChip(barPortColorSlot,ch.colorSlot);
-  barPortFlow.value=ch.flow;
+  barPortFlow.value=portShownFlow(info);
+  const pathEnd=portIsPathEnd(info);barPortFlow.disabled=pathEnd;barPortFlow.title=pathEnd?PATH_END_FLOW_TITLE:'Input/output behavior';
   barPortAccess.value=ch.access;
   if(!selectionSettingsPanel.hidden)syncSelectionSettings('port');
   closeColorSlotPanel();
   positionSelectionBar();
 }
+// One flow, shown the same by the port bar and the inspector: the declared flow, else the port's
+// default (a Point's `self` is `duplex`, a Path's `start` is `in` and `end` is `out`), the flow
+// checkDocument and the runtime read. A Path end's direction is its role, so the bar does not edit it.
+function portShownFlow(info){
+  const spec=Attachment.resolveSpec(info.owner,info.pointId||info.portId);
+  if(!spec)return portConnection(info.port).flow;
+  return spec.flow||spec.defaultFlow||'duplex';
+}
+const PATH_END_FLOW_TITLE="A Path end's direction comes from its role: start receives, end emits";
+function portIsPathEnd(info){return Attachment.resolveSpec(info.owner,info.pointId||info.portId)?.role==='endpoint'}
+function portFlowText(flow){return [...barPortFlow.options].find(o=>o.value===flow)?.textContent||flow}
 function portDisplayName(info){return componentConfig(info.owner).label||byId(info.owner.symbolId).name}
 
 function restoreSelectedSurface(){

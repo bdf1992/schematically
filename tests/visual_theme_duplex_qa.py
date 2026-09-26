@@ -58,5 +58,5 @@ assert results['dark']['buttonColor']!='rgb(0, 0, 0)', results
 assert results['dark']['cardColor']!='rgb(0, 0, 0)', results
 assert results['darkPalette']['paletteBg']!='rgb(255, 255, 255)', results
 assert not errors, errors
-(ROOT/'tests'/'beta15-visual-results.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
+(ROOT/'tests'/'beta15-visual-results.json').write_text(json.dumps(results,indent=2),encoding='utf-8',newline='\n')
 print('PASS visual theme + duplex QA')

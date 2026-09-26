@@ -254,7 +254,7 @@
       <div id="componentSettingsFields" class="settings-surface">
         <div class="settings-head"><b>Component settings</b><span>Form first · appearance second</span></div>
         <details class="form-settings" id="formSettings" open>
-          <summary><b>Form</b><span class="helper-snippet">dimension · interior · attachments</span></summary>
+          <summary><b>Form</b><span class="helper-snippet">dimension · interior · attachments · ports</span></summary>
           <div class="settings-grid settings-grid-compact">
             <label>Dimension
               <select id="formDimension">
@@ -284,11 +284,16 @@
               </select>
             </label>
             <label data-dims="2">Attachments
-              <select id="formAttachments" title="Built-in boundary points">
-                <option value="standard">Left · Right · Top</option>
-                <option value="none">None · hosted Points only</option>
+              <select id="formAttachments" title="The template's ports, or a custom port list">
+                <option value="standard">Template ports</option>
+                <option value="none">Custom ports</option>
               </select>
             </label>
+          </div>
+          <div class="ports-settings" id="portsSettings" hidden>
+            <div class="ports-head"><b>Ports</b><span class="helper-snippet">side · position · flow · channels</span></div>
+            <div class="ports-list" id="portsList" role="list" aria-label="Ports"></div>
+            <button id="portsAddBtn" class="bar-action settings-action" type="button" title="Add a port on the right side">Add port</button>
           </div>
           <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
         </details>
@@ -426,7 +431,8 @@
               <option value="in">Input</option>
               <option value="out">Output</option>
               <option value="duplex">Input + Output</option>
-              <option value="control">Trigger</option>
+              <option value="control">Control</option>
+              <option value="trigger">Trigger</option>
             </select>
           </label>
           <label>Access
@@ -514,9 +520,12 @@
 </aside>
 </div>
 
+<script type="application/json" id="sov-packs">[]</script>
+<script src="src/03-canonical.js"></script>
 <script src="src/03-notation-core.js"></script>
 <script src="src/06-attachment-core.js"></script>
 <script src="src/05-data-core.js"></script>
+<script src="src/07-state-space.js"></script>
 <script src="src/07-graph-core.js"></script>
 <script src="src/08-layout-core.js"></script>
 <script src="src/09-colour-core.js"></script>

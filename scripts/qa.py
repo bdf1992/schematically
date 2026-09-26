@@ -10,11 +10,16 @@ import time
 ROOT=Path(__file__).resolve().parents[1]
 
 STATIC=[
+    'tests/canonical_qa.py',
     'tests/dimensional_form_qa.py',
     'tests/graph_core_qa.py',
     'tests/pre_repo_hardening_qa.py',
     'tests/author_offline_qa.py',
     'tests/file_load_presets_qa.py',
+    'tests/declared_ports_qa.py',
+    'tests/state_space_contracts_qa.py',
+    'tests/state_space_run_qa.py',
+    'tests/state_space_perf_qa.py',
     'tests/file_load_wire_canvas_qa.py',
     'tests/desktop_shell_qa.py',
     'tests/revision_guard_qa.py',
@@ -42,6 +47,7 @@ BROWSER=[
     'tests/plane_boundary_routing_qa.py',
     'tests/tray_settle_qa.py',
     'tests/beta20_ports_history_qa.py',
+    'tests/ports_panel_qa.py',
     'tests/grid_visibility_qa.py',
     'tests/editor_kernel_qa.py',
     'tests/editor_kernel_extended_qa.py',
@@ -66,6 +72,7 @@ BROWSER=[
     'tests/appearance_history_qa.py',
     'tests/appearance_color_scheme_qa.py',
     'tests/agent_api_mcp_golden_qa.py',
+    'tests/state_space_surfaces_qa.py',
     'tests/skills_conformance_qa.py',
     'tests/render_idempotence_qa.py',
     'tests/region_dimensions_qa.py',

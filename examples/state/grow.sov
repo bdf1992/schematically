@@ -1,0 +1,164 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "state-grow",
+  "revision": 0,
+  "meta": {
+    "title": "State space: a NOT loop fanning out on two Paths into a growing queue-merge Point"
+  },
+  "components": [
+    {
+      "id": "G",
+      "symbolId": "act",
+      "x": 260,
+      "y": 180,
+      "config": {
+        "label": "NOT",
+        "definition": "logic.not@1",
+        "attachmentDefaults": "none",
+        "attachmentPoints": [
+          {
+            "id": "a",
+            "side": "left",
+            "t": 0.5,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
+          },
+          {
+            "id": "q",
+            "side": "right",
+            "t": 0.5,
+            "flow": "out",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "J",
+      "symbolId": "point",
+      "x": 440,
+      "y": 180,
+      "config": {
+        "label": "J",
+        "attachmentPoints": [
+          {
+            "id": "self",
+            "channels": [
+              {
+                "id": "main",
+                "merge": {
+                  "combine": "queue"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O",
+      "symbolId": "point",
+      "x": 600,
+      "y": 180,
+      "config": {
+        "label": "O"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "wL",
+      "a": "G",
+      "aSide": "q",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "G",
+        "pointId": "q"
+      },
+      "b": "G",
+      "bSide": "a",
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "G",
+        "pointId": "a"
+      },
+      "config": {
+        "direction": "forward",
+        "delay": 1
+      }
+    },
+    {
+      "id": "p1",
+      "a": "G",
+      "aSide": "q",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "G",
+        "pointId": "q"
+      },
+      "b": "J",
+      "bSide": "self",
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "J",
+        "pointId": "self"
+      },
+      "config": {
+        "direction": "forward",
+        "delay": 1
+      }
+    },
+    {
+      "id": "p2",
+      "a": "G",
+      "aSide": "q",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "G",
+        "pointId": "q"
+      },
+      "b": "J",
+      "bSide": "self",
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "J",
+        "pointId": "self"
+      },
+      "config": {
+        "direction": "forward",
+        "delay": 1
+      }
+    },
+    {
+      "id": "p3",
+      "a": "J",
+      "aSide": "self",
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "J",
+        "pointId": "self"
+      },
+      "b": "O",
+      "bSide": "self",
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "O",
+        "pointId": "self"
+      },
+      "config": {
+        "direction": "forward",
+        "delay": 1
+      }
+    }
+  ],
+  "references": [],
+  "layout": {}
+}

@@ -140,25 +140,49 @@ function copySelection(){
   semanticClipboard={schema:'soveraeign.schematic/clipboard@0.1',createdAt:new Date().toISOString(),rootIds:data.roots.map(x=>x.id),components:data.components,wires:data.wires};
   statusEl.textContent=`Copied · ${data.components.length} Component${data.components.length===1?'':'s'}`;updateEditMenuState();return SovSchematicData.clone(semanticClipboard);
 }
+// A channel merge's declared order names Wires by id. On paste the copies' orders follow the
+// copied Wires (old id -> new id); a Wire that was not copied leaves the list, and an order left
+// with no path is removed so the merge falls back to its default order.
+function remapPastedMergeOrders(components,wireIdMap){
+  for(const component of components){
+    for(const port of Array.isArray(component?.config?.attachmentPoints)?component.config.attachmentPoints:[]){
+      for(const channel of Array.isArray(port?.channels)?port.channels:[]){
+        const order=channel?.merge?.order;
+        if(!order||order.kind!=='declared'||!Array.isArray(order.paths))continue;
+        const paths=order.paths.map(id=>wireIdMap.get(id)).filter(Boolean);
+        if(paths.length)order.paths=paths;else delete channel.merge.order;
+      }
+    }
+  }
+  return components;
+}
 function pasteClipboard({offset=32}={}){
   if(!semanticClipboard?.components?.length){statusEl.textContent='Clipboard empty';return []}
-  setHistoryHint('Paste');const idMap=new Map(),created=[];
+  // All or nothing: every record is built and checked against a staged copy of the document
+  // before any is inserted, so a refused record inserts nothing and leaves history as it was.
+  const stage={...diagram,components:nodes.slice(),wires:wires.slice()};
+  const idMap=new Map(),wireIdMap=new Map(),created=[],createdWires=[];
   const comps=semanticClipboard.components.slice().sort((a,b)=>nodeDepth(a)-nodeDepth(b));
-  for(const old of comps){
-    const value=SovSchematicData.clone(old);delete value.id;
-    value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
-    if(old.parentId&&idMap.has(old.parentId)){
-      value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
-      // A Point stuck to the copied host's boundary or path stays stuck to the copy.
-      if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
-    }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
-    const fresh=SovSchematicData.makeComponent(diagram,value);nodes.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
-  }
+  try{
+    for(const old of comps){
+      const value=SovSchematicData.clone(old);delete value.id;
+      value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
+      if(old.parentId&&idMap.has(old.parentId)){
+        value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
+        // A Point stuck to the copied host's boundary or path stays stuck to the copy.
+        if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
+      }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
+      // A copy keeps a bound Component's config.definition as-is (a plain create may not set one).
+      const fresh=SovSchematicData.makeComponent(stage,value,{copy:true});stage.components.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
+    }
+  }catch(error){statusEl.textContent=`Paste refused · ${error.message}`;return []}
   for(const old of semanticClipboard.wires||[]){
     if(!idMap.has(old.a)||!idMap.has(old.b))continue;
     const value=SovSchematicData.clone(old);delete value.id;value.a=idMap.get(old.a);value.b=idMap.get(old.b);
-    try{wires.push(SovSchematicData.makeWire(diagram,value))}catch(_){ }
+    try{const w=SovSchematicData.makeWire(stage,value);stage.wires.push(w);createdWires.push(w);wireIdMap.set(old.id,w.id)}catch(_){ }
   }
+  remapPastedMergeOrders(created,wireIdMap);
+  setHistoryHint('Paste');nodes.push(...created);wires.push(...createdWires);
   syncAllNodeBoundaryContext();setComponentSelection(created.filter(n=>semanticClipboard.rootIds.includes([...idMap.entries()].find(([,v])=>v===n.id)?.[0])).map(n=>n.id),created.at(-1)?.id);routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();statusEl.textContent=`Pasted · ${created.length} Component${created.length===1?'':'s'}`;return created;
 }
 function cutSelection(){if(!copySelection())return;setHistoryHint('Cut');deleteSelected();scheduleHistoryCapture()}
