@@ -79,7 +79,8 @@ function toolPayload(value,isError=false,image=null){
   return {content:[{type:'text',text:JSON.stringify(value,null,2)}],structuredContent:value,isError}}
 // Pictures and layout metrics need a browser; the server asks scripts/render_service.py, which
 // runs the editor's own renderer in headless Chromium. Without one the call is refused, typed.
-const RENDER_PYTHON=process.env.SOV_RENDER_PYTHON||'python3';
+// Windows installs Python as `python` (there is no python3 on the path).
+const RENDER_PYTHON=process.env.SOV_RENDER_PYTHON||(process.platform==='win32'?'python':'python3');
 function renderDocument(formats,args={}){
   return new Promise(resolve=>{
     let out='',err='';const child=spawn(RENDER_PYTHON,[path.join(HERE,'../scripts/render_service.py')],{cwd:path.join(HERE,'..')});
