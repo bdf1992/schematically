@@ -54,10 +54,96 @@ function appendComponentGraphic(g,n,cfg){
   const box=componentInlineGraphicBox(n);
   if(p.graphic.kind==='custom'&&appendCustomSvgFragment(g,p.graphic.svg,box))return;
   const use=document.createElementNS('http://www.w3.org/2000/svg','use');
-  use.setAttribute('class','glyph');use.setAttribute('href',`#${(p.graphic.ref||`sym-${n.symbolId}`).replace(/^#/,'')}`);
+  // A clock draws the wave it makes.
+  const wave=n.symbolId==='clock'?cfg.signal?.clock?.wave:null,ref=(p.graphic.ref||`sym-${n.symbolId}`).replace(/^#/,'');
+  use.setAttribute('class','glyph');use.setAttribute('href',`#${ref==='sym-clock'&&['saw','triangle','sine'].includes(wave)?`sym-clock-${wave}`:ref}`);
   use.setAttribute('x',box.x);use.setAttribute('y',box.y);use.setAttribute('width',box.w);use.setAttribute('height',box.h);
   g.appendChild(use);
 }
+// A label belongs inside the body it names. Measured after the node is in the document (label
+// size follows zoom): a label wider than the body wraps onto two lines at word breaks, and one
+// still too long is cut with an ellipsis; the full text stays available as a tooltip.
+// A wired side point on the glyph's axis gets an inner lead from the body edge to the symbol,
+// so the wire, the edge and the symbol read as one continuous line.
+// A wired terminal is joined to its point on the card's edge by a lead: straight when they
+// line up, one orthogonal dogleg when the point sits elsewhere on the same side.
+function appendComponentLeads(g,n){
+  const axis=componentGlyphAxis(n);if(!axis)return;
+  const glyph=componentGlyph(n);
+  for(const t of glyph?.terminals||[]){
+    const spec=Attachment.resolveSpec(n,t.id);if(!spec||spec.side!==t.toward)continue;
+    if(!wires.some(x=>(x.a===n.id&&x.aSide===spec.compatId)||(x.b===n.id&&x.bSide===spec.compatId)))continue;
+    const P=componentPortLocalPosition(n,spec.id),[ex,ey]=SovSchematicNotation.pinEnd(t),E={x:axis.x0+ex*axis.scale,y:axis.y0+ey*axis.scale};
+    const horizontal=t.toward==='left'||t.toward==='right';
+    let d;
+    if(horizontal)d=Math.abs(P.y-E.y)<.5?`M${P.x} ${E.y}H${E.x}`:`M${P.x} ${P.y}H${(P.x+E.x)/2}V${E.y}H${E.x}`;
+    else d=Math.abs(P.x-E.x)<.5?`M${E.x} ${P.y}V${E.y}`:`M${P.x} ${P.y}V${(P.y+E.y)/2}H${E.x}V${E.y}`;
+    const lead=document.createElementNS('http://www.w3.org/2000/svg','path');lead.setAttribute('class','component-lead');lead.setAttribute('d',d);
+    lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
+  }
+}
+// Where a wire meets a card, a short bar on the edge in the point's own colour: amber where
+// work leaves, blue where it arrives, both halves for a two-way point, muted for control.
+function appendTerminalMarks(g,n){
+  if(componentForm(n).dimension!==2)return;
+  for(const point of componentAttachmentPoints(n)){
+    const compat=point.compatId;
+    if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
+    const flow=activePortChannel(point.config||{}).flow||'duplex',side=physicalPortSide(n,point.id),P=componentPortLocalPosition(n,point.id);
+    const vertical=side==='left'||side==='right',len=12,th=3.2;
+    const parts=flow==='duplex'?[['in',-len/2,len/2],['out',0,len/2]]:[[flow==='control'?'control':flow==='in'?'in':'out',-len/2,len]];
+    for(const [cls,off,span] of parts){
+      const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('class','terminal-mark '+cls);
+      if(vertical){r.setAttribute('x',String(P.x-th/2));r.setAttribute('y',String(P.y+off));r.setAttribute('width',String(th));r.setAttribute('height',String(span))}
+      else{r.setAttribute('x',String(P.x+off));r.setAttribute('y',String(P.y-th/2));r.setAttribute('width',String(span));r.setAttribute('height',String(th))}
+      r.setAttribute('rx','1.2');g.appendChild(r);
+    }
+  }
+}
+function fitComponentLabels(g,n){
+  if(componentForm(n).dimension!==2)return;
+  const size=componentSize(n),max=size.w-12-componentSectionInset(n)*2;
+  for(const t of g.querySelectorAll(':scope > text.component-label,:scope > text.outside-label')){
+    // Fit at the label's base size: the on-screen clamp changes its size with zoom, and a label
+    // must not wrap or cut differently as the reader zooms.
+    const role=t.classList.contains('outside-label')?'caption':'title',base=SovSchematicNotation.drawnSize(SovSchematicNotation.tokens(diagram).type,role);
+    const k=base/(parseFloat(getComputedStyle(t).fontSize)||base),len=()=>t.getComputedTextLength()*k;
+    const full=t.textContent;if(!full||len()<=max)continue;
+    const words=full.split(/\s+/),lines=[''];
+    for(const word of words){
+      const trial=lines.at(-1)?lines.at(-1)+' '+word:word;
+      t.textContent=trial;
+      if(len()<=max||!lines.at(-1))lines[lines.length-1]=trial;else lines.push(word);
+    }
+    if(lines.length>2)lines.splice(1,lines.length-1,lines.slice(1).join(' '));
+    t.textContent=lines[lines.length-1];
+    while(len()>max&&t.textContent.length>1){t.textContent=t.textContent.slice(0,-2)+'…';t.dataset.truncated='true'}
+    lines[lines.length-1]=t.textContent;
+    const em=parseFloat(getComputedStyle(t).fontSize)||9,x=t.getAttribute('x')||'0',outside=t.classList.contains('outside-label');
+    t.textContent='';
+    lines.forEach((line,i)=>{const span=document.createElementNS('http://www.w3.org/2000/svg','tspan');span.setAttribute('x',x);
+      // Inside the body the block grows upward from its baseline; below the body it grows down.
+      span.setAttribute('dy',i===0?(outside?'0':String(-(lines.length-1)*em*1.15)):String(em*1.15));span.textContent=line;t.appendChild(span)});
+    const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=full;t.appendChild(title);
+  }
+}
+// A bevel inside a rounded rectangle w x h: raised (lit from the top left) or recessed.
+function appendBevel(g,w,h,rx,mode='raised'){
+  const d=SovSchematicNotation.tokens(diagram).space.bevel;w-=d*2;h-=d*2;if(w<12||h<12)return;
+  const r=Math.max(0,rx-d),x0=-w/2,y0=-h/2,x1=w/2,y1=h/2;
+  const tl=`M${x0} ${y1-r}L${x0} ${y0+r}Q${x0} ${y0} ${x0+r} ${y0}L${x1-r} ${y0}`,br=`M${x1} ${y0+r}L${x1} ${y1-r}Q${x1} ${y1} ${x1-r} ${y1}L${x0+r} ${y1}`;
+  for(const [cls,path] of mode==='raised'?[['light',tl],['shade',br]]:[['shade',tl],['light',br]]){
+    const e=document.createElementNS('http://www.w3.org/2000/svg','path');e.setAttribute('class',`section-bevel ${mode} ${cls}`);e.setAttribute('d',path);g.appendChild(e);
+  }
+}
+function appendSolidBevel(g,size,section){
+  const T=SovSchematicNotation.tokens(diagram),sectioned=section.lines.length>=2,total=sectioned?section.bands.reduce((a,b)=>a+b.thickness,0):0;
+  const w=size.w-total*2,h=size.h-total*2;
+  appendBevel(g,w,h,SovSchematicNotation.cornerRadius(T,{total,inset:total,w,h,sectioned}),'raised');
+}
+// A card's elevation: one above what holds it. Root cards sit at 1.
+function componentElevation(n){let k=1,p=n;const seen=new Set();while(p?.parentId&&!seen.has(p.parentId)){seen.add(p.parentId);p=nodes.find(x=>x.id===p.parentId);if(p)k++}return k}
+function componentSectionInset(n){const s=componentForm(n).dimension===2?SovSchematicData.componentSection(n):null;return s&&s.lines.length>=2?s.bands.reduce((a,b)=>a+b.thickness,0):0}
 function appendComponentText(g,n,cfg,s){
   const p=cfg.presentation,size=p.size,customLabel=String(cfg.label||'').trim(),label=customLabel||componentTypeCaption(n,s),labelMode=SovSchematicData.effectiveLabelMode(n);
   if(labelMode!=='none'&&label){
@@ -67,15 +153,47 @@ function appendComponentText(g,n,cfg,s){
       const box=componentInlineGraphicBox(n);t.setAttribute('x','0');t.setAttribute('y',String(box.y+box.h+11));
     }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
     else if(labelMode==='outside'){t.setAttribute('x','0');t.setAttribute('y',String(size.h/2+18))}
-    else {t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-8))}
+    // Inside the innermost line: a label never straddles a section's own boundary.
+    // A container's name heads it, under its glyph; a card's sits at its foot.
+    else if(componentAcceptsChildren(n)&&((p.graphic?.kind&&p.graphic.kind!=='none')||nodes.some(c=>c.parentId===n.id))){const box=componentInlineGraphicBox(n),glyph=p.graphic?.kind&&p.graphic.kind!=='none';t.setAttribute('x','0');t.setAttribute('y',String(glyph?box.y+box.h+12:box.y+10))}
+    else {const inset=componentSectionInset(n),sec=componentForm(n).section?SovSchematicData.componentSection(n):null,bevel=sec&&(sec.core?.fill||'solid')==='solid';t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-(bevel?15:inset?11:8)-inset))}
     t.textContent=label;g.appendChild(t);
+    // A subtitle sits under its title; the title steps up a line to make room.
+    const subtitle=String(cfg.subtitle||'').trim();
+    if(subtitle&&labelMode!=='none'){
+      const u=document.createElementNS('http://www.w3.org/2000/svg','text');u.setAttribute('class','component-subtitle');u.setAttribute('text-anchor','middle');
+      const y=Number(t.getAttribute('y'))||0,below=labelMode==='outside'||(componentAcceptsChildren(n)&&t.getAttribute('y')&&y<0);
+      const step=SovSchematicNotation.drawnSize(SovSchematicNotation.tokens(diagram).type,'subtitle')*1.3;
+      u.setAttribute('x','0');u.setAttribute('y',String(below?y+step:y));if(!below)t.setAttribute('y',String(y-step));
+      u.textContent=subtitle;g.appendChild(u);
+    }
   }
   const annotation=String(p.text||'').trim();
   if(annotation&&annotation!==label&&annotation!==s.name){
     const t=document.createElementNS('http://www.w3.org/2000/svg','text');
     t.setAttribute('class','internal-text');t.setAttribute('text-anchor','middle');t.setAttribute('x','0');
-    t.setAttribute('y',componentAcceptsChildren(n)?String(-p.size.h/2+72):'5');t.textContent=annotation;g.appendChild(t);
+    const lines=appendMarkdownLite(t,annotation,{x:0,lineHeight:11});
+    t.setAttribute('y',componentAcceptsChildren(n)?String(-p.size.h/2+72):String(5-(lines-1)*5.5));g.appendChild(t);
   }
+}
+// Body text is a small, safe Markdown (NOTATION-MODEL.md §4): **bold**, *italic*, `code`, line
+// breaks and "- " list items. Everything goes in as text content; nothing is read as markup.
+function appendMarkdownLite(textEl,source,{x=0,lineHeight=11}={}){
+  const lines=String(source).replace(/\r/g,'').split('\n').slice(0,6);
+  lines.forEach((raw,i)=>{
+    const line=document.createElementNS('http://www.w3.org/2000/svg','tspan');line.setAttribute('x',String(x));if(i)line.setAttribute('dy',String(lineHeight));
+    const text=raw.replace(/^\s*[-*]\s+/,'• ');
+    for(const part of text.split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|`[^`]+`)/).filter(Boolean)){
+      const run=document.createElementNS('http://www.w3.org/2000/svg','tspan');
+      if(/^\*\*.+\*\*$/.test(part)){run.setAttribute('class','md-strong');run.textContent=part.slice(2,-2)}
+      else if(/^\*.+\*$/.test(part)){run.setAttribute('class','md-em');run.textContent=part.slice(1,-1)}
+      else if(/^`.+`$/.test(part)){run.setAttribute('class','md-code');run.textContent=part.slice(1,-1)}
+      else run.textContent=part;
+      line.appendChild(run);
+    }
+    textEl.appendChild(line);
+  });
+  return lines.length;
 }
 function appendComponentTransformHandles(g,n,cfg){
   const {w,h}=componentSize(n);
@@ -124,57 +242,161 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   const p=cfg.presentation,size=p.size,form=componentForm(n);
   const boundaryColor=slotColor(cfg.colorSlot),interiorColor=slotColor(p.interiorColorSlot);
   const mixedInterior=colorEngine.diffuse?mixHex([interiorColor,signalColor],[.66,.34]):interiorColor;
-  const materialFill=materialFillColor(componentSurfaceFill(mixedInterior,.86),form.body.material);
+  // A card is a light tint of its slot, so ink and accents carry the picture, not a gray mass;
+  // a container is lighter still, a wash that holds its children without competing with them.
+  const materialFill=materialFillColor(componentSurfaceFill(mixedInterior,componentAcceptsChildren(n)?.975:.955),form.body.material);
+  // A section fills its regions by what they are: solid is the card's material, space is a wash.
+  g.style.setProperty('--section-solid',materialFillColor(componentSurfaceFill(mixedInterior,.86),form.body.material));
+  g.style.setProperty('--section-space',componentSurfaceFill(mixedInterior,.985));
   g.dataset.material=form.body.material;g.dataset.dimension=String(form.dimension);
   g.style.setProperty('--component-color',boundaryColor);
   g.style.setProperty('--component-boundary-color',boundaryColor);
   g.style.setProperty('--component-interior-ink',ensureContrast(interiorColor,materialFill,3));
   g.style.setProperty('--component-interior-fill',materialFill);
+  // Text on the card is its colour darkened (or lightened) until it reads: WCAG's 4.5:1 for text,
+  // where the outline and glyph only need 3:1.
+  g.style.setProperty('--component-text-color',ensureContrast(boundaryColor,materialFill,4.6));
   const backdrop=componentBackdropMode(n);g.dataset.backdrop=backdrop;
   if(form.dimension===0){
     const pointCfg=componentAttachmentPoint(n,'self')?.config,point=document.createElementNS('http://www.w3.org/2000/svg','circle');
-    point.setAttribute('class','dimensional-point-body port attachment-point');point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
+    // A Point that carries wires is structure (a terminal, a junction) and is drawn solid; an
+    // empty Point stays an open ring, an attachment waiting for a wire.
+    const ends=wires.reduce((k,w)=>k+(w.a===n.id?1:0)+(w.b===n.id?1:0),0);
+    // A through-point spans its band: a capsule across the skin, the channel it is.
+    {const pos=componentPlacement(n).kind==='edge'?SovSchematicData.pointSectionPosition(diagram,n.id,'out'):null;
+     if(pos&&pos.through!=null){const host=nodes.find(h=>h.id===pos.owner),s=SovSchematicData.componentSection(host),T=s.bands[pos.through]?.thickness||8;
+       const cap=document.createElementNS('http://www.w3.org/2000/svg','rect');cap.setAttribute('class','through-mark');cap.setAttribute('x','-4.5');cap.setAttribute('y',String(-T/2-3));cap.setAttribute('width','9');cap.setAttribute('height',String(T+6));cap.setAttribute('rx','4.5');g.appendChild(cap)}}
+    point.setAttribute('class','dimensional-point-body port attachment-point'+(ends?' carries':'')+(ends>=3?' junction':''));point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(ends?(ends>=3?4.5:4):Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
     const display=String(cfg.label||'').trim()||componentTypeCaption(n,s);
     if(display){
       // A hosted Point inherits its host's angle; its label stays upright and below the point in world space.
       const angle=componentHostAngle(n),label=document.createElementNS('http://www.w3.org/2000/svg','text');
-      label.setAttribute('class','component-label dimensional-point-label');label.setAttribute('text-anchor','middle');label.setAttribute('y','0');
-      label.setAttribute('transform',`rotate(${-angle}) translate(0 22)`);label.textContent=display;g.appendChild(label);
+      label.setAttribute('class','component-label dimensional-point-label');label.setAttribute('y','0');
+      // A boundary Point labels the crossing from outside its host, clear of the wire it carries.
+      const edge=componentPlacement(n).kind==='edge'?componentPlacement(n).side:null;
+      // Below the wire it carries: a wire's own label sits above its line.
+      const at={left:[-8,15,'end'],right:[8,15,'start'],top:[8,-10,'start'],bottom:[8,16,'start']}[edge]||[0,22,'middle'];
+      label.setAttribute('text-anchor',at[2]);
+      label.setAttribute('transform',`rotate(${-angle}) translate(${at[0]} ${at[1]})`);label.textContent=display;g.appendChild(label);
     }
     return
   }
   if(form.dimension===1){const line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('class','dimensional-path-body');line.setAttribute('x1',String(-size.w/2));line.setAttribute('x2',String(size.w/2));line.setAttribute('y1','0');line.setAttribute('y2','0');line.setAttribute('stroke-width',String(Math.max(2,Math.min(14,2+form.body.thickness*.18))));g.appendChild(line);appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);return}
   if(backdrop!=='none'){
-    const depth=Math.min(12,Math.max(0,form.body.thickness*.18));
-    if(depth>0){const back=document.createElementNS('http://www.w3.org/2000/svg','rect');back.setAttribute('class','component-body-depth');back.setAttribute('x',String(-size.w/2+depth));back.setAttribute('y',String(-size.h/2+depth));back.setAttribute('width',String(size.w));back.setAttribute('height',String(size.h));back.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(back)}
-    const body=document.createElementNS('http://www.w3.org/2000/svg','rect');body.setAttribute('class','body');body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(Math.min(12,Math.max(4,size.h*.095))));g.appendChild(body);
-    if(form.frame.mode!=='none'||backdrop==='frame'){
+    // Depth is elevation, a soft shadow by nesting level (NOTATION-MODEL.md §3), never a second outline.
+    const section=SovSchematicData.componentSection(n),T=SovSchematicNotation.tokens(diagram);
+    const sectioned=!!(section&&section.lines.length>=2),total=sectioned?section.bands.reduce((a,b)=>a+b.thickness,0):0;
+    const body=document.createElementNS('http://www.w3.org/2000/svg','rect');body.setAttribute('class','body');body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(SovSchematicNotation.cornerRadius(T,{total,inset:0,w:size.w,h:size.h,sectioned})));
+    // A thicker body stands taller: its shadow falls further.
+    {const E=SovSchematicNotation.elevation(T,componentElevation(n),surfaceAppearance()),th=Math.max(0,Number(form.body.thickness)||0);
+     if(E){const dy=E.dy+Math.min(4,th*.08),blur=E.blur+Math.min(3,th*.06);body.style.filter=`drop-shadow(0 ${+dy.toFixed(2)}px ${+blur.toFixed(2)}px rgba(${surfaceAppearance()==='dark'?'0,0,0':'40,36,28'},${E.opacity}))`;body.dataset.elevation=String(componentElevation(n))}}
+    g.appendChild(body);
+    // A section's lines inside the outline: each line an inset boundary, each region filled as
+    // what it is (solid material, or space). The outline is line L0. Corners are concentric.
+    if(sectioned){
+      let inset=0;
+      for(let i=1;i<section.lines.length;i++){
+        inset+=section.bands[i-1]?.thickness||0;const w=size.w-inset*2,h=size.h-inset*2;if(w<=4||h<=4)break;
+        const fill=(section.bands[i]?.fill)||section.core?.fill||'solid',rx=SovSchematicNotation.cornerRadius(T,{total,inset,w,h,sectioned:true});
+        const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('class',`section-line fill-${fill}`);
+        r.setAttribute('x',String(-w/2));r.setAttribute('y',String(-h/2));r.setAttribute('width',String(w));r.setAttribute('height',String(h));
+        r.setAttribute('rx',String(rx));r.dataset.line=section.lines[i].id;g.appendChild(r);
+        // A band's depth sinks what lies inside it: a recess, shaded from the top left.
+        if(i===1&&Number(section.bands[0]?.depth||0)>0)appendBevel(g,w,h,rx,'recess');
+      }
+      body.classList.add(`fill-${section.bands[0]?.fill||'solid'}`);
+    }else if(form.section&&section){body.classList.add(`fill-${section.core?.fill||'solid'}`)}
+    // A solid core is bevelled, lit from the top left, so a disk reads as a body, not a blank card.
+    if(form.section&&section&&(section.core?.fill||'solid')==='solid'&&!componentAcceptsChildren(n))appendSolidBevel(g,size,section);
+    if(section&&section.lines.length>=2){}else if(form.frame.mode!=='none'||backdrop==='frame'){
       const inset=Math.max(4,Math.min(Math.min(size.w,size.h)/3,form.frame.thickness||12));const frameDepth=Math.min(14,Math.max(0,form.frame.depth*.16));
-      if(frameDepth>0){const fd=document.createElementNS('http://www.w3.org/2000/svg','rect');fd.setAttribute('class','component-frame-depth');fd.setAttribute('x',String(-size.w/2+inset+frameDepth));fd.setAttribute('y',String(-size.h/2+inset+frameDepth));fd.setAttribute('width',String(Math.max(1,size.w-inset*2)));fd.setAttribute('height',String(Math.max(1,size.h-inset*2)));fd.setAttribute('rx','6');g.appendChild(fd)}
+      if(frameDepth>0)appendBevel(g,size.w-inset*2,size.h-inset*2,SovSchematicNotation.cornerRadius(SovSchematicNotation.tokens(diagram),{total:inset,inset,w:size.w-inset*2,h:size.h-inset*2,sectioned:true}),'recess');
       const inner=document.createElementNS('http://www.w3.org/2000/svg','rect');inner.setAttribute('class','component-frame-inner');inner.setAttribute('x',String(-size.w/2+inset));inner.setAttribute('y',String(-size.h/2+inset));inner.setAttribute('width',String(Math.max(1,size.w-inset*2)));inner.setAttribute('height',String(Math.max(1,size.h-inset*2)));inner.setAttribute('rx',String(Math.max(2,Math.min(9,(size.h-inset*2)*.08))));g.appendChild(inner);
     }
-    if(componentAcceptsChildren(n)){const guide=document.createElementNS('http://www.w3.org/2000/svg','rect');guide.setAttribute('class','container-guide');guide.setAttribute('x',String(-size.w/2+p.padding));guide.setAttribute('y',String(-size.h/2+p.padding));guide.setAttribute('width',String(Math.max(1,size.w-p.padding*2)));guide.setAttribute('height',String(Math.max(1,size.h-p.padding*2)));guide.setAttribute('rx','6');g.appendChild(guide)}
+    if(componentAcceptsChildren(n)){const guidePad=Math.max(p.padding,(section&&section.lines.length>=2?section.bands.reduce((a,b)=>a+b.thickness,0):0)+6);const guide=document.createElementNS('http://www.w3.org/2000/svg','rect');guide.setAttribute('class','container-guide');guide.setAttribute('x',String(-size.w/2+guidePad));guide.setAttribute('y',String(-size.h/2+guidePad));guide.setAttribute('width',String(Math.max(1,size.w-guidePad*2)));guide.setAttribute('height',String(Math.max(1,size.h-guidePad*2)));guide.setAttribute('rx','6');g.appendChild(guide)}
   }else if(componentHostedOnWire(n)){
     const half=componentInlineTerminalHalfSpan(n);
     if(half>0){const cut=document.createElementNS('http://www.w3.org/2000/svg','rect');cut.setAttribute('class','inline-wire-cut');cut.setAttribute('x',String(-half));cut.setAttribute('y','-8');cut.setAttribute('width',String(half*2));cut.setAttribute('height','16');cut.setAttribute('rx','2');g.appendChild(cut)}
   }
   appendComponentGraphic(g,n,cfg);appendComponentText(g,n,cfg,s);
 }
+// Where two or more wires share one point of a card, a dot marks where their lines part:
+// connected, not crossing. The dot is found from the rendered lines, walking back from the point.
+function renderJunctionDots(){
+  const layer=document.getElementById('junctionLayer');if(!layer)return;layer.replaceChildren();
+  const groups=new Map();
+  for(const w of wires)for(const [end,id,side] of [['a',w.a,w.aSide],['b',w.b,w.bSide]]){
+    if(!id)continue;const n=nodes.find(x=>x.id===id);if(!n||componentForm(n).dimension===0||isEffectivelyHidden(n))continue; // a Point is its own junction
+    const k=`${id}|${side}`;if(!groups.has(k))groups.set(k,[]);groups.get(k).push({w,end});
+  }
+  for(const [key,list] of groups){
+    if(list.length<2)continue;
+    const paths=list.map(({w,end})=>{const el=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"] path.wire`);return el?{el,L:el.getTotalLength(),fromEnd:end==='b'}:null}).filter(Boolean);
+    if(paths.length<2)continue;
+    const at=(p,d)=>p.el.getPointAtLength(p.fromEnd?Math.max(0,p.L-d):Math.min(p.L,d));
+    let join=at(paths[0],0);const reach=Math.min(...paths.map(p=>p.L));
+    for(let d=0;d<=reach;d+=2){const pts=paths.map(p=>at(p,d));if(pts.some(q=>Math.hypot(q.x-pts[0].x,q.y-pts[0].y)>1.2))break;join=pts[0]}
+    const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('class','junction-dot');dot.dataset.port=key;
+    dot.setAttribute('cx',String(join.x));dot.setAttribute('cy',String(join.y));dot.setAttribute('r','3.6');layer.appendChild(dot);
+  }
+}
+// The notation's stroke tokens, as the CSS custom properties the stylesheet draws with.
+function applyNotationTokens(){
+  const T=SovSchematicNotation.tokens(diagram);
+  for(const [k,v] of Object.entries(T.stroke))workspace.style.setProperty(`--stroke-${k}`,`${v}px`);
+  // Derived weights are computed here, not with calc(): a computed calc() is not a length a reader can parse.
+  workspace.style.setProperty('--stroke-structure-container',`${+(T.stroke.structure*1.2).toFixed(2)}px`);
+  workspace.style.setProperty('--stroke-structure-selected',`${+(T.stroke.structure*1.9).toFixed(2)}px`);
+  for(const [role,t] of Object.entries(T.type||{})){if(role==='screen')continue;workspace.style.setProperty(`--type-${role}-size`,`${t.size}px`);workspace.style.setProperty(`--type-${role}-weight`,String(t.weight))}
+}
+function markersById(){
+  const byId=new Map();
+  for(const marker of SovSchematicData.markersFor(diagram)){
+    const list=byId.get(marker.id);if(list)list.push(marker);else byId.set(marker.id,[marker]);
+  }
+  return byId;
+}
+function appendMarkerBadge(host,markers,x,y){
+  const badge=document.createElementNS('http://www.w3.org/2000/svg','g');
+  badge.setAttribute('class','marker-badge');
+  badge.setAttribute('transform',`translate(${x} ${y})`);
+  badge.setAttribute('title',markers.map(m=>m.message).join('; '));
+  const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  dot.setAttribute('class','marker-badge-dot');dot.setAttribute('r','7');
+  badge.appendChild(dot);
+  const mark=document.createElementNS('http://www.w3.org/2000/svg','text');
+  mark.setAttribute('class','marker-badge-mark');mark.setAttribute('text-anchor','middle');mark.setAttribute('y','3');mark.textContent='!';
+  badge.appendChild(mark);
+  host.appendChild(badge);
+}
+function markerCountEl(){
+  let el=document.getElementById('markerCount');
+  if(!el&&statusEl?.parentElement){
+    el=document.createElement('span');el.id='markerCount';el.className='marker-count';
+    statusEl.parentElement.insertBefore(el,statusEl.nextSibling);
+  }
+  return el;
+}
 function render(){
+  applyNotationTokens();
+  if(typeof buildSymbolPalette==='function')buildSymbolPalette();
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
   const componentSignals=signalState.colors;
+  const markers=markersById();
   nodesG.innerHTML='';
+  const unplacedIds=new Set(typeof layoutUnplacedIds==='function'?layoutUnplacedIds():[]);
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
     if(isEffectivelyHidden(n))return;
     const s=byId(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
-    {const form=componentForm(n),backdrop=componentBackdropMode(n);g.setAttribute('class','node'+(n.symbolId==='blank'?' blank':'')+(selectedComponentIds.has(n.id)?' selected':'')+(componentAcceptsChildren(n)?' is-container':'')+(form.frame.mode==='shell'?' form-shell':'')+(form.frame.mode==='frame'?' form-frame':'')+(n.parentId?' nested-child':'')+(componentHostedOnWire(n)?' wire-hosted':'')+(backdrop==='none'?' backdrop-none':'')+(editor.pinned?' is-pinned':'')+(editor.locked?' is-locked':''));}
+    {const form=componentForm(n),backdrop=componentBackdropMode(n);g.setAttribute('class','node'+(unplacedIds.has(n.id)?' unplaced':'')+(n.symbolId==='blank'?' blank':'')+(selectedComponentIds.has(n.id)?' selected':'')+(componentAcceptsChildren(n)?' is-container':'')+(form.frame.mode==='shell'?' form-shell':'')+(form.frame.mode==='frame'?' form-frame':'')+(n.parentId?' nested-child':'')+(componentHostedOnWire(n)?' wire-hosted':'')+(backdrop==='none'?' backdrop-none':'')+(editor.pinned?' is-pinned':'')+(editor.locked?' is-locked':''));}
     g.style.opacity=String(editor.opacity);
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
     renderComponentVisual(g,n,cfg,s,signalColor);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
+    {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
       const pointId=point.id,pcfg=point.config,local=componentPortLocalPosition(n,pointId);
       const localX=local.x,localY=local.y;
@@ -183,6 +405,10 @@ function render(){
       let vis=null;const selfPoint=componentForm(n).dimension===0&&pointId==='self';
       if(selfPoint){vis=g.querySelector('.dimensional-point-body');if(vis){vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}}
       else{vis=document.createElementNS('http://www.w3.org/2000/svg','circle');vis.setAttribute('class','port attachment-point');vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.setAttribute('cx',localX);vis.setAttribute('cy',localY);vis.setAttribute('r','5');vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}
+      {const pos=componentForm(n).dimension===2?SovSchematicData.pointSectionPosition(diagram,n.id,point.compatId):null;
+       if(pos&&pos.through!=null){const s=SovSchematicData.componentSection(n),T=s.bands[pos.through]?.thickness||8,side=point.side,vertical=side==='left'||side==='right';
+         const cap=document.createElementNS('http://www.w3.org/2000/svg','rect');cap.setAttribute('class','through-mark');
+         cap.setAttribute('x',String(vertical?localX-T/2-3:localX-4.5));cap.setAttribute('y',String(vertical?localY-4.5:localY-T/2-3));cap.setAttribute('width',String(vertical?T+6:9));cap.setAttribute('height',String(vertical?9:T+6));cap.setAttribute('rx','4.5');g.appendChild(cap)}}
       g.appendChild(hit);if(!selfPoint)g.appendChild(vis);
       if(selfPoint){
         // A 0D form is both a movable object and an attachment. The inner grip moves it
@@ -197,9 +423,13 @@ function render(){
         portLabel.setAttribute('x',localX+offsets.dx);portLabel.setAttribute('y',localY+offsets.dy);portLabel.setAttribute('text-anchor',offsets.anchor);portLabel.textContent=pcfg.label;g.appendChild(portLabel);
       }
     }
-    bindNode(g,n); nodesG.appendChild(g);
+    appendComponentLeads(g,n);appendTerminalMarks(g,n);
+    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
   });
-  renderWires(signalState);
+  renderWires(signalState,markers);
+  {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
+  renderJunctionDots();
+  if(typeof paintSim==='function')paintSim();
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
 }
@@ -241,12 +471,16 @@ function straightnessAt(path,d){
   const after=pointAngleAtDistance(path,Math.min(L-2,d+10),3);
   return Math.max(angleDelta(q.angle,before.angle),angleDelta(q.angle,after.angle));
 }
+// Where wires cross, in world space: no arrowhead is placed within reach of one, on either wire.
+let arrowKeepClear=[];
+const ARROW_CROSSING_CLEAR=24;
 function stableArrowPoint(path,targetD,minD,maxD){
   const offsets=[0,10,-10,20,-20,30,-30,42,-42];
   let fallback=null;
   for(const off of offsets){
     const d=Math.max(minD,Math.min(maxD,targetD+off));
     const q=pointAngleAtDistance(path,d,3);
+    if(arrowKeepClear.some(c=>Math.hypot(c.x-q.x,c.y-q.y)<ARROW_CROSSING_CLEAR))continue;
     const bend=straightnessAt(path,d);
     if(!fallback || bend<fallback.bend) fallback={q,bend};
     if(bend<=8) return q;
@@ -262,7 +496,8 @@ function appendChevronAt(group,q,reverse=false,className='flow-chevron'){
 }
 function adaptiveArrowDistances(path,duplex=false){
   const L=path.getTotalLength();
-  if(L<72) return [];
+  // A short directed wire still says which way it runs: one mark at its middle.
+  if(L<72) return L>=20?[L/2]:[];
 
   // Keep arrows away from terminals and scale density with actual wire length.
   const margin=Math.min(46,Math.max(26,L*.16));
@@ -286,7 +521,7 @@ function arrowPosesForPath(path,duplex=false){
   const L=path.getTotalLength();
   const distances=adaptiveArrowDistances(path,duplex);
   if(!distances.length)return [];
-  const margin=Math.min(46,Math.max(26,L*.16));
+  const margin=Math.min(L/2,Math.min(46,Math.max(26,L*.16)));
   const poses=[];
   distances.forEach((d,i)=>{
     const q=stableArrowPoint(path,d,margin,L-margin);
@@ -362,27 +597,49 @@ function renderPacketsForWire(group,cfg,points,signal,pathLength,w){
 
   if(cfg.direction==='forward'){
     if(signal.forwardLive){
-      appendWirePacket(group,forwardPath,pathLength,signal.forwardBody,signal.forwardBoundary,'forward',wireEndpointMarker(w,'a'),packetRateForWire(w,'forward'),wireOperation(w,'forward'))
+      appendWirePacket(group,forwardPath,pathLength,signal.forwardBody,signal.forwardBoundary,'forward',(endpointShowsChannelTag(w,'a')?wireEndpointMarker(w,'a'):''),packetRateForWire(w,'forward'),wireOperation(w,'forward'))
       count++;
     }
   }else if(cfg.direction==='reverse'){
     if(signal.reverseLive){
-      appendWirePacket(group,reversePath,pathLength,signal.reverseBody,signal.reverseBoundary,'reverse',wireEndpointMarker(w,'b'),packetRateForWire(w,'reverse'),wireOperation(w,'reverse'))
+      appendWirePacket(group,reversePath,pathLength,signal.reverseBody,signal.reverseBoundary,'reverse',(endpointShowsChannelTag(w,'b')?wireEndpointMarker(w,'b'):''),packetRateForWire(w,'reverse'),wireOperation(w,'reverse'))
       count++;
     }
   }else if(cfg.direction==='duplex'){
     if(signal.forwardLive){
-      appendWirePacket(group,forwardPath,pathLength,signal.forwardBody,signal.forwardBoundary,'forward',wireEndpointMarker(w,'a'),packetRateForWire(w,'forward'),wireOperation(w,'forward'))
+      appendWirePacket(group,forwardPath,pathLength,signal.forwardBody,signal.forwardBoundary,'forward',(endpointShowsChannelTag(w,'a')?wireEndpointMarker(w,'a'):''),packetRateForWire(w,'forward'),wireOperation(w,'forward'))
       count++;
     }
     if(signal.reverseLive){
-      appendWirePacket(group,reversePath,pathLength,signal.reverseBody,signal.reverseBoundary,'reverse',wireEndpointMarker(w,'b'),packetRateForWire(w,'reverse'),wireOperation(w,'reverse'))
+      appendWirePacket(group,reversePath,pathLength,signal.reverseBody,signal.reverseBoundary,'reverse',(endpointShowsChannelTag(w,'b')?wireEndpointMarker(w,'b'):''),packetRateForWire(w,'reverse'),wireOperation(w,'reverse'))
       count++;
     }
   }
   return count;
 }
 
+// A route drawn with a hop at each crossing it makes over an earlier wire: a half circle that
+// lifts it over the other line, so a crossing never reads as a junction (NOTATION-MODEL.md).
+const WIRE_HOP_RADIUS=6.5;
+function pathWithHops(points,hops){
+  const pts=normalizePoints(points);if(!hops?.length||pts.length<2)return pathD(pts);
+  const r=WIRE_HOP_RADIUS;let d=`M ${pts[0].x} ${pts[0].y}`;
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1],b=pts[i],h=a.y===b.y,dir=h?Math.sign(b.x-a.x):Math.sign(b.y-a.y);
+    const along=c=>h?(c.x-a.x)*dir:(c.y-a.y)*dir,len=h?Math.abs(b.x-a.x):Math.abs(b.y-a.y);
+    const mine=hops.filter(c=>(h?Math.abs(c.y-a.y)<.5:Math.abs(c.x-a.x)<.5)&&along(c)>r+2&&along(c)<len-r-2).sort((p,q)=>along(p)-along(q));
+    let last=-Infinity;
+    for(const c of mine){
+      if(along(c)-last<2*r+2)continue;last=along(c);
+      // Over the top going right or down; the mirror going left or up. Always the same side.
+      const sweep=dir>0?1:0;
+      if(h)d+=` H ${c.x-r*dir} A ${r} ${r} 0 0 ${sweep} ${c.x+r*dir} ${c.y}`;
+      else d+=` V ${c.y-r*dir} A ${r} ${r} 0 0 ${sweep} ${c.x} ${c.y+r*dir}`;
+    }
+    d+=h?` H ${b.x}`:` V ${b.y}`;
+  }
+  return d;
+}
 function renderArrowPoses(group,poses,className='flow-chevron'){
   for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className);
 }
@@ -395,7 +652,75 @@ function clearWireVisualFocus(){
   document.querySelectorAll('.wire-group').forEach(g=>g.classList.remove('muted'));
   if(!(typeof selected==='string'&&selected.startsWith('wire:'))) clearEndpointFocus();
 }
-function renderWires(signalState=computeSignalState()){
+// Projection-only geometry: keep the exact points used to paint each path. Label
+// layout never asks the router for another route or writes into the document.
+const wireLabelPaths=new Map();
+function placeWireLabels(){
+  const matrix=workspace.getScreenCTM();if(!matrix)return;
+  const inverse=matrix.inverse(),clearance=6;
+  const screen=p=>new DOMPoint(p.x,p.y).matrixTransform(matrix);
+  const visible=el=>{
+    for(let cur=el;cur&&cur!==workspace;cur=cur.parentElement){
+      const style=getComputedStyle(cur);
+      if(style.display==='none'||style.visibility==='hidden'||Number(style.opacity)===0)return false;
+    }
+    return true;
+  };
+  const rect=el=>{const r=el.getBoundingClientRect();return {l:r.left,r:r.right,t:r.top,b:r.bottom}};
+  const intersects=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
+  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.component-label,.outside-label,.internal-text')].filter(visible).map(rect);
+  const entries=[...wireLabelPaths].filter(([path])=>path.isConnected&&visible(path)).map(([path,points])=>({path,points:points.map(screen)}));
+  // A slab intersection also handles diagonal carrier segments without sampling.
+  const crosses=(box,a,b)=>{
+    let lo=0,hi=1;
+    for(const [start,delta,min,max] of [[a.x,b.x-a.x,box.l,box.r],[a.y,b.y-a.y,box.t,box.b]]){
+      if(Math.abs(delta)<1e-9){if(start<min||start>max)return false;continue}
+      const u=(min-start)/delta,v=(max-start)/delta;
+      lo=Math.max(lo,Math.min(u,v));hi=Math.min(hi,Math.max(u,v));if(lo>hi)return false;
+    }
+    return true;
+  };
+  for(const entry of entries){
+    const {path,points}=entry,label=path.parentElement.querySelector('.connection-label');
+    if(!label||!visible(label))continue;
+    const bounds=rect(label),width=bounds.r-bounds.l,height=bounds.b-bounds.t;
+    const anchor=screen({x:Number(label.getAttribute('x')),y:Number(label.getAttribute('y'))});
+    const offset={x:bounds.l-anchor.x,y:bounds.t-anchor.y};
+    const midpoint=screen(path.getPointAtLength(path.getTotalLength()/2)),candidates=[];
+    const beside=(p,a,b)=>{
+      if(Math.abs(a.y-b.y)<.01){
+        candidates.push({l:p.x-width/2,t:p.y-clearance-height},{l:p.x-width/2,t:p.y+clearance});
+      }else if(Math.abs(a.x-b.x)<.01){
+        candidates.push({l:p.x-clearance-width,t:p.y-height/2},{l:p.x+clearance,t:p.y-height/2});
+      }
+    };
+    const total=path.getTotalLength(),before=screen(path.getPointAtLength(Math.max(0,total/2-.1))),after=screen(path.getPointAtLength(Math.min(total,total/2+.1)));
+    beside(midpoint,before,after);
+    for(let i=1;i<points.length;i++)beside({x:(points[i-1].x+points[i].x)/2,y:(points[i-1].y+points[i].y)/2},points[i-1],points[i]);
+    let chosen=null,distance=Infinity;
+    for(const candidate of candidates){
+      candidate.r=candidate.l+width;candidate.b=candidate.t+height;
+      const padded={l:candidate.l-clearance,r:candidate.r+clearance,t:candidate.t-clearance,b:candidate.b+clearance};
+      if(obstacles.some(box=>intersects(padded,box)))continue;
+      if(entries.some(other=>other!==entry&&other.points.slice(1).some((p,i)=>crosses(padded,other.points[i],p))))continue;
+      const d=Math.hypot(candidate.l+width/2-midpoint.x,candidate.t+height/2-midpoint.y);
+      if(d<distance-1e-6){chosen=candidate;distance=d}
+    }
+    if(chosen){
+      const position=new DOMPoint(chosen.l-offset.x,chosen.t-offset.y).matrixTransform(inverse);
+      label.setAttribute('x',String(position.x));label.setAttribute('y',String(position.y));
+    }
+    // A crowded path retains its existing label position. Later labels still
+    // avoid that occupied space, and the finite candidate list bounds the work.
+    obstacles.push(rect(label));
+  }
+}
+function renderWires(signalState=computeSignalState(),markers=markersById()){
+  const previousLabels=new Map([...wireLabelPaths.keys()].map(path=>{
+    const label=path.parentElement?.querySelector('.connection-label');
+    return [path.parentElement?.dataset.wireId,label?{text:label.textContent,d:path.getAttribute('d'),x:label.getAttribute('x'),y:label.getAttribute('y')}:null];
+  }));
+  wireLabelPaths.clear();
   wiresG.innerHTML='';
   nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
   clearEndpointFocus();
@@ -403,21 +728,46 @@ function renderWires(signalState=computeSignalState()){
   const dragging=!!activeNodeDrag;
   const hostAnchors=new Map();
 
+  // Every route first, so each wire knows the crossings it makes: the later wire hops over the
+  // earlier one, and neither puts an arrowhead on the crossing. Wires sharing an end never hop.
+  const routes=new Map();
+  wires.forEach((w,i)=>{
+    if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
+    const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
+    const snapshot=dragging&&(w.a===activeNodeDrag||w.b===activeNodeDrag)?dragRouteSnapshots.get(i):null;
+    // While moving, the settled route is immutable. We do not rebuild its
+    // interior, endpoint leads, arrows, or direction marks on pointer frames.
+    const points=snapshot?clonePoints(snapshot.points):stableRouteForWire(i,w,A,B,occupied);
+    routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
+    occupied.push(...routes.get(i).segs);
+  });
+  const hops=new Map(),order=[...routes.keys()];arrowKeepClear=[];
+  for(let x=0;x<order.length;x++)for(let y=x+1;y<order.length;y++){
+    const P=routes.get(order[x]),Q=routes.get(order[y]);
+    for(const p of P.segs)for(const q of Q.segs){
+      if(p.ends&&q.ends&&p.ends.some(e=>q.ends.includes(e)))continue;
+      if(!segmentsCross(p.a,p.b,q.a,q.b))continue;
+      const c=segmentAxis(p.a,p.b)==='h'?{x:q.a.x,y:p.a.y}:{x:p.a.x,y:q.a.y};
+      if(!hops.has(order[y]))hops.set(order[y],[]);hops.get(order[y]).push(c);arrowKeepClear.push(c);
+    }
+  }
+  // Junctions too: where wires sharing an end part, the dot needs room around it.
+  {const at=(pts,d)=>{for(let k=1;k<pts.length;k++){const L=Math.hypot(pts[k].x-pts[k-1].x,pts[k].y-pts[k-1].y);if(d<=L){const t=L?d/L:0;return {x:pts[k-1].x+(pts[k].x-pts[k-1].x)*t,y:pts[k-1].y+(pts[k].y-pts[k-1].y)*t}}d-=L}return pts.at(-1)};
+   const lenOf=pts=>pts.slice(1).reduce((a,q,k)=>a+Math.hypot(q.x-pts[k].x,q.y-pts[k].y),0);
+   const groups=new Map();
+   for(const [i,r] of routes){const w=wires[i];for(const [end,id,side] of [['a',w.a,w.aSide],['b',w.b,w.bSide]]){if(!id)continue;const k=`${id}|${side}`;if(!groups.has(k))groups.set(k,[]);const pts=normalizePoints(r.points);groups.get(k).push(end==='b'?[...pts].reverse():pts)}}
+   for(const list of groups.values()){if(list.length<2)continue;const reach=Math.min(...list.map(lenOf));let join=list[0][0];
+     for(let d=0;d<=reach;d+=2){const q=list.map(p=>at(p,d));if(q.some(v=>Math.hypot(v.x-q[0].x,v.y-q[0].y)>1.2))break;join=q[0]}
+     arrowKeepClear.push(join)}}
+
   wires.forEach((w,i)=>{
     const editor=entityEditorState(w);const cfg=connectionConfig(w);if(editor.hidden||!carrierIsRenderable(w))return;
     const epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b'),a=epA.node,b=epB.node;
     const A=epA.pos, B=epB.pos;
-    const touchesDragged = dragging && (w.a===activeNodeDrag || w.b===activeNodeDrag);
-    const snapshot = touchesDragged ? dragRouteSnapshots.get(i) : null;
-
-    // While moving, the settled route is immutable. We do not rebuild its
-    // interior, endpoint leads, arrows, or direction marks on pointer frames.
-    const points = snapshot
-      ? clonePoints(snapshot.points)
-      : stableRouteForWire(i,w,A,B,occupied);
-
-    const d=pathD(points);
-    occupied.push(...routeSegments(points));
+    const {points,snapshot}=routes.get(i);
+    // A multi-line wire is a band, not a line: it does not hop.
+    const d=SovSchematicData.normalizeSection(w.form?.section,1)?.lines?.length>=2?pathD(points):pathWithHops(points,hops.get(i));
+    const wireMarkers=markers.get(w.id);
 
     const signal=wireSignalColors(w,signalState);
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
@@ -444,12 +794,27 @@ function renderWires(signalState=computeSignalState()){
     const base=document.createElementNS('http://www.w3.org/2000/svg','path');
     base.setAttribute('d',d);
     base.setAttribute('class','wire'+(selected===`wire:${i}`?' selected':''));
+    wireLabelPaths.set(base,clonePoints(points));
 
     const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
     hit.setAttribute('d',d); hit.setAttribute('class','wire-hit');
 
+    // A multi-line wire (strip, lanes, pipe): its lines and bands drawn as nested strokes along the
+    // route, outside in, so the section follows every bend. Symmetric about the route.
+    const wsec=SovSchematicData.normalizeSection(w.form?.section,1);
+    if(wsec&&wsec.lines.length>=2){
+      group.classList.add('sectioned');group.dataset.lines=String(wsec.lines.length);
+      const lw=1.6;let r=wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+lw;
+      const layer=(width,cls)=>{const q=document.createElementNS('http://www.w3.org/2000/svg','path');q.setAttribute('d',d);q.setAttribute('class','wire-section '+cls);q.setAttribute('stroke-width',String(width));group.appendChild(q)};
+      layer(2*r,'line');r-=lw;
+      for(const b of wsec.bands){if(r<=0)break;layer(2*r,'band-'+b.fill);r-=b.thickness;if(r<=0)break;layer(2*r,'line');r-=lw}
+    }
     group.appendChild(voltage);
     group.appendChild(base);
+    if(wireMarkers){
+      const top=Math.min(...points.map(p=>p.y)),right=Math.max(...points.map(p=>p.x));
+      appendMarkerBadge(group,wireMarkers,right,top);
+    }
     {const L=base.getTotalLength();for(const hosted of nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&n.id!==activeNodeDrag)){
       const placement=componentPlacement(hosted),len=Math.max(1,Math.min(L-1,L*placement.t)),q=base.getPointAtLength(len),angle=pathTangentAngleAtLength(base,len);
       hosted.x=q.x;hosted.y=q.y;wireHostPoseCache.set(hosted.id,{x:q.x,y:q.y,angle,wireId:w.id,t:placement.t});
@@ -485,7 +850,8 @@ function renderWires(signalState=computeSignalState()){
       if(w.b===activeNodeDrag)renderMoveTether(group,snapshot.bPos,B);
     }
 
-    if(cfg.direction==='duplex'){
+    // One mark per place: a labelled duplex wire carries ↔ in its label, not stacked above it.
+    if(cfg.direction==='duplex'&&!cfg.label){
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5);
       const badge=document.createElementNS('http://www.w3.org/2000/svg','text');
       badge.setAttribute('class','net-badge');
@@ -495,17 +861,23 @@ function renderWires(signalState=computeSignalState()){
       group.appendChild(badge);
     }
 
-    if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'RETURN!':'RETURN?';group.appendChild(mark)}
-    if(cfg.label){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),label=document.createElementNS('http://www.w3.org/2000/svg','text');label.setAttribute('class','connection-label');label.setAttribute('x',q.x);label.setAttribute('y',q.y-13);label.setAttribute('text-anchor','middle');label.textContent=cfg.label;group.appendChild(label)}
+    if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'return required':'return expected';group.appendChild(mark)}
+    if(cfg.label){
+      // A label keeps the place clearance gave it while its text and route stand (wire-label clearance).
+      const text=(cfg.direction==='duplex'?'↔ ':'')+cfg.label,lift=13+(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0);
+      const q=pointAngleAtDistance(base,base.getTotalLength()*.5),previous=previousLabels.get(w.id),label=document.createElementNS('http://www.w3.org/2000/svg','text');
+      const keep=previous?.text===text&&previous.d===d;
+      label.setAttribute('class','connection-label');label.setAttribute('x',keep?previous.x:q.x);label.setAttribute('y',keep?previous.y:q.y-lift);label.setAttribute('text-anchor','middle');label.textContent=text;group.appendChild(label);
+    }
     // Channel markers belong to bound ends; a free end has no port to mark.
-    if(a){
+    if(a&&endpointShowsChannelTag(w,'a')){
       const markerA=document.createElementNS('http://www.w3.org/2000/svg','text');
       markerA.setAttribute('class','endpoint-channel-tag');
       {const side=physicalPortSide(a,w.aSide);markerA.setAttribute('x',A.x+(side==='left'?-14:side==='right'?14:0));markerA.setAttribute('y',A.y+(side==='top'?-12:side==='bottom'?15:4));markerA.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
       markerA.textContent=endpointMarkerDisplay(w,'a');
       group.appendChild(markerA);
     }
-    if(b){
+    if(b&&endpointShowsChannelTag(w,'b')){
       const markerB=document.createElementNS('http://www.w3.org/2000/svg','text');
       markerB.setAttribute('class','endpoint-channel-tag');
       {const side=physicalPortSide(b,w.bSide);markerB.setAttribute('x',B.x+(side==='left'?-14:side==='right'?14:0));markerB.setAttribute('y',B.y+(side==='top'?-12:side==='bottom'?15:4));markerB.setAttribute('text-anchor',side==='left'?'end':side==='right'?'start':'middle')}
@@ -530,4 +902,5 @@ function renderWires(signalState=computeSignalState()){
     group.addEventListener('pointerleave',()=>{if(selected!==`wire:${i}`)clearWireVisualFocus()});
     if(selected===`wire:${i}`) focusWireVisual(i);
   });
+  placeWireLabels();
 }

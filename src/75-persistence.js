@@ -12,7 +12,7 @@ let lastFileFingerprint=null;
 
 function snapshotDocument(){
   // Files and API snapshots carry authored truth only; runtime projections are rebuilt on load.
-  const doc=SovSchematicData.compactDocument(SovSchematicData.makeDocument(SovSchematicData.clone(diagram)));
+  const doc=SovSchematicData.compactDocument(SovSchematicData.makeDocument(typeof canonicalDiagram==='function'?canonicalDiagram():SovSchematicData.clone(diagram)));
   doc.meta=doc.meta||{};
   doc.meta.title=doc.meta.title||'Soveraeign Schematic';
   return doc;
@@ -33,7 +33,8 @@ function captureWorkspace(){
       showFlow,
       colorEngine:SovSchematicData.clone(colorEngine),
       appearanceMode,
-      globalRate:globalTimeScale()
+      globalRate:globalTimeScale(),
+      layout:typeof activeLayoutId==='function'?activeLayoutId():null
     }
   };
 }
@@ -94,6 +95,7 @@ function replaceRuntimeDocument(input){
   const valid=SovSchematicData.validateDocument(normalized);
   if(!valid.ok)throw new Error(valid.errors.join('; '));
   SovSchematicData.replaceDocument(diagram,normalized);
+  if(typeof layoutAfterDocumentLoad==='function')layoutAfterDocumentLoad();
   syncRuntimeAfterDocumentReplace();
   return snapshotDocument();
 }
@@ -109,6 +111,8 @@ function applyWorkspace(bundle){
   if(typeof view.showFlow==='boolean'){showFlow=view.showFlow;document.getElementById('workspace')?.classList.toggle('show-flow',showFlow);flowBtn?.classList.toggle('active',showFlow)}
   if(view.colorEngine&&typeof view.colorEngine==='object'){Object.assign(colorEngine,view.colorEngine);applyColorEngine()}
   if(view.appearanceMode){appearanceMode=view.appearanceMode;applyAppearanceMode()}
+  // The layout on screen is a viewer's choice, kept with the workspace, never in the file.
+  if(view.layout&&typeof switchLayout==='function'&&view.layout!==activeLayoutId())switchLayout(view.layout);
   if(view.globalRate!=null){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Number(view.globalRate)||1}
   render();
   return captureWorkspace();
@@ -312,13 +316,139 @@ function restoreRecovery(){
   statusEl.textContent='Recovery restored · save to keep it';
   return true;
 }
+// One standalone picture of the diagram, used by File > Export SVG, the Browser API
+// (render.svg / render.png), scripts/export_svg.py and the server's render service. Computed
+// styles are inlined so the file renders outside the editor; the viewBox fits the diagram; the
+// live clock's overlay and, unless asked for, animated packets are left out.
+// A picture (export, PNG, audit) draws labels at their base size whatever the editor's zoom:
+// the on-screen clamp (app.css, issue #15) keeps the canvas readable, but a fitted picture of a
+// small diagram would otherwise carry labels at a third of their size.
+function withPictureLabels(fn){
+  const prev=workspace.style.getPropertyValue('--zoom');if(prev===''||Number(prev)===1)return fn();
+  workspace.style.setProperty('--zoom','1');render();
+  try{return fn()}finally{workspace.style.setProperty('--zoom',prev);render()}
+}
+function renderStandaloneSvg(opts={}){return withPictureLabels(()=>renderStandaloneSvgNow(opts))}
+// The snapshot (file.svg, File > Export SVG): the canvas exactly as on screen, labels where the
+// reader sees them. render.svg makes a picture instead, with labels at their base size.
+function snapshotSvg(opts={}){return renderStandaloneSvgNow(opts)}
+function renderStandaloneSvgNow(opts={}){
+  if (typeof cancelWireDrag === 'function') cancelWireDrag();
+  const live = workspace;
+  const INHERITED = ['fill','fill-opacity','fill-rule','stroke','stroke-width','stroke-opacity','stroke-dasharray',
+    'stroke-dashoffset','stroke-linecap','stroke-linejoin','color','font-family','font-size','font-weight','font-style',
+    'letter-spacing','text-anchor','dominant-baseline','visibility','paint-order','text-rendering','shape-rendering'];
+  const OWN = {opacity:'1', filter:'none', 'mix-blend-mode':'normal', transform:'none'};
+  const VISUAL = new Set(['svg','g','path','rect','circle','ellipse','line','polyline','polygon','text','tspan','use','foreignObject','image']);
+  const styleOf = new Map();
+  const walk = (el, parentStyle) => {
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none') { styleOf.set(el, null); return; }
+    const out = {};
+    for (const p of INHERITED) {
+      const v = cs.getPropertyValue(p);
+      if (!v) continue;
+      if (!parentStyle || parentStyle[p] !== v) out[p] = v;
+    }
+    for (const p in OWN) {
+      const v = cs.getPropertyValue(p);
+      if (v && v !== OWN[p]) out[p] = v;
+    }
+    if (out.transform) {
+      out['transform-box'] = cs.getPropertyValue('transform-box');
+      out['transform-origin'] = cs.getPropertyValue('transform-origin');
+    }
+    const merged = Object.assign({}, parentStyle || {});
+    for (const p of INHERITED) merged[p] = cs.getPropertyValue(p);
+    styleOf.set(el, out);
+    for (const child of el.children) walk(child, merged);
+  };
+  walk(live, null);
+
+  const clone = live.cloneNode(true);
+  const liveEls = [live, ...live.querySelectorAll('*')];
+  const cloneEls = [clone, ...clone.querySelectorAll('*')];
+  const drop = [];
+  for (let i = 0; i < liveEls.length; i++) {
+    const src = liveEls[i], dst = cloneEls[i];
+    const st = styleOf.get(src);
+    if (st === null) { drop.push(dst); continue; }
+    if (st === undefined || !VISUAL.has(dst.tagName)) continue;
+    const parts = [];
+    for (const p in st) parts.push(`${p}:${st[p]}`);
+    dst.removeAttribute('tabindex');
+    if (parts.length) dst.setAttribute('style', parts.join(';'));
+  }
+  for (const el of drop) el.remove();
+  clone.querySelector('#ghostLayer')?.replaceChildren();
+  clone.querySelector('#paletteDropLayer')?.replaceChildren();
+  // A running clock's overlay is a moment, not the document.
+  clone.querySelector('#simLayer')?.replaceChildren();
+  clone.querySelectorAll('.level-high').forEach(x => x.classList.remove('level-high'));
+  clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
+  clone.querySelectorAll('.port-hit,.wire-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
+  // A still picture cannot show travel: a packet frozen mid-wire reads as a junction.
+  // Packets stay only when the file is made to loop (--loop).
+  if (!opts.packets) clone.querySelectorAll('.wire-packet').forEach(x => x.remove());
+
+  // A wire on a local surface already sits just after its host in the node layer
+  // (renderWires), so the picture shows it above the host body with no lifting here.
+
+  const defs = document.querySelector('.hidden-symbols defs').cloneNode(true);
+  clone.insertBefore(defs, clone.firstChild);
+
+  const pad = opts.pad ?? 48;
+  const b = typeof diagramBounds === 'function' ? diagramBounds() : null;
+  if (b) {
+    const w = Math.max(160, b.r - b.l + pad * 2);
+    // Blocks below the drawing, never over it: a narration line, then the legend.
+    const extra = appendPictureBlocks(clone, {x: b.l - pad, y: b.b + pad * .5, w}, opts);
+    const h = Math.max(120, b.b - b.t + pad * 2 + extra);
+    clone.setAttribute('viewBox', `${b.l - pad} ${b.t - pad} ${w} ${h}`);
+    clone.setAttribute('width', String(Math.round(w)));
+    clone.setAttribute('height', String(Math.round(h)));
+  }
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+  clone.removeAttribute('tabindex');
+  clone.removeAttribute('aria-label');
+  const bg = getComputedStyle(live).backgroundColor;
+  const own = clone.getAttribute('style') || '';
+  clone.setAttribute('style', `${own}${own && !own.endsWith(';') ? ';' : ''}background-color:${bg}`);
+  return new XMLSerializer().serializeToString(clone);
+}
+// Picture blocks (NOTATION-MODEL.md §4-5), drawn with inline attributes because a picture carries
+// no stylesheet. Returns the height they add under the drawing.
+function appendPictureBlocks(svg,{x,y,w},opts={}){
+  const NS='http://www.w3.org/2000/svg',T=SovSchematicNotation.tokens(diagram),dark=surfaceAppearance()==='dark';
+  const ink=dark?'#F3F2EE':'#2B2A27',muted=dark?'#B9B7B0':'#6C6A64';let used=0;
+  const lines=typeof narrationLines==='function'?narrationLines():[];
+  const line=opts.narration!=null?lines[Number(opts.narration)]:null;
+  if(line){
+    const size=T.type?.narration?.size||15,perLine=Math.max(12,Math.floor((w-48)/(size*.54)));
+    const words=line.say.split(/\s+/),rows=[''];for(const word of words){const t=rows.at(-1)?rows.at(-1)+' '+word:word;if(t.length>perLine&&rows.at(-1))rows.push(word);else rows[rows.length-1]=t}
+    const boxH=rows.length*size*1.4+size*.9,g=document.createElementNS(NS,'g');g.setAttribute('class','picture-narration');
+    const r=document.createElementNS(NS,'rect');r.setAttribute('x',String(x+24));r.setAttribute('y',String(y));r.setAttribute('width',String(w-48));r.setAttribute('height',String(boxH));r.setAttribute('rx','9');
+    r.setAttribute('style',`fill:${dark?'#2A2C2E':'#1F1E1C'};fill-opacity:.9`);g.appendChild(r);
+    rows.forEach((row,i)=>{const t=document.createElementNS(NS,'text');t.setAttribute('x',String(x+w/2));t.setAttribute('y',String(y+(boxH-rows.length*size*1.4)/2+size*1.05+i*size*1.4));t.setAttribute('text-anchor','middle');
+      t.setAttribute('style',`font-family:ui-sans-serif,system-ui,sans-serif;font-size:${size}px;font-weight:${T.type?.narration?.weight||500};fill:#FAF9F5`);t.textContent=row;g.appendChild(t)});
+    svg.appendChild(g);used+=boxH+16;
+  }
+  if(opts.legend&&typeof appendLegendBlock==='function')used+=appendLegendBlock(svg,{x,y:y+used,w,ink,muted,dark});
+  return used;
+}
 function exportSvgFile(){
-  cancelWireDrag();
-  const clone=workspace.cloneNode(true);
-  clone.querySelector('#ghostLayer')?.replaceChildren();clone.querySelector('#paletteDropLayer')?.replaceChildren();
-  clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x=>x.classList.remove('selected','snap-target','wiring-source'));
-  const defs=document.querySelector('.hidden-symbols defs').cloneNode(true);clone.insertBefore(defs,clone.firstChild);
-  triggerDownload(new XMLSerializer().serializeToString(clone),`${fileBaseName()}.svg`,'image/svg+xml');
+  triggerDownload(snapshotSvg({pad:48}),`${fileBaseName()}.svg`,'image/svg+xml');
+}
+// A raster of the same picture, for readers that cannot take SVG (chat, issue trackers).
+function renderStandalonePng(opts={}){
+  const svg=renderStandaloneSvg(opts),scale=Math.max(.25,Math.min(4,Number(opts.scale)||2));
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{const c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);const ctx=c.getContext('2d');ctx.scale(scale,scale);ctx.drawImage(img,0,0);resolve(c.toDataURL('image/png'))};
+    img.onerror=()=>reject(new Error('SVG could not be rasterized'));
+    img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svg)));
+  });
 }
 function setFileMenu(open){
   if(!fileMenu)return;

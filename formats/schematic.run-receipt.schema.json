@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "soveraeign.schematic/run-receipt@0.1",
+  "title": "SOV Schematic Run Receipt",
+  "description": "Documentation only: receipts are built by runReceipt in src/07-state-space.js. The one receipt every run operation returns on every surface (browser API, HTTP, MCP): schematic.run.start, .step, .settle, .trace, schematic.state.query and schematic.run.replay (STATE-SPACE.md, Surfaces). Running never changes the document, its revision, history or recovery. The HTTP status is the only surface-specific field and is not part of the receipt. Runs are addressed by handle.",
+  "type": "object",
+  "required": [
+    "schema",
+    "operation",
+    "runId",
+    "handle",
+    "ok",
+    "tickBefore",
+    "tickAfter",
+    "head",
+    "result",
+    "error"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "soveraeign.schematic/run-receipt@0.1"
+    },
+    "operation": {
+      "enum": [
+        "schematic.run.start",
+        "schematic.run.step",
+        "schematic.run.settle",
+        "schematic.run.trace",
+        "schematic.state.query",
+        "schematic.run.replay"
+      ]
+    },
+    "runId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{12}$",
+      "description": "the run's content-derived id (the first 12 hex digits of its replay key's hash; record ids carry it); two starts with the same replay key share it. Null when no run was found or started"
+    },
+    "handle": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{12}\\.[1-9][0-9]*$",
+      "description": "the address of the run on this surface: the run id, a '.', and the surface registry's start counter from 1 (e.g. dd38fae2158e.3). Every start gets a new handle, so a second start with the same replay key never touches the first run; step, settle, trace and state.query take it. Null for a replay (not registered), a refusal with no run, and a receipt built outside a registry"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "tickBefore": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "the run's last processed tick before the operation (null before any, and for start and replay)"
+    },
+    "tickAfter": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "the run's last processed tick after the operation"
+    },
+    "head": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "the hash of the run's last ledger entry after the operation, which a truncated trace cannot match"
+    },
+    "result": {
+      "description": "null on a refusal. start: the start ledger entry's body {replayKey, budget}; step: {tick, records}; settle: {kind: quiet} | {kind: oscillating, period, subjects} | {kind: budget, left}; trace: the trace (trace@0.1); state.query: the matching state records, in record order; replay: {records}"
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "RUN_NOT_FOUND (unknown handle; HTTP 404), INPUT_INVALID (including a surface budget over 1000000, and over HTTP a body that is not JSON or a path that does not decode, both HTTP 400), PACK_INVALID, QUERY_INVALID, RUN_INVALID, RUN_REFUSED, MERGE_FORM, BUDGET_SPENT (step), TRACE_INVALID, REPLAY_KEY_MISMATCH or REPLAY_DIVERGED"
+            },
+            "message": {
+              "type": "string"
+            },
+            "details": {
+              "type": "object",
+              "description": "what the refusal names besides its code and message, the same on every surface: {refusals} for RUN_REFUSED and a PACK_INVALID from packs that do not load; {tick, left} for BUDGET_SPENT; {fields} for REPLAY_KEY_MISMATCH; {entry, errors} for TRACE_INVALID; {tick}, {entry} or {record} for REPLAY_DIVERGED; {subject} for MERGE_FORM; {definitions} for PACK_INVALID 'this page carries no packs'. Absent when the refusal names nothing more"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -59,7 +59,7 @@ function selectPortRef(info,{focus=true}={}){
   pLabel.textContent=info.port.label||'—';
   pChannelCount.textContent=portMarkerSummaryText(info);
   pChannel.textContent=ch.name;
-  pFlow.textContent=portFlowLabel(ch.flow);
+  pFlow.textContent=portFlowText(portShownFlow(info)); // the flow the port bar shows
   pAccess.textContent=portAccessLabel(ch.access);
   pColor.textContent=`${slotLabel(ch.colorSlot)} · ${ch.color}`;
   showPortBar(info);

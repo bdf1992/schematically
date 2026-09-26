@@ -32,7 +32,8 @@ def check(svg_path: Path, doc: dict) -> None:
     # A Plane draws no label of its own; every other labelled record renders its label as text.
     labels = [c.get('config', {}).get('label') for c in doc['components'] if c.get('symbolId') != 'plane']
     labels = [l for l in labels if l]
-    texts = ''.join((t.text or '') for t in root.iter(f'{SVG_NS}text')) + ''.join((t.text or '') for t in root.iter(f'{SVG_NS}tspan'))
+    # A label wrapped to fit its body is one <text> whose lines are <tspan>s; read it as one line.
+    texts = '\n'.join(' '.join(filter(None, [(t.text or '').strip()] + [(s.text or '').strip() for s in t.iter(f'{SVG_NS}tspan')])) for t in root.iter(f'{SVG_NS}text'))
     for label in labels:
         assert label in texts, f'{svg_path.name}: label {label!r} not rendered'
     if labels:

@@ -1,0 +1,329 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "soveraeign.schematic/trace@0.1",
+  "title": "SOV Schematic Trace (.sovtrace)",
+  "description": "Documentation only: validation is the hand-written validateTrace in src/07-state-space.js. A run's trace (STATE-SPACE.md, Files; Runtime semantics (slice 1b)). The .sovtrace encoding is canonicalize(traceOf(run)): RFC 8785 JSON, sorted keys, no whitespace. MIME application/vnd.soveraeign.schematic-trace+json.",
+  "type": "object",
+  "required": [
+    "format",
+    "replayKey",
+    "documentRevision",
+    "budget",
+    "through",
+    "head",
+    "ledger"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "soveraeign.schematic/trace@0.1"
+    },
+    "replayKey": {
+      "$ref": "#/$defs/replayKey"
+    },
+    "documentRevision": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "a label for people; identity is replayKey.documentHash"
+    },
+    "budget": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "processed events allowed (inputs, arrivals, output changes); default 10000. Also carried in the start entry, so the chain covers it"
+    },
+    "through": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "the last tick processed, null before any; replay processes exactly the ticks up to it"
+    },
+    "head": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "the hash of the last ledger entry; a truncated ledger fails against it"
+    },
+    "ledger": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/entry"
+      },
+      "description": "hash-chained; what a replay cannot recompute: the start entry (carrying {replayKey, budget}), each input, each stochastic order draw"
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "$ref": "soveraeign.schematic/state-record@0.1"
+      },
+      "description": "optional: the derived records, for audit. When present, replay must reproduce them byte for byte; when absent, replay recomputes them. Ids are sr-<run>-<seq6>; time.sequence is their index"
+    }
+  },
+  "$defs": {
+    "replayKey": {
+      "type": "object",
+      "description": "Everything the fold depends on. Replay recomputes it from the document, the packs and this key's inputs and seed, and refuses with REPLAY_KEY_MISMATCH naming each differing field.",
+      "required": [
+        "documentId",
+        "documentHash",
+        "definitions",
+        "runtimeVersion",
+        "traceFormat",
+        "inputs",
+        "seed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "documentId": {
+          "type": "string"
+        },
+        "documentHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 over the canonical compactDocument() with revision and timestamps removed"
+        },
+        "definitions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^.+@[0-9]+$"
+          },
+          "description": "every resolved definition id@version, sorted"
+        },
+        "runtimeVersion": {
+          "type": "string",
+          "description": "state-space@1"
+        },
+        "traceFormat": {
+          "const": "soveraeign.schematic/trace@0.1"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "entity",
+              "point",
+              "channel",
+              "value",
+              "at"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "entity": {
+                "type": "string",
+                "minLength": 1
+              },
+              "point": {
+                "type": "string",
+                "minLength": 1,
+                "description": "the port id, as resolved (a compat id is stored as the port id)"
+              },
+              "channel": {
+                "type": "string",
+                "minLength": 1,
+                "description": "default main"
+              },
+              "value": {
+                "type": "boolean",
+                "description": "binary channels only in slice 1b"
+              },
+              "at": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "description": "the registered inputs, in (at, entity, point, channel) order"
+        },
+        "seed": {
+          "type": "string",
+          "description": "default \"0\""
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": [
+        "entity",
+        "point",
+        "channel",
+        "value",
+        "at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "point": {
+          "type": "string",
+          "minLength": 1,
+          "description": "the port id, as resolved (a compat id is stored as the port id)"
+        },
+        "channel": {
+          "type": "string",
+          "minLength": 1,
+          "description": "default main"
+        },
+        "value": {
+          "type": "boolean",
+          "description": "binary channels only in slice 1b"
+        },
+        "at": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "draw": {
+      "type": "object",
+      "required": [
+        "tick",
+        "entity",
+        "point",
+        "channel",
+        "paths",
+        "order"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tick": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entity": {
+          "type": "string"
+        },
+        "point": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the arrivals left after the declared Paths, sorted: the items drawOrder shuffles"
+        },
+        "order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "drawOrder(seed, ['merge', tick, entity, point, channel], paths)"
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": [
+        "seq",
+        "kind",
+        "body",
+        "prev",
+        "hash"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "counts from 0"
+        },
+        "kind": {
+          "enum": [
+            "start",
+            "input",
+            "draw"
+          ]
+        },
+        "body": {
+          "description": "start: {replayKey, budget}; input: one input; draw: one stochastic merge order"
+        },
+        "prev": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "the previous entry's hash; 64 zeros for the first"
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "sha256Hex(canonicalize({seq, kind, body, prev}))"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "start"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/start"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "input"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/input"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "draw"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/draw"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "start": {
+      "type": "object",
+      "required": [
+        "replayKey",
+        "budget"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "replayKey": {
+          "$ref": "#/$defs/replayKey"
+        },
+        "budget": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "description": "the start entry body: equal to the trace's replayKey and budget"
+    }
+  }
+}

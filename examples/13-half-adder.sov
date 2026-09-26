@@ -1,0 +1,162 @@
+{
+ "schema": "soveraeign.schematic/document@0.1",
+ "id": "example-half-adder",
+ "revision": 0,
+ "notation": "logic",
+ "meta": {
+  "title": "Example 13: a half adder in logic notation"
+ },
+ "components": [
+  {
+   "id": "a",
+   "symbolId": "lever",
+   "x": 150,
+   "y": 200,
+   "config": {
+    "label": "A",
+    "signal": {
+     "value": 1
+    }
+   }
+  },
+  {
+   "id": "b",
+   "symbolId": "lever",
+   "x": 150,
+   "y": 420,
+   "config": {
+    "label": "B",
+    "signal": {
+     "value": 1
+    }
+   }
+  },
+  {
+   "id": "sum-gate",
+   "symbolId": "xor2",
+   "x": 480,
+   "y": 206.61,
+   "config": {
+    "label": "Sum gate",
+    "subtitle": "a ⊕ b",
+    "presentation": {
+     "size": {
+      "w": 128,
+      "h": 108
+     }
+    }
+   }
+  },
+  {
+   "id": "carry-gate",
+   "symbolId": "and2",
+   "x": 480,
+   "y": 413.39,
+   "config": {
+    "label": "Carry gate",
+    "subtitle": "a · b",
+    "presentation": {
+     "size": {
+      "w": 128,
+      "h": 108
+     }
+    }
+   }
+  },
+  {
+   "id": "sum",
+   "symbolId": "observe",
+   "x": 800,
+   "y": 206.61,
+   "config": {
+    "label": "Sum",
+    "signal": {
+     "mode": "derived"
+    }
+   }
+  },
+  {
+   "id": "carry",
+   "symbolId": "observe",
+   "x": 800,
+   "y": 413.39,
+   "config": {
+    "label": "Carry",
+    "signal": {
+     "mode": "derived"
+    }
+   }
+  }
+ ],
+ "wires": [
+  {
+   "id": "w1",
+   "a": "a",
+   "aSide": "out",
+   "b": "sum-gate",
+   "bSide": "a"
+  },
+  {
+   "id": "w2",
+   "a": "a",
+   "aSide": "out",
+   "b": "carry-gate",
+   "bSide": "a"
+  },
+  {
+   "id": "w3",
+   "a": "b",
+   "aSide": "out",
+   "b": "sum-gate",
+   "bSide": "b"
+  },
+  {
+   "id": "w4",
+   "a": "b",
+   "aSide": "out",
+   "b": "carry-gate",
+   "bSide": "b"
+  },
+  {
+   "id": "w5",
+   "a": "sum-gate",
+   "aSide": "y",
+   "b": "sum",
+   "bSide": "in"
+  },
+  {
+   "id": "w6",
+   "a": "carry-gate",
+   "aSide": "y",
+   "b": "carry",
+   "bSide": "in"
+  }
+ ],
+ "references": [],
+ "narration": [
+  {
+   "at": 0,
+   "say": "Two levers, A and B, each feed both gates.",
+   "focus": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "at": 1000,
+   "say": "The exclusive-or gate is high when exactly one input is high: that is the sum.",
+   "focus": [
+    "sum-gate",
+    "sum"
+   ]
+  },
+  {
+   "at": 2000,
+   "say": "The and gate is high only when both inputs are: that is the carry.",
+   "focus": [
+    "carry-gate",
+    "carry"
+   ]
+  }
+ ]
+}

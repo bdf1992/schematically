@@ -1,0 +1,372 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "soveraeign.schematic/pattern@0.1",
+  "title": "SOV Schematic Pattern Declaration",
+  "description": "Documentation only. A pattern is a mechanism with parameters; the patterns themselves ship with the engine (src/07-state-space.js: patterns(), pattern('id@version')) and each validates its own parameters by hand. This file documents the declaration every pattern exposes and the parameters and derived contract of the two registered in slice 1a.",
+  "type": "object",
+  "required": [
+    "id",
+    "version",
+    "class",
+    "stateful",
+    "blastRadius"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "class": {
+      "enum": [
+        "exact",
+        "estimated",
+        "predicted"
+      ]
+    },
+    "stateful": {
+      "type": "boolean"
+    },
+    "blastRadius": {
+      "enum": [
+        "local",
+        "regional",
+        "global"
+      ]
+    },
+    "validate": {
+      "description": "validate(parameters) -> errors[] (a function on the engine's pattern object)"
+    },
+    "derive": {
+      "description": "derive(parameters) -> contract (a function on the engine's pattern object)"
+    }
+  },
+  "$defs": {
+    "truth_table@1.parameters": {
+      "type": "object",
+      "required": [
+        "inputs",
+        "outputs",
+        "table"
+      ],
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "description": "disjoint from inputs"
+        },
+        "table": {
+          "type": "array",
+          "description": "one row per input combination, each exactly once; a row is inputs.length + outputs.length cells of 0 or 1",
+          "items": {
+            "type": "array",
+            "items": {
+              "enum": [
+                0,
+                1
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "truth_table@1.contract": {
+      "type": "object",
+      "required": [
+        "inputs",
+        "outputs",
+        "state",
+        "observables"
+      ],
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "flow",
+              "channels",
+              "observable",
+              "form"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "flow": {
+                "enum": [
+                  "in",
+                  "out"
+                ]
+              },
+              "channels": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "observable": {
+                "type": "string",
+                "minLength": 1
+              },
+              "form": {
+                "enum": [
+                  "binary",
+                  "continuous",
+                  "categorical"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "flow",
+              "channels",
+              "observable",
+              "form"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "flow": {
+                "enum": [
+                  "in",
+                  "out"
+                ]
+              },
+              "channels": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "observable": {
+                "type": "string",
+                "minLength": 1
+              },
+              "form": {
+                "enum": [
+                  "binary",
+                  "continuous",
+                  "categorical"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "state": {
+          "type": "null"
+        },
+        "observables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "form",
+              "unit",
+              "blastRadius",
+              "staleness"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "form": {
+                "enum": [
+                  "binary",
+                  "continuous",
+                  "categorical"
+                ]
+              },
+              "unit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "blastRadius": {
+                "enum": [
+                  "local",
+                  "regional",
+                  "global"
+                ]
+              },
+              "staleness": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "merge@1.parameters": {
+      "type": "object",
+      "required": [
+        "combine"
+      ],
+      "properties": {
+        "combine": {
+          "enum": [
+            "or",
+            "and",
+            "min",
+            "max",
+            "sum",
+            "first",
+            "last",
+            "queue"
+          ]
+        },
+        "order": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "kind",
+                "paths"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "declared"
+                },
+                "paths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "description": "wire ids, highest priority first; each must end on the port"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "kind"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "stochastic"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "kind"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "observed"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "combine": {
+                "enum": [
+                  "or",
+                  "and",
+                  "min",
+                  "max",
+                  "sum"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "order"
+              ]
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "merge@1.contract": {
+      "type": "object",
+      "required": [
+        "orderDependent",
+        "order"
+      ],
+      "properties": {
+        "orderDependent": {
+          "type": "boolean"
+        },
+        "order": {
+          "description": "the order, defaulted to {kind: stochastic} for first | last | queue; null for the order-free combines"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

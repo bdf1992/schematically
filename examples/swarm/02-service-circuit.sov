@@ -1,0 +1,851 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "swarm-service-circuit",
+  "revision": 0,
+  "meta": {
+    "title": "02 \u2014 Admission, bounded work, effects, and settlement",
+    "status": "PROPOSED \u2014 architecture for review; no live execution",
+    "notes": [
+      "Logical service circuit. This drawing declares intended contracts; the editor does not implement a runtime or security sandbox.",
+      "Admission checks authenticated authority, preconditions, idempotency, and available resources before recording a request and reservation.",
+      "Queue and reservations form a durable admitted-work record. Capacity and budget are checked before admission and at the effect boundary.",
+      "Relay dispatches admitted work. Breaker trips stop new dispatch; stopping in-flight work depends on the adapter. Reset requires separate authority.",
+      "Results arrive through an authenticated observation port. Reconciliation verifies identity, attempt/version, provenance, and evidence.",
+      "Settlement releases only confirmed reservations. Missing acknowledgment remains unknown and reserved pending reconciliation; never blindly retry.",
+      "Refusals are recorded. Observation, cancellation, and protection ingress require capacity even when the work queue is full.",
+      "One step, bounded batch, and event-driven control share these contracts; scheduling is host supplied."
+    ],
+    "source": "https://github.com/bdf1992/schematically",
+    "timeScale": 0,
+    "originalLabels": {
+      "operator": "Operator",
+      "service": "Service custody boundary",
+      "request": "Request",
+      "effect": "Dispatch",
+      "result": "Observation",
+      "admit": "Admission",
+      "queue": "Queue + reservations",
+      "relay": "Dispatch relay",
+      "grant": "Authority",
+      "limit": "Budget / capacity",
+      "breaker": "Breaker / reset",
+      "reconcile": "Reconcile evidence",
+      "settle": "Settlement / receipt",
+      "refuse": "Recorded refusal",
+      "adapter": "Effect adapter"
+    },
+    "originalWireLabels": {
+      "w1": "invoke",
+      "w2": "",
+      "w3": "",
+      "w4": "",
+      "w5": "reserve",
+      "w6": "admitted work",
+      "w7": "control",
+      "w8": "",
+      "w9": "execute",
+      "w10": "reported outcome",
+      "w11": "",
+      "w12": "confirmed",
+      "w13": "release / retain",
+      "w14": "refused"
+    },
+    "presentationReview": "C5 requests/actions; C6 authority/control; C4 evidence; C1 breaker/refusal. Host and persistence fills use M1. Pin holds the host and authority/capacity reference geometry; drafts remain movable. Original captions retained in metadata; topology and authored geometry unchanged."
+  },
+  "components": [
+    {
+      "id": "operator",
+      "symbolId": "act",
+      "x": 100,
+      "y": 395,
+      "config": {
+        "label": "Operator",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "custom",
+            "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 64\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"><circle cx=\"34\" cy=\"19\" r=\"10\"/><circle cx=\"67\" cy=\"23\" r=\"8\"/><path d=\"M14 55v-8c0-18 40-18 40 0v8M59 38c17-5 23 6 23 17\"/></g></svg>"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 10,
+        "ports": {
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "service",
+      "symbolId": "plane",
+      "x": 860,
+      "y": 450,
+      "config": {
+        "label": "SERVICE",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 1170,
+            "h": 730
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "interiorColorSlot": 0
+        },
+        "attachmentDefaults": "none",
+        "colorSlot": 0
+      },
+      "form": {
+        "dimension": 2,
+        "regions": {
+          "interior": {
+            "state": "open"
+          }
+        }
+      },
+      "editor": {
+        "pinned": true
+      }
+    },
+    {
+      "id": "request",
+      "symbolId": "point",
+      "x": 275.0,
+      "y": 395.25,
+      "config": {
+        "label": "Request",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 24,
+            "h": 24
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none",
+          "interiorColorSlot": 0
+        },
+        "ports": {
+          "out": {
+            "face": "both",
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          }
+        },
+        "colorSlot": 10
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service",
+      "placement": {
+        "kind": "edge",
+        "hostId": "service",
+        "side": "left",
+        "t": 0.425
+      }
+    },
+    {
+      "id": "effect",
+      "symbolId": "point",
+      "x": 1445.0,
+      "y": 395.25,
+      "config": {
+        "label": "Dispatch",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 24,
+            "h": 24
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none",
+          "interiorColorSlot": 0
+        },
+        "ports": {
+          "out": {
+            "face": "both",
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          }
+        },
+        "colorSlot": 10
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service",
+      "placement": {
+        "kind": "edge",
+        "hostId": "service",
+        "side": "right",
+        "t": 0.425
+      }
+    },
+    {
+      "id": "result",
+      "symbolId": "point",
+      "x": 1445.0,
+      "y": 661.7,
+      "config": {
+        "label": "Observation",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 24,
+            "h": 24
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none",
+          "interiorColorSlot": 0
+        },
+        "ports": {
+          "out": {
+            "face": "both",
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        },
+        "colorSlot": 10
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service",
+      "placement": {
+        "kind": "edge",
+        "hostId": "service",
+        "side": "right",
+        "t": 0.79
+      }
+    },
+    {
+      "id": "admit",
+      "symbolId": "gate",
+      "x": 475,
+      "y": 395,
+      "config": {
+        "label": "Admission",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 10,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "control": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 11
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service"
+    },
+    {
+      "id": "queue",
+      "symbolId": "buffer",
+      "x": 745,
+      "y": 395,
+      "config": {
+        "label": "Queue",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 190,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 0,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "control": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service"
+    },
+    {
+      "id": "relay",
+      "symbolId": "switch",
+      "x": 1135,
+      "y": 395,
+      "config": {
+        "label": "Relay",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 10,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "control": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 6
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service"
+    },
+    {
+      "id": "grant",
+      "symbolId": "authority",
+      "x": 475,
+      "y": 175,
+      "config": {
+        "label": "Authority",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 11,
+        "ports": {
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 11
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service",
+      "editor": {
+        "pinned": true
+      }
+    },
+    {
+      "id": "limit",
+      "symbolId": "limit",
+      "x": 745,
+      "y": 175,
+      "config": {
+        "label": "Capacity",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 11,
+        "ports": {
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 11
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service",
+      "editor": {
+        "pinned": true
+      }
+    },
+    {
+      "id": "breaker",
+      "symbolId": "switch",
+      "x": 1135,
+      "y": 175,
+      "config": {
+        "label": "Breaker",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 6,
+        "ports": {
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 6
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service"
+    },
+    {
+      "id": "reconcile",
+      "symbolId": "gate",
+      "x": 1135,
+      "y": 660,
+      "config": {
+        "label": "Reconcile",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 9,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service"
+    },
+    {
+      "id": "settle",
+      "symbolId": "receipt",
+      "x": 745,
+      "y": 660,
+      "config": {
+        "label": "Settlement",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 9,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service"
+    },
+    {
+      "id": "refuse",
+      "symbolId": "refuse",
+      "x": 475,
+      "y": 660,
+      "config": {
+        "label": "Refusal",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 6,
+        "ports": {
+          "control": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          }
+        }
+      },
+      "parentId": "service",
+      "canvasId": "canvas:component:service"
+    },
+    {
+      "id": "adapter",
+      "symbolId": "act",
+      "x": 1660,
+      "y": 395,
+      "config": {
+        "label": "Adapter",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          },
+          "interiorColorSlot": 0
+        },
+        "colorSlot": 10,
+        "ports": {
+          "in": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 10
+              }
+            ]
+          },
+          "out": {
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 9
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "operator",
+      "aSide": "out",
+      "b": "request",
+      "bSide": "out",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w2",
+      "a": "request",
+      "aSide": "out",
+      "b": "admit",
+      "bSide": "in",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "grant",
+      "aSide": "out",
+      "b": "admit",
+      "bSide": "control",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "limit",
+      "aSide": "out",
+      "b": "admit",
+      "bSide": "control",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w5",
+      "a": "admit",
+      "aSide": "out",
+      "b": "queue",
+      "bSide": "in",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "reserve",
+        "direction": "forward",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w6",
+      "a": "queue",
+      "aSide": "out",
+      "b": "relay",
+      "bSide": "in",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "work",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w7",
+      "a": "breaker",
+      "aSide": "out",
+      "b": "relay",
+      "bSide": "control",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "control",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w8",
+      "a": "relay",
+      "aSide": "out",
+      "b": "effect",
+      "bSide": "out",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w9",
+      "a": "effect",
+      "aSide": "out",
+      "b": "adapter",
+      "bSide": "in",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w10",
+      "a": "adapter",
+      "aSide": "out",
+      "b": "result",
+      "bSide": "out",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "result",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w11",
+      "a": "result",
+      "aSide": "out",
+      "b": "reconcile",
+      "bSide": "in",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w12",
+      "a": "reconcile",
+      "aSide": "out",
+      "b": "settle",
+      "bSide": "in",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "confirmed",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w13",
+      "a": "settle",
+      "aSide": "out",
+      "b": "queue",
+      "bSide": "control",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "release",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w14",
+      "a": "admit",
+      "aSide": "out",
+      "b": "refuse",
+      "bSide": "control",
+      "canvasId": "canvas:component:service",
+      "config": {
+        "label": "refused",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    }
+  ],
+  "references": []
+}

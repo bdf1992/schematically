@@ -27,11 +27,16 @@ Recovery is browser-local and separate from normal `.sov` File Save behavior.
 SovSchematicAPI.file.info()
 SovSchematicAPI.file.document()
 SovSchematicAPI.file.package()
+SovSchematicAPI.file.svg({pad: 48})
 SovSchematicAPI.file.parse(text)
 SovSchematicAPI.file.open(payload, name)
 ```
 
 `file.package()` returns the same `soveraeign.schematic/package@0.1` payload used by File → Export Package.
+
+`file.svg()` returns standalone SVG with computed theme styles, embedded graphics and content bounds. File → Export SVG and `scripts/export_svg.py` use this same persistence implementation.
+
+Component presentation sizes share one admission policy across file loading, browser CRUD, HTTP and MCP: missing width/height default to 112/84, finite numeric values normalize to minima 80/64, and admitted larger sizes have no editor-only ceiling. Plane presets remain 320/220 and a Point retains its fixed footprint. Resize gestures additionally preserve the space required by hosted children.
 
 ## CRUD
 
@@ -49,6 +54,14 @@ Resources are `component`, `wire`, and `reference`.
 Every mutation produces the same revisioned receipt semantics as MCP/HTTP adapters. Wire writes cannot bypass surface/Port reachability.
 
 
+## Markers
+
+```js
+SovSchematicAPI.markers()
+```
+
+Returns `{id, severity, message, rule}` for every current `document.get()`/CRUD validation finding, straight from the same check the core runs on write — no separate legality is computed for the view. The renderer draws these as a badge on each carrying element and a total count in the status area.
+
 ## Editor/history API
 
 `window.SovSchematicAPI` additionally exposes `history.list/undo/redo`, `checkpoints.list/create/restore`, semantic selection clipboard helpers, and view appearance/global-rate accessors. MCP exposes history undo/redo and checkpoint list/create/restore for its file-backed document.
@@ -63,3 +76,32 @@ Port Connections may carry `access: none | read | write | read-write`. Wire conf
 Wire endpoints accept canonical built-in attachment IDs (`self`, `start`, `end`, `left`, `right`, `top`), template-declared attachment IDs, or their document@0.1 compatibility Port IDs at Wire endpoints. Returned Wire records preserve canonical endpoint references in `aAttachment` / `bAttachment` while retaining `aSide` / `bSide` for compatibility.
 
 Wire ends may be free: create with `aAttachment: {kind:'free',x,y}` (and/or `bAttachment`), rebind with `a`/`aSide`, free again with a free attachment. Two bound ends must share an exposed surface.
+
+
+## Runs (state space, slice 1c)
+
+```js
+SovSchematicAPI.run.start({inputs, seed, budget})   // every key optional; budget at most 1000000
+SovSchematicAPI.run.step(handle)                    // one tick
+SovSchematicAPI.run.settle(handle)                  // quiet | oscillating {period, subjects} | budget {left}
+SovSchematicAPI.run.trace(handle)                   // the trace in `result`
+SovSchematicAPI.run.query(handle, {entity, point, channel, observable})   // point and channel optional
+SovSchematicAPI.run.replay(trace)
+```
+
+Each returns a run receipt, `soveraeign.schematic/run-receipt@0.1` (`DATA-FORMATS.md`), identical to the one HTTP and
+MCP return for the same document and call. Runs live in an in-memory registry beside the document. A start returns
+the run's content-derived `runId` and a new `handle`, `<runId>.<n>` with `n` counting this page's starts from 1; step,
+settle, trace and query take the handle (`RUN_NOT_FOUND` otherwise, a bare run id included), so two starts with the same
+inputs are two runs and never touch each other. A replay is not registered: its receipt has `handle: null`. A run always
+starts from the current document (`document.get()`), and replay replays against it. A budget over 1,000,000 is refused
+with `INPUT_INVALID` (the engine's `startRun` itself has no cap). A refused receipt's `error.details` carries what the
+refusal names (`refusals`, `{tick, left}`, `fields`, `entry`, ...). None of these calls captures history, changes the
+document or its revision, or saves recovery. Packs come from the page's `<script type="application/json"
+id="sov-packs">`, which `build.py` fills from `data/*.pack.json`; the unbuilt `index.source.html` carries an empty list,
+so a start or replay of a document that references a definition there is refused with `PACK_INVALID`, "this page
+carries no packs".
+
+The editor fills defaults into a document it opens and advances its revision, so a document opened in the browser
+hashes differently from the same file loaded by `node` or the server: a trace recorded against the file does not
+replay against the opened document (`REPLAY_KEY_MISMATCH`, `documentHash`).

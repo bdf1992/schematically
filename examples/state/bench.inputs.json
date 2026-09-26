@@ -1,0 +1,1808 @@
+[
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": true,
+    "at": 1
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": false,
+    "at": 9
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": true,
+    "at": 22
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": false,
+    "at": 30
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": true,
+    "at": 32
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": false,
+    "at": 33
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": true,
+    "at": 36
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": false,
+    "at": 39
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": true,
+    "at": 44
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": false,
+    "at": 47
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": true,
+    "at": 48
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": false,
+    "at": 52
+  },
+  {
+    "entity": "S00",
+    "point": "self",
+    "value": true,
+    "at": 60
+  },
+  {
+    "entity": "S01",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S01",
+    "point": "self",
+    "value": true,
+    "at": 7
+  },
+  {
+    "entity": "S01",
+    "point": "self",
+    "value": false,
+    "at": 13
+  },
+  {
+    "entity": "S01",
+    "point": "self",
+    "value": true,
+    "at": 14
+  },
+  {
+    "entity": "S01",
+    "point": "self",
+    "value": false,
+    "at": 31
+  },
+  {
+    "entity": "S01",
+    "point": "self",
+    "value": true,
+    "at": 35
+  },
+  {
+    "entity": "S01",
+    "point": "self",
+    "value": false,
+    "at": 38
+  },
+  {
+    "entity": "S01",
+    "point": "self",
+    "value": true,
+    "at": 40
+  },
+  {
+    "entity": "S01",
+    "point": "self",
+    "value": false,
+    "at": 41
+  },
+  {
+    "entity": "S01",
+    "point": "self",
+    "value": true,
+    "at": 50
+  },
+  {
+    "entity": "S01",
+    "point": "self",
+    "value": false,
+    "at": 51
+  },
+  {
+    "entity": "S01",
+    "point": "self",
+    "value": true,
+    "at": 54
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": true,
+    "at": 0
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": false,
+    "at": 5
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": true,
+    "at": 6
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": false,
+    "at": 8
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": true,
+    "at": 10
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": false,
+    "at": 23
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": true,
+    "at": 31
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": false,
+    "at": 41
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": true,
+    "at": 44
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": false,
+    "at": 46
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": true,
+    "at": 47
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": false,
+    "at": 50
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": true,
+    "at": 57
+  },
+  {
+    "entity": "S02",
+    "point": "self",
+    "value": false,
+    "at": 59
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": true,
+    "at": 0
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": false,
+    "at": 12
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": true,
+    "at": 14
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": false,
+    "at": 16
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": true,
+    "at": 17
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": false,
+    "at": 29
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": true,
+    "at": 30
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": false,
+    "at": 37
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": true,
+    "at": 41
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": false,
+    "at": 52
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": true,
+    "at": 55
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": false,
+    "at": 58
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": true,
+    "at": 59
+  },
+  {
+    "entity": "S03",
+    "point": "self",
+    "value": false,
+    "at": 60
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": true,
+    "at": 0
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": false,
+    "at": 1
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": true,
+    "at": 6
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": false,
+    "at": 7
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": true,
+    "at": 20
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": false,
+    "at": 26
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": true,
+    "at": 32
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": false,
+    "at": 34
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": true,
+    "at": 38
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": false,
+    "at": 42
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": true,
+    "at": 45
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": false,
+    "at": 47
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": true,
+    "at": 49
+  },
+  {
+    "entity": "S04",
+    "point": "self",
+    "value": false,
+    "at": 57
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": true,
+    "at": 5
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": false,
+    "at": 13
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": true,
+    "at": 17
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": false,
+    "at": 21
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": true,
+    "at": 22
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": false,
+    "at": 28
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": true,
+    "at": 32
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": false,
+    "at": 33
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": true,
+    "at": 34
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": false,
+    "at": 39
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": true,
+    "at": 42
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": false,
+    "at": 47
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": true,
+    "at": 48
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": false,
+    "at": 55
+  },
+  {
+    "entity": "S05",
+    "point": "self",
+    "value": true,
+    "at": 59
+  },
+  {
+    "entity": "S06",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S06",
+    "point": "self",
+    "value": true,
+    "at": 11
+  },
+  {
+    "entity": "S06",
+    "point": "self",
+    "value": false,
+    "at": 17
+  },
+  {
+    "entity": "S06",
+    "point": "self",
+    "value": true,
+    "at": 19
+  },
+  {
+    "entity": "S06",
+    "point": "self",
+    "value": false,
+    "at": 23
+  },
+  {
+    "entity": "S06",
+    "point": "self",
+    "value": true,
+    "at": 29
+  },
+  {
+    "entity": "S06",
+    "point": "self",
+    "value": false,
+    "at": 37
+  },
+  {
+    "entity": "S06",
+    "point": "self",
+    "value": true,
+    "at": 53
+  },
+  {
+    "entity": "S06",
+    "point": "self",
+    "value": false,
+    "at": 57
+  },
+  {
+    "entity": "S06",
+    "point": "self",
+    "value": true,
+    "at": 60
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": true,
+    "at": 0
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": false,
+    "at": 6
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": true,
+    "at": 7
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": false,
+    "at": 12
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": true,
+    "at": 13
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": false,
+    "at": 19
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": true,
+    "at": 23
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": false,
+    "at": 37
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": true,
+    "at": 38
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": false,
+    "at": 49
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": true,
+    "at": 50
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": false,
+    "at": 52
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": true,
+    "at": 53
+  },
+  {
+    "entity": "S07",
+    "point": "self",
+    "value": false,
+    "at": 60
+  },
+  {
+    "entity": "S08",
+    "point": "self",
+    "value": true,
+    "at": 0
+  },
+  {
+    "entity": "S08",
+    "point": "self",
+    "value": false,
+    "at": 11
+  },
+  {
+    "entity": "S08",
+    "point": "self",
+    "value": true,
+    "at": 14
+  },
+  {
+    "entity": "S08",
+    "point": "self",
+    "value": false,
+    "at": 15
+  },
+  {
+    "entity": "S08",
+    "point": "self",
+    "value": true,
+    "at": 19
+  },
+  {
+    "entity": "S08",
+    "point": "self",
+    "value": false,
+    "at": 35
+  },
+  {
+    "entity": "S08",
+    "point": "self",
+    "value": true,
+    "at": 43
+  },
+  {
+    "entity": "S08",
+    "point": "self",
+    "value": false,
+    "at": 44
+  },
+  {
+    "entity": "S08",
+    "point": "self",
+    "value": true,
+    "at": 45
+  },
+  {
+    "entity": "S08",
+    "point": "self",
+    "value": false,
+    "at": 48
+  },
+  {
+    "entity": "S08",
+    "point": "self",
+    "value": true,
+    "at": 51
+  },
+  {
+    "entity": "S09",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S09",
+    "point": "self",
+    "value": true,
+    "at": 11
+  },
+  {
+    "entity": "S09",
+    "point": "self",
+    "value": false,
+    "at": 16
+  },
+  {
+    "entity": "S09",
+    "point": "self",
+    "value": true,
+    "at": 21
+  },
+  {
+    "entity": "S09",
+    "point": "self",
+    "value": false,
+    "at": 26
+  },
+  {
+    "entity": "S09",
+    "point": "self",
+    "value": true,
+    "at": 29
+  },
+  {
+    "entity": "S09",
+    "point": "self",
+    "value": false,
+    "at": 37
+  },
+  {
+    "entity": "S09",
+    "point": "self",
+    "value": true,
+    "at": 43
+  },
+  {
+    "entity": "S09",
+    "point": "self",
+    "value": false,
+    "at": 46
+  },
+  {
+    "entity": "S09",
+    "point": "self",
+    "value": true,
+    "at": 54
+  },
+  {
+    "entity": "S09",
+    "point": "self",
+    "value": false,
+    "at": 56
+  },
+  {
+    "entity": "S10",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S10",
+    "point": "self",
+    "value": true,
+    "at": 1
+  },
+  {
+    "entity": "S10",
+    "point": "self",
+    "value": false,
+    "at": 15
+  },
+  {
+    "entity": "S10",
+    "point": "self",
+    "value": true,
+    "at": 26
+  },
+  {
+    "entity": "S10",
+    "point": "self",
+    "value": false,
+    "at": 29
+  },
+  {
+    "entity": "S10",
+    "point": "self",
+    "value": true,
+    "at": 34
+  },
+  {
+    "entity": "S10",
+    "point": "self",
+    "value": false,
+    "at": 42
+  },
+  {
+    "entity": "S10",
+    "point": "self",
+    "value": true,
+    "at": 59
+  },
+  {
+    "entity": "S11",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S11",
+    "point": "self",
+    "value": true,
+    "at": 8
+  },
+  {
+    "entity": "S11",
+    "point": "self",
+    "value": false,
+    "at": 23
+  },
+  {
+    "entity": "S11",
+    "point": "self",
+    "value": true,
+    "at": 27
+  },
+  {
+    "entity": "S11",
+    "point": "self",
+    "value": false,
+    "at": 28
+  },
+  {
+    "entity": "S11",
+    "point": "self",
+    "value": true,
+    "at": 30
+  },
+  {
+    "entity": "S11",
+    "point": "self",
+    "value": false,
+    "at": 40
+  },
+  {
+    "entity": "S11",
+    "point": "self",
+    "value": true,
+    "at": 47
+  },
+  {
+    "entity": "S11",
+    "point": "self",
+    "value": false,
+    "at": 55
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": true,
+    "at": 3
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": false,
+    "at": 4
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": true,
+    "at": 14
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": false,
+    "at": 17
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": true,
+    "at": 24
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": false,
+    "at": 28
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": true,
+    "at": 37
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": false,
+    "at": 39
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": true,
+    "at": 40
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": false,
+    "at": 43
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": true,
+    "at": 44
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": false,
+    "at": 57
+  },
+  {
+    "entity": "S12",
+    "point": "self",
+    "value": true,
+    "at": 58
+  },
+  {
+    "entity": "S13",
+    "point": "self",
+    "value": true,
+    "at": 0
+  },
+  {
+    "entity": "S13",
+    "point": "self",
+    "value": false,
+    "at": 12
+  },
+  {
+    "entity": "S13",
+    "point": "self",
+    "value": true,
+    "at": 16
+  },
+  {
+    "entity": "S13",
+    "point": "self",
+    "value": false,
+    "at": 24
+  },
+  {
+    "entity": "S13",
+    "point": "self",
+    "value": true,
+    "at": 25
+  },
+  {
+    "entity": "S13",
+    "point": "self",
+    "value": false,
+    "at": 29
+  },
+  {
+    "entity": "S13",
+    "point": "self",
+    "value": true,
+    "at": 34
+  },
+  {
+    "entity": "S13",
+    "point": "self",
+    "value": false,
+    "at": 39
+  },
+  {
+    "entity": "S13",
+    "point": "self",
+    "value": true,
+    "at": 44
+  },
+  {
+    "entity": "S13",
+    "point": "self",
+    "value": false,
+    "at": 47
+  },
+  {
+    "entity": "S13",
+    "point": "self",
+    "value": true,
+    "at": 59
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": true,
+    "at": 1
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": false,
+    "at": 3
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": true,
+    "at": 6
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": false,
+    "at": 9
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": true,
+    "at": 14
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": false,
+    "at": 18
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": true,
+    "at": 22
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": false,
+    "at": 28
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": true,
+    "at": 33
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": false,
+    "at": 40
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": true,
+    "at": 41
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": false,
+    "at": 43
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": true,
+    "at": 53
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": false,
+    "at": 55
+  },
+  {
+    "entity": "S14",
+    "point": "self",
+    "value": true,
+    "at": 59
+  },
+  {
+    "entity": "S15",
+    "point": "self",
+    "value": true,
+    "at": 0
+  },
+  {
+    "entity": "S15",
+    "point": "self",
+    "value": false,
+    "at": 11
+  },
+  {
+    "entity": "S15",
+    "point": "self",
+    "value": true,
+    "at": 24
+  },
+  {
+    "entity": "S15",
+    "point": "self",
+    "value": false,
+    "at": 28
+  },
+  {
+    "entity": "S15",
+    "point": "self",
+    "value": true,
+    "at": 29
+  },
+  {
+    "entity": "S15",
+    "point": "self",
+    "value": false,
+    "at": 37
+  },
+  {
+    "entity": "S15",
+    "point": "self",
+    "value": true,
+    "at": 38
+  },
+  {
+    "entity": "S15",
+    "point": "self",
+    "value": false,
+    "at": 45
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": true,
+    "at": 2
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": false,
+    "at": 15
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": true,
+    "at": 16
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": false,
+    "at": 19
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": true,
+    "at": 22
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": false,
+    "at": 29
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": true,
+    "at": 30
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": false,
+    "at": 31
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": true,
+    "at": 36
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": false,
+    "at": 38
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": true,
+    "at": 39
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": false,
+    "at": 43
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": true,
+    "at": 46
+  },
+  {
+    "entity": "S16",
+    "point": "self",
+    "value": false,
+    "at": 50
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": true,
+    "at": 0
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": false,
+    "at": 4
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": true,
+    "at": 10
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": false,
+    "at": 13
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": true,
+    "at": 15
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": false,
+    "at": 16
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": true,
+    "at": 18
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": false,
+    "at": 19
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": true,
+    "at": 21
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": false,
+    "at": 25
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": true,
+    "at": 29
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": false,
+    "at": 33
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": true,
+    "at": 42
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": false,
+    "at": 43
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": true,
+    "at": 48
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": false,
+    "at": 49
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": true,
+    "at": 51
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": false,
+    "at": 52
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": true,
+    "at": 53
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": false,
+    "at": 56
+  },
+  {
+    "entity": "S17",
+    "point": "self",
+    "value": true,
+    "at": 57
+  },
+  {
+    "entity": "S18",
+    "point": "self",
+    "value": true,
+    "at": 0
+  },
+  {
+    "entity": "S18",
+    "point": "self",
+    "value": false,
+    "at": 15
+  },
+  {
+    "entity": "S18",
+    "point": "self",
+    "value": true,
+    "at": 31
+  },
+  {
+    "entity": "S18",
+    "point": "self",
+    "value": false,
+    "at": 32
+  },
+  {
+    "entity": "S18",
+    "point": "self",
+    "value": true,
+    "at": 42
+  },
+  {
+    "entity": "S18",
+    "point": "self",
+    "value": false,
+    "at": 48
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": true,
+    "at": 0
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": false,
+    "at": 14
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": true,
+    "at": 16
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": false,
+    "at": 19
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": true,
+    "at": 23
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": false,
+    "at": 24
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": true,
+    "at": 30
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": false,
+    "at": 33
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": true,
+    "at": 42
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": false,
+    "at": 46
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": true,
+    "at": 48
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": false,
+    "at": 55
+  },
+  {
+    "entity": "S19",
+    "point": "self",
+    "value": true,
+    "at": 59
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": true,
+    "at": 6
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": false,
+    "at": 11
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": true,
+    "at": 22
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": false,
+    "at": 33
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": true,
+    "at": 34
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": false,
+    "at": 38
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": true,
+    "at": 43
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": false,
+    "at": 48
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": true,
+    "at": 50
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": false,
+    "at": 52
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": true,
+    "at": 53
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": false,
+    "at": 56
+  },
+  {
+    "entity": "S20",
+    "point": "self",
+    "value": true,
+    "at": 57
+  },
+  {
+    "entity": "S21",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S21",
+    "point": "self",
+    "value": true,
+    "at": 1
+  },
+  {
+    "entity": "S21",
+    "point": "self",
+    "value": false,
+    "at": 2
+  },
+  {
+    "entity": "S21",
+    "point": "self",
+    "value": true,
+    "at": 3
+  },
+  {
+    "entity": "S21",
+    "point": "self",
+    "value": false,
+    "at": 8
+  },
+  {
+    "entity": "S21",
+    "point": "self",
+    "value": true,
+    "at": 18
+  },
+  {
+    "entity": "S21",
+    "point": "self",
+    "value": false,
+    "at": 21
+  },
+  {
+    "entity": "S21",
+    "point": "self",
+    "value": true,
+    "at": 23
+  },
+  {
+    "entity": "S21",
+    "point": "self",
+    "value": false,
+    "at": 45
+  },
+  {
+    "entity": "S21",
+    "point": "self",
+    "value": true,
+    "at": 52
+  },
+  {
+    "entity": "S21",
+    "point": "self",
+    "value": false,
+    "at": 53
+  },
+  {
+    "entity": "S21",
+    "point": "self",
+    "value": true,
+    "at": 57
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": true,
+    "at": 0
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": false,
+    "at": 11
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": true,
+    "at": 12
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": false,
+    "at": 14
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": true,
+    "at": 16
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": false,
+    "at": 23
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": true,
+    "at": 25
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": false,
+    "at": 27
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": true,
+    "at": 28
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": false,
+    "at": 40
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": true,
+    "at": 41
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": false,
+    "at": 44
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": true,
+    "at": 48
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": false,
+    "at": 53
+  },
+  {
+    "entity": "S22",
+    "point": "self",
+    "value": true,
+    "at": 59
+  },
+  {
+    "entity": "S23",
+    "point": "self",
+    "value": false,
+    "at": 0
+  },
+  {
+    "entity": "S23",
+    "point": "self",
+    "value": true,
+    "at": 1
+  },
+  {
+    "entity": "S23",
+    "point": "self",
+    "value": false,
+    "at": 5
+  },
+  {
+    "entity": "S23",
+    "point": "self",
+    "value": true,
+    "at": 11
+  },
+  {
+    "entity": "S23",
+    "point": "self",
+    "value": false,
+    "at": 13
+  },
+  {
+    "entity": "S23",
+    "point": "self",
+    "value": true,
+    "at": 15
+  },
+  {
+    "entity": "S23",
+    "point": "self",
+    "value": false,
+    "at": 20
+  },
+  {
+    "entity": "S23",
+    "point": "self",
+    "value": true,
+    "at": 31
+  },
+  {
+    "entity": "S23",
+    "point": "self",
+    "value": false,
+    "at": 57
+  }
+]
