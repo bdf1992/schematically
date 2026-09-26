@@ -54,9 +54,12 @@ def main() -> None:
     cl = r['closed']
     assert cl['form']['regions']['interior']['state'] == 'closed', cl['form']
     assert cl['signalMode'] == 'source' and cl['attachmentDefaults'] in (None, 'standard') and cl['ports'] == ['in', 'out', 'control'], cl
-    assert cl['presentation'] == {'size': {'w': 100, 'h': 80}}, cl['presentation']
-    # A typed Component is untouched: no preset exists for it.
-    assert r['c']['form']['dimension'] == 2 and r['c']['ports'] == ['in', 'out', 'control'] and r['c']['presentation'] is None, r['c']
+    # Contract #50 step 11: the loader applies the one defaults table, so the authored size stands among
+    # the preset's graphic and the defaults (was: the presentation exactly {'size': {'w': 100, 'h': 80}}).
+    assert cl['presentation'] == {'size': {'w': 100, 'h': 80}, 'graphic': {'kind': 'none', 'ref': 'sym-plane', 'svg': ''}, 'interiorColorSlot': 0, 'text': '', 'padding': 16, 'backdrop': 'auto'}, cl['presentation']
+    # A typed Component takes no preset, only the defaults (was: presentation None, before step 11).
+    assert r['c']['form']['dimension'] == 2 and r['c']['ports'] == ['in', 'out', 'control'], r['c']
+    assert r['c']['presentation'] == {'graphic': {'kind': 'symbol', 'ref': 'sym-act', 'svg': ''}, 'size': {'w': 112, 'h': 84}, 'interiorColorSlot': 0, 'text': '', 'padding': 16, 'backdrop': 'auto'}, r['c']
     # An authored 'standard' on a Plane is kept on the runtime record, survives re-normalization,
     # and is saved; 'none' is always saved; a typed Component's 'standard' is the default and is not.
     assert r['std'] == {'api': 'standard', 'again': 'standard', 'againPorts': ['in', 'out', 'control'], 'savedClosed': 'standard', 'savedPl': 'none', 'actSaved': None}, r['std']

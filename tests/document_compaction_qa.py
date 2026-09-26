@@ -47,11 +47,13 @@ with sync_playwright() as p:
         assert 'canvas' not in w and 'duplex' not in w and 'attachments' not in w,w
         assert w['aSide'] and w['bSide'] and w['aAttachment']['pointId'],w  # schema-required endpoint names stay
     assert 'canvas' not in doc
-    # Default contracts are minimal and dimension-specific.
-    assert list(comp['a']['config']['ports'])==['in','out','control'],comp['a']['config']['ports']
+    # Default contracts are minimal and dimension-specific. Contract #50: a contract equal to its default
+    # is omitted, so default contracts are not saved at all (was: ports ['in','out','control'] / ['out']).
+    assert 'ports' not in comp['a']['config'],comp['a']['config']
     assert comp['pl']['config']['attachmentDefaults']=='none' and comp['pl']['config'].get('ports',{})=={},comp['pl']['config']
-    assert list(comp['pt']['config']['ports'])==['out'],comp['pt']['config']['ports']
-    assert comp['pt']['placement']['kind']=='edge' and comp['pt']['placement']['hostId']=='pl',comp['pt']['placement']
+    assert 'ports' not in comp['pt']['config'],comp['pt']['config']
+    # The host follows from the canvas (was: placement.hostId=='pl'); an edge Point's x/y follow from its placement.
+    assert comp['pt']['placement']['kind']=='edge' and comp['pt']['canvasId']=='canvas:component:pl' and 'x' not in comp['pt'],comp['pt']
     assert 'placement' not in comp['a'],comp['a']  # free placement is implied by x/y
     # Checkpoints embedded in the file are compact too.
     cp=doc['meta']['checkpoints'][0]['document']
