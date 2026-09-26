@@ -306,7 +306,7 @@ From slice 4, transitions are marked **controllable** or **uncontrollable**, as 
 
 A **run** is one replay key (document content hash, resolved definitions, runtime version, initial registered values, seed) plus a budget. The engine is deterministic: no wall clock, no randomness except draws from the declared seed, and every draw is recorded. Anything outside that guarantee enters as a recorded result (see *Generative steps and attempts*).
 
-**Document identity is content, not revision.** The document's `revision` is a counter, and undo restores older content with its older revision, so two different documents can carry the same number. The replay key therefore holds `documentHash`: SHA-256 over the canonical encoding of `compactDocument()` with `revision` and timestamps removed. `revision` stays on the trace as a label for people.
+**Document identity is content, not revision.** The document's `revision` is a counter, and undo restores older content with its older revision, so two different documents can carry the same number. The replay key therefore holds `documentHash`: SHA-256 over the canonical encoding of `compactDocument()` with `revision` and timestamps removed. `revision` stays on the trace as a label for people. The hash must not depend on where the document is held: opening a document in the editor may add runtime defaults, but hashing it must give the same answer as hashing the file. *(Not yet true: the editor's defaults currently change the hash. Found by slice 1c; tracked as its own contract.)*
 
 1. A source's registered value changes; the change is an event.
 2. The event leaves through a declared port (see *Ports*) and enters a Path.
@@ -386,7 +386,7 @@ Decided before building the first runtime, so the contract names outcomes, not c
 One `schematic.run.step` is **one tick**: the smallest unit whose result is deterministic. `schematic.run.settle` steps until one of three typed results:
 
 - **quiet**: the queue is empty;
-- **oscillating `{period, subjects}`**: the run has entered a cycle. At each tick the runtime hashes the full state that determines the future: committed signal state, every `device.state`, and the pending queue with arrival times taken relative to the current tick. A repeated hash proves a cycle; committed signal state alone would not, because transitions still in flight can differ between two ticks that look the same. A NOT feeding itself ends here, not in budget exhaustion.
+- **oscillating `{period, subjects}`**: the run has entered a cycle. At each tick the runtime hashes the full state that determines the future: committed signal state, every `device.state`, and the pending queue with arrival times taken relative to the current tick. A repeated hash proves a cycle; committed signal state alone would not, because transitions still in flight can differ between two ticks that look the same. A NOT feeding itself ends here, not in budget exhaustion. Where a cycle passes through a port with stochastic order, draws are keyed by the absolute tick, which the state hash does not hold: `oscillating` then means the state recurred, not that the future is strictly periodic.
 - **budget spent**: a typed refusal naming what was left in the queue.
 
 ### Generative steps and attempts
