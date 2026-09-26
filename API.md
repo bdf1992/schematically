@@ -54,6 +54,15 @@ Every mutation produces the same revisioned receipt semantics as MCP/HTTP adapte
 `window.SovSchematicAPI` additionally exposes `history.list/undo/redo`, `checkpoints.list/create/restore`, semantic selection clipboard helpers, and view appearance/global-rate/zoom accessors (`view.zoom()`, `view.setZoom(z)`). MCP exposes history undo/redo and checkpoint list/create/restore for its file-backed document.
 
 
+## Logic API
+
+A document whose components declare `config.logic` runs as a circuit (the shared runtime `src/07-logic-core.js`, equal to `scripts/logic_sov.py`).
+
+- `logic.run({vector})` or `logic.run({steps: [{set, pulse?}], record?})`: stateless. Returns `{ok, inputs, levels, outputs, steps: [{set, outputs, settle, transitions, time}], wires: {id: {value, a, b}}, events?}` or a typed refusal `{ok: false, refused, reason, next_operation}`. MCP's `schematic.logic.run` returns the same.
+- `logic.live.start(vector)`, `.set(vector)`, `.pulse(clock, vector)`, `.state()`, `.stop()`: draw the circuit's state on the canvas and keep it (flip-flops, latches) between steps. Inputs a vector does not name start at 0 and are then named in `state().vector`. A move keeps the state; a change to the logic rebuilds the circuit from power-on with the current inputs (`state().rebuilt` counts). While live, a bit input's chip is its switch.
+- `logic.composites.add(name, document)`, `.list()`, `.remove(name)`: documents that `{"composite": name}` parts resolve to, by file name. Without one, a composite part is refused `NO_COMPOSITE`.
+
+
 ### Access axis
 Port Connections may carry `access: none | read | write | read-write`. Wire config may carry `forwardOperation` / `reverseOperation: none | read | write`. Direction, access, and authority are independent.
 

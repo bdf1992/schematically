@@ -1,7 +1,9 @@
 # Module ownership — 0.1
 
 - `00-state.js` — runtime state and DOM references.
+- `04-logic-pack.js` — the logic pack's semantics, generated from `packs/logic/gates.json` by `scripts/build_logic_pack_js.py`.
 - `05-data-core.js` — transport-neutral documents, packages, validation, CRUD, reachability, primitive template presets, and compact serialization (`compactDocument`).
+- `07-logic-core.js` — logic runtime shared by the editor, `mcp/server.mjs` and Node (`scripts/logic_run.mjs`); a port of `scripts/logic_sov.py`, held equal to it by `tests/logic_core_parity_qa.py`. No DOM.
 - `10-model.js` — Component/Wire/Port semantic normalization.
 - `20-ui.js` — panels, palette/grid UI helpers.
 - `25-signal.js` — derived signal state.
@@ -9,6 +11,7 @@
 - `40-routing.js` — Wire geometry.
 - `50-selection.js` — selection projection.
 - `55-render.js` — SVG projection.
+- `57-logic-live.js` — live logic state on the canvas: wire values, pin chips (hover, selection, zoom ≥ 100%, inputs always), input switches.
 - `60-interactions.js` — pointer/drag gestures.
 - `70-editor-controls.js` — selection/form editing controls.
 - `75-persistence.js` — File lifecycle, `.sov`/`.sovpak`, recovery, rehydration.

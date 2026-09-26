@@ -40,6 +40,7 @@ Additional server tools:
 - `schematic.checkpoint.list`
 - `schematic.checkpoint.create`
 - `schematic.checkpoint.restore`
+- `schematic.logic.run` — run a logic document (inputs as `vector`, or `steps` of `{set, pulse?}`); read-only, refusals typed
 
 ## Mutation discipline
 

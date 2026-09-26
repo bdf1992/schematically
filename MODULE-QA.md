@@ -6,6 +6,7 @@ Engineering release estimate grounded in the current automated suite and manual 
 |---|---:|---|---|---|---|---|
 | `00-state.js` | 288 | Medium | **GREEN** | runtime state + palette/color kernel | theme + performance + mutation | — |
 | `05-data-core.js` | 446 | High | **GREEN** | formats, canonical CRUD, boundary/lock legality | file, boundary, Browser/HTTP/MCP golden, mutation | compatibility projections remain for 0.1 |
+| `07-logic-core.js` | 289 | High | **GREEN** | logic runtime shared by editor, MCP and Node | event-for-event parity with `scripts/logic_sov.py` on every example + refusals, mutation | the event budget itself is not observable through the API |
 | `06-attachment-core.js` | 102 | High | **GREEN** | canonical 0D topology + aliases + data-declared 2D attachment defaults | point/parity/cardinality/mutation | full cell/facet grammar is post-RC |
 | `10-model.js` | 510 | High | **GREEN** | component normalization + attachment configuration + host surfaces | host, R/W, attachment suites | compatibility `config.ports` still projected |
 | `15-editor-kernel.js` | 240 | High | **GREEN** | history/checkpoints/clipboard/object state | editor + delete/undo + agent history | — |
@@ -15,6 +16,7 @@ Engineering release estimate grounded in the current automated suite and manual 
 | `40-routing.js` | 497 | High | **YELLOW** | carrier route geometry/cache/terminal identity | host, terminal identity, visual, performance | scaling beyond small/medium diagrams |
 | `50-selection.js` | 100 | Medium | **GREEN** | selection + inspector projection | editor + point parity | Wire selection remains index-backed internally |
 | `55-render.js` | 498 | High | **YELLOW** | SVG projection, packet/mark/tag geometry, themes | visual, R/W, performance, render-idempotence | whole-scene SVG projection scales with graph size |
+| `57-logic-live.js` | 138 | Medium | **GREEN** | live logic overlay, pin chips, input switches | `logic_live_qa` (browser) against the definition and `logic_sov.py`, mutation | a document edit rebuilds the circuit from power-on (latched state is not carried across a logic change) |
 | `60-interactions.js` | 447 | High | **YELLOW** | pointer gestures, drag/settle/growth | 46-drag stress, attachment growth/parity | historically intermittent; watchdog retained |
 | `70-editor-controls.js` | 173 | Medium | **GREEN** | UI→semantic mutation bindings | editor/file suites | — |
 | `75-persistence.js` | 384 | High | **GREEN** | save/open/recovery/packages/runtime replacement | file + render-idempotence | — |

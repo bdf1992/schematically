@@ -243,6 +243,7 @@ function applyCamera(){
   workspace.style.setProperty('--zoom',String(currentZoom())); // labels clamp their screen size against this (app.css)
   zoomReadout.textContent=`${Math.round(currentZoom()*100)}%`;
   if(typeof applyGlyphSizeRule==='function')applyGlyphSizeRule();
+  if(typeof applyLogicChipVisibility==='function')applyLogicChipVisibility();
   requestAnimationFrame(positionSelectionBar);
 }
 function setPanMode(active){

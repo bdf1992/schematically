@@ -545,4 +545,5 @@ function renderWires(signalState=computeSignalState()){
     group.addEventListener('pointerleave',()=>{if(selected!==`wire:${i}`)clearWireVisualFocus()});
     if(selected===`wire:${i}`) focusWireVisual(i);
   });
+  if(typeof applyLogicLive==='function')applyLogicLive();
 }

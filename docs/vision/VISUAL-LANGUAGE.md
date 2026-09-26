@@ -140,6 +140,7 @@ The bake-off put two or three contenders per view side by side, drawn from the s
 | Size rule: a gate's glyph drawn under 40 px shows its rectangle (`svgSmall`), following the camera | `applyGlyphSizeRule` in `src/55-render.js`; `view.zoom()` / `view.setZoom()` in the API | `tests/glyph_size_rule_qa.py`: one variant per gate at every zoom, the small one exactly when height x zoom < 40 |
 | Composite parts as IEC boxes, qualified by their own document (HA, FA, Σ4, RG4, ...) | `composite_glyph()` in `scripts/logic_glyphs.py`, applied by `scripts/build_logic_examples.py` | `build_logic_examples.py --check` |
 | Landscape slices for more than two decisions: every pair, the rest held at the whole-unit plan, labelled as a slice | `landscape(pair=, held=)` in `scripts/optimize_sov.py`; `record_optimize` | `tests/plot_run_qa.py` (held values, projected marks, true values at named plans) |
+| Live logic state in the editor: wires high in the signal colour and low in ink, a chip at every pin shown on hover, selection or zoom ≥ 100% (always on inputs, where it is the switch) | `src/57-logic-live.js` over the shared runtime `src/07-logic-core.js`; `SovSchematicAPI.logic` and MCP `schematic.logic.run` | `tests/logic_live_qa.py` (browser, against the definition and `logic_sov.py`); `tests/logic_core_parity_qa.py` (event for event with `logic_sov.py`); `tests/logic_mcp_qa.py` |
 | Step-through on the run page: timing event by event (cursor, lane mark, log row, bus value), search node by node in the order decided (later nodes fade in outline and tree) | `STEPPER` in `scripts/plot_run.mjs` | `tests/run_page_qa.py` (browser) against the record; `tests/plot_run_qa.py` (step order is log order) |
 
 Making the tests fail on purpose (transient detection off, pruned nodes drawn live) fails them. Two defects surfaced while building: a bare `&` in the IEC AND qualifier made the glyph markup unparseable, which in the editor would have silently fallen back to the generic symbol; and monochrome exports still named the signal colour for the hidden glow.
@@ -175,9 +176,16 @@ node scripts/plot_run.mjs ripple.json schmitt.json learning.json week.json --out
 python scripts/export_svg.py examples/logic/half-adder.sov --logic-state A=1,B=1
 ```
 
+Live in the editor (open `examples/logic/half-adder.sov`, then in the console or through the API):
+
+```
+SovSchematicAPI.logic.live.start({A: 1, B: 0})   // click an input's chip to flip it
+SovSchematicAPI.logic.run({steps: [{set: {A: 1, B: 1}}]})
+```
+
 ## Residuals
 
 | Gap | What closes it |
 | --- | --- |
-| Pin chips are always on in exports; on hover, selection or zoom ≥ 100% in the editor | the logic runtime shared between editor and scripts, then an overlay in the editor |
-| Editor, API and MCP surfaces for the views | the view functions move into the editor's module set; `scripts/plot_run.mjs` is already plain JavaScript with no dependencies |
+| The run views (timing, landscape, search, timeline) live on the run page, not in the editor | a decision on where: a panel beside the canvas, a second tab, or a mode of the canvas itself; `scripts/plot_run.mjs` is already plain JavaScript with no dependencies |
+| A logic edit restarts a live circuit from power-on, so a latched value is lost | carry state by gate id across a rebuild where the gate survives unchanged |

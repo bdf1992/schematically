@@ -19,6 +19,7 @@ Tools:
 - `schematic.delete`
 - `schematic.document.get`
 - `schematic.document.replace`
+- `schematic.logic.run` — run the document as a logic circuit (`vector`, or `steps` of `{set, pulse?}`; `record`; `composites` by file name, else files beside the served document). The same answer as the browser's `SovSchematicAPI.logic.run`; changes nothing.
 
 Resources: `component`, `wire`, `reference`.
 
