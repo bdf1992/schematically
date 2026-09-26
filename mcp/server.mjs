@@ -9,6 +9,7 @@ const HERE=path.dirname(fileURLToPath(import.meta.url));
 // Absolute paths are not valid ESM specifiers on Windows; import by file:// URL everywhere.
 await import(pathToFileURL(path.join(HERE,'../src/03-canonical.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/03-notation-core.js')).href);
+await import(pathToFileURL(path.join(HERE,'../src/04-signal-model.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/06-attachment-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/05-data-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/07-state-space.js')).href);

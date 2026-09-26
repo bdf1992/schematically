@@ -9,14 +9,17 @@
 (function(root,factory){
   let Canonical=root.SovSchematicCanonical;
   if(!Canonical&&typeof module!=='undefined'&&module.exports)Canonical=require('./03-canonical.js');
+  let Model=root.SovSchematicSignalModel;
+  if(!Model&&typeof module!=='undefined'&&module.exports)Model=require('./04-signal-model.js');
   let Data=root.SovSchematicData;
   if(!Data&&typeof module!=='undefined'&&module.exports)Data=require('./05-data-core.js');
-  const api=factory(Canonical,Data);
+  const api=factory(Canonical,Data,Model);
   root.SovSchematicStateSpace=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(Canonical,Data){
+})(typeof globalThis!=='undefined'?globalThis:this,function(Canonical,Data,Model){
   if(!Canonical)throw new Error('SovSchematicCanonical core is required');
   if(!Data)throw new Error('SovSchematicData core is required');
+  if(!Model)throw new Error('SovSchematicSignalModel (src/04-signal-model.js) is required');
   const RECORD_FORMAT='soveraeign.schematic/state-record@0.1';
   const PACK_FORMAT='soveraeign.schematic/pack@0.1';
   const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
@@ -41,6 +44,13 @@
   const MESSAGE_KEYS=['id','root','parent','channel','payload','origin'];
   const HOP_EVENTS=['injected','arrived','sent','crossed','forwarded','delivered','refused','handled','absorbed','observed','buffered','released','waiting','joined','parked','resumed','replayed','ambiguous','controlled','asserted','edge'];
   const HOP_KEYS=['event','wire','to','reason','parkId','effectKey'];
+  // The first number in a JSON value that is not a safe integer, as {path, value}, or null.
+  function firstFraction(value,path){
+    if(typeof value==='number')return Number.isSafeInteger(value)?null:{path,value};
+    if(Array.isArray(value)){for(let i=0;i<value.length;i++){const f=firstFraction(value[i],`${path}[${i}]`);if(f)return f}return null}
+    if(isObject(value)){for(const key of Object.keys(value).sort()){const f=firstFraction(value[key],`${path}.${key}`);if(f)return f}return null}
+    return null;
+  }
   function checkMessageValue(v,errors){
     if(!isObject(v)){errors.push('value must be an object {id, root, parent, channel, payload, origin} for form message');return}
     unknownKeys(v,MESSAGE_KEYS,'value',errors);
@@ -48,7 +58,11 @@
     if(v.parent!==null&&!nonEmpty(v.parent))errors.push('value.parent must be null or a non-empty string');
     if(v.channel!==null&&typeof v.channel!=='string')errors.push('value.channel must be null or a string');
     if(v.payload===undefined)errors.push('value.payload must be present (null when empty)');
-    else{try{Canonical.canonicalize(v.payload)}catch(_){errors.push('value.payload must be JSON')}}
+    else{
+      try{Canonical.canonicalize(v.payload)}catch(_){errors.push('value.payload must be JSON')}
+      const fraction=firstFraction(v.payload,'value.payload');
+      if(fraction)errors.push(`${fraction.path} must be a safe integer (no floating point), not ${JSON.stringify(fraction.value)}`);
+    }
   }
   function validateRecord(record){
     const errors=[];
@@ -370,7 +384,6 @@
   }
 
   // --- Load checks (STATE-SPACE.md "Invariants", at load). Never throws, never mutates doc.
-  const EMITS=['out','duplex'],RECEIVES=['in','duplex','control','trigger'];
   function checkDocument(doc,packs){
     const refusals=[];
     const refuse=(code,subject,message)=>refusals.push(refusal(code,subject,message));
@@ -387,20 +400,14 @@
     for(const wire of d.wires){
       try{
         const subject=`wire:${wire.id}`,config=isObject(wire.config)?wire.config:{};
-        if(config.delay!==undefined&&!(Number.isInteger(config.delay)&&config.delay>=1))refuse('PATH_DELAY_INVALID',subject,`config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
+        // Delay 0 is a zero-delay Path (a cycle of them is refused when the run starts).
+        if(config.delay!==undefined&&!(Number.isInteger(config.delay)&&config.delay>=0))refuse('PATH_DELAY_INVALID',subject,`config.delay must be an integer >= 0, not ${JSON.stringify(config.delay)}`);
         const aPoint=endPoint(wire,'a'),bPoint=endPoint(wire,'b');
         if(!aPoint||!bPoint)continue; // a free end binds nothing
         const aSpec=specOf(wire.a,aPoint),bSpec=specOf(wire.b,bPoint);
         if(!aSpec||!bSpec)continue; // an unreachable end is the data core's validation
-        const flow=spec=>spec.flow||spec.defaultFlow||'duplex';
-        const direction=['none','forward','reverse','duplex'].includes(config.direction)?config.direction:wire.duplex?'duplex':'forward';
-        const aFlow=flow(aSpec),bFlow=flow(bSpec);
-        // Refused only when none of the Wire's declared directions is admitted by both flows:
-        // a duplex Wire from an out port to an in port carries forward only.
-        const carries={forward:EMITS.includes(aFlow)&&RECEIVES.includes(bFlow),reverse:EMITS.includes(bFlow)&&RECEIVES.includes(aFlow)};
-        const declared=direction==='none'?[]:direction==='duplex'?['forward','reverse']:[direction];
-        const admitted=!declared.length||declared.some(x=>carries[x]);
-        if(!admitted)refuse('PATH_DIRECTION_FLOW',subject,`direction ${direction} is not admitted by ports ${wire.a}.${aSpec.id} (${aFlow}) and ${wire.b}.${bSpec.id} (${bFlow})`);
+        // A Wire whose directions no port flow admits is not refused: the run blocks it and records
+        // it with the graph core's reason, as the graph core does.
         const theirs=new Set((bSpec.channels||[{id:'main'}]).map(c=>c.id));
         if(!(aSpec.channels||[{id:'main'}]).some(c=>theirs.has(c.id)))refuse('CHANNEL_MISMATCH',subject,`ports ${wire.a}.${aSpec.id} and ${wire.b}.${bSpec.id} share no channel`);
       }catch(error){refuse('DOCUMENT_INVALID',`wire:${wire?.id}`,String(error?.message||error))}
@@ -506,12 +513,12 @@
   const specChannels=spec=>(Array.isArray(spec?.channels)&&spec.channels.length?spec.channels:[{id:'main'}]).map(c=>c.id);
   const specFlow=spec=>spec.flow||spec.defaultFlow||'duplex';
   // The document's signal model is behaviour too. A non-Point Component with no bound definition is
-  // read through the graph core's own signalConfig (its declared signal, a gate glyph's combine, or
-  // the editor's default): a derived card becomes a combine@1 device over the Wires that reach it, an
-  // asserted one drives its level onto its out ports at power-on, a square clock schedules its edges.
+  // read through the signal model's signalConfig (src/04-signal-model.js: its declared signal, a gate
+  // glyph's combine, or the editor's default): a derived card becomes a combine@1 device over the Wires
+  // that reach it, an asserted one drives its level onto its out ports at power-on, a square clock
+  // schedules its edges.
   function impliedDevices(d){
-    const g=typeof globalThis!=='undefined'?globalThis:{},G=g.SovSchematicGraph,N=g.SovSchematicNotation,out={definitions:{},bind:{},sources:[],clocks:[]};
-    if(!G?.signalConfig)return out;
+    const g=typeof globalThis!=='undefined'?globalThis:{},N=g.SovSchematicNotation,out={definitions:{},bind:{},sources:[],clocks:[]};
     let glyphs={};try{const r=N?N.resolve(d):null;glyphs=r?.ok?(r.notation?.glyphs||{}):{}}catch(_){glyphs={}}
     for(const c of d.components){
       const config=isObject(c.config)?c.config:{};
@@ -520,7 +527,7 @@
       // A Point relays what reaches it (the engine's own 'point' role); every card has a signal,
       // declared or the editor's default (STATE-SPACE.md, What signalMode becomes).
       if(c.symbolId==='point')continue;
-      const sig=G.signalConfig(c,glyph);
+      const sig=Model.signalConfig(c,glyph);
       let specs=[];try{specs=Data.canonicalAttachmentPointDescriptors(c).filter(Boolean)}catch(_){specs=[]}
       const named=specs.filter(s=>NAME.test(s.id));
       const ins=named.filter(s=>specFlow(s)==='in').map(s=>s.id),outs=named.filter(s=>specFlow(s)==='out').map(s=>s.id);
@@ -570,20 +577,19 @@
   // What the run reads of the document, resolved once at start: each Wire's two ports, delay,
   // the directions it carries and the channels it shares; each Component's role; each merge.
   // Time: one tick is tickMs milliseconds (default 1). A Wire's stored delay is in ticks; without one,
-  // its latencyMs (the graph core's default when absent) is converted, never below one tick.
+  // its latencyMs (the signal model's default when absent) is converted, rounding half up; 0 ms is a
+  // zero-delay Path, run in delta rounds within its tick (a cycle of them is refused at start).
   function wireDelay(config,tickMs){
     if(config.delay!==undefined)return config.delay;
-    const g=typeof globalThis!=='undefined'?globalThis:{},fallback=Number(g.SovSchematicGraph?.DEFAULT_LATENCY_MS??10);
-    const ms=Math.round(Number.isFinite(Number(config.latencyMs))?Math.max(0,Number(config.latencyMs)):fallback);
-    return Math.max(1,msToTick(ms,tickMs));
+    const ms=Math.round(Number.isFinite(Number(config.latencyMs))?Math.max(0,Number(config.latencyMs)):Model.DEFAULT_LATENCY_MS);
+    return msToTick(ms,tickMs);
   }
   // Which legs of a Wire carry is the graph core's passability (src/07-graph-core.js build): the
   // Wire's direction, then each leg's emit and receive flows (legacy config.ports connections
-  // included) and its operation against the ports' access, read through the rule the graph core
-  // exports. A leg that does not carry is blocked with the graph core's reason. Without the graph
-  // core loaded (this file run alone) the port flows decide, as checkDocument reads them.
-  function passability(d,wire,G){
-    if(!G?.canEmit)return null;
+  // included) and its operation against the ports' access, read through the rule in
+  // src/04-signal-model.js that both engines share. A leg that does not carry is blocked with the
+  // graph core's reason, recorded once at start; a Wire that carries nothing is blocked, never refused.
+  function passability(d,wire,G=Model){
     const byId=new Map(d.components.map(c=>[c.id,c]));
     const bound=end=>!!wire[end]&&byId.has(wire[end])&&!Data.isFreeEndpoint(wire[end+'Attachment']);
     if(!bound('a')||!bound('b'))return {forward:false,reverse:false,blocked:[{wire:wire.id,reason:'free end'}]};
@@ -606,7 +612,6 @@
   }
   function topology(d,definitions,bind={},tickMs=1){
     const components={},merges={},wires=[],blocked=[];
-    const G=typeof globalThis!=='undefined'?globalThis.SovSchematicGraph:null;
     const specOf=(component,pointId)=>{try{return Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&(s.id===pointId||s.compatId===pointId))||null}catch(_){return null}};
     const byId=new Map(d.components.map(c=>[c.id,c]));
     for(const component of d.components){
@@ -627,8 +632,8 @@
       }
     }
     for(const wire of d.wires){
-      const passable=passability(d,wire,G);
-      if(passable)blocked.push(...passable.blocked);
+      const passable=passability(d,wire);
+      blocked.push(...passable.blocked);
       if(!Data.wireEndBound(wire,'a')||!Data.wireEndBound(wire,'b'))continue;
       const ends={};
       for(const end of ['a','b']){
@@ -638,11 +643,8 @@
       }
       if(!ends.a||!ends.b)continue;
       const config=isObject(wire.config)?wire.config:{};
-      const direction=['none','forward','reverse','duplex'].includes(config.direction)?config.direction:wire.duplex?'duplex':'forward';
-      const declared=direction==='none'?[]:direction==='duplex'?['forward','reverse']:[direction];
       const theirs=new Set(ends.b.channels);
-      const forward=passable?passable.forward:declared.includes('forward')&&EMITS.includes(ends.a.flow)&&RECEIVES.includes(ends.b.flow);
-      const reverse=passable?passable.reverse:declared.includes('reverse')&&EMITS.includes(ends.b.flow)&&RECEIVES.includes(ends.a.flow);
+      const {forward,reverse}=passable;
       // A Wire that reaches a combine device lands on its own input, `<port>:<wire>`: the device reads
       // each Wire's latest level, as the graph core does, and never a merge of them.
       const land=(end,into)=>{
@@ -662,6 +664,26 @@
     wires.sort((x,y)=>cmp(x.id,y.id));
     for(const c of Object.values(components))if(c.combine){const p=definitions[c.definition].parameters;p.data.sort();p.control.sort();c.inputs.sort()}
     return {components,merges,wires,blocked};
+  }
+  // Every cycle made only of zero-delay legs, as its strongly connected component: the components in
+  // it and the Wires whose zero-delay legs join them, both sorted; [] when there is none. Such a cycle
+  // would run forever inside one tick, so the run refuses it at start (the graph core's
+  // ZERO_LATENCY_CYCLE).
+  function zeroDelayCycles(wires){
+    const edges=new Map(),add=(from,to,wire)=>{if(!edges.has(from))edges.set(from,[]);edges.get(from).push({to,wire})};
+    for(const w of wires)if(w.delay===0){if(w.forward)add(w.a.entity,w.b.entity,w.id);if(w.reverse)add(w.b.entity,w.a.entity,w.id)}
+    const nodes=[...new Set([...edges.keys(),...[...edges.values()].flat().map(e=>e.to)])].sort();
+    const index=new Map(),low=new Map(),stack=[],on=new Set(),out=[];let n=0;
+    const visit=v=>{
+      index.set(v,n);low.set(v,n);n++;stack.push(v);on.add(v);
+      for(const {to} of edges.get(v)||[]){if(!index.has(to)){visit(to);low.set(v,Math.min(low.get(v),low.get(to)))}else if(on.has(to))low.set(v,Math.min(low.get(v),index.get(to)))}
+      if(low.get(v)!==index.get(v))return;
+      const members=[];let x;do{x=stack.pop();on.delete(x);members.push(x)}while(x!==v);
+      const inside=new Set(members),joined=[...new Set(members.flatMap(m=>(edges.get(m)||[]).filter(e=>inside.has(e.to)).map(e=>e.wire)))].sort();
+      if(members.length>1||joined.length)out.push({nodes:members.sort(),wires:joined});
+    };
+    for(const v of nodes)if(!index.has(v))visit(v);
+    return out.sort((x,y)=>cmp(x.nodes[0],y.nodes[0]));
   }
   function inputRefusal(message){return {ok:false,code:'INPUT_INVALID',message}}
   // A run: startRun({doc, packs, inputs, seed, budget}). `walk: 'reverse'` reverses the order in
@@ -709,12 +731,17 @@
         if(v.channel!==undefined&&v.channel!==null&&typeof v.channel!=='string')return inputRefusal(`input ${i}: value.channel must be a string or null`);
         if(v.principal!==undefined&&v.principal!==null&&!nonEmpty(v.principal))return inputRefusal(`input ${i}: value.principal must be a non-empty string or null`);
         try{Canonical.canonicalize(v.payload??null)}catch(_){return inputRefusal(`input ${i}: value.payload must be JSON`)}
+        // No floating point anywhere a run records, payloads included: every number is a safe integer.
+        const fraction=firstFraction(v.payload??null,`inputs[${i}].value.payload`);
+        if(fraction)return {ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`input ${i}: ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the number in integer units (e.g. 1.5 kg as 1500 g, 0.25 as 250 thousandths) and name the unit in the payload'};
         inputs.push({entity:component.id,point:spec.id,channel,value:{channel:v.channel??null,payload:clone(v.payload??null),principal:v.principal??null},at:raw.at});
         continue;
       }
       const bound=component.config?.definition;
       if(bound!==undefined&&bound!==null&&(resolveDefinition(bound,o.packs)?.parameters?.outputs||[]).includes(spec.id))return inputRefusal(`input ${i}: ${component.id}.${spec.id} is an output of ${bound}; a device's output is the device's`);
       if(!specChannels(spec).includes(channel))return inputRefusal(`input ${i}: port ${raw.entity}.${spec.id} has no channel ${JSON.stringify(channel)}`);
+      const fraction=firstFraction(raw.value,`inputs[${i}].value`);
+      if(fraction)return {ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`input ${i}: ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the value in integer units (a level as a boolean on a binary channel)'};
       if(typeof raw.value!=='boolean')return inputRefusal(`input ${i}: value must be a boolean (binary channels only)`);
       if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
       const input={entity:component.id,point:spec.id,channel,value:raw.value,at:raw.at};
@@ -734,6 +761,8 @@
     const replayKey={documentId:d.id,documentHash:Data.documentHash(d),definitions:refs,runtimeVersion:RUNTIME_VERSION,traceFormat:TRACE_FORMAT,inputs,seed};
     if(tickMs!==1)replayKey.tickMs=tickMs;
     const shape=topology(d,definitions,implied.bind,tickMs);
+    const loops=zeroDelayCycles(shape.wires);
+    if(loops.length)return {ok:false,code:'ZERO_DELAY_CYCLE',message:`a cycle must take time: give one of its Paths a delay or latencyMs above 0 (${loops.map(c=>c.wires.join(', ')).join('; ')})`,cycles:loops};
     // A declared level is an input the document makes: a caller's input on the same port and tick wins.
     const sources=implied.sources.filter(x=>!seen.has(JSON.stringify([x.at,x.entity,x.point,x.channel])));
     const run={
@@ -797,7 +826,7 @@
   }
   function makeRecord(run,ctx,{entity,point,channel,kind,value,observer,rule,inputs,phase,rank=0}){
     const id=`${TMP}${ctx.tmp++}`;
-    ctx.records.push({phase,rank,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind,form:typeof value==='number'?'continuous':'binary',value,time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none'}});
+    ctx.records.push({round:ctx.round,phase,rank,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind,form:typeof value==='number'?'continuous':'binary',value,time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none'}});
     return id;
   }
   // Emission: one arrival per bound Wire, per direction it carries out of this port, per shared
@@ -822,16 +851,17 @@
     const rest=items.filter(item=>!declared.includes(item.a.wire));
     let restOrder=rest.map(item=>item.id);
     if(rest.length>1){
-      const paths=restOrder.slice(),drawn=Canonical.drawOrder(run.seed,['merge',ctx.t,g.entity,g.point,g.channel],paths);
+      // A delta round after the first is part of the draw key, and of the recorded draw.
+      const paths=restOrder.slice(),drawn=Canonical.drawOrder(run.seed,ctx.round?['merge',ctx.t,ctx.round,g.entity,g.point,g.channel]:['merge',ctx.t,g.entity,g.point,g.channel],paths);
       if(run.replayDraws){
-        const recorded=run.replayDraws.find(e=>e.body.tick===ctx.t&&e.body.entity===g.entity&&e.body.point===g.point&&e.body.channel===g.channel);
+        const recorded=run.replayDraws.find(e=>e.body.tick===ctx.t&&(e.body.round??0)===ctx.round&&e.body.entity===g.entity&&e.body.point===g.point&&e.body.channel===g.channel);
         if(!recorded||!same(recorded.body.paths,paths)||!same(recorded.body.order,drawn)){
           ctx.diverged={code:'REPLAY_DIVERGED',entry:recorded?recorded.seq:null,message:recorded?`the draw recorded at ledger entry ${recorded.seq} (${g.entity}.${g.point}.${g.channel}, tick ${ctx.t}) does not re-derive from the seed: recorded ${JSON.stringify(recorded.body.order)}, derived ${JSON.stringify(drawn)}`:`no draw is recorded for ${g.entity}.${g.point}.${g.channel} at tick ${ctx.t}`};
           return null;
         }
         restOrder=recorded.body.order.slice();
       }else restOrder=drawn;
-      ctx.draws.push({tick:ctx.t,entity:g.entity,point:g.point,channel:g.channel,paths,order:restOrder.slice()});
+      ctx.draws.push({tick:ctx.t,...(ctx.round?{round:ctx.round}:{}),entity:g.entity,point:g.point,channel:g.channel,paths,order:restOrder.slice()});
     }
     return [...first,...restOrder.map(id=>rest.find(item=>item.id===id))].map(item=>item.a);
   }
@@ -845,7 +875,8 @@
     const id=`${TMP}${ctx.tmp++}`;
     const record={format:RECORD_FORMAT,id,subject:{entity,point,channel:MESSAGE,run:run.id},vantage:'space',observable:'message',kind,form:'message',value:copy(message),
       time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none',principal:principal??null,hop};
-    ctx.records.push({phase:0,rank:0,record,key:[entity,point,MESSAGE,'message',message.id,HOP_RANK[hop.event]??4]});
+    // Records at one port sort by delivery (injects, then arrivals in merge order), then by message.
+    ctx.records.push({round:ctx.round,phase:0,rank:0,record,key:[entity,point,MESSAGE,'message',ctx.delivery,message.id,HOP_RANK[hop.event]??4]});
     return id;
   }
   // A message at a component, after it arrived by `via` (null for an inject): a passive card absorbs
@@ -868,33 +899,32 @@
       run.pending.push(item);ctx.fresh.push(item);
     });
   }
-  // Update phase on the message channel of one port: injects start their messages; arrivals join the
-  // port's queue in merge order (a draw recorded like any merge) and one is delivered per tick.
+  // Update phase on the message channel of one port: injects start their messages; arrivals are put in
+  // merge order (the declared Paths first, the rest a draw recorded like any merge) and every one is
+  // delivered in this tick, in that order, as the graph core delivers same-time arrivals. (One per
+  // tick is the level channel's queue merge only.)
   function messagePort(run,ctx,g){
+    ctx.delivery=0;
     for(const input of g.injects.slice().sort((x,y)=>x.seq-y.seq)){
+      ctx.delivery++;
       const id=`m-${input.seq}`,message={id,root:id,parent:null,channel:input.value.channel,payload:copy(input.value.payload),origin:g.entity};
       const at=messageRecord(run,ctx,{entity:g.entity,point:g.point,kind:'registered',observer:'input',rule:'input',inputs:[],message,principal:input.value.principal,hop:{event:'injected'}});
       messageAt(run,ctx,g.entity,g.point,message,input.value.principal,null,at);
     }
+    if(!g.arrivals.length)return;
     const key=portKey(g.entity,g.point,MESSAGE);
-    if(!g.arrivals.length&&!run.queues[key])return;
-    const queue=ensureQueue(run,ctx,key);
-    if(g.arrivals.length){
-      const ordered=g.arrivals.length>1?mergeOrder(run,ctx,g,run.merges[key]||MESSAGE_MERGE):g.arrivals;if(!ordered)return;
-      for(const a of ordered)queue.items.push({value:a.value,principal:a.principal??null,wire:a.wire,phase:a.phase,from:a.from});
+    const ordered=g.arrivals.length>1?mergeOrder(run,ctx,g,run.merges[key]||MESSAGE_MERGE):g.arrivals;if(!ordered)return;
+    for(const item of ordered){
+      ctx.delivery++;
+      const id=messageRecord(run,ctx,{entity:g.entity,point:g.point,observer:`path:${item.wire}`,rule:'merge@1',inputs:[item.from],message:item.value,principal:item.principal??null,hop:{event:'arrived',wire:item.wire}});
+      messageAt(run,ctx,g.entity,g.point,item.value,item.principal??null,item.wire,id);
     }
-    if(queue.items.length>queue.head){
-      const item=queue.items[queue.head++];
-      const id=messageRecord(run,ctx,{entity:g.entity,point:g.point,observer:`path:${item.wire}`,rule:'merge@1',inputs:[item.from],message:item.value,principal:item.principal,hop:{event:'arrived',wire:item.wire}});
-      messageAt(run,ctx,g.entity,g.point,item.value,item.principal,item.wire,id);
-    }
-    queue.next=ctx.t+1;
   }
   // Blocked legs are recorded once, at the first tick, with the graph core's reason.
   function blockedRecords(run,ctx){
     for(const b of run.blocked||[]){
       const id=`${TMP}${ctx.tmp++}`;
-      ctx.records.push({phase:0,rank:0,key:[b.wire,'','','path.carries',b.reason],record:{format:RECORD_FORMAT,id,subject:{entity:b.wire,run:run.id},vantage:'space',observable:'path.carries',kind:'derived',form:'categorical',value:b.reason,
+      ctx.records.push({round:0,phase:0,rank:0,key:[b.wire,'','','path.carries',b.reason],record:{format:RECORD_FORMAT,id,subject:{entity:b.wire,run:run.id},vantage:'space',observable:'path.carries',kind:'derived',form:'categorical',value:b.reason,
         time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer:'engine:passability',provenance:{rule:'blocked',inputs:[]},perturbation:'none'}});
     }
   }
@@ -918,7 +948,8 @@
         win=sorted.length===1?{value,observer:`path:${sorted[0].wire}`,rule:'path',inputs:[sorted[0].from]}:{value,observer:'engine:merge@1',rule:'merge@1',inputs:sorted.map(a=>a.from)};
       }else if(queue){
         if(g.arrivals.length){const ordered=g.arrivals.length>1?mergeOrder(run,ctx,g,merge):g.arrivals;if(!ordered)return;for(const a of ordered)queue.items.push({value:a.value,wire:a.wire,phase:a.phase,from:a.from})}
-        if(queue.items.length>queue.head){const item=queue.items[queue.head++];win={value:item.value,observer:'engine:merge@1',rule:'merge@1',inputs:[item.from]};if(!arrived.includes(item.wire))arrived.push(item.wire)}
+        // A queue delivers once per tick, whatever delta round its arrivals come in.
+        if(queue.items.length>queue.head&&!ctx.delivered.has(key)){ctx.delivered.add(key);const item=queue.items[queue.head++];win={value:item.value,observer:'engine:merge@1',rule:'merge@1',inputs:[item.from]};if(!arrived.includes(item.wire))arrived.push(item.wire)}
       }else if(g.arrivals.length===1){
         const a=g.arrivals[0];win={value:a.value,observer:`path:${a.wire}`,rule:'path',inputs:[a.from]};
       }else if(g.arrivals.length){
@@ -926,7 +957,7 @@
         const pick=merge.combine==='first'?ordered[0]:ordered[ordered.length-1];
         win={value:pick.value,observer:'engine:merge@1',rule:'merge@1',inputs:ordered.map(a=>a.from)};
       }
-      if(!win)return;
+      if(!win){if(queue)queue.next=ctx.t+1;return}
       win.kind='derived';win.exclude=arrived;win.emits=role==='point';
     }
     if(queue)queue.next=ctx.t+1;
@@ -970,32 +1001,55 @@
   const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
   function put(obj,undo,key,value){if(!undo.has(key))undo.set(key,own(obj,key)?[true,obj[key]]:[false]);obj[key]=value}
   function undo(obj,log){for(const [key,[had,value]] of log)if(had)obj[key]=value;else delete obj[key]}
+  // A record never precedes its cause: the key-sorted records of one tick, reordered only as far as
+  // needed so that every record comes after the records of this tick it names in provenance.inputs
+  // (always the lowest-keyed record whose causes are placed next; a list already in causal order is
+  // returned as it is). Causes are acyclic, since a record can only name records made before it.
+  function causalOrder(sorted){
+    const at=new Map(sorted.map((x,i)=>[x.record.id,i])),need=new Array(sorted.length).fill(0),next=sorted.map(()=>[]);
+    sorted.forEach((x,i)=>{for(const id of x.record.provenance.inputs){const j=at.get(id);if(j!==undefined&&j!==i){need[i]++;next[j].push(i)}}});
+    const heap=[],push=i=>{heap.push(i);let k=heap.length-1;while(k>0){const p=(k-1)>>1;if(heap[p]<=heap[k])break;[heap[p],heap[k]]=[heap[k],heap[p]];k=p}};
+    const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let k=0;for(;;){const l=2*k+1,r=l+1;let m=k;if(l<heap.length&&heap[l]<heap[m])m=l;if(r<heap.length&&heap[r]<heap[m])m=r;if(m===k)break;[heap[m],heap[k]]=[heap[k],heap[m]];k=m}}return top};
+    need.forEach((n,i)=>{if(!n)push(i)});
+    const out=[];
+    while(heap.length){const i=pop();out.push(sorted[i]);for(const j of next[i])if(--need[j]===0)push(j)}
+    return out;
+  }
+  // A tick runs in delta rounds: round 0 takes what was scheduled for it; what a zero-delay Path or a
+  // delay-0 device output schedules for the same tick is the next round, two-phase like the first,
+  // until nothing more is due at t. A cycle of zero-delay legs is refused at start, so the rounds end;
+  // the budget bounds them besides.
   function processTick(run,t,ctx){
-    const due=run.pending.filter(x=>x.at===t);run.pending=run.pending.filter(x=>x.at!==t);
-    const groups=new Map();
-    const group=(entity,point,channel)=>{const key=portKey(entity,point,channel);if(!groups.has(key))groups.set(key,{entity,point,channel,input:null,output:null,arrivals:[],injects:[]});return groups.get(key)};
     if(run.tick===null)blockedRecords(run,ctx);
-    for(const item of due){
-      const g=group(item.entity,item.point,item.channel);ctx.cost++;
-      if(item.channel===MESSAGE)(item.kind==='input'?g.injects:g.arrivals).push(item);
-      else if(item.kind==='input'||item.kind==='clock')g.input=item;else if(item.kind==='output')g.output=item;else g.arrivals.push(item);
-      if(item.kind==='clock'){
-        const source=run.clocks[portKey(item.entity,item.point,item.channel)];
-        const next=source&&(source.clock.wave==='square'?clockEdge(source,run.tickMs,item.value?item.k:item.k+1,!item.value,t):clockEdge(source,run.tickMs,item.k+1,null,t));
-        if(next){run.pending.push(next);ctx.fresh.push(next)}
+    for(ctx.round=0;;ctx.round++){
+      if(ctx.round>0){ctx.changed=new Set();ctx.evaluated=new Map()}
+      const due=run.pending.filter(x=>x.at===t);run.pending=run.pending.filter(x=>x.at!==t);
+      const groups=new Map();
+      const group=(entity,point,channel)=>{const key=portKey(entity,point,channel);if(!groups.has(key))groups.set(key,{entity,point,channel,input:null,output:null,arrivals:[],injects:[]});return groups.get(key)};
+      for(const item of due){
+        const g=group(item.entity,item.point,item.channel);ctx.cost++;
+        if(item.channel===MESSAGE)(item.kind==='input'?g.injects:g.arrivals).push(item);
+        else if(item.kind==='input'||item.kind==='clock')g.input=item;else if(item.kind==='output')g.output=item;else g.arrivals.push(item);
+        if(item.kind==='clock'){
+          const source=run.clocks[portKey(item.entity,item.point,item.channel)];
+          const next=source&&(source.clock.wave==='square'?clockEdge(source,run.tickMs,item.value?item.k:item.k+1,!item.value,t):clockEdge(source,run.tickMs,item.k+1,null,t));
+          if(next){run.pending.push(next);ctx.fresh.push(next)}
+        }
       }
+      if(ctx.round===0)for(const [key,q] of Object.entries(run.queues))if(q.items.length>q.head&&q.next===t){const [entity,point,channel]=JSON.parse(key);group(entity,point,channel)}
+      for(const key of walked(run,[...groups.keys()].sort())){updatePort(run,ctx,groups.get(key));if(ctx.diverged)return {ok:false,...ctx.diverged}}
+      // Committed state is the signal after the update phase: what the evaluate phase overwrites is read from before it.
+      const committed=key=>ctx.evaluated.has(key)?ctx.evaluated.get(key):run.signal[key];
+      const devices=indexOf(run).devices.filter(x=>(t===0&&ctx.round===0)||x.inputs.some(key=>ctx.changed.has(key))).map(x=>x.id);
+      for(const entity of walked(run,devices))evaluateDevice(run,ctx,entity,committed);
+      if(!run.pending.some(x=>x.at===t)||run.spent+ctx.cost>run.budget)break;
     }
-    for(const [key,q] of Object.entries(run.queues))if(q.items.length>q.head&&q.next===t){const [entity,point,channel]=JSON.parse(key);group(entity,point,channel)}
-    for(const key of walked(run,[...groups.keys()].sort())){updatePort(run,ctx,groups.get(key));if(ctx.diverged)return {ok:false,...ctx.diverged}}
-    // Committed state is the signal after the update phase: what the evaluate phase overwrites is read from before it.
-    const committed=key=>ctx.evaluated.has(key)?ctx.evaluated.get(key):run.signal[key];
-    const devices=indexOf(run).devices.filter(x=>t===0||x.inputs.some(key=>ctx.changed.has(key))).map(x=>x.id);
-    for(const entity of walked(run,devices))evaluateDevice(run,ctx,entity,committed);
-    // Sequence is assigned after the tick, from stable ids only; then every provisional id is resolved.
+    // Sequence is assigned after the tick, from stable ids only, then put in causal order (no record
+    // before a record it names); then every provisional id is resolved.
     // A provisional id is only ever held by what this tick made: its records, the pending items it
     // scheduled and the lastRecord entries it wrote (queue items come from arrivals of earlier ticks).
-    const sortKey=x=>x.key||[x.record.subject.entity,x.record.subject.point,x.record.subject.channel,x.record.observable,x.record.kind,x.phase,x.record.observer,x.rank,x.record.value?1:0];
-    const sorted=ctx.records.map(x=>({x,k:sortKey(x)})).sort((x,y)=>cmpList(x.k,y.k)).map(d=>d.x);
+    const sortKey=x=>[x.round,...(x.key||[x.record.subject.entity,x.record.subject.point,x.record.subject.channel,x.record.observable,x.record.kind,x.phase,x.record.observer,x.rank,x.record.value?1:0])];
+    const sorted=causalOrder(ctx.records.map(x=>({x,k:sortKey(x)})).sort((x,y)=>cmpList(x.k,y.k)).map(d=>d.x));
     const map=new Map();
     for(const x of sorted){const seq=run.sequence++;map.set(x.record.id,`sr-${run.id}-${String(seq).padStart(6,'0')}`);x.record.id=map.get(x.record.id);x.record.time.sequence=seq}
     const records=sorted.map(x=>{x.record.provenance.inputs=resolveTmp(x.record.provenance.inputs,map);return x.record});
@@ -1009,7 +1063,7 @@
       if(q.items.length===q.head)delete run.queues[key];
     }
     run.pending=run.pending.map(x=>({x,k:pendingKey(x)})).sort((x,y)=>cmp(x.k,y.k)).map(d=>d.x);
-    ctx.draws.sort((x,y)=>cmpList([x.entity,x.point,x.channel],[y.entity,y.point,y.channel]));
+    ctx.draws.sort((x,y)=>cmpList([x.round??0,x.entity,x.point,x.channel],[y.round??0,y.entity,y.point,y.channel]));
     return {ok:true,cost:ctx.cost,records,draws:ctx.draws};
   }
   // One step is the earliest tick with scheduled work. Signal and lastRecord writes go through an
@@ -1023,7 +1077,7 @@
     const t=nextTick(run);
     if(t===null)return {ok:true,tick:null,records:[]};
     const before={pending:run.pending,sequence:run.sequence};
-    const ctx={t,cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null,fresh:[],written:[],evaluated:new Map(),undoSignal:new Map(),undoLast:new Map(),queueUndo:new Map()};
+    const ctx={t,round:0,delivery:0,delivered:new Set(),cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null,fresh:[],written:[],evaluated:new Map(),undoSignal:new Map(),undoLast:new Map(),queueUndo:new Map()};
     const result=processTick(run,t,ctx);
     const refused=!result.ok?result:run.spent+result.cost>run.budget?{ok:false,code:'BUDGET_SPENT',tick:t,left:null,message:`processing tick ${t} takes ${result.cost} events; ${run.budget-run.spent} of the budget ${run.budget} remain`}:null;
     if(refused){

@@ -192,7 +192,8 @@ const timeline=run=>run.records.map(r=>[r.time.logical,r.subject.entity,r.subjec
   out.mergeForm=S.startRun({doc:withMerge({combine:'sum'}),packs,inputs:mergeInputs});
   out.mergeFormOk=['or','and','min','max','first','last','queue'].map(c=>S.startRun({doc:withMerge({combine:c}),packs,inputs:mergeInputs}).ok);
   const unresolved=S.startRun({doc,packs:[],inputs:vec('11')});
-  const badDelay=read('and.sov');badDelay.wires[0].config.delay=0;
+  // Delay 0 is a zero-delay Path since 2026-09-26; -1 is the refused example.
+  const badDelay=read('and.sov');badDelay.wires[0].config.delay=-1;
   const delay=S.startRun({doc:D.normalizeDocument(badDelay),packs,inputs:vec('11')});
   out.runRefused={unresolved:{ok:unresolved.ok,code:unresolved.code,codes:(unresolved.refusals||[]).map(r=>r.code)},delay:{ok:delay.ok,code:delay.code,codes:(delay.refusals||[]).map(r=>r.code)}};
 }
@@ -300,7 +301,7 @@ const timeline=run=>run.records.map(r=>[r.time.logical,r.subject.entity,r.subjec
     // error.details on each refusal kind.
     const spent=reg.start({inputs:vec('11'),budget:1}),tampered=JSON.parse(JSON.stringify(t.result));tampered.ledger[1].hash='0'+tampered.ledger[1].hash.slice(1);
     const other=S.createRunRegistry({packs:[packJson],document:()=>load('not-loop.sov')});
-    const badDoc=load('and.sov');badDoc.wires[0].config={...(badDoc.wires[0].config||{}),delay:0};
+    const badDoc=load('and.sov');badDoc.wires[0].config={...(badDoc.wires[0].config||{}),delay:-1};
     out.details={budget:reg.step(spent.handle).error,trace:reg.replay(tampered).error,key:reg.replay(other.trace(other.start({budget:40}).handle).result).error,
       refused:S.createRunRegistry({packs:[packJson],document:()=>badDoc}).start({}).error,notFound:reg.step('x').error,input:reg.start({seed:1}).error};
   }

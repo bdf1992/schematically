@@ -22,7 +22,10 @@ const canon=C.canonicalize;
 const pack=S.loadPack(JSON.parse(fs.readFileSync('data/core.logic.pack.json','utf8'))).pack,packs=[pack];
 const out={};
 const started=args=>{const s=S.startRun({packs,...args});if(!s.ok)throw new Error(JSON.stringify(s));return s.run};
-const settle=run=>{for(let i=0;i<500;i++){const r=S.step(run);if(!r.ok)throw new Error(JSON.stringify(r));if(r.tick===null)return run}throw new Error('no quiet')};
+const runsSeen=[];
+// Each step processes a later tick than the one before: a tick is done in one step, delta rounds and all.
+const settle=run=>{runsSeen.push(run);let last=run.tick;for(let i=0;i<500;i++){const r=S.step(run);if(!r.ok)throw new Error(JSON.stringify(r));if(r.tick===null)return run;
+  if(last!==null&&r.tick<=last)throw new Error(`tick ${r.tick} processed again after ${last}`);last=r.tick}throw new Error('no quiet')};
 const msgs=run=>run.records.filter(r=>r.form==='message');
 const hops=(run,event)=>msgs(run).filter(r=>r.hop.event===event);
 const inj=(entity,point,channel,extra={},at=0)=>({entity,point,channel:'message',value:{channel,payload:null,...extra},at});
@@ -80,8 +83,9 @@ for(const channel of ['red','green','blue']){
     seqOrdered:run.records.every((r,i)=>r.time.sequence===i),
     hopsOfOne:msgs(run).filter(r=>r.value.id==='m-1.0.1').map(r=>r.hop.event)};
 }
-// Three messages reaching one port in the same tick are delivered one per tick, in the recorded draw
-// order; the run traces and replays byte for byte, forward and in the reversed walk.
+// Three messages reaching one port in the same tick are all delivered in that tick, in the recorded
+// draw order (review 2026-09-26: dev's 20/20/20); the run traces and replays byte for byte, forward
+// and in the reversed walk.
 {
   const threeRaw=()=>({components:[A('a'),A('b'),A('c'),A('z',{signalMode:'passive'})],wires:[{id:'wa',a:'a',aSide:'out',b:'z',bSide:'in'},{id:'wb',a:'b',aSide:'out',b:'z',bSide:'in'},{id:'wc',a:'c',aSide:'out',b:'z',bSide:'in'}]});
   const three=()=>D.normalizeDocument(threeRaw());
@@ -90,7 +94,10 @@ for(const channel of ['red','green','blue']){
   let seed=null,run=null;
   for(let i=0;i<64&&seed===null;i++){const r=settle(started({doc:three(),inputs,seed:String(i)}));const d=r.ledger.find(e=>e.kind==='draw');if(d&&canon(d.body.order)!==canon(d.body.paths)){seed=String(i);run=r}}
   const draw=run.ledger.find(e=>e.kind==='draw').body;
-  const arrived=hops(run,'arrived').filter(r=>r.subject.entity==='z').map(r=>[r.time.logical,`${r.hop.wire}#${r.value.id}`]);
+  // In sequence order: the order the records say they were delivered in.
+  const arrived=hops(run,'arrived').filter(r=>r.subject.entity==='z').sort((x,y)=>x.time.sequence-y.time.sequence).map(r=>[r.time.logical,`${r.hop.wire}#${r.value.id}`]);
+  // Dev's own timing for the same fan-in.
+  {const gdoc=threeRaw();const {sim}=G.createSimulation(gdoc);for(const x of ['a','b','c'])sim.inject(x,{channel:'k'});sim.run();out.devFanIn=sim.log().filter(e=>e.event==='arrived'&&e.node==='z').map(e=>e.at)}
   const rev=settle(started({doc:three(),inputs,seed,walk:'reverse'}));
   const trace=S.traceOf(run),bytes=canon(trace),replayed=S.replay({trace:JSON.parse(bytes),doc:three(),packs});
   const tampered=JSON.parse(bytes);const i=tampered.ledger.findIndex(e=>e.kind==='draw');tampered.ledger[i].body.order=tampered.ledger[i].body.order.slice().reverse();
@@ -103,7 +110,7 @@ for(const channel of ['red','green','blue']){
   // A declared order on the message channel puts its Paths first; any combine but queue is refused.
   const pointZ=merge=>{const d=threeRaw();d.components[3]={id:'z',symbolId:'point',x:0,y:0,form:{dimension:0},config:{attachmentPoints:[{id:'self',channels:[{id:'main'},{id:'message',merge}]}]}};for(const w of d.wires)w.bSide='out';return D.normalizeDocument(d)};
   const dz=S.startRun({doc:pointZ({combine:'queue',order:{kind:'declared',paths:['wc','wb','wa']}}),packs,inputs,seed});
-  out.declared=dz.ok?hops(settle(dz.run),'arrived').filter(r=>r.subject.entity==='z').map(r=>r.hop.wire):dz;
+  out.declared=dz.ok?hops(settle(dz.run),'arrived').filter(r=>r.subject.entity==='z').sort((x,y)=>x.time.sequence-y.time.sequence).map(r=>r.hop.wire):dz;
   out.lastRefused=S.startRun({doc:pointZ({combine:'last'}),packs,inputs}).code||'started';
 }
 // An in-only port cannot emit: that leg is blocked, recorded once at the first tick with the graph
@@ -115,13 +122,60 @@ for(const channel of ['red','green','blue']){
   out.blocked={dev:G.build(d).blocked.map(b=>b.reason),records:blocked.map(r=>[r.subject.entity,r.value,r.form,r.observable,r.time.logical]),
     fromA:hops(run,'sent').filter(r=>r.subject.entity==='a').length,endA:hops(run,'delivered').filter(r=>r.subject.entity==='a').map(r=>r.value.id),
     toA:hops(run,'arrived').filter(r=>r.subject.entity==='a').map(r=>r.value.id),ticks:[...new Set(run.records.map(r=>r.time.logical))]};
-  // Fully blocked one-way wire: refused at load by the existing flow check, as before.
-  out.oneWay=S.startRun({doc:doc([A('a'),A('b')],[{id:'w1',a:'a',aSide:'in',b:'b',bSide:'in'}]),packs}).refusals?.map(r=>r.code);
+  // A Wire that carries in no direction is blocked and recorded, never refused (review 2026-09-26):
+  // next to it a working Wire still delivers, as dev does.
+  const oneWay=doc([A('a'),A('b'),A('c',{signalMode:'passive'})],[{id:'w1',a:'a',aSide:'in',b:'b',bSide:'in'},{id:'w2',a:'a',aSide:'out',b:'c',bSide:'in'}]);
+  const ow=S.startRun({doc:oneWay,packs,inputs:[inj('a','out',null)]});
+  out.oneWay=ow.ok?{check:S.checkDocument(oneWay,packs).ok,blocked:settle(ow.run).records.filter(r=>r.provenance.rule==='blocked').map(r=>[r.subject.entity,r.value]),
+    toC:hops(ow.run,'arrived').filter(r=>r.subject.entity==='c').length,dev:G.build(oneWay).blocked.map(b=>[b.wireId,b.reason])}:ow;
+}
+// Zero-delay Paths (Bdo 2026-09-26): delay 0 and latencyMs 0 arrive within the same tick, in delta
+// rounds; a cycle of zero-delay legs only is refused at start with ZERO_DELAY_CYCLE naming its wires.
+{
+  const chain=cfg=>doc([A('s'),P('p'),A('z',{signalMode:'passive'})],[{id:'w1',a:'s',aSide:'out',b:'p',bSide:'out',config:cfg},{id:'w2',a:'p',aSide:'out',b:'z',bSide:'in',config:cfg}]);
+  const zero={};
+  for(const [name,cfg] of [['delay',{delay:0}],['latency',{latencyMs:0}]]){
+    const d=chain(cfg),run=settle(started({doc:d,inputs:[inj('s','out',null,{},3)]})),trace=S.traceOf(run);
+    const rp=S.replay({trace:JSON.parse(canon(trace)),doc:chain(cfg),packs});
+    zero[name]={delays:run.wires.map(w=>w.delay),arrived:hops(run,'arrived').map(r=>[r.subject.entity,r.time.logical]),ticks:[...new Set(run.records.map(r=>r.time.logical))],
+      replay:rp.ok&&canon(rp.records)===canon(trace.records),check:S.checkDocument(d,packs).ok};
+  }
+  // Levels over zero-delay Paths: a Point chain carries an input to its end within the tick.
+  {const lv=D.normalizeDocument(JSON.parse(fs.readFileSync('examples/state/merge.or.sov','utf8')));for(const w of lv.wires)w.config.delay=0;
+   const run=settle(started({doc:lv,inputs:[{entity:'S1',point:'self',value:true,at:0},{entity:'S2',point:'self',value:false,at:0}]}));
+   const rev=settle(started({doc:lv,inputs:[{entity:'S1',point:'self',value:true,at:0},{entity:'S2',point:'self',value:false,at:0}],walk:'reverse'}));
+   zero.levels={out:run.signal[JSON.stringify(['OUT','self','main'])],ticks:[...new Set(run.records.map(r=>r.time.logical))],reversed:canon(S.traceOf(rev))===canon(S.traceOf(run)),
+     replay:S.replay({trace:S.traceOf(run),doc:lv,packs}).ok}}
+  // A ring of zero-delay legs is refused; dev refuses the same ring (ZERO_LATENCY_CYCLE); with one timed leg it runs.
+  const ring=(l1,l2)=>doc([A('a'),A('b')],[{id:'w1',a:'a',aSide:'out',b:'b',bSide:'in',config:{latencyMs:l1}},{id:'w2',a:'b',aSide:'out',b:'a',bSide:'in',config:{latencyMs:l2}}]);
+  const r0=S.startRun({doc:ring(0,0),packs});
+  zero.ring={code:r0.code,cycles:r0.cycles,dev:G.createSimulation(ring(0,0)).code,timed:S.startRun({doc:ring(0,5),packs}).ok,devTimed:G.createSimulation(ring(0,5)).ok};
+  // A two-way zero-delay Wire is a ring of two legs, as dev reads it.
+  const duplex=doc([P('p'),P('q')],[{id:'wd',a:'p',aSide:'out',b:'q',bSide:'out',config:{direction:'duplex',latencyMs:0}}]);
+  zero.duplex={code:S.startRun({doc:duplex,packs}).code,dev:G.createSimulation(duplex).code};
+  zero.negative=S.startRun({doc:chain({delay:-1}),packs}).refusals?.map(r=>r.code);
+  out.zero=zero;
+}
+// A record never precedes its cause (review 2026-09-26): inject at a.top, leave by a.out.
+{
+  const d=doc([A('a'),A('z',{signalMode:'passive'})],[{id:'w1',a:'a',aSide:'out',b:'z',bSide:'in'}]);
+  const run=settle(started({doc:d,inputs:[inj('a','control',null)]}));
+  out.causeAtTop=msgs(run).filter(r=>r.value.root==='m-1'&&r.time.logical===0).sort((x,y)=>x.time.sequence-y.time.sequence).map(r=>[r.subject.point,r.hop.event]);
+}
+// No floating point anywhere a run records, payloads included (Bdo 2026-09-26).
+{
+  const d=doc([A('s'),A('z',{signalMode:'passive'})],[{id:'w1',a:'s',aSide:'out',b:'z',bSide:'in'}]);
+  const f=S.startRun({doc:d,packs,inputs:[inj('s','out','job',{payload:{items:[{kg:2},{kg:1.5}]}})]});
+  const big=S.startRun({doc:d,packs,inputs:[inj('s','out','job',{payload:{n:2**60}})]});
+  const lvl=S.startRun({doc:d,packs,inputs:[{entity:'s',point:'out',value:0.5,at:0}]});
+  out.fraction={code:f.code,path:f.path,next:typeof f.next_operation,big:big.code,level:[lvl.code,lvl.path],
+    ints:S.startRun({doc:d,packs,inputs:[inj('s','out','job',{payload:{kg:2,n:-3,list:[0,1]}})]}).ok};
 }
 // Records validate and carry principal and hop; a participant with a principal acts in its own name.
 {
   const d=doc([A('s'),{...A('m'),config:{signalMode:'relay',principal:'svc:mailer'}},A('z',{signalMode:'passive'})],[{id:'w1',a:'s',aSide:'out',b:'m',bSide:'in'},{id:'w2',a:'m',aSide:'out',b:'z',bSide:'in'}]);
-  const run=settle(started({doc:d,inputs:[inj('s','out','job',{payload:{caseId:'7',weight:1.5},principal:'svc:ops'})]}));
+  // weight is in grams (1.5 kg): a payload holds integers only.
+  const run=settle(started({doc:d,inputs:[inj('s','out','job',{payload:{caseId:'7',weight:1500},principal:'svc:ops'})]}));
   const m=msgs(run);
   out.records={all:run.records.map(r=>S.validateRecord(r)),members:m.map(r=>['principal' in r,'hop' in r,r.channel===undefined,r.subject.channel]),
     principals:m.map(r=>[r.subject.entity,r.hop.event,r.principal]),payload:m.map(r=>canon(r.value.payload)),
@@ -130,7 +184,7 @@ for(const channel of ['red','green','blue']){
   const variant=f=>{const r=JSON.parse(JSON.stringify(good));f(r);return S.validateRecord(r)};
   bad.event=variant(r=>{r.hop.event='teleported'});bad.hopKey=variant(r=>{r.hop.colour='red'});bad.wire=variant(r=>{r.hop.wire=''});
   bad.valueKey=variant(r=>{delete r.value.origin});bad.valueExtra=variant(r=>{r.value.extra=1});bad.parent=variant(r=>{r.value.parent=3});
-  bad.principal=variant(r=>{r.principal=7});bad.hopOnLevel=variant(r=>{r.form='binary';r.value=true});bad.notObject=variant(r=>{r.value='m-1'});
+  bad.principal=variant(r=>{r.principal=7});bad.fraction=variant(r=>{r.value.payload={weight:1.5}});bad.hopOnLevel=variant(r=>{r.form='binary';r.value=true});bad.notObject=variant(r=>{r.value='m-1'});
   out.bad=Object.fromEntries(Object.entries(bad).map(([k,v])=>[k,v.ok]));
   out.goodNull=variant(r=>{r.principal=null;delete r.hop.wire;delete r.hop.to}).ok;
   out.badInput=['x',{channel:3},{extra:1},{principal:''}].map(v=>S.startRun({doc:d,packs,inputs:[{entity:'s',point:'out',channel:'message',value:v,at:0}]}).code);
@@ -141,6 +195,32 @@ for(const channel of ['red','green','blue']){
   const run=settle(started({doc:d,inputs:[{entity:'S1',point:'self',value:true,at:0},{entity:'S2',point:'self',value:false,at:0}]}));
   out.levels={messages:msgs(run).length,forms:[...new Set(run.records.map(r=>r.form))]};
 }
+// Every record of every run above comes after every record it names (review 2026-09-26).
+out.causal=runsSeen.every(run=>{const seen=new Set();return run.records.every(r=>{const ok=r.provenance.inputs.every(i=>seen.has(i));seen.add(r.id);return ok})});
+out.runsSeen=runsSeen.length;
+console.log(JSON.stringify(out));
+"""
+
+
+# A run never depends on load order (review 2026-09-26): the swarm examples and examples 08-13 give
+# the same trace whether or not 07-graph-core.js is loaded. Each mode is its own Node process.
+LOAD_ORDER = r"""
+const fs=require('fs');
+require('./src/03-canonical.js');require('./src/03-notation-core.js');require('./src/06-attachment-core.js');
+const D=require('./src/05-data-core.js'),S=require('./src/07-state-space.js'),C=globalThis.SovSchematicCanonical;
+if(process.argv[1]==='graph')require('./src/07-graph-core.js');
+const pack=S.loadPack(JSON.parse(fs.readFileSync('data/core.logic.pack.json','utf8'))).pack;
+const files=[...fs.readdirSync('examples/swarm').filter(f=>f.endsWith('.sov')).sort().map(f=>'examples/swarm/'+f),
+  ...['08-gated-service.sov','09-print-ai-proof-run.sov','10-clocked-signals.sov','12-membrane.sov','13-half-adder.sov'].map(f=>'examples/'+f)];
+const out={graph:typeof globalThis.SovSchematicGraph,runs:{}};
+for(const f of files){
+  const doc=D.documentFromFilePayload(JSON.parse(fs.readFileSync(f,'utf8')));
+  const s=S.startRun({doc,packs:[pack],budget:20000});
+  if(!s.ok){out.runs[f]={refused:s.code};continue}
+  for(let i=0;i<400;i++){const r=S.step(s.run);if(!r.ok||r.tick===null)break}
+  const trace=S.traceOf(s.run);
+  out.runs[f]={hash:C.sha256Hex(C.canonicalize(trace)),records:trace.records.length,blocked:s.run.blocked.length,through:trace.through};
+}
 console.log(JSON.stringify(out));
 """
 
@@ -149,6 +229,19 @@ def main() -> None:
     proc = subprocess.run(['node', '-e', SCRIPT], cwd=ROOT, capture_output=True, text=True)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     r = json.loads(proc.stdout)
+
+    # Load order: the same run with and without the graph core loaded.
+    modes = {}
+    for mode in ('alone', 'graph'):
+        p = subprocess.run(['node', '-e', LOAD_ORDER, mode], cwd=ROOT, capture_output=True, text=True)
+        assert p.returncode == 0, p.stdout + p.stderr
+        modes[mode] = json.loads(p.stdout)
+    assert modes['alone']['graph'] == 'undefined' and modes['graph']['graph'] == 'object', modes
+    swarm = [f for f in modes['alone']['runs'] if f.startswith('examples/swarm/')]
+    assert len(swarm) == 3, modes['alone']['runs']
+    for f, run in modes['alone']['runs'].items():
+        assert 'hash' in run and run['records'] > 0, (f, run)
+        assert run == modes['graph']['runs'][f], (f, 'differs with 07-graph-core.js loaded', run, modes['graph']['runs'][f])
 
     # Dev passability: the carried (wire, direction) pairs are the graph core's arcs, on every example.
     for f, a in r['arcs'].items():
@@ -183,14 +276,15 @@ def main() -> None:
     assert i['lineageRoots'] == ['m-1', 'm-2'] and i['seqOrdered'], i
     assert i['hopsOfOne'] == ['sent', 'arrived', 'absorbed'], i['hopsOfOne']
 
-    # Queue delivery: one per tick, in the recorded draw order; trace and replay byte for byte.
+    # Same-tick arrivals: all delivered in that tick (dev's 20/20/20), in the recorded draw order;
+    # trace and replay byte for byte.
     q = r['queue']
     assert q['seed'] is not None, 'no seed in 0..63 draws other than the sorted order'
     assert q['draw']['channel'] == 'message' and q['draw']['entity'] == 'z', q['draw']
     assert sorted(q['draw']['paths']) == q['draw']['paths'] and q['draw']['order'] != q['draw']['paths'], q['draw']
     ticks = [t for t, _ in q['arrived']]
     assert [x for _, x in q['arrived']] == q['draw']['order'], (q['arrived'], q['draw'])
-    assert ticks == [ticks[0], ticks[0] + 1, ticks[0] + 2], q['arrived']
+    assert ticks == [10, 10, 10] and r['devFanIn'] == [10, 10, 10], (q['arrived'], r['devFanIn'])
     assert q['inputOrder'] == ['a', 'b', 'c'], q['inputOrder']
     assert q['reversed'] and q['rerun'] and q['valid'], q
     assert q['replay'] == {'ok': True, 'code': None, 'same': True}, q['replay']
@@ -205,7 +299,30 @@ def main() -> None:
     assert bl['records'] == [['w1', 'a.in cannot emit', 'categorical', 'path.carries', 0]], bl['records']
     assert bl['fromA'] == 0 and bl['endA'] == ['m-1', 'm-2.0'], ('a has no carried leg out: delivered', bl)
     assert bl['toA'] == ['m-2.0'] and len(bl['ticks']) > 1, bl
-    assert r['oneWay'] == ['PATH_DIRECTION_FLOW'], r['oneWay']
+    ow = r['oneWay']
+    assert ow['check'] is True and ow['blocked'] == [['w1', 'a.in cannot emit']] and ow['toC'] == 1, ('blocked and recorded, never refused', ow)
+    assert ow['dev'] == ow['blocked'], ow
+
+    # Zero-delay Paths: same tick, delta rounds, replayed; a zero-delay ring is refused like dev's.
+    z = r['zero']
+    for name in ('delay', 'latency'):
+        x = z[name]
+        assert x['delays'] == [0, 0] and x['check'] and x['replay'], (name, x)
+        assert x['arrived'] == [['p', 3], ['z', 3]] and x['ticks'] == [3], (name, x)
+    assert z['levels']['out'] is True and z['levels']['ticks'] == [0] and z['levels']['reversed'] and z['levels']['replay'], z['levels']
+    assert z['ring']['code'] == 'ZERO_DELAY_CYCLE' and z['ring']['cycles'] == [{'nodes': ['a', 'b'], 'wires': ['w1', 'w2']}], z['ring']
+    assert z['ring']['dev'] == 'ZERO_LATENCY_CYCLE' and z['ring']['timed'] and z['ring']['devTimed'], z['ring']
+    assert z['duplex'] == {'code': 'ZERO_DELAY_CYCLE', 'dev': 'ZERO_LATENCY_CYCLE'}, z['duplex']
+    assert z['negative'] == ['PATH_DELAY_INVALID', 'PATH_DELAY_INVALID'], ('both wires carry -1', z['negative'])
+
+    # A record never precedes its cause.
+    assert r['causeAtTop'] == [['top', 'injected'], ['top', 'forwarded'], ['right', 'sent']], r['causeAtTop']
+    assert r['causal'] is True and r['runsSeen'] >= 15, (r['causal'], r['runsSeen'])
+
+    # No floating point anywhere, payloads included.
+    fr = r['fraction']
+    assert fr['code'] == 'PAYLOAD_FRACTION' and fr['path'] == 'inputs[0].value.payload.items[1].kg' and fr['next'] == 'string', fr
+    assert fr['big'] == 'PAYLOAD_FRACTION' and fr['level'] == ['PAYLOAD_FRACTION', 'inputs[0].value'] and fr['ints'] is True, fr
 
     # Records validate and carry principal and hop.
     rec = r['records']
@@ -214,7 +331,7 @@ def main() -> None:
     assert rec['value'] == ['channel', 'id', 'origin', 'parent', 'payload', 'root'], rec['value']
     assert ['s', 'injected', 'svc:ops'] in rec['principals'] and ['s', 'sent', 'svc:ops'] in rec['principals'], rec['principals']
     assert ['m', 'sent', 'svc:mailer'] in rec['principals'] and ['z', 'arrived', 'svc:mailer'] in rec['principals'], ('a participant acts in its own name', rec['principals'])
-    assert set(rec['payload']) == {'{"caseId":"7","weight":1.5}'}, rec['payload']
+    assert set(rec['payload']) == {'{"caseId":"7","weight":1500}'}, rec['payload']  # weight in grams
     assert rec['inputs'][0] == 0 and all(n == 1 for n in rec['inputs'][1:]), rec['inputs']
     assert all(v is False for v in r['bad'].values()), r['bad']
     assert r['goodNull'] is True

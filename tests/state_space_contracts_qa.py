@@ -193,10 +193,13 @@ const reload=doc=>D.documentFromFilePayload(JSON.parse(JSON.stringify(D.compactD
   const snapshot=JSON.stringify(validDoc);
   out.valid={bound:bound.ok,wires:wires.map(w=>w.ok),check:S.checkDocument(validDoc,packs),unmutated:JSON.stringify(validDoc)===snapshot,noPacks:S.checkDocument(validDoc,[])};
   const crafted={};
-  // PATH_DELAY_INVALID: delay 0 on an otherwise valid Wire.
-  {const d=reload(valid);d.wires[0].config.delay=0;crafted.PATH_DELAY_INVALID=d}
-  // PATH_DIRECTION_FLOW: a forward Wire from an input port to an output port.
-  {const d=D.makeDocument({id:'dir'});mk(d,{id:'a',symbolId:'act',x:0,y:0});mk(d,{id:'b',symbolId:'act',x:400,y:0});mkw(d,{id:'k',a:'a',aSide:'in',b:'b',bSide:'out'});crafted.PATH_DIRECTION_FLOW=reload(d)}
+  // PATH_DELAY_INVALID: delay -1 on an otherwise valid Wire (delay 0 is a zero-delay Path, allowed since 2026-09-26).
+  {const d=reload(valid);d.wires[0].config.delay=-1;crafted.PATH_DELAY_INVALID=d}
+  // A forward Wire from an input port to an output port is no longer refused (it was PATH_DIRECTION_FLOW):
+  // the run blocks it and records it with the graph core's reason.
+  {const d=D.makeDocument({id:'dir'});mk(d,{id:'a',symbolId:'act',x:0,y:0});mk(d,{id:'b',symbolId:'act',x:400,y:0});mkw(d,{id:'k',a:'a',aSide:'in',b:'b',bSide:'out'});
+   const doc=reload(d),run=S.startRun({doc,packs});if(run.ok)S.step(run.run);
+   out.inToOut={check:S.checkDocument(doc,packs),blocked:run.ok?run.run.records.filter(x=>x.provenance.rule==='blocked').map(x=>[x.subject.entity,x.value]):run}}
   // CHANNEL_MISMATCH: a file whose Wire joins ports sharing no channel (the loader keeps it as written).
   {const file={schema:D.DOCUMENT_SCHEMA,id:'ch',revision:0,references:[],components:[
      {id:'a',symbolId:'act',x:0,y:0,config:{attachmentDefaults:'none',attachmentPoints:[{id:'tx',side:'right',t:.5,flow:'out',channels:[{id:'data'}]}]}},
@@ -228,7 +231,10 @@ const reload=doc=>D.documentFromFilePayload(JSON.parse(JSON.stringify(D.compactD
    mkw(d,{id:'dupBad',a:'a',aSide:'in',b:'b',bSide:'in',config:{direction:'duplex'}});
    mkw(d,{id:'revBad',a:'a',aSide:'out',b:'b',bSide:'in',config:{direction:'reverse'}});
    mkw(d,{id:'free',aAttachment:{kind:'free',x:0,y:0},b:'b',bSide:'in',config:{direction:'reverse'}});
-   out.directions=S.checkDocument(reload(d),packs).refusals.map(x=>[x.code,x.subject])}
+   out.directions=S.checkDocument(reload(d),packs).refusals.map(x=>[x.code,x.subject]);
+   // A Wire no direction of which the port flows admit is blocked by the run and recorded, never refused (review 2026-09-26).
+   const run=S.startRun({doc:reload(d),packs});if(run.ok)S.step(run.run);
+   out.directionsBlocked=run.ok?run.run.records.filter(x=>x.provenance.rule==='blocked').map(x=>[x.subject.entity,x.value]):run}
   out.garbage={nul:S.checkDocument(null,packs).ok,str:S.checkDocument('x',packs).ok};
 }
 
@@ -267,7 +273,7 @@ const refusedClean=(doc,fn,pick)=>{const rev=doc.revision,before=JSON.stringify(
   }
   r.accepted=upd(d,'w',{config:{delay:5}},'wire').ok&&d.wires[0].config.delay===5;
   r.unrelated=upd(d,'w',{config:{label:'x'}},'wire').ok;
-  const file=JSON.parse(JSON.stringify(D.compactDocument(d)));file.wires[0].config.delay=0;
+  const file=JSON.parse(JSON.stringify(D.compactDocument(d)));file.wires[0].config.delay=-1;
   const loaded=D.documentFromFilePayload(file);
   r.loadKeeps=loaded.wires[0].config.delay;
   r.check=S.checkDocument(loaded,packs).refusals.map(x=>x.code);
@@ -532,7 +538,7 @@ def check_amendment() -> None:
     for kind in ('create', 'update'):
         for key, got in dl[kind].items():
             assert got['ok'] is False and 'PATH_DELAY_INVALID' in got['msg'] and got['rev'] and got['same'], (kind, key, got)
-    assert dl['loadKeeps'] == 0 and dl['check'] == ['PATH_DELAY_INVALID'], dl
+    assert dl['loadKeeps'] == -1 and dl['check'] == ['PATH_DELAY_INVALID'], dl
     ad = a['adapterDelay']
     for key in ('update', 'create'):
         assert ad[key]['ok'] is False and 'PATH_DELAY_INVALID' in ad[key]['error']['message'], ad
@@ -994,7 +1000,8 @@ def main() -> None:
         assert key in bare['keys'], (key, bare['keys'])
     src = (ROOT / 'src/07-state-space.js').read_text(encoding='utf-8')
     assert 'document.' not in src and 'window' not in src and 'logic.and' not in src, 'the engine holds no DOM and no pack data'
-    assert "require('./03-canonical.js')" in src and "require('./05-data-core.js')" in src and src.count('require(') == 2, 'requires only 03 and 05'
+    # Review 2026-09-26: the signal model (04) is read directly, so a run never depends on load order.
+    assert "require('./03-canonical.js')" in src and "require('./04-signal-model.js')" in src and "require('./05-data-core.js')" in src and src.count('require(') == 3, 'requires only 03, 04 and 05'
 
     examples = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / 'examples').glob('*.sov'))
     assert examples, 'no examples'
@@ -1126,7 +1133,10 @@ def main() -> None:
         assert got['codes'] == [code] and got['ok'] is False and got['unmutated'], (key, got)
         assert all(x['subject'] and x['message'] for x in got['refusals']), (key, got)
     assert r['declaredOk'] == {'ok': True, 'refusals': []}, r['declaredOk']
-    assert r['directions'] == [['PATH_DIRECTION_FLOW', 'wire:dupBad'], ['PATH_DIRECTION_FLOW', 'wire:revBad']], r['directions']
+    # Review 2026-09-26: a Wire no direction of which is admitted is blocked by the run and recorded, not refused.
+    assert r['directions'] == [], r['directions']
+    assert r['directionsBlocked'] == [['dupBad', 'a.in cannot emit'], ['dupBad', 'b.in cannot emit'], ['dupOutIn', 'b.in cannot emit'], ['free', 'free end'], ['none', 'direction none'], ['revBad', 'b.in cannot emit']], r['directionsBlocked']
+    assert r['inToOut']['check'] == {'ok': True, 'refusals': []} and r['inToOut']['blocked'] == [['k', 'a.in cannot emit']], r['inToOut']
     assert r['garbage'] == {'nul': False, 'str': False}, r['garbage']
 
     # checkDocument on every example returns without throwing (its result is printed), and since amendment 1

@@ -352,7 +352,7 @@
                 "description": "the message's own channel, which config.accepts filters"
               },
               "payload": {
-                "description": "any JSON, canonicalized by RFC 8785 as it is"
+                "description": "JSON whose numbers are all safe integers (a fraction is refused with PAYLOAD_FRACTION), canonicalized by RFC 8785"
               },
               "origin": {
                 "type": "string",
