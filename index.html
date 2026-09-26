@@ -3167,7 +3167,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return rows;
   }
   function impliedDevices(d){
-    const g=typeof globalThis!=='undefined'?globalThis:{},G=g.SovSchematicGraph,N=g.SovSchematicNotation,out={definitions:{},bind:{},sources:[]};
+    const g=typeof globalThis!=='undefined'?globalThis:{},G=g.SovSchematicGraph,N=g.SovSchematicNotation,out={definitions:{},bind:{},sources:[],clocks:[]};
     if(!G?.signalConfig)return out;
     let glyphs={};try{const r=N?N.resolve(d):null;glyphs=r?.ok?(r.notation?.glyphs||{}):{}}catch(_){glyphs={}}
     for(const c of d.components){
@@ -3178,10 +3178,12 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       // declared or the editor's default (STATE-SPACE.md, What signalMode becomes).
       if(c.symbolId==='point')continue;
       const sig=G.signalConfig(c,glyph);
-      if(sig.kind!=='binary'||sig.clock)continue;
       let specs=[];try{specs=Data.canonicalAttachmentPointDescriptors(c).filter(Boolean)}catch(_){specs=[]}
       const named=specs.filter(s=>NAME.test(s.id));
       const ins=named.filter(s=>specFlow(s)==='in').map(s=>s.id),outs=named.filter(s=>specFlow(s)==='out').map(s=>s.id);
+      // A square clock drives its out ports with scheduled edges (see clockEdge); other waves are continuous.
+      if(sig.clock){if(sig.clock.wave==='square'&&sig.clock.periodMs>0)for(const point of outs)out.clocks.push({entity:c.id,point,clock:clone(sig.clock)});continue}
+      if(sig.kind!=='binary')continue;
       if(sig.mode==='derived'){
         if(!BINARY_COMBINE[sig.combine]||!ins.length||ins.length>8||!outs.length||outs.length>8)continue;
         const ref=`implied.${sig.combine}(${ins.join(',')})>(${outs.join(',')})@1`;
@@ -3191,6 +3193,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       }else for(const point of outs)out.sources.push({entity:c.id,point,channel:'main',value:sig.value>=sig.threshold,at:0});
     }
     return out;
+  }
+  // A square clock's edges in ticks: rise at phase + k*period, fall duty*period later; after `cycles`
+  // periods it falls and stops. Each processed edge schedules the next, always at least a tick on.
+  function clockEdge(source,tickMs,k,rising,after){
+    const c=source.clock,tick=ms=>Math.max(0,Math.round(ms/tickMs));
+    if(c.cycles&&k>=c.cycles)return null;
+    const at=tick(c.phaseMs+k*c.periodMs+(rising?0:c.duty*c.periodMs));
+    return {kind:'clock',at:after===null?at:Math.max(after+1,at),entity:source.entity,point:source.point,channel:'main',value:rising,k};
   }
   // What the run reads of the document, resolved once at start: each Wire's two ports, delay,
   // the directions it carries and the channels it shares; each Component's role; each merge.
@@ -3301,7 +3311,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       runtimeVersion:RUNTIME_VERSION,doc:d,definitions,components:shape.components,merges:shape.merges,wires:shape.wires,
       seed,budget,tickMs,spent:0,tick:null,walk:o.walk||'forward',
       signal:{},lastRecord:{},queues:{},sequence:0,ledger:[],records:[],replayDraws:null,
-      pending:[...inputs,...sources].sort((x,y)=>cmpList([x.at,x.entity,x.point,x.channel],[y.at,y.entity,y.point,y.channel])).map(x=>({kind:'input',...x}))
+      clocks:Object.fromEntries(implied.clocks.map(c=>[portKey(c.entity,c.point,'main'),c])),
+      pending:[...[...inputs,...sources].map(x=>({kind:'input',...x})),...implied.clocks.map(c=>clockEdge(c,tickMs,0,true,null)).filter(Boolean)]
+        .sort((x,y)=>cmpList([x.at,x.entity,x.point,x.channel],[y.at,y.entity,y.point,y.channel]))
     };
     appendEntry(run,'start',{replayKey:clone(replayKey),budget});
     for(const input of inputs)appendEntry(run,'input',clone(input));
@@ -3397,7 +3409,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const merge=run.merges[key]||DEFAULT_MERGE,queue=merge.combine==='queue'?ensureQueue(run,ctx,key):null;
     const base={entity:g.entity,point:g.point,channel:g.channel,phase:0};
     let win=null;
-    if(g.input)win={value:g.input.value,kind:'registered',observer:'input',rule:'input',inputs:[],always:true,exclude:[]};
+    if(g.input&&g.input.kind==='clock')win={value:g.input.value,kind:'derived',observer:'rule:clock',rule:'clock',inputs:[],always:true,exclude:[]};
+    else if(g.input)win={value:g.input.value,kind:'registered',observer:'input',rule:'input',inputs:[],always:true,exclude:[]};
     else if(g.output)win={value:g.output.value,kind:'derived',observer:`rule:${g.output.rule}`,rule:g.output.rule,inputs:g.output.inputs,emits:true,exclude:[]};
     if(win){
       for(const a of g.arrivals)makeRecord(run,ctx,{...base,kind:'derived',value:a.value,observer:`path:${a.wire}`,rule:'overridden',inputs:[a.from],rank:a.phase});
@@ -3468,7 +3481,12 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const group=(entity,point,channel)=>{const key=portKey(entity,point,channel);if(!groups.has(key))groups.set(key,{entity,point,channel,input:null,output:null,arrivals:[]});return groups.get(key)};
     for(const item of due){
       const g=group(item.entity,item.point,item.channel);ctx.cost++;
-      if(item.kind==='input')g.input=item;else if(item.kind==='output')g.output=item;else g.arrivals.push(item);
+      if(item.kind==='input'||item.kind==='clock')g.input=item;else if(item.kind==='output')g.output=item;else g.arrivals.push(item);
+      if(item.kind==='clock'){
+        const source=run.clocks[portKey(item.entity,item.point,item.channel)];
+        const next=source&&clockEdge(source,run.tickMs,item.value?item.k:item.k+1,!item.value,t);
+        if(next){run.pending.push(next);ctx.fresh.push(next)}
+      }
     }
     for(const [key,q] of Object.entries(run.queues))if(q.items.length>q.head&&q.next===t){const [entity,point,channel]=JSON.parse(key);group(entity,point,channel)}
     for(const key of walked(run,[...groups.keys()].sort())){updatePort(run,ctx,groups.get(key));if(ctx.diverged)return {ok:false,...ctx.diverged}}
