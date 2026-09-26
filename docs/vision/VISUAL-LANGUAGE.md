@@ -137,6 +137,10 @@ The bake-off put two or three contenders per view side by side, drawn from the s
 | The views: timing and event log, level trace and transfer loop, landscape and table, search outline and tree, timeline, glyph sheet, and a run page that links them | `scripts/plot_run.mjs` (plain JavaScript, record in, SVG out; runs under Node now and in a page or the editor later) | `tests/plot_run_qa.py`: every view's claims against the record, determinism, both themes |
 | Live signal state on the editor's own export | `scripts/export_svg.py --logic-state A=1,B=1 [--monochrome]` | `tests/logic_state_export_qa.py`: every input of the half adder against its definition, one chip per pin, no packets in a snapshot, no signal colour in monochrome |
 | Gallery | `docs/visual/`, from `scripts/build_visual_gallery.py` | `--check` inside `tests/plot_run_qa.py` |
+| Size rule: a gate's glyph drawn under 40 px shows its rectangle (`svgSmall`), following the camera | `applyGlyphSizeRule` in `src/55-render.js`; `view.zoom()` / `view.setZoom()` in the API | `tests/glyph_size_rule_qa.py`: one variant per gate at every zoom, the small one exactly when height x zoom < 40 |
+| Composite parts as IEC boxes, qualified by their own document (HA, FA, Σ4, RG4, ...) | `composite_glyph()` in `scripts/logic_glyphs.py`, applied by `scripts/build_logic_examples.py` | `build_logic_examples.py --check` |
+| Landscape slices for more than two decisions: every pair, the rest held at the whole-unit plan, labelled as a slice | `landscape(pair=, held=)` in `scripts/optimize_sov.py`; `record_optimize` | `tests/plot_run_qa.py` (held values, projected marks, true values at named plans) |
+| Step-through on the run page: timing event by event (cursor, lane mark, log row, bus value), search node by node in the order decided (later nodes fade in outline and tree) | `STEPPER` in `scripts/plot_run.mjs` | `tests/run_page_qa.py` (browser) against the record; `tests/plot_run_qa.py` (step order is log order) |
 
 Making the tests fail on purpose (transient detection off, pruned nodes drawn live) fails them. Two defects surfaced while building: a bare `&` in the IEC AND qualifier made the glyph markup unparseable, which in the editor would have silently fallen back to the generic symbol; and monochrome exports still named the signal colour for the hidden glow.
 
@@ -175,9 +179,5 @@ python scripts/export_svg.py examples/logic/half-adder.sov --logic-state A=1,B=1
 
 | Gap | What closes it |
 | --- | --- |
-| The size rule (rectangle below about 40 px) needs the editor's zoom | the renderer picks `glyph_small` when a gate's drawn size falls below the threshold; post-RC |
-| Pin chips are always on in exports; on hover, selection or zoom ≥ 100% in the editor | editor work, post-RC |
-| The landscape needs exactly two free decisions | pairwise slices through the best plan for more, labelled as slices |
-| Composite gates still draw as generic boxes | an IEC box labelled with the composite's name, from its document |
-| Step-through for timing and search | a control on the run page over the recorded events |
-| Editor, API and MCP surfaces | the view functions move into the editor's module set after the RC; `scripts/plot_run.mjs` is already plain JavaScript with no dependencies |
+| Pin chips are always on in exports; on hover, selection or zoom ≥ 100% in the editor | the logic runtime shared between editor and scripts, then an overlay in the editor |
+| Editor, API and MCP surfaces for the views | the view functions move into the editor's module set; `scripts/plot_run.mjs` is already plain JavaScript with no dependencies |

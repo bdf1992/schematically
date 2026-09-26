@@ -17,7 +17,9 @@ claim is checked here against the record, not against the renderer's own arithme
     what lies outside it as projected, and holds the true value of the plans it names; every
     whole-unit local optimum is ringed and nothing else is, and every limit is drawn;
   - search: one outline row per logged node, dead exactly when pruned or infeasible, the
-    gradient in [0, 1] with the incumbent at 0;
+    gradient in [0, 1] with the incumbent at 0, and step order equal to log order;
+  - step-through: timing marks sit on recorded changes, one cursor per timing view, and the
+    page puts step controls on exactly the timing and search figures;
   - timeline: one bar per unit span at its recorded start and end, and the stall where it happened;
   - both themes: every view carries the dark tokens;
   - the committed gallery in docs/visual/ is what the code draws today.
@@ -151,6 +153,12 @@ def check_views() -> None:
         else:
             zoom = [int(s.attrib['data-value']) for s in nodes(views['ripple.timing-zoom'], 'data-bus') if s.attrib['data-transient'] == '1']
             assert zoom in ([6, 4, 0], [14, 12, 8]), zoom
+        # Step-through: one steppable mark per recorded change, at its time, with a hidden cursor.
+        marks = nodes(views[f'{name}.timing'], 'data-t')
+        changes = {(sig, c[0]) for sig, cs in rec['signals'].items() for c in cs if c[0] > 0}
+        assert {(m.attrib['data-link'].split(':')[1], float(m.attrib['data-t'])) for m in marks} <= changes, name
+        assert all(m.attrib['data-label'] and m.attrib['data-x'] for m in marks)
+        assert len(nodes(views[f'{name}.timing'], 'data-cursor')) == 1
 
     # level: switch counts
     rec = records['schmitt']
@@ -223,6 +231,8 @@ def check_views() -> None:
                 assert 0 <= float(row['data-gap']) <= 1
             if e['outcome'] == 'incumbent':
                 assert float(row['data-gap']) == 0, row
+            # Step-through order is the order branch and bound decided the nodes: the log's.
+            assert row['data-order'] == str(log.index(e)), (view, e, row['data-order'])
 
     # timeline
     rec = records['week']
@@ -238,7 +248,9 @@ def check_views() -> None:
 
     # page: every view present, linking wired
     page = views['page']
-    assert page.count('<figure>') == sum(1 for k in views if k != 'page')
+    assert page.count('<figure') == sum(1 for k in views if k != 'page')
+    assert page.count('data-step="timing"') == sum(1 for k in views if '.timing' in k)
+    assert page.count('data-step="search"') == sum(1 for k in views if k.endswith('.search-outline')) >= 1
     assert 'data-link="ev:Q0:169"' in page and 'CSS.escape' in page
 
 

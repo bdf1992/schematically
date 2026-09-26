@@ -59,7 +59,7 @@ const STYLE = `.sov-view{${TOKENS_LIGHT};font-family:"IBM Plex Mono",ui-monospac
   `:root[data-theme="dark"] .sov-view{${TOKENS_DARK}}` +
   `.sov-view .lbl{font-size:11px;fill:var(--v-muted)}.sov-view .ink{font-size:11px;font-weight:600;fill:var(--v-ink)}` +
   `.sov-view .lane{font-size:11px;font-weight:600;fill:var(--v-ink)}.sov-view .bad{fill:var(--v-s2);font-weight:600}` +
-  `.sov-view [data-link].hl{outline:none;filter:drop-shadow(0 0 3px var(--v-hi))}`;
+  `.sov-view [data-link].hl{outline:none;filter:drop-shadow(0 0 3px var(--v-hi))}.sov-view .future{opacity:.12}`;
 
 function svg(w, h, label, body, kind) {
   return tag('svg', {xmlns: 'http://www.w3.org/2000/svg', viewBox: `0 0 ${w} ${h}`, class: 'sov-view', role: 'img',
@@ -105,7 +105,8 @@ export function timing(rec, opts = {}) {
     d += `H${r2(X(t1))}`;
     body += el('path', {d, fill: 'none', stroke: name === rec.clock ? '--v-muted' : '--v-hi', 'stroke-width': 1.8, 'stroke-linejoin': 'round'});
     ch.forEach(([t, v]) => { if (t > t0 && t <= t1)
-      body += tag('rect', {x: X(t) - 3, y, width: 6, height: 24, fill: 'transparent', 'data-link': `ev:${name}:${t}`}, title(`t=${t}  ${name} ${v ? '0→1' : '1→0'}`)); });
+      body += tag('rect', {x: X(t) - 3, y, width: 6, height: 24, fill: 'transparent', 'data-link': `ev:${name}:${t}`, 'data-t': t, 'data-x': r2(X(t)),
+        'data-label': `t=${t}  ${name} ${v ? '0→1' : '1→0'}`}, title(`t=${t}  ${name} ${v ? '0→1' : '1→0'}`)); });
   });
   let y = top + lanes.length * lh + 6;
   for (const bus of Object.keys(rec.buses)) {
@@ -122,6 +123,8 @@ export function timing(rec, opts = {}) {
     y += 30;
   }
   const ay = y + 8; body += el('path', {d: `M${left} ${ay}H${W - 10}`, stroke: '--v-line'});
+  // a cursor for the run page's step-through control; hidden in a standalone picture
+  body += el('line', {x1: left, x2: left, y1: top - 4, y2: ay, stroke: '--v-hi', 'stroke-width': 1.4, 'data-cursor': 1, display: 'none'});
   const span = t1 - t0, step = span <= 30 ? 4 : span <= 120 ? 12 : 48;
   for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) body += text(X(t), ay + 15, String(t), 'lbl', {'text-anchor': 'middle'});
   body += text(W - 10, ay + 30, 'time (gate delays)', 'lbl', {'text-anchor': 'end'});
@@ -319,6 +322,7 @@ function searchModel(rec) {
   Object.values(by).forEach(n => n.kids.sort((a, b) => a.id - b.id));
   const order = []; (function walk(n, d) { n.depth = d; order.push(n); n.kids.forEach(k => walk(k, d + 1)); })(by[0], 0);
   const span = Math.max(1e-9, S.relaxation - S.objective);
+  S.nodes.forEach((e, i) => { by[e.id].decided = i; });
   for (const n of order) { n.dead = n.outcome === 'pruned' || n.outcome === 'infeasible'; n.gap = n.bound === null || n.bound === undefined ? null : Math.max(0, Math.min(1, (n.bound - S.objective) / span)); }
   return {order, by};
 }
@@ -344,7 +348,8 @@ export function searchOutline(rec) {
     let g = n.depth ? el('path', {d: `M${x - 8} ${y - rowH + 6}V${y}H${x - 3}`, fill: 'none', stroke: '--v-line', 'stroke-dasharray': n.dead ? '2 2' : null}) : '';
     g += nodeMark(n, x + 2, y) + text(x + 12, y + 4, n.label, n.dead ? 'lbl' : 'ink', n.dead ? {'text-decoration': n.outcome === 'pruned' ? 'line-through' : null} : {});
     if (n.bound != null) g += el('rect', {x: BX, y: y - 4, width: Math.max(1, B(n.bound) - BX), height: 8, rx: 2, fill: n.dead ? '--v-muted' : '--v-hi', 'fill-opacity': n.dead ? 0.3 : gapOpacity(n.gap)});
-    body += tag('g', {'data-node': n.id, 'data-link': `node:${n.id}`, 'data-dead': n.dead ? 1 : 0, 'data-gap': n.gap === null ? '' : r2(n.gap), 'data-outcome': n.outcome},
+    body += tag('g', {'data-node': n.id, 'data-link': `node:${n.id}`, 'data-dead': n.dead ? 1 : 0, 'data-gap': n.gap === null ? '' : r2(n.gap), 'data-outcome': n.outcome,
+      'data-order': n.decided, 'data-label': `${n.label}: ${n.outcome}${n.bound != null ? `, bound ${n.bound.toFixed(2)}` : ''}`},
       g + el('rect', {x: 0, y: y - 9, width: W, height: 18, fill: 'transparent'}) + nodeTitle(n, rec));
   });
   const yb = top + order.length * rowH + 8;
@@ -359,7 +364,7 @@ export function searchTree(rec) {
   const X = lin(0, Math.max(1, leaves.length - 1), 18, W - 18), Y = d => 22 + d * 42;
   let body = '';
   order.forEach(n => n.kids.forEach(k => { body += el('path', {d: `M${r2(X(n.lx))} ${Y(n.depth)}L${r2(X(k.lx))} ${Y(k.depth)}`, stroke: k.dead ? '--v-line' : '--v-ink', 'stroke-width': k.dead ? 1.1 : 1.6, 'stroke-dasharray': k.dead ? '3 3' : null, opacity: k.dead ? 1 : 0.8}); }));
-  order.forEach(n => { body += tag('g', {'data-node': n.id, 'data-link': `node:${n.id}`, 'data-dead': n.dead ? 1 : 0, 'data-gap': n.gap === null ? '' : r2(n.gap)},
+  order.forEach(n => { body += tag('g', {'data-node': n.id, 'data-link': `node:${n.id}`, 'data-dead': n.dead ? 1 : 0, 'data-gap': n.gap === null ? '' : r2(n.gap), 'data-order': n.decided},
     nodeMark(n, X(n.lx), Y(n.depth)) + el('circle', {cx: X(n.lx), cy: Y(n.depth), r: 9, fill: 'transparent'}) + nodeTitle(n, rec)); });
   const inc = order.find(n => n.outcome === 'incumbent');
   if (inc) body += text(X(inc.lx) - 10, Y(inc.depth) + 4, `best ${rec.search.objective.toFixed(0)}`, 'ink', {'text-anchor': 'end'});
@@ -477,9 +482,38 @@ export function viewsFor(rec) {
   throw new Error(`unknown record kind ${rec.kind}`);
 }
 
+// The run page's step-through control. Timing: each event in time order; the cursor moves to
+// it, its lane mark and log row light up, and the status reads the change and the bus values.
+// Search: each node in the order branch and bound decided it; later nodes fade, the current one
+// lights, in both the outline and the tree. A search opens at its last step, so the page is
+// complete at rest; timing opens at its first event.
+const STEPPER = `for(const fig of document.querySelectorAll('figure[data-step]')){` +
+  `const kind=fig.dataset.step,sec=fig.closest('section'),range=fig.querySelector('.step input'),status=fig.querySelector('.step-status');let items,k=0;` +
+  `if(kind==='timing'){items=[...fig.querySelectorAll('.stage [data-t]')].sort((a,b)=>a.dataset.t-b.dataset.t);}` +
+  `else{const n=[...sec.querySelectorAll('[data-order]')].map(x=>+x.dataset.order);items=[...Array(Math.max(...n)+1).keys()];}` +
+  `range.max=String(items.length-1);` +
+  `function show(i){k=Math.max(0,Math.min(items.length-1,i));range.value=String(k);sec.querySelectorAll('.hl').forEach(x=>x.classList.remove('hl'));` +
+  `if(kind==='timing'){const r=items[k],cur=fig.querySelector('[data-cursor]');cur.setAttribute('x1',r.dataset.x);cur.setAttribute('x2',r.dataset.x);cur.removeAttribute('display');` +
+  `fig.querySelectorAll('[data-link="'+CSS.escape(r.dataset.link)+'"]').forEach(x=>x.classList.add('hl'));` +
+  `const t=+r.dataset.t,buses=[...fig.querySelectorAll('.stage [data-bus]')].filter(g=>+g.dataset.t0<=t&&t<+g.dataset.t1).map(g=>g.dataset.bus+' = '+g.dataset.value);` +
+  `status.textContent='step '+(k+1)+' of '+items.length+' · '+r.dataset.label+(buses.length?' · '+buses.join(', '):'');fig.dataset.at=String(k);}` +
+  `else{let label='';sec.querySelectorAll('[data-order]').forEach(g=>{const o=+g.dataset.order;g.classList.toggle('future',o>k);if(o===k){g.classList.add('hl');if(g.dataset.label)label=g.dataset.label;}});` +
+  `status.textContent='node '+(k+1)+' of '+items.length+' decided · '+label;fig.dataset.at=String(k);}}` +
+  `fig.querySelectorAll('.step button').forEach(b=>b.addEventListener('click',()=>show(k+Number(b.dataset.step))));` +
+  `range.addEventListener('input',()=>show(Number(range.value)));` +
+  `fig.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){show(k+1);e.preventDefault();}if(e.key==='ArrowLeft'){show(k-1);e.preventDefault();}});` +
+  `show(kind==='timing'?0:items.length-1);}`;
+
 export function page(records, heading = 'Run views') {
   const sections = records.map(rec => {
-    const views = viewsFor(rec).map(v => `<figure><figcaption>${esc(v.title)}</figcaption><div class="stage">${v.svg}</div>${v.html ? `<div class="detail">${v.html}</div>` : ''}</figure>`).join('');
+    const views = viewsFor(rec).map(v => {
+      // Timing steps through events; the search steps through nodes in the order decided.
+      const step = v.name.startsWith('timing') ? 'timing' : v.name === 'search-outline' ? 'search' : null;
+      const controls = step ? `<div class="step"><button type="button" data-step="-1" aria-label="Step back">◀</button>` +
+        `<input type="range" min="0" value="0" aria-label="Step"><button type="button" data-step="1" aria-label="Step forward">▶</button>` +
+        `<span class="step-status" aria-live="polite"></span></div>` : '';
+      return `<figure${step ? ` data-step="${step}" tabindex="0"` : ''}><figcaption>${esc(v.title)}</figcaption>${controls}<div class="stage">${v.svg}</div>${v.html ? `<div class="detail">${v.html}</div>` : ''}</figure>`;
+    }).join('');
     return `<section><h2>${esc(rec.document.path)} <span class="kind">${esc(rec.kind)}</span></h2><p class="fp">${esc(rec.document.fingerprint)}</p>${views}</section>`;
   }).join('');
   const css = `:root{--bg:#F4F4F1;--ink:#171715;--muted:#6C6C65;--line:#D8D8D1;--panel:#fff;--bad:#eb6834;--hl:rgba(42,120,214,.16)}` +
@@ -491,9 +525,11 @@ export function page(records, heading = 'Run views') {
     `figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px}figcaption{font-weight:600}` +
     `.stage{overflow-x:auto}.stage svg{display:block;width:100%;height:auto;border-radius:6px}.detail{overflow-x:auto;max-height:340px}` +
     `.sov-log{border-collapse:collapse;font:12.5px/1.4 ui-monospace,Menlo,monospace;width:100%}.sov-log th,.sov-log td{text-align:left;padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap}` +
-    `.sov-log th{color:var(--muted)}.sov-log td.num{text-align:right}.sov-log tr.bad td{color:var(--bad)}.sov-log tr.hl td{background:var(--hl)}`;
-  const js = `document.addEventListener('pointerover',e=>{const t=e.target.closest('[data-link]');document.querySelectorAll('.hl').forEach(x=>x.classList.remove('hl'));` +
-    `if(!t)return;document.querySelectorAll('[data-link="'+CSS.escape(t.dataset.link)+'"]').forEach(x=>x.classList.add('hl'));});`;
+    `.sov-log th{color:var(--muted)}.sov-log td.num{text-align:right}.sov-log tr.bad td{color:var(--bad)}.sov-log tr.hl td{background:var(--hl)}` +
+    `.step{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font:13px ui-monospace,Menlo,monospace}.step button{font:inherit;padding:4px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);cursor:pointer}` +
+    `.step input{flex:1 1 180px;min-width:0}.step-status{color:var(--muted);flex:1 1 100%}figure:focus-visible{outline:2px solid #2a78d6;outline-offset:2px}`;
+  const js = `document.addEventListener('pointerover',e=>{const t=e.target.closest('[data-link]');if(!t||t.closest('[data-step]')&&e.target.closest('.step'))return;document.querySelectorAll('.hl').forEach(x=>x.classList.remove('hl'));` +
+    `document.querySelectorAll('[data-link="'+CSS.escape(t.dataset.link)+'"]').forEach(x=>x.classList.add('hl'));});` + STEPPER;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(heading)}</title><style>${css}</style></head>` +
     `<body><main><h1>${esc(heading)}</h1>${sections}</main><script>${js}</script></body></html>\n`;
 }
