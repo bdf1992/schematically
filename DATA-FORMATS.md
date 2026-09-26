@@ -159,6 +159,58 @@ rebuilds:
 Files that still carry the full projections load identically; nothing is removed
 from the reader.
 
+Saved documents carry authored truth only, and a document is the same document
+wherever it is held (contract #50; STATE-SPACE.md "One normalizer"). Every default a
+record takes and every layout constraint on it is applied by the data core
+(`05-data-core.js`): `normalizeDocument` on load and every `create`/`update`/`delete`
+on every surface, and the editor calls the same functions (`applyComponentDefaults`,
+`applyWireDefaults`, `normalizeEditorState`, `normalizePortConnections`,
+`normalizePlacement`, `placeHostedComponent`), adding only appearance projections
+that are stripped. The saved form is minimal: `compactDocument` normalizes, then
+omits every value equal to its default:
+
+- component: `editor` keys equal to `{pinned: false, locked: false, hidden: false,
+  opacity: 1, rate: 1}`; `canvasId` `canvas:global`; `parentId` (the owner of
+  `canvasId`); `config.label` `''`; `config.colorSlot` `0`; `config.signalMode` equal
+  to the preset's (`relay` for a Point) or `source`; presentation `graphic` keys equal to
+  the preset's kind (or `symbol`), `ref` `sym-<symbolId>` and `svg` `''`; `size` keys
+  equal to the preset's (or 112 x 84); `interiorColorSlot` equal to `colorSlot`; `text`
+  `''`; `padding` 16; `backdrop` equal to the preset's (or `auto`); a typed Component's
+  `labelMode` `boundary`; `form` keys equal to the preset's normalized Form; a port
+  contract's `label` `''`, `face` `external`, `connectionCount` 1, `activeConnection` 0,
+  and its connections when they are the one default connection (a kept connection omits
+  `colorSlot` 0, its default `flow` and `access` `read-write`); empty objects;
+- a Wire-, Path- or edge-hosted component's `x`, `y` and placement `hostId`/`wireId`
+  (they follow from the placement and the canvas);
+- wire: `editor` defaults; `config` keys equal to `{direction: forward, reciprocity:
+  none, label: '', forwardOperation: none, reverseOperation: none, aConnectionIndex: 0,
+  bConnectionIndex: 0, aChannelMarker: '1', bChannelMarker: '1'}`; `form` equal to the
+  1D path default; `role` `carrier`; a `canvasId` its ends imply;
+- document: an empty `layout`; `meta.timeScale` 1.
+
+Loading fills a preset key by key, so an omitted value comes back as its default and
+`compactDocument` is idempotent. Layout constraints are the data core's too: a size is
+bounded to 80..520 x 64..420; a Wire-hosted placement's `t` to .02..98 and a Path or
+edge placement's to 0..1; a Path- or edge-hosted component is posed on its host.
+Checkpoints store the same minimal form; recovery restores its snapshot unchanged.
+
+A legacy record that carries a hex `config.color` and no `colorSlot` takes the nearest slot of the
+canonical palette (`SovSchematicData.LIGHT_PALETTE`: the twelve light-appearance slots, six mono then
+the spectrum, as at 6a39efd), in the data core, whatever the editor's appearance.
+
+The position of a Wire-hosted Component is computed by the renderer from the Wire's route and is not
+part of the document: normalize removes its `x`/`y`, and `document.get`, `read`, HTTP and MCP return
+none; its `placement` (`t` along the Wire) says where it is. A Path- or edge-hosted component's
+`x`/`y` are computed by the data core from its placement and are not saved. An update that sets
+`x` or `y` on any of these host-derived positions is refused with `POSITION_DERIVED` unless the same
+patch sets `placement`. When a Wire is deleted, a component it hosted falls back to the world at
+its place along the straight line between the Wire's ends.
+
+**Format break.** Files saved in this minimal form may be refused by builds before this change:
+they omit default port contracts, and older validators check Wire reachability on the stored form,
+where those contracts are missing. The schema string (`soveraeign.schematic/document@0.1`) is
+unchanged; files saved by older builds load here as before.
+
 ### Default records
 
 A default point contract is one connection, outside face, no label. Only the points
@@ -340,14 +392,15 @@ cycle through such a port, `oscillating` means the state repeated.
 Every run operation on every surface returns one receipt, `soveraeign.schematic/run-receipt@0.1` (schema
 `formats/schematic.run-receipt.schema.json`, built by `runReceipt(operation, run, result, tickBefore?, handle?)`):
 `{schema, operation, runId, handle, ok, tickBefore, tickAfter, head, result, error}`. `operation` is the tool name
-(`schematic.run.start`, `.step`, `.settle`, `.trace`, `schematic.state.query`, `schematic.run.replay`); `runId` is the
+(`schematic.run.start`, `.step`, `.settle`, `.trace`, `schematic.state.query`, `schematic.run.replay`, and a registry's
+`schematic.run.drop`); `runId` is the
 run's content-derived id and `handle` its address on the surface (null for a replay, a refusal with no run, and a
 receipt built outside a registry); `head` is the ledger head hash after the operation; `error` is `{code, message,
 details?}` on a refusal (then `result` is null), `details` holding what the refusal names besides its code and message:
 `refusals` for `RUN_REFUSED`, `{tick, left}` for `BUDGET_SPENT`, `fields` for `REPLAY_KEY_MISMATCH`, `{entry, errors}`
 for `TRACE_INVALID`, `definitions` for "this page carries no packs"; `runId`, `handle`, the ticks and `head` are null
 when there is no run. `result` is, per operation: start, the start entry's body `{replayKey, budget}`; step, `{tick,
-records}`; settle, the result above; trace, the trace; query, the records; replay, `{records}`.
+records}`; settle, the result above; trace, the trace; query, the records; replay, `{records}`; drop, null.
 
 Runs live beside the document, never in it. `createRunRegistry({packs, document})` is the registry each surface keeps
 in memory. Each successful start registers the run under a new handle, `<runId>.<n>`, `n` counting the registry's
@@ -357,7 +410,10 @@ it) but are two runs, and neither touches the other. Step, settle, trace and que
 `document()`, the surface's current document, and `packs` is the raw pack JSON: a pack that does not load refuses every
 start and replay with `PACK_INVALID`, and an empty list refuses a document that references a definition with
 `PACK_INVALID`, "this page carries no packs". A start through a registry with a budget over `BUDGET_LIMIT`
-(1,000,000) is refused with `INPUT_INVALID`; `startRun` itself is not capped. No run operation captures history,
+(1,000,000) is refused with `INPUT_INVALID`; `startRun` itself is not capped. A registry holds at most 64 runs
+(`RUN_LIMIT`): a start beyond that is refused with `RUN_LIMIT` and nothing is evicted. `drop(handle)` removes a run and
+returns its receipt as it stood (`operation` `schematic.run.drop`, `result` null; `RUN_NOT_FOUND` for an unknown
+handle), after which a start succeeds. No run operation captures history,
 changes the document or its revision, or saves recovery. The browser reads its packs from `<script
 type="application/json" id="sov-packs">`, into which `build.py` inlines every `data/*.pack.json`; the MCP/HTTP server
 reads `data/*.pack.json` at start.

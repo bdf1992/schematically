@@ -145,12 +145,13 @@ let canvasKeyboardActive = false;
 let spacePanHeld=false;
 let panDrag=null;
 
-const LIGHT_SURFACE_MONO=['#202020','#353535','#4B4B4B','#616161','#747474','#878787'];
+// The light mono and spectrum slots are the data core's canonical palette (SovSchematicData.LIGHT_PALETTE).
+const LIGHT_SURFACE_MONO=SovSchematicData.LIGHT_PALETTE.slice(0,6);
 const LIGHT_SURFACE_MONO_DEEP=['#0D0D0D','#171717','#222222','#2E2E2E','#3A3A3A','#464646'];
 const DARK_SURFACE_MONO=['#F2F2EE','#DDDDD8','#C8C8C2','#B3B3AD','#9E9E98','#898984'];
 const DARK_SURFACE_MONO_BRIGHT=['#FFFFFF','#F0F0EB','#E1E1DB','#D2D2CC','#C3C3BD','#B4B4AE'];
 const BASE_PALETTES={
-  spectrum:['#D34E4E','#D99032','#79A948','#3EA7A0','#507CCB','#8A5BC0'],
+  spectrum:SovSchematicData.LIGHT_PALETTE.slice(6,12),
   cool:['#3C7EA6','#3AA2A0','#54A58B','#6589BF','#6D67B1','#8A69A7'],
   warm:['#C34B48','#D36F3E','#D7983D','#B77A4C','#A85E65','#91546F'],
   earth:['#8A6348','#A3814D','#7E8E55','#5F8677','#687C86','#806C78']
@@ -267,14 +268,8 @@ function normalizeSlot(v,fallback=0){
   return Number.isInteger(n)?Math.max(0,Math.min(11,n)):fallback;
 }
 function slotColor(slot){return activePalette()[normalizeSlot(slot)]}
-function nearestSlot(hex){
-  const c=hexRgb(hex);let best=0,bestD=Infinity;
-  activePalette().forEach((h,i)=>{
-    const q=hexRgb(h),d=(c.r-q.r)**2+(c.g-q.g)**2+(c.b-q.b)**2;
-    if(d<bestD){bestD=d;best=i}
-  });
-  return best;
-}
+// A hex colour's slot is read against the canonical palette, whatever the appearance (data core).
+function nearestSlot(hex){return SovSchematicData.nearestSlot(hex)}
 function lighten(hex,amount=.88){return mixHex([hex,'#FFFFFF'],[1-amount,amount])}
 function darken(hex,amount=.72){return mixHex([hex,'#111315'],[1-amount,amount])}
 function componentSurfaceFill(hex,amount=.86){return surfaceAppearance()==='dark'?darken(hex,Math.min(.88,amount*.82)):lighten(hex,amount)}

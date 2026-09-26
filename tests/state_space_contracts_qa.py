@@ -140,7 +140,7 @@ const reload=doc=>D.documentFromFilePayload(JSON.parse(JSON.stringify(D.compactD
   const w2=mkw(d,{id:'w2',a:'s2',aSide:'self',b:'g',bAttachment:{pointId:'in'}});
   const saved=D.compactDocument(d),back=reload(d),again=D.compactDocument(D.normalizeDocument(clone(back)));
   const gOf=doc=>doc.components.find(c=>c.id==='g').config.attachmentPoints;
-  const wOf=(doc,id)=>doc.wires.find(w=>w.id===id).config;
+  const wOf=(doc,id)=>doc.wires.find(w=>w.id===id).config||{}; // a saved Wire whose config is all defaults carries none (contract #50)
   const stored=clone(gOf(d));
   // An update that sets the merge on an existing port, and a delay by wire update.
   const upMerge=upd(d,'g',{config:{attachmentPoints:[{id:'in',side:'left',t:.5,flow:'in',channels:[{id:'main',merge:{combine:'sum'}}]},{id:'out',side:'right',t:.5,flow:'out'}]}});
@@ -731,7 +731,7 @@ const bound=()=>{const d=D.makeDocument({id:'b47'});mk(d,{id:'g',symbolId:'act',
   mk(d,{id:'z',symbolId:'act',x:600,y:0});
   const wire=mkw(d,{id:'k',a:'g',aAttachment:{pointId:'q'},b:'z',bSide:'in',config:{delay:3}});
   const rev=d.revision,clear=upd(d,'k',{config:{delay:null}},'wire'),k=()=>d.wires.find(w=>w.id==='k');
-  const cleared={ok:clear.ok,msg:clear.error?.message||'',rev:[rev,d.revision],inRecord:'delay' in k().config,saved:'delay' in D.compactDocument(d).wires.find(w=>w.id==='k').config,reloaded:'delay' in reload(d).wires.find(w=>w.id==='k').config};
+  const cleared={ok:clear.ok,msg:clear.error?.message||'',rev:[rev,d.revision],inRecord:'delay' in k().config,saved:'delay' in (D.compactDocument(d).wires.find(w=>w.id==='k').config||{}),reloaded:'delay' in reload(d).wires.find(w=>w.id==='k').config};
   const again=upd(d,'k',{config:{delay:null}},'wire').ok&&!('delay' in k().config);
   out.step7={unbind:unbind.ok,savedHasDefinition:'definition' in saved,wire:wire.ok,cleared,again,check:S.checkDocument(reload(d),packs)};
 }

@@ -79,9 +79,11 @@ async def main():
     assert nothing['ok'] is False,nothing
 
     # Files keep free ends and round-trip losslessly.
-    rt=await page.evaluate('()=>{const before=semanticFingerprint();const doc=SovSchematicAPI.document.get();const k=doc.wires.find(w=>w.id==="ki");SovSchematicAPI.document.replace(JSON.parse(JSON.stringify(doc)));return {before,after:semanticFingerprint(),a:k.a,aSide:k.aSide,att:k.aAttachment,form:k.form,role:k.role,count:wires.length}}')
+    rt=await page.evaluate('()=>{const before=semanticFingerprint();const doc=SovSchematicAPI.document.get();const k=doc.wires.find(w=>w.id==="ki");SovSchematicAPI.document.replace(JSON.parse(JSON.stringify(doc)));return {before,after:semanticFingerprint(),a:k.a,aSide:k.aSide,att:k.aAttachment,form:k.form,role:k.role,count:wires.length,loaded:(w=>({dimension:w.form.dimension,role:w.role}))(wires.find(w=>w.id==="ki"))}}')
     assert rt['before']==rt['after'] and rt['a'] is None and rt['aSide'] is None and rt['att']['kind']=='free',rt
-    assert rt['form']['dimension']==1 and rt['role']=='carrier' and rt['count']==3,rt
+    # Contract #50: the saved Wire omits its default form and role (was: form.dimension 1 and role 'carrier'
+    # on the saved record); the reloaded Wire is the 1D carrier.
+    assert rt.get('form') is None and rt.get('role') is None and rt['loaded']=={'dimension':1,'role':'carrier'} and rt['count']==3,rt
 
     # Pointer gesture: drag a free end handle onto a point binds it; drag a bound handle off frees it.
     box=await page.locator(f'.wire-group[data-wire-id="{fid}"] .carrier-end-handle.free').bounding_box()

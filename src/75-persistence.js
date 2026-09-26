@@ -11,11 +11,9 @@ let currentFileFormat='document';
 let lastFileFingerprint=null;
 
 function snapshotDocument(){
-  // Files and API snapshots carry authored truth only; runtime projections are rebuilt on load.
-  const doc=SovSchematicData.compactDocument(SovSchematicData.makeDocument(SovSchematicData.clone(diagram)));
-  doc.meta=doc.meta||{};
-  doc.meta.title=doc.meta.title||'Soveraeign Schematic';
-  return doc;
+  // Files, API snapshots and runs carry authored truth only: the data core's minimal form, which
+  // every surface computes the same way from the same document (STATE-SPACE.md "One normalizer").
+  return SovSchematicData.compactDocument(SovSchematicData.makeDocument(SovSchematicData.clone(diagram)));
 }
 function semanticFingerprint(){
   const doc=snapshotDocument();
@@ -84,9 +82,10 @@ function syncRuntimeAfterDocumentReplace(){
   seq=Math.max(seq,maxSeq+1);
   routeCache.clear();arrowPoseCache.clear();dragRouteSnapshots.clear();
   selected=null;hideSelectionBar();
+  render();
   persistenceFingerprint=semanticFingerprint();
   updateRevisionReadout();
-  render();selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
+  selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
 }
 function replaceRuntimeDocument(input){
   const doc=input?.schema===SovSchematicData.WORKSPACE_SCHEMA?input.document:input;
@@ -109,7 +108,9 @@ function applyWorkspace(bundle){
   if(typeof view.showFlow==='boolean'){showFlow=view.showFlow;document.getElementById('workspace')?.classList.toggle('show-flow',showFlow);flowBtn?.classList.toggle('active',showFlow)}
   if(view.colorEngine&&typeof view.colorEngine==='object'){Object.assign(colorEngine,view.colorEngine);applyColorEngine()}
   if(view.appearanceMode){appearanceMode=view.appearanceMode;applyAppearanceMode()}
-  if(view.globalRate!=null){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Number(view.globalRate)||1}
+  // The global rate is the document's (meta.timeScale); a view rate is read only for a document
+  // that carries none, and its default 1 is not written.
+  if(view.globalRate!=null&&diagram.meta?.timeScale===undefined&&(Number(view.globalRate)||1)!==1){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Number(view.globalRate)}
   render();
   return captureWorkspace();
 }

@@ -2,8 +2,9 @@
 
 Runtime projections (local canvas descriptors, boundary/parts, port-level mirrors
 of the active connection, realized colors, presentation layout hints) are rebuilt
-on load and never written. Default contracts are dimension-specific. Old files that
-still carry the full projections load identically.
+on load and never written, and a value equal to its default is omitted (contract #50),
+so default port contracts are not saved; the loader gives them back dimension-specific.
+Old files that still carry the full projections load identically.
 """
 from pathlib import Path
 import json
@@ -33,7 +34,9 @@ with sync_playwright() as p:
       SovSchematicAPI.document.replace(JSON.parse(text));
       const after=semanticFingerprint();
       const pt=nodes.find(n=>n.id==='pt');
-      return {ok:w.ok,doc,size:text.length,full,before,after,reloadedPlacement:pt.placement,reloadedPoints:Object.keys(pt.parts.points),runtimePorts:Object.keys(nodes.find(n=>n.id==='a').parts.ports),wire:{aSide:wires[0].aSide,bSide:wires[0].bSide,a:wires[0].aAttachment.pointId,b:wires[0].bAttachment.pointId}};
+      // The contracts the loader gives back (default contracts are not saved): dimension-specific.
+      const contracts=Object.fromEntries(['a','pt','pl'].map(id=>[id,Object.keys(nodes.find(n=>n.id===id).config.ports||{})]));
+      return {ok:w.ok,doc,size:text.length,full,before,after,contracts,reloadedPlacement:pt.placement,reloadedPoints:Object.keys(pt.parts.points),runtimePorts:Object.keys(nodes.find(n=>n.id==='a').parts.ports),wire:{aSide:wires[0].aSide,bSide:wires[0].bSide,a:wires[0].aAttachment.pointId,b:wires[0].bAttachment.pointId}};
     }''')
     assert state['ok'],state
     doc=state['doc'];comp={c['id']:c for c in doc['components']}
@@ -47,11 +50,15 @@ with sync_playwright() as p:
         assert 'canvas' not in w and 'duplex' not in w and 'attachments' not in w,w
         assert w['aSide'] and w['bSide'] and w['aAttachment']['pointId'],w  # schema-required endpoint names stay
     assert 'canvas' not in doc
-    # Default contracts are minimal and dimension-specific.
-    assert list(comp['a']['config']['ports'])==['in','out','control'],comp['a']['config']['ports']
+    # A contract equal to its default is not saved (contract #50): the saved records carry no default contracts.
+    assert 'ports' not in comp['a']['config'],comp['a']['config']
     assert comp['pl']['config']['attachmentDefaults']=='none' and comp['pl']['config'].get('ports',{})=={},comp['pl']['config']
-    assert list(comp['pt']['config']['ports'])==['out'],comp['pt']['config']['ports']
-    assert comp['pt']['placement']['kind']=='edge' and comp['pt']['placement']['hostId']=='pl',comp['pt']['placement']
+    assert 'ports' not in comp['pt']['config'],comp['pt']['config']
+    # Default contracts are dimension-specific, on the loaded record: a 2D Component owns in/out/control, a
+    # Point owns out (its self), a Plane owns none until a Point is hosted on it.
+    assert state['contracts']=={'a':['in','out','control'],'pt':['out'],'pl':[]},state['contracts']
+    # The host follows from the canvas (was: placement.hostId=='pl'); an edge Point's x/y follow from its placement.
+    assert comp['pt']['placement']['kind']=='edge' and comp['pt']['canvasId']=='canvas:component:pl' and 'x' not in comp['pt'],comp['pt']
     assert 'placement' not in comp['a'],comp['a']  # free placement is implied by x/y
     # Checkpoints embedded in the file are compact too.
     cp=doc['meta']['checkpoints'][0]['document']

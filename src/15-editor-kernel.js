@@ -10,16 +10,8 @@ let quickSearchActive=false;
 let quickSearchMatches=[];
 let appearanceMode='system';
 
-function entityEditorState(entity){
-  if(!entity)return {pinned:false,locked:false,hidden:false,opacity:1,rate:1};
-  if(!entity.editor||typeof entity.editor!=='object')entity.editor={};
-  entity.editor.pinned=!!entity.editor.pinned;
-  entity.editor.locked=!!entity.editor.locked;
-  entity.editor.hidden=!!entity.editor.hidden;
-  entity.editor.opacity=Math.max(.08,Math.min(1,Number(entity.editor.opacity)||1));
-  entity.editor.rate=Math.max(.1,Math.min(8,Number(entity.editor.rate)||1));
-  return entity.editor;
-}
+// Object state's defaults and bounds are the data core's (compactDocument omits the defaults).
+function entityEditorState(entity){return SovSchematicData.normalizeEditorState(entity)}
 function isEntityLocked(entity){return !!entityEditorState(entity).locked}
 function isEntityPinned(entity){return !!entityEditorState(entity).pinned}
 function isEffectivelyHidden(node){

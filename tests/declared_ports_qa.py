@@ -325,7 +325,7 @@ out.planePreset=D.templatePreset('plane');
   out.compatEdge=r;
 }
 
-// Contract 0b-2, step 9: compactDocument output for every example is unchanged (hashes taken at f676563).
+// Contract 0b-2, step 9: compactDocument output for every example is pinned (the minimal form, contract #50).
 out.compactHashes={};
 for(const file of JSON.parse(process.argv[5])){
   const raw=JSON.parse(fs.readFileSync(file,'utf8')),compact=D.compactDocument(D.documentFromFilePayload(raw));
@@ -348,22 +348,24 @@ console.log(JSON.stringify(out));
 
 # compactDocument(documentFromFilePayload(file)), canonicalized and hashed, as the code at f676563
 # (before contract 0b-2) wrote it; contract 0b-2, step 9 keeps every one unchanged.
+# Contract #50 amendment 1 withdrew "compactDocument output unchanged": the saved form is minimal (every value
+# equal to its default omitted), so every example's compact hash changed; the old values are noted.
 COMPACT_HASHES = {
-    'examples/01-source-hold.sov': 'f84a33ba9687de18bcc2b4eec58318047102d7452f48d993dca61bc715141f0b',
-    'examples/02-duplex-buffer.sov': 'a3514bf517c8bbce3f3db07e67af0f6dbc463b88ae799d2bb677d1186ccd810b',
-    'examples/03-contained-stage.sov': '967a85e9c65922b7acc2b7059d064f49411f1c247b8467aae15764d693ea497a',
-    'examples/04-boundary-port.sov': '07c55423ef8cd7f64782846913904d76fed7aae85c13d2b13558164ce793bff3',
-    'examples/05-rate-chain.sov': '15de44503e19699b89fffc09fb23643ba3c73e322063074901fad00b16c21e87',
-    'examples/06-read-write-evidence.sov': '9dd86dd27f104d07f7e621a33895dad6f7be4ae0c9e6ad35670f0444e5e202fd',
-    'examples/07-plane-with-points.sov': 'f4b02c71f1325791cd31c96461ade1352c14edd8f6ab38fce2c100b2c1ca5362',
-    'examples/08-gated-service.sov': '8533d19c195e349fcc583372b6f92c65fd9b3ecd3c9b39249d2acdfa96c80933',
-    'examples/blank.sov': 'd2d0606caeaecb459544b398f92a7c3c80dc124822565db17a9886ed07581e2e',
-    'examples/state/and.sov': 'c8db904a557ff9c2b5f53b8edcbf06f984472685c9a33fa5dc3e92c4138a1b4f',
-    'examples/state/merge.or.sov': '1faa851f526622cf44bbf66398a52dcc077bf92a4daf56d94d1996bc4dcb417b',
-    'examples/state/merge.sov': 'ac82f767cd90b6bf6628f24ec480c0099288fc4e259062b7d666167842ec2d38',
-    'examples/state/merge.stochastic.sov': '1a6ef98b5fcd3228571d11d6e96da8425959da7ebf68aec713c88113a46c0c10',
-    'examples/state/not-loop.sov': '51b5caa23a859d91371ed13d3142284e9d89dd57a83f1df8e5c07054089b48bd',
-    'examples/state/not.sov': 'b2a3cfece5eec2af2e4696bec7b15ebdd148b90e58b682f78e71852222a1c2fd',
+    'examples/01-source-hold.sov': '656141b3f41c64f41b3229dafa88b7410fa6bbfe5d036e1a75d7b11e021e1399',  # was f84a33ba9687
+    'examples/02-duplex-buffer.sov': '1799528029ddfc03d621c6e01feda9b755a73717a7f8e06f7a75332d9e0b8219',  # was a3514bf517c8
+    'examples/03-contained-stage.sov': '337172b0ef0403d6f5e29862b672a1f13b31f215185330e5354c195c29a7eb38',  # was 967a85e9c659
+    'examples/04-boundary-port.sov': '6d32578da011ebba57eb394633ea92d4288497a006a44d56d225ba410300f29c',  # was 07c55423ef8c
+    'examples/05-rate-chain.sov': 'b544b39dcd071ef813eba93bed84282dae0207101da15301c3de331e21a93f18',  # was 15de44503e19
+    'examples/06-read-write-evidence.sov': 'e4dd3a2c700600c4668a03992355ab7354f7654ad64091212bdaee850c528fec',  # was 9dd86dd27f10
+    'examples/07-plane-with-points.sov': '7eed0957a076d1080fca2efc8f4f1113e1e949aa1f7facfaf872ed9d82dfd8a3',  # was f4b02c71f132
+    'examples/08-gated-service.sov': 'd8516b0370b3d5f51675082c608b16efb5e7e1cc4b6cbd7f9c54366d54f4e173',  # was 8533d19c195e
+    'examples/blank.sov': '5fbc76fbdffa1df2d584f91d3744fb31cb22176bdbfbf272b2ce4fb22c0c34b4',  # was d2d0606caeae
+    'examples/state/and.sov': 'beeca204dbcf4d6bf4f5aa3df4f11bc38527d4505f60d9429640e6c058f35de4',  # was c8db904a557f
+    'examples/state/merge.or.sov': '495fc5421e158844a866cf5764245bf551b22eaaa2e96716e18deca576bf5976',  # was 1faa851f5266
+    'examples/state/merge.sov': '19e76544372b8d48df48fd5c38381b9bcafc833ad3bb38a9c29b29ddad14e8c8',  # was ac82f767cd90
+    'examples/state/merge.stochastic.sov': '7e8b042046953a36a5f564569530d751e15dcde9c42c9d2532b65439c96b4390',  # was 1a6ef98b5fcd
+    'examples/state/not-loop.sov': 'd3824af4bc416e0fd365a0ffb8429d0eb572006c021f2ed958d987ab46fa51eb',  # was 51b5caa23a85
+    'examples/state/not.sov': '6a1a222b21065c61ee80335dfd01ef94e2f25522887e40965686c1b68d145095',  # was b2a3cfece5ee
 }
 
 
@@ -557,7 +559,7 @@ def main() -> None:
         assert ce['pointId'][key] == on_left, (key, ce['pointId'][key])
     assert ce['side']['valid'] and ce['pointId']['valid'], ce
 
-    # Contract 0b-2, step 9: compactDocument output for every example is unchanged.
+    # Contract 0b-2, step 9: compactDocument output for every example is pinned (the minimal form of contract #50).
     assert set(COMPACT_HASHES) >= set(examples), sorted(set(examples) - set(COMPACT_HASHES))
     assert r['compactHashes'] == COMPACT_HASHES, {k: v for k, v in r['compactHashes'].items() if COMPACT_HASHES.get(k) != v}
 

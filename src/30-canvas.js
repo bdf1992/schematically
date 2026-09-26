@@ -576,12 +576,18 @@ function componentScopePath(node){
 function syncNodeBoundaryContext(node){
   if(!node)return;
   ensureComponentStructure(node);
-  if(!node.canvasId)node.canvasId=node.parentId?localCanvasId('component',node.parentId):GLOBAL_CANVAS_ID;
+  SovSchematicData.normalizeHosting(diagram,node); // canvasId default and the derived parentId are the data core's
   const parent=parentComponent(node),host=canvasDescriptorById(node.canvasId||GLOBAL_CANVAS_ID);
-  node.parentId=parent?.id||null;node.boundary.inside.type=node.symbolId==='blank'?null:node.symbolId;node.type=node.boundary.inside.type;
+  node.boundary.inside.type=node.symbolId==='blank'?null:node.symbolId;node.type=node.boundary.inside.type;
   node.boundary.outside.type=parent?(parent.boundary.inside.type||parent.symbolId||'component'):host?.ownerKind==='wire'?'wire':'world';componentPlacement(node);
 }
+// A Wire-hosted component's position is the renderer's (from the route), not the record's: the data core
+// leaves it out, and the editor puts back the last rendered pose until the next render computes it again.
+function restoreWireHostedPoses(){
+  for(const n of nodes){if(n.placement?.kind!=='wire'||Number.isFinite(n.x))continue;const q=wireHostPoseCache.get(n.id);n.x=q?.x??0;n.y=q?.y??0}
+}
 function syncAllNodeBoundaryContext(){
+  restoreWireHostedPoses();
   const ordered=[...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b));ordered.forEach(syncNodeBoundaryContext);ordered.forEach(syncComponentAttachedPose);
 }
 function setActiveCanvas(){
@@ -691,11 +697,12 @@ function nearestPointOnComponentEdge(host,x,y){
   const candidates=[{side:'top',x:Math.max(-hw,Math.min(hw,lx)),y:-hh,angle:0,t:(Math.max(-hw,Math.min(hw,lx))+hw)/w},{side:'bottom',x:Math.max(-hw,Math.min(hw,lx)),y:hh,angle:0,t:(Math.max(-hw,Math.min(hw,lx))+hw)/w},{side:'left',x:-hw,y:Math.max(-hh,Math.min(hh,ly)),angle:90,t:(Math.max(-hh,Math.min(hh,ly))+hh)/h},{side:'right',x:hw,y:Math.max(-hh,Math.min(hh,ly)),angle:90,t:(Math.max(-hh,Math.min(hh,ly))+hh)/h}];
   let best=null;for(const c of candidates){const d=Math.hypot(lx-c.x,ly-c.y);if(!best||d<best.distance)best={...c,distance:d}}const world=rotateVectorByDegrees(best.x,best.y,angle);return {...best,x:host.x+world.x,y:host.y+world.y,angle:angle+best.angle};
 }
+// The pose on a host's Path or edge is the data core's (placeHostedComponent); the editor supplies
+// the host's own angle, which only a Wire-carried host has (from its route).
 function syncComponentAttachedPose(node){
-  const placement=componentPlacement(node);if(!['path','edge'].includes(placement.kind))return;const host=nodes.find(n=>n.id===placement.hostId)||parentComponent(node);if(!host)return;let q=null;
-  if(placement.kind==='path'){const half=Math.max(24,componentSize(host).w/2),local=-half+half*2*placement.t,world=rotateVectorByDegrees(local,0,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)}}
-  else{const {w,h}=componentSize(host),side=placement.side||'top',u=Math.max(0,Math.min(1,placement.t));let lx=0,ly=0,a=0;if(side==='top'||side==='bottom'){lx=-w/2+w*u;ly=side==='top'?-h/2:h/2}else{lx=side==='left'?-w/2:w/2;ly=-h/2+h*u;a=90}const world=rotateVectorByDegrees(lx,ly,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)+a}}
-  node.x=q.x;node.y=q.y;wireHostPoseCache.set(node.id,{...q,hostId:host.id,t:placement.t});
+  const placement=componentPlacement(node);if(!['path','edge'].includes(placement.kind))return;const host=nodes.find(n=>n.id===placement.hostId);if(!host)return;
+  componentConfig(host);const q=SovSchematicData.placeHostedComponent(diagram,node,componentHostAngle(host));if(!q)return;
+  wireHostPoseCache.set(node.id,{...q,hostId:host.id,t:placement.t});
 }
 function componentHostCandidateAtPoint(node,x=node.x,y=node.y){
   if(!node)return null;const dim=componentForm(node).dimension,ownedIds=new Set([node.id,...descendantsOf(node.id).map(n=>n.id)]);let best=null;const consider=c=>{if(c&&(!best||c.placement.distance<best.placement.distance))best=c};

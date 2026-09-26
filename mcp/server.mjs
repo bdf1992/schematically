@@ -38,7 +38,8 @@ const RUN_TOOLS=[
   {name:'schematic.run.settle',description:'Step a run until quiet, oscillating or budget spent. Returns a run receipt.',inputSchema:{type:'object',properties:{handle},required:['handle'],additionalProperties:false}},
   {name:'schematic.run.trace',description:'The trace of a run (.sovtrace), in a run receipt.',inputSchema:{type:'object',properties:{handle},required:['handle'],additionalProperties:false}},
   {name:'schematic.state.query',description:'Records of a run whose subject matches; passive. Returns a run receipt.',inputSchema:{type:'object',properties:{handle,entity:{type:'string',minLength:1},point:{type:'string',minLength:1},channel:{type:'string',minLength:1},observable:{type:'string',minLength:1}},required:['handle','entity','observable'],additionalProperties:false}},
-  {name:'schematic.run.replay',description:'Replay a trace against the current document. Returns a run receipt.',inputSchema:{type:'object',properties:{trace:{type:'object'}},required:['trace'],additionalProperties:false}}
+  {name:'schematic.run.replay',description:'Replay a trace against the current document. Returns a run receipt.',inputSchema:{type:'object',properties:{trace:{type:'object'}},required:['trace'],additionalProperties:false}},
+  {name:'schematic.run.drop',description:'Drop a run by handle, freeing its place (a surface holds at most 64 runs; a start beyond that is refused with RUN_LIMIT). Returns the run receipt of the dropped run.',inputSchema:{type:'object',properties:{handle},required:['handle'],additionalProperties:false}}
 ];
 function runTool(name,args){
   if(name==='schematic.run.start')return runs.start(args);
@@ -47,6 +48,7 @@ function runTool(name,args){
   if(name==='schematic.run.trace')return runs.trace(args.handle);
   if(name==='schematic.state.query'){const {handle,...subject}=args;return runs.query(handle,subject)}
   if(name==='schematic.run.replay')return runs.replay(args.trace);
+  if(name==='schematic.run.drop')return runs.drop(args.handle);
   return null;
 }
 let historyUndo=[],historyRedo=[];
@@ -113,17 +115,20 @@ async function handleApi(req,res,url){
     }
   }
   // Runs, addressed by handle: a receipt always; 201 on a start, 404 for an unknown handle, 400 for a
-  // body that is not JSON or a path that does not decode, 409 for any other refusal.
+  // body that is not JSON or a path that does not decode, 409 for any other refusal (RUN_LIMIT among
+  // them). DELETE /api/v1/runs/{handle} drops a run.
   if(parts[0]==='api'&&parts[1]==='v1'&&(parts[2]==='runs'||parts[2]==='replay')){
     const send=(receipt,status=200)=>json(res,receipt.ok?status:receipt.error?.code==='RUN_NOT_FOUND'?404:409,receipt);
     const malformed=(operation,message)=>{json(res,400,State.runReceipt(operation,null,{ok:false,code:'INPUT_INVALID',message}));return true};
     const body=async operation=>{try{return {value:await bodyJson(req)}}catch(e){return {refused:malformed(operation,`the request body is not JSON: ${String(e?.message||e)}`)}}};
     const verb=parts[4],route=parts[2]==='replay'&&parts.length===3&&req.method==='POST'?'schematic.run.replay'
       :parts[2]==='runs'&&parts.length===3&&req.method==='POST'?'schematic.run.start'
+      :parts[2]==='runs'&&parts.length===4&&req.method==='DELETE'?'schematic.run.drop'
       :parts[2]==='runs'&&parts.length===5?({'step:POST':'schematic.run.step','settle:POST':'schematic.run.settle','trace:GET':'schematic.run.trace','query:POST':'schematic.state.query'})[`${verb}:${req.method}`]:undefined;
     if(!route)return json(res,404,{error:'not found'});
     let id;
-    if(parts.length===5){try{id=decodeURIComponent(parts[3])}catch(e){malformed(route,`the run handle in the path does not decode: ${String(e?.message||e)}`);return}}
+    if(parts.length>=4){try{id=decodeURIComponent(parts[3])}catch(e){malformed(route,`the run handle in the path does not decode: ${String(e?.message||e)}`);return}}
+    if(route==='schematic.run.drop')return send(runs.drop(id));
     if(route==='schematic.run.step')return send(runs.step(id));
     if(route==='schematic.run.settle')return send(runs.settle(id));
     if(route==='schematic.run.trace')return send(runs.trace(id));

@@ -935,7 +935,7 @@
   // what the refusal names besides its code and message; runId, ticks and head are null when there is
   // no run. `tickBefore` defaults to the run's tick (an operation that processes no tick).
   const RUN_RECEIPT_FORMAT='soveraeign.schematic/run-receipt@0.1';
-  const RUN_OPERATIONS=['schematic.run.start','schematic.run.step','schematic.run.settle','schematic.run.trace','schematic.state.query','schematic.run.replay'];
+  const RUN_OPERATIONS=['schematic.run.start','schematic.run.step','schematic.run.settle','schematic.run.trace','schematic.state.query','schematic.run.replay','schematic.run.drop'];
   function runReceipt(operation,run,result,tickBefore,handle){
     if(!RUN_OPERATIONS.includes(operation))throw new Error(`RUN_OPERATION_UNKNOWN: ${operation}`);
     const has=isObject(run)&&run.runtimeVersion===RUNTIME_VERSION&&Array.isArray(run.ledger)&&run.ledger.length>0;
@@ -961,8 +961,10 @@
   // (one that does not load refuses every start and replay with PACK_INVALID; an empty list refuses a
   // document that references a definition, saying so). A surface start is capped at BUDGET_LIMIT
   // (the engine's startRun is not). Every method returns a run receipt, and none of them touches the
-  // document, its revision, history or recovery.
-  const START_KEYS=['inputs','seed','budget'],BUDGET_LIMIT=1000000;
+  // document, its revision, history or recovery. A registry holds at most RUN_LIMIT runs: a start
+  // beyond that is refused with RUN_LIMIT, and nothing is evicted; `drop(handle)` removes a run and
+  // returns its receipt as it stood (result null), so a later start can take its place.
+  const START_KEYS=['inputs','seed','budget'],BUDGET_LIMIT=1000000,RUN_LIMIT=64;
   function createRunRegistry(options){
     const o=isObject(options)?options:{};
     const loaded=Array.isArray(o.packs)?o.packs.map(p=>loadPack(p)):null;
@@ -990,6 +992,7 @@
         const extra=Object.keys(a).filter(k=>!START_KEYS.includes(k));
         if(extra.length)return runReceipt(op,null,inputRefusal(`unknown key ${extra[0]}`));
         if(typeof a.budget==='number'&&a.budget>BUDGET_LIMIT)return runReceipt(op,null,inputRefusal(`budget ${a.budget} is over the surface limit ${BUDGET_LIMIT}`));
+        if(runs.size>=RUN_LIMIT)return runReceipt(op,null,{ok:false,code:'RUN_LIMIT',message:`this surface holds ${RUN_LIMIT} runs, its limit; drop one (schematic.run.drop) before starting another`});
         const doc=current(),empty=noPacks(doc);
         if(empty)return runReceipt(op,null,empty);
         const started=startRun({doc,packs,inputs:a.inputs,seed:a.seed,budget:a.budget});
@@ -1002,6 +1005,7 @@
       settle:handle=>found('schematic.run.settle',handle,(run,h)=>{const before=run.tick;return runReceipt('schematic.run.settle',run,settle(run),before,h)}),
       trace:handle=>found('schematic.run.trace',handle,(run,h)=>runReceipt('schematic.run.trace',run,traceOf(run),undefined,h)),
       query:(handle,subject)=>found('schematic.state.query',handle,(run,h)=>runReceipt('schematic.state.query',run,query(run,subject),undefined,h)),
+      drop:handle=>found('schematic.run.drop',handle,(run,h)=>{runs.delete(h);return runReceipt('schematic.run.drop',run,null,undefined,h)}),
       replay(trace){
         const op='schematic.run.replay';
         if(packRefusal)return runReceipt(op,null,packRefusal);
