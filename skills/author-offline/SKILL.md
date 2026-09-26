@@ -122,7 +122,50 @@ Port override on a Component, for access or face. Write the whole port record; t
 | `plane` | Bounded 2D region that hosts Points on its boundary and Components inside. |
 | `point` | 0D attachment on a Path, a Plane boundary, or a Wire. |
 | `path` | 1D route with start and end that hosts Points. |
+| `clock` | Drives time: its level rises and falls on a declared period. Needs `config.signal.clock.periodMs`. |
+| `lever` | An asserted level: it holds the state it was set to until an operation changes it. |
 | `blank` | Incomplete component whose type is still to be chosen. Do not author these. |
+
+## Signals, clocks and access (optional)
+
+All of this is optional data. `GRAPH-MODEL.md` specifies it in full.
+
+- **A level:** `config.signal = {kind: 'binary' | 'continuous', value}`. It is asserted (it
+  holds `value`) unless you write `mode: 'derived'`. A derived level adds
+  `combine: 'or' | 'and' | 'not' | 'xor' | 'nand' | 'nor' | 'buffer' | 'max' | 'min' | 'mean' | 'sum'`
+  and a `threshold`.
+- **A clock:** `config.signal.clock = {periodMs, duty, wave: 'square' | 'saw' | 'triangle' | 'sine', sampleMs, cycles}`.
+- **Work on an edge:** `config.signal.on: '+' | '-' | '±'` starts work as a message on
+  each rising or falling edge.
+- **An access list on a plane:**
+  `config.acl = {entries: [{principal: 'svc:*', allow: ['enter', 'exit']}]}`.
+  - The operations are `enter`, `exit`, `read` and `write`.
+  - A deny always wins, and the default is deny.
+- **A section:** `form.section` (presets `disk`, `circle`, `section`, `coated`,
+  `double-wall` for 2D; `line`, `strip`, `lanes`, `pipe` for wires, in `SECTION-MODEL.md`).
+  On a multi-line boundary a point sits on a line or through a band:
+  `placement.at = {line: 'L1'}` or `{through: 'B1'}`, or `config.ports.<id>.at` for a card's
+  own port. That position decides what the point reaches.
+- **A participant:** `config.principal: 'ai:ingest'` makes a component act in that name
+  when it forwards work.
+
+## Notation, text and narration (optional)
+
+`NOTATION-MODEL.md` specifies it.
+
+- **A notation:** `document.notation: 'logic'` draws the document in a domain's shapes. A
+  domain glyph's terminals are its card's points: an `and2` card is wired by `bSide: 'a'` or
+  `'b'` and `aSide: 'y'`. The glyph's combine becomes the card's signal.
+- **A custom notation:** carry it in `references: [{id, kind: 'notation', data: {id, extends:
+  'schematic', glyphs, tokens}}]` and name it. An unknown notation is refused.
+- **Text is as authored.** Write labels in sentence case, never in capitals.
+  - `config.subtitle` adds one line under the title.
+  - `config.presentation.text` is body text in a small Markdown: `**bold**`, `*italic*`,
+    `` `code` ``, line breaks, `- ` items.
+- **Narration:** `document.narration: [{at: ms, say, focus: [ids]}]` is a subtitle track that
+  follows the clock. Scenario steps may carry `say`.
+- **The legend is derived**; do not draw one. Name a colour category with
+  `document.legend.names: {C1: 'Refunds'}`, or hide an entry with `document.legend.hide`.
 
 ## Layout rules
 

@@ -35,6 +35,10 @@
       {id:'end',compatId:'out',side:'right',role:'endpoint',defaultFlow:'out',t:1}
     ];
     if(attachmentDefaults(entity)==='none')return [];
+    // A glyph that declares its terminals as points (NOTATION-MODEL.md §2) gives the card one
+    // point per terminal: a two-input gate has two inputs.
+    const glyphPoints=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation?.pointsFor?.(entity?.symbolId);
+    if(glyphPoints)return glyphPoints.map(p=>({...p,role:'boundary'}));
     return [
       {id:'left',compatId:'in',side:'left',role:'boundary',defaultFlow:'in',t:.5},
       {id:'right',compatId:'out',side:'right',role:'boundary',defaultFlow:'out',t:.5},
@@ -63,9 +67,20 @@
     }
     return out;
   }
+  // A 2D boundary point may be moved anywhere on its host's perimeter:
+  // `config.ports[compatId].boundary = {side, t}` places it; `placed` records that the
+  // position is authored, so no default (such as a glyph's axis) overrides it.
+  const SIDES=new Set(['left','right','top','bottom']);
+  function placedBoundary(entity,spec){
+    const b=entity?.config?.ports?.[spec.compatId]?.boundary;
+    if(!b||typeof b!=='object'||!SIDES.has(b.side))return spec;
+    const t=Math.max(0,Math.min(1,Number.isFinite(Number(b.t))?Number(b.t):.5));
+    return {...spec,side:b.side,t,placed:true};
+  }
   function pointSpecs(entity){
     const d=effectiveDimension(entity),base=basePointSpecs(d,entity);
-    return [...base,...customPointSpecs(entity,d,base)];
+    const specs=[...base,...customPointSpecs(entity,d,base)];
+    return d===2?specs.map(spec=>spec.role==='boundary'?placedBoundary(entity,spec):spec):specs;
   }
   function builtinPointIds(entity){return basePointSpecs(effectiveDimension(entity),entity).map(x=>x.id)}
   function pointIds(entity){return pointSpecs(entity).map(x=>x.id)}

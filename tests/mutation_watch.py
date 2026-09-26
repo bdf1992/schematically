@@ -62,8 +62,8 @@ MUTANTS=[
     {
       'name':'attachment-defaults-become-hard-cardinality',
       'file':'src/06-attachment-core.js',
-      'old':'return [...base,...customPointSpecs(entity,d,base)];',
-      'new':'return base;',
+      'old':'const specs=[...base,...customPointSpecs(entity,d,base)];',
+      'new':'const specs=base;',
       'test':'tests/configurable_attachment_defaults_qa.py'
     },
     {
@@ -100,6 +100,132 @@ MUTANTS=[
       'old':"if(allowed&&!portExposedCanvasIds(n,pointId).some(c=>allowed.has(c)))continue;",
       'new':"if(false)continue;",
       'test':'tests/carrier_path_qa.py'
+    },
+    {
+      'name':'boundary-placement-ignored',
+      'file':'src/06-attachment-core.js',
+      'old':"return d===2?specs.map(spec=>spec.role==='boundary'?placedBoundary(entity,spec):spec):specs;",
+      'new':'return specs;',
+      'test':'tests/boundary_attachment_qa.py'
+    },
+    {
+      'name':'terminal-stands-off-the-edge',
+      'file':'src/30-canvas.js',
+      'old':'const faceOffset=-sectionPointInset(n,SovSchematicData.pointSectionPosition(diagram,n.id,spec.compatId)),t=',
+      'new':'const faceOffset=4,t=',
+      'test':'tests/boundary_attachment_qa.py'
+    },
+    {
+      'name':'interior-route-unfenced',
+      'file':'src/40-routing.js',
+      'old':'.filter(points=>pathValid(points,obstacles)&&routeInsideFence(points,fence))',
+      'new':'.filter(points=>pathValid(points,obstacles))',
+      'test':'tests/layout_quality_qa.py'
+    },
+    {
+      'name':'acl-deny-does-not-win',
+      'file':'src/07-graph-core.js',
+      'old':"const denied=matching.find(e=>e.deny.includes(op));",
+      'new':"const denied=null;",
+      'test':'tests/graph_core_qa.py'
+    },
+    {
+      'name':'derived-signal-can-be-set',
+      'file':'src/07-graph-core.js',
+      'old':"if(node.signal.mode!=='asserted')return refusal('DERIVED_SIGNAL',`${node.label||nodeId} is derived from its inputs; only an asserted signal is set`);",
+      'new':"",
+      'test':'tests/graph_core_qa.py'
+    },
+    {
+      'name':'junction-dots-not-drawn',
+      'file':'src/55-render.js',
+      'old':'  renderJunctionDots();\n',
+      'new':'\n',
+      'test':'tests/layout_quality_qa.py'
+    },
+    {
+      'name':'short-wires-lose-their-arrow',
+      'file':'src/55-render.js',
+      'old':'if(L<72) return L>=20?[L/2]:[];',
+      'new':'if(L<72) return [];',
+      'test':'tests/layout_quality_qa.py'
+    },
+    {
+      'name':'point-self-defaults-out-only',
+      'file':'src/05-data-core.js',
+      'old':"if(spec.role==='self')return defaultPointContract(spec.side,spec.defaultFlow||'duplex');",
+      'new':'',
+      'test':'tests/graph_core_qa.py'
+    },
+    {
+      'name':'signal-stops-after-six-passes',
+      'file':'src/25-signal.js',
+      'old':'for(let pass=0;pass<=nodes.length;pass++){',
+      'new':'for(let pass=0;pass<6;pass++){',
+      'test':'tests/sim_control_qa.py'
+    },
+    {
+      'name':'save-keeps-the-projection',
+      'file':'src/75-persistence.js',
+      'old':"const doc=SovSchematicData.compactDocument(SovSchematicData.makeDocument(typeof canonicalDiagram==='function'?canonicalDiagram():SovSchematicData.clone(diagram)));",
+      'new':"const doc=SovSchematicData.compactDocument(SovSchematicData.makeDocument(SovSchematicData.clone(diagram)));",
+      'test':'tests/layouts_qa.py'
+    },
+    {
+      'name':'router-ignores-pinned-routes',
+      'file':'src/40-routing.js',
+      'old':"if(spec){const declared=routeThroughSpec(A,B,w,spec);if(declared)return declared}",
+      'new':"",
+      'test':'tests/layouts_qa.py'
+    },
+    {
+      'name':'section-band-count-repaired-silently',
+      'file':'src/05-data-core.js',
+      'old':"for(const c of input.components||[]){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)",
+      'new':"for(const c of []){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)",
+      'test':'tests/sections_qa.py'
+    },
+    {
+      'name':'section-position-ignored',
+      'file':'src/05-data-core.js',
+      'old':"const b=boundarySection(doc,component);\n    if(b){",
+      'new':"const b=null;\n    if(b){",
+      'test':'tests/section_exposure_qa.py'
+    },
+    {
+      'name':'glyph-terminals-not-points',
+      'file':'src/06-attachment-core.js',
+      'old':"if(glyphPoints)return glyphPoints.map(p=>({...p,role:'boundary'}));",
+      'new':"if(false)return glyphPoints;",
+      'test':'tests/notation_qa.py'
+    },
+    {
+      'name':'radius-not-concentric',
+      'file':'src/03-notation-core.js',
+      'old':"const r=sectioned?t.radius.core+Math.max(0,total-inset):t.radius.card;",
+      'new':"const r=t.radius.card;",
+      'test':'tests/notation_qa.py'
+    },
+    {
+      'name':'power-on-undoes-explicit-set',
+      'file':'src/07-graph-core.js',
+      'old':"s.queue=s.queue.filter(ev=>!(ev.powerOn&&ev.action?.set?.node===nodeId));",
+      'new':"",
+      'test':'tests/notation_qa.py'
+    },
+    {
+      'name':'crossings-drawn-flat',
+      'file':'src/55-render.js',
+      'old':"const pts=normalizePoints(points);if(!hops?.length||pts.length<2)return pathD(pts);",
+      'new':"const pts=normalizePoints(points);return pathD(pts);",
+      'test':'tests/wire_crossing_qa.py'
+    },
+    {
+      'name':'arrows-land-on-junctions',
+      'file':'src/55-render.js',
+      'old':"if(arrowKeepClear.some(c=>Math.hypot(c.x-q.x,c.y-q.y)<ARROW_CROSSING_CLEAR))continue;",
+      'new':"",
+      'test':'tests/wire_crossing_qa.py'
     },
 ]
 

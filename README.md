@@ -13,7 +13,7 @@ A compact, AI-native schematic editor. A document is a semantic model — Compon
 - **Direction ≠ access ≠ authority** — Ports carry direction (Input / Output / Input + Output / Trigger) and access (None / Read / Write / Read + Write) as independent axes. Read/Write describes the represented effect; it never grants permission.
 - **Boundaries are real** — no implicit reach-through. Crossing a Component boundary requires an inside-facing or both-facing Port on that Component, and every surface (UI, API, HTTP, MCP) enforces the same legality.
 
-`ATTACHMENT-POINT-MODEL.md`, `FORM-MODEL.md`, `HOST-SURFACE-MODEL.md`, `CANVAS-MODEL.md`, and `reference/REFERENCE.md` specify these in detail.
+`ATTACHMENT-POINT-MODEL.md`, `FORM-MODEL.md` (and the proposed `SECTION-MODEL.md`, `GRAPH-MODEL.md`, `LAYOUT-MODEL.md`), `HOST-SURFACE-MODEL.md`, `CANVAS-MODEL.md`, and `reference/REFERENCE.md` specify these in detail.
 
 ## The editor
 

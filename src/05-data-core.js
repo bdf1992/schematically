@@ -3,6 +3,7 @@
 // This file intentionally has no DOM dependencies and is shared by browser and MCP adapters.
 (function(root,factory){
   let Attachment=root.SovSchematicAttachment;
+  if(typeof globalThis!=='undefined'&&!globalThis.SovSchematicNotation&&typeof module!=='undefined'&&module.exports)require('./03-notation-core.js');
   if(!Attachment&&typeof module!=='undefined'&&module.exports)Attachment=require('./06-attachment-core.js');
   const api=factory(Attachment);
   root.SovSchematicData=api;
@@ -102,6 +103,11 @@
       references:Array.isArray(input.references)?clone(input.references):[],
       layout:isObject(input.layout)?clone(input.layout):{}
     };
+    // Presentation the document carries (NOTATION-MODEL.md): which notation it is drawn in, its
+    // narration track and its legend choices. Absent means the default, and is not written.
+    if(typeof input.notation==='string'&&input.notation.trim())doc.notation=input.notation.trim();
+    if(Array.isArray(input.narration))doc.narration=clone(input.narration);
+    if(isObject(input.legend))doc.legend=clone(input.legend);
     if(input.canvas&&isObject(input.canvas))doc.canvas={...doc.canvas,...clone(input.canvas),id:GLOBAL_CANVAS_ID,scope:'global',dimension:2,state:'open'};
     doc.meta.updatedAt=cleanString(doc.meta.updatedAt,nowIso());
     return normalizeDocument(doc);
@@ -118,6 +124,9 @@
     if(!Array.isArray(doc.wires))doc.wires=Array.isArray(doc.connections)?doc.connections:[];
     if(!Array.isArray(doc.references))doc.references=[];
     if(!isObject(doc.layout))doc.layout={};
+    // Resolving the notation registers the glyphs whose terminals are points, before any
+    // component's points are read.
+    {const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(N)N.resolve(doc)}
     for(const component of doc.components){
       normalizeComponentIdentity(component);
       applyTemplatePreset(component);
@@ -206,6 +215,9 @@
   }
   const STANDARD_POINT_FLOWS={in:['left','in'],out:['right','out'],control:['top','control']};
   function defaultPortForSpec(spec){
+    // A 0D Point's own point is an attachment both ways (its spec says duplex); the in/out
+    // defaults belong to the sides of Paths and Planes.
+    if(spec.role==='self')return defaultPointContract(spec.side,spec.defaultFlow||'duplex');
     const standard=STANDARD_POINT_FLOWS[spec.compatId];
     if(standard)return defaultPointContract(spec.side||standard[0],standard[1]);
     return defaultPointContract(spec.side,spec.defaultFlow||'duplex');
@@ -282,6 +294,50 @@
     }
     return changed;
   }
+  // ---- Section (SECTION-MODEL.md): the lines of a form and the regions between them. -------
+  // An authored form.section is the authority and the legacy frame / interior fields are its
+  // projection; without one, a section is derived from those fields and nothing is written.
+  const FILLS=['solid','space'];
+  const SECTION_PRESETS={
+    disk:{lines:1,bands:[],core:'solid'},circle:{lines:1,bands:[],core:'space'},
+    section:{lines:2,bands:[['solid',12,'skin']],core:'space'},coated:{lines:2,bands:[['solid',12,'skin']],core:'solid'},
+    'double-wall':{lines:4,bands:[['solid',8,'skin'],['space',14,'gap'],['solid',8,'skin']],core:'space'},
+    line:{lines:1,bands:[]},strip:{lines:2,bands:[['solid',10,'band']]},lanes:{lines:2,bands:[['space',18,'lane']]},
+    pipe:{lines:4,bands:[['solid',4,'wall'],['space',12,'bore'],['solid',4,'wall']]}
+  };
+  function sectionPreset(name,dimension){
+    const p=SECTION_PRESETS[name];if(!p)return null;
+    if((dimension===2)!==('core' in p))return null; // closed presets for 2D, open for 1D
+    const s={lines:Array.from({length:p.lines},(_,i)=>({id:`L${i}`})),bands:p.bands.map(([fill,thickness,role],i)=>({id:`B${i+1}`,fill,thickness,role}))};
+    if('core' in p)s.core={fill:p.core};
+    return s;
+  }
+  function sectionFromLegacy(form){
+    const d=Number(form?.dimension??2);
+    if(d===2){const open=form?.regions?.interior?.state==='open',mode=form?.frame?.mode;
+      if(!mode||mode==='none')return {lines:[{id:'L0'}],bands:[],core:{fill:open?'space':'solid'},derived:true};
+      return {lines:[{id:'L0'},{id:'L1'}],bands:[{id:'B1',fill:'solid',thickness:Math.max(1,num(form.frame.thickness,12)),role:mode,depth:Math.max(0,num(form.frame.depth,0))}],core:{fill:open?'space':'solid'},derived:true}}
+    if(d===1)return {lines:[{id:'L0',weight:Math.max(0,num(form?.body?.thickness,0))}],bands:[],derived:true};
+    return null;
+  }
+  function normalizeSection(section,dimension){
+    if(!isObject(section)||!Array.isArray(section.lines)||!section.lines.length)return null;
+    const lines=section.lines.map((l,i)=>({...(isObject(l)?l:{}),id:cleanString(l?.id,`L${i}`)||`L${i}`}));
+    const bands=(Array.isArray(section.bands)?section.bands:[]).map((b,i)=>({...(isObject(b)?b:{}),id:cleanString(b?.id,`B${i+1}`)||`B${i+1}`,fill:FILLS.includes(b?.fill)?b.fill:'solid',thickness:Math.max(1,Math.min(256,num(b?.thickness,10)))}));
+    const out={lines,bands};
+    if(dimension===2)out.core={fill:FILLS.includes(section.core?.fill)?section.core.fill:'space'};
+    return out;
+  }
+  // The section a form has: authored, or derived from its legacy fields.
+  function componentSection(c){const f=c?.form||{},d=Number(f.dimension??2);if(d===0)return null;return normalizeSection(f.section,d)||sectionFromLegacy(f)}
+  function projectSection(form){
+    const s=form.section;if(!s)return;
+    if(form.dimension===2){
+      form.regions=form.regions||{};form.regions.interior=form.regions.interior||{};form.regions.interior.state=s.core.fill==='space'?'open':'closed';
+      form.frame=form.frame||{};const b=s.bands[0];
+      form.frame.mode=s.lines.length>=2?(['frame','shell'].includes(b?.role)?b.role:'frame'):'none';form.frame.thickness=b?b.thickness:0;form.frame.depth=b?Math.max(0,num(b.depth,0)):0;
+    }
+  }
   function normalizeComponentForm(value={},legacyCanvas=null){
     const form=isObject(value)?clone(value):{};
     const legacyOpen=legacyCanvas?.state==='open';
@@ -301,6 +357,7 @@
     if(!isObject(form.regions.interior))form.regions.interior={};
     if(!['open','closed'].includes(form.regions.interior.state))form.regions.interior.state=legacyOpen?'open':'closed';
     if(dimension<2)form.regions.interior.state='closed';
+    if(form.section!==undefined){const s=normalizeSection(form.section,dimension);if(s&&dimension>0){form.section=s;projectSection(form)}else if(!s)delete form.section}
     return form;
   }
   // One implementation types a component: creation, the bar retype, and `update` over
@@ -422,10 +479,51 @@
     }
     return {outside:containingCanvasId(component),inside:componentCanvasId(component)};
   }
+  // Where a point sits on a multi-line boundary (SECTION-MODEL.md): on a line, or through a
+  // band. Declared as at: {line} | {through} (an id or an index); without one the face places
+  // it: external on the outer line, internal on the inner line, both through the outer band.
+  function sectionPosition(section,at,face){
+    const n=section.lines.length,idx=(list,v)=>typeof v==='number'?(v>=0&&v<list.length?v:-1):list.findIndex(x=>x.id===v);
+    if(isObject(at)){
+      if(at.line!=null){const i=idx(section.lines,at.line);if(i>=0)return {line:i,declared:true}}
+      if(at.through!=null){const k=idx(section.bands,at.through);if(k>=0)return {through:k,declared:true}}
+    }
+    if(face==='internal')return {line:n-1};
+    if(face==='both')return {through:0};
+    return {line:0};
+  }
+  // The regions a position touches: 0 is beyond the outer line, 1..n-1 the bands, n the core.
+  // A line separates two regions; a through-point spans its band and touches both neighbours.
+  function sectionRegionsTouched(pos){return pos.line!=null?[pos.line,pos.line+1]:[pos.through,pos.through+2]}
+  // The multi-line boundary a point sits on: its host's (a boundary Point) or its own (a card's port).
+  function boundarySection(doc,component){
+    const placement=component?.placement||{};
+    const owner=placement.kind==='edge'&&placement.hostId?doc.components.find(c=>c.id===placement.hostId):(Number(component?.form?.dimension??2)===2&&!['wire','path'].includes(placement.kind)?component:null);
+    const section=owner?componentSection(owner):null;
+    return section&&section.lines.length>=2?{owner,section,at:placement.kind==='edge'?placement.at:null}:null;
+  }
+  function pointSectionPosition(doc,componentId,portId){
+    const component=doc.components.find(c=>c.id===componentId);if(!component)return null;
+    const b=boundarySection(doc,component);if(!b)return null;
+    const port=attachmentPointConfig(doc,componentId,portId)||{};
+    return {...sectionPosition(b.section,b.at||port.at,port.face||'external'),lines:b.section.lines.length,owner:b.owner.id};
+  }
   function portExposedCanvasIds(doc,componentId,portId){
     const component=doc.components.find(c=>c.id===componentId);if(!component)return [];
     const port=attachmentPointConfig(doc,componentId,portId);if(!port)return [];
     const face=port.face||'external',surfaces=attachmentHostSurfaces(doc,component);
+    // On a multi-line boundary a point is exposed to the space regions its position touches;
+    // the face decides only on a one-line boundary, which has no thickness to sit in.
+    const b=boundarySection(doc,component);
+    if(b){
+      const n=b.section.lines.length,pos=sectionPosition(b.section,b.at||port.at,face),out=[];
+      for(const r of sectionRegionsTouched(pos)){
+        if(r===0)out.push(surfaces.outside);
+        else if(r===n&&b.section.core?.fill==='space')out.push(surfaces.inside);
+        // A space band would be a surface of its own; band surfaces are not built yet.
+      }
+      return [...new Set(out)];
+    }
     if(face==='internal')return [surfaces.inside];
     if(face==='both')return [...new Set([surfaces.outside,surfaces.inside])];
     return [surfaces.outside];
@@ -643,6 +741,7 @@
     wires.splice(0,wires.length,...incoming.wires);
     references.splice(0,references.length,...incoming.references);
     target.schema=DOCUMENT_SCHEMA;target.id=incoming.id;target.revision=incoming.revision;target.meta=incoming.meta;target.canvas=incoming.canvas;target.layout=incoming.layout;
+    for(const k of ['notation','narration','legend']){if(incoming[k]===undefined)delete target[k];else target[k]=incoming[k]}
     return target;
   }
   function validateDocument(input){
@@ -655,6 +754,12 @@
     const ids=new Set();
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]],['reference',input.references||[]]])for(const item of items){if(!item?.id)errors.push(`${kind} missing id`);else if(ids.has(`${kind}:${item.id}`))errors.push(`duplicate ${kind} id: ${item.id}`);else ids.add(`${kind}:${item.id}`)}
     const componentIds=new Set((input.components||[]).map(x=>x.id));
+    // A notation is named or carried; an unknown one is refused, never replaced by the default.
+    {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null;if(N&&input.notation!=null){const r=N.resolve(input);if(!r.ok)errors.push(`notation: ${r.message} (${r.code})`)}}
+    if(input.narration!=null&&!Array.isArray(input.narration))errors.push('narration must be an array of {at, say}');
+    for(const [i,line] of (Array.isArray(input.narration)?input.narration:[]).entries())if(!isObject(line)||typeof line.say!=='string')errors.push(`narration[${i}] needs a say`);
+    // A section's regions sit between its lines: n lines bound exactly n-1 bands. Never repaired.
+    for(const c of input.components||[]){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)errors.push(`component ${c.id||'?'} section: bands must be one fewer than lines (${s.lines.length} lines, ${s.bands.length} bands)`)}
     for(const wire of input.wires||[]){
       const aFree=isFreeEndpoint(wire.aAttachment),bFree=isFreeEndpoint(wire.bAttachment);
       if(!aFree&&!componentIds.has(wire.a))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.a}`);
@@ -662,6 +767,7 @@
       if(!aFree&&!bFree&&componentIds.has(wire.a)&&componentIds.has(wire.b)){
         const reach=connectionReachability(input,wire.a,wire.aSide,wire.b,wire.bSide);if(!reach.ok)errors.push(`wire ${wire.id||'?'}: ${reach.reason}`);
       }
+      const ws=wire.form?.section;if(ws&&Array.isArray(ws.lines)&&Array.isArray(ws.bands)&&ws.bands.length!==ws.lines.length-1)errors.push(`wire ${wire.id||'?'} section: bands must be one fewer than lines (${ws.lines.length} lines, ${ws.bands.length} bands)`);
       for(const key of ['forwardOperation','reverseOperation'])if(wire.config?.[key]!=null&&!['none','read','write'].includes(wire.config[key]))errors.push(`wire ${wire.id||'?'} invalid ${key}: ${wire.config[key]}`);
     }
     return {ok:errors.length===0,errors};
@@ -702,5 +808,5 @@
       {name:'schematic.document.replace',description:'Replace the entire schematic document after validation.',inputSchema:{type:'object',properties:{document:{type:'object'}},required:['document'],additionalProperties:false}}
     ];
   }
-  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,normalizePresentationSize,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,markersFor,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch};
+  return {DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,normalizePresentationSize,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,validateDocument,markersFor,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,operationTools,touch,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });

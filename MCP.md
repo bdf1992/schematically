@@ -21,6 +21,37 @@ Tools:
 - `schematic.document.replace`
 - `schematic.markers`
 
+Graph and simulation (`GRAPH-MODEL.md`, read-only over the document):
+
+- `schematic.graph.query` — `{verb, args}`: junctions, reach, paths, cycles, order, cut, boundary, untyped, blocked, acl, signals, export (jgf | dot | graphml)
+- `schematic.sim.set` / `at` / `advance` / `tick` — levels and time (asserted set, scheduled operations, the clock)
+- `schematic.sim.start` / `stop` / `inject` / `step` / `run` / `resume` / `reconcile` / `inspect` / `scenario` / `scenarios`
+
+HTTP: `GET|POST /api/v1/graph/<verb>`, `POST /api/v1/sim/<action>`, `GET /api/v1/sim/inspect?what=…&id=…`.
+
+Arranging (`LAYOUT-MODEL.md`, "As built: layouts"): `schematic.layout {op, …}`.
+- Read-only ops: `list`, `unplaced`.
+- Views: `create`, `rename`, `delete`, `set-default`.
+- Placement: `move`, `place`, `align`, `distribute`.
+- `route` sets `auto`, `guided` or `pinned`.
+- `apply` runs the `layered` engine, with `scope` and `into`.
+
+Refusals are typed (`PINNED`, `LOCKED`, `HOSTED`, `UNPLACED`, `UNKNOWN_*`). Arranging never
+changes what the document means.
+
+Seeing and measuring (`LAYOUT-MODEL.md` §4–5). These need Python with Playwright and a
+Chromium browser (`SOV_RENDER_PYTHON` selects the interpreter). Without them the call is
+refused with `RENDERER_UNAVAILABLE`: over MCP as an error result, over HTTP as a 503.
+
+- `schematic.render`
+  - `{format: 'svg'}` returns the editor's own standalone SVG as text.
+  - `{format: 'png', scale}` returns the picture as MCP **image content**, followed by
+    the score as text.
+- `schematic.layout.metrics` returns the 0–10 score and every finding.
+
+HTTP: `GET /api/v1/render.svg`, `GET /api/v1/render.png?appearance=dark&scale=2`,
+`GET /api/v1/layout/metrics`.
+
 Resources: `component`, `wire`, `reference`.
 
 `schematic.markers` returns `{id, severity, message, rule}` for each current validation finding, delegating to the same `Data.markersFor` the browser API uses — the tool invents no legality of its own.

@@ -162,6 +162,33 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
   }
   statusEl.textContent=fault?'Recovered drag error · ready':reason?`Select · ${reason}`:'Select';
 }
+// Alt-drag a boundary point to slide it around its card's perimeter, corners included. The
+// same edge resolver hosts a free Point on a boundary; Shift releases the eighth-of-a-side snap.
+let portSlide=null;
+function beginPortSlide(e,n,pointId){
+  const spec=Attachment.resolveSpec(n,pointId);
+  if(!spec||spec.role!=='boundary'||componentForm(n).dimension!==2)return false;
+  const editor=entityEditorState(n);if(editor.pinned||editor.locked){statusEl.textContent=editor.locked?'Locked: points stay where they are':'Pinned: geometry is frozen';return true}
+  e.preventDefault();e.stopPropagation();
+  commitHistoryCapture();
+  portSlide={pointerId:e.pointerId,id:n.id,compat:spec.compatId,moved:false};
+  const move=ev=>{if(ev.pointerId!==portSlide?.pointerId)return;movePortSlide(ev)};
+  const end=ev=>{if(ev.pointerId!==portSlide?.pointerId)return;window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',end);window.removeEventListener('pointercancel',end);
+    const done=portSlide;portSlide=null;if(done.moved){commitHistoryCapture('Move point');statusEl.textContent='Point moved along the boundary'}};
+  window.addEventListener('pointermove',move);window.addEventListener('pointerup',end);window.addEventListener('pointercancel',end);
+  return true;
+}
+function slidePortTo(n,compat,x,y,{snap=true}={}){
+  const q=nearestPointOnComponentEdge(n,x,y);if(!q)return null;
+  const t=snap?Math.round(q.t*8)/8:Math.round(q.t*1000)/1000;
+  componentConfig(n).ports[compat].boundary={side:q.side,t};
+  routeCache.clear();arrowPoseCache.clear();render();
+  return {side:q.side,t};
+}
+function movePortSlide(e){
+  const d=portSlide,n=nodes.find(x=>x.id===d.id);if(!n)return;
+  const P=svgPoint(e.clientX,e.clientY);if(slidePortTo(n,d.compat,P.x,P.y,{snap:!e.shiftKey}))d.moved=true;
+}
 function bindNode(g,n){
   g.addEventListener('pointerdown',e=>{
     if(e.target.closest('.point-grip')){
@@ -170,7 +197,7 @@ function bindNode(g,n){
       else if(!selectedComponentIds.has(n.id))selectNode(n.id,{focus:false});
       beginActiveNodeDrag(e,g,n);return;
     }
-    const port=e.target.closest('.port-hit');if(port){beginWireDrag(e,n,port.dataset.point||port.dataset.side,g);return}
+    const port=e.target.closest('.port-hit');if(port){if(e.altKey&&beginPortSlide(e,n,port.dataset.point||port.dataset.side))return;beginWireDrag(e,n,port.dataset.point||port.dataset.side,g);return}
     const transform=e.target.closest('.transform-handle,.transform-handle-halo');if(transform){beginComponentTransform(e,n,transform.dataset.transform);return}
     if(e.shiftKey){selectNode(n.id,{focus:false,additive:true,toggle:true});if(!selectedComponentIds.has(n.id))return}
     else if(!selectedComponentIds.has(n.id))selectNode(n.id,{focus:false});
@@ -362,7 +389,7 @@ function updateWireDrag(e){
     const WA=carrierEndpointPos(w,'a'), WB=carrierEndpointPos(w,'b');
     if(!WA||!WB) return;
     const pts=stableRouteForWire(i,w,WA,WB,occupied);
-    occupied.push(...routeSegments(pts));
+    occupied.push(...routeSegments(pts,w));
   });
   wireDrag.ghost.setAttribute('d',routePath(
     wireDrag.A,B,wireDrag.sourceSide,bSide,
@@ -448,7 +475,7 @@ function carrierEndPointerMove(e){
   const otherEp=carrierEndpoint(w,d.other);
   if(otherEp){
     const from=d.other==='a',occupied=[];
-    wires.forEach((x,j)=>{if(j===d.i)return;const XA=carrierEndpointPos(x,'a'),XB=carrierEndpointPos(x,'b');if(XA&&XB)occupied.push(...routeSegments(stableRouteForWire(j,x,XA,XB,occupied)))});
+    wires.forEach((x,j)=>{if(j===d.i)return;const XA=carrierEndpointPos(x,'a'),XB=carrierEndpointPos(x,'b');if(XA&&XB)occupied.push(...routeSegments(stableRouteForWire(j,x,XA,XB,occupied),x))});
     const A=from?otherEp.pos:B,Z=from?B:otherEp.pos;
     d.ghost.setAttribute('d',routePath(A,Z,from?(otherEp.compatId||null):(snap?.side||null),from?(snap?.side||null):(otherEp.compatId||null),from?(otherEp.node?.id||null):(snap?.node||null),from?(snap?.node||null):(otherEp.node?.id||null),d.i,occupied));
   }

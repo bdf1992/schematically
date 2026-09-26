@@ -1,0 +1,717 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "example-print-ai-proof-run",
+  "revision": 0,
+  "meta": {
+    "title": "Classic 09 — Print AI proof-resolution run (simulation)",
+    "source": "Print AI distributed workstation deck, 2026-09-23: slides 11, 12, 13, 15"
+  },
+  "components": [
+    {
+      "id": "case",
+      "symbolId": "hold",
+      "x": 250,
+      "y": 330,
+      "config": {
+        "label": "Case · Customer proof 48219",
+        "signalMode": "source",
+        "principal": "intake:case-48219",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          }
+        }
+      }
+    },
+    {
+      "id": "run",
+      "symbolId": "plane",
+      "x": 700,
+      "y": 380,
+      "form": {
+        "dimension": 2,
+        "regions": {
+          "interior": {
+            "state": "open"
+          }
+        }
+      },
+      "config": {
+        "label": "Run · Proof-resolution @ v3",
+        "attachmentDefaults": "none",
+        "acl": {
+          "default": "deny",
+          "entries": [
+            {
+              "principal": "intake:*",
+              "allow": [
+                "enter"
+              ]
+            },
+            {
+              "principal": "svc:mailer",
+              "allow": [
+                "exit"
+              ]
+            }
+          ]
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "boundary",
+          "size": {
+            "w": 520,
+            "h": 420
+          }
+        }
+      }
+    },
+    {
+      "id": "run-in",
+      "symbolId": "point",
+      "x": 440,
+      "y": 330,
+      "canvasId": "canvas:component:run",
+      "parentId": "run",
+      "placement": {
+        "kind": "edge",
+        "hostId": "run",
+        "side": "left",
+        "t": 0.381
+      },
+      "form": {
+        "dimension": 0
+      },
+      "config": {
+        "label": "case in",
+        "ports": {
+          "out": {
+            "face": "both",
+            "connections": [
+              {
+                "id": "connection-1",
+                "flow": "duplex",
+                "access": "read-write"
+              }
+            ]
+          }
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "outside",
+          "backdrop": "none"
+        }
+      }
+    },
+    {
+      "id": "run-out",
+      "symbolId": "point",
+      "x": 960,
+      "y": 490,
+      "canvasId": "canvas:component:run",
+      "parentId": "run",
+      "placement": {
+        "kind": "edge",
+        "hostId": "run",
+        "side": "right",
+        "t": 0.762
+      },
+      "form": {
+        "dimension": 0
+      },
+      "config": {
+        "label": "effect out",
+        "ports": {
+          "out": {
+            "face": "both",
+            "connections": [
+              {
+                "id": "connection-1",
+                "flow": "duplex",
+                "access": "read-write"
+              }
+            ]
+          }
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "outside",
+          "backdrop": "none"
+        }
+      }
+    },
+    {
+      "id": "ingest",
+      "symbolId": "act",
+      "x": 545,
+      "y": 330,
+      "canvasId": "canvas:component:run",
+      "parentId": "run",
+      "config": {
+        "label": "Ingest · AI workflow",
+        "signalMode": "relay",
+        "principal": "ai:ingest",
+        "behavior": {
+          "handler": "ingest"
+        }
+      }
+    },
+    {
+      "id": "evaluate",
+      "symbolId": "gate",
+      "x": 700,
+      "y": 330,
+      "canvasId": "canvas:component:run",
+      "parentId": "run",
+      "config": {
+        "label": "Evaluate",
+        "signalMode": "relay",
+        "behavior": {
+          "handler": "evaluate"
+        }
+      }
+    },
+    {
+      "id": "split",
+      "symbolId": "point",
+      "x": 785,
+      "y": 330,
+      "canvasId": "canvas:component:run",
+      "parentId": "run",
+      "form": {
+        "dimension": 0
+      },
+      "config": {
+        "label": "",
+        "signalMode": "relay",
+        "flow": {
+          "policy": "fanout"
+        },
+        "ports": {
+          "out": {
+            "face": "external",
+            "connections": [
+              {
+                "id": "connection-1",
+                "flow": "duplex",
+                "access": "read-write"
+              }
+            ]
+          }
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "none",
+          "backdrop": "none"
+        }
+      }
+    },
+    {
+      "id": "review",
+      "symbolId": "act",
+      "x": 870,
+      "y": 330,
+      "canvasId": "canvas:component:run",
+      "parentId": "run",
+      "config": {
+        "label": "Human review",
+        "signalMode": "relay",
+        "principal": "human:reviewer",
+        "behavior": {
+          "human": {
+            "prompt": "Approve the proof for the customer?"
+          }
+        }
+      }
+    },
+    {
+      "id": "monitor",
+      "symbolId": "observe",
+      "x": 870,
+      "y": 225,
+      "canvasId": "canvas:component:run",
+      "parentId": "run",
+      "config": {
+        "label": "Monitor · eval scores",
+        "signalMode": "relay"
+      }
+    },
+    {
+      "id": "notify",
+      "symbolId": "act",
+      "x": 545,
+      "y": 490,
+      "canvasId": "canvas:component:run",
+      "parentId": "run",
+      "config": {
+        "label": "Notify customer · effect",
+        "signalMode": "relay",
+        "principal": "svc:mailer",
+        "behavior": {
+          "handler": "send-email",
+          "effect": {
+            "key": "payload.caseId"
+          }
+        },
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          }
+        }
+      }
+    },
+    {
+      "id": "evidence",
+      "symbolId": "receipt",
+      "x": 700,
+      "y": 490,
+      "canvasId": "canvas:component:run",
+      "parentId": "run",
+      "config": {
+        "label": "Evidence",
+        "signalMode": "relay"
+      }
+    },
+    {
+      "id": "customer",
+      "symbolId": "act",
+      "x": 1140,
+      "y": 490,
+      "config": {
+        "label": "Customer · external service",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          }
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "k1",
+      "a": "case",
+      "aSide": "out",
+      "b": "run-in",
+      "bSide": "out",
+      "canvasId": "canvas:global"
+    },
+    {
+      "id": "k2",
+      "a": "run-in",
+      "aSide": "out",
+      "b": "ingest",
+      "bSide": "in",
+      "canvasId": "canvas:component:run"
+    },
+    {
+      "id": "k3",
+      "a": "ingest",
+      "aSide": "out",
+      "b": "evaluate",
+      "bSide": "in",
+      "canvasId": "canvas:component:run"
+    },
+    {
+      "id": "k4",
+      "a": "evaluate",
+      "aSide": "out",
+      "b": "split",
+      "bSide": "out",
+      "canvasId": "canvas:component:run"
+    },
+    {
+      "id": "k5",
+      "a": "split",
+      "aSide": "out",
+      "b": "review",
+      "bSide": "in",
+      "canvasId": "canvas:component:run"
+    },
+    {
+      "id": "k6",
+      "a": "split",
+      "aSide": "out",
+      "b": "monitor",
+      "bSide": "in",
+      "canvasId": "canvas:component:run"
+    },
+    {
+      "id": "k7",
+      "a": "review",
+      "aSide": "out",
+      "b": "notify",
+      "bSide": "in",
+      "canvasId": "canvas:component:run"
+    },
+    {
+      "id": "k8",
+      "a": "notify",
+      "aSide": "out",
+      "b": "evidence",
+      "bSide": "in",
+      "canvasId": "canvas:component:run"
+    },
+    {
+      "id": "k9",
+      "a": "evidence",
+      "aSide": "out",
+      "b": "run-out",
+      "bSide": "out",
+      "canvasId": "canvas:component:run"
+    },
+    {
+      "id": "k10",
+      "a": "run-out",
+      "aSide": "out",
+      "b": "customer",
+      "bSide": "in",
+      "canvasId": "canvas:global"
+    }
+  ],
+  "references": [
+    {
+      "id": "s-approve",
+      "kind": "scenario",
+      "label": "Approved proof reaches the customer once",
+      "data": {
+        "handlers": {
+          "ingest": {
+            "kind": "stub"
+          },
+          "evaluate": {
+            "kind": "fixture",
+            "key": "payload.proof",
+            "merge": true,
+            "responses": {
+              "good": {
+                "payload": {
+                  "verdict": "pass",
+                  "score": 0.93
+                }
+              },
+              "bad": {
+                "refuse": "eval: proof below threshold"
+              }
+            }
+          },
+          "send-email": {
+            "kind": "stub"
+          }
+        },
+        "steps": [
+          {
+            "inject": {
+              "node": "case",
+              "channel": "proof",
+              "payload": {
+                "caseId": "48219",
+                "proof": "good"
+              }
+            }
+          },
+          {
+            "resume": {
+              "node": "review",
+              "decision": "approve"
+            }
+          }
+        ],
+        "expect": {
+          "taps": {
+            "customer": 1,
+            "monitor": 1
+          },
+          "effects": {
+            "confirmed": 1
+          },
+          "parked": 0,
+          "refusals": 0,
+          "levelRefusals": 0
+        }
+      }
+    },
+    {
+      "id": "s-retry",
+      "kind": "scenario",
+      "label": "A retried case does not message the customer twice (REQ.EFFECT.HAS_STABLE_REPLAY_IDENTITY)",
+      "data": {
+        "handlers": {
+          "ingest": {
+            "kind": "stub"
+          },
+          "evaluate": {
+            "kind": "fixture",
+            "key": "payload.proof",
+            "merge": true,
+            "responses": {
+              "good": {
+                "payload": {
+                  "verdict": "pass",
+                  "score": 0.93
+                }
+              },
+              "bad": {
+                "refuse": "eval: proof below threshold"
+              }
+            }
+          },
+          "send-email": {
+            "kind": "stub"
+          }
+        },
+        "steps": [
+          {
+            "inject": {
+              "node": "case",
+              "channel": "proof",
+              "payload": {
+                "caseId": "48219",
+                "proof": "good"
+              }
+            }
+          },
+          {
+            "resume": {
+              "node": "review",
+              "decision": "approve"
+            }
+          },
+          {
+            "inject": {
+              "node": "case",
+              "channel": "proof",
+              "payload": {
+                "caseId": "48219",
+                "proof": "good"
+              }
+            }
+          },
+          {
+            "resume": {
+              "node": "review",
+              "decision": "approve"
+            }
+          }
+        ],
+        "expect": {
+          "taps": {
+            "customer": 1
+          },
+          "effects": {
+            "confirmed": 1
+          },
+          "events": {
+            "effect-replayed": 1,
+            "effect-confirmed": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "s-restart",
+      "kind": "scenario",
+      "label": "Restart while waiting on the approver, and again after the effect (INV.RECOVERY.PRESERVES_COMPLETED_EFFECT_IDENTITY)",
+      "data": {
+        "handlers": {
+          "ingest": {
+            "kind": "stub"
+          },
+          "evaluate": {
+            "kind": "fixture",
+            "key": "payload.proof",
+            "merge": true,
+            "responses": {
+              "good": {
+                "payload": {
+                  "verdict": "pass",
+                  "score": 0.93
+                }
+              },
+              "bad": {
+                "refuse": "eval: proof below threshold"
+              }
+            }
+          },
+          "send-email": {
+            "kind": "stub"
+          }
+        },
+        "steps": [
+          {
+            "inject": {
+              "node": "case",
+              "channel": "proof",
+              "payload": {
+                "caseId": "48219",
+                "proof": "good"
+              }
+            }
+          },
+          {
+            "restart": true
+          },
+          {
+            "resume": {
+              "node": "review",
+              "decision": "approve"
+            }
+          },
+          {
+            "restart": true
+          },
+          {
+            "inject": {
+              "node": "case",
+              "channel": "proof",
+              "payload": {
+                "caseId": "48219",
+                "proof": "good"
+              }
+            }
+          },
+          {
+            "resume": {
+              "node": "review",
+              "decision": "approve"
+            }
+          }
+        ],
+        "expect": {
+          "taps": {
+            "customer": 1
+          },
+          "effects": {
+            "confirmed": 1
+          },
+          "events": {
+            "effect-replayed": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "s-reject",
+      "kind": "scenario",
+      "label": "A rejected proof is refused at review and nothing is sent",
+      "data": {
+        "handlers": {
+          "ingest": {
+            "kind": "stub"
+          },
+          "evaluate": {
+            "kind": "fixture",
+            "key": "payload.proof",
+            "merge": true,
+            "responses": {
+              "good": {
+                "payload": {
+                  "verdict": "pass",
+                  "score": 0.93
+                }
+              },
+              "bad": {
+                "refuse": "eval: proof below threshold"
+              }
+            }
+          },
+          "send-email": {
+            "kind": "stub"
+          }
+        },
+        "steps": [
+          {
+            "inject": {
+              "node": "case",
+              "channel": "proof",
+              "payload": {
+                "caseId": "48219",
+                "proof": "good"
+              }
+            }
+          },
+          {
+            "resume": {
+              "node": "review",
+              "decision": "reject"
+            }
+          }
+        ],
+        "expect": {
+          "taps": {
+            "customer": 0
+          },
+          "effects": {
+            "confirmed": 0
+          },
+          "refusals": 1,
+          "parked": 0
+        }
+      }
+    },
+    {
+      "id": "s-eval-fails",
+      "kind": "scenario",
+      "label": "A failing eval is refused before any person is asked",
+      "data": {
+        "handlers": {
+          "ingest": {
+            "kind": "stub"
+          },
+          "evaluate": {
+            "kind": "fixture",
+            "key": "payload.proof",
+            "merge": true,
+            "responses": {
+              "good": {
+                "payload": {
+                  "verdict": "pass",
+                  "score": 0.93
+                }
+              },
+              "bad": {
+                "refuse": "eval: proof below threshold"
+              }
+            }
+          },
+          "send-email": {
+            "kind": "stub"
+          }
+        },
+        "steps": [
+          {
+            "inject": {
+              "node": "case",
+              "channel": "proof",
+              "payload": {
+                "caseId": "48219",
+                "proof": "bad"
+              }
+            }
+          }
+        ],
+        "expect": {
+          "taps": {
+            "customer": 0,
+            "monitor": 0,
+            "review": 0
+          },
+          "refusals": 1,
+          "parked": 0
+        }
+      }
+    }
+  ]
+}

@@ -21,8 +21,10 @@ async def main():
         child=await page.evaluate("""window.SovSchematicAPI.create('component',{symbolId:'buffer',x:240,y:250,config:{label:'Payload'}}).result""")
         await page.wait_for_timeout(150)
         # Effectful Form values have visible projections.
-        assert await page.locator(f'.node[data-id="{host["id"]}"] .component-body-depth').count()==1
-        assert await page.locator(f'.node[data-id="{host["id"]}"] .component-frame-depth').count()==1
+        # Body thickness lengthens the card's shadow; frame depth recesses what the frame holds.
+        shadow=await page.locator(f'.node[data-id="{host["id"]}"] > .body').evaluate("e=>e.style.filter")
+        assert '0px 3.92px' in shadow, shadow  # elevation 1 (2px) plus 24 x .08 for the body's thickness
+        assert await page.locator(f'.node[data-id="{host["id"]}"] .section-bevel.shade').count()==1
         assert await page.locator(f'.node[data-id="{host["id"]}"]').get_attribute('data-material')=='wood'
 
         # Actual pointer settle: ghost appears before release and relationship is established on release.

@@ -17,3 +17,5 @@ Component
 `interior.state = open` means that region may host Components. Existing `canvas.state` is compatibility-only.
 
 Examples: painting = 2D/surface/material=canvas; wire = 1D/path; enclosure = 3D/volume/shell.
+
+Proposed refinement: `SECTION-MODEL.md` replaces Frame and Regions with a Section of lines and the solid or space regions between them.

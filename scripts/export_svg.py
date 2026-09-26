@@ -23,7 +23,8 @@ sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'scripts'))
 from browser_runtime import chromium_launch_kwargs  # noqa: E402
 
-# File-menu, browser API and headless export share the persistence implementation.
+# File > Export SVG, the Browser API (file.svg, render.svg), this script and the server's render
+# service share one implementation: renderStandaloneSvg() in src/75-persistence.js.
 EXPORT_JS = "(opts) => window.SovSchematicAPI.file.svg(opts)"
 
 
@@ -54,7 +55,7 @@ def export_documents(paths: list[Path], out_dir: Path | None = None, appearance:
             page.evaluate('([t,n])=>window.SovSchematicAPI.file.open(t,n)', [text, src.name])
             page.evaluate('()=>{ if (typeof fitDiagram === "function") fitDiagram(); }')
             page.wait_for_timeout(300)
-            svg = page.evaluate(EXPORT_JS, {'pad': pad})
+            svg = page.evaluate(EXPORT_JS, {'pad': pad, 'packets': loop is not None})
             period = 0.0
             if loop is not None:
                 from loop_svg import quantize

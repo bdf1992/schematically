@@ -53,7 +53,8 @@ function clearComponentSelectionSet(){selectedComponentIds.clear()}
 
 // --- History ---------------------------------------------------------------
 const historyState={undo:[],redo:[],baseline:null,timer:null,hint:'Edit',replaying:false,max:120};
-function historyDocument(){return SovSchematicData.makeDocument(SovSchematicData.clone(diagram))}
+// History holds the canonical document: the layout on screen folded back into its view.
+function historyDocument(){return SovSchematicData.makeDocument(typeof canonicalDiagram==='function'?canonicalDiagram():SovSchematicData.clone(diagram))}
 function historyFingerprintOf(doc){
   const d=SovSchematicData.clone(doc);d.revision=0;
   if(d.meta){delete d.meta.updatedAt;delete d.meta.savedAt}
@@ -212,12 +213,13 @@ function selectedUtilityEntity(kind=selectedSurfaceKind()){
 function syncEntityUtilityPanel(kind){
   const entity=selectedUtilityEntity(kind),panel=document.getElementById('entityUtilityFields');if(!panel)return;panel.hidden=!entity;if(!entity)return;
   const state=entityEditorState(entity),pin=document.getElementById('entityPin'),lock=document.getElementById('entityLock'),hidden=document.getElementById('entityHidden'),opacity=document.getElementById('entityOpacity'),rate=document.getElementById('entityRate');
-  pin.checked=state.pinned;pin.disabled=kind!=='component'||state.locked;lock.checked=state.locked;hidden.checked=state.hidden;opacity.value=String(state.opacity);opacity.disabled=state.locked;rate.value=String(state.rate);rate.disabled=state.locked;
+  // A wire's Pin is its route in the layout on screen.
+  pin.checked=kind==='wire'?(typeof activeRouteSpec==='function'&&activeRouteSpec(entity.id)?.mode==='pinned'):state.pinned;pin.disabled=(kind!=='component'&&kind!=='wire')||state.locked;lock.checked=state.locked;hidden.checked=state.hidden;opacity.value=String(state.opacity);opacity.disabled=state.locked;rate.value=String(state.rate);rate.disabled=state.locked;
   panel.dataset.ownerKind=kind;
 }
 function bindUtilitySettings(){
   const pin=document.getElementById('entityPin'),lock=document.getElementById('entityLock'),hidden=document.getElementById('entityHidden'),opacity=document.getElementById('entityOpacity'),rate=document.getElementById('entityRate');
-  pin?.addEventListener('change',()=>{const e=selectedUtilityEntity();if(!e)return;setHistoryHint(pin.checked?'Pin':'Unpin');entityEditorState(e).pinned=pin.checked;render();scheduleHistoryCapture();restoreSelectedSurface()});
+  pin?.addEventListener('change',()=>{const e=selectedUtilityEntity();if(!e)return;if(wires.includes(e)){const r=toggleWireRoutePin(e,pin.checked);if(!r.ok){pin.checked=false;statusEl.textContent=r.message}restoreSelectedSurface();return}setHistoryHint(pin.checked?'Pin':'Unpin');entityEditorState(e).pinned=pin.checked;render();scheduleHistoryCapture();restoreSelectedSurface()});
   lock?.addEventListener('change',()=>{const e=selectedUtilityEntity();if(!e)return;setHistoryHint(lock.checked?'Lock':'Unlock');entityEditorState(e).locked=lock.checked;render();scheduleHistoryCapture();restoreSelectedSurface()});
   hidden?.addEventListener('change',()=>{const e=selectedUtilityEntity();if(!e)return;setHistoryHint(hidden.checked?'Hide':'Show');entityEditorState(e).hidden=hidden.checked;render();scheduleHistoryCapture();if(hidden.checked){selected=null;clearComponentSelectionSet();selectNode(null)}else restoreSelectedSurface()});
   opacity?.addEventListener('input',()=>{const e=selectedUtilityEntity();if(!e||isEntityLocked(e))return;entityEditorState(e).opacity=Number(opacity.value);setHistoryHint('Change opacity');render();scheduleHistoryCapture()});

@@ -69,7 +69,7 @@ with sync_playwright() as p:
     for symbol in ('act', 'hold', 'gate'):
         typed = page.evaluate("([s])=>window.SovSchematicAPI.create('component',{symbolId:s,x:1000,y:1100}).result.id", [symbol])
         assert page.evaluate(MODE, typed) == 'boundary', (symbol, page.evaluate(MODE, typed))
-        assert symbol.upper() in page.evaluate(TEXTS, typed), (symbol, 'caption', page.evaluate(TEXTS, typed))
+        assert symbol.capitalize() in page.evaluate(TEXTS, typed), (symbol, 'caption', page.evaluate(TEXTS, typed))
 
     # A record from an earlier build: authored 'none', no label. The first label adopts the form's default.
     old = page.evaluate("()=>window.SovSchematicAPI.create('component',{symbolId:'path',x:300,y:1100,"
