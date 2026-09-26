@@ -309,11 +309,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .settings-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:8px;font-size:10px}
 .settings-head span{font-size:9px;color:var(--muted);text-align:right}
 .settings-grid{display:grid;gap:7px 9px}
-.settings-grid-compact{grid-template-columns:1fr 1fr}
+/* Columns never grow to a control's intrinsic width: a long option or a number input stays inside its column. */
+.settings-grid-compact{grid-template-columns:repeat(2,minmax(0,1fr))}
 .settings-grid-three{grid-template-columns:repeat(3,minmax(0,1fr))}
-.settings-grid-three input,.settings-grid-three select{width:100%;min-width:0}
+.settings-grid input,.settings-grid select,.settings-grid .form-readout{width:100%;min-width:0;box-sizing:border-box}
 /* Controls read at 12px or more (#23); their labels at 10px. */
 .settings-surface label{display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--muted);letter-spacing:.03em}
+/* A field the dimension does not have is hidden by attribute (20-ui.js); the flex display above must not override that. */
+.settings-surface label[hidden],.settings-surface [data-dims][hidden]{display:none}
 .settings-surface input,.settings-surface select,.settings-surface textarea{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font-size:12px;padding:5px;outline:none;min-height:30px}
 /* Appearance tiers (#23): the frequent row and the size row are open grids; the Form-appearance and
    Advanced tiers are disclosures inside the section, closed until reached for. */
@@ -339,12 +342,18 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .ports-settings{padding:0 8px 8px}
 .ports-settings[hidden]{display:none}
 .ports-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline;font-size:10px;margin-bottom:4px}
-.ports-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:6px 0;border-top:1px solid var(--line)}
-.ports-row .port-channels{grid-column:span 2}
-.ports-row input[readonly],.ports-row :disabled{color:var(--muted);background:var(--hover)}
-.ports-row input,.ports-row select,.ports-row button{min-width:0}
-.ports-row .port-remove{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font-size:10px;cursor:pointer;min-height:29px}
-.ports-row .port-remove:hover:not(:disabled){background:var(--hover)}
+.ports-row,.hosted-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:6px 0;border-top:1px solid var(--line)}
+.ports-row .port-channels,.hosted-row .port-channels{grid-column:span 2}
+.ports-row input[readonly],.ports-row :disabled,.hosted-row input[readonly]{color:var(--muted);background:var(--hover)}
+.ports-row .port-id,.hosted-row .port-id{cursor:pointer}
+.ports-row input,.ports-row select,.ports-row button,.hosted-row input,.hosted-row button{min-width:0}
+.ports-row .port-remove,.hosted-row .port-select{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font-size:11px;cursor:pointer;min-height:30px}
+.ports-row .port-remove:hover:not(:disabled),.hosted-row .port-select:hover{background:var(--hover)}
+/* What ends on the point (#21): a read-out under the row's controls. */
+.port-attached{grid-column:1 / -1;font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hosted-row{background:color-mix(in srgb,var(--hover) 45%,transparent)}
+.ports-actions{display:flex;gap:6px;flex-wrap:wrap}
+.ports-actions .settings-action:disabled{opacity:.55;cursor:default}
 .color-slot-panel{z-index:36}
 
 /* Diegetic component transforms live on the selected object, not in the command bar. */

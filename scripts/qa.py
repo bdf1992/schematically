@@ -51,6 +51,7 @@ BROWSER=[
     'tests/multi_select_drag_qa.py',
     'tests/type_catalog_qa.py',
     'tests/appearance_tiers_qa.py',
+    'tests/attached_list_qa.py',
     'tests/grid_visibility_qa.py',
     'tests/editor_kernel_qa.py',
     'tests/editor_kernel_extended_qa.py',

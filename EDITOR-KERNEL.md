@@ -17,6 +17,7 @@ The editor kernel is deliberately separate from schematic semantics.
 - **Search**: blank-canvas typing opens search/command; nonmatches are temporarily desaturated.
 - **Objects**: fallback Inspector surface when nothing is selected.
 - **Appearance**: Light/Dark/System editor chrome. Authored schematic palette remains document semantics.
+- **Attached**: a 2D Component's Form section lists what is attached, not a switch over a template rule: every port with the Wires that end on it, then every Point hosted on the boundary, each row selecting its point. "Reset to template ports" is the one control over the template's ports (added ports stay); `config.attachmentDefaults` stays in the file and out of the UI.
 - **Component settings**: the Appearance section is tiered by how often a field is reached for. Label, Graphic and Signal come first; Width, Height and Interior next, with the canvas handles as the primary way to size; Material, Thickness and the Frame fields sit behind one disclosure; Text and SVG behind a second, which opens itself when Custom SVG is chosen. Controls are 12px or larger.
 - **Rate**: global × source Component × Wire multiplier controls packet travel timing.
 

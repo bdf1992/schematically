@@ -39,7 +39,6 @@ const visualSvgMarkup=document.getElementById('visualSvgMarkup');
 const appearanceAdvancedTier=document.getElementById('appearanceAdvancedTier');
 const formSettings=document.getElementById('formSettings');
 const formDimensionReadout=document.getElementById('formDimensionReadout');
-const formAttachments=document.getElementById('formAttachments');
 const formMaterial=document.getElementById('formMaterial');
 const formBodyThickness=document.getElementById('formBodyThickness');
 const formInteriorState=document.getElementById('formInteriorState');

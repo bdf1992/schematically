@@ -361,6 +361,15 @@ function wiresOnBuiltinPoints(n){
   const ids=new Set(Attachment.builtinPointIds(n));
   return wires.filter(w=>(w.a===n.id&&ids.has(Attachment.pointId(n,w.aAttachment?.pointId||w.aSide)))||(w.b===n.id&&ids.has(Attachment.pointId(n,w.bAttachment?.pointId||w.bSide))));
 }
+// The Wires whose end is bound to this Component's point (by point id or compat id): what the
+// Attached list shows beside each port (#21).
+function wiresOnPoint(n,pointId){
+  const spec=Attachment.resolveSpec(n,pointId);if(!spec)return [];
+  const at=(w,end)=>w[end]===n.id&&Attachment.pointId(n,w[`${end}Attachment`]?.pointId||w[`${end}Side`])===spec.id;
+  return wires.filter(w=>at(w,'a')||at(w,'b'));
+}
+// The Points hosted on this Component's boundary (placement kind `edge`), in document order.
+function hostedPointsOn(n){return nodes.filter(p=>p.id!==n.id&&p.placement?.kind==='edge'&&p.placement.hostId===n.id)}
 function componentHostedOnComponentPath(n){return componentPlacement(n).kind==='path'}
 function componentHostedOnComponentEdge(n){return componentPlacement(n).kind==='edge'}
 function componentBackdropMode(n){

@@ -27,9 +27,9 @@ TIERS = """()=>{
 SIZES = """()=>[...componentSettingsFields.querySelectorAll('input,select,textarea')].filter(el=>el.offsetParent!==null||el.closest('details'))
   .map(el=>[el.id||el.className,parseFloat(getComputedStyle(el).fontSize),parseFloat(getComputedStyle(el.closest('label')||el).fontSize)])"""
 RECTS = """()=>{const r=el=>el.getBoundingClientRect();const p=r(selectionSettingsPanel),w=r(document.querySelector('.workspace-wrap'));
-  // Every visible control of the two open rows sits inside the panel: nothing is cut off at its edge.
-  const cut=[...appearanceFrequent.querySelectorAll('select'),...appearanceGeometry.querySelectorAll('input,button')]
-    .filter(el=>!el.closest('label').hidden).map(el=>[el.id,r(el)]).filter(([,b])=>b.width>0&&(b.right>p.right-8||b.left<p.left+8)).map(([id])=>id);
+  // Every visible control in the Component settings sits inside the panel: nothing is cut off at its edge.
+  const cut=[...componentSettingsFields.querySelectorAll('input,select,button,output')]
+    .map(el=>[el.id||el.className,r(el)]).filter(([,b])=>b.width>0&&(b.right>p.right-8||b.left<p.left+8)).map(([id])=>id);
   return {inside:p.left>=w.left-4&&p.right<=w.right+4&&p.top>=w.top-4&&p.bottom<=w.bottom+4,w:p.width,h:p.height,wrapH:w.height,cut,
     scrolls:selectionSettingsPanel.scrollHeight>selectionSettingsPanel.clientHeight,overflow:getComputedStyle(selectionSettingsPanel).overflowY}}"""
 
@@ -106,6 +106,9 @@ with sync_playwright() as p:
     assert t['frequent']['visible'] == ['visualLabelMode', 'barComponentSignalMode'], t['frequent']
     assert t['geometry']['hidden'] is True, t['geometry']
     assert page.evaluate("()=>[visualText.closest('label').hidden,formMaterial.closest('label').hidden,formBodyThickness.closest('label').hidden]") == [True, True, False]
+    # Hidden means not drawn: the flex layout of a settings label must not override the attribute.
+    drawn = page.evaluate("()=>[...componentSettingsFields.querySelectorAll('label[hidden],[data-dims][hidden]')].filter(el=>el.getBoundingClientRect().width>0).map(el=>el.id||el.textContent.trim().slice(0,20))")
+    assert drawn == [], ('hidden fields are drawn', drawn)
     open_appearance(page, 'rail')
     t = page.evaluate(TIERS)
     assert t['geometry']['hidden'] is False and t['geometry']['visible'] == ['visualWidth'], t['geometry']

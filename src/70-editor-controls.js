@@ -150,23 +150,9 @@ barWireSection?.addEventListener('change',()=>{
   routeCache.clear();renderWires();const i=wires.indexOf(w);selectWire(i,{focus:false});scheduleHistoryCapture();
 });
 // Dimension has no control of its own: it comes with the type, chosen in the bar (issue #20).
-formAttachments.addEventListener('change',()=>{
-  // Built-in 2D points are template defaults. Turning them off is refused while a Wire
-  // still ends on one, so the change never silently orphans a carrier.
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Attachment defaults edit'))return;
-  const next=formAttachments.value==='none'?'none':'standard';
-  if(next==='none'&&Attachment.attachmentDefaults(n)!=='none'&&wiresOnBuiltinPoints(n).length){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent='Detach Wires from built-in points first';return}
-  // Any Wire the switch would orphan or leave between ports sharing no channel refuses it (data core).
-  const trial=SovSchematicData.clone(n);if(next==='none')trial.config.attachmentDefaults='none';else delete trial.config.attachmentDefaults;
-  try{SovSchematicData.assertDefinitionPortsKept(n,{config:{attachmentDefaults:next}},trial);SovSchematicData.assertWiresSurviveEdit(diagram,n,trial)}catch(error){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent=error.message;return}
-  setHistoryHint('Change attachment defaults');
-  // Choosing the template's ports where the Component's ports differ from them resets them.
-  const differs=next==='standard'&&JSON.stringify(componentPortList(n).slice(0,SovSchematicData.templatePorts(n.symbolId).length))!==JSON.stringify(SovSchematicData.normalizeDeclaredPorts(SovSchematicData.templatePorts(n.symbolId)));
-  if(next==='none')n.config.attachmentDefaults='none';else delete n.config.attachmentDefaults;
-  SovSchematicData.reconcileComponentWirePorts(diagram,n.id);componentConfig(n);
-  routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
-  if(differs)statusEl.textContent='Reset to template ports';
-});
+// Attachments have no selector of their own either: the Attached list shows them, and the ports are
+// edited row by row or put back to the template's (issue #21). `config.attachmentDefaults` stays in
+// the file format; the data core still stores every port list in its smallest form.
 // --- Ports ------------------------------------------------------------------
 // Every Ports edit sends the Component's complete port list through the data core's component
 // update, which stores it in the smallest form and applies every refusal. One edit is one history
@@ -274,9 +260,26 @@ portsList.addEventListener('change',e=>{
   else if(el.classList.contains('port-channels'))editComponentPort(n,portId,port=>{port.channels=portChannelsFromText(value,port.channels)},'Change port channels');
 });
 portsList.addEventListener('click',e=>{
+  // A row's id cell selects its point; a hosted Point's Select button selects the Point (#21).
+  const select=e.target.closest('.port-select');
+  if(select){const p=nodes.find(x=>x.id===select.closest('.hosted-row')?.dataset.pointComponentId);if(p){closeSelectionSettings();selectNode(p.id)}return}
+  const idCell=e.target.closest('.port-id');
+  if(idCell){
+    const row=idCell.closest('.ports-row,.hosted-row');if(!row)return;
+    if(row.dataset.portId){closeSelectionSettings();selectPort(row.dataset.componentId,row.dataset.portId)}
+    else if(row.dataset.pointComponentId&&nodes.some(x=>x.id===row.dataset.pointComponentId)){closeSelectionSettings();selectNode(row.dataset.pointComponentId)}
+    return;
+  }
   const button=e.target.closest('.port-remove');if(!button||button.disabled)return;
   const target=button.closest('.ports-row'),n=nodes.find(x=>x.id===target.dataset.componentId);if(!n)return;
   editComponentPort(n,target.dataset.portId,port=>{port.removed=true},'Remove port');
+});
+// The template's ports put back (#21), the added ports kept under them: the same component update as
+// any port edit, so a Wire whose port would change (PORT_IN_USE) or a definition that owns the ports
+// (DEFINITION_PORTS) refuses it.
+portsResetBtn.addEventListener('click',()=>{
+  const n=selectedPortsComponent();if(!n||portsResetBtn.disabled)return;
+  applyComponentPortPatch(n,{attachmentDefaults:'standard',attachmentPoints:templatePortsKept(n).additions},'Reset to template ports');
 });
 // A new port: id p1, p2, ... (the first free), on the right, at the first free position of
 // .5, .25, .75, .125, .375, .625, .875 on that side; once those are used, at the midpoint of the

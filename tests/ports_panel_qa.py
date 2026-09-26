@@ -116,9 +116,10 @@ with sync_playwright() as p:
     assert page.evaluate("()=>[...document.querySelector('#portsList .port-flow').options].map(o=>o.value)") == ['in', 'out', 'duplex', 'control', 'trigger']
     t_attrs = page.evaluate("()=>{const t=document.querySelector('#portsList .port-t');return [t.type,t.min,t.max,t.step]}")
     assert t_attrs == ['number', '0', '1', '0.05'], t_attrs
-    # The section sits below the Attachments control.
-    below = page.evaluate("()=>formAttachments.closest('label').getBoundingClientRect().bottom<=portsSettings.getBoundingClientRect().top")
+    # The section sits below the Interior control; the Attachments selector is gone (#21).
+    below = page.evaluate("()=>formInteriorState.closest('label').getBoundingClientRect().bottom<=portsSettings.getBoundingClientRect().top")
     assert below
+    assert page.evaluate("()=>document.getElementById('formAttachments')") is None
     # Hidden for 0D and 1D Components.
     open_panel(page, 'q')
     assert page.evaluate('()=>portsSettings.hidden') and not page.locator('#portsSettings').is_visible()
@@ -288,11 +289,8 @@ with sync_playwright() as p:
     assert next(x for x in page.evaluate(STATE, 'and')['specs'] if x['id'] == 'b')['label'] == 'B in'
     one_transition(page, h, c, 'bound label', 'and')
     assert page.evaluate("()=>nodes.find(n=>n.id==='and').config.definition") == 'logic.and@1'
-    # The other Form controls cannot change its ports either.
-    h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
-    page.locator('#formAttachments').select_option('standard')
-    refused(page, h, c, 'DEFINITION_PORTS', 'bound attachments')
-    assert page.evaluate('()=>formAttachments.value') == 'none'
+    # The other Form controls cannot change its ports either: Reset is disabled, naming the definition.
+    assert page.evaluate('()=>portsResetBtn.disabled') and 'logic.and@1' in page.evaluate('()=>portsResetBtn.title')
     # Dimension has no control of its own (#20): it changes only with the type, and a retype to a
     # 2D type or to a Point is refused alike.
     assert page.evaluate("()=>document.getElementById('formDimension')") is None
@@ -601,13 +599,18 @@ with sync_playwright() as p:
     assert pg.evaluate("()=>nodes.find(x=>x.id==='src').config.attachmentPoints") == [{'id': 'self', 'flow': 'in', 'channels': [{'id': 'main'}]}]
     assert pg.evaluate('()=>barPortFlow.value') == 'in'
 
-    # Step 18: the Attachments control says what it means.
+    # Step 18: "Reset to template ports" stands where a template port is missing, moved or changed
+    # (#21), and puts the template's ports back through the same update as any port edit.
     open_panel(pg, 'g')
-    assert pg.evaluate("()=>[...formAttachments.options].map(o=>[o.value,o.textContent])") == [['standard', 'Template ports'], ['none', 'Custom ports']]
-    assert pg.evaluate('()=>formAttachments.value') == 'none'  # g's ports differ from its template
-    pg.locator('#formAttachments').select_option('standard')
-    pg.wait_for_timeout(120)
+    assert pg.evaluate(STATE, 'g')['mode'] == 'none'  # g's ports differ from its template
+    assert not pg.evaluate('()=>portsResetBtn.disabled')
+    pg.locator('#portsResetBtn').click()
+    pg.wait_for_timeout(450)
     assert status(pg) == 'Reset to template ports', status(pg)
+    s = pg.evaluate(STATE, 'g')
+    assert s['mode'] is None and [x['id'] for x in s['specs']][:3] == ['left', 'right', 'top'], s
+    open_panel(pg, 'g')
+    assert pg.evaluate('()=>portsResetBtn.disabled')
 
     # Step 19: ten added ports all sit at distinct positions on the right side.
     pg.evaluate("()=>{SovSchematicAPI.create('component',{id:'ten',symbolId:'plane',x:900,y:260});render()}")
@@ -845,7 +848,7 @@ with sync_playwright() as p:
         open_panel(pg, gate)
         title = pg.evaluate("(id)=>componentGlyph(nodes.find(n=>n.id===id)).title", gate)
         assert pg.locator('#iName').inner_text() == title and title in ('And', 'Exclusive or'), (gate, title, pg.locator('#iName').inner_text())
-        assert pg.evaluate("()=>formAttachments.value") == 'standard', gate
+        assert pg.evaluate("()=>portsResetBtn.disabled"), gate  # its ports are the template's (its terminals)
         assert pg.evaluate(ROWS) == ['a', 'b', 'y'], (gate, pg.evaluate(ROWS))
         assert pg.evaluate('()=>!portsAddBtn.disabled'), gate
         pg.locator('#portsAddBtn').click()
@@ -860,10 +863,11 @@ with sync_playwright() as p:
         pg.wait_for_timeout(450)
         s = pg.evaluate(STATE, gate)
         assert s['mode'] == 'none' and [x['id'] for x in s['stored']] == ['a', 'b', 'y', 'p1'] and s['specs'][0]['side'] == 'top', (gate, s)
-        # Choosing the template's ports resets the terminals to the glyph's and keeps the addition.
+        # Resetting to the template's ports puts the terminals back as the glyph declares them and
+        # keeps the addition: added ports are not the template's.
         open_panel(pg, gate)
-        assert pg.evaluate("()=>formAttachments.value") == 'none', gate
-        pg.locator('#formAttachments').select_option('standard')
+        assert not pg.evaluate("()=>portsResetBtn.disabled"), gate
+        pg.locator('#portsResetBtn').click()
         pg.wait_for_timeout(450)
         assert status(pg) == 'Reset to template ports', (gate, status(pg))
         s = pg.evaluate(STATE, gate)
