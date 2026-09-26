@@ -64,8 +64,8 @@ const SovSchematicAPI={
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   view:{appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
   run:{
-    start:(args)=>pageRuns().start(args),step:(runId)=>pageRuns().step(runId),settle:(runId)=>pageRuns().settle(runId),
-    trace:(runId)=>pageRuns().trace(runId),query:(runId,subject)=>pageRuns().query(runId,subject),replay:(trace)=>pageRuns().replay(trace)
+    start:(args)=>pageRuns().start(args),step:(handle)=>pageRuns().step(handle),settle:(handle)=>pageRuns().settle(handle),
+    trace:(handle)=>pageRuns().trace(handle),query:(handle,subject)=>pageRuns().query(handle,subject),replay:(trace)=>pageRuns().replay(trace)
   },
   tools:()=>SovSchematicData.operationTools()
 };

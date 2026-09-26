@@ -323,18 +323,32 @@ cycle through such a port, `oscillating` means the state repeated.
 `QUERY_INVALID` and never writes to the run.
 
 Every run operation on every surface returns one receipt, `soveraeign.schematic/run-receipt@0.1` (schema
-`formats/schematic.run-receipt.schema.json`, built by `runReceipt(operation, run, result, tickBefore?)`):
-`{schema, operation, runId, ok, tickBefore, tickAfter, head, result, error}`. `operation` is the tool name
-(`schematic.run.start`, `.step`, `.settle`, `.trace`, `schematic.state.query`, `schematic.run.replay`); `head` is the
-ledger head hash after the operation; `error` is `{code, message}` on a refusal (then `result` is null); `runId`,
-the ticks and `head` are null when there is no run. `result` is, per operation: start, the start entry's body
-`{replayKey, budget}`; step, `{tick, records}`; settle, the result above; trace, the trace; query, the records; replay,
-`{records}`.
+`formats/schematic.run-receipt.schema.json`, built by `runReceipt(operation, run, result, tickBefore?, handle?)`):
+`{schema, operation, runId, handle, ok, tickBefore, tickAfter, head, result, error}`. `operation` is the tool name
+(`schematic.run.start`, `.step`, `.settle`, `.trace`, `schematic.state.query`, `schematic.run.replay`); `runId` is the
+run's content-derived id and `handle` its address on the surface (null for a replay, a refusal with no run, and a
+receipt built outside a registry); `head` is the ledger head hash after the operation; `error` is `{code, message,
+details?}` on a refusal (then `result` is null), `details` holding what the refusal names besides its code and message:
+`refusals` for `RUN_REFUSED`, `{tick, left}` for `BUDGET_SPENT`, `fields` for `REPLAY_KEY_MISMATCH`, `{entry, errors}`
+for `TRACE_INVALID`, `definitions` for "this page carries no packs"; `runId`, `handle`, the ticks and `head` are null
+when there is no run. `result` is, per operation: start, the start entry's body `{replayKey, budget}`; step, `{tick,
+records}`; settle, the result above; trace, the trace; query, the records; replay, `{records}`.
 
 Runs live beside the document, never in it. `createRunRegistry({packs, document})` is the registry each surface keeps
-in memory: runs keyed by run id (a start with the same replay key replaces that run), every run started from
-`document()`, the surface's current document, and `packs` the raw pack JSON (a pack that does not load refuses every
-start and replay with `PACK_INVALID`). An unknown run id is refused with `RUN_NOT_FOUND`. No run operation captures
-history, changes the document or its revision, or saves recovery. The browser reads its packs from
-`<script type="application/json" id="sov-packs">`, into which `build.py` inlines every `data/*.pack.json`; the MCP/HTTP
-server reads `data/*.pack.json` at start.
+in memory. Each successful start registers the run under a new handle, `<runId>.<n>`, `n` counting the registry's
+starts from 1 (for example `dd38fae2158e.3`): two starts with the same replay key share the run id (record ids depend on
+it) but are two runs, and neither touches the other. Step, settle, trace and query take the handle; an unknown handle
+(a bare run id included) is refused with `RUN_NOT_FOUND`. A replay is not registered. Every run starts from
+`document()`, the surface's current document, and `packs` is the raw pack JSON: a pack that does not load refuses every
+start and replay with `PACK_INVALID`, and an empty list refuses a document that references a definition with
+`PACK_INVALID`, "this page carries no packs". A start through a registry with a budget over `BUDGET_LIMIT`
+(1,000,000) is refused with `INPUT_INVALID`; `startRun` itself is not capped. No run operation captures history,
+changes the document or its revision, or saves recovery. The browser reads its packs from `<script
+type="application/json" id="sov-packs">`, into which `build.py` inlines every `data/*.pack.json`; the MCP/HTTP server
+reads `data/*.pack.json` at start.
+
+`settle` is linear in the ticks it processes: each tick costs a summary kept incrementally (the true signal keys'
+count and code sum, each queue's length, relative next and positional code sum, the pending count and code sums with
+relative times); the full hash is computed only when a summary repeats, for that tick and for each earlier tick with
+the same summary (its state rebuilt from the kept pending list, the queue's item log and the later signal flips).
+Equal states have equal summaries, so results are those of hashing every tick.

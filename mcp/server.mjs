@@ -31,21 +31,21 @@ let documentState=loadDocument();
 const PACK_DIR=path.join(HERE,'../data');
 const packsJson=fs.readdirSync(PACK_DIR).filter(name=>name.endsWith('.pack.json')).sort().map(name=>JSON.parse(fs.readFileSync(path.join(PACK_DIR,name),'utf8')));
 const runs=State.createRunRegistry({packs:packsJson,document:()=>Data.clone(documentState)});
-const runId={type:'string',minLength:1,description:'a run id from schematic.run.start'};
+const handle={type:'string',minLength:1,description:'the run handle (<runId>.<n>) from schematic.run.start'};
 const RUN_TOOLS=[
-  {name:'schematic.run.start',description:'Start a run of the current document (never changes it). Returns a run receipt.',inputSchema:{type:'object',properties:{inputs:{type:'array',items:{type:'object',properties:{entity:{type:'string'},point:{type:'string'},channel:{type:'string'},value:{type:'boolean'},at:{type:'integer',minimum:0}},required:['entity','point','value','at'],additionalProperties:false}},seed:{type:'string'},budget:{type:'integer',minimum:0}},additionalProperties:false}},
-  {name:'schematic.run.step',description:'Process one tick of a run. Returns a run receipt.',inputSchema:{type:'object',properties:{runId},required:['runId'],additionalProperties:false}},
-  {name:'schematic.run.settle',description:'Step a run until quiet, oscillating or budget spent. Returns a run receipt.',inputSchema:{type:'object',properties:{runId},required:['runId'],additionalProperties:false}},
-  {name:'schematic.run.trace',description:'The trace of a run (.sovtrace), in a run receipt.',inputSchema:{type:'object',properties:{runId},required:['runId'],additionalProperties:false}},
-  {name:'schematic.state.query',description:'Records of a run whose subject matches; passive. Returns a run receipt.',inputSchema:{type:'object',properties:{runId,entity:{type:'string',minLength:1},point:{type:'string',minLength:1},channel:{type:'string',minLength:1},observable:{type:'string',minLength:1}},required:['runId','entity','observable'],additionalProperties:false}},
+  {name:'schematic.run.start',description:'Start a run of the current document (never changes it). Returns a run receipt with the new run handle; budget at most 1000000.',inputSchema:{type:'object',properties:{inputs:{type:'array',items:{type:'object',properties:{entity:{type:'string'},point:{type:'string'},channel:{type:'string'},value:{type:'boolean'},at:{type:'integer',minimum:0}},required:['entity','point','value','at'],additionalProperties:false}},seed:{type:'string'},budget:{type:'integer',minimum:0,maximum:1000000}},additionalProperties:false}},
+  {name:'schematic.run.step',description:'Process one tick of a run. Returns a run receipt.',inputSchema:{type:'object',properties:{handle},required:['handle'],additionalProperties:false}},
+  {name:'schematic.run.settle',description:'Step a run until quiet, oscillating or budget spent. Returns a run receipt.',inputSchema:{type:'object',properties:{handle},required:['handle'],additionalProperties:false}},
+  {name:'schematic.run.trace',description:'The trace of a run (.sovtrace), in a run receipt.',inputSchema:{type:'object',properties:{handle},required:['handle'],additionalProperties:false}},
+  {name:'schematic.state.query',description:'Records of a run whose subject matches; passive. Returns a run receipt.',inputSchema:{type:'object',properties:{handle,entity:{type:'string',minLength:1},point:{type:'string',minLength:1},channel:{type:'string',minLength:1},observable:{type:'string',minLength:1}},required:['handle','entity','observable'],additionalProperties:false}},
   {name:'schematic.run.replay',description:'Replay a trace against the current document. Returns a run receipt.',inputSchema:{type:'object',properties:{trace:{type:'object'}},required:['trace'],additionalProperties:false}}
 ];
 function runTool(name,args){
   if(name==='schematic.run.start')return runs.start(args);
-  if(name==='schematic.run.step')return runs.step(args.runId);
-  if(name==='schematic.run.settle')return runs.settle(args.runId);
-  if(name==='schematic.run.trace')return runs.trace(args.runId);
-  if(name==='schematic.state.query'){const {runId,...subject}=args;return runs.query(runId,subject)}
+  if(name==='schematic.run.step')return runs.step(args.handle);
+  if(name==='schematic.run.settle')return runs.settle(args.handle);
+  if(name==='schematic.run.trace')return runs.trace(args.handle);
+  if(name==='schematic.state.query'){const {handle,...subject}=args;return runs.query(handle,subject)}
   if(name==='schematic.run.replay')return runs.replay(args.trace);
   return null;
 }
@@ -112,19 +112,25 @@ async function handleApi(req,res,url){
       const before=cloneDoc();Data.replaceDocument(documentState,incoming);Data.touch(documentState);recordHistory(before);saveDocument();return json(res,200,Data.clone(documentState));
     }
   }
-  // Runs: a receipt always; 201 on a start, 404 for an unknown run id, 409 for any other refusal.
+  // Runs, addressed by handle: a receipt always; 201 on a start, 404 for an unknown handle, 400 for a
+  // body that is not JSON or a path that does not decode, 409 for any other refusal.
   if(parts[0]==='api'&&parts[1]==='v1'&&(parts[2]==='runs'||parts[2]==='replay')){
     const send=(receipt,status=200)=>json(res,receipt.ok?status:receipt.error?.code==='RUN_NOT_FOUND'?404:409,receipt);
-    const id=parts[3]===undefined?undefined:decodeURIComponent(parts[3]),verb=parts[4];
-    if(parts[2]==='replay'&&parts.length===3&&req.method==='POST')return send(runs.replay(await bodyJson(req)));
-    if(parts[2]==='runs'&&parts.length===3&&req.method==='POST')return send(runs.start(await bodyJson(req)),201);
-    if(parts[2]==='runs'&&parts.length===5){
-      if(verb==='step'&&req.method==='POST')return send(runs.step(id));
-      if(verb==='settle'&&req.method==='POST')return send(runs.settle(id));
-      if(verb==='trace'&&req.method==='GET')return send(runs.trace(id));
-      if(verb==='query'&&req.method==='POST')return send(runs.query(id,await bodyJson(req)));
-    }
-    return json(res,404,{error:'not found'});
+    const malformed=(operation,message)=>{json(res,400,State.runReceipt(operation,null,{ok:false,code:'INPUT_INVALID',message}));return true};
+    const body=async operation=>{try{return {value:await bodyJson(req)}}catch(e){return {refused:malformed(operation,`the request body is not JSON: ${String(e?.message||e)}`)}}};
+    const verb=parts[4],route=parts[2]==='replay'&&parts.length===3&&req.method==='POST'?'schematic.run.replay'
+      :parts[2]==='runs'&&parts.length===3&&req.method==='POST'?'schematic.run.start'
+      :parts[2]==='runs'&&parts.length===5?({'step:POST':'schematic.run.step','settle:POST':'schematic.run.settle','trace:GET':'schematic.run.trace','query:POST':'schematic.state.query'})[`${verb}:${req.method}`]:undefined;
+    if(!route)return json(res,404,{error:'not found'});
+    let id;
+    if(parts.length===5){try{id=decodeURIComponent(parts[3])}catch(e){malformed(route,`the run handle in the path does not decode: ${String(e?.message||e)}`);return}}
+    if(route==='schematic.run.step')return send(runs.step(id));
+    if(route==='schematic.run.settle')return send(runs.settle(id));
+    if(route==='schematic.run.trace')return send(runs.trace(id));
+    const b=await body(route);if(b.refused)return;
+    if(route==='schematic.run.replay')return send(runs.replay(b.value));
+    if(route==='schematic.run.start')return send(runs.start(b.value),201);
+    return send(runs.query(id,b.value));
   }
   if(parts[0]==='api'&&parts[1]==='v1'&&parts[2]){
     const resource=resourceFromPath(parts[2]);if(!resource)return json(res,404,{error:'resource not found'});
