@@ -41,6 +41,7 @@ const SovSchematicAPI={
     info:()=>({name:currentFileName,format:currentFileFormat,dirty:isFileDirty(),revision:diagram.revision}),
     document:()=>snapshotDocument(),
     package:()=>snapshotPackage(),
+    svg:(options={})=>snapshotSvg(options),
     parse:(text)=>parseFilePayload(text),
     open:(payload,name='API.sov')=>applyOpenedPayload(typeof payload==='string'?parseFilePayload(payload):{format:payload?.schema===SovSchematicData.PACKAGE_SCHEMA?'package':payload?.schema===SovSchematicData.WORKSPACE_SCHEMA?'workspace':'document',payload},name,null)
   },
@@ -53,6 +54,7 @@ const SovSchematicAPI={
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
+  markers:()=>SovSchematicData.markersFor(diagram),
   view:{zoom:()=>currentZoom(),setZoom:(value)=>{zoomAt(Number(value)/currentZoom());return currentZoom()},appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
   // Logic: `run` is stateless and is what MCP's schematic.logic.run answers; `live` draws the
   // circuit's state on the canvas and keeps it between steps. Composites resolve by file name

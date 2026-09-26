@@ -1,0 +1,8 @@
+{
+  "fixture": "evidence/scale-fixture.sov",
+  "components": 252,
+  "wires": 225,
+  "rendered_nodes": 54,
+  "rendered_edges": 225,
+  "cold_render_ms_navigate_to_glspReady": 214.36630003154278
+}

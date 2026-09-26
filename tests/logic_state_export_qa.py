@@ -5,7 +5,7 @@ Checked here against the circuit's definition, not the overlay's own reading:
 
   - for every input vector of the half adder, each wire carries the value its net must have
     (the S wire A xor B, the C wire A and B, input wires their input), and each chip shows it;
-  - one chip per pin, never two on a shared output;
+  - exactly one chip per wired pin: none dropped from the file, never two on a shared output;
   - no packet is left moving in a state snapshot;
   - monochrome uses no signal colour and dashes low wires;
   - every gate keeps its pack glyph through the editor's sanitizer (a custom graphic, not the
@@ -53,7 +53,8 @@ def check_half_adder() -> None:
                 assert not any(x.tag.endswith('animateMotion') for x in g.iter()), 'a snapshot has no packets in flight'
             chips = [c for c in ET.fromstring(text).iter(f'{SVG}g') if c.attrib.get('class') == 'logic-chip']
             pins = [c.attrib['data-pin'] for c in chips]
-            assert len(pins) == len(set(pins)), 'one chip per pin'
+            # Exactly one chip per wired pin: none missing (a hidden chip is dropped from the file), none doubled.
+            assert sorted(pins) == sorted({'in-A.out', 'in-B.out', 'x.a', 'x.b', 'n.a', 'n.b', 'x.q', 'n.q', 'out-S.in', 'out-C.in'}), pins
             for c in chips:
                 # A chip shows its own pin's net: a gate's input pins read the inputs, its q the result.
                 expect = {'in-A.out': a, 'in-B.out': b, 'x.a': a, 'x.b': b, 'n.a': a, 'n.b': b,

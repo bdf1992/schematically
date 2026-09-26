@@ -22,6 +22,7 @@ STATIC=[
     'tests/plot_run_qa.py',
     'tests/logic_core_parity_qa.py',
     'tests/logic_mcp_qa.py',
+    'tests/revision_guard_qa.py',
 ]
 BROWSER=[
     'tests/attachment_point_refactor_qa.py',
@@ -38,6 +39,7 @@ BROWSER=[
     'tests/attachment_growth_direction_qa.py',
     'tests/attachment_terminal_identity_qa.py',
     'tests/boundary_legality_qa.py',
+    'tests/markers_qa.py',
     'tests/read_write_access_qa.py',
     'tests/wire_host_inline_qa.py',
     'tests/host_surface_qa.py',
@@ -61,6 +63,11 @@ BROWSER=[
     'tests/agent_api_mcp_golden_qa.py',
     'tests/skills_conformance_qa.py',
     'tests/render_idempotence_qa.py',
+    'tests/region_dimensions_qa.py',
+    'tests/swarm_originals_qa.py',
+    'tests/swarm_review_qa.py',
+    'tests/authoring_review_qa.py',
+    'tests/wire_label_clearance_qa.py',
     'tests/drag_lifecycle_stress_qa.py',
     'tests/performance_regression_qa.py',
 ]

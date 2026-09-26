@@ -11,8 +11,8 @@ function mutateSelectedPresentation(mutator,{reroute=false}={}){
 }
 visualGraphicMode.addEventListener('change',()=>mutateSelectedPresentation(p=>{p.graphic.kind=visualGraphicMode.value;visualSvgRow.hidden=p.graphic.kind!=='custom'}));
 visualLabelMode.addEventListener('change',()=>mutateSelectedPresentation(p=>p.labelMode=visualLabelMode.value));
-visualWidth.addEventListener('change',()=>mutateSelectedPresentation(p=>p.size.w=Number(visualWidth.value)||112,{reroute:true}));
-visualHeight.addEventListener('change',()=>mutateSelectedPresentation(p=>p.size.h=Number(visualHeight.value)||84,{reroute:true}));
+visualWidth.addEventListener('change',()=>mutateSelectedPresentation(p=>p.size.w=visualWidth.value,{reroute:true}));
+visualHeight.addEventListener('change',()=>mutateSelectedPresentation(p=>p.size.h=visualHeight.value,{reroute:true}));
 visualInteriorColor.addEventListener('click',()=>openColorSlotPanel('component-interior'));
 visualText.addEventListener('input',()=>mutateSelectedPresentation(p=>p.text=visualText.value));
 visualSvgMarkup.addEventListener('input',()=>mutateSelectedPresentation(p=>{p.graphic.svg=visualSvgMarkup.value;p.graphic.kind='custom';visualGraphicMode.value='custom'}));
