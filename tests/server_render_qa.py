@@ -5,11 +5,14 @@ schematic.layout.metrics returns the audit; HTTP serves render.svg / render.png 
 layout/metrics. Without a renderer the call is refused with RENDERER_UNAVAILABLE, typed.
 """
 from __future__ import annotations
-import base64, json, os, shutil, socket, subprocess, tempfile, time
+import base64, json, os, shutil, socket, subprocess, sys, tempfile, time
 from pathlib import Path
 from urllib import request
 
 ROOT = Path(__file__).resolve().parents[1]
+# The server spawns `python3` unless SOV_RENDER_PYTHON names an interpreter; not every host
+# has a `python3` (Windows), so the spawned server uses this interpreter when none is set.
+os.environ.setdefault('SOV_RENDER_PYTHON', sys.executable)
 
 def free_port():
     s = socket.socket(); s.bind(('127.0.0.1', 0)); port = s.getsockname()[1]; s.close(); return port
