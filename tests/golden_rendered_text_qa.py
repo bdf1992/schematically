@@ -51,12 +51,13 @@ READ_TEXT = """
 """
 
 # Held by hand, not derived from a run: a typed Component with no label of its own shows
-# its type caption. This is the exact text the 1f213c7 regression stopped drawing.
+# its type caption. This is the text the 1f213c7 regression stopped drawing, in the sentence
+# case the notation model gives a caption since 8a86399 ("Act", never "ACT").
 CAPTION_ANCHOR = {
     '09-typed-captions.sov': [
-        ['component:src', 'component-label', 'ACT'],
-        ['component:check', 'component-label', 'GATE'],
-        ['component:store', 'component-label', 'HOLD'],
+        ['component:src', 'component-label', 'Act'],
+        ['component:check', 'component-label', 'Gate'],
+        ['component:store', 'component-label', 'Hold'],
         ['component:log', 'component-label', 'Receipt'],
     ]
 }

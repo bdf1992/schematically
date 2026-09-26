@@ -2,23 +2,8 @@
  "01-source-hold.sov": [
   [
    "wire:k1",
-   "wire-packet-tag",
-   "1"
-  ],
-  [
-   "wire:k1",
    "connection-label",
    "signal"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "1"
   ],
   [
    "component:c1",
@@ -34,38 +19,13 @@
  "02-duplex-buffer.sov": [
   [
    "wire:k1",
-   "wire-packet-tag",
-   "req"
-  ],
-  [
-   "wire:k1",
-   "wire-packet-tag",
-   "ret"
-  ],
-  [
-   "wire:k1",
-   "net-badge",
-   "↔"
-  ],
-  [
-   "wire:k1",
    "reciprocity-mark",
-   "RETURN?"
+   "return expected"
   ],
   [
    "wire:k1",
    "connection-label",
-   "request / return"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "req"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "ret"
+   "↔ request / return"
   ],
   [
    "component:c1",
@@ -103,23 +63,8 @@
   ],
   [
    "wire:k1",
-   "wire-packet-tag",
-   "inside"
-  ],
-  [
-   "wire:k1",
    "connection-label",
    "explicit boundary path"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "inside"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "edge"
   ],
   [
    "component:c2",
@@ -130,23 +75,8 @@
  "05-rate-chain.sov": [
   [
    "wire:k1",
-   "wire-packet-tag",
-   "1"
-  ],
-  [
-   "wire:k1",
    "connection-label",
    "0.5× propagation"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "1"
   ],
   [
    "component:c1",
@@ -167,23 +97,8 @@
   ],
   [
    "wire:k1",
-   "wire-packet-tag",
-   "event"
-  ],
-  [
-   "wire:k1",
    "connection-label",
    "record what happened"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "event"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "record"
   ],
   [
    "wire:k2",
@@ -192,105 +107,30 @@
   ],
   [
    "wire:k2",
-   "wire-packet-tag",
-   "witness"
-  ],
-  [
-   "wire:k2",
    "connection-label",
    "observe what happened"
   ],
   [
-   "wire:k2",
-   "endpoint-channel-tag",
-   "witness"
-  ],
-  [
-   "wire:k2",
-   "endpoint-channel-tag",
-   "event"
-  ],
-  [
    "component:c1",
    "component-label",
-   "EVENT"
+   "Event"
   ],
   [
    "component:c2",
    "component-label",
-   "RECORD"
+   "Record"
   ],
   [
    "component:c3",
    "component-label",
-   "WITNESS"
+   "Witness"
   ]
  ],
  "07-plane-with-points.sov": [
   [
-   "wire:k1",
-   "wire-packet-tag",
-   "1"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k4",
-   "wire-packet-tag",
-   "1"
-  ],
-  [
-   "wire:k4",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k4",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
    "component:src",
    "component-label",
    "Source"
-  ],
-  [
-   "wire:k2",
-   "wire-packet-tag",
-   "1"
-  ],
-  [
-   "wire:k2",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k2",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k3",
-   "wire-packet-tag",
-   "1"
-  ],
-  [
-   "wire:k3",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k3",
-   "endpoint-channel-tag",
-   "1"
   ],
   [
    "component:sink",
@@ -320,44 +160,19 @@
    "scoped permission"
   ],
   [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
    "wire:k3",
    "connection-label",
    "request"
   ],
   [
-   "wire:k3",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k3",
-   "endpoint-channel-tag",
-   "1"
+   "wire:k7",
+   "wire-packet-operation",
+   "W"
   ],
   [
    "wire:k7",
    "connection-label",
    "record"
-  ],
-  [
-   "wire:k7",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k7",
-   "endpoint-channel-tag",
-   "1"
   ],
   [
    "component:grant",
@@ -368,51 +183,6 @@
    "component:req",
    "component-label",
    "Requester"
-  ],
-  [
-   "wire:k2",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k2",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k4",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k4",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k5",
-   "wire-packet-tag",
-   "1"
-  ],
-  [
-   "wire:k5",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k5",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k6",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k6",
-   "endpoint-channel-tag",
-   "1"
   ],
   [
    "component:log",
@@ -445,46 +215,115 @@
    "Store"
   ]
  ],
- "09-typed-captions.sov": [
+ "09-print-ai-proof-run.sov": [
   [
-   "wire:k1",
-   "wire-packet-tag",
-   "1"
+   "component:case",
+   "component-label",
+   "Case · Customerproof 48219Case · Customer proof 48219"
   ],
+  [
+   "component:run",
+   "component-label",
+   "Run · Proof-resolution @ v3"
+  ],
+  [
+   "component:customer",
+   "component-label",
+   "Customer · externalserviceCustomer · external service"
+  ],
+  [
+   "component:run-in",
+   "component-label dimensional-point-label",
+   "case in"
+  ],
+  [
+   "component:run-out",
+   "component-label dimensional-point-label",
+   "effect out"
+  ],
+  [
+   "component:ingest",
+   "component-label",
+   "Ingest · AIworkflowIngest · AI workflow"
+  ],
+  [
+   "component:evaluate",
+   "component-label",
+   "Evaluate"
+  ],
+  [
+   "component:review",
+   "component-label",
+   "Human review"
+  ],
+  [
+   "component:monitor",
+   "component-label",
+   "Monitor · evalscoresMonitor · eval scores"
+  ],
+  [
+   "component:notify",
+   "component-label",
+   "Notify customer ·effectNotify customer · effect"
+  ],
+  [
+   "component:evidence",
+   "component-label",
+   "Evidence"
+  ]
+ ],
+ "09-proposed-service-review.sov": [
+  [
+   "wire:request",
+   "connection-label",
+   "submit"
+  ],
+  [
+   "component:service",
+   "component-label",
+   "SERVICE / proposal"
+  ],
+  [
+   "wire:control",
+   "connection-label",
+   "scope"
+  ],
+  [
+   "wire:record",
+   "connection-label",
+   "record"
+  ],
+  [
+   "component:team",
+   "component-label",
+   "Team"
+  ],
+  [
+   "component:entry",
+   "component-label dimensional-point-label",
+   "request"
+  ],
+  [
+   "component:check",
+   "component-label",
+   "Check"
+  ],
+  [
+   "component:history",
+   "component-label",
+   "History"
+  ],
+  [
+   "component:grant",
+   "component-label",
+   "Scope"
+  ]
+ ],
+ "09-typed-captions.sov": [
   [
    "wire:k1",
    "connection-label",
    "request"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k1",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k2",
-   "wire-packet-tag",
-   "1"
-  ],
-  [
-   "wire:k2",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k2",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k3",
-   "wire-packet-tag",
-   "1"
   ],
   [
    "wire:k3",
@@ -492,34 +331,227 @@
    "record"
   ],
   [
-   "wire:k3",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
-   "wire:k3",
-   "endpoint-channel-tag",
-   "1"
-  ],
-  [
    "component:src",
    "component-label",
-   "ACT"
+   "Act"
   ],
   [
    "component:check",
    "component-label",
-   "GATE"
+   "Gate"
   ],
   [
    "component:store",
    "component-label",
-   "HOLD"
+   "Hold"
   ],
   [
    "component:log",
    "component-label",
    "Receipt"
+  ]
+ ],
+ "10-clocked-signals.sov": [
+  [
+   "component:clock",
+   "component-label",
+   "Clock · 1s"
+  ],
+  [
+   "component:enable",
+   "component-label",
+   "Enable"
+  ],
+  [
+   "component:both",
+   "component-label",
+   "Clock ANDenableClock AND enable"
+  ],
+  [
+   "component:lamp",
+   "component-label",
+   "Lamp"
+  ],
+  [
+   "component:sensor",
+   "component-label",
+   "Sensor · sine4sSensor · sine 4s"
+  ],
+  [
+   "component:level",
+   "component-label",
+   "Level"
+  ],
+  [
+   "component:alarm",
+   "component-label",
+   "Over half"
+  ],
+  [
+   "component:job",
+   "component-label",
+   "Nightly job"
+  ]
+ ],
+ "11-sections.sov": [
+  [
+   "wire:w2",
+   "connection-label",
+   "strip"
+  ],
+  [
+   "wire:w3",
+   "connection-label",
+   "lanes"
+  ],
+  [
+   "wire:w4",
+   "connection-label",
+   "pipe"
+  ],
+  [
+   "component:disk",
+   "component-label",
+   "Disk · solid"
+  ],
+  [
+   "component:circle",
+   "component-label",
+   "Circle · space"
+  ],
+  [
+   "component:cell",
+   "component-label",
+   "Section · skin around space"
+  ],
+  [
+   "component:coated",
+   "component-label",
+   "Coated · skin aroundsolidCoated · skin around solid"
+  ],
+  [
+   "component:double",
+   "component-label",
+   "Double wall"
+  ],
+  [
+   "component:src",
+   "component-label",
+   "Source"
+  ],
+  [
+   "component:a1",
+   "component-label",
+   "Line"
+  ],
+  [
+   "component:a2",
+   "component-label",
+   "Strip"
+  ],
+  [
+   "component:a3",
+   "component-label",
+   "Lanes"
+  ],
+  [
+   "component:a4",
+   "component-label",
+   "Pipe"
+  ],
+  [
+   "component:inside",
+   "component-label",
+   "Inside"
+  ]
+ ],
+ "12-membrane.sov": [
+  [
+   "component:cell",
+   "component-label",
+   "Cell · a skin around space"
+  ],
+  [
+   "component:signal",
+   "component-label",
+   "Signal"
+  ],
+  [
+   "component:ligand",
+   "component-label",
+   "Ligand"
+  ],
+  [
+   "component:world",
+   "component-label",
+   "World"
+  ],
+  [
+   "component:channel",
+   "component-label dimensional-point-label",
+   "channel · through the skin"
+  ],
+  [
+   "component:receptor",
+   "component-label dimensional-point-label",
+   "receptor · outer line"
+  ],
+  [
+   "component:pore",
+   "component-label dimensional-point-label",
+   "pore · through the skin"
+  ],
+  [
+   "component:nucleus",
+   "component-label",
+   "Nucleus"
+  ],
+  [
+   "component:enzyme",
+   "component-label",
+   "Enzyme"
+  ]
+ ],
+ "13-half-adder.sov": [
+  [
+   "component:a",
+   "component-label",
+   "A"
+  ],
+  [
+   "component:b",
+   "component-label",
+   "B"
+  ],
+  [
+   "component:sum-gate",
+   "component-label",
+   "Sum gate"
+  ],
+  [
+   "component:sum-gate",
+   "component-subtitle",
+   "a ⊕ b"
+  ],
+  [
+   "component:carry-gate",
+   "component-label",
+   "Carry gate"
+  ],
+  [
+   "component:carry-gate",
+   "component-subtitle",
+   "a · b"
+  ],
+  [
+   "component:sum",
+   "component-label",
+   "Sum"
+  ],
+  [
+   "component:carry",
+   "component-label",
+   "Carry"
   ]
  ],
  "blank.sov": []
