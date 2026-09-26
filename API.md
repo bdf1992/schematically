@@ -97,3 +97,8 @@ core, on every surface, so `document.get()` (and so every run, and every file it
 held document, the same minimal form `node` or the server computes from the same file and the same operations: its
 `documentHash` is the file's, and opening does not change its revision. A trace recorded against the file therefore
 replays against the opened document, and one recorded in the browser replays on the server.
+
+The position of a Wire-hosted Component is computed by the renderer from the Wire's route and is not part of the
+document: `get`, `document.get()` and the HTTP and MCP servers return it with no `x`/`y`, only its `placement`. An
+`update` that sets `x` or `y` on a Component whose position is host-derived (on a Wire, a Path or an edge) is refused
+with `POSITION_DERIVED` (a receipt, no history) unless the same patch sets `placement`.

@@ -581,7 +581,13 @@ function syncNodeBoundaryContext(node){
   node.boundary.inside.type=node.symbolId==='blank'?null:node.symbolId;node.type=node.boundary.inside.type;
   node.boundary.outside.type=parent?(parent.boundary.inside.type||parent.symbolId||'component'):host?.ownerKind==='wire'?'wire':'world';componentPlacement(node);
 }
+// A Wire-hosted component's position is the renderer's (from the route), not the record's: the data core
+// leaves it out, and the editor puts back the last rendered pose until the next render computes it again.
+function restoreWireHostedPoses(){
+  for(const n of nodes){if(n.placement?.kind!=='wire'||Number.isFinite(n.x))continue;const q=wireHostPoseCache.get(n.id);n.x=q?.x??0;n.y=q?.y??0}
+}
 function syncAllNodeBoundaryContext(){
+  restoreWireHostedPoses();
   const ordered=[...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b));ordered.forEach(syncNodeBoundaryContext);ordered.forEach(syncComponentAttachedPose);
 }
 function setActiveCanvas(){

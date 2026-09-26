@@ -657,6 +657,16 @@
   const SIZE_BOUNDS={w:[80,520,112],h:[64,420,84]};
   const STANDARD_CONTRACT_FLOWS={in:'in',out:'out',control:'control'};
   const normalizeSlot=(value,fallback=0)=>{const n=Number(value);return Number.isInteger(n)?Math.max(0,Math.min(11,n)):fallback};
+  // The canonical palette: the twelve light-appearance slots (six mono, then the spectrum), as they
+  // were at 6a39efd. The editor reads its light palettes from this table (00-state.js); a legacy
+  // `config.color` hex migrates to the nearest of these slots, whatever the editor's appearance.
+  const LIGHT_PALETTE=Object.freeze(['#202020','#353535','#4B4B4B','#616161','#747474','#878787','#D34E4E','#D99032','#79A948','#3EA7A0','#507CCB','#8A5BC0']);
+  function nearestSlot(hex){
+    const rgb=h=>{const x=String(h||'#000000').replace('#','');const f=x.length===3?x.split('').map(c=>c+c).join(''):x.padEnd(6,'0').slice(0,6);return [0,2,4].map(i=>parseInt(f.slice(i,i+2),16)||0)};
+    const c=rgb(hex);let best=0,bestD=Infinity;
+    LIGHT_PALETTE.forEach((h,i)=>{const q=rgb(h),d=(c[0]-q[0])**2+(c[1]-q[1])**2+(c[2]-q[2])**2;if(d<bestD){bestD=d;best=i}});
+    return best;
+  }
   // The defaults of a component record, as it would be normalized with nothing authored.
   function componentDefaults(component){
     const symbolId=normalizeSymbolId(component?.symbolId),preset=templatePreset(symbolId)||{},size=preset.presentation?.size||{w:112,h:84};
@@ -726,6 +736,8 @@
     if(typeof p.padding!=='number')p.padding=PRESENTATION_DEFAULTS.padding;
     p.padding=Math.max(8,Math.min(36,p.padding));
     if(!['auto','none','body','frame'].includes(p.backdrop))p.backdrop=PRESENTATION_DEFAULTS.backdrop;
+    // A legacy record carries a hex `color` and no slot: it takes the nearest canonical slot.
+    if(!Number.isInteger(config.colorSlot)&&/^#[0-9a-fA-F]{6}$/.test(config.color||''))config.colorSlot=nearestSlot(config.color);
     config.colorSlot=normalizeSlot(config.colorSlot,0);
     if(!['source','relay','passive'].includes(config.signalMode))config.signalMode='source';
     if(!isObject(config.ports))config.ports={};
@@ -739,10 +751,16 @@
       port.side=spec.side; // geometry belongs to the attachment descriptor
     }
     normalizeEditorState(component);
-    if(!Number.isFinite(Number(component.x)))component.x=0;
-    if(!Number.isFinite(Number(component.y)))component.y=0;
+    // A Wire-hosted component has no position of its own: the renderer computes it from the route.
+    if(!wireHosted(component)){
+      if(!Number.isFinite(Number(component.x)))component.x=0;
+      if(!Number.isFinite(Number(component.y)))component.y=0;
+    }
     return component;
   }
+  function wireHosted(component){return component?.placement?.kind==='wire'||String(component?.canvasId||'').startsWith('canvas:wire:')}
+  // A position that follows from the host: on a Wire (the route), a Path or an edge (placeHostedComponent).
+  function positionDerived(component){return wireHosted(component)||['path','edge'].includes(component?.placement?.kind)}
   // Where a component is hosted, from its canvas: a Wire, a Component or the world.
   function componentHost(doc,component){
     const canvasId=cleanString(component?.canvasId,'')||GLOBAL_CANVAS_ID;
@@ -827,7 +845,11 @@
   // hosting and placement (hosts first), Wires, then the poses of Path- and edge-hosted components.
   function normalizeRecords(doc){
     for(const component of doc.components)applyComponentDefaults(component);
-    for(const component of doc.components)normalizePlacement(doc,component,normalizeHosting(doc,component));
+    for(const component of doc.components){
+      const placement=normalizePlacement(doc,component,normalizeHosting(doc,component));
+      // No false positions: a Wire-hosted component's x/y are the renderer's, from the route, not the record's.
+      if(placement.kind==='wire'){delete component.x;delete component.y}
+    }
     for(const wire of doc.wires)applyWireDefaults(doc,wire);
     for(const component of doc.components){
       const host=doc.components.find(c=>c.id===component.placement?.hostId);
@@ -1128,6 +1150,9 @@
     if(binding&&resource!=='component')throw new Error('DEFINITION_INVALID: only a component binds a definition');
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource==='component'){
+      // A host-derived position is not set by x/y: the patch moves the component by its placement.
+      if(isObject(patch)&&(patch.x!==undefined||patch.y!==undefined)&&patch.placement===undefined&&positionDerived(current))
+        throw new Error(`POSITION_DERIVED: ${id} is placed on its host (${current.placement?.kind||'wire'}); its x/y follow from its placement, so set placement instead`);
       assertDefinitionPatch(patch,binding);
       if(!binding)assertDefinitionPortsKept(current,patch,null);
       const nextSymbol=patch?.symbolId??patch?.type;
@@ -1196,7 +1221,15 @@
       for(let i=doc.wires.length-1;i>=0;i--)if(doc.wires[i].a===id||doc.wires[i].b===id)remove(doc,'wire',doc.wires[i].id);
     }else if(resource==='wire'){
       const hostedCanvas=`canvas:wire:${id}`;
-      for(const component of doc.components)if(component.canvasId===hostedCanvas){component.canvasId=GLOBAL_CANVAS_ID;component.parentId=null;component.placement={kind:'surface',x:component.x,y:component.y};}
+      // A Wire-hosted component keeps no position of its own; falling back to the world, it is put at its
+      // place along the straight line between the Wire's ends (the route is the renderer's).
+      const end=e=>{const att=removed[e+'Attachment'];if(isFreeEndpoint(att))return {x:num(att.x,0),y:num(att.y,0)};const c=doc.components.find(x=>x.id===removed[e]);return c&&Number.isFinite(Number(c.x))?{x:Number(c.x),y:Number(c.y)}:null};
+      const a=end('a'),b=end('b');
+      for(const component of doc.components)if(component.canvasId===hostedCanvas){
+        const t=Math.max(.02,Math.min(.98,Number(component.placement?.t)||.5));
+        if(!Number.isFinite(Number(component.x))&&a&&b){component.x=a.x+(b.x-a.x)*t;component.y=a.y+(b.y-a.y)*t}
+        component.canvasId=GLOBAL_CANVAS_ID;component.parentId=null;component.placement={kind:'surface',x:component.x,y:component.y};
+      }
     }
     arr.splice(index,1);normalizeRecords(doc);return clone(removed);
   }
@@ -1283,5 +1316,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {EDITOR_DEFAULTS,WIRE_CONFIG_DEFAULTS,normalizeEditorState,normalizePortConnections,normalizeFormInPlace,applyComponentDefaults,applyWireDefaults,componentHost,normalizeHosting,normalizePlacement,placeHostedComponent,normalizeRecords,componentDefaults,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch};
+  return {LIGHT_PALETTE,nearestSlot,EDITOR_DEFAULTS,WIRE_CONFIG_DEFAULTS,normalizeEditorState,normalizePortConnections,normalizeFormInPlace,applyComponentDefaults,applyWireDefaults,componentHost,normalizeHosting,normalizePlacement,placeHostedComponent,normalizeRecords,componentDefaults,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch};
 });

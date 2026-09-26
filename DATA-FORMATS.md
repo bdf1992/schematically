@@ -194,6 +194,23 @@ bounded to 80..520 x 64..420; a Wire-hosted placement's `t` to .02..98 and a Pat
 edge placement's to 0..1; a Path- or edge-hosted component is posed on its host.
 Checkpoints store the same minimal form; recovery restores its snapshot unchanged.
 
+A legacy record that carries a hex `config.color` and no `colorSlot` takes the nearest slot of the
+canonical palette (`SovSchematicData.LIGHT_PALETTE`: the twelve light-appearance slots, six mono then
+the spectrum, as at 6a39efd), in the data core, whatever the editor's appearance.
+
+The position of a Wire-hosted Component is computed by the renderer from the Wire's route and is not
+part of the document: normalize removes its `x`/`y`, and `document.get`, `read`, HTTP and MCP return
+none; its `placement` (`t` along the Wire) says where it is. A Path- or edge-hosted component's
+`x`/`y` are computed by the data core from its placement and are not saved. An update that sets
+`x` or `y` on any of these host-derived positions is refused with `POSITION_DERIVED` unless the same
+patch sets `placement`. When a Wire is deleted, a component it hosted falls back to the world at
+its place along the straight line between the Wire's ends.
+
+**Format break.** Files saved in this minimal form may be refused by builds before this change:
+they omit default port contracts, and older validators check Wire reachability on the stored form,
+where those contracts are missing. The schema string (`soveraeign.schematic/document@0.1`) is
+unchanged; files saved by older builds load here as before.
+
 ### Default records
 
 A default point contract is one connection, outside face, no label. Only the points

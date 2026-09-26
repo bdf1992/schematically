@@ -26,6 +26,15 @@ Amendment 1 (one normalizer, steps 11-14):
 - step 14: open, Save, reopen, Save gives identical bytes, for every example and after every edit; a
   checkpoint stores the same minimal form; restoring recovery gives back the snapshot exactly, adding no
   `meta.timeScale` and no revision.
+
+Amendment 2 (steps 18-20):
+
+- step 18: a legacy record (01 with `colorSlot` removed and `config.color` #D94C4C / #2E7DD1) loads slots 6 and
+  10, as at 6a39efd, headless and in the browser in either appearance, and saves them;
+- step 19: a Wire-hosted Component has no x/y headless: normalize, `read`, HTTP GET /api/v1/document and MCP
+  schematic.document.get;
+- step 20: an update setting x or y on a host-derived position (Wire, Path, edge) is refused with
+  POSITION_DERIVED, with no history, on the browser API, HTTP and MCP; the same patch with a placement is not.
 """
 from __future__ import annotations
 import datetime
@@ -157,6 +166,21 @@ def save(page):
     with page.expect_download() as info:
         page.locator('#fileSaveBtn').click()
     return Path(info.value.path()).read_text(encoding='utf-8')
+
+
+def legacy_color_document():
+    """The reviewer's fixture: 01 with colorSlot removed and a legacy hex colour on each component."""
+    doc = json.loads((ROOT / 'examples/01-source-hold.sov').read_text(encoding='utf-8'))
+    for c, hex_ in zip(doc['components'], ('#D94C4C', '#2E7DD1')):
+        c['config'].pop('colorSlot', None);c['config']['color'] = hex_
+    return json.dumps(doc)
+
+
+def wire_hosted_document():
+    """01 with a Point hosted on its Wire k1 (x/y written, as an old file may carry them)."""
+    doc = json.loads((ROOT / 'examples/01-source-hold.sov').read_text(encoding='utf-8'))
+    doc['components'].append({'id': 'tap', 'symbolId': 'point', 'x': 999, 'y': 999, 'canvasId': 'canvas:wire:k1', 'placement': {'kind': 'wire', 't': 0.5}})
+    return json.dumps(doc)
 
 
 def headless_ops(text, ops):
@@ -416,6 +440,67 @@ def main() -> None:
         assert page.evaluate('()=>SovSchematicAPI.document.get()') == rated, 'recovery changed a document with a rate'
         page.close()
         print('recovery: restores the snapshot exactly, adding no timeScale and no revision')
+
+        # Step 18: legacy colours load as before, identically headless and in the browser, whatever the appearance.
+        legacy = legacy_color_document()
+        want = headless_ops(legacy, [])
+        assert [c['config'].get('colorSlot') for c in want['compact']['components']] == [6, 10], want['compact']['components']
+        for appearance in ('light', 'dark'):
+            page = open_page(browser);page.on('pageerror', lambda exc: errors.append(str(exc)))
+            page.evaluate('(m)=>SovSchematicAPI.view.setAppearance(m)', appearance)
+            page.evaluate('([t,n])=>{SovSchematicAPI.file.open(t,n)}', [legacy, 'legacy.sov'])
+            assert page.evaluate("()=>nodes.map(n=>n.config.colorSlot)") == [6, 10], (appearance, page.evaluate("()=>nodes.map(n=>n.config.colorSlot)"))
+            saved = save(page)
+            assert json.loads(saved) == want['compact'] and held_doc(page)['hash'] == want['hash'], (appearance, 'the legacy file saves differently')
+            page.close()
+        print('legacy colours: #D94C4C and #2E7DD1 load and save as slots 6 and 10, headless and in the browser (light and dark)')
+
+        # Step 19: no false positions. Step 20: derived positions are refused, not ignored.
+        hosted = wire_hosted_document()
+        want = headless_ops(hosted, [])
+        tap = next(c for c in want['compact']['components'] if c['id'] == 'tap')
+        assert 'x' not in tap and 'y' not in tap, tap
+        probe = r"""
+const D=require(process.argv[1]),fs=require('fs');const doc=D.documentFromFilePayload(JSON.parse(fs.readFileSync(0,'utf8')));
+const tap=doc.components.find(c=>c.id==='tap'),read=D.read(doc,'component','tap'),normalized='x' in tap||'y' in tap;
+const refused=D.applyOperation(doc,{op:'update',resource:'component',resourceId:'tap',patch:{x:5}});
+const moved=D.applyOperation(doc,{op:'update',resource:'component',resourceId:'tap',patch:{x:5,y:6,canvasId:'canvas:global',placement:{kind:'surface'}}});
+process.stdout.write(JSON.stringify({normalized,read:'x' in read||'y' in read,refused:refused.ok?null:refused.error.message,moved:moved.ok&&[moved.result.x,moved.result.y,moved.result.placement.kind]}));
+"""
+        proc = subprocess.run(['node', '-e', probe, str(ROOT / 'src/05-data-core.js')], input=hosted, cwd=ROOT, capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stderr
+        hl = json.loads(proc.stdout)
+        assert hl['normalized'] is False and hl['read'] is False, hl
+        assert hl['refused'] and hl['refused'].startswith('POSITION_DERIVED'), hl
+        assert hl['moved'] == [5, 6, 'surface'], hl
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / 'hosted.sov';src.write_text(hosted, encoding='utf-8')
+            server = Server(src, td)
+            try:
+                status, doc = http_json(server.base + '/api/v1/document')
+                assert status == 200 and not any(k in next(c for c in doc['components'] if c['id'] == 'tap') for k in ('x', 'y')), doc
+                status, res = http_json(server.base + '/mcp', 'POST', {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': 'schematic.document.get', 'arguments': {}}})
+                mdoc = res['result']['structuredContent']
+                assert not any(k in next(c for c in mdoc['components'] if c['id'] == 'tap') for k in ('x', 'y')), mdoc
+                status, r = http_json(server.base + '/api/v1/components/tap', 'PATCH', {'y': 7})
+                assert status == 400 and r['ok'] is False and r['error']['message'].startswith('POSITION_DERIVED'), (status, r)
+                status, res = http_json(server.base + '/mcp', 'POST', {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call', 'params': {'name': 'schematic.update', 'arguments': {'resource': 'component', 'id': 'tap', 'patch': {'x': 7}}}})
+                assert res['result']['isError'] and res['result']['structuredContent']['error']['message'].startswith('POSITION_DERIVED'), res
+                status, res = http_json(server.base + '/mcp', 'POST', {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call', 'params': {'name': 'schematic.history.undo', 'arguments': {}}})
+                assert res['result']['structuredContent'] == {'error': 'Nothing to undo'}, 'a refused update entered the server history'
+            finally:
+                server.close()
+        page = open_page(browser);page.on('pageerror', lambda exc: errors.append(str(exc)))
+        page.evaluate('([t,n])=>{SovSchematicAPI.file.open(t,n)}', [hosted, 'hosted.sov']);page.wait_for_timeout(300)
+        assert 'x' not in record(page, 'tap'), record(page, 'tap')
+        page.evaluate('([t,n])=>{SovSchematicAPI.file.open(t,n)}', [(ROOT / 'examples/07-plane-with-points.sov').read_text(encoding='utf-8'), '07.sov']);page.wait_for_timeout(300)
+        before = page.evaluate('()=>[historyState.undo.length,diagram.revision,SovSchematicAPI.document.get()]')
+        r = page.evaluate('()=>SovSchematicAPI.update("component","pin-in",{y:340})')
+        assert r['ok'] is False and r['error']['message'].startswith('POSITION_DERIVED'), r
+        page.wait_for_timeout(500)
+        assert page.evaluate('()=>[historyState.undo.length,diagram.revision,SovSchematicAPI.document.get()]') == before, 'a refused update changed the editor'
+        page.close()
+        print('positions: a Wire-hosted Component has no x/y headless, over HTTP or MCP; x/y on a derived position is POSITION_DERIVED everywhere')
 
         # Step 3: traces cross surfaces.
         golden = json.loads((STATE / 'and.11.sovtrace').read_text(encoding='utf-8'))
