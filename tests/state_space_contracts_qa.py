@@ -387,7 +387,7 @@ const refusedClean=(doc,fn,pick)=>{const rev=doc.revision,before=JSON.stringify(
   mk(diagram,{id:'a',symbolId:'act',x:0,y:0});mk(diagram,{id:'b',symbolId:'act',x:400,y:0});mkw(diagram,{id:'w',a:'a',aSide:'out',b:'b',bSide:'in'});
   D.normalizeDocument(diagram);
   const captures=[],runtime=[];
-  const ctx=vm.createContext({window:{},SovSchematicData:D,diagram,Date,Math,String,commitHistoryCapture:label=>captures.push(label===undefined?null:label),normalizeRuntimeAfterCrud:()=>runtime.push('normalize'),saveWorkspaceToStorage:()=>runtime.push('save'),LOCAL_RECOVERY_KEY:'k'});
+  const ctx=vm.createContext({window:{},SovSchematicData:D,SovSchematicGraph:require(require('path').join(require('path').dirname(process.argv[1]),'07-graph-core.js')),diagram,Date,Math,String,commitHistoryCapture:label=>captures.push(label===undefined?null:label),normalizeRuntimeAfterCrud:()=>runtime.push('normalize'),saveWorkspaceToStorage:()=>runtime.push('save'),LOCAL_RECOVERY_KEY:'k'});
   vm.runInContext(fs.readFileSync(process.argv[4],'utf8'),ctx,{filename:'85-api.js'});
   const api=ctx.window.SovSchematicAPI,rev=diagram.revision,before=JSON.stringify(diagram.wires);
   const u=api.update('wire','w',{config:{delay:0}}),c=api.create('wire',{id:'w2',a:'a',aSide:'out',b:'b',bSide:'in',config:{delay:1.5}});
@@ -508,7 +508,7 @@ const [good,bad]=JSON.parse(process.argv[4]);
 const diagram=D.makeDocument({id:'adapter'});
 const made=D.applyOperation(diagram,{op:'create',resource:'component',value:{id:'g',symbolId:'act',x:200,y:200,config:{attachmentDefaults:'none',attachmentPoints:good}}});
 const captures=[],runtime=[];
-const ctx=vm.createContext({window:{},SovSchematicData:D,diagram,Date,Math,String,
+const ctx=vm.createContext({window:{},SovSchematicData:D,SovSchematicGraph:require(require('path').join(require('path').dirname(process.argv[1]),'07-graph-core.js')),diagram,Date,Math,String,
   commitHistoryCapture:label=>captures.push(label===undefined?null:label),
   normalizeRuntimeAfterCrud:()=>runtime.push('normalize'),saveWorkspaceToStorage:()=>runtime.push('save'),LOCAL_RECOVERY_KEY:'k'});
 vm.runInContext(fs.readFileSync(process.argv[3],'utf8'),ctx,{filename:'85-api.js'});
@@ -740,7 +740,7 @@ const bound=()=>{const d=D.makeDocument({id:'b47'});mk(d,{id:'g',symbolId:'act',
 {
   const diagram=D.makeDocument({id:'adapter-bind'});mk(diagram,{id:'g',symbolId:'act',x:0,y:0});D.normalizeDocument(diagram);
   const captures=[],runtime=[];
-  const ctx=vm.createContext({window:{},SovSchematicData:D,diagram,Date,Math,String,commitHistoryCapture:label=>captures.push(label===undefined?null:label),normalizeRuntimeAfterCrud:()=>runtime.push('normalize'),saveWorkspaceToStorage:()=>runtime.push('save'),LOCAL_RECOVERY_KEY:'k'});
+  const ctx=vm.createContext({window:{},SovSchematicData:D,SovSchematicGraph:require(require('path').join(require('path').dirname(process.argv[1]),'07-graph-core.js')),diagram,Date,Math,String,commitHistoryCapture:label=>captures.push(label===undefined?null:label),normalizeRuntimeAfterCrud:()=>runtime.push('normalize'),saveWorkspaceToStorage:()=>runtime.push('save'),LOCAL_RECOVERY_KEY:'k'});
   vm.runInContext(fs.readFileSync(process.argv[5],'utf8'),ctx,{filename:'85-api.js'});
   const api=ctx.window.SovSchematicAPI,rev=diagram.revision,before=JSON.stringify(diagram.components);
   const u=api.update('component','g',{config:{definition:'logic.and@1'}}),c=api.create('component',{id:'h',symbolId:'act',config:{definition:'logic.and@1'}}),x=api.create('component',{id:'i',symbolId:'act',config:{definition:{evil:1}}});
