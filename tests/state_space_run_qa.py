@@ -645,7 +645,7 @@ def main() -> None:
     # Slice 1c, the run receipt: its shape, and head equal to the trace's head.
     rc = r['receipt']
     assert rc['format'] == 'soveraeign.schematic/run-receipt@0.1', rc['format']
-    assert rc['operations'] == ['schematic.run.start', 'schematic.run.step', 'schematic.run.settle', 'schematic.run.trace', 'schematic.state.query', 'schematic.run.replay'], rc['operations']
+    assert rc['operations'] == ['schematic.run.start', 'schematic.run.step', 'schematic.run.settle', 'schematic.run.trace', 'schematic.state.query', 'schematic.run.replay', 'schematic.run.drop'], rc['operations']
     assert rc['unknown'] and 'RUN_OPERATION_UNKNOWN' in rc['unknown'], rc['unknown']
     keys = ['error', 'handle', 'head', 'ok', 'operation', 'result', 'runId', 'schema', 'tickAfter', 'tickBefore']
     for receipt, head in rc['receipts']:

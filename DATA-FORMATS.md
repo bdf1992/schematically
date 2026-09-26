@@ -160,18 +160,39 @@ Files that still carry the full projections load identically; nothing is removed
 from the reader.
 
 Saved documents carry authored truth only, and a document is the same document
-wherever it is held (contract #50). The editor fills runtime defaults into the
-records it holds (editor state, palette slots, presentation, wire markers and
-channel indexes, clamped sizes, settled points), but none of them reaches a file,
-`document.get()`, a checkpoint's document or a run: the editor keeps the compact
-form of the document it opened or was given (`compactDocument` of the same load
-`node` and the server make) beside its own compact form right after opening, and a
-snapshot is the opened form with only what changed since carried over, key by key
-(records matched by id). So a document opened and not edited, or edited and undone
-back, saves exactly `compactDocument` of the file loaded headless, hashes the same
-(`documentHash`) on every surface, and opening does not change its revision. History
-and checkpoint restores keep the opened form; opening a file, `document.replace`,
-New and recovery replace it.
+wherever it is held (contract #50; STATE-SPACE.md "One normalizer"). Every default a
+record takes and every layout constraint on it is applied by the data core
+(`05-data-core.js`): `normalizeDocument` on load and every `create`/`update`/`delete`
+on every surface, and the editor calls the same functions (`applyComponentDefaults`,
+`applyWireDefaults`, `normalizeEditorState`, `normalizePortConnections`,
+`normalizePlacement`, `placeHostedComponent`), adding only appearance projections
+that are stripped. The saved form is minimal: `compactDocument` normalizes, then
+omits every value equal to its default:
+
+- component: `editor` keys equal to `{pinned: false, locked: false, hidden: false,
+  opacity: 1, rate: 1}`; `canvasId` `canvas:global`; `parentId` (the owner of
+  `canvasId`); `config.label` `''`; `config.colorSlot` `0`; `config.signalMode` equal
+  to the preset's (`relay` for a Point) or `source`; presentation `graphic` keys equal to
+  the preset's kind (or `symbol`), `ref` `sym-<symbolId>` and `svg` `''`; `size` keys
+  equal to the preset's (or 112 x 84); `interiorColorSlot` equal to `colorSlot`; `text`
+  `''`; `padding` 16; `backdrop` equal to the preset's (or `auto`); a typed Component's
+  `labelMode` `boundary`; `form` keys equal to the preset's normalized Form; a port
+  contract's `label` `''`, `face` `external`, `connectionCount` 1, `activeConnection` 0,
+  and its connections when they are the one default connection (a kept connection omits
+  `colorSlot` 0, its default `flow` and `access` `read-write`); empty objects;
+- a Wire-, Path- or edge-hosted component's `x`, `y` and placement `hostId`/`wireId`
+  (they follow from the placement and the canvas);
+- wire: `editor` defaults; `config` keys equal to `{direction: forward, reciprocity:
+  none, label: '', forwardOperation: none, reverseOperation: none, aConnectionIndex: 0,
+  bConnectionIndex: 0, aChannelMarker: '1', bChannelMarker: '1'}`; `form` equal to the
+  1D path default; `role` `carrier`; a `canvasId` its ends imply;
+- document: an empty `layout`; `meta.timeScale` 1.
+
+Loading fills a preset key by key, so an omitted value comes back as its default and
+`compactDocument` is idempotent. Layout constraints are the data core's too: a size is
+bounded to 80..520 x 64..420; a Wire-hosted placement's `t` to .02..98 and a Path or
+edge placement's to 0..1; a Path- or edge-hosted component is posed on its host.
+Checkpoints store the same minimal form; recovery restores its snapshot unchanged.
 
 ### Default records
 
@@ -362,7 +383,7 @@ details?}` on a refusal (then `result` is null), `details` holding what the refu
 `refusals` for `RUN_REFUSED`, `{tick, left}` for `BUDGET_SPENT`, `fields` for `REPLAY_KEY_MISMATCH`, `{entry, errors}`
 for `TRACE_INVALID`, `definitions` for "this page carries no packs"; `runId`, `handle`, the ticks and `head` are null
 when there is no run. `result` is, per operation: start, the start entry's body `{replayKey, budget}`; step, `{tick,
-records}`; settle, the result above; trace, the trace; query, the records; replay, `{records}`.
+records}`; settle, the result above; trace, the trace; query, the records; replay, `{records}`; drop, null.
 
 Runs live beside the document, never in it. `createRunRegistry({packs, document})` is the registry each surface keeps
 in memory. Each successful start registers the run under a new handle, `<runId>.<n>`, `n` counting the registry's

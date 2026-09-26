@@ -119,9 +119,7 @@ async function handleApi(req,res,url){
   // them). DELETE /api/v1/runs/{handle} drops a run.
   if(parts[0]==='api'&&parts[1]==='v1'&&(parts[2]==='runs'||parts[2]==='replay')){
     const send=(receipt,status=200)=>json(res,receipt.ok?status:receipt.error?.code==='RUN_NOT_FOUND'?404:409,receipt);
-    // runReceipt builds the six RUN_OPERATIONS; a drop's refusal is the same receipt under its own name (as the registry's drop).
-    const refusedReceipt=(operation,refusal)=>operation==='schematic.run.drop'?{...State.runReceipt('schematic.run.trace',null,refusal),operation}:State.runReceipt(operation,null,refusal);
-    const malformed=(operation,message)=>{json(res,400,refusedReceipt(operation,{ok:false,code:'INPUT_INVALID',message}));return true};
+    const malformed=(operation,message)=>{json(res,400,State.runReceipt(operation,null,{ok:false,code:'INPUT_INVALID',message}));return true};
     const body=async operation=>{try{return {value:await bodyJson(req)}}catch(e){return {refused:malformed(operation,`the request body is not JSON: ${String(e?.message||e)}`)}}};
     const verb=parts[4],route=parts[2]==='replay'&&parts.length===3&&req.method==='POST'?'schematic.run.replay'
       :parts[2]==='runs'&&parts.length===3&&req.method==='POST'?'schematic.run.start'

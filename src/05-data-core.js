@@ -43,13 +43,22 @@
   // Loading a file applies the same preset rule as makeComponent: a preset field fills in
   // only where the record supplied nothing, so a sparse authored Plane or Point loads the
   // way an API-created one is born, and a full saved record is left exactly as written.
+  // The preset is filled in key by key, so a saved record that omits a value equal to its
+  // preset (compactDocument's minimal form) loads back to the same record.
+  function fillAbsent(target,defaults){
+    for(const [key,value] of Object.entries(defaults)){
+      if(isObject(value)){if(target[key]===undefined)target[key]={};if(isObject(target[key]))fillAbsent(target[key],value)}
+      else if(target[key]===undefined)target[key]=clone(value);
+    }
+    return target;
+  }
   function applyTemplatePreset(component){
     const preset=templatePreset(component.symbolId);if(!preset)return component;
-    if(!isObject(component.form)&&isObject(preset.form))component.form=clone(preset.form);
+    if(isObject(preset.form)){if(!isObject(component.form))component.form={};fillAbsent(component.form,preset.form)}
     if(!isObject(component.config))component.config={};
     const config=component.config;
     if(!['source','relay','passive'].includes(config.signalMode)&&preset.signalMode)config.signalMode=preset.signalMode;
-    if(!isObject(config.presentation)&&isObject(preset.presentation))config.presentation=clone(preset.presentation);
+    if(isObject(preset.presentation)){if(!isObject(config.presentation))config.presentation={};fillAbsent(config.presentation,preset.presentation)}
     if(!['standard','none'].includes(config.attachmentDefaults)&&preset.attachmentDefaults&&preset.attachmentDefaults!=='standard')config.attachmentDefaults=preset.attachmentDefaults;
     return component;
   }
@@ -125,31 +134,19 @@
       normalizeComponentIdentity(component);
       applyTemplatePreset(component);
       cleanStoredPorts(doc,component);
-      component.form=normalizeComponentForm(component.form,component.canvas);
+    }
+    for(const wire of doc.wires)normalizeWireEndpoints(doc,wire,{strict:false});
+    migrateLegacyWirePointAttachments(doc);
+    for(const component of doc.components)normalizeComponentIdentity(component);
+    normalizeRecords(doc);
+    // A carrier runs on the surface its ends share. A file may leave that out; derive it the way
+    // wire.create does, once the ends' contracts exist. An unreachable pair stays as written for
+    // validation to report.
+    for(const wire of doc.wires)if(!cleanString(wire.canvasId)){try{wire.canvasId=carrierCanvasId(doc,wire,null)}catch(_){wire.canvasId=null}}
+    for(const component of doc.components){
       if(!isObject(component.canvas))component.canvas={};
       component.canvas.id=`canvas:component:${component.id||'unknown'}`;component.canvas.scope='local';component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
-      ensureAttachmentPortConfigs(component);
-      const ports=component?.config?.ports;
-      if(!isObject(ports))continue;
-      for(const port of Object.values(ports)){
-        if(!isObject(port))continue;
-        if(Array.isArray(port.connections))for(const connection of port.connections){
-          if(!['none','read','write','read-write'].includes(connection.access))connection.access='read-write';
-        }
-        if(!['none','read','write','read-write'].includes(port.access))port.access=Array.isArray(port.connections)&&port.connections[port.activeConnection||0]?.access||'read-write';
-      }
     }
-    for(const wire of doc.wires){
-      normalizeWireEndpoints(doc,wire,{strict:false});
-      normalizeWireForm(wire);
-      // A carrier runs on the surface its ends share. A file may leave that out; derive it
-      // the way wire.create does. An unreachable pair stays as written for validation to report.
-      if(!cleanString(wire.canvasId)){try{wire.canvasId=carrierCanvasId(doc,wire,null)}catch(_){wire.canvasId=null}}
-      if(!isObject(wire.config))wire.config={};
-      if(!['none','read','write'].includes(wire.config.forwardOperation))wire.config.forwardOperation='none';
-      if(!['none','read','write'].includes(wire.config.reverseOperation))wire.config.reverseOperation='none';
-    }
-    migrateLegacyWirePointAttachments(doc);
     if('connections' in doc)delete doc.connections;
     return doc;
   }
@@ -540,8 +537,8 @@
   function setEditedPorts(doc,component){
     return Attachment.intrinsicDimension(component)===0?setSelfPort(component):setDeclaredPorts(doc,component);
   }
-  function normalizeComponentForm(value={},legacyCanvas=null){
-    const form=isObject(value)?clone(value):{};
+  // The Form in place: the one set of Form defaults and bounds, the editor's componentForm included.
+  function normalizeFormInPlace(form,legacyCanvas=null){
     const legacyOpen=legacyCanvas?.state==='open';
     const rawDimension=Number(form.dimension);
     const dimension=[0,1,2].includes(rawDimension)?rawDimension:2; // Legacy 3D migrates to 2D until spatial volume is earned.
@@ -550,17 +547,18 @@
     form.dimension=dimension;
     form.body.kind=['point','path','surface'].includes(form.body.kind)?form.body.kind:defaultKind;
     form.body.material=cleanString(form.body.material,'generic')||'generic';
-    form.body.thickness=Math.max(0,num(form.body.thickness,0));
+    form.body.thickness=Math.max(0,Math.min(128,Number(form.body.thickness)||0));
     if(!isObject(form.frame))form.frame={};
     form.frame.mode=['none','frame','shell'].includes(form.frame.mode)?form.frame.mode:'none';
-    form.frame.thickness=Math.max(0,num(form.frame.thickness,form.frame.mode==='none'?0:12));
-    form.frame.depth=Math.max(0,num(form.frame.depth,0));
+    form.frame.thickness=Math.max(0,Math.min(64,Number(form.frame.thickness)||(form.frame.mode==='none'?0:12)));
+    form.frame.depth=Math.max(0,Math.min(128,Number(form.frame.depth)||0));
     if(!isObject(form.regions))form.regions={};
     if(!isObject(form.regions.interior))form.regions.interior={};
     if(!['open','closed'].includes(form.regions.interior.state))form.regions.interior.state=legacyOpen?'open':'closed';
     if(dimension<2)form.regions.interior.state='closed';
     return form;
   }
+  function normalizeComponentForm(value={},legacyCanvas=null){return normalizeFormInPlace(isObject(value)?clone(value):{},legacyCanvas)}
   // One implementation types a component: creation, the bar retype, and `update` over
   // API, HTTP and MCP all pass through it, so a retyped record is the record a creation
   // would have made. A primitive applies its whole preset (Form, presentation, signal mode,
@@ -644,7 +642,228 @@
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
     if(isObject(value.parts))component.parts=clone(value.parts);
-    return ensureAttachmentPortConfigs(component);
+    ensureAttachmentPortConfigs(component);
+    return applyComponentDefaults(component);
+  }
+  // --- One normalizer (STATE-SPACE.md "Execution", "One normalizer") -------------------
+  // Every default a record takes, and every layout constraint on it, is applied here, by
+  // normalizeDocument and by every create/update/delete, the same on every surface. The editor
+  // calls these same functions (10-model.js, 15-editor-kernel.js, 30-canvas.js) and adds only
+  // appearance projections (realized colours, parts, boundary) that compactDocument strips.
+  // compactDocument omits every value equal to its default here, so the saved form is minimal.
+  const EDITOR_DEFAULTS={pinned:false,locked:false,hidden:false,opacity:1,rate:1};
+  const WIRE_CONFIG_DEFAULTS={direction:'forward',reciprocity:'none',label:'',forwardOperation:'none',reverseOperation:'none',aConnectionIndex:0,bConnectionIndex:0,aChannelMarker:'1',bChannelMarker:'1'};
+  const PRESENTATION_DEFAULTS={text:'',padding:16,backdrop:'auto'};
+  const SIZE_BOUNDS={w:[80,520,112],h:[64,420,84]};
+  const STANDARD_CONTRACT_FLOWS={in:'in',out:'out',control:'control'};
+  const normalizeSlot=(value,fallback=0)=>{const n=Number(value);return Number.isInteger(n)?Math.max(0,Math.min(11,n)):fallback};
+  // The defaults of a component record, as it would be normalized with nothing authored.
+  function componentDefaults(component){
+    const symbolId=normalizeSymbolId(component?.symbolId),preset=templatePreset(symbolId)||{},size=preset.presentation?.size||{w:112,h:84};
+    return {
+      signalMode:preset.signalMode||'source',
+      graphic:{kind:preset.presentation?.graphic?.kind||'symbol',ref:`sym-${symbolId||'blank'}`,svg:''},
+      size:{w:size.w,h:size.h},backdrop:preset.presentation?.backdrop||PRESENTATION_DEFAULTS.backdrop,
+      form:normalizeFormInPlace(clone(preset.form||{}))
+    };
+  }
+  function normalizeEditorState(entity){
+    if(!entity)return {...EDITOR_DEFAULTS};
+    if(!isObject(entity.editor))entity.editor={};
+    const e=entity.editor;
+    e.pinned=!!e.pinned;e.locked=!!e.locked;e.hidden=!!e.hidden;
+    e.opacity=Math.max(.08,Math.min(1,Number(e.opacity)||1));
+    e.rate=Math.max(.1,Math.min(8,Number(e.rate)||1));
+    return e;
+  }
+  // One port contract's connections, and the compatibility mirrors of its active one (the mirrors
+  // are projections; compactDocument strips them). Realized colours are the editor's to add.
+  function normalizePortConnections(port,defaultFlow='duplex',defaultSlot=0){
+    if(!Number.isInteger(port.connectionCount))port.connectionCount=Number.isInteger(port.channelCount)?port.channelCount:1;
+    port.connectionCount=Math.max(1,Math.min(8,port.connectionCount));
+    if(!Array.isArray(port.connections))port.connections=Array.isArray(port.channels)?port.channels.map(ch=>({...ch})):[];
+    if(!port.connections.length)port.connections.push({id:'connection-1',name:'Connection 1',colorSlot:normalizeSlot(port.colorSlot,defaultSlot),flow:['in','out','duplex','control'].includes(port.flow)?port.flow:defaultFlow,access:['none','read','write','read-write'].includes(port.access)?port.access:'read-write'});
+    while(port.connections.length<port.connectionCount){const i=port.connections.length;port.connections.push({id:`connection-${i+1}`,name:`Connection ${i+1}`,colorSlot:defaultSlot,flow:defaultFlow,access:'read-write'})}
+    port.connections=port.connections.slice(0,port.connectionCount);
+    if(typeof port.label!=='string')port.label='';
+    port.connections.forEach((connection,i)=>{
+      connection.id=`connection-${i+1}`;connection.name=`Connection ${i+1}`;
+      connection.colorSlot=normalizeSlot(connection.colorSlot,defaultSlot);
+      if(!['in','out','duplex','control'].includes(connection.flow))connection.flow=defaultFlow;
+      if(!['none','read','write','read-write'].includes(connection.access))connection.access='read-write';
+    });
+    if(!Number.isInteger(port.activeConnection))port.activeConnection=Number.isInteger(port.activeChannel)?port.activeChannel:0;
+    port.activeConnection=Math.max(0,Math.min(port.connectionCount-1,port.activeConnection));
+    const active=port.connections[port.activeConnection];
+    port.channelCount=port.connectionCount;port.channels=port.connections;port.activeChannel=port.activeConnection;
+    port.channel=active.name;port.colorSlot=active.colorSlot;port.flow=active.flow;port.access=active.access;
+    return port;
+  }
+  function contractFlow(spec){return STANDARD_CONTRACT_FLOWS[spec?.compatId]||spec?.defaultFlow||'duplex'}
+  // A component record's own defaults and bounds (no other record is read).
+  function applyComponentDefaults(component){
+    if(!isObject(component))return component;
+    applyTemplatePreset(component);
+    if(!isObject(component.form))component.form={};
+    normalizeFormInPlace(component.form,component.canvas);
+    if(!isObject(component.config))component.config={};
+    const config=component.config;
+    if(typeof config.label!=='string')config.label=cleanString(component.label,'');
+    if(!isObject(config.presentation))config.presentation={};
+    const p=config.presentation;
+    if(!isObject(p.graphic))p.graphic={kind:'symbol',ref:cleanString(p.svgRef,'')||`sym-${component.symbolId||'blank'}`,svg:''};
+    if(!['symbol','custom','none'].includes(p.graphic.kind))p.graphic.kind='symbol';
+    if(typeof p.graphic.ref!=='string')p.graphic.ref=`sym-${component.symbolId||'blank'}`;
+    if(typeof p.graphic.svg!=='string')p.graphic.svg='';
+    if(!isObject(p.size))p.size={w:112,h:84};
+    for(const [key,[lo,hi,fallback]] of Object.entries(SIZE_BOUNDS))p.size[key]=Math.max(lo,Math.min(hi,Number(p.size[key])||fallback));
+    // The label mode is read through effectiveLabelMode; an absent one is derived, never written.
+    if(p.labelMode!==undefined&&!LABEL_MODES.includes(p.labelMode))delete p.labelMode;
+    if(!Number.isInteger(p.interiorColorSlot))p.interiorColorSlot=config.colorSlot??0;
+    p.interiorColorSlot=normalizeSlot(p.interiorColorSlot,0);
+    if(typeof p.text!=='string')p.text='';
+    if('contains' in p)delete p.contains; // legacy only; the Form interior owns hosting state.
+    if(typeof p.padding!=='number')p.padding=PRESENTATION_DEFAULTS.padding;
+    p.padding=Math.max(8,Math.min(36,p.padding));
+    if(!['auto','none','body','frame'].includes(p.backdrop))p.backdrop=PRESENTATION_DEFAULTS.backdrop;
+    config.colorSlot=normalizeSlot(config.colorSlot,0);
+    if(!['source','relay','passive'].includes(config.signalMode))config.signalMode='source';
+    if(!isObject(config.ports))config.ports={};
+    // Only the points the effective dimension exposes get a contract; authored contracts for points
+    // a dimension change hid are left in place, so switching back restores them.
+    for(const spec of Attachment.pointSpecs(component)){
+      const port=isObject(config.ports[spec.compatId])?config.ports[spec.compatId]:(config.ports[spec.compatId]={});
+      if(typeof port.label!=='string')port.label='';
+      if(!['external','internal','both'].includes(port.face))port.face='external';
+      normalizePortConnections(port,contractFlow(spec),0);
+      port.side=spec.side; // geometry belongs to the attachment descriptor
+    }
+    normalizeEditorState(component);
+    if(!Number.isFinite(Number(component.x)))component.x=0;
+    if(!Number.isFinite(Number(component.y)))component.y=0;
+    return component;
+  }
+  // Where a component is hosted, from its canvas: a Wire, a Component or the world.
+  function componentHost(doc,component){
+    const canvasId=cleanString(component?.canvasId,'')||GLOBAL_CANVAS_ID;
+    if(canvasId.startsWith('canvas:wire:')){const id=canvasId.slice('canvas:wire:'.length);if((doc?.wires||[]).some(w=>w.id===id))return {kind:'wire',id}}
+    if(canvasId.startsWith('canvas:component:')){const id=canvasId.slice('canvas:component:'.length),host=(doc?.components||[]).find(c=>c.id===id);if(host)return {kind:'component',id,component:host}}
+    return {kind:'global',id:null};
+  }
+  // canvasId and parentId: parentId is the component that owns the canvas (derived), canvasId
+  // defaults to the parent's canvas or the world.
+  function normalizeHosting(doc,component){
+    if(!cleanString(component.canvasId,''))component.canvasId=component.parentId?`canvas:component:${component.parentId}`:GLOBAL_CANVAS_ID;
+    const host=componentHost(doc,component);
+    component.parentId=host.kind==='component'?host.id:null;
+    return host;
+  }
+  // The placement a component's host gives it: a Wire (t in .02..98), a Component's Path or edge
+  // (t in 0..1), or a plain surface position.
+  function normalizePlacement(doc,component,host=componentHost(doc,component)){
+    if(!isObject(component.placement))component.placement=host.kind==='wire'?{kind:'wire',wireId:host.id,t:.5}:{kind:'surface',x:component.x,y:component.y};
+    const q=component.placement;
+    if(host.kind==='wire'){q.kind='wire';q.wireId=host.id;q.t=Math.max(.02,Math.min(.98,Number(q.t)||.5))}
+    else if(host.kind==='component'&&['path','edge'].includes(q.kind)){q.hostId=host.id;q.t=Math.max(0,Math.min(1,Number(q.t)||.5))}
+    else{q.kind='surface';q.x=Number(component.x)||0;q.y=Number(component.y)||0;delete q.wireId;delete q.hostId;delete q.t;delete q.side}
+    return q;
+  }
+  // The pose of a component on its host's Path or edge (`angle` is the host's own angle, non-zero
+  // only for a host carried by a Wire, which the editor knows from the route). Sets x and y.
+  function placeHostedComponent(doc,component,angle=0){
+    const q=component?.placement;if(!isObject(q)||!['path','edge'].includes(q.kind))return null;
+    const host=(doc?.components||[]).find(c=>c.id===q.hostId);if(!host)return null;
+    const size=isObject(host.config?.presentation?.size)?host.config.presentation.size:{w:112,h:84},w=Number(size.w)||112,h=Number(size.h)||84;
+    let lx=0,ly=0,turn=0;
+    if(q.kind==='path'){const half=Math.max(24,w/2);lx=-half+half*2*q.t}
+    else{const side=q.side||'top',u=Math.max(0,Math.min(1,q.t));if(side==='top'||side==='bottom'){lx=-w/2+w*u;ly=side==='top'?-h/2:h/2}else{lx=side==='left'?-w/2:w/2;ly=-h/2+h*u;turn=90}}
+    const r=angle*Math.PI/180,c=Math.cos(r),sn=Math.sin(r);
+    component.x=host.x+(lx*c-ly*sn);component.y=host.y+(lx*sn+ly*c);
+    return {x:component.x,y:component.y,angle:angle+turn};
+  }
+  // The port contract a Wire end is bound to, or null.
+  function wireEndContract(doc,wire,end){
+    if(isFreeEndpoint(wire?.[end+'Attachment']))return null;
+    const ref=Attachment.wireEndpointRef(wire,end,doc?.components||[]);if(!ref)return null;
+    const component=doc.components.find(c=>c.id===ref.componentId);
+    return component?.config?.ports?.[ref.compatId]||null;
+  }
+  // A Wire record's defaults and bounds; its ends' contracts are read for the connection indexes,
+  // a legacy colour, and a duplex Wire's end flows.
+  function applyWireDefaults(doc,wire){
+    if(!isObject(wire))return wire;
+    normalizeWireForm(wire);
+    for(const end of ['a','b'])if(isFreeEndpoint(wire[end+'Attachment'])){wire[end]=null;wire[end+'Side']=null}
+    if(!isObject(wire.config))wire.config={};
+    const config=wire.config;
+    if(!['none','forward','reverse','duplex'].includes(config.direction))config.direction=wire.duplex?'duplex':'forward';
+    if(!['none','expected','required'].includes(config.reciprocity))config.reciprocity='none';
+    if(typeof config.label!=='string')config.label='';
+    if(!['none','read','write'].includes(config.forwardOperation))config.forwardOperation='none';
+    if(!['none','read','write'].includes(config.reverseOperation))config.reverseOperation='none';
+    for(const end of ['a','b']){
+      const key=end+'ConnectionIndex',port=wireEndContract(doc,wire,end);
+      if(!Number.isInteger(config[key]))config[key]=Number.isInteger(config.channelIndex)?config.channelIndex:0;
+      if(port)normalizePortConnections(port);
+      config[key]=Math.max(0,Math.min(Math.max(1,port?.connectionCount||1)-1,config[key]));
+      const marker=end+'ChannelMarker',text=typeof config[marker]==='string'?config[marker].trim():'';
+      config[marker]=(text||'1').slice(0,12);
+    }
+    // A legacy Wire colour migrates, once, to the A end's connection.
+    if(Number.isInteger(config.colorSlot)&&!config._legacyColorMigrated){
+      const port=wireEndContract(doc,wire,'a');
+      if(port)port.connections[config.aConnectionIndex].colorSlot=normalizeSlot(config.colorSlot,0);
+      config._legacyColorMigrated=true;
+    }
+    delete config.channelIndex;delete config.colorSlot;delete config.color;delete config.channel;
+    if(!Array.isArray(wire.attachments))wire.attachments=[];
+    wire.duplex=config.direction==='duplex';
+    // A duplex Wire carries both ways: the connections its ends are bound to are duplex.
+    if(wire.duplex)for(const end of ['a','b']){const port=wireEndContract(doc,wire,end),c=port?.connections?.[config[end+'ConnectionIndex']];if(c)c.flow='duplex'}
+    normalizeEditorState(wire);
+    return wire;
+  }
+  // Every record of a document, in the order the editor settles them: components' own defaults,
+  // hosting and placement (hosts first), Wires, then the poses of Path- and edge-hosted components.
+  function normalizeRecords(doc){
+    for(const component of doc.components)applyComponentDefaults(component);
+    for(const component of doc.components)normalizePlacement(doc,component,normalizeHosting(doc,component));
+    for(const wire of doc.wires)applyWireDefaults(doc,wire);
+    for(const component of doc.components){
+      const host=doc.components.find(c=>c.id===component.placement?.hostId);
+      if(host&&componentHost(doc,host).kind!=='wire')placeHostedComponent(doc,component);
+    }
+    return doc;
+  }
+  // The minimal form: every value equal to its default omitted, empty objects dropped.
+  function omitDefaults(target,defaults){
+    if(!isObject(target))return target;
+    for(const [key,value] of Object.entries(defaults)){
+      if(!(key in target))continue;
+      if(isObject(value)&&isObject(target[key])){omitDefaults(target[key],value);if(!Object.keys(target[key]).length)delete target[key]}
+      else if(JSON.stringify(target[key])===JSON.stringify(value))delete target[key];
+    }
+    return target;
+  }
+  function minimalPort(port,spec,defaultSlot=0){
+    for(const key of DERIVED_PORT_KEYS)delete port[key];
+    if(port.label==='')delete port.label;
+    if(port.face==='external')delete port.face;
+    if(Array.isArray(port.connections)){
+      const flow=contractFlow(spec);
+      port.connections=port.connections.map(c=>{
+        if(!isObject(c))return c;
+        const m=clone(c);delete m.id;delete m.name;delete m.color;
+        if(m.colorSlot===defaultSlot)delete m.colorSlot;
+        if(m.flow===flow)delete m.flow;
+        if(m.access==='read-write')delete m.access;
+        return m;
+      });
+      if(port.connections.length===1&&isObject(port.connections[0])&&!Object.keys(port.connections[0]).length)delete port.connections;
+    }
+    if(port.connectionCount===1)delete port.connectionCount;
+    if(port.activeConnection===0)delete port.activeConnection;
+    return port;
   }
   // Saved records carry authored truth only. Everything below is regenerated on load:
   // local canvas descriptors, boundary/parts projections, port-level mirrors of the
@@ -652,9 +871,27 @@
   const DERIVED_PORT_KEYS=['channelCount','activeChannel','channel','channels','colorSlot','color','flow','access','side'];
   const DERIVED_PRESENTATION_KEYS=['svgRef','internalLayout','portTopology','boundaryColorMode','boundaryShape'];
   function compactComponent(component){
-    const c=clone(component);
+    const c=clone(component),defaults=componentDefaults(c),specs=Attachment.pointSpecs(c);
     delete c.canvas;delete c.boundary;delete c.parts;delete c.type;delete c.incomplete;
+    // Hosting: parentId is the canvas owner, the world canvas is the default, and a Wire-,
+    // Path- or edge-hosted component's position and host ids follow from its placement.
+    delete c.parentId;
+    if(c.canvasId===GLOBAL_CANVAS_ID)delete c.canvasId;
+    if(isObject(c.placement)&&['wire','path','edge'].includes(c.placement.kind)){delete c.x;delete c.y;delete c.placement.hostId;delete c.placement.wireId}
+    if(isObject(c.editor)){omitDefaults(c.editor,EDITOR_DEFAULTS);if(!Object.keys(c.editor).length)delete c.editor}
+    if(isObject(c.form)){omitDefaults(c.form,defaults.form);if(!Object.keys(c.form).length)delete c.form}
     if(isObject(c.config)){
+      const colorSlot=c.config.colorSlot??0;
+      if(c.config.label==='')delete c.config.label;
+      if(c.config.colorSlot===0)delete c.config.colorSlot;
+      if(c.config.signalMode===defaults.signalMode)delete c.config.signalMode;
+      const p=c.config.presentation;
+      if(isObject(p)){
+        if(isObject(p.graphic)){omitDefaults(p.graphic,defaults.graphic);if(!Object.keys(p.graphic).length)delete p.graphic}
+        if(isObject(p.size)){omitDefaults(p.size,defaults.size);if(!Object.keys(p.size).length)delete p.size}
+        if(p.interiorColorSlot===colorSlot)delete p.interiorColorSlot;
+        omitDefaults(p,{text:PRESENTATION_DEFAULTS.text,padding:PRESENTATION_DEFAULTS.padding,backdrop:defaults.backdrop});
+      }
       delete c.config.color;
       if(c.config.definition===null)delete c.config.definition; // null is unbound
       // 'none' is always stored; 'standard' only where it overrides a preset of 'none' (a Plane).
@@ -664,30 +901,49 @@
         if(self)c.config.attachmentPoints=c.config.attachmentPoints.map(p=>isObject(p)&&String(p.id??'').trim()==='self'?storedSelf(self):p);
       }
       if(Array.isArray(c.config.attachmentPoints)&&!c.config.attachmentPoints.length)delete c.config.attachmentPoints;
-      if(isObject(c.config.presentation))for(const key of DERIVED_PRESENTATION_KEYS)delete c.config.presentation[key];
-      if(isObject(c.config.ports))for(const port of Object.values(c.config.ports)){
-        if(!isObject(port))continue;
-        if(Array.isArray(port.connections)&&port.connections.length){
-          for(const key of DERIVED_PORT_KEYS)delete port[key];
-          for(const connection of port.connections)if(isObject(connection)){delete connection.color;delete connection.name}
+      // A typed Component's label sits on its boundary unless authored otherwise.
+      if(!isPrimitiveSymbol(c.symbolId)&&c.config.presentation?.labelMode==='boundary')delete c.config.presentation.labelMode;
+      if(isObject(c.config.presentation)){for(const key of DERIVED_PRESENTATION_KEYS)delete c.config.presentation[key];if(!Object.keys(c.config.presentation).length)delete c.config.presentation}
+      if(isObject(c.config.ports)){
+        for(const [compatId,port] of Object.entries(c.config.ports)){
+          if(!isObject(port))continue;
+          const spec=specs.find(x=>x.compatId===compatId);
+          if(spec&&Array.isArray(port.connections))minimalPort(port,spec);
+          else if(Array.isArray(port.connections)&&port.connections.length){
+            // A contract a dimension change hid: kept as authored, without its mirrors.
+            for(const key of DERIVED_PORT_KEYS)delete port[key];
+            for(const connection of port.connections)if(isObject(connection)){delete connection.color;delete connection.name}
+          }
+          if(!Object.keys(port).length)delete c.config.ports[compatId];
         }
+        if(!Object.keys(c.config.ports).length)delete c.config.ports;
       }
     }
     if(isObject(c.placement)&&c.placement.kind==='surface')delete c.placement;
     return c;
   }
-  function compactWire(wire){
+  const WIRE_FORM_DEFAULTS={dimension:1,body:{kind:'path',material:'generic',thickness:0}};
+  // `doc`, when given, is the document the Wire is in: a canvasId its ends imply is omitted.
+  function compactWire(wire,doc=null){
     const w=clone(wire);
+    if(doc&&cleanString(w.canvasId,'')){try{if(carrierCanvasId(doc,wire,null)===w.canvasId)delete w.canvasId}catch(_){}}
     delete w.canvas;delete w.duplex;
+    if(w.role==='carrier')delete w.role;
     if(Array.isArray(w.attachments)&&!w.attachments.length)delete w.attachments;
-    if(isObject(w.config))delete w.config._legacyColorMigrated;
+    if(isObject(w.editor)){omitDefaults(w.editor,EDITOR_DEFAULTS);if(!Object.keys(w.editor).length)delete w.editor}
+    if(isObject(w.form)){omitDefaults(w.form,WIRE_FORM_DEFAULTS);if(!Object.keys(w.form).length)delete w.form}
+    if(isObject(w.config)){delete w.config._legacyColorMigrated;omitDefaults(w.config,WIRE_CONFIG_DEFAULTS);if(!Object.keys(w.config).length)delete w.config}
     return w;
   }
+  // The saved form: the document normalized (every default and constraint applied, as on every
+  // surface), then each record minimal. Idempotent: normalizing the result gives the same record.
   function compactDocument(input){
-    const doc=clone(input);
+    const doc=normalizeDocument(clone(input));
     delete doc.canvas;
-    doc.components=(doc.components||[]).map(compactComponent);
-    doc.wires=(doc.wires||[]).map(compactWire);
+    const components=doc.components.map(compactComponent),wires=doc.wires.map(w=>compactWire(w,doc));
+    doc.components=components;doc.wires=wires;
+    if(isObject(doc.layout)&&!Object.keys(doc.layout).length)delete doc.layout;
+    if(isObject(doc.meta)&&Number(doc.meta.timeScale)===1)delete doc.meta.timeScale;
     if(isObject(doc.meta)&&Array.isArray(doc.meta.checkpoints))doc.meta.checkpoints=doc.meta.checkpoints.map(cp=>isObject(cp)&&isObject(cp.document)?{...cp,document:compactDocument(cp.document)}:cp);
     return doc;
   }
@@ -779,7 +1035,7 @@
     if(!isObject(wire.form.body))wire.form.body={};
     wire.form.body.kind='path';
     wire.form.body.material=cleanString(wire.form.body.material,'generic')||'generic';
-    wire.form.body.thickness=Math.max(0,num(wire.form.body.thickness,0));
+    wire.form.body.thickness=Math.max(0,Math.min(128,Number(wire.form.body.thickness)||0));
     wire.role='carrier';
     return wire;
   }
@@ -862,7 +1118,7 @@
     if(resource==='wire'){assertCarrierEndpointAccepts(doc,value?.a);assertCarrierEndpointAccepts(doc,value?.b)}
     const record=resource==='component'?makeComponent(doc,value):resource==='wire'?makeWire(doc,value):makeReference(doc,value);
     if(arr.some(x=>x.id===record.id))throw new Error(`${resource} id already exists: ${record.id}`);
-    arr.push(record);return clone(record);
+    arr.push(record);normalizeRecords(doc);return clone(record);
   }
   // `binding` is the binding path only (`applyBinding`): the one update that may set a non-null
   // `config.definition`; the owned-port guard does not apply to it, the Wire checks do.
@@ -893,7 +1149,6 @@
       ensureAttachmentPortConfigs(candidate);
       if(!binding)assertDefinitionPortsKept(current,patch,candidate);
       assertWiresSurviveEdit(doc,current,candidate);
-      if(candidate.config?.presentation?.size){candidate.config.presentation.size.w=Math.max(80,num(candidate.config.presentation.size.w,112));candidate.config.presentation.size.h=Math.max(64,num(candidate.config.presentation.size.h,84));}
     }else if(resource==='wire'){
       if(isObject(patch?.config))assertPathDelay(patch.config,true);
       if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
@@ -924,6 +1179,9 @@
     Object.assign(current,candidate);
     if(resource==='component')reconcileComponentWirePorts(doc,id);
     if(resource==='wire')migrateLegacyWirePointAttachments(doc);
+    // Defaults and layout constraints (size bounds, placement, hosted poses) apply to the stored
+    // record and to what it hosts; the receipt carries the stored, constrained value.
+    normalizeRecords(doc);
     return clone(arr[index]);
   }
   function remove(doc,resource,id){
@@ -940,7 +1198,7 @@
       const hostedCanvas=`canvas:wire:${id}`;
       for(const component of doc.components)if(component.canvasId===hostedCanvas){component.canvasId=GLOBAL_CANVAS_ID;component.parentId=null;component.placement={kind:'surface',x:component.x,y:component.y};}
     }
-    arr.splice(index,1);return clone(removed);
+    arr.splice(index,1);normalizeRecords(doc);return clone(removed);
   }
   function touch(doc){doc.revision=Math.max(0,Math.trunc(num(doc.revision,0)))+1;doc.meta=doc.meta||{};doc.meta.updatedAt=nowIso();return doc.revision}
   function makeReceipt(op,ok,result,revisionBefore,error=null){return {schema:RECEIPT_SCHEMA,operationId:op.id||null,ok,revisionBefore,revisionAfter:result?.revisionAfter??revisionBefore,result:result?.value??result??null,error:error?{message:String(error.message||error)}:null}}
@@ -997,12 +1255,16 @@
     const ids=new Set();
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]],['reference',input.references||[]]])for(const item of items){if(!item?.id)errors.push(`${kind} missing id`);else if(ids.has(`${kind}:${item.id}`))errors.push(`duplicate ${kind} id: ${item.id}`);else ids.add(`${kind}:${item.id}`)}
     const componentIds=new Set((input.components||[]).map(x=>x.id));
+    // Reachability is read from the records as the loader completes them: a saved (minimal) form
+    // omits default port contracts, which the loader restores.
+    let complete=input;
+    if(!errors.length){try{complete=normalizeDocument(clone(input))}catch(_){complete=input}}
     for(const wire of input.wires||[]){
       const aFree=isFreeEndpoint(wire.aAttachment),bFree=isFreeEndpoint(wire.bAttachment);
       if(!aFree&&!componentIds.has(wire.a))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.a}`);
       if(!bFree&&!componentIds.has(wire.b))errors.push(`wire ${wire.id||'?'} missing endpoint component: ${wire.b}`);
       if(!aFree&&!bFree&&componentIds.has(wire.a)&&componentIds.has(wire.b)){
-        const reach=connectionReachability(input,wire.a,wire.aSide,wire.b,wire.bSide);if(!reach.ok)errors.push(`wire ${wire.id||'?'}: ${reach.reason}`);
+        const reach=connectionReachability(complete,wire.a,wire.aSide,wire.b,wire.bSide);if(!reach.ok)errors.push(`wire ${wire.id||'?'}: ${reach.reason}`);
       }
       for(const key of ['forwardOperation','reverseOperation'])if(wire.config?.[key]!=null&&!['none','read','write'].includes(wire.config[key]))errors.push(`wire ${wire.id||'?'} invalid ${key}: ${wire.config[key]}`);
     }
@@ -1021,5 +1283,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch};
+  return {EDITOR_DEFAULTS,WIRE_CONFIG_DEFAULTS,normalizeEditorState,normalizePortConnections,normalizeFormInPlace,applyComponentDefaults,applyWireDefaults,componentHost,normalizeHosting,normalizePlacement,placeHostedComponent,normalizeRecords,componentDefaults,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch};
 });

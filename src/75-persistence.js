@@ -10,60 +10,10 @@ let currentFileName='Untitled.sov';
 let currentFileFormat='document';
 let lastFileFingerprint=null;
 
-// A document is the same document wherever it is held (STATE-SPACE.md "Document identity is
-// content"). The editor fills runtime defaults into the records it holds (editor state, palette
-// slots, presentation, wire markers, clamped sizes, settled points), so its compact form is not the
-// file's. `documentBaseline` keeps, for the document last opened or replaced from outside, its
-// authored compact form (what a headless load of the file compacts to) and the editor's compact
-// form of it right after opening. A snapshot starts from the authored form and carries over only
-// what changed in the held document since then, so an unedited document, or one edited and undone
-// back, snapshots to exactly the file's compact form. History and checkpoint restores keep the baseline.
-let documentBaseline=null;
-function heldDocument(){
-  const doc=SovSchematicData.compactDocument(SovSchematicData.makeDocument(SovSchematicData.clone(diagram)));
-  doc.meta=doc.meta||{};
-  doc.meta.title=doc.meta.title||'Soveraeign Schematic';
-  return doc;
-}
-function sameValue(a,b){
-  if(a===b)return true;
-  if(Array.isArray(a)!==Array.isArray(b)||!a||!b||typeof a!=='object'||typeof b!=='object')return false;
-  if(Array.isArray(a))return a.length===b.length&&a.every((x,i)=>sameValue(x,b[i]));
-  const ka=Object.keys(a),kb=Object.keys(b);
-  return ka.length===kb.length&&ka.every(k=>Object.prototype.hasOwnProperty.call(b,k)&&sameValue(a[k],b[k]));
-}
-const isPlainRecord=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
-// authored + (now - held): keys the held form changed are taken from now, keys it dropped are
-// dropped, everything else stays as authored. Arrays are values, except the document's records,
-// which are matched by id.
-function authoredValue(authored,held,now){
-  if(sameValue(held,now))return SovSchematicData.clone(authored);
-  if(!isPlainRecord(authored)||!isPlainRecord(held)||!isPlainRecord(now))return SovSchematicData.clone(now);
-  const out=SovSchematicData.clone(authored);
-  for(const key of Object.keys(held))if(!(key in now))delete out[key];
-  for(const key of Object.keys(now)){
-    if(!(key in held))out[key]=SovSchematicData.clone(now[key]);
-    else if(!sameValue(held[key],now[key]))out[key]=key in authored?authoredValue(authored[key],held[key],now[key]):SovSchematicData.clone(now[key]);
-  }
-  return out;
-}
-function authoredRecords(authored,held,now){
-  const byId=list=>new Map((Array.isArray(list)?list:[]).filter(x=>x?.id!=null).map(x=>[x.id,x]));
-  const a=byId(authored),h=byId(held);
-  return (now||[]).map(record=>a.has(record?.id)&&h.has(record.id)?authoredValue(a.get(record.id),h.get(record.id),record):SovSchematicData.clone(record));
-}
 function snapshotDocument(){
-  // Files and API snapshots carry authored truth only; runtime projections are rebuilt on load.
-  const now=heldDocument();
-  if(!documentBaseline)return now;
-  const {authored,held}=documentBaseline,doc=SovSchematicData.clone(authored);
-  for(const key of Object.keys(held))if(!(key in now))delete doc[key];
-  for(const key of Object.keys(now)){
-    if(['components','wires','references'].includes(key))doc[key]=authoredRecords(authored[key],held[key],now[key]);
-    else if(key==='revision')doc.revision=now.revision;
-    else doc[key]=key in authored?authoredValue(authored[key],held[key],now[key]):SovSchematicData.clone(now[key]);
-  }
-  return doc;
+  // Files, API snapshots and runs carry authored truth only: the data core's minimal form, which
+  // every surface computes the same way from the same document (STATE-SPACE.md "One normalizer").
+  return SovSchematicData.compactDocument(SovSchematicData.makeDocument(SovSchematicData.clone(diagram)));
 }
 function semanticFingerprint(){
   const doc=snapshotDocument();
@@ -120,9 +70,7 @@ function scheduleLocalAutosave(){
     try{saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false})}catch(error){console.warn('Recovery save failed',error)}
   },420);
 }
-// `authored` is the compact form of a document opened or replaced from outside; it becomes the
-// baseline once the editor has filled its defaults in and rendered (render fills some of them).
-function syncRuntimeAfterDocumentReplace(authored=null){
+function syncRuntimeAfterDocumentReplace(){
   let maxSeq=0;
   for(const n of nodes){
     const m=String(n.id||'').match(/^c(\d+)$/);if(m)maxSeq=Math.max(maxSeq,Number(m[1]));
@@ -135,7 +83,6 @@ function syncRuntimeAfterDocumentReplace(authored=null){
   routeCache.clear();arrowPoseCache.clear();dragRouteSnapshots.clear();
   selected=null;hideSelectionBar();
   render();
-  if(authored)documentBaseline={authored,held:heldDocument()};
   persistenceFingerprint=semanticFingerprint();
   updateRevisionReadout();
   selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
@@ -145,10 +92,8 @@ function replaceRuntimeDocument(input){
   const normalized=SovSchematicData.makeDocument(SovSchematicData.clone(doc));
   const valid=SovSchematicData.validateDocument(normalized);
   if(!valid.ok)throw new Error(valid.errors.join('; '));
-  // A history or checkpoint restore is the same document moving in time: it keeps the baseline.
-  const authored=historyState.replaying?null:SovSchematicData.compactDocument(normalized);
   SovSchematicData.replaceDocument(diagram,normalized);
-  syncRuntimeAfterDocumentReplace(authored);
+  syncRuntimeAfterDocumentReplace();
   return snapshotDocument();
 }
 function applyWorkspace(bundle){
@@ -163,7 +108,9 @@ function applyWorkspace(bundle){
   if(typeof view.showFlow==='boolean'){showFlow=view.showFlow;document.getElementById('workspace')?.classList.toggle('show-flow',showFlow);flowBtn?.classList.toggle('active',showFlow)}
   if(view.colorEngine&&typeof view.colorEngine==='object'){Object.assign(colorEngine,view.colorEngine);applyColorEngine()}
   if(view.appearanceMode){appearanceMode=view.appearanceMode;applyAppearanceMode()}
-  if(view.globalRate!=null){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Number(view.globalRate)||1}
+  // The global rate is the document's (meta.timeScale); a view rate is read only for a document
+  // that carries none, and its default 1 is not written.
+  if(view.globalRate!=null&&diagram.meta?.timeScale===undefined&&(Number(view.globalRate)||1)!==1){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Number(view.globalRate)}
   render();
   return captureWorkspace();
 }

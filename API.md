@@ -92,8 +92,8 @@ id="sov-packs">`, which `build.py` fills from `data/*.pack.json`; the unbuilt `i
 so a start or replay of a document that references a definition there is refused with `PACK_INVALID`, "this page
 carries no packs".
 
-A document is the same document wherever it is held. The editor fills runtime defaults into the records it holds,
-but `document.get()` (and so every run, and every file it saves) carries the document as authored: opened and not
-edited, it equals `compactDocument` of the same file loaded by `node` or the server, its `documentHash` is the file's,
-and opening does not change its revision. A trace recorded against the file therefore replays against the opened
-document, and one recorded in the browser replays on the server.
+A document is the same document wherever it is held. Every default and layout constraint is applied by the data
+core, on every surface, so `document.get()` (and so every run, and every file it saves) is `compactDocument` of the
+held document, the same minimal form `node` or the server computes from the same file and the same operations: its
+`documentHash` is the file's, and opening does not change its revision. A trace recorded against the file therefore
+replays against the opened document, and one recorded in the browser replays on the server.

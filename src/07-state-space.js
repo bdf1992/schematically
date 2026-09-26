@@ -935,7 +935,7 @@
   // what the refusal names besides its code and message; runId, ticks and head are null when there is
   // no run. `tickBefore` defaults to the run's tick (an operation that processes no tick).
   const RUN_RECEIPT_FORMAT='soveraeign.schematic/run-receipt@0.1';
-  const RUN_OPERATIONS=['schematic.run.start','schematic.run.step','schematic.run.settle','schematic.run.trace','schematic.state.query','schematic.run.replay'];
+  const RUN_OPERATIONS=['schematic.run.start','schematic.run.step','schematic.run.settle','schematic.run.trace','schematic.state.query','schematic.run.replay','schematic.run.drop'];
   function runReceipt(operation,run,result,tickBefore,handle){
     if(!RUN_OPERATIONS.includes(operation))throw new Error(`RUN_OPERATION_UNKNOWN: ${operation}`);
     const has=isObject(run)&&run.runtimeVersion===RUNTIME_VERSION&&Array.isArray(run.ledger)&&run.ledger.length>0;
@@ -1005,12 +1005,7 @@
       settle:handle=>found('schematic.run.settle',handle,(run,h)=>{const before=run.tick;return runReceipt('schematic.run.settle',run,settle(run),before,h)}),
       trace:handle=>found('schematic.run.trace',handle,(run,h)=>runReceipt('schematic.run.trace',run,traceOf(run),undefined,h)),
       query:(handle,subject)=>found('schematic.state.query',handle,(run,h)=>runReceipt('schematic.state.query',run,query(run,subject),undefined,h)),
-      // RUN_OPERATIONS names the six operations runReceipt builds; a drop's receipt is that receipt
-      // for the dropped run, named schematic.run.drop.
-      drop:handle=>{
-        const op='schematic.run.drop',receipt=found('schematic.run.trace',handle,(run,h)=>{runs.delete(h);return runReceipt('schematic.run.trace',run,null,undefined,h)});
-        return {...receipt,operation:op};
-      },
+      drop:handle=>found('schematic.run.drop',handle,(run,h)=>{runs.delete(h);return runReceipt('schematic.run.drop',run,null,undefined,h)}),
       replay(trace){
         const op='schematic.run.replay';
         if(packRefusal)return runReceipt(op,null,packRefusal);

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "soveraeign.schematic/run-receipt@0.1",
   "title": "SOV Schematic Run Receipt",
-  "description": "Documentation only: receipts are built by runReceipt in src/07-state-space.js. The one receipt every run operation returns on every surface (browser API, HTTP, MCP): schematic.run.start, .step, .settle, .trace, schematic.state.query and schematic.run.replay (STATE-SPACE.md, Surfaces). Running never changes the document, its revision, history or recovery. The HTTP status is the only surface-specific field and is not part of the receipt. Runs are addressed by handle.",
+  "description": "Documentation only: receipts are built by runReceipt in src/07-state-space.js. The one receipt every run operation returns on every surface (browser API, HTTP, MCP): schematic.run.start, .step, .settle, .trace, schematic.state.query, schematic.run.replay and schematic.run.drop (STATE-SPACE.md, Surfaces). A drop's receipt is the dropped run as it stood, with result null. Running never changes the document, its revision, history or recovery. The HTTP status is the only surface-specific field and is not part of the receipt. Runs are addressed by handle.",
   "type": "object",
   "required": [
     "schema",
@@ -28,7 +28,8 @@
         "schematic.run.settle",
         "schematic.run.trace",
         "schematic.state.query",
-        "schematic.run.replay"
+        "schematic.run.replay",
+        "schematic.run.drop"
       ]
     },
     "runId": {
@@ -75,7 +76,7 @@
       "description": "the hash of the run's last ledger entry after the operation, which a truncated trace cannot match"
     },
     "result": {
-      "description": "null on a refusal. start: the start ledger entry's body {replayKey, budget}; step: {tick, records}; settle: {kind: quiet} | {kind: oscillating, period, subjects} | {kind: budget, left}; trace: the trace (trace@0.1); state.query: the matching state records, in record order; replay: {records}"
+      "description": "null on a refusal. start: the start ledger entry's body {replayKey, budget}; step: {tick, records}; settle: {kind: quiet} | {kind: oscillating, period, subjects} | {kind: budget, left}; trace: the trace (trace@0.1); state.query: the matching state records, in record order; replay: {records}; drop: null"
     },
     "error": {
       "oneOf": [
@@ -92,7 +93,7 @@
           "properties": {
             "code": {
               "type": "string",
-              "description": "RUN_NOT_FOUND (unknown handle; HTTP 404), INPUT_INVALID (including a surface budget over 1000000, and over HTTP a body that is not JSON or a path that does not decode, both HTTP 400), PACK_INVALID, QUERY_INVALID, RUN_INVALID, RUN_REFUSED, MERGE_FORM, BUDGET_SPENT (step), TRACE_INVALID, REPLAY_KEY_MISMATCH or REPLAY_DIVERGED"
+              "description": "RUN_NOT_FOUND (unknown handle; HTTP 404), RUN_LIMIT (a start on a surface already holding 64 runs; HTTP 409; nothing is evicted), INPUT_INVALID (including a surface budget over 1000000, and over HTTP a body that is not JSON or a path that does not decode, both HTTP 400), PACK_INVALID, QUERY_INVALID, RUN_INVALID, RUN_REFUSED, MERGE_FORM, BUDGET_SPENT (step), TRACE_INVALID, REPLAY_KEY_MISMATCH or REPLAY_DIVERGED"
             },
             "message": {
               "type": "string"
