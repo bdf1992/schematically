@@ -86,16 +86,81 @@
       "enum": [
         "binary",
         "continuous",
-        "categorical"
+        "categorical",
+        "message"
       ]
     },
     "value": {
-      "description": "a boolean for binary, a finite number for continuous, a string for categorical",
+      "description": "a boolean for binary, a finite number for continuous, a string for categorical, a message {id, root, parent, channel, payload, origin} for message",
       "type": [
         "boolean",
         "number",
-        "string"
+        "string",
+        "object"
       ]
+    },
+    "principal": {
+      "description": "optional: who the message acts for, null when nobody is named",
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "hop": {
+      "description": "optional, form message only: what happened to the message here; its hops are its records in sequence order",
+      "type": "object",
+      "required": [
+        "event"
+      ],
+      "properties": {
+        "event": {
+          "enum": [
+            "injected",
+            "arrived",
+            "sent",
+            "crossed",
+            "forwarded",
+            "delivered",
+            "refused",
+            "handled",
+            "absorbed",
+            "observed",
+            "buffered",
+            "released",
+            "waiting",
+            "joined",
+            "parked",
+            "resumed",
+            "replayed",
+            "ambiguous",
+            "controlled",
+            "asserted",
+            "edge"
+          ]
+        },
+        "wire": {
+          "type": "string",
+          "minLength": 1
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parkId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "effectKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
     },
     "time": {
       "type": "object",
@@ -239,6 +304,70 @@
           "value": {
             "type": "string"
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "form": {
+            "const": "message"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "type": "object",
+            "required": [
+              "id",
+              "root",
+              "parent",
+              "channel",
+              "payload",
+              "origin"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "derived: a root is m-<ledger seq of its input>, a child <parent id>.<n>"
+              },
+              "root": {
+                "type": "string",
+                "minLength": 1
+              },
+              "parent": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "channel": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "the message's own channel, which config.accepts filters"
+              },
+              "payload": {
+                "description": "any JSON, canonicalized by RFC 8785 as it is"
+              },
+              "origin": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "hop"
+          ]
         }
       }
     }
