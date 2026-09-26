@@ -184,21 +184,8 @@
         <div class="selection-bar-fields" id="componentBarFields">
       <div class="icon-select component-template-select" aria-label="Component template">
         <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3"></rect><path d="M3 12h3M18 12h3M12 3v3M12 18v3"></path></svg></span>
-        <select id="barComponentType" class="bar-select bar-type" aria-label="Component template" title="Component template">
-        <optgroup label="Primitives">
-        <option value="point">Point</option>
-        <option value="path">Path</option>
-        <option value="plane">Plane</option>
-        </optgroup>
-        <option value="blank">Untyped</option>
-        <option value="act">Act</option>
-        <option value="hold">Hold</option>
-        <option value="buffer">Buffer</option>
-        <option value="gate">Gate</option>
-        <option value="switch">Switch</option>
-        <option value="limit">Limit</option>
-        <option value="receipt">Receipt</option>
-        </select>
+        <!-- Options come from the symbol catalog, the same list as the palette (20-ui.js syncComponentTypeOptions). -->
+        <select id="barComponentType" class="bar-select bar-type" aria-label="Component type" title="Component type · dimension comes with it"></select>
       </div>
       <input id="barComponentLabel" class="bar-input bar-label" type="text" placeholder="Label" aria-label="Component label" title="Component label">
       <button id="barComponentColorSlot" class="color-slot-chip" type="button" title="Boundary color" aria-label="Component boundary palette slot"></button>
@@ -254,14 +241,10 @@
       <div id="componentSettingsFields" class="settings-surface">
         <div class="settings-head"><b>Component settings</b><span>Form first · appearance second</span></div>
         <details class="form-settings" id="formSettings" open>
-          <summary><b>Form</b><span class="helper-snippet">dimension · interior · attachments · ports</span></summary>
+          <summary><b>Form</b><span class="helper-snippet">type · interior · attachments · ports</span></summary>
           <div class="settings-grid settings-grid-compact">
-            <label>Dimension
-              <select id="formDimension">
-                <option value="0">0D · Point</option>
-                <option value="1">1D · Path</option>
-                <option value="2">2D · Plane</option>
-              </select>
+            <label title="Dimension comes with the type; change the type in the selection bar">Dimension
+              <output id="formDimensionReadout" class="form-readout"></output>
             </label>
             <label data-dims="0" id="formPointPositionRow" hidden title="On a multi-line boundary a point sits on a line or across a band; that decides which side it reaches">Position
               <select id="formPointPosition" aria-label="Position on the host's section"></select>
@@ -295,7 +278,7 @@
             <div class="ports-list" id="portsList" role="list" aria-label="Ports"></div>
             <button id="portsAddBtn" class="bar-action settings-action" type="button" title="Add a port on the right side">Add port</button>
           </div>
-          <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
+          <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. It comes with the type: every entry in the type list carries its dimension. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
         </details>
         <details class="form-settings" id="accessSettings">
           <summary><b>Access</b><span class="helper-snippet">principal · access list</span></summary>

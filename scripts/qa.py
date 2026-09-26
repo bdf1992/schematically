@@ -49,6 +49,7 @@ BROWSER=[
     'tests/beta20_ports_history_qa.py',
     'tests/ports_panel_qa.py',
     'tests/multi_select_drag_qa.py',
+    'tests/type_catalog_qa.py',
     'tests/grid_visibility_qa.py',
     'tests/editor_kernel_qa.py',
     'tests/editor_kernel_extended_qa.py',

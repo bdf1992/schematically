@@ -555,7 +555,8 @@ workspace.addEventListener('pointerdown',e=>{if(e.target===workspace && !panDrag
 barComponentType.addEventListener('change',()=>{
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'type change'))return;setHistoryHint('Change Component type');
   const next=barComponentType.value;
-  if(!GROUPS.Components.includes(next)&&!GROUPS.Primitives.includes(next)){barComponentType.value=n.symbolId;return}
+  // The bar offers exactly the catalog (symbolCatalog, issue #20); anything else is not a type.
+  if(!symbolCatalogEntry(next)){barComponentType.value=n.symbolId;return}
 
   // A Path is a carrier drawn from the palette; a Component is not retyped into one (#19).
   const preset=SovSchematicData.templatePreset(next);

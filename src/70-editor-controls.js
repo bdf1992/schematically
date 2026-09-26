@@ -148,7 +148,7 @@ barWireSection?.addEventListener('change',()=>{
   if(v==='line')delete w.form.section;else if(v!=='custom')w.form.section=SovSchematicData.sectionPreset(v,1);
   routeCache.clear();renderWires();const i=wires.indexOf(w);selectWire(i,{focus:false});scheduleHistoryCapture();
 });
-formDimension.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.dimension=Number(formDimension.value);f.body.kind=['point','path','surface'][f.dimension]}));
+// Dimension has no control of its own: it comes with the type, chosen in the bar (issue #20).
 formAttachments.addEventListener('change',()=>{
   // Built-in 2D points are template defaults. Turning them off is refused while a Wire
   // still ends on one, so the change never silently orphans a carrier.

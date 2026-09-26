@@ -10,6 +10,19 @@ function symbolOf(symbolId){
   const g=SovSchematicNotation.glyphOf(activeNotation(),symbolId);
   return {id:symbolId,name:g?.title||String(symbolId||''),family:g?.family||'',role:'',diagram_class:'',meaning:g?.meaning||'',verbs:[],properties:[]};
 }
+// The one list of what a Component can be, in the order it is shown: Point, Path, Plane, then the
+// Component types, the Signals, then the glyphs the active notation adds. The palette and the bar's
+// type control both read it, so they never diverge (issue #20). Every entry carries the dimension
+// its type gives; dimension is a property of the type, never chosen apart from it.
+function symbolCatalog(){
+  const notation=activeNotation(),own=Object.keys(notation.glyphs||{}).filter(id=>!byId(id));
+  const groups=[...Object.entries(GROUPS),...(own.length?[[notation.name||notation.id,own]]:[])];
+  return groups.map(([group,ids])=>({group,entries:ids.map(id=>{
+    const symbol=symbolOf(id),preset=SovSchematicData.templatePreset(id);
+    return {id,group,symbol,preset,name:notation.glyphs?.[id]?.title||sentenceCase(symbol.name),dimension:preset?.form?.dimension??2,carrier:!!preset?.carrier};
+  })}));
+}
+function symbolCatalogEntry(symbolId){for(const {entries} of symbolCatalog()){const e=entries.find(x=>x.id===symbolId);if(e)return e}return null}
 const Attachment=SovSchematicAttachment;
 function componentAttachmentPointIds(n){return Attachment.pointIds(n)}
 function componentAttachmentPoints(n){return Attachment.descriptors(n,componentConfig(n).ports)}
