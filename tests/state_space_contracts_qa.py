@@ -996,7 +996,7 @@ def main() -> None:
     assert 'document.' not in src and 'window' not in src and 'logic.and' not in src, 'the engine holds no DOM and no pack data'
     assert "require('./03-canonical.js')" in src and "require('./05-data-core.js')" in src and src.count('require(') == 2, 'requires only 03 and 05'
 
-    examples = sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'examples').glob('*.sov'))
+    examples = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / 'examples').glob('*.sov'))
     assert examples, 'no examples'
     r = node(CORE, str(ROOT / 'src/07-state-space.js'), str(ROOT / 'data/core.logic.pack.json'), json.dumps(examples))
 

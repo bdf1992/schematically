@@ -406,7 +406,7 @@ def main() -> None:
     assert [s['id'] for s in alone['zero']] == ['self'] and [s['id'] for s in alone['one']] == ['start', 'end'], alone
     assert alone['zero'][0] == {'id': 'self', 'compatId': 'out', 'side': 'point', 'role': 'self', 'defaultFlow': 'duplex', 't': .5}, alone['zero']
 
-    examples = sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'examples').glob('*.sov'))
+    examples = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / 'examples').glob('*.sov'))
     assert examples, 'no examples'
     r = node(CORE, str(ROOT / 'src/05-data-core.js'), json.dumps(typed_symbols()), json.dumps(TRIO), json.dumps(examples), json.dumps(sorted(COMPACT_HASHES)))
 

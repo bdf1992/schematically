@@ -19,8 +19,8 @@ assert source.count(PACKS_TAG)==1,'index.source.html must hold the sov-packs tag
 packs=[json.loads(path.read_text(encoding='utf-8')) for path in sorted((ROOT/'data').glob('*.pack.json'),key=lambda p:p.name)]
 packs_json=json.dumps(packs,ensure_ascii=False,separators=(',',':')).replace('</','<\\/')
 source=source.replace(PACKS_TAG,f'<script type="application/json" id="sov-packs">{packs_json}</script>')
-(ROOT/'index.html').write_text(source,encoding='utf-8')
+(ROOT/'index.html').write_text(source,encoding='utf-8',newline='\n')
 dist_dir=ROOT/'desktop/dist'
 dist_dir.mkdir(parents=True,exist_ok=True)
-(dist_dir/'index.html').write_text(source,encoding='utf-8')
+(dist_dir/'index.html').write_text(source,encoding='utf-8',newline='\n')
 print(ROOT/'index.html')

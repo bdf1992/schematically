@@ -39,5 +39,5 @@ assert results['small']['wiresOnly'] < 80, results
 assert results['small']['signal'] < 40, results
 assert results['medium']['warm'] < 100, results
 assert results['medium']['wiresOnly'] < 100, results
-(ROOT/'tests'/'performance-results.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
+(ROOT/'tests'/'performance-results.json').write_text(json.dumps(results,indent=2),encoding='utf-8',newline='\n')
 print('PASS performance regression QA',json.dumps(results))

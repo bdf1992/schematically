@@ -41,7 +41,7 @@ def main() -> None:
                 counts['json'] += 1
             elif lang == 'sov':
                 path = out / f'fence-{i}.sov'
-                path.write_text(body, encoding='utf-8')
+                path.write_text(body, encoding='utf-8', newline='\n')
                 code, log = run_validator([path])
                 assert code == 0, f'sov fence {i} should validate:\n{log}'
                 counts['sov'] += 1
@@ -49,7 +49,7 @@ def main() -> None:
                 expected = info.strip()
                 assert expected, f'sov-refused fence {i} needs the expected message on the fence line'
                 path = out / f'fence-{i}.sov'
-                path.write_text(body, encoding='utf-8')
+                path.write_text(body, encoding='utf-8', newline='\n')
                 code, log = run_validator([path])
                 assert code == 1, f'sov-refused fence {i} should fail validation:\n{log}'
                 assert expected in log, f'sov-refused fence {i} should fail with {expected!r}:\n{log}'
@@ -70,12 +70,12 @@ def main() -> None:
         assert inner, 'example 08 should carry interior wires'
         del inner[0]['canvasId']
         path = out / 'missing-canvas.sov'
-        path.write_text(json.dumps(doc), encoding='utf-8')
+        path.write_text(json.dumps(doc), encoding='utf-8', newline='\n')
         code, log = run_validator([path])
         assert code == 0, log
         inner[1]['canvasId'] = 'canvas:global'
         path = out / 'wrong-canvas.sov'
-        path.write_text(json.dumps(doc), encoding='utf-8')
+        path.write_text(json.dumps(doc), encoding='utf-8', newline='\n')
         code, log = run_validator([path])
         assert code == 1 and 'canvasId is canvas:global' in log and 'canvas:component:svc' in log, log
 

@@ -195,7 +195,7 @@ def server_scenario(kind, docs):
     steps, states, tools, malformed, carried = [], {}, None, {}, {}
     with tempfile.TemporaryDirectory() as td:
         for name, _ in DOCUMENTS:
-            file = Path(td) / f'{name}.sov';file.write_text(json.dumps(docs[name]), encoding='utf-8')
+            file = Path(td) / f'{name}.sov';file.write_text(json.dumps(docs[name]), encoding='utf-8', newline='\n')
             port = free_port();base = f'http://127.0.0.1:{port}'
             proc = subprocess.Popen(['node', str(ROOT / 'mcp/server.mjs'), '--port', str(port), '--file', str(file)], cwd=ROOT,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
