@@ -3,136 +3,433 @@
   "id": "logic-full-adder",
   "revision": 0,
   "meta": {
-    "title": "Full adder: two half adders and an OR",
-    "qualifier": "FA"
+    "title": "Full adder: two half adders and an OR"
   },
   "components": [
     {
-      "id": "in-A",
-      "symbolId": "act",
+      "id": "A",
+      "symbolId": "point",
       "x": 120,
       "y": 100,
       "config": {
         "label": "A",
         "signalMode": "source",
-        "logic": {
-          "kind": "input",
-          "name": "A"
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none"
+        },
+        "ports": {
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "dimension": 0,
+        "body": {
+          "kind": "point",
+          "material": "generic",
+          "thickness": 0
+        },
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
         }
       }
     },
     {
-      "id": "in-B",
-      "symbolId": "act",
+      "id": "B",
+      "symbolId": "point",
       "x": 120,
       "y": 230,
       "config": {
         "label": "B",
         "signalMode": "source",
-        "logic": {
-          "kind": "input",
-          "name": "B"
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none"
+        },
+        "ports": {
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "dimension": 0,
+        "body": {
+          "kind": "point",
+          "material": "generic",
+          "thickness": 0
+        },
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
         }
       }
     },
     {
-      "id": "in-Cin",
-      "symbolId": "act",
+      "id": "Cin",
+      "symbolId": "point",
       "x": 120,
       "y": 360,
       "config": {
         "label": "Cin",
         "signalMode": "source",
-        "logic": {
-          "kind": "input",
-          "name": "Cin"
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none"
+        },
+        "ports": {
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "dimension": 0,
+        "body": {
+          "kind": "point",
+          "material": "generic",
+          "thickness": 0
+        },
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
         }
       }
     },
     {
       "id": "ha1",
-      "symbolId": "act",
+      "symbolId": "gate",
       "x": 340,
       "y": 100,
       "config": {
         "label": "HALF ADDER",
-        "logic": {
-          "composite": "half-adder.sov"
-        },
+        "definition": "logic.half_adder@1",
+        "attachmentDefaults": "none",
         "attachmentPoints": [
           {
-            "id": "A",
+            "id": "a",
             "side": "left",
-            "t": 0.3333,
-            "defaultFlow": "in"
+            "t": 0.3333333333333333,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
-            "id": "B",
+            "id": "b",
             "side": "left",
-            "t": 0.6667,
-            "defaultFlow": "in"
+            "t": 0.6666666666666666,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
-            "id": "S",
+            "id": "s",
             "side": "right",
-            "t": 0.3333,
-            "defaultFlow": "out"
+            "t": 0.3333333333333333,
+            "flow": "out",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
-            "id": "C",
+            "id": "c",
             "side": "right",
-            "t": 0.6667,
-            "defaultFlow": "out"
+            "t": 0.6666666666666666,
+            "flow": "out",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           }
         ],
         "presentation": {
           "graphic": {
             "kind": "custom",
-            "svg": "<path d=\"M6 22.0H30\"/><path d=\"M6 42.0H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22.0H90\"/><path d=\"M66 42.0H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">HA</text>"
+            "svg": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">HA</text>"
+          }
+        },
+        "ports": {
+          "a": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "b": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "s": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          },
+          "c": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
           }
         }
       }
     },
     {
       "id": "ha2",
-      "symbolId": "act",
+      "symbolId": "gate",
       "x": 560,
       "y": 100,
       "config": {
         "label": "HALF ADDER",
-        "logic": {
-          "composite": "half-adder.sov"
-        },
+        "definition": "logic.half_adder@1",
+        "attachmentDefaults": "none",
         "attachmentPoints": [
           {
-            "id": "A",
+            "id": "a",
             "side": "left",
-            "t": 0.3333,
-            "defaultFlow": "in"
+            "t": 0.3333333333333333,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
-            "id": "B",
+            "id": "b",
             "side": "left",
-            "t": 0.6667,
-            "defaultFlow": "in"
+            "t": 0.6666666666666666,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
-            "id": "S",
+            "id": "s",
             "side": "right",
-            "t": 0.3333,
-            "defaultFlow": "out"
+            "t": 0.3333333333333333,
+            "flow": "out",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
-            "id": "C",
+            "id": "c",
             "side": "right",
-            "t": 0.6667,
-            "defaultFlow": "out"
+            "t": 0.6666666666666666,
+            "flow": "out",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           }
         ],
         "presentation": {
           "graphic": {
             "kind": "custom",
-            "svg": "<path d=\"M6 22.0H30\"/><path d=\"M6 42.0H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22.0H90\"/><path d=\"M66 42.0H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">HA</text>"
+            "svg": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 22H90\"/><path d=\"M66 42H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">HA</text>"
+          }
+        },
+        "ports": {
+          "a": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "b": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "s": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          },
+          "c": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
           }
         }
       }
@@ -144,27 +441,41 @@
       "y": 100,
       "config": {
         "label": "OR",
-        "logic": {
-          "gate": "or"
-        },
+        "definition": "logic.or@1",
+        "attachmentDefaults": "none",
         "attachmentPoints": [
           {
             "id": "a",
             "side": "left",
-            "t": 0.3333,
-            "defaultFlow": "in"
+            "t": 0.3333333333333333,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
             "id": "b",
             "side": "left",
-            "t": 0.6667,
-            "defaultFlow": "in"
+            "t": 0.6666666666666666,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
             "id": "q",
             "side": "right",
             "t": 0.5,
-            "defaultFlow": "out"
+            "flow": "out",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           }
         ],
         "presentation": {
@@ -173,32 +484,168 @@
             "svg": "<path d=\"M6 22H33\"/><path d=\"M6 42H33\"/><path d=\"M26 12Q40 32 26 52Q56 52 70 32Q56 12 26 12Z\"/><path d=\"M70 32H90\"/>",
             "svgSmall": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M66 32H90\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">\u22651</text>"
           }
+        },
+        "ports": {
+          "a": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "b": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "q": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
         }
       }
     },
     {
-      "id": "out-S",
-      "symbolId": "observe",
+      "id": "S",
+      "symbolId": "point",
       "x": 1000,
       "y": 100,
       "config": {
         "label": "S",
-        "logic": {
-          "kind": "output",
-          "name": "S"
+        "signalMode": "relay",
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none"
+        },
+        "ports": {
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "dimension": 0,
+        "body": {
+          "kind": "point",
+          "material": "generic",
+          "thickness": 0
+        },
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
         }
       }
     },
     {
-      "id": "out-Cout",
-      "symbolId": "observe",
+      "id": "Cout",
+      "symbolId": "point",
       "x": 1000,
       "y": 230,
       "config": {
         "label": "Cout",
-        "logic": {
-          "kind": "output",
-          "name": "Cout"
+        "signalMode": "relay",
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none"
+        },
+        "ports": {
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "dimension": 0,
+        "body": {
+          "kind": "point",
+          "material": "generic",
+          "thickness": 0
+        },
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
         }
       }
     }
@@ -206,60 +653,269 @@
   "wires": [
     {
       "id": "w1",
-      "a": "in-A",
+      "a": "A",
       "aSide": "out",
       "b": "ha1",
-      "bSide": "A"
+      "bSide": "a",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "A",
+        "pointId": "self"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "ha1",
+        "pointId": "a"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w2",
-      "a": "in-B",
+      "a": "B",
       "aSide": "out",
       "b": "ha1",
-      "bSide": "B"
+      "bSide": "b",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "B",
+        "pointId": "self"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "ha1",
+        "pointId": "b"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w3",
       "a": "ha1",
-      "aSide": "S",
+      "aSide": "s",
       "b": "ha2",
-      "bSide": "A"
+      "bSide": "a",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "ha1",
+        "pointId": "s"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "ha2",
+        "pointId": "a"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w4",
-      "a": "in-Cin",
+      "a": "Cin",
       "aSide": "out",
       "b": "ha2",
-      "bSide": "B"
+      "bSide": "b",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "Cin",
+        "pointId": "self"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "ha2",
+        "pointId": "b"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w5",
       "a": "ha1",
-      "aSide": "C",
+      "aSide": "c",
       "b": "carry",
-      "bSide": "a"
+      "bSide": "a",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "ha1",
+        "pointId": "c"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "carry",
+        "pointId": "a"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w6",
       "a": "ha2",
-      "aSide": "C",
+      "aSide": "c",
       "b": "carry",
-      "bSide": "b"
+      "bSide": "b",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "ha2",
+        "pointId": "c"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "carry",
+        "pointId": "b"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w7",
       "a": "ha2",
-      "aSide": "S",
-      "b": "out-S",
-      "bSide": "in"
+      "aSide": "s",
+      "b": "S",
+      "bSide": "out",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "ha2",
+        "pointId": "s"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "S",
+        "pointId": "self"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w8",
       "a": "carry",
       "aSide": "q",
-      "b": "out-Cout",
-      "bSide": "in"
+      "b": "Cout",
+      "bSide": "out",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "carry",
+        "pointId": "q"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "Cout",
+        "pointId": "self"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     }
   ],
-  "references": []
+  "references": [],
+  "layout": {}
 }

@@ -22,10 +22,8 @@ STATIC=[
     'tests/desktop_shell_qa.py',
     'tests/optimize_sov_qa.py',
     'tests/simulate_sov_qa.py',
-    'tests/logic_sov_qa.py',
     'tests/plot_run_qa.py',
-    'tests/logic_core_parity_qa.py',
-    'tests/logic_mcp_qa.py',
+    'tests/logic_examples_qa.py',
     'tests/revision_guard_qa.py',
 ]
 BROWSER=[
@@ -60,7 +58,7 @@ BROWSER=[
     'tests/logic_state_export_qa.py',
     'tests/glyph_size_rule_qa.py',
     'tests/run_page_qa.py',
-    'tests/logic_live_qa.py',
+    'tests/state_view_qa.py',
     'tests/menu_dismissal_qa.py',
     'tests/appearance_history_qa.py',
     'tests/appearance_color_scheme_qa.py',

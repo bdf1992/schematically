@@ -48,10 +48,10 @@ def run() -> None:
 
         doc = page.evaluate('()=>window.SovSchematicAPI.document.get()')
         doc = doc.get('result', doc)
-        gates = [c for c in doc['components'] if 'gate' in (c.get('config') or {}).get('logic', {})]
+        gates = [c for c in doc['components'] if (c.get('config') or {}).get('definition')]
         # Distinctive-shape gates carry their rectangle as svgSmall; rectangle gates already are it.
-        pack = json.loads((ROOT / 'packs' / 'logic' / 'gates.json').read_text(encoding='utf-8'))['gates']
-        shaped = [c for c in gates if pack[c['config']['logic']['gate']]['glyph_family'] == 'distinctive']
+        table = json.loads((ROOT / 'data' / 'logic.glyphs.json').read_text(encoding='utf-8'))['glyphs']
+        shaped = [c for c in gates if table[c['config']['definition']]['family'] == 'distinctive']
         assert len(shaped) == 8, len(shaped)
         for c in gates:
             has = bool(c['config']['presentation']['graphic'].get('svgSmall'))

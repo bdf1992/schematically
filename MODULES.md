@@ -3,9 +3,7 @@
 - `03-canonical.js` — canonical JSON encoding (RFC 8785 / JCS), synchronous pure-JS SHA-256, and the seeded draw used by merges and QA. Pure; loaded before `06-attachment-core.js` and `05-data-core.js`.
 - `07-state-space.js` — the state space's contract layer (slice 1a of `STATE-SPACE.md`): the state record validator, the closed pattern registry (`truth_table@1`, `merge@1`), definitions and the minimal pack envelope, contracts derived from pattern + parameters, ports generated from a bound definition (`bindDefinition` returns a data-core `update`), and the load checks (`checkDocument`). Pure; no DOM and no pack data (packs are passed in; the built-ins are `data/core.logic.pack.json`); requires only `03-canonical.js` and `05-data-core.js`, and loads right after `05`. The ledger, ticks and runs are not built yet.
 - `00-state.js` — runtime state and DOM references.
-- `04-logic-pack.js` — the logic pack's semantics, generated from `packs/logic/gates.json` by `scripts/build_logic_pack_js.py`.
 - `05-data-core.js` — transport-neutral documents, packages, validation, CRUD, reachability, primitive template presets, and compact serialization (`compactDocument`).
-- `07-logic-core.js` — logic runtime shared by the editor, `mcp/server.mjs` and Node (`scripts/logic_run.mjs`); a port of `scripts/logic_sov.py`, held equal to it by `tests/logic_core_parity_qa.py`. No DOM.
 - `10-model.js` — Component/Wire/Port semantic normalization.
 - `20-ui.js` — panels, palette/grid UI helpers.
 - `25-signal.js` — derived signal state.
@@ -13,7 +11,7 @@
 - `40-routing.js` — Wire geometry.
 - `50-selection.js` — selection projection.
 - `55-render.js` — SVG projection and measured wire-label clearance. Canvas scale changes call its placement pass; routing and document geometry remain inputs.
-- `57-logic-live.js` — live logic state on the canvas: wire values, pin chips (hover, selection, zoom ≥ 100%, inputs always), input switches.
+- `57-state-view.js` — a state space run's records projected onto the canvas: wire levels and port chips at a chosen tick (hover, selection, zoom ≥ 100%, sources always). Passive: replays a trace through `07-state-space.js`, runs nothing.
 - `60-interactions.js` — pointer/drag gestures.
 - `70-editor-controls.js` — selection/form editing controls.
 - `75-persistence.js` — File lifecycle, `.sov`/`.sovpak`, shared standalone SVG serialization, recovery, rehydration. The headless SVG script delegates here through the browser API.

@@ -19,14 +19,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'docs' / 'visual'
 sys.path.insert(0, str(ROOT / 'scripts'))
-from record_run import noisy_wave, record_logic, record_optimize, record_simulate  # noqa: E402
+from record_run import parse_vector, record_logic, record_optimize, record_simulate  # noqa: E402
 
 LG, OP = ROOT / 'examples' / 'logic', ROOT / 'examples' / 'optimization'
 KEEP = {  # record name.view -> gallery file
-    'ripple.timing-zoom': 'timing-ripple-glitch.svg',
-    'sync.timing': 'timing-sync-counter.svg',
-    'schmitt.level': 'level-schmitt.svg',
-    'schmitt.loop-hys': 'loop-schmitt.svg',
+    'adder.timing-zoom': 'timing-adder-carry.svg',
     'learning.landscape': 'landscape-learning.svg',
     'three.landscape-chairs-tables': 'landscape-slice-chairs-tables.svg',
     'learning.search-outline': 'search-outline.svg',
@@ -38,9 +35,8 @@ KEEP = {  # record name.view -> gallery file
 
 def records() -> dict[str, dict]:
     return {
-        'ripple': record_logic(LG / 'ripple-counter4.sov', [{} for _ in range(17)], 'CLK', 24, ['Q']),
-        'sync': record_logic(LG / 'sync-counter4.sov', [{} for _ in range(17)], 'CLK', 24, ['Q']),
-        'schmitt': record_logic(LG / 'schmitt.sov', [{'X': x} for x in noisy_wave(240)], None, 1, [], 'X'),
+        # A state space run: 7 + 0, then B0 rises and the carry ripples to 8.
+        'adder': record_logic(LG / 'adder4.sov', [parse_vector('A=7:4,B=0:4,Cin=0'), parse_vector('B0=1')], 20, ['S']),
         'learning': record_optimize(OP / 'workshop.sov', OP / 'workshop.learning.opt.json', segments=32, starts=24, steps=41),
         'week': record_simulate(OP / 'workshop.sov', OP / 'workshop.learning.opt.json', {'chairs': 14, 'tables': 2}),
         'three': record_optimize(OP / 'workshop3.sov', OP / 'workshop3.opt.json', segments=20, starts=12, steps=41),

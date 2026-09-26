@@ -25,7 +25,7 @@ from browser_runtime import chromium_launch_kwargs
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from record_run import record_logic, record_optimize  # noqa: E402
+from record_run import parse_vector, record_logic, record_optimize  # noqa: E402
 
 
 def value_at(changes: list, t: float) -> int:
@@ -37,7 +37,8 @@ def value_at(changes: list, t: float) -> int:
 
 
 def build(tmp: Path) -> tuple[str, dict, dict]:
-    ripple = record_logic(ROOT / 'examples' / 'logic' / 'ripple-counter4.sov', [{} for _ in range(9)], 'CLK', 24, ['Q'])
+    # A state space run of the 4-bit adder: 7 + 0, then B0 rises and the carry ripples to 8.
+    ripple = record_logic(ROOT / 'examples' / 'logic' / 'adder4.sov', [parse_vector('A=7:4,B=0:4,Cin=0'), parse_vector('B0=1')], 20, ['S'])
     op = ROOT / 'examples' / 'optimization'
     learning = record_optimize(op / 'workshop.sov', op / 'workshop.learning.opt.json', segments=12, starts=4, steps=11)
     files = []
@@ -70,14 +71,14 @@ def run() -> None:
         page.on('pageerror', lambda exc: errors.append(str(exc)))
         page.set_content(html, wait_until='load')
 
-        # Timing: the full timing view of the ripple counter.
+        # Timing: the full timing view of the adder's run.
         fig = page.locator('figure[data-step="timing"]').first
         handle = fig.element_handle()
         marks = page.evaluate("(fig)=>[...fig.querySelectorAll('.stage [data-t]')].map(m=>({t:+m.dataset.t,x:m.dataset.x,link:m.dataset.link}))", handle)
         marks.sort(key=lambda m: m['t'])
         changes = sorted(c[0] for s, cs in ripple['signals'].items() for c in cs if c[0] > 0)
         assert [m['t'] for m in marks] == changes, 'one step per recorded change, in time order'
-        bits = ripple['buses']['Q']
+        bits = ripple['buses']['S']
         state = page.evaluate(TIMING, handle)
         assert state['at'] == 0 and state['shown'] and state['x'] == marks[0]['x'], state
         forward = fig.locator('.step button[data-step="1"]')
@@ -88,7 +89,7 @@ def run() -> None:
             assert state['at'] == k and state['x'] == m['x'], (k, state, m)
             assert m['link'] in state['lit'] and state['lit'].count(m['link']) >= 2, ('lane mark and log row lit', k, state)
             q = sum(value_at(ripple['signals'][bit], m['t']) << i for i, bit in enumerate(bits))
-            assert f'Q = {q}' in state['status'], (k, m['t'], q, state['status'])
+            assert f'S = {q}' in state['status'], (k, m['t'], q, state['status'])
             assert state['status'].startswith(f'step {k + 1} of {len(marks)}'), state['status']
         # Ends hold; keys step like the buttons.
         fig.locator('.step button[data-step="-1"]').click()

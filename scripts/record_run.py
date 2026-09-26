@@ -4,17 +4,17 @@ A record (soveraeign.schematic/run@0.0-draft) names the document by its semantic
 and holds exactly what the views in scripts/plot_run.mjs draw, so a picture never computes a
 number itself (VISUAL-LANGUAGE.md). Three kinds:
 
-  logic     a circuit driven through a sequence of input vectors, optionally clocked:
-            every signal's changes in time, buses decoded by name, the event log, and for
-            gates that read a level their thresholds;
+  logic     a state space run (STATE-SPACE.md) of a logic document through a sequence of
+            input vectors, one every `period` ticks: every source's and output's changes in
+            logical time, buses decoded by name, the event log, and the trace it came from
+            (run id, head hash, last tick), so a picture names the run it draws;
   optimize  a two-decision model: the landscape (value and limit slack over a grid, whole-unit
             plans and local optima), gradient climbs and their optima, the proven fractional
             and whole-unit plans, the plan without effects, and the branch-and-bound log;
   simulate  a unit simulation: each unit's span of work, targets, the stall and its reason,
             and the units still in progress.
 
-    python scripts/record_run.py logic examples/logic/ripple-counter4.sov --clock CLK --pulses 17 --bus Q
-    python scripts/record_run.py logic examples/logic/schmitt.sov --wave X --samples 240
+    python scripts/record_run.py logic examples/logic/adder4.sov --sequence 'A=7:4,B=0:4,Cin=0;B=1:4' --bus S
     python scripts/record_run.py optimize examples/optimization/workshop.sov --model examples/optimization/workshop.learning.opt.json
     python scripts/record_run.py simulate examples/optimization/workshop.sov --model examples/optimization/workshop.learning.opt.json --target chairs=14,tables=2
 """
@@ -22,13 +22,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
-import random
+import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from logic_sov import Circuit, parse_vector  # noqa: E402
 from optimize_sov import Refusal, branch_and_bound, build, landscape, load, local_search, solve  # noqa: E402
 from sov_fingerprint import document_fingerprint, model_fingerprint  # noqa: E402
 
@@ -42,58 +40,62 @@ def _doc_ref(path: Path) -> dict:
 
 # --------------------------------------------------------------------------- logic
 
-def record_logic(path: Path, steps: list[dict], clock: str | None = None, period: int = 24,
-                 buses: list[str] = (), wave: str | None = None) -> dict:
-    """Drive a circuit and keep every change of every named input and output.
+def parse_vector(text: str) -> dict[str, int]:
+    """'A=13:4,B=9:4,Cin=0' -> bits by source name; ':width' makes a bus, least significant first."""
+    out: dict[str, int] = {}
+    for part in filter(None, (x.strip() for x in text.split(','))):
+        name, _, value = part.partition('=')
+        value, _, width = value.partition(':')
+        if width:
+            v, w = int(value), int(width)
+            if not 0 <= v < 2 ** w:
+                raise Refusal('OUT_OF_RANGE', f'{name}={v} does not fit in {w} bits')
+            out.update({f'{name}{i}': (v >> i) & 1 for i in range(w)})
+        else:
+            if value not in ('0', '1'):
+                raise Refusal('NOT_A_BIT', f'{name}={value}: a source takes 0 or 1 (state space runs binary channels)')
+            out[name] = int(value)
+    return out
 
-    With a clock, each step sets its vector and then raises the clock at k*period and lowers it
-    half a period later. Without, each step is applied at k*period. Time is in gate delays.
+
+def record_logic(path: Path, steps: list[dict], period: int = 20, buses: list[str] = ()) -> dict:
+    """Run a logic document on state space and keep every change at its sources and outputs.
+
+    Step k registers its vector at logical tick k * period. The run goes to quiet; the record
+    is read from its trace, so every change is one the engine recorded. Sources and outputs are
+    the document's Points; a Point's value is its `self` port's `logic.level`.
     """
-    c = Circuit(path)
-    named = {c.net_names[c.net_of[t]]: n for n, t in c.inputs.items()}
-    named.update({c.net_names[c.net_of[t]]: n for n, t in c.outputs.items()})
-    signals: dict[str, list] = {n: [] for n in sorted(set(named.values()))}
+    inputs = [{'entity': name, 'value': bool(v), 'at': k * period} for k, vector in enumerate(steps)
+              for name, v in sorted(vector.items())]
+    out = subprocess.run(['node', str(Path(__file__).resolve().parent / 'run_state.mjs')],
+                         input=json.dumps([{'path': str(path), 'inputs': inputs}]), capture_output=True, text=True, check=True)
+    result = json.loads(out.stdout)[0]
+    if not result['ok']:
+        raise Refusal(result['code'], result['message'])
+    trace = result['trace']
+    doc = json.loads(path.read_text(encoding='utf-8'))
+    points = sorted(c['id'] for c in doc['components'] if c.get('symbolId') == 'point')
+    signals: dict[str, list] = {n: [] for n in points}
     events: list[dict] = []
-    c.apply({}, record=True)
-    for e in c.events:
-        if e['net'] in named:
-            signals[named[e['net']]].append([e['t'], e['value']])
-    c.events.clear()
-    for k, vector in enumerate(steps):
-        c.time = k * period
-        c.apply(vector, record=True)
-        if clock:
-            c.apply({clock: 1}, record=True)
-            c.time = k * period + period // 2
-            c.apply({clock: 0}, record=True)
-        for e in c.events:
-            if e['net'] in named:
-                signals[named[e['net']]].append([e['t'], e['value']])
-                events.append({'t': e['t'], 'signal': named[e['net']], 'value': e['value']})
-        c.events.clear()
+    for r in trace['records']:
+        sub = r['subject']
+        if r['observable'] != 'logic.level' or sub['point'] != 'self' or sub['entity'] not in signals:
+            continue
+        value, t, lane = int(r['value']), r['time']['logical'], signals[sub['entity']]
+        if (lane[-1][1] if lane else 0) == value:
+            continue   # a registered input equal to the level already held changes nothing
+        lane.append([t, value])
+        events.append({'t': t, 'signal': sub['entity'], 'value': value})
     bus_map = {}
     for b in buses:
         bits = sorted((n for n in signals if n.startswith(b) and n[len(b):].isdigit()), key=lambda n: int(n[len(b):]))
         if not bits:
-            raise Refusal('NO_BUS', f'no signals named {b}0, {b}1, ... in {path.name}')
+            raise Refusal('NO_BUS', f'no Points named {b}0, {b}1, ... in {path.name}')
         bus_map[b] = bits
-    readers = []
-    for g in c.gates:
-        if g['def']['kind'] in ('compare', 'hysteresis') and wave:
-            src = [n for n, t in c.inputs.items() if c.net_of[t] == g['in_nets'][0]]
-            if src:
-                out_names = [n for n, t in c.outputs.items() if c.net_of[t] in g['out_nets']]
-                readers.append({'gate': g['id'], 'kind': g['def']['kind'], 'reads': src[0], 'params': g['params'],
-                                'outputs': out_names})
-    return {'schema': SCHEMA, 'kind': 'logic', 'document': _doc_ref(path), 'clock': clock, 'period': period,
-            'end': len(steps) * period, 'signals': signals, 'buses': bus_map, 'events': events,
-            'levels': sorted(n for n in c.inputs if c.levels.get(n)), 'readers': readers}
-
-
-def noisy_wave(samples: int, seed: int = 6) -> list[float]:
-    """A slow swing across 0.5 with noise smaller than a 0.2 band: the hysteresis test signal."""
-    rng = random.Random(seed)
-    return [round(0.5 + 0.3 * math.sin(k / (samples / 8)) + rng.uniform(-0.08, 0.08), 4) for k in range(samples)]
+    run_id = trace['records'][0]['subject']['run'] if trace['records'] else None
+    return {'schema': SCHEMA, 'kind': 'logic', 'document': _doc_ref(path), 'period': period,
+            'end': max(len(steps) * period, (trace['through'] or 0) + 1), 'signals': signals, 'buses': bus_map,
+            'events': events, 'run': {'id': run_id, 'head': trace['head'], 'through': trace['through']}}
 
 
 # --------------------------------------------------------------------------- optimize
@@ -188,12 +190,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest='kind', required=True)
     lg = sub.add_parser('logic')
     lg.add_argument('document', type=Path)
-    lg.add_argument('--clock')
-    lg.add_argument('--pulses', type=int, default=0, help='with --clock and no --sequence: this many empty steps')
-    lg.add_argument('--sequence', default=None, help="steps separated by ';', each like logic_sov --set")
-    lg.add_argument('--wave', default=None, help='drive this level input with the noisy test swing')
-    lg.add_argument('--samples', type=int, default=240)
-    lg.add_argument('--period', type=int, default=24)
+    lg.add_argument('--sequence', required=True, help="vectors separated by ';', e.g. 'A=7:4,B=0:4,Cin=0;B=1:4'")
+    lg.add_argument('--period', type=int, default=20, help='logical ticks between vectors')
     lg.add_argument('--bus', action='append', default=[])
     op = sub.add_parser('optimize')
     op.add_argument('document', type=Path)
@@ -211,14 +209,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     try:
         if args.kind == 'logic':
-            if args.wave:
-                steps = [{args.wave: x} for x in noisy_wave(args.samples)]
-                period = 1 if args.period == 24 else args.period
-            else:
-                steps = [parse_vector(s.strip()) for s in args.sequence.split(';')] if args.sequence \
-                    else [{} for _ in range(args.pulses)]
-                period = args.period
-            rec = record_logic(args.document, steps, args.clock, period, args.bus, args.wave)
+            steps = [parse_vector(x) for x in args.sequence.split(';')]
+            rec = record_logic(args.document, steps, args.period, args.bus)
         elif args.kind == 'optimize':
             rec = record_optimize(args.document, args.model, args.segments, args.starts, args.steps)
         else:

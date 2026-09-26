@@ -1,20 +1,21 @@
-"""Gate glyphs for the logic pack, written into packs/logic/gates.json.
+"""Gate glyphs for the logic definitions, written to data/logic.glyphs.json.
 
-The rule (VISUAL-LANGUAGE.md, agreed in the bake-off):
+Glyphs are presentation, keyed by the definition they draw (`logic.and@1`), for every
+definition in data/core.logic.pack.json and data/logic.gates.pack.json. The rule
+(VISUAL-LANGUAGE.md, agreed in the bake-off):
   - the eight classic gates (AND, OR, XOR, NOT, NAND, NOR, XNOR, BUFFER) get their distinctive
     ANSI/IEEE 91 shape;
-  - everything else, anything with state, a threshold or more than two inputs, gets an IEC 60617
-    rectangle with a qualifier;
-  - every gate also carries its rectangle as `glyph_small`, for when it is drawn below about
+  - everything else gets an IEC 60617 rectangle with a qualifier;
+  - every gate also carries its rectangle as `glyphSmall`, for when it is drawn below about
     40 px, where distinctive shapes stop being distinguishable.
 
 Each glyph is SVG markup on the editor's 96 x 64 symbol grid, stroked in the current color, and
 uses only the tags and attributes the editor's custom-graphic sanitizer admits
-(src/55-render.js), so a Component can carry it as `presentation.graphic.svg` with no renderer
-change.
+(src/55-render.js), so a Component carries it as `presentation.graphic.svg` with no renderer
+change. Glyphs for gates with memory or a threshold return with their patterns.
 
-    python scripts/logic_glyphs.py            # write the glyphs into the pack
-    python scripts/logic_glyphs.py --check    # exit 1 if the pack's glyphs are stale
+    python scripts/logic_glyphs.py            # write data/logic.glyphs.json
+    python scripts/logic_glyphs.py --check    # exit 1 if it is stale
 """
 from __future__ import annotations
 
@@ -24,7 +25,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PACK = ROOT / 'packs' / 'logic' / 'gates.json'
+PACKS = [ROOT / 'data' / 'core.logic.pack.json', ROOT / 'data' / 'logic.gates.pack.json']
+TARGET = ROOT / 'data' / 'logic.glyphs.json'
 CLASSIC = ('and', 'or', 'xor', 'not', 'buffer', 'nand', 'nor', 'xnor')
 
 
@@ -68,85 +70,65 @@ DISTINCTIVE = {
 }
 
 
-def rect(ins: list[float], outs: list[float], q: str = '', size: int = 14, clock: float | None = None,
-         pins: list[tuple[str, float, float]] = (), loop: bool = False, out_bubble: bool = False) -> str:
-    """An IEC rectangle: input stubs, a frame, output stubs, a qualifier, pin letters."""
+def rect(ins: list[float], outs: list[float], q: str = '', size: int = 14, out_bubble: bool = False) -> str:
+    """An IEC rectangle: input stubs, a frame, output stubs, a qualifier."""
     body = paths(*(stub(y, 6, 30) for y in ins), 'M30 8H66V56H30Z',
                  *(f'M{70 if out_bubble else 66} {y}H90' for y in outs))
-    if clock is not None:
-        body += paths(f'M30 {clock - 4}L38 {clock}L30 {clock + 4}')
     if out_bubble:
         body += bubble(70, outs[0])
     if q:
         body += label(48, 37, q, size)
-    for s, x, y in pins:
-        body += label(x, y, s, 9)
-    if loop:
-        body += paths('M38 38H50V26H58', 'M42 38V26H54')
     return body
 
+QUALIFIER = {
+    'and': ('&', {}), 'or': ('≥1', {}), 'xor': ('=1', {}), 'buffer': ('1', {}), 'not': ('1', {'out_bubble': True}),
+    'nand': ('&', {'out_bubble': True}), 'nor': ('≥1', {'out_bubble': True}), 'xnor': ('=1', {'out_bubble': True}),
+    'imply': ('⇒', {}), 'nimply': ('⇏', {}), 'cimply': ('⇐', {}), 'ncimply': ('⇍', {}),
+    'majority': ('≥2', {}), 'mux': ('MUX', {'size': 11}), 'half_adder': ('HA', {}), 'full_adder': ('FA', {}),
+}
 
-def iec(name: str, gate: dict) -> str:
-    n_in, n_out = len(gate['inputs']), len(gate['outputs'])
-    ins = {0: [], 1: [32], 2: [22, 42], 3: [18, 32, 46]}[n_in]
+
+def iec(name: str, n_in: int, n_out: int) -> str:
+    ins = {1: [32], 2: [22, 42], 3: [18, 32, 46]}[n_in]
     outs = {1: [32], 2: [22, 42]}[n_out]
-    table = {
-        'and': ('&', {}), 'or': ('≥1', {}), 'xor': ('=1', {}), 'buffer': ('1', {}), 'not': ('1', {'out_bubble': True}),
-        'nand': ('&', {'out_bubble': True}), 'nor': ('≥1', {'out_bubble': True}), 'xnor': ('=1', {'out_bubble': True}),
-        'false': ('0', {}), 'true': ('1', {}),
-        'imply': ('⇒', {}), 'nimply': ('⇏', {}), 'cimply': ('⇐', {}), 'ncimply': ('⇍', {}),
-        'majority': ('≥2', {}), 'mux': ('MUX', {'size': 11}), 'half-adder': ('Σ', {}),
-        'threshold': ('Σ≥θ', {'size': 11}), 'compare': ('≥θ', {}), 'c-element': ('C', {}),
-        'schmitt': ('', {'loop': True}),
-        'dff': ('', {'clock': 42, 'pins': [('D', 36, 25), ('Q', 58, 25), ('Q̄', 58, 45)]}),
-        'tff': ('', {'clock': 42, 'pins': [('T', 36, 25), ('Q', 58, 25), ('Q̄', 58, 45)]}),
-        'jkff': ('', {'clock': 46, 'pins': [('J', 36, 21), ('K', 36, 35), ('Q', 58, 25), ('Q̄', 58, 45)]}),
-        'sr-latch': ('', {'pins': [('S', 36, 25), ('R', 36, 45), ('Q', 58, 25), ('Q̄', 58, 45)]}),
-        'd-latch': ('', {'pins': [('D', 36, 25), ('EN', 38, 45), ('Q', 58, 25), ('Q̄', 58, 45)]}),
-    }
-    if name not in table:
-        raise SystemExit(f'no rectangle qualifier for gate {name!r}; add one to logic_glyphs.py')
-    q, opts = table[name]
+    if name not in QUALIFIER:
+        raise SystemExit(f'no rectangle qualifier for {name!r}; add one to logic_glyphs.py')
+    q, opts = QUALIFIER[name]
     return rect(ins, outs, q, **opts)
 
 
-def composite_glyph(qualifier: str, n_in: int, n_out: int) -> str:
-    """An IEC box for a composite part: one stub per pin, the composite's qualifier inside.
-
-    A composite is a document used as one part (a half adder inside a full adder). It draws in
-    the rectangle family, since it has no classic shape, with its own qualifier (HA, FA, Σ4).
-    Pins are spread evenly down each side, however many there are.
-    """
-    def spread(n: int) -> list[float]:
-        return [round(12 + 40 * (i + 0.5) / n, 2) for i in range(n)] if n else []
-    size = 14 if len(qualifier) <= 2 else 11 if len(qualifier) <= 4 else 9
-    return rect(spread(n_in), spread(n_out), qualifier, size)
+def definitions() -> list[dict]:
+    return [d for p in PACKS for d in json.loads(p.read_text(encoding='utf-8'))['definitions']]
 
 
-def glyphs(pack: dict) -> dict[str, dict[str, str]]:
+def glyphs() -> dict[str, dict[str, str]]:
     out = {}
-    for name, gate in sorted(pack['gates'].items()):
-        small = iec(name, gate)
-        out[name] = {'glyph': DISTINCTIVE.get(name, small), 'glyph_small': small,
-                     'glyph_family': 'distinctive' if name in DISTINCTIVE else 'rectangle'}
+    for d in sorted(definitions(), key=lambda d: d['id']):
+        name = d['id'].split('.', 1)[1]
+        small = iec(name, len(d['parameters']['inputs']), len(d['parameters']['outputs']))
+        out[f"{d['id']}@{d['version']}"] = {'glyph': DISTINCTIVE.get(name, small), 'glyphSmall': small,
+                                             'family': 'distinctive' if name in DISTINCTIVE else 'rectangle'}
     return out
+
+
+def text() -> str:
+    return json.dumps({'id': 'logic.glyphs', 'note': 'Presentation for the logic definitions, keyed by definition. Written by scripts/logic_glyphs.py.',
+                       'glyphs': glyphs()}, indent=2, sort_keys=True, ensure_ascii=False) + '\n'
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--check', action='store_true')
     args = ap.parse_args(argv)
-    pack = json.loads(PACK.read_text(encoding='utf-8'))
-    made = glyphs(pack)
-    stale = [n for n, g in made.items() if any(pack['gates'][n].get(k) != v for k, v in g.items())]
+    want = text()
     if args.check:
-        for n in stale:
-            print(f'stale glyph {n}')
-        return 1 if stale else 0
-    for n, g in made.items():
-        pack['gates'][n].update(g)
-    PACK.write_text(json.dumps(pack, indent=2, sort_keys=True, ensure_ascii=False) + '\n', encoding='utf-8', newline='\n')
-    print(f'wrote glyphs for {len(made)} gates ({sum(g["glyph_family"] == "distinctive" for g in made.values())} distinctive)')
+        if not TARGET.exists() or TARGET.read_text(encoding='utf-8') != want:
+            print(f'stale {TARGET.relative_to(ROOT)}')
+            return 1
+        return 0
+    TARGET.write_text(want, encoding='utf-8', newline='\n')
+    made = json.loads(want)['glyphs']
+    print(f'wrote glyphs for {len(made)} definitions ({sum(g["family"] == "distinctive" for g in made.values())} distinctive)')
     return 0
 
 

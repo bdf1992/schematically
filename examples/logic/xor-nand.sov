@@ -7,30 +7,102 @@
   },
   "components": [
     {
-      "id": "in-A",
-      "symbolId": "act",
+      "id": "A",
+      "symbolId": "point",
       "x": 120,
       "y": 100,
       "config": {
         "label": "A",
         "signalMode": "source",
-        "logic": {
-          "kind": "input",
-          "name": "A"
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none"
+        },
+        "ports": {
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "dimension": 0,
+        "body": {
+          "kind": "point",
+          "material": "generic",
+          "thickness": 0
+        },
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
         }
       }
     },
     {
-      "id": "in-B",
-      "symbolId": "act",
+      "id": "B",
+      "symbolId": "point",
       "x": 120,
       "y": 230,
       "config": {
         "label": "B",
         "signalMode": "source",
-        "logic": {
-          "kind": "input",
-          "name": "B"
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none"
+        },
+        "ports": {
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "dimension": 0,
+        "body": {
+          "kind": "point",
+          "material": "generic",
+          "thickness": 0
+        },
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
         }
       }
     },
@@ -41,27 +113,41 @@
       "y": 100,
       "config": {
         "label": "NAND",
-        "logic": {
-          "gate": "nand"
-        },
+        "definition": "logic.nand@1",
+        "attachmentDefaults": "none",
         "attachmentPoints": [
           {
             "id": "a",
             "side": "left",
-            "t": 0.3333,
-            "defaultFlow": "in"
+            "t": 0.3333333333333333,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
             "id": "b",
             "side": "left",
-            "t": 0.6667,
-            "defaultFlow": "in"
+            "t": 0.6666666666666666,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
             "id": "q",
             "side": "right",
             "t": 0.5,
-            "defaultFlow": "out"
+            "flow": "out",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           }
         ],
         "presentation": {
@@ -69,6 +155,68 @@
             "kind": "custom",
             "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>",
             "svgSmall": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M70 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">&amp;</text>"
+          }
+        },
+        "ports": {
+          "a": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "b": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "q": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
           }
         }
       }
@@ -80,27 +228,41 @@
       "y": 100,
       "config": {
         "label": "NAND",
-        "logic": {
-          "gate": "nand"
-        },
+        "definition": "logic.nand@1",
+        "attachmentDefaults": "none",
         "attachmentPoints": [
           {
             "id": "a",
             "side": "left",
-            "t": 0.3333,
-            "defaultFlow": "in"
+            "t": 0.3333333333333333,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
             "id": "b",
             "side": "left",
-            "t": 0.6667,
-            "defaultFlow": "in"
+            "t": 0.6666666666666666,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
             "id": "q",
             "side": "right",
             "t": 0.5,
-            "defaultFlow": "out"
+            "flow": "out",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           }
         ],
         "presentation": {
@@ -108,6 +270,68 @@
             "kind": "custom",
             "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>",
             "svgSmall": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M70 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">&amp;</text>"
+          }
+        },
+        "ports": {
+          "a": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "b": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "q": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
           }
         }
       }
@@ -119,27 +343,41 @@
       "y": 230,
       "config": {
         "label": "NAND",
-        "logic": {
-          "gate": "nand"
-        },
+        "definition": "logic.nand@1",
+        "attachmentDefaults": "none",
         "attachmentPoints": [
           {
             "id": "a",
             "side": "left",
-            "t": 0.3333,
-            "defaultFlow": "in"
+            "t": 0.3333333333333333,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
             "id": "b",
             "side": "left",
-            "t": 0.6667,
-            "defaultFlow": "in"
+            "t": 0.6666666666666666,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
             "id": "q",
             "side": "right",
             "t": 0.5,
-            "defaultFlow": "out"
+            "flow": "out",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           }
         ],
         "presentation": {
@@ -147,6 +385,68 @@
             "kind": "custom",
             "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>",
             "svgSmall": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M70 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">&amp;</text>"
+          }
+        },
+        "ports": {
+          "a": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "b": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "q": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
           }
         }
       }
@@ -158,27 +458,41 @@
       "y": 100,
       "config": {
         "label": "NAND",
-        "logic": {
-          "gate": "nand"
-        },
+        "definition": "logic.nand@1",
+        "attachmentDefaults": "none",
         "attachmentPoints": [
           {
             "id": "a",
             "side": "left",
-            "t": 0.3333,
-            "defaultFlow": "in"
+            "t": 0.3333333333333333,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
             "id": "b",
             "side": "left",
-            "t": 0.6667,
-            "defaultFlow": "in"
+            "t": 0.6666666666666666,
+            "flow": "in",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           },
           {
             "id": "q",
             "side": "right",
             "t": 0.5,
-            "defaultFlow": "out"
+            "flow": "out",
+            "channels": [
+              {
+                "id": "main"
+              }
+            ]
           }
         ],
         "presentation": {
@@ -187,19 +501,118 @@
             "svg": "<path d=\"M6 22H28\"/><path d=\"M6 42H28\"/><path d=\"M28 12H46A20 20 0 0 1 46 52H28Z\"/><path d=\"M74 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/>",
             "svgSmall": "<path d=\"M6 22H30\"/><path d=\"M6 42H30\"/><path d=\"M30 8H66V56H30Z\"/><path d=\"M70 32H90\"/><circle cx=\"70\" cy=\"32\" r=\"4\"/><text x=\"48\" y=\"37\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"600\" fill=\"currentColor\" stroke=\"none\">&amp;</text>"
           }
+        },
+        "ports": {
+          "a": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "b": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "in",
+                "access": "read-write"
+              }
+            ]
+          },
+          "q": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "body": {
+          "kind": "surface",
+          "material": "generic",
+          "thickness": 0
+        },
+        "dimension": 2,
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
         }
       }
     },
     {
-      "id": "out-Q",
-      "symbolId": "observe",
+      "id": "Q",
+      "symbolId": "point",
       "x": 1000,
       "y": 100,
       "config": {
         "label": "Q",
-        "logic": {
-          "kind": "output",
-          "name": "Q"
+        "signalMode": "relay",
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none"
+        },
+        "ports": {
+          "out": {
+            "face": "external",
+            "label": "",
+            "connectionCount": 1,
+            "activeConnection": 0,
+            "connections": [
+              {
+                "id": "connection-1",
+                "colorSlot": 0,
+                "flow": "out",
+                "access": "read-write"
+              }
+            ]
+          }
+        }
+      },
+      "form": {
+        "dimension": 0,
+        "body": {
+          "kind": "point",
+          "material": "generic",
+          "thickness": 0
+        },
+        "frame": {
+          "mode": "none",
+          "thickness": 0,
+          "depth": 0
+        },
+        "regions": {
+          "interior": {
+            "state": "closed"
+          }
         }
       }
     }
@@ -207,67 +620,302 @@
   "wires": [
     {
       "id": "w1",
-      "a": "in-A",
+      "a": "A",
       "aSide": "out",
       "b": "m",
-      "bSide": "a"
+      "bSide": "a",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "A",
+        "pointId": "self"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "m",
+        "pointId": "a"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w2",
-      "a": "in-B",
+      "a": "B",
       "aSide": "out",
       "b": "m",
-      "bSide": "b"
+      "bSide": "b",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "B",
+        "pointId": "self"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "m",
+        "pointId": "b"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w3",
-      "a": "in-A",
+      "a": "A",
       "aSide": "out",
       "b": "p",
-      "bSide": "a"
+      "bSide": "a",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "A",
+        "pointId": "self"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "p",
+        "pointId": "a"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w4",
       "a": "m",
       "aSide": "q",
       "b": "p",
-      "bSide": "b"
+      "bSide": "b",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "m",
+        "pointId": "q"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "p",
+        "pointId": "b"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w5",
       "a": "m",
       "aSide": "q",
       "b": "q",
-      "bSide": "a"
+      "bSide": "a",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "m",
+        "pointId": "q"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "q",
+        "pointId": "a"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w6",
-      "a": "in-B",
+      "a": "B",
       "aSide": "out",
       "b": "q",
-      "bSide": "b"
+      "bSide": "b",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "B",
+        "pointId": "self"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "q",
+        "pointId": "b"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w7",
       "a": "p",
       "aSide": "q",
       "b": "r",
-      "bSide": "a"
+      "bSide": "a",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "p",
+        "pointId": "q"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "r",
+        "pointId": "a"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w8",
       "a": "q",
       "aSide": "q",
       "b": "r",
-      "bSide": "b"
+      "bSide": "b",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "q",
+        "pointId": "q"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "r",
+        "pointId": "b"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     },
     {
       "id": "w9",
       "a": "r",
       "aSide": "q",
-      "b": "out-Q",
-      "bSide": "in"
+      "b": "Q",
+      "bSide": "out",
+      "config": {
+        "direction": "forward",
+        "delay": 1,
+        "forwardOperation": "none",
+        "reverseOperation": "none"
+      },
+      "aAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "r",
+        "pointId": "q"
+      },
+      "bAttachment": {
+        "kind": "attachment-ref",
+        "componentId": "Q",
+        "pointId": "self"
+      },
+      "form": {
+        "dimension": 1,
+        "body": {
+          "kind": "path",
+          "material": "generic",
+          "thickness": 0
+        }
+      },
+      "role": "carrier",
+      "canvasId": "canvas:global"
     }
   ],
-  "references": []
+  "references": [],
+  "layout": {}
 }

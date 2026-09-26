@@ -1,8 +1,8 @@
 # A visual language for solvers, units and gates
 
-> **Non-authoritative design.** Discovery and design for how optimization runs, unit simulations and logic circuits should look. It extends `OPTIMIZATION-VISUALIZATION.md` (solver views) to the simulator and the logic runtime, and fixes one grammar for all three. Nothing here is built into the editor yet.
+> **Non-authoritative design.** Discovery and design for how optimization runs, unit simulations and logic circuits should look. It extends `OPTIMIZATION-VISUALIZATION.md` (solver views) to the simulator and the logic runtime, and fixes one grammar for all three. What is built is listed under "Built"; the rest is design.
 
-A studies page accompanies this document: each view below was prototyped from real runs of `optimize_sov.py`, `simulate_sov.py` and `logic_sov.py` on this branch. It was published as a private artifact in the working session. The figures and findings quoted here come from it.
+A studies page accompanies this document: each view below was prototyped from real runs of `optimize_sov.py`, `simulate_sov.py` and `logic_sov.py` on this branch (the last since retired: logic now runs on state space). It was published as a private artifact in the working session. The figures and findings quoted here come from it.
 
 ## Discovery: what the editor already gives us
 
@@ -130,26 +130,30 @@ The bake-off put two or three contenders per view side by side, drawn from the s
 
 ## Built
 
+Logic is drawn from state space (STATE-SPACE.md), the one runtime: every logic picture is a projection of an engine run's records. This branch's own logic runtime is retired (see `LOGIC-GATES.md`).
+
 | Piece | File | Checked by |
 | --- | --- | --- |
-| Glyphs as pack data (`glyph`, `glyph_small`, `glyph_family` per gate), written into the pack and applied by the example builder as `presentation.graphic` | `scripts/logic_glyphs.py`, `packs/logic/gates.json` | `tests/plot_run_qa.py` (sanitizer allowlist, family rule, examples carry them); `tests/logic_state_export_qa.py` (every gate keeps its glyph through the editor, both themes) |
-| Run records, one kind per domain, naming the document by fingerprint | `scripts/record_run.py`; `landscape()` and the shared `_decision_space()` in `scripts/optimize_sov.py` | `tests/plot_run_qa.py` |
-| The views: timing and event log, level trace and transfer loop, landscape and table, search outline and tree, timeline, glyph sheet, and a run page that links them | `scripts/plot_run.mjs` (plain JavaScript, record in, SVG out; runs under Node now and in a page or the editor later) | `tests/plot_run_qa.py`: every view's claims against the record, determinism, both themes |
-| Live signal state on the editor's own export | `scripts/export_svg.py --logic-state A=1,B=1 [--monochrome]` | `tests/logic_state_export_qa.py`: every input of the half adder against its definition, one chip per pin, no packets in a snapshot, no signal colour in monochrome |
+| Glyphs as presentation keyed by definition (`logic.and@1` → `glyph`, `glyphSmall`, `family`), applied by the example builder as `presentation.graphic` | `scripts/logic_glyphs.py` → `data/logic.glyphs.json` | `tests/plot_run_qa.py` (one per definition, sanitizer allowlist, family rule, every bound example device carries its definition's glyph); `tests/logic_state_export_qa.py` (every gate keeps its glyph through the editor, both themes) |
+| Run records, one kind per domain, naming the document by fingerprint; a logic record is read from a state space trace and names its run (id, head hash, last tick) | `scripts/record_run.py` over `scripts/run_state.mjs`; `landscape()` and `_decision_space()` in `scripts/optimize_sov.py` | `tests/plot_run_qa.py` |
+| The views: timing and event log, landscape and table, search outline and tree, timeline, glyph sheet, and a run page that links them | `scripts/plot_run.mjs` (plain JavaScript, record in, SVG out) | `tests/plot_run_qa.py`: every view's claims against the record, determinism, both themes |
+| State on the editor's own export: a run drawn at a tick | `scripts/export_svg.py --run 'A=7:4,...' [--tick T] [--monochrome]`, or `--trace` of the document | `tests/logic_state_export_qa.py`: every half-adder vector against its definition, one chip per wired port, no packets, no signal colour in monochrome, a trace of another document refused |
+| State in the editor: wires at the level of the port they leave, a chip at every port, on hover, selection or zoom ≥ 100% (sources always), stepped tick by tick | `src/57-state-view.js`; `SovSchematicAPI.view.stateSpace` | `tests/state_view_qa.py` (browser): the carry's 7, 6, 4, 0, 8 at the records' ticks, a change in flight, the chip rule, passivity, three refusals |
 | Gallery | `docs/visual/`, from `scripts/build_visual_gallery.py` | `--check` inside `tests/plot_run_qa.py` |
-| Size rule: a gate's glyph drawn under 40 px shows its rectangle (`svgSmall`), following the camera | `applyGlyphSizeRule` in `src/55-render.js`; `view.zoom()` / `view.setZoom()` in the API | `tests/glyph_size_rule_qa.py`: one variant per gate at every zoom, the small one exactly when height x zoom < 40 |
-| Composite parts as IEC boxes, qualified by their own document (HA, FA, Σ4, RG4, ...) | `composite_glyph()` in `scripts/logic_glyphs.py`, applied by `scripts/build_logic_examples.py` | `build_logic_examples.py --check` |
-| Landscape slices for more than two decisions: every pair, the rest held at the whole-unit plan, labelled as a slice | `landscape(pair=, held=)` in `scripts/optimize_sov.py`; `record_optimize` | `tests/plot_run_qa.py` (held values, projected marks, true values at named plans) |
-| Live logic state in the editor: wires high in the signal colour and low in ink, a chip at every pin shown on hover, selection or zoom ≥ 100% (always on inputs, where it is the switch) | `src/57-logic-live.js` over the shared runtime `src/07-logic-core.js`; `SovSchematicAPI.logic` and MCP `schematic.logic.run` | `tests/logic_live_qa.py` (browser, against the definition and `logic_sov.py`); `tests/logic_core_parity_qa.py` (event for event with `logic_sov.py`); `tests/logic_mcp_qa.py` |
+| Size rule: a gate's glyph drawn under 40 px shows its rectangle (`svgSmall`), following the camera | `applyGlyphSizeRule` in `src/55-render.js`; `view.zoom()` / `view.setZoom()` | `tests/glyph_size_rule_qa.py`: one variant per gate at every zoom, the small one exactly when height x zoom < 40 |
+| Devices without a classic shape as IEC boxes with a qualifier (HA, FA, MUX, ≥2, ⇒ ...) | `QUALIFIER` in `scripts/logic_glyphs.py` | `tests/plot_run_qa.py` |
+| Landscape slices for more than two decisions: every pair, the rest held at the whole-unit plan, labelled as a slice | `landscape(pair=, held=)` in `scripts/optimize_sov.py`; `record_optimize` | `tests/plot_run_qa.py` |
 | Step-through on the run page: timing event by event (cursor, lane mark, log row, bus value), search node by node in the order decided (later nodes fade in outline and tree) | `STEPPER` in `scripts/plot_run.mjs` | `tests/run_page_qa.py` (browser) against the record; `tests/plot_run_qa.py` (step order is log order) |
 
-Making the tests fail on purpose (transient detection off, pruned nodes drawn live) fails them. Two defects surfaced while building: a bare `&` in the IEC AND qualifier made the glyph markup unparseable, which in the editor would have silently fallen back to the generic symbol; and monochrome exports still named the signal colour for the hidden glow.
+Making the tests fail on purpose fails them: transient detection off, pruned nodes drawn live, a wire taking its receiving end, a tick cut-off moved, sources' chips hidden, the document-change guard off, a gate's function changed in the pack. Defects surfaced while building: a bare `&` in the IEC AND qualifier made glyph markup unparseable (the editor would have fallen back to the generic symbol); monochrome exports named the signal colour for the hidden glow; an editor rule hiding chips until hover also hid every export chip, while the export test passed on zero chips.
+
+The level trace and transfer loop views (a Schmitt trigger's hysteresis), and the ripple and synchronous counter pictures, left with the retired runtime: nothing on state space produces their data until the `threshold` (slice 2) and `transition` (slice 5) patterns. Their code is in this branch's history (commit `9332839`).
 
 ### Gallery
 
-The glitch the value lane exists for: the ripple counter passing 6, 4 and 0 on its way from 7 to 8.
+The glitch the value lane exists for, from a state space run: the 4-bit adder going from 7 to 8 passes 6, 4 and 0 while the carry ripples.
 
-![Ripple counter, pulse 8](../visual/timing-ripple-glitch.svg)
+![4-bit adder, 7 + 1](../visual/timing-adder-carry.svg)
 
 The search, with dead branches drawn dead and the bound gradient:
 
@@ -159,28 +163,28 @@ The landscape of the learning-curve workshop: limits where their slack is zero, 
 
 ![Landscape](../visual/landscape-learning.svg)
 
-Live state on the editor's own export, full adder with A = 1, B = 0, Cin = 1:
+State on the editor's own export, full adder with A = 1, B = 0, Cin = 1, from an engine run:
 
-![Full adder, live state](../visual/live-state-full-adder.svg)
+![Full adder, state](../visual/live-state-full-adder.svg)
 
-Also in `docs/visual/`: `glyphs.svg`, `timing-sync-counter.svg`, `level-schmitt.svg`, `loop-schmitt.svg`, `search-outline.svg`, `timeline-week.svg`, `live-state-full-adder-mono.svg`. Standalone files follow the viewer's colour scheme.
+Also in `docs/visual/`: `glyphs.svg`, `search-outline.svg`, `timeline-week.svg`, `landscape-slice-chairs-tables.svg`, `live-state-full-adder-mono.svg`. Standalone files follow the viewer's colour scheme.
 
 ### Try it
 
 ```
-python scripts/record_run.py logic examples/logic/ripple-counter4.sov --clock CLK --pulses 17 --bus Q --out ripple.json
-python scripts/record_run.py logic examples/logic/schmitt.sov --wave X --out schmitt.json
+python scripts/record_run.py logic examples/logic/adder4.sov --sequence 'A=7:4,B=0:4,Cin=0;B0=1' --bus S --out carry.json
 python scripts/record_run.py optimize examples/optimization/workshop.sov --model examples/optimization/workshop.learning.opt.json --out learning.json
 python scripts/record_run.py simulate examples/optimization/workshop.sov --model examples/optimization/workshop.learning.opt.json --target chairs=14,tables=2 --out week.json
-node scripts/plot_run.mjs ripple.json schmitt.json learning.json week.json --out views/ --page runs.html
-python scripts/export_svg.py examples/logic/half-adder.sov --logic-state A=1,B=1
+node scripts/plot_run.mjs carry.json learning.json week.json --out views/ --page runs.html
+python scripts/export_svg.py examples/logic/adder4.sov --run 'A=7:4,B=0:4,Cin=0;B0=1' --tick 23
 ```
 
-Live in the editor (open `examples/logic/half-adder.sov`, then in the console or through the API):
+In the editor, with `examples/logic/half-adder.sov` open (console or API; `packs` are the two logic packs' JSON):
 
 ```
-SovSchematicAPI.logic.live.start({A: 1, B: 0})   // click an input's chip to flip it
-SovSchematicAPI.logic.run({steps: [{set: {A: 1, B: 1}}]})
+const S = SovSchematicStateSpace, r = S.startRun({doc: SovSchematicAPI.document.get(), packs, inputs: [{entity: 'A', point: 'self', value: true, at: 0}]});
+while (S.step(r.run).tick !== null) {}
+SovSchematicAPI.view.stateSpace.show({trace: S.traceOf(r.run), packs});
 ```
 
 ## Residuals
@@ -188,4 +192,7 @@ SovSchematicAPI.logic.run({steps: [{set: {A: 1, B: 1}}]})
 | Gap | What closes it |
 | --- | --- |
 | The run views (timing, landscape, search, timeline) live on the run page, not in the editor | a decision on where: a panel beside the canvas, a second tab, or a mode of the canvas itself; `scripts/plot_run.mjs` is already plain JavaScript with no dependencies |
-| A logic edit restarts a live circuit from power-on, so a latched value is lost | carry state by gate id across a rebuild where the gate survives unchanged |
+| A trace made from a file cannot be shown on that file open in the editor: the engine's `documentHash` includes defaults the editor fills in | the engine hashing authored truth only (STATE-SPACE.md: document identity is content); until then the export and tests run in the page |
+| Editing a document under a shown run drops the view (`DOCUMENT_CHANGED`), even for a move, because the document hash covers layout | follows the engine's identity rule; a layout-insensitive run identity would let a moved document keep its view |
+| Level and loop views, counters, latches | the `threshold` and `transition` patterns (LOGIC-GATES.md, "Waiting for patterns") |
+| Three wires share a run in `full-adder.sov`'s picture, so which goes where is ambiguous | routing (`40-routing.js`) or the example's layout |

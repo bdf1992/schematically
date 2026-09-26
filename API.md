@@ -67,14 +67,14 @@ Returns `{id, severity, message, rule}` for every current `document.get()`/CRUD 
 `window.SovSchematicAPI` additionally exposes `history.list/undo/redo`, `checkpoints.list/create/restore`, semantic selection clipboard helpers, and view appearance/global-rate/zoom accessors (`view.zoom()`, `view.setZoom(z)`). MCP exposes history undo/redo and checkpoint list/create/restore for its file-backed document.
 
 
-## Logic API
+## State view
 
-A document whose components declare `config.logic` runs as a circuit (the shared runtime `src/07-logic-core.js`, equal to `scripts/logic_sov.py`).
+`view.stateSpace` draws a state space run (STATE-SPACE.md) on the canvas. It is passive: it replays a trace through the engine against the open document and reads the records; it runs nothing and writes nothing.
 
-- `logic.run({vector})` or `logic.run({steps: [{set, pulse?}], record?})`: stateless. Returns `{ok, inputs, levels, outputs, steps: [{set, outputs, settle, transitions, time}], wires: {id: {value, a, b}}, events?}` or a typed refusal `{ok: false, refused, reason, next_operation}`. MCP's `schematic.logic.run` returns the same.
-- `logic.live.start(vector)`, `.set(vector)`, `.pulse(clock, vector)`, `.state()`, `.stop()`: draw the circuit's state on the canvas and keep it (flip-flops, latches) between steps. Inputs a vector does not name start at 0 and are then named in `state().vector`. A move keeps the state; a change to the logic rebuilds the circuit from power-on with the current inputs (`state().rebuilt` counts). While live, a bit input's chip is its switch.
-- `logic.composites.add(name, document)`, `.list()`, `.remove(name)`: documents that `{"composite": name}` parts resolve to, by file name. Without one, a composite part is refused `NO_COMPOSITE`.
+- `view.stateSpace.show({trace, packs, tick?, chips?, monochrome?})`: replay `trace` with `packs` against the open document and draw it at `tick` (default: the trace's last). A wire takes the level of the port it leaves from; a chip at each port shows that port's level. Chips show on hover, selection and zoom ≥ 100%, and always on sources; `chips: 'all'` shows every one. Returns `{ok, on, tick, through, ticks}`, or a refusal: the engine's (`REPLAY_KEY_MISMATCH` for a trace of another document), and `DOCUMENT_CHANGED` once the document is edited under a shown run.
+- `view.stateSpace.tick(t)`: redraw at logical tick `t` (`NOT_SHOWING` with nothing shown). `view.stateSpace.info()`: the same receipt. `view.stateSpace.hide()`: back to the plain render.
 
+Runs themselves are the engine's (`SovSchematicStateSpace.startRun`, `step`, `traceOf`); their surfaces (`schematic.run.*`) arrive with slice 1c.
 
 ### Access axis
 Port Connections may carry `access: none | read | write | read-write`. Wire config may carry `forwardOperation` / `reverseOperation: none | read | write`. Direction, access, and authority are independent.

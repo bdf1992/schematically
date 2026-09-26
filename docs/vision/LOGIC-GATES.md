@@ -1,158 +1,108 @@
-# Logic gates, composites and binary computation
+# Logic gates on state space
 
-> **Non-authoritative horizon.** A headless slice of Issue #6's logic machine over ordinary `.sov` files. Nothing here changes the editor, the file format or 0.1.
+> **Non-authoritative horizon.** The logic domain as data for the state space runtime (`STATE-SPACE.md`, #43), which is the one runtime. This document says which gates exist as definitions, which examples run them, and what the stateful gates need from the patterns still to come. It changes nothing in the engine.
 
-## What exists
+## Where this stands
 
-- **`packs/logic/gates.json`** — 26 gates as data, in five kinds. The loader refuses a table that is incomplete, malformed or repeats a row.
-- **`scripts/logic_sov.py`** — runs a document as a circuit.
-- **`scripts/build_logic_examples.py`** — writes the 17 documents in `examples/logic/` deterministically; `--check` fails if a committed one is stale.
-- **`tests/logic_sov_qa.py`** — in the static gate.
+State space is canonical (decided 2026-09-26). Behaviour is **definitions in packs**, each an instance of a pattern; a Component runs one by binding it (`config.definition: "logic.and@1"`). This branch had carried its own runtime (`scripts/logic_sov.py`, a JavaScript port, a `logic.*` editor API and an MCP tool). They are retired. What they taught is kept below.
 
-## Two types of gate
+- **`data/core.logic.pack.json`** (the engine's): NOT, AND, OR, XOR.
+- **`data/logic.gates.pack.json`**: the other combinational gates and two adders, as `truth_table@1` definitions. Written by `scripts/build_logic_pack.py`, which enumerates each table from a plain function of the inputs.
+- **`data/logic.glyphs.json`**: one glyph per definition, keyed by reference (`logic.and@1`), written by `scripts/logic_glyphs.py`. Presentation only.
+- **`examples/logic/`**: eight state space documents, written by `scripts/build_logic_examples.py`, with a golden trace `adder4.carry.sovtrace`.
+- **`scripts/run_state.mjs`**: runs a document on the engine to quiet from scripts.
+- **`tests/logic_examples_qa.py`**: every example passes the engine's load checks and computes what it claims, against oracles written in the test.
 
-A **combinational** gate's outputs depend only on its inputs now. A **sequential** gate holds state and changes it by its own rule. Its outputs depend on what happened before, which is what makes memory, counting and hysteresis possible.
+## Definitions
 
-| Type | Kind | What decides the output | Gates in the pack |
+| Pack | Definition | Inputs → outputs | Glyph |
 | --- | --- | --- | --- |
-| combinational | `table` | a truth table of the inputs | `false` `true` `buffer` `not` `and` `or` `xor` `nand` `nor` `xnor` `imply` `nimply` `cimply` `ncimply` `majority` `mux` `half-adder` |
-| combinational | `threshold` | weighted sum of the inputs ≥ θ | `threshold` (defaults make majority; θ = 1 makes OR, θ = 3 AND) |
-| combinational | `compare` | a level x ≥ θ | `compare` |
-| sequential | `sequential`, clocked | a next-state table, applied only on a clock edge | `dff` (D), `tff` (toggle), `jkff` (JK) flip-flops |
-| sequential | `sequential`, level | a next-state table, applied on any input change | `sr-latch`, `d-latch`, `c-element` |
-| sequential | `hysteresis` | a level crossing a band: on at `high`, off at `low`, hold between | `schmitt` |
+| `core.logic` | `logic.not`, `logic.and`, `logic.or`, `logic.xor` | a (, b) → q | shape |
+| `logic.gates` | `logic.buffer`, `logic.nand`, `logic.nor`, `logic.xnor` | a (, b) → q | shape |
+| `logic.gates` | `logic.imply`, `logic.nimply`, `logic.cimply`, `logic.ncimply` | a, b → q | IEC ⇒ ⇏ ⇐ ⇍ |
+| `logic.gates` | `logic.majority` | a, b, c → q | IEC ≥2 |
+| `logic.gates` | `logic.mux` | s, a, b → q (a when s = 0) | IEC MUX |
+| `logic.gates` | `logic.half_adder` | a, b → s, c | IEC HA |
+| `logic.gates` | `logic.full_adder` | a, b, cin → s, cout | IEC FA |
 
-- The ten named two-input tables, with `buffer`, `not`, `true` and `false`, cover **all sixteen Boolean functions of two inputs**. The QA derives this from the tables.
-- A sequential gate's table is keyed `"state|inputs"`, clock excluded; a separate output table maps state to outputs. Clocked gates declare their `clock` pin and `edge` (`rising` or `falling`).
-- **Params** (threshold weights and θ, compare θ, hysteresis low and high) are defaults an instance overrides in its own `config.logic`. For example, `{"gate": "schmitt", "low": 10, "high": 30}`. Bad params are refused: low above high, or the wrong number of weights.
+Constants are not definitions: `truth_table@1` takes one to eight inputs, and a source is a Point whose value a run registers. With `buffer` and `not`, the ten two-input tables cover all sixteen Boolean functions of two inputs except the two constants.
 
-### Hysteresis is a threshold with memory
+## Examples
 
-A comparator answers "is x above θ right now?". If x is noisy near θ, the answer flips on every wobble: chatter. A Schmitt trigger has two thresholds and one bit of state. It turns on only when x reaches `high`, turns off only when x falls to `low`, and holds in between. Noise smaller than the band cannot flip it.
+Sources are Points marked `signalMode: source`; outputs are Points; every Wire carries forward with delay 1.
 
-The QA drives both with a slow swing plus noise: the comparator flips more than four times as often, while the Schmitt trigger flips once per real crossing and matches its definition at every step. This is the same shape as a reorder rule (`reorder.sov`): order when stock falls to 10, stop at 30, and do not dither in between.
-
-### Bits and levels
-
-Nets carry either bits or **levels**: an input declared `"type": "level"` carries a number. A level may feed only a gate built to read one (`threshold`, `compare`, `hysteresis`). Into a truth table or a flip-flop it is refused (`LEVEL_INTO_BINARY`), with the next operation "put a compare or hysteresis gate between them". A non-bit value on a bit input is refused (`NOT_A_BIT`). Crossing from a level to a bit is always a visible gate, never a silent rounding.
-
-### Power-on
-
-Stateful gates start in their declared `initial` state, and constants show their value, before anything runs. Without that, every net would start at 0 and a flip-flop's `qn` rising to 1 at power-on would look like a clock edge to the next stage; the first version of the ripple counter jumped straight to 15 for exactly this reason. **Nothing else gets a default.** Feedback made only of combinational gates, like two cross-coupled NORs, declares no state, so it races on its first run unless an input forces it. An early version settled it silently, in whatever order the gates were listed; that is the kind of default rule R-02 refuses.
-
-## Gates interacting and adding
-
-Composites are documents used as parts, and they nest. The ones that add, from bottom to top:
-
-| Document | Built from | Checked |
+| Document | Built from | Checked by the engine's run |
 | --- | --- | --- |
-| `half-adder.sov` | XOR, AND | equals the pack's `half-adder` table |
-| `full-adder.sov` | two half adders, OR | S + 2·Cout = A + B + Cin |
-| `adder4.sov` | four full adders (20 gates flattened) | all 512 inputs, two orders |
-| `adder8.sov` | two 4-bit adders | edge cases and 1,500 random |
-| `add-sub4.sov` | 4 XORs + `adder4` | A − B mod 16, Cout = no borrow, all 512 |
-| `register4.sov` | four D flip-flops on one clock | never changes without an edge; loads on one |
-| `accumulator4.sov` | `adder4` + `register4` + a constant, the sum fed back | 200 random steps: ACC is the running sum mod 16, Carry says whether this step wraps |
-| `sync-counter4.sov` | `accumulator4` with X held at 1 | counts 1 … 15, 0, 1 … over 40 pulses |
-| `ripple-counter4.sov` | four T flip-flops, each clocked by the last one's `qn` | counts the same |
+| `gates.sov` | every definition on sources A, B, C | all 8 vectors against each gate's Boolean function |
+| `half-adder.sov` | XOR, AND | all 4 vectors |
+| `full-adder.sov` | two `half_adder` devices, OR | all 8 vectors |
+| `adder4.sov` | four `full_adder` devices | all 512 vectors: S + 16·Cout = A + B + Cin |
+| `adder8.sov` | eight `full_adder` devices | 64 seeded vectors |
+| `add-sub4.sov` | four XORs and four `full_adder` devices | all 512: A − B mod 16 with SUB, carry out = no borrow |
+| `xor-nand.sov` | four NANDs | all 4: equals XOR |
+| `mux2.sov` | NOT, two ANDs, OR | all 8: equals `logic.mux` |
 
-The accumulator is where the two types meet. The adder is combinational and the register sequential; the register's output feeds the adder, and the adder's output feeds the register. The loop is stable because the register moves only on a clock edge, so every clock adds X once.
+**The carry ripples.** Delay is transport delay and every Wire takes a tick, so 7 + 0 → 7 + 1 passes through **6, 4 and 0** before 8, one full adder at a time. The golden trace `adder4.carry.sovtrace` records it, replays byte for byte, and is the gallery's timing picture (`docs/visual/timing-adder-carry.svg`). A change that needs no carry (0 + 0 → 1 + 0) shows no transient.
 
-**Ripple versus synchronous** shows why that matters. Both counters count correctly, but their outputs get there differently:
-- **Ripple counter:** each bit is clocked by the bit before it. Going from 7 to 8 its outputs change one after another and pass through **6, 4 and 0** first. The QA requires four distinct change times at 7 → 8 and 15 → 0.
-- **Synchronous counter:** all bits share one clock, so its outputs change at the same instant. The QA requires one change time.
+A half adder is a device here, not a document inside a document: state space has no composition pattern yet (`children` in a definition is named in STATE-SPACE.md, not built). A full adder made of two `half_adder` devices keeps the teaching shape without it.
 
-Anything that reads the ripple counter mid-change reads a wrong number.
+## Waiting for patterns
 
-Also checked:
-- XOR from four NANDs equals XOR, since NAND is universal.
-- The multiplexer built from gates equals the `mux` primitive.
-- The window comparator (two comparators and NIMPLY, with thresholds set per instance) gives 0.3 ≤ x < 0.7.
-- Every gate matches Python's operators in six input orders.
-- Every sequential gate matches a textbook reference model over 400 random single-input changes.
-- Random weighted threshold gates on levels match the weighted sum.
-- Carry ripple is linear in time: 8 gate delays at 4 bits, 16 at 8.
-- The NOR latch sets, resets, holds, and races when released from S = R = 1; so does a ring of three NOTs, and both are refused.
+These gates ran under the retired runtime and are specified here so the patterns that will carry them start from a tested definition. None is invented as a pattern here; the engine's set is closed and grows by review.
 
-Mutations are caught:
-- a flipped XOR row;
-- a gate delay of 2;
-- composites that drop their inner wires;
-- hysteresis without memory;
-- flip-flops on the falling edge;
-- power-on switched off.
+**For `threshold` (slice 2): a binary cut through a continuous value.** Needs continuous channels (slice 1b runs binary only).
 
-## Completion, again
+| Gate | Parameters | Rule | State |
+| --- | --- | --- | --- |
+| compare | θ = 0.5 | q = x ≥ θ | none (chatters on noise near θ) |
+| threshold | weights (1, 1, 1), θ = 2 | q = Σ wᵢ·xᵢ ≥ θ (defaults: majority; θ 1: OR; θ 3: AND) | none |
+| Schmitt | low 0.4, high 0.6, initial 0 | on at x ≥ high, off at x ≤ low, hold between | one bit, declared initial |
 
-`completion.sov` puts the simulator's completion gate beside the C-element on the same two signals, MATERIALS and WORK:
+Under the old runtime a comparator driven by a slow swing plus noise flipped more than four times as often as the Schmitt trigger, which flipped once per real crossing. That is the QA the `threshold` pattern should inherit, with STATE-SPACE.md's margin.
 
-- **AND** says "both are done *now*". It drops the moment either resets.
-- **The C-element** says "both have finished". It rises when both are 1, then holds until both have gone back to 0.
+**For `transition` (slice 5): state machines, latches, clocks and edges.** Each is a next-state table over (state, inputs) and an output table over state, with a declared initial state; clocked ones step only on the declared edge.
 
-That is the completion detector of asynchronous (self-timed) circuits. It is the right gate when "done" has to survive one side being cleared for the next unit before the other has caught up.
+| Gate | Inputs | Clock | Next state (state \| inputs → state) | Outputs |
+| --- | --- | --- | --- | --- |
+| D flip-flop | d | clk, rising | q ← d | q, q̄ |
+| T flip-flop | t | clk, rising | q ← q xor t | q, q̄ |
+| JK flip-flop | j, k | clk, rising | 00 hold, 01 reset, 10 set, 11 toggle | q, q̄ |
+| SR latch | s, r | none | 00 hold, 01 reset, 10 set, 11 reset (reset wins) | q, q̄ |
+| D latch | d, en | none | q ← d while en, hold otherwise | q, q̄ |
+| C-element | a, b | none | q ← a when a = b, hold when they differ | q |
 
-## Other complex gates worth having
+With those, the examples that were retired come back as documents: a 4-bit register, an accumulator (adder plus register fed back), ripple and synchronous counters, the completion pair, the window comparator and the reorder rule.
 
-Grouped by type. **Bold** marks the ones that would fit this project soonest.
+**Lessons from the retired runtime**, for whoever builds them:
+- **Power-on.** A stateful gate must show its declared initial state before anything runs; otherwise a flip-flop's q̄ rising at power-on reads as a clock edge to the next stage (the first ripple counter jumped to 15). Nothing without declared state gets a default. STATE-SPACE.md already requires a declared initial state and evaluates every device at tick 0.
+- **Races.** Two cross-coupled NORs declare no state; released from S = R = 1 they oscillate. STATE-SPACE.md's `run.settle` (slice 1c) reports that as *oscillating* with its period, which is the right answer, where the old runtime could only refuse on its event budget.
+- **Ripple against synchronous.** A ripple counter's outputs change one after another (7 → 8 passes 6, 4, 0); a synchronous counter's change in one tick. The timing view's transient marking is built to show exactly this.
+- **Completion.** AND says "both are done now" and drops when either resets; the C-element says "both have finished" and holds until both reset. The second is the completion detector of self-timed circuits, and the one `WHOLE-UNITS-AND-STATE.md` needs when completion must survive a reset.
 
-**Combinational**
-- **Decoder / demultiplexer** (n bits → one of 2ⁿ lines) and **encoder / priority encoder** (which request wins). A priority encoder is what the simulator's fixed "nearest the market first" dispatch rule is.
-- **Magnitude comparator** (A < B, A = B, A > B over buses) and **parity** (XOR tree).
-- **Lookup table (LUT)**: any n-input function as data. This is what the `table` kind already is; FPGAs are built from them.
-- ALU (add, subtract, AND, OR by an opcode); barrel shifter.
-- **Carry-lookahead adder**: more gates, logarithmic delay instead of linear. The natural first optimization target (below).
+## Other gates worth having
 
-**Sequential**
-- **Shift register**, and counters with **enable, load and reset**: the working parts of registers and timers.
-- **Generic finite-state machine**: Moore and Mealy tables with named states. The `sequential` kind is one step from this.
-- **Edge detector / one-shot (monostable)**: a pulse of fixed width on a rising edge.
-- **Debouncer**: ignore changes shorter than a hold time. Hysteresis in time, where the Schmitt trigger is hysteresis in level.
-- **Timer / watchdog**, clock divider, rate limiter.
-- **Arbiter / mutex**: grants one of two simultaneous requests and never both. The honest answer to two stages wanting the same input at once, a residual in `WHOLE-UNITS-AND-STATE.md`.
-- **Muller C-element with more inputs**, and asymmetric C-elements: the family around completion.
+Mapped to what would carry them:
 
-**Level and multi-valued**
-- **Window comparator** (built here as a composite), dead-band, clamp, quantizer (level → n bits, an ADC).
-- **Three-valued logic with X (unknown)**: Kleene AND and OR. This removes the NOR latch's power-on race by saying "unknown" instead of oscillating, and lets a tri-state bus say "nobody is driving" instead of refusing.
-- **Tri-state buffer and wired-AND (open-drain)**: legal ways for several outputs to share a net, where today that is refused as `MULTIPLE_DRIVERS`.
-- Fuzzy gates (AND = min, OR = max) and stochastic gates, for when truth is a degree or a probability.
-
-**Recommended next, in order:**
-1. **Three-valued X**, because it removes a class of false races.
-2. **Edge detector, one-shot and debouncer**, because they finish the time-domain family that hysteresis started.
-3. **Generic finite-state machine**.
-4. **Arbiter**, because it closes the simulator's contention residual.
-5. **Carry-lookahead**, as the first gate-count-against-delay optimization problem for `optimize_sov.py`.
-
-## How this meets the rest of the work
-
-- **Completion** (above): the simulator's AND over completions, and the C-element when completion has to hold through a reset.
-- **Linear vs nonlinear.** Ripple carry is linear in width, in gates and in delay. Carry-lookahead trades more gates for logarithmic delay. Choosing between them under a gate budget and a delay target is an `optimize_sov.py` problem, with gates as material and delay as time.
-- **Saved state.** Flip-flop and Schmitt states are exactly what a `.sav` should hold for a circuit.
-- **Fingerprints.** `config.logic`, params included, is in the semantic fingerprint's allowlist, so retuning a Schmitt band or swapping a gate changes what the document means.
+- **As `truth_table@1` data now:** decoder, encoder and priority encoder (a priority encoder is the simulator's "nearest the market first" dispatch rule), parity, magnitude comparator, a small ALU slice. All are tables of up to eight inputs.
+- **As compositions** (when `children` lands): carry-lookahead adder, barrel shifter, wider ALUs. Carry-lookahead is the first gate-count-against-delay problem for `optimize_sov.py`: gates as material, delay as time.
+- **As `transition`:** shift registers, counters with enable, load and reset, generic Moore and Mealy machines, edge detector and one-shot, debouncer (hysteresis in time), arbiter (closes the simulator's contention residual in `WHOLE-UNITS-AND-STATE.md`).
+- **As `threshold`:** window comparator, dead band, clamp, quantizer.
+- **Beyond binary:** three-valued logic with X would say "unknown" where the NOR latch races and where a tri-state bus has no driver; it needs a categorical form, which STATE-SPACE.md's record already has (`form: categorical`).
 
 ## Residuals
 
 | Gap | What closes it |
 | --- | --- |
-| A composite's inner document is not part of the outer document's fingerprint | fingerprint the flattened circuit, or include each composite's fingerprint by path |
-| Composites are referenced by file path in `config.logic` | a document-level reference (the `.sov` already has `references`) or a pack template, per Issue #4 |
-| Gates draw with the generic `gate` glyph | gate glyphs (AND, OR, NOT, flip-flop shapes) from a domain pack, Issue #4 |
-| No X value | three-valued logic, above |
-| A clock produced by combinational logic can see a power-on edge | X, or power-on settling of combinational paths that declare it |
-| Transport delays only; no setup or hold time; zero-delay wires | inertial delays, setup/hold checks on flip-flops, wire delays from path length and rate |
-| Circuit state is not saved | a `.sav` for circuits: flip-flop and Schmitt state, net values, time |
-| Buses are naming conventions (`A0`..`A3`) | a bus as a first-class carrier of width n |
-| Headless only | the runtime in the data core with editor, API and MCP parity, and live signal state on the canvas (post-RC) |
+| The editor's copy of a document hashes differently from the file (`documentHash` includes defaults the editor fills in), so a trace made from a file cannot be replayed on it open in the editor; the engine's own `and.11.sovtrace` shows it | the engine hashing the document's authored truth, invariant under the editor's projection (STATE-SPACE.md: "document identity is content") |
+| Stateful gates, levels, composition | the `threshold`, `transition` and composition patterns, above |
+| A run shows only in a picture or on the canvas from the API | the run surfaces of slice 1c (`schematic.run.*`) and Save Run / Open Run (slice 2) |
+| Buses are naming conventions (`A0`..`A3`) | a bus as a carrier of width n, or several channels on one port (STATE-SPACE.md "Channels") |
 
 ## Try it
 
 ```
-python scripts/logic_sov.py examples/logic/gates.sov --table
-python scripts/logic_sov.py examples/logic/adder4.sov --set A=13:4,B=9:4,Cin=0
-python scripts/logic_sov.py examples/logic/accumulator4.sov --clock CLK --sequence 'X=3:4;X=5:4;X=9:4;X=15:4'
-python scripts/logic_sov.py examples/logic/ripple-counter4.sov --clock CLK --sequence ';;;;;;;;'
-python scripts/logic_sov.py examples/logic/schmitt.sov --sequence 'X=0.52;X=0.48;X=0.61;X=0.45;X=0.39'
-python scripts/logic_sov.py examples/logic/completion.sov --sequence 'MATERIALS=1;WORK=1;MATERIALS=0;WORK=0'
-python tests/logic_sov_qa.py
+python scripts/record_run.py logic examples/logic/adder4.sov --sequence 'A=7:4,B=0:4,Cin=0;B0=1' --bus S --out carry.json
+node scripts/plot_run.mjs carry.json --page carry.html
+python scripts/export_svg.py examples/logic/adder4.sov --run 'A=7:4,B=0:4,Cin=0;B0=1' --tick 23
+python tests/logic_examples_qa.py
 ```

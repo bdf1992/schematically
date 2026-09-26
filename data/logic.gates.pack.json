@@ -1,0 +1,575 @@
+{
+  "format": "soveraeign.schematic/pack@0.1",
+  "id": "logic.gates",
+  "version": 1,
+  "definitions": [
+    {
+      "id": "logic.buffer",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      "projection": {
+        "label": "BUFFER"
+      }
+    },
+    {
+      "id": "logic.nand",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            1
+          ],
+          [
+            1,
+            0,
+            1
+          ],
+          [
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "projection": {
+        "label": "NAND"
+      }
+    },
+    {
+      "id": "logic.nor",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "projection": {
+        "label": "NOR"
+      }
+    },
+    {
+      "id": "logic.xnor",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "projection": {
+        "label": "XNOR"
+      }
+    },
+    {
+      "id": "logic.imply",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            1
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "projection": {
+        "label": "IMPLY"
+      }
+    },
+    {
+      "id": "logic.nimply",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            1,
+            0,
+            1
+          ],
+          [
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "projection": {
+        "label": "NIMPLY"
+      }
+    },
+    {
+      "id": "logic.cimply",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            1,
+            0,
+            1
+          ],
+          [
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "projection": {
+        "label": "CIMPLY"
+      }
+    },
+    {
+      "id": "logic.ncimply",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            1
+          ],
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "projection": {
+        "label": "NCIMPLY"
+      }
+    },
+    {
+      "id": "logic.majority",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b",
+          "c"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            1,
+            1
+          ],
+          [
+            1,
+            1,
+            0,
+            1
+          ],
+          [
+            1,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "projection": {
+        "label": "MAJORITY"
+      }
+    },
+    {
+      "id": "logic.mux",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "s",
+          "a",
+          "b"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            1,
+            1
+          ],
+          [
+            1,
+            1,
+            0,
+            0
+          ],
+          [
+            1,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "projection": {
+        "label": "MUX"
+      }
+    },
+    {
+      "id": "logic.half_adder",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "outputs": [
+          "s",
+          "c"
+        ],
+        "table": [
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            1,
+            1,
+            0,
+            1
+          ]
+        ]
+      },
+      "projection": {
+        "label": "HALF ADDER"
+      }
+    },
+    {
+      "id": "logic.full_adder",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b",
+          "cin"
+        ],
+        "outputs": [
+          "s",
+          "cout"
+        ],
+        "table": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            0,
+            1
+          ],
+          [
+            1,
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            1,
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            1,
+            1,
+            0,
+            0,
+            1
+          ],
+          [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "projection": {
+        "label": "FULL ADDER"
+      }
+    }
+  ]
+}

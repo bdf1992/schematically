@@ -14,7 +14,6 @@
     "schematic.checkpoint.list",
     "schematic.checkpoint.create",
     "schematic.checkpoint.restore",
-    "schematic.logic.run",
     "schematic.markers"
   ]
 }

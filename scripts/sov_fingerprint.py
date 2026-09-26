@@ -3,8 +3,11 @@
 A `.sav` belongs to one document and one model. Pinning their exact bytes would make moving
 a component on the canvas, or fixing a label, refuse every save. So a save pins a fingerprint
 of the meaning instead: what exists, what it is, what contains or hosts it, what connects to
-what and through which points, which way things flow, and what logic it runs. Position, size,
-labels, colors, titles, editor flags and revision counters are left out.
+what and through which points, which way things flow, and what behaviour it runs: the state
+space definition a Component is bound to (`config.definition`), each port's flow, channels and
+merge, and each Wire's logical delay (STATE-SPACE.md). Position, size, labels, colors, titles,
+editor flags and revision counters are left out. A field that is absent adds nothing, so a
+document that uses none of these fingerprints as it did before they were counted.
 
 A document is first normalized through the editor's own data core (scripts/normalize_sov.mjs):
 a hand-authored file leaves defaults unwritten that the editor writes on save, and the
@@ -51,7 +54,7 @@ def _component(c: dict) -> dict:
     interior = (form.get('regions') or {}).get('interior') or {}
     if 'state' in interior:
         out['interior'] = interior['state']
-    for key in ('signalMode', 'attachmentDefaults', 'logic'):
+    for key in ('signalMode', 'attachmentDefaults', 'definition'):
         if key in cfg:
             out[key] = cfg[key]
     if isinstance(cfg.get('ports'), dict):
@@ -60,8 +63,15 @@ def _component(c: dict) -> dict:
         if faces:
             out['faces'] = faces
     if isinstance(cfg.get('attachmentPoints'), list):
-        out['attachmentPoints'] = sorted(({'id': p.get('id'), 'defaultFlow': p.get('defaultFlow')}
-                                          for p in cfg['attachmentPoints'] if isinstance(p, dict)),
+        def point(p: dict) -> dict:
+            out_p = {'id': p.get('id'), 'defaultFlow': p.get('defaultFlow')}
+            if 'flow' in p:
+                out_p['flow'] = p['flow']
+            if isinstance(p.get('channels'), list):
+                # A channel's id and merge decide what a Path carries and how arrivals combine.
+                out_p['channels'] = [{k: c[k] for k in ('id', 'merge') if k in c} for c in p['channels'] if isinstance(c, dict)]
+            return out_p
+        out['attachmentPoints'] = sorted((point(p) for p in cfg['attachmentPoints'] if isinstance(p, dict)),
                                          key=lambda p: str(p['id']))
     return out
 
@@ -69,7 +79,7 @@ def _component(c: dict) -> dict:
 def _wire(w: dict) -> dict:
     cfg = w.get('config') or {}
     out = {k: w.get(k) for k in ('id', 'a', 'aSide', 'b', 'bSide')}
-    for key in ('direction', 'forwardOperation', 'reverseOperation'):
+    for key in ('direction', 'forwardOperation', 'reverseOperation', 'delay'):
         if key in cfg:
             out[key] = cfg[key]
     return out

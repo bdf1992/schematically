@@ -55,20 +55,7 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
-  view:{zoom:()=>currentZoom(),setZoom:(value)=>{zoomAt(Number(value)/currentZoom());return currentZoom()},appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
-  // Logic: `run` is stateless and is what MCP's schematic.logic.run answers; `live` draws the
-  // circuit's state on the canvas and keeps it between steps. Composites resolve by file name
-  // from documents added here.
-  logic:{
-    run:(request={})=>SovSchematicLogic.run(snapshotDocument(),request,logicOptions()),
-    live:{start:(vector={})=>startLogicLive(vector),set:(vector={})=>logicLiveStep(vector),pulse:(clock,vector={})=>logicLiveStep(vector,String(clock)),
-      stop:()=>stopLogicLive(),state:()=>logicReceipt()},
-    composites:{
-      add:(name,document)=>{const doc=typeof document==='string'?JSON.parse(document):document;logicComposites.set(String(name).split(/[\\/]/).pop(),doc);if(logicLive.on)applyLogicLive();return [...logicComposites.keys()].sort()},
-      list:()=>[...logicComposites.keys()].sort(),
-      remove:(name)=>{logicComposites.delete(String(name));if(logicLive.on)applyLogicLive();return [...logicComposites.keys()].sort()}
-    }
-  },
+  view:{stateSpace:{show:(options)=>showStateView(options),tick:(t)=>setStateViewTick(t),hide:()=>hideStateView(),info:()=>stateViewReceipt()},zoom:()=>currentZoom(),setZoom:(value)=>{zoomAt(Number(value)/currentZoom());return currentZoom()},appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
   tools:()=>SovSchematicData.operationTools()
 };
 window.SovSchematicAPI=SovSchematicAPI;

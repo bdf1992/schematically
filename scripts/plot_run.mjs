@@ -92,8 +92,7 @@ function busSegments(rec, bus, t0, t1) {
 
 export function timing(rec, opts = {}) {
   const t0 = opts.window ? opts.window[0] : 0, t1 = opts.window ? opts.window[1] : rec.end;
-  const lanes = opts.lanes || [...(rec.clock ? [rec.clock] : []),
-    ...Object.values(rec.buses).flat(), ...Object.keys(rec.signals).filter(s => s !== rec.clock && !Object.values(rec.buses).flat().includes(s) && !rec.levels.includes(s))];
+  const lanes = opts.lanes || [...Object.values(rec.buses).flat(), ...Object.keys(rec.signals).filter(s => !Object.values(rec.buses).flat().includes(s))];
   const W = 760, lh = 30, top = 12, left = 64;
   const X = lin(t0, t1, left, W - 10);
   let body = '';
@@ -103,7 +102,7 @@ export function timing(rec, opts = {}) {
     let d = `M${r2(X(t0))} ${y + (valueAt(ch, t0) ? 3 : 21)}`;
     ch.forEach(([t, v], k) => { if (t > t0 && t <= t1) d += `H${r2(X(t))}V${y + (v ? 3 : 21)}`; });
     d += `H${r2(X(t1))}`;
-    body += el('path', {d, fill: 'none', stroke: name === rec.clock ? '--v-muted' : '--v-hi', 'stroke-width': 1.8, 'stroke-linejoin': 'round'});
+    body += el('path', {d, fill: 'none', stroke: '--v-hi', 'stroke-width': 1.8, 'stroke-linejoin': 'round'});
     ch.forEach(([t, v]) => { if (t > t0 && t <= t1)
       body += tag('rect', {x: X(t) - 3, y, width: 6, height: 24, fill: 'transparent', 'data-link': `ev:${name}:${t}`, 'data-t': t, 'data-x': r2(X(t)),
         'data-label': `t=${t}  ${name} ${v ? '0→1' : '1→0'}`}, title(`t=${t}  ${name} ${v ? '0→1' : '1→0'}`)); });
@@ -127,7 +126,7 @@ export function timing(rec, opts = {}) {
   body += el('line', {x1: left, x2: left, y1: top - 4, y2: ay, stroke: '--v-hi', 'stroke-width': 1.4, 'data-cursor': 1, display: 'none'});
   const span = t1 - t0, step = span <= 30 ? 4 : span <= 120 ? 12 : 48;
   for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) body += text(X(t), ay + 15, String(t), 'lbl', {'text-anchor': 'middle'});
-  body += text(W - 10, ay + 30, 'time (gate delays)', 'lbl', {'text-anchor': 'end'});
+  body += text(W - 10, ay + 30, 'logical time (ticks)', 'lbl', {'text-anchor': 'end'});
   return svg(W, ay + 38, `Timing diagram of ${rec.document.path}`, body, 'timing');
 }
 
@@ -139,62 +138,13 @@ export function eventLog(rec, opts = {}) {
   for (const b of buses) for (const s of busSegments(rec, b, t0, t1)) if (s.transient) transient.add(s.t0);
   const head = `<tr><th>t</th><th>signal</th><th>change</th>${buses.map(b => `<th>${esc(b)} after</th>`).join('')}</tr>`;
   const body = rows.map(e => {
-    const bad = transient.has(e.t) && !(rec.clock && e.signal === rec.clock);
+    const bad = transient.has(e.t);
     return `<tr data-link="ev:${esc(e.signal)}:${e.t}"${bad ? ' class="bad"' : ''}><td class="num">${e.t}</td><td>${esc(e.signal)}</td>` +
       `<td>${e.value ? '0→1' : '1→0'}</td>${buses.map(b => `<td class="num">${busAt(rec, b, e.t)}</td>`).join('')}</tr>`;
   }).join('');
   return `<table class="sov-log"><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
-export function levelTrace(rec) {
-  const level = rec.levels[0]; const samples = rec.signals[level] || [];
-  const W = 780, left = 44, right = 660; const X = lin(0, rec.end, left, right), Y = lin(0, 1.05, 160, 12);
-  let body = '';
-  for (const r of rec.readers) {
-    if (r.kind === 'hysteresis') {
-      body += tag('rect', {x: left, y: Y(r.params.high), width: right - left, height: Y(r.params.low) - Y(r.params.high), fill: '--v-soft'}, title(`${r.gate}: on at ${r.params.high}, off at ${r.params.low}`));
-      body += text(right + 6, Y(r.params.high) + 4, `high ${r.params.high}`) + text(right + 6, Y(r.params.low) + 4, `low ${r.params.low}`);
-    } else {
-      body += el('path', {d: `M${left} ${r2(Y(r.params.theta))}H${right}`, stroke: '--v-s2', 'stroke-width': 1.3, 'stroke-dasharray': '5 4'});
-      body += text(right + 6, Y(r.params.theta) + 4, `θ ${r.params.theta}`);
-    }
-  }
-  body += el('path', {d: samples.map(([t, v], i) => `${i ? 'L' : 'M'}${r2(X(t))} ${r2(Y(v))}`).join(''), fill: 'none', stroke: '--v-ink', 'stroke-width': 1.2});
-  body += text(0, 20, level, 'lane') + text(left - 6, Y(0) + 4, '0', 'lbl', {'text-anchor': 'end'}) + text(left - 6, Y(1) + 4, '1', 'lbl', {'text-anchor': 'end'});
-  let y = 180;
-  for (const r of rec.readers) for (const out of r.outputs) {
-    const ch = rec.signals[out] || []; let d = `M${left} ${y + (valueAt(ch, 0) ? 3 : 21)}`;
-    ch.forEach(([t, v]) => { d += `H${r2(X(t))}V${y + (v ? 3 : 21)}`; }); d += `H${right}`;
-    const switches = ch.filter(([t]) => t > 0).length;
-    body += text(0, y + 15, out, 'lane') + el('path', {d, fill: 'none', stroke: r.kind === 'hysteresis' ? '--v-hi' : '--v-s2', 'stroke-width': 1.7});
-    body += tag('text', {x: right + 6, y: y + 15, class: 'ink', 'data-switches': switches}, `${switches} switches`);
-    y += 34;
-  }
-  body += el('path', {d: `M${left} ${y + 4}H${right}`, stroke: '--v-line'});
-  [0, Math.round(rec.end / 2), rec.end].forEach(t => { body += text(X(t), y + 19, String(t), 'lbl', {'text-anchor': 'middle'}); });
-  body += text(right, y + 34, 'sample', 'lbl', {'text-anchor': 'end'});
-  return svg(W, y + 42, `Level ${level} with its readers`, body, 'level');
-}
-
-export function transferLoop(rec, reader) {
-  const level = rec.levels[0]; const W = 420, H = 280; const lx = lin(0, 1, 50, 400), ly = lin(0, 1, 220, 40);
-  const {low, high} = reader.params; const out = reader.outputs[0]; const samples = rec.signals[level] || [];
-  let body = el('path', {d: `M50 230H400M50 230V30`, stroke: '--v-line'});
-  samples.forEach(([t, x]) => { body += el('circle', {cx: lx(x), cy: ly(valueAt(rec.signals[out] || [], t)), r: 2, fill: '--v-hi', opacity: 0.3}); });
-  body += el('path', {d: `M${lx(0)} ${ly(0)}H${lx(high)}V${ly(1)}H${lx(1)}`, fill: 'none', stroke: '--v-hi', 'stroke-width': 2.2});
-  body += el('path', {d: `M${lx(1)} ${ly(1)}H${lx(low)}V${ly(0)}`, fill: 'none', stroke: '--v-hi', 'stroke-width': 2.2});
-  body += el('path', {d: `M${r2(lx(high) - 5)} ${r2(ly(0.5) + 6)}L${r2(lx(high))} ${r2(ly(0.5) - 2)}L${r2(lx(high) + 5)} ${r2(ly(0.5) + 6)}`, fill: 'none', stroke: '--v-hi', 'stroke-width': 1.6});
-  body += el('path', {d: `M${r2(lx(low) - 5)} ${r2(ly(0.5) - 6)}L${r2(lx(low))} ${r2(ly(0.5) + 2)}L${r2(lx(low) + 5)} ${r2(ly(0.5) - 6)}`, fill: 'none', stroke: '--v-hi', 'stroke-width': 1.6});
-  body += text(lx(high) + 8, ly(0.5), 'rising') + text(lx(low) - 8, ly(0.5), 'falling', 'lbl', {'text-anchor': 'end'});
-  [0, low, high, 1].forEach(v => { body += text(lx(v), 246, String(v), 'lbl', {'text-anchor': 'middle'}); });
-  body += text(400, 264, `level ${level}`, 'lbl', {'text-anchor': 'end'}) + text(44, ly(1) + 4, '1', 'lbl', {'text-anchor': 'end'}) + text(44, ly(0) + 4, '0', 'lbl', {'text-anchor': 'end'});
-  body += text(50, 20, `${reader.gate}: ${out} against ${level}`, 'ink');
-  return svg(W, H, `Transfer loop of ${reader.gate}`, body, 'loop');
-}
-
-// --------------------------------------------------------------------------- optimize
-
-// Line segments where a grid crosses a level (marching squares, with interpolation).
 function contour(xs, ys, grid, level) {
   const segs = [];
   for (let i = 0; i + 1 < xs.length; i++) for (let j = 0; j + 1 < ys.length; j++) {
@@ -422,17 +372,17 @@ export function laborSplit(rec) {
 
 // --------------------------------------------------------------------------- pack
 
-export function glyphSheet(pack) {
-  // Each card: the glyph at canvas size, its small-size fallback, the gate's name and family.
-  const names = Object.keys(pack.gates).sort(); const cols = 6, cw = 124, chh = 134;
+export function glyphSheet(table) {
+  // Each card: the glyph at canvas size, its small-size fallback, the definition and family.
+  const names = Object.keys(table.glyphs).sort(); const cols = 6, cw = 124, chh = 134;
   let body = '';
   names.forEach((name, i) => {
-    const g = pack.gates[name], x = 6 + (i % cols) * cw, y = 6 + Math.floor(i / cols) * chh;
+    const g = table.glyphs[name], x = 6 + (i % cols) * cw, y = 6 + Math.floor(i / cols) * chh;
     body += el('rect', {x, y, width: cw - 10, height: chh - 10, rx: 10, fill: '--v-panel', stroke: '--v-line'});
     body += tag('g', {transform: `translate(${x + 9} ${y + 6})`, fill: 'none', stroke: '--v-ink', 'stroke-width': 2, 'data-glyph': name}, g.glyph);
-    body += text(x + 8, y + 88, name.toUpperCase(), 'ink');
-    body += text(x + 8, y + 104, g.glyph_family === 'distinctive' ? 'shape' : 'IEC box', 'lbl');
-    body += tag('g', {transform: `translate(${x + cw - 52} ${y + 90}) scale(0.4)`, fill: 'none', stroke: '--v-ink', 'stroke-width': 3}, g.glyph_small);
+    body += text(x + 8, y + 88, name.split('@')[0].replace(/^logic\./, '').replace(/_/g, ' ').toUpperCase(), 'ink');
+    body += text(x + 8, y + 104, g.family === 'distinctive' ? 'shape' : 'IEC box', 'lbl');
+    body += tag('g', {transform: `translate(${x + cw - 52} ${y + 90}) scale(0.4)`, fill: 'none', stroke: '--v-ink', 'stroke-width': 3}, g.glyphSmall);
     body += text(x + cw - 32, y + 120, 'small', 'lbl', {'text-anchor': 'middle', 'font-size': 9});
   });
   const rows = Math.ceil(names.length / cols);
@@ -445,20 +395,15 @@ export function glyphSheet(pack) {
 export function viewsFor(rec) {
   if (rec.kind === 'logic') {
     const out = [];
-    if (rec.levels.length) {
-      out.push({name: 'level', title: `Level ${rec.levels[0]} and its readers`, svg: levelTrace(rec)});
-      for (const r of rec.readers.filter(r => r.kind === 'hysteresis')) out.push({name: `loop-${r.gate}`, title: `Transfer loop of ${r.gate}`, svg: transferLoop(rec, r)});
-    } else {
-      out.push({name: 'timing', title: 'Timing', svg: timing(rec), html: eventLog(rec)});
-      if (Object.keys(rec.buses).length) {
-        // zoom on the longest transient burst, where glitches are
-        const bus = Object.keys(rec.buses)[0]; const segs = busSegments(rec, bus, 0, rec.end).filter(s => s.transient);
-        if (segs.length) {
-          let best = segs[0], run = [segs[0]], bestRun = [segs[0]];
-          for (let i = 1; i < segs.length; i++) { if (segs[i].t0 <= run[run.length - 1].t1 + 1) run.push(segs[i]); else run = [segs[i]]; if (run.length > bestRun.length) bestRun = [...run]; }
-          best = bestRun[0]; const w = [Math.max(0, best.t0 - 6), Math.min(rec.end, bestRun[bestRun.length - 1].t1 + 10)];
-          out.push({name: 'timing-zoom', title: `Timing, zoomed on the longest glitch (t ${w[0]}–${w[1]})`, svg: timing(rec, {window: w}), html: eventLog(rec, {window: w})});
-        }
+    out.push({name: 'timing', title: 'Timing', svg: timing(rec), html: eventLog(rec)});
+    if (Object.keys(rec.buses).length) {
+      // zoom on the longest transient burst, where glitches are
+      const bus = Object.keys(rec.buses)[0]; const segs = busSegments(rec, bus, 0, rec.end).filter(s => s.transient);
+      if (segs.length) {
+        let best = segs[0], run = [segs[0]], bestRun = [segs[0]];
+        for (let i = 1; i < segs.length; i++) { if (segs[i].t0 <= run[run.length - 1].t1 + 1) run.push(segs[i]); else run = [segs[i]]; if (run.length > bestRun.length) bestRun = [...run]; }
+        best = bestRun[0]; const w = [Math.max(0, best.t0 - 6), Math.min(rec.end, bestRun[bestRun.length - 1].t1 + 10)];
+        out.push({name: 'timing-zoom', title: `Timing, zoomed on the longest glitch (t ${w[0]}–${w[1]})`, svg: timing(rec, {window: w}), html: eventLog(rec, {window: w})});
       }
     }
     return out;
@@ -541,9 +486,9 @@ function main(argv) {
   const glyphs = args.includes('--glyphs'); if (glyphs) args.splice(args.indexOf('--glyphs'), 1);
   const out = flag('--out'), pagePath = flag('--page'), heading = flag('--title');
   if (glyphs) {
-    const pack = JSON.parse(fs.readFileSync(path.join(HERE, '../packs/logic/gates.json'), 'utf8'));
+    const table = JSON.parse(fs.readFileSync(path.join(HERE, '../data/logic.glyphs.json'), 'utf8'));
     const file = path.join(out || '.', 'glyphs.svg'); fs.mkdirSync(path.dirname(file), {recursive: true});
-    fs.writeFileSync(file, glyphSheet(pack).replace('class="sov-view"', 'class="sov-view standalone"') + '\n'); console.log(`wrote ${file}`);
+    fs.writeFileSync(file, glyphSheet(table).replace('class="sov-view"', 'class="sov-view standalone"') + '\n'); console.log(`wrote ${file}`);
     return 0;
   }
   if (!args.length) { console.error('usage: node scripts/plot_run.mjs run.json [...] (--out DIR | --page FILE) | --glyphs --out DIR'); return 2; }

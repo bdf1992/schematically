@@ -11,9 +11,6 @@ await import(pathToFileURL(path.join(HERE,'../src/06-attachment-core.js')).href)
 await import(pathToFileURL(path.join(HERE,'../src/05-data-core.js')).href);
 const Data=globalThis.SovSchematicData;
 if(!Data)throw new Error('SovSchematicData core failed to load');
-await import(pathToFileURL(path.join(HERE,'../src/07-logic-core.js')).href);
-const Logic=globalThis.SovSchematicLogic;
-const LOGIC_PACK=Logic.loadPack(JSON.parse(fs.readFileSync(path.join(HERE,'../packs/logic/gates.json'),'utf8')));
 
 const args=process.argv.slice(2);
 const arg=(name,fallback)=>{const i=args.indexOf(name);return i>=0&&args[i+1]?args[i+1]:fallback};
@@ -50,15 +47,6 @@ function executeTool(name,args={}){
   if(name==='schematic.checkpoint.create'){pushHistory();const store=checkpointStore(),snap=cloneDoc();snap.meta=snap.meta||{};snap.meta.checkpoints=[];const cp={id:`cp-${Date.now()}`,name:String(args.name||`Checkpoint ${store.length+1}`),createdAt:new Date().toISOString(),revision:documentState.revision||0,document:snap};store.push(cp);Data.touch(documentState);return {ok:true,value:{...cp,document:undefined},mutates:true}}
   if(name==='schematic.checkpoint.restore'){const cp=checkpointStore().find(x=>x.id===args.id);if(!cp)return {ok:false,value:{error:'Checkpoint not found'},mutates:false};pushHistory();const store=Data.clone(checkpointStore());Data.replaceDocument(documentState,cp.document);documentState.meta=documentState.meta||{};documentState.meta.checkpoints=store;Data.touch(documentState);return {ok:true,value:Data.clone(documentState),mutates:true}}
   if(name==='schematic.document.get')return {ok:true,value:Data.clone(documentState),mutates:false};
-  if(name==='schematic.logic.run'){
-    // The same run as the editor's SovSchematicAPI.logic.run. Composites: those passed by name,
-    // else the file of that name beside the served document.
-    const given=args.composites&&typeof args.composites==='object'?args.composites:{};
-    const resolve=(ref,from)=>{const base=String(ref).split(/[\\/]/).pop();if(given[base])return {key:base,document:given[base]};
-      const file=path.resolve(path.dirname(from),String(ref));try{return {key:file,document:JSON.parse(fs.readFileSync(file,'utf8'))}}catch(_){return null}};
-    const value=Logic.run(Data.compactDocument(Data.makeDocument(Data.clone(documentState))),{vector:args.vector,steps:args.steps,record:args.record},{pack:LOGIC_PACK,resolve,key:FILE});
-    return {ok:value.ok,value,mutates:false};
-  }
   if(name==='schematic.markers')return {ok:true,value:Data.markersFor(documentState),mutates:false};
   if(name==='schematic.document.replace'){
     const incoming=Data.makeDocument(args.document||{}),valid=Data.validateDocument(incoming);
@@ -78,7 +66,7 @@ async function handleMcp(req,res){
   let rpc;try{rpc=await bodyJson(req)}catch(e){return json(res,400,rpcError(null,-32700,'Parse error',e.message),{'MCP-Protocol-Version':MCP_VERSION})}
   const id=rpc.id??null,method=rpc.method;
   if(method==='server/discover')return json(res,200,rpcResult(id,{protocolVersion:MCP_VERSION,serverInfo:{name:'soveraeign-schematic',version:'0.1.24'},capabilities:{tools:{listChanged:false}},instructions:'CRUD against SOV Schematic document@0.1. File packages use package@0.1.'}),{'MCP-Protocol-Version':MCP_VERSION});
-  if(method==='tools/list'){const extra=[{name:'schematic.markers',description:'List validation markers for the current document, derived from schematic.document validation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}},{name:'schematic.logic.run',description:'Run the document as a logic circuit: set inputs (vector, or steps of {set, pulse?}), return outputs per step, settle time, transitions and every top-level wire value; refusals are typed. Does not change the document.',inputSchema:{type:'object',properties:{vector:{type:'object'},steps:{type:'array',items:{type:'object',properties:{set:{type:'object'},pulse:{type:'string'}},additionalProperties:false}},record:{type:'boolean'},composites:{type:'object',description:'documents by file name, for {"composite": name} parts'}},additionalProperties:false}}];return json(res,200,rpcResult(id,{tools:[...Data.operationTools(),...extra]}),{'MCP-Protocol-Version':MCP_VERSION});}
+  if(method==='tools/list'){const extra=[{name:'schematic.markers',description:'List validation markers for the current document, derived from schematic.document validation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}}];return json(res,200,rpcResult(id,{tools:[...Data.operationTools(),...extra]}),{'MCP-Protocol-Version':MCP_VERSION});}
   if(method==='tools/call'){
     const name=rpc.params?.name,args=rpc.params?.arguments||{};
     const result=executeTool(name,args);if(result.mutates)saveDocument();

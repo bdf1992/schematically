@@ -3,15 +3,14 @@
 The views in scripts/plot_run.mjs claim to draw what a record holds and nothing else. Each
 claim is checked here against the record, not against the renderer's own arithmetic:
 
-  - glyphs: the pack's glyphs are what scripts/logic_glyphs.py writes, parse as XML, use only
-    the tags and attributes the editor's custom-graphic sanitizer admits (read from
-    src/55-render.js), follow the agreed family rule, and are what the example gates carry;
+  - glyphs: data/logic.glyphs.json is what scripts/logic_glyphs.py writes, has one entry per
+    logic definition, parses as XML, uses only the tags and attributes the editor's
+    custom-graphic sanitizer admits (read from src/55-render.js), follows the agreed family
+    rule, and is what every example device bound to that definition carries;
   - determinism: the same records render byte-identical SVG, and every SVG parses;
-  - timing: every value-lane segment shows the bus value decoded from the record's bit changes,
-    the ripple counter's 7 -> 8 shows the transient 6, 4, 0, and the synchronous counter shows
-    no transient at all;
-  - level: each output lane's switch count is the record's count, and the Schmitt trigger
-    switches less than the comparator;
+  - timing, from state space runs: every value-lane segment shows the bus value decoded from
+    the record's bit changes, the 4-bit adder's 7 -> 8 shows the carry's transient 6, 4, 0, and
+    0 -> 1 on A0 alone (no carry) shows no transient at all; the record names its run;
   - landscape: every plan marker sits at its record position with its certificate, every
     slice of a three-decision model holds the others at the whole-unit plan, says so, marks
     what lies outside it as projected, and holds the true value of the plans it names; every
@@ -36,9 +35,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from record_run import noisy_wave, record_logic, record_optimize, record_simulate  # noqa: E402
+from record_run import parse_vector, record_logic, record_optimize, record_simulate  # noqa: E402
 
-PACK = json.loads((ROOT / 'packs' / 'logic' / 'gates.json').read_text(encoding='utf-8'))
+GLYPHS = json.loads((ROOT / 'data' / 'logic.glyphs.json').read_text(encoding='utf-8'))['glyphs']
+DEFS = {f"{d['id']}@{d['version']}" for p in ('core.logic.pack.json', 'logic.gates.pack.json')
+        for d in json.loads((ROOT / 'data' / p).read_text(encoding='utf-8'))['definitions']}
 SVG = '{http://www.w3.org/2000/svg}'
 CLASSIC = {'and', 'or', 'xor', 'not', 'buffer', 'nand', 'nor', 'xnor'}
 
@@ -54,36 +55,30 @@ def check_glyphs() -> None:
     subprocess.run([sys.executable, str(ROOT / 'scripts' / 'logic_glyphs.py'), '--check'], check=True)
     tags, attrs = sanitizer_allowlist()
     assert {'path', 'text', 'circle'} <= tags and 'd' in attrs, (tags, attrs)
-    for name, g in PACK['gates'].items():
-        assert g['glyph_family'] == ('distinctive' if name in CLASSIC else 'rectangle'), name
-        for key in ('glyph', 'glyph_small'):
+    assert set(GLYPHS) == DEFS, (sorted(GLYPHS), sorted(DEFS))
+    for ref, g in GLYPHS.items():
+        name = ref.split('.', 1)[1].split('@')[0]
+        assert g['family'] == ('distinctive' if name in CLASSIC else 'rectangle'), ref
+        for key in ('glyph', 'glyphSmall'):
             root = ET.fromstring(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64">{g[key]}</svg>')
             for node in root.iter():
                 t = node.tag.replace(SVG, '')
-                assert t in tags, (name, key, t)
+                assert t in tags, (ref, key, t)
                 if node is not root:
                     bad = set(node.attrib) - attrs
-                    assert not bad, (name, key, t, bad)
-        assert g['glyph_small'].count('M30 8H66V56H30Z') == 1, f'{name}: small glyph must be the rectangle'
+                    assert not bad, (ref, key, t, bad)
+        assert g['glyphSmall'].count('M30 8H66V56H30Z') == 1, f'{ref}: small glyph must be the rectangle'
+    bound = 0
     for doc_path in sorted((ROOT / 'examples' / 'logic').glob('*.sov')):
         doc = json.loads(doc_path.read_text(encoding='utf-8'))
         for c in doc['components']:
-            logic = c.get('config', {}).get('logic', {})
-            if 'gate' in logic:
-                svg = c['config']['presentation']['graphic']['svg']
-                assert svg == PACK['gates'][logic['gate']]['glyph'], (doc_path.name, c['id'])
-            if 'composite' in logic:
-                # A composite draws as an IEC box with its document's qualifier and a stub per pin.
-                from logic_glyphs import composite_glyph
-                inner = json.loads((doc_path.parent / logic['composite']).read_text(encoding='utf-8'))
-                ins = [x for x in inner['components'] if x.get('config', {}).get('logic', {}).get('kind') == 'input']
-                outs = [x for x in inner['components'] if x.get('config', {}).get('logic', {}).get('kind') == 'output']
-                q = inner['meta']['qualifier']
-                svg = c['config']['presentation']['graphic']['svg']
-                assert svg == composite_glyph(q, len(ins), len(outs)), (doc_path.name, c['id'])
-                root = ET.fromstring(f'<svg xmlns="http://www.w3.org/2000/svg">{svg}</svg>')
-                assert all(n.tag.replace(SVG, '') in tags for n in root.iter()), c['id']
-                assert svg.count('H30"/>') == len(ins) and svg.count('H90"/>') == len(outs), (c['id'], len(ins), len(outs))
+            ref = c.get('config', {}).get('definition')
+            if ref:
+                bound += 1
+                graphic = c['config']['presentation']['graphic']
+                assert graphic['svg'] == GLYPHS[ref]['glyph'], (doc_path.name, c['id'])
+                assert graphic.get('svgSmall', graphic['svg']) == GLYPHS[ref]['glyphSmall'], (doc_path.name, c['id'])
+    assert bound > 16, bound
 
 
 def value_at(changes: list, t: float) -> int:
@@ -124,9 +119,8 @@ def check_views() -> None:
     lg = ROOT / 'examples' / 'logic'
     op = ROOT / 'examples' / 'optimization'
     records = {
-        'ripple': record_logic(lg / 'ripple-counter4.sov', [{} for _ in range(17)], 'CLK', 24, ['Q']),
-        'sync': record_logic(lg / 'sync-counter4.sov', [{} for _ in range(17)], 'CLK', 24, ['Q']),
-        'schmitt': record_logic(lg / 'schmitt.sov', [{'X': x} for x in noisy_wave(240)], None, 1, [], 'X'),
+        'carry': record_logic(lg / 'adder4.sov', [parse_vector('A=7:4,B=0:4,Cin=0'), parse_vector('B0=1')], 20, ['S']),
+        'calm': record_logic(lg / 'adder4.sov', [parse_vector('A=0:4,B=0:4,Cin=0'), parse_vector('A0=1')], 20, ['S']),
         'learning': record_optimize(op / 'workshop.sov', op / 'workshop.learning.opt.json', segments=20, starts=12, steps=41),
         'week': record_simulate(op / 'workshop.sov', op / 'workshop.learning.opt.json', {'chairs': 14, 'tables': 2}),
         'three': record_optimize(op / 'workshop3.sov', op / 'workshop3.opt.json', segments=20, starts=8, steps=21),
@@ -139,36 +133,27 @@ def check_views() -> None:
         views = render(records, Path(tmp))
 
     # timing: segments against bits decoded here from the record
-    for name in ('ripple', 'sync'):
+    for name in ('carry', 'calm'):
         rec = records[name]
+        assert rec['run']['head'] and rec['run']['id'] and rec['run']['through'] is not None, rec['run']
         segs = nodes(views[f'{name}.timing'], 'data-bus')
         assert segs
         for s in segs:
             t0 = float(s.attrib['data-t0'])
-            decoded = sum(value_at(rec['signals'][bit], t0) << i for i, bit in enumerate(rec['buses']['Q']))
+            decoded = sum(value_at(rec['signals'][bit], t0) << i for i, bit in enumerate(rec['buses']['S']))
             assert int(s.attrib['data-value']) == decoded, (name, s.attrib, decoded)
         transients = [int(s.attrib['data-value']) for s in segs if s.attrib['data-transient'] == '1']
-        if name == 'sync':
-            assert not transients and 'sync.timing-zoom' not in views, 'a synchronous counter has no transient values'
+        if name == 'calm':
+            assert not transients and 'calm.timing-zoom' not in views, 'a change with no carry has no transient values'
         else:
-            zoom = [int(s.attrib['data-value']) for s in nodes(views['ripple.timing-zoom'], 'data-bus') if s.attrib['data-transient'] == '1']
-            assert zoom in ([6, 4, 0], [14, 12, 8]), zoom
+            zoom = [int(s.attrib['data-value']) for s in nodes(views['carry.timing-zoom'], 'data-bus') if s.attrib['data-transient'] == '1']
+            assert zoom == [6, 4, 0], zoom
         # Step-through: one steppable mark per recorded change, at its time, with a hidden cursor.
         marks = nodes(views[f'{name}.timing'], 'data-t')
         changes = {(sig, c[0]) for sig, cs in rec['signals'].items() for c in cs if c[0] > 0}
-        assert {(m.attrib['data-link'].split(':')[1], float(m.attrib['data-t'])) for m in marks} <= changes, name
+        assert marks and {(m.attrib['data-link'].split(':')[1], float(m.attrib['data-t'])) for m in marks} <= changes, name
         assert all(m.attrib['data-label'] and m.attrib['data-x'] for m in marks)
         assert len(nodes(views[f'{name}.timing'], 'data-cursor')) == 1
-
-    # level: switch counts
-    rec = records['schmitt']
-    counts = {}
-    for n in nodes(views['schmitt.level'], 'data-switches'):
-        counts[len(counts)] = int(n.attrib['data-switches'])
-    expected = [len([c for c in rec['signals'][o] if c[0] > 0]) for r in rec['readers'] for o in r['outputs']]
-    assert list(counts.values()) == expected, (counts, expected)
-    cmp_, hys = expected
-    assert hys < cmp_, expected
 
     # landscape (two decisions: the whole problem, one view)
     rec = records['learning']
@@ -251,7 +236,8 @@ def check_views() -> None:
     assert page.count('<figure') == sum(1 for k in views if k != 'page')
     assert page.count('data-step="timing"') == sum(1 for k in views if '.timing' in k)
     assert page.count('data-step="search"') == sum(1 for k in views if k.endswith('.search-outline')) >= 1
-    assert 'data-link="ev:Q0:169"' in page and 'CSS.escape' in page
+    last = records['carry']['events'][-1]
+    assert f'data-link="ev:{last["signal"]}:{last["t"]}"' in page and 'CSS.escape' in page
 
 
 def check_gallery() -> None:

@@ -655,5 +655,5 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     if(selected===`wire:${i}`) focusWireVisual(i);
   });
   placeWireLabels();
-  if(typeof applyLogicLive==='function')applyLogicLive();
+  if(typeof applyStateView==='function')applyStateView();
 }

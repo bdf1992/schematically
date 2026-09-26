@@ -251,7 +251,7 @@ function applyCamera(){
   syncLabelScale();
   zoomReadout.textContent=`${Math.round(currentZoom()*100)}%`;
   if(typeof applyGlyphSizeRule==='function')applyGlyphSizeRule();
-  if(typeof applyLogicChipVisibility==='function')applyLogicChipVisibility();
+  if(typeof applyStateChipVisibility==='function')applyStateChipVisibility();
   requestAnimationFrame(positionSelectionBar);
 }
 function setPanMode(active){

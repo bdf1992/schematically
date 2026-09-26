@@ -11,8 +11,16 @@ Usage:
     python scripts/export_svg.py a.sov --out build/   # into a directory
     python scripts/export_svg.py --appearance dark    # force light|dark (default: light)
     python scripts/export_svg.py a.sov --loop         # also make the packet animation repeat
-    python scripts/export_svg.py examples/logic/half-adder.sov --logic-state A=1,B=1   # live signal state
-    python scripts/export_svg.py examples/logic/half-adder.sov --logic-state A=1,B=1 --monochrome
+    python scripts/export_svg.py examples/logic/adder4.sov --run 'A=7:4,B=0:4,Cin=0;B0=1' --tick 23
+    python scripts/export_svg.py examples/logic/full-adder.sov --run 'A=1,B=0,Cin=1' --monochrome
+    python scripts/export_svg.py doc.sov --trace doc.sovtrace          # a trace of this document
+
+With --trace, the export draws a state space run's state at a tick (default: the last one the
+trace processed) through the editor's state view (src/57-state-view.js): a high wire in the
+signal colour, a low one in ink, a chip at every port; with --monochrome, by weight alone.
+The trace must have run this document as the editor holds it; otherwise the view refuses and
+the export fails. With --run, the engine runs the open document in the page on those input
+vectors (one every --period ticks) and the export draws that run.
 """
 from __future__ import annotations
 import argparse
@@ -30,94 +38,39 @@ EXPORT_JS = "(opts) => window.SovSchematicAPI.file.svg(opts)"
 
 
 
-# Runs inside the page after a logic document is open, before serialisation. Draws live
-# signal state the way VISUAL-LANGUAGE.md settles it: a high net in the signal colour with the
-# voltage glow and 0.6 px heavier, a low net in plain ink, a value chip at each pin; with
-# monochrome, weight alone. Packets are removed: a snapshot has no change in flight, and a
-# moving dot would say there is one.
-STATE_JS = r"""
-(opts) => {
-  const NS = 'http://www.w3.org/2000/svg';
-  const dark = document.documentElement.dataset.appearance === 'dark';
-  const hi = dark ? '#3987e5' : '#2a78d6';
-  const css = getComputedStyle(document.documentElement);
-  const ink = css.getPropertyValue('--canvas-ink').trim() || (dark ? '#E7E8E3' : '#42423E');
-  const muted = css.getPropertyValue('--canvas-muted').trim() || (dark ? '#AEB0AA' : '#73736D');
-  const panel = css.getPropertyValue('--canvas-tone').trim() || (dark ? '#17191B' : '#FEFEFC');
-  const chipped = new Set();
-  for (const group of document.querySelectorAll('.wire-group[data-wire-id]')) {
-    const st = opts.wires[group.dataset.wireId];
-    if (!st) continue;
-    group.querySelectorAll('.wire-packet').forEach(x => x.remove());
-    group.querySelectorAll('animateMotion,animate').forEach(x => x.remove());
-    const high = st.value === 1;
-    group.style.setProperty('--wire-ink', opts.monochrome ? (high ? ink : muted) : (high ? hi : ink));
-    group.style.setProperty('--voltage-ink', opts.monochrome ? ink : hi);
-    group.dataset.logicValue = String(st.value);
-    const wire = group.querySelector('path.wire');
-    if (wire) {
-      wire.style.strokeWidth = opts.monochrome ? (high ? '3.6px' : '1.4px') : (high ? '2.9px' : '2.3px');
-      if (opts.monochrome && !high) wire.style.strokeDasharray = '5 5';
-    }
-    const glow = group.querySelector('path.wire-voltage');
-    if (glow) glow.style.opacity = (!opts.monochrome && high) ? '0.18' : '0';
-    if (!wire) continue;
-    const total = wire.getTotalLength();
-    const ends = [[st.a, 12], [st.b, total - 12]];
-    for (const [key, at] of ends) {
-      if (!key || chipped.has(key)) continue;
-      chipped.add(key);
-      const p = wire.getPointAtLength(Math.max(0, Math.min(total, at)));
-      const g = document.createElementNS(NS, 'g');
-      g.setAttribute('class', 'logic-chip'); g.dataset.pin = key; g.dataset.value = String(st.value);
-      const r = document.createElementNS(NS, 'rect');
-      r.setAttribute('x', p.x - 7); r.setAttribute('y', p.y - 7); r.setAttribute('width', 14); r.setAttribute('height', 14); r.setAttribute('rx', 3);
-      const on = high ? (opts.monochrome ? ink : hi) : panel;
-      r.setAttribute('fill', on); r.setAttribute('stroke', high ? on : ink); r.setAttribute('stroke-width', '1.2');
-      const t = document.createElementNS(NS, 'text');
-      t.setAttribute('x', p.x); t.setAttribute('y', p.y + 3.5); t.setAttribute('text-anchor', 'middle');
-      t.setAttribute('font-size', '9.5'); t.setAttribute('font-weight', '700'); t.setAttribute('font-family', 'ui-monospace, Menlo, monospace');
-      t.setAttribute('fill', high ? panel : ink); t.textContent = String(st.value);
-      g.append(r, t); group.appendChild(g);
-    }
-  }
-  return Object.keys(opts.wires).length;
+PACKS = [ROOT / 'data' / 'core.logic.pack.json', ROOT / 'data' / 'logic.gates.pack.json']
+
+# Runs the open document on the engine in the page (its own API; no surface of ours) to quiet,
+# and returns the trace, so the trace is of the document exactly as the editor holds it.
+RUN_JS = r"""
+([packs, inputs]) => {
+  const S = window.SovSchematicStateSpace;
+  const started = S.startRun({doc: snapshotDocument(), packs, inputs});
+  if (!started.ok) return started;
+  for (;;) { const r = S.step(started.run); if (!r.ok) return r; if (r.tick === null) break; }
+  return {ok: true, trace: S.traceOf(started.run)};
 }
 """
 
 
-def logic_state(path: Path, vector: dict) -> dict:
-    """Each top-level wire's net value after applying `vector`, and the pins at its ends."""
-    from logic_sov import Circuit
-    c = Circuit(path)
-    result = c.apply(vector)
-    doc = __import__('json').loads(path.read_text(encoding='utf-8'))
-    points = {x['id'] for x in doc.get('components', []) if x.get('symbolId') == 'point'}
-    wires = {}
-    for w in doc.get('wires', []):
-        a = (w['a'], 'out' if w['a'] in points else w['aSide'])
-        b = (w['b'], 'out' if w['b'] in points else w['bSide'])
-        value = c.value[c.net_of[a]] if a in c.net_of else None
-        if value is None:
-            continue
-        wires[w['id']] = {'value': int(value), 'a': f'{a[0]}.{a[1]}', 'b': f'{b[0]}.{b[1]}'}
-    return {'wires': wires, 'outputs': result['outputs']}
-
-
 def export_documents(paths: list[Path], out_dir: Path | None = None, appearance: str = 'light', pad: int = 48, loop: float | None = None,
-                     logic: dict | None = None, monochrome: bool = False) -> list[dict]:
+                     trace: dict | None = None, tick: int | None = None, monochrome: bool = False,
+                     run: list[dict] | None = None) -> list[dict]:
     """Export each .sov to .svg. Returns one record per input: {source, target, bytes, errors, loop}.
 
     `loop` is a travel-time budget: when given, every animation is snapped to a divisor of
     one period so the file repeats. See scripts/loop_svg.py.
 
-    `logic` is an input vector for a logic document: the export then draws the circuit's live
-    signal state after that vector settles (`monochrome`: by line weight alone).
+    `trace` is a state space trace of the document: the export then draws the run's state at
+    `tick` (default: the trace's last tick); `monochrome` draws it by line weight alone. A
+    refusal to show the trace is an error in the result. `run` is a list of state space inputs
+    ({entity, point, value, at}): the page runs the open document on them and draws that run.
     """
     from playwright.sync_api import sync_playwright
     if not HTML.exists():
         raise SystemExit('index.html is missing; run python build.py first')
     html = HTML.read_text(encoding='utf-8')
+    packs = [__import__('json').loads(p.read_text(encoding='utf-8')) for p in PACKS] if trace is not None or run is not None else None
     results = []
     with sync_playwright() as p:
         browser = p.chromium.launch(**chromium_launch_kwargs(disable_gpu=True))
@@ -136,9 +89,17 @@ def export_documents(paths: list[Path], out_dir: Path | None = None, appearance:
             page.wait_for_timeout(300)
             # An export draws the document at its own scale: full glyphs, whatever the camera.
             page.evaluate('()=>{ if (typeof applyGlyphSizeRule === "function") applyGlyphSizeRule(1); }')
-            if logic is not None:
-                state = logic_state(src, logic)
-                page.evaluate(STATE_JS, {'wires': state['wires'], 'monochrome': monochrome})
+            shown_trace = trace
+            if run is not None:
+                made = page.evaluate(RUN_JS, [packs, run])
+                if not made['ok']:
+                    errors.append(f"run refused {made['code']}: {made['message']}")
+                shown_trace = made.get('trace')
+            if shown_trace is not None:
+                shown = page.evaluate('(o)=>window.SovSchematicAPI.view.stateSpace.show(o)',
+                                      {'trace': shown_trace, 'packs': packs, 'tick': tick, 'chips': 'all', 'monochrome': monochrome})
+                if not shown['ok']:
+                    errors.append(f"state view refused {shown['refused']}: {shown['reason']}")
             svg = page.evaluate(EXPORT_JS, {'pad': pad})
             period = 0.0
             if loop is not None:
@@ -162,19 +123,24 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument('--loop', nargs='?', type=float, const=0.08, default=None,
                     metavar='BUDGET',
                     help='make the animation repeat; optional travel-time budget (default 0.08)')
-    ap.add_argument('--logic-state', default=None, help="draw a logic document's live state after these inputs, e.g. A=1,B=1")
-    ap.add_argument('--monochrome', action='store_true', help='with --logic-state: state by line weight, no colour')
+    ap.add_argument('--trace', type=Path, default=None, help="draw this state space trace's state (a .sovtrace of the document)")
+    ap.add_argument('--run', default=None, help="run the document on these vectors in the page, e.g. 'A=7:4,B=0:4,Cin=0;B0=1'")
+    ap.add_argument('--period', type=int, default=20, help='with --run: logical ticks between vectors')
+    ap.add_argument('--tick', type=int, default=None, help='with --trace: the logical tick to draw (default: the last)')
+    ap.add_argument('--monochrome', action='store_true', help='with --trace: state by line weight, no colour')
     args = ap.parse_args(argv)
     paths = [Path(p) for p in args.paths] or sorted((ROOT / 'examples').glob('*.sov'))
     if not paths:
         print('no .sov inputs', file=sys.stderr)
         return 2
     failed = 0
-    logic = None
-    if args.logic_state is not None:
-        from logic_sov import parse_vector
-        logic = parse_vector(args.logic_state)
-    for r in export_documents(paths, args.out, args.appearance, args.pad, args.loop, logic, args.monochrome):
+    trace = __import__('json').loads(args.trace.read_text(encoding='utf-8')) if args.trace else None
+    run = None
+    if args.run is not None:
+        from record_run import parse_vector
+        run = [{'entity': name, 'point': 'self', 'value': bool(v), 'at': k * args.period}
+               for k, step in enumerate(args.run.split(';')) for name, v in sorted(parse_vector(step).items())]
+    for r in export_documents(paths, args.out, args.appearance, args.pad, args.loop, trace, args.tick, args.monochrome, run):
         status = 'ok ' if not r['errors'] else 'ERR'
         loop = f", loops at {r['loop']:.2f}s" if r.get('loop') else ''
         print(f"{status} {r['source']} -> {r['target']} ({r['bytes']} bytes{loop})")

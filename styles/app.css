@@ -439,10 +439,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .wire-group.has-free-end .wire{stroke-dasharray:7 5}
 .endpoint-halo.free-end{stroke-dasharray:2 3}
 
-/* Live logic state (src/57-logic-live.js): chips at pins, shown on hover, selection, zoom >= 100%, and always on inputs. */
-.logic-chips{pointer-events:none}
-/* Scoped to the live layer: an export's chips (scripts/export_svg.py --logic-state) share the class and always show. */
-.logic-chips .logic-chip{display:none;font:700 9.5px ui-monospace,Menlo,monospace}
-.logic-chips .logic-chip.shown{display:inline}
-.logic-chips .logic-chip.logic-toggle{pointer-events:all;cursor:pointer}
-.logic-chips .logic-chip.logic-toggle:hover rect{stroke-width:2px}
+/* State view (src/57-state-view.js): chips at ports, shown on hover, selection, zoom >= 100%, and always on sources.
+   Scoped to the view's layer: an export shows the chips it asks for. */
+.state-chips{pointer-events:none}
+.state-chips .state-chip{display:none}
+.state-chips .state-chip.shown{display:inline}

@@ -89,7 +89,7 @@ Loading a `.sav` against a document or model that differs in meaning from the on
   - what exists: id and type;
   - what contains or hosts it: parent, surface, host kind and host id;
   - dimension and whether its interior is open;
-  - signal mode, port faces, declared attachment points and `config.logic`;
+  - signal mode, port faces, declared attachment points (with their flow, channels and merge), the state space definition a Component is bound to (`config.definition`) and each Wire's delay;
   - what each wire joins, through which points, and its direction and operations.
 - Everything else is left out: position, size, where along a side a point sits, labels, colors, titles, editor flags, revision.
 - A new field counts only if it is added to the list on purpose, so a presentation field can never invalidate saves by accident.
