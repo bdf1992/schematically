@@ -26,6 +26,8 @@ const out={};
 const K=(e,p,c='main')=>JSON.stringify([e,p,c]);
 function settle(run,limit=1000){const steps=[];for(let i=0;i<limit;i++){const r=S.step(run);steps.push(r);if(!r.ok||r.tick===null)return steps}throw new Error('no quiet')}
 function started(args){const s=S.startRun(args);if(!s.ok)throw new Error(JSON.stringify(s));return s.run}
+// Each device's definition, delay and input ports, read from the document and the packs.
+const devicesOf=(doc,packs)=>Object.fromEntries(doc.components.filter(c=>c.config&&c.config.definition).map(c=>{const def=S.resolveDefinition(c.config.definition,packs);return [c.id,{definition:c.config.definition,delay:def.delay||0,inputs:def.parameters.inputs}]}));
 const rehash=trace=>{let prev='0'.repeat(64);trace.ledger.forEach((e,i)=>{e.prev=prev;e.hash=C.sha256Hex(canon({seq:e.seq,kind:e.kind,body:e.body,prev}));prev=e.hash});trace.head=prev;return trace};
 
 out.api={keys:Object.keys(S),version:S.RUNTIME_VERSION,fns:['startRun','step','traceOf','replay','validateTrace'].map(k=>typeof S[k])};
@@ -54,7 +56,7 @@ for(const [sov,file,inputs,budget] of jobs){
     lastStep:steps[steps.length-1],ticks:steps.filter(s=>s.ok&&s.tick!==null).map(s=>s.tick),
     startLedger,final:{Q:signal('Q'),J:signal('J'),OUT:signal('OUT'),q:signal('G','q')},through:trace.through,head:trace.head,lastHash:trace.ledger[trace.ledger.length-1].hash,
     records:trace.records,ledgerKinds:trace.ledger.map(e=>e.kind),draws:trace.ledger.filter(e=>e.kind==='draw').map(e=>e.body),
-    recordChecks:trace.records.map(r=>S.validateRecord(r).ok),runId:run.id,replayKey:trace.replayKey,top:Object.keys(trace).sort(),budget:trace.budget,revision:trace.documentRevision
+    recordChecks:trace.records.map(r=>S.validateRecord(r).ok),runId:run.id,devices:devicesOf(doc,packs),replayKey:trace.replayKey,top:Object.keys(trace).sort(),budget:trace.budget,revision:trace.documentRevision
   };
 }
 
@@ -207,6 +209,21 @@ const timeline=run=>run.records.map(r=>[r.time.logical,r.subject.entity,r.subjec
     sameHash:D.documentHash(n)===D.documentHash(load('merge.or.sov')),sameTrace:canon(S.traceOf(a))===canon(S.traceOf(b))};
 }
 
+// Provenance of power-on records, both ways: a device with a tick-0 input on its own input port
+// (its power-on output names that input), and a delay-2 NOT whose power-on output is recorded at
+// tick 2 with no input records.
+{
+  const own=started({doc:load('and.sov'),packs,inputs:[{entity:'G',point:'a',value:true,at:0},{entity:'G',point:'b',value:true,at:0}]});settle(own);
+  const notPack=S.loadPack({format:'soveraeign.schematic/pack@0.1',id:'test.not2',version:1,definitions:[
+    {id:'test.not',version:2,pattern:'truth_table@1',delay:2,parameters:{inputs:['a'],outputs:['q'],table:[[0,1],[1,0]]}}]});
+  const notDoc=()=>{const d=read('not.sov');d.components.find(c=>c.id==='G').config.definition='test.not@2';return D.normalizeDocument(d)};
+  const quiet=started({doc:notDoc(),packs:[notPack.pack]});settle(quiet);
+  const fed=started({doc:notDoc(),packs:[notPack.pack],inputs:[{entity:'G',point:'a',value:false,at:0}]});settle(fed);
+  out.powerOn={own:{records:S.traceOf(own).records,devices:devicesOf(load('and.sov'),packs)},
+    not2:{pack:notPack.ok,records:S.traceOf(quiet).records,devices:devicesOf(notDoc(),[notPack.pack])},
+    not2fed:{records:S.traceOf(fed).records,devices:devicesOf(notDoc(),[notPack.pack])}};
+}
+
 // Only the engine appends; the ledger is hash-chained.
 {
   const run=started({doc:load('merge.stochastic.sov'),packs,inputs:mergeInputs});settle(run);
@@ -215,6 +232,33 @@ const timeline=run=>run.records.map(r=>[r.time.logical,r.subject.entity,r.subjec
 }
 process.stdout.write(JSON.stringify(out));
 """
+
+
+def provenance_errors(records: list, devices: dict) -> list:
+    """Every derived record names input records, all recorded before it. Exempt, exactly: a record
+    produced by a device's power-on evaluation (tick 0, so recorded at tick `device delay`, by the
+    device's own rule) when none of that device's input ports has a record at tick 0. A power-on
+    record whose device does have tick-0 input records must name each of them."""
+    errors, seen = [], set()
+    at_zero = {}
+    for rec in records:
+        if rec['time']['logical'] == 0 and rec['provenance']['rule'] != 'overridden':
+            at_zero.setdefault((rec['subject']['entity'], rec['subject']['point']), []).append(rec['id'])
+    for rec in records:
+        inputs = rec['provenance']['inputs']
+        if rec['kind'] == 'derived':
+            dev = devices.get(rec['subject']['entity'])
+            power_on = (dev is not None and rec['observer'] == f"rule:{dev['definition']}"
+                        and rec['time']['logical'] == dev['delay'])
+            required = [i for p in dev['inputs'] for i in at_zero.get((rec['subject']['entity'], p), [])] if power_on else []
+            if power_on and not all(i in inputs for i in required):
+                errors.append((rec['id'], 'a power-on record does not name its tick-0 input records', required))
+            if not inputs and not (power_on and not required):
+                errors.append((rec['id'], 'a derived record names no input records'))
+        if not all(i in seen for i in inputs):
+            errors.append((rec['id'], 'names a record not recorded before it'))
+        seen.add(rec['id'])
+    return errors
 
 
 def node(js: str, *args: str):
@@ -237,6 +281,7 @@ def main() -> None:
     # Step 8 + 9: every golden re-runs byte-identical (forward and reversed walk) and replays.
     names = sorted(p.name for p in STATE.iterdir())
     assert names == ['and.00.sovtrace', 'and.01.sovtrace', 'and.10.sovtrace', 'and.11.sovtrace', 'and.sov',
+                     'bench.inputs.json', 'bench.sov', 'bench.sovtrace',
                      'merge.declared.sovtrace', 'merge.or.sov', 'merge.or.sovtrace', 'merge.sov',
                      'merge.stochastic.sov', 'merge.stochastic.sovtrace',
                      'not-loop.sov', 'not-loop.sovtrace', 'not.0.sovtrace', 'not.1.sovtrace', 'not.sov'], names
@@ -277,9 +322,8 @@ def main() -> None:
                 assert rec['kind'] == 'registered' and rec['provenance'] == {'rule': 'input', 'inputs': []}, rec
             else:
                 assert rec['kind'] == 'derived' and re.match(r'^(path:.+|rule:.+@\d+|engine:merge@1)$', rec['observer']), rec
-                # Only a power-on evaluation from the unrecorded starting state has no input records.
-                power_on = rec['time']['logical'] == 0 and rec['observer'].startswith('rule:')
-                assert (rec['provenance']['inputs'] or power_on) and all(i in [x['id'] for x in g['records'][:n]] for i in rec['provenance']['inputs']), rec
+        # Only a power-on evaluation from the unrecorded starting state has no input records.
+        assert provenance_errors(g['records'], g['devices']) == [], (file, provenance_errors(g['records'], g['devices']))
         # Sequence order within a tick is (entity, point, channel, observable, kind).
         for a, b in zip(g['records'], g['records'][1:]):
             if a['time']['logical'] == b['time']['logical']:
@@ -288,6 +332,42 @@ def main() -> None:
                 assert ka <= kb, (file, ka, kb)
             else:
                 assert a['time']['logical'] < b['time']['logical'], (file, a, b)
+
+    # The provenance exemption is exact, both ways.
+    po = r['powerOn']
+    own = po['own']['records']
+    q0 = [x for x in own if x['subject'] == {'entity': 'G', 'point': 'q', 'channel': 'main', 'run': x['subject']['run']} and x['time']['logical'] == 0]
+    ga = [x['id'] for x in own if x['subject']['entity'] == 'G' and x['subject']['point'] in ('a', 'b') and x['time']['logical'] == 0]
+    assert len(q0) == 1 and q0[0]['value'] is True and len(ga) == 2 and q0[0]['provenance']['inputs'] == ga, (q0, ga)
+    assert provenance_errors(own, po['own']['devices']) == [], provenance_errors(own, po['own']['devices'])
+    doctored = json.loads(json.dumps(own))
+    [x for x in doctored if x['id'] == q0[0]['id']][0]['provenance']['inputs'] = []
+    assert [e[0] for e in provenance_errors(doctored, po['own']['devices'])] == [q0[0]['id'], q0[0]['id']], provenance_errors(doctored, po['own']['devices'])
+    partly = json.loads(json.dumps(own))
+    [x for x in partly if x['id'] == q0[0]['id']][0]['provenance']['inputs'] = ga[:1]
+    assert [e[:2] for e in provenance_errors(partly, po['own']['devices'])] == [(q0[0]['id'], 'a power-on record does not name its tick-0 input records')], provenance_errors(partly, po['own']['devices'])
+    assert po['not2']['pack'] and po['not2']['devices'] == {'G': {'definition': 'test.not@2', 'delay': 2, 'inputs': ['a']}}, po['not2']
+    q2 = [x for x in po['not2']['records'] if x['subject']['entity'] == 'G' and x['subject']['point'] == 'q']
+    assert [(x['time']['logical'], x['value'], x['observer'], x['provenance']['inputs']) for x in q2] == [(2, True, 'rule:test.not@2', [])], q2
+    assert provenance_errors(po['not2']['records'], po['not2']['devices']) == [], provenance_errors(po['not2']['records'], po['not2']['devices'])
+    # Exactly: the same empty provenance at any other tick, or on a Path's record, is not exempt.
+    moved = json.loads(json.dumps(po['not2']['records']))
+    [x for x in moved if x['id'] == q2[0]['id']][0]['time']['logical'] = 3
+    assert [e[:2] for e in provenance_errors(moved, po['not2']['devices'])] == [(q2[0]['id'], 'a derived record names no input records')], provenance_errors(moved, po['not2']['devices'])
+    path = json.loads(json.dumps(po['not2']['records']))
+    qrec = [x for x in path if x['subject']['entity'] == 'Q']
+    assert qrec and qrec[0]['provenance']['inputs'], qrec
+    qrec[0]['provenance']['inputs'] = []
+    assert [e[:2] for e in provenance_errors(path, po['not2']['devices'])] == [(qrec[0]['id'], 'a derived record names no input records')], provenance_errors(path, po['not2']['devices'])
+    # A delay-2 NOT fed at tick 0 on its own input: its power-on output at tick 2 names that input.
+    fed = po['not2fed']['records']
+    fq = [x for x in fed if x['subject']['entity'] == 'G' and x['subject']['point'] == 'q' and x['time']['logical'] == 2]
+    fa = [x['id'] for x in fed if x['subject']['entity'] == 'G' and x['subject']['point'] == 'a' and x['time']['logical'] == 0]
+    assert len(fq) == 1 and len(fa) == 1 and fq[0]['provenance']['inputs'] == fa, (fq, fa)
+    assert provenance_errors(fed, po['not2fed']['devices']) == [], provenance_errors(fed, po['not2fed']['devices'])
+    dropped = json.loads(json.dumps(fed))
+    [x for x in dropped if x['id'] == fq[0]['id']][0]['provenance']['inputs'] = []
+    assert [e[:2] for e in provenance_errors(dropped, po['not2fed']['devices'])] == [(fq[0]['id'], 'a power-on record does not name its tick-0 input records'), (fq[0]['id'], 'a derived record names no input records')], provenance_errors(dropped, po['not2fed']['devices'])
 
     # Power-on: NOT gives Q = NOT A for both values of A; the NOT loop starts and alternates.
     for v in ('0', '1'):

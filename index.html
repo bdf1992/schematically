@@ -2727,6 +2727,34 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   const portKey=(entity,point,channel)=>JSON.stringify([entity,point,channel]);
   const TMP='\u0000tmp:';
   const walked=(run,list)=>run.walk==='reverse'?list.slice().reverse():list;
+  // A deep copy of JSON-safe data (what clone gives, without the text round trip).
+  function copy(value){
+    if(value===null||typeof value!=='object')return value;
+    if(Array.isArray(value)){const out=new Array(value.length);for(let i=0;i<value.length;i++){const v=value[i];out[i]=v===undefined?null:copy(v)}return out}
+    const out={};for(const k in value){const v=value[k];if(v!==undefined)out[k]=copy(v)}return out;
+  }
+  // Indexes derived from a run's read-only topology, kept beside the run (never in it, so a run
+  // stays plain JSON): each port's outgoing Wire ends, and the devices with their port keys.
+  const INDEX=new WeakMap();
+  function indexOf(run){
+    let index=INDEX.get(run.wires);
+    if(index&&index.components===run.components)return index;
+    const out=new Map();
+    for(const wire of run.wires)for(const [end,other,dir] of [['a','b','forward'],['b','a','reverse']]){
+      if(!wire[dir])continue;
+      const key=wire[end].entity+'\u0000'+wire[end].point;
+      if(!out.has(key))out.set(key,[]);
+      out.get(key).push({wire,to:wire[other]});
+    }
+    const devices=Object.keys(run.components).filter(id=>run.components[id].role==='device').sort()
+      .map(id=>({id,inputs:run.components[id].inputs.map(name=>portKey(id,name,'main'))}));
+    index={components:run.components,out,devices};
+    INDEX.set(run.wires,index);
+    return index;
+  }
+  // Pending items are never changed once scheduled, so each one's canonical text is computed once.
+  const PENDING_KEY=new WeakMap();
+  function pendingKey(item){let k=PENDING_KEY.get(item);if(k===undefined){k=Canonical.canonicalize(item);PENDING_KEY.set(item,k)}return k}
   function ledgerHash(seq,kind,body,prev){return Canonical.sha256Hex(Canonical.canonicalize({seq,kind,body,prev}))}
   function appendEntry(run,kind,body){
     const seq=run.ledger.length,prev=seq?run.ledger[seq-1].hash:ZERO_HASH;
@@ -2849,12 +2877,12 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // Emission: one arrival per bound Wire, per direction it carries out of this port, per shared
   // channel, at t + path delay; never back onto a Wire in `exclude`.
   function emit(run,ctx,entity,point,channel,value,exclude,from,phase){
-    for(const wire of walked(run,run.wires)){
+    const ends=indexOf(run).out.get(entity+'\u0000'+point);
+    if(!ends)return;
+    for(const {wire,to} of walked(run,ends)){
       if(exclude.includes(wire.id)||!wire.channels.includes(channel))continue;
-      for(const [end,other,dir] of [['a','b','forward'],['b','a','reverse']]){
-        if(!wire[dir]||wire[end].entity!==entity||wire[end].point!==point)continue;
-        run.pending.push({kind:'arrival',at:ctx.t+wire.delay,entity:wire[other].entity,point:wire[other].point,channel,value,wire:wire.id,phase,from});
-      }
+      const item={kind:'arrival',at:ctx.t+wire.delay,entity:to.entity,point:to.point,channel,value,wire:wire.id,phase,from};
+      run.pending.push(item);ctx.fresh.push(item);
     }
   }
   // Merge order: the declared Paths first (in their declared order), the rest by a seeded draw
@@ -2913,7 +2941,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     }
     if(queue)queue.next=ctx.t+1;
     const id=makeRecord(run,ctx,{...base,kind:win.kind,value:win.value,observer:win.observer,rule:win.rule,inputs:win.inputs});
-    run.signal[key]=win.value;run.lastRecord[key]=id;
+    put(run.signal,ctx.undoSignal,key,win.value);put(run.lastRecord,ctx.undoLast,key,id);ctx.written.push(key);
     const changed=win.value!==old;
     if(changed)ctx.changed.add(key);
     if(win.always||(changed&&win.emits))emit(run,ctx,g.entity,g.point,g.channel,win.value,win.exclude,id,0);
@@ -2922,7 +2950,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   function evaluateDevice(run,ctx,entity,committed){
     const component=run.components[entity],definition=run.definitions[component.definition],p=pattern(definition.pattern);
     const values={},inputs=[];
-    for(const name of component.inputs){const key=portKey(entity,name,'main');values[name]=committed[key]===true;if(run.lastRecord[key])inputs.push(run.lastRecord[key])}
+    for(const name of component.inputs){const key=portKey(entity,name,'main');values[name]=committed(key)===true;if(run.lastRecord[key])inputs.push(run.lastRecord[key])}
     const out=p.evaluate(definition.parameters,values),delay=definition.delay||0;
     for(const name of component.outputs){
       const key=portKey(entity,name,'main'),value=out[name];
@@ -2930,13 +2958,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         if(value===(run.signal[key]===true))continue;
         ctx.cost++;
         const id=makeRecord(run,ctx,{entity,point:name,channel:'main',kind:'derived',value,observer:`rule:${component.definition}`,rule:component.definition,inputs,phase:1});
-        run.signal[key]=value;run.lastRecord[key]=id;
+        if(!ctx.evaluated.has(key))ctx.evaluated.set(key,run.signal[key]);
+        put(run.signal,ctx.undoSignal,key,value);put(run.lastRecord,ctx.undoLast,key,id);ctx.written.push(key);
         emit(run,ctx,entity,name,'main',value,[],id,1);
       }else{
         // Transport delay: schedule every change from the latest value already on its way.
         let latest=run.signal[key]===true,at=-1;
         for(const item of run.pending)if(item.kind==='output'&&item.entity===entity&&item.point===name&&item.channel==='main'&&item.at>at){at=item.at;latest=item.value}
-        if(value!==latest)run.pending.push({kind:'output',at:ctx.t+delay,entity,point:name,channel:'main',value,rule:component.definition,inputs:inputs.slice()});
+        if(value!==latest){const item={kind:'output',at:ctx.t+delay,entity,point:name,channel:'main',value,rule:component.definition,inputs:inputs.slice()};run.pending.push(item);ctx.fresh.push(item)}
       }
     }
   }
@@ -2946,8 +2975,12 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(isObject(value)){const out={};for(const [k,v] of Object.entries(value))out[k]=resolveTmp(v,map);return out}
     return value;
   }
-  function processTick(run,t){
-    const ctx={t,cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null};
+  // Writes to signal and lastRecord go through put, which keeps each key's value from before the
+  // tick, so a refused tick is undone in place (a key the tick added is removed again).
+  const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
+  function put(obj,undo,key,value){if(!undo.has(key))undo.set(key,own(obj,key)?[true,obj[key]]:[false]);obj[key]=value}
+  function undo(obj,log){for(const [key,[had,value]] of log)if(had)obj[key]=value;else delete obj[key]}
+  function processTick(run,t,ctx){
     const due=run.pending.filter(x=>x.at===t);run.pending=run.pending.filter(x=>x.at!==t);
     const groups=new Map();
     const group=(entity,point,channel)=>{const key=portKey(entity,point,channel);if(!groups.has(key))groups.set(key,{entity,point,channel,input:null,output:null,arrivals:[]});return groups.get(key)};
@@ -2957,39 +2990,51 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     }
     for(const [key,q] of Object.entries(run.queues))if(q.items.length&&q.next===t){const [entity,point,channel]=JSON.parse(key);group(entity,point,channel)}
     for(const key of walked(run,[...groups.keys()].sort())){updatePort(run,ctx,groups.get(key));if(ctx.diverged)return {ok:false,...ctx.diverged}}
-    const committed=clone(run.signal);
-    const devices=Object.keys(run.components).filter(id=>run.components[id].role==='device'&&(t===0||run.components[id].inputs.some(name=>ctx.changed.has(portKey(id,name,'main'))))).sort();
+    // Committed state is the signal after the update phase: what the evaluate phase overwrites is read from before it.
+    const committed=key=>ctx.evaluated.has(key)?ctx.evaluated.get(key):run.signal[key];
+    const devices=indexOf(run).devices.filter(x=>t===0||x.inputs.some(key=>ctx.changed.has(key))).map(x=>x.id);
     for(const entity of walked(run,devices))evaluateDevice(run,ctx,entity,committed);
     // Sequence is assigned after the tick, from stable ids only; then every provisional id is resolved.
+    // A provisional id is only ever held by what this tick made: its records, the pending items it
+    // scheduled and the lastRecord entries it wrote (queue items come from arrivals of earlier ticks).
     const sortKey=x=>[x.record.subject.entity,x.record.subject.point,x.record.subject.channel,x.record.observable,x.record.kind,x.phase,x.record.observer,x.rank,x.record.value?1:0];
-    ctx.records.sort((x,y)=>cmpList(sortKey(x),sortKey(y)));
+    const sorted=ctx.records.map(x=>({x,k:sortKey(x)})).sort((x,y)=>cmpList(x.k,y.k)).map(d=>d.x);
     const map=new Map();
-    for(const x of ctx.records){const seq=run.sequence++;map.set(x.record.id,`sr-${run.id}-${String(seq).padStart(6,'0')}`);x.record.id=map.get(x.record.id);x.record.time.sequence=seq}
-    const records=ctx.records.map(x=>{x.record.provenance.inputs=resolveTmp(x.record.provenance.inputs,map);return x.record});
-    run.pending=resolveTmp(run.pending,map);run.lastRecord=resolveTmp(run.lastRecord,map);run.queues=resolveTmp(run.queues,map);
-    for(const [key,q] of Object.entries(run.queues))if(!q.items.length)delete run.queues[key];
-    run.pending.sort((x,y)=>cmp(Canonical.canonicalize(x),Canonical.canonicalize(y)));
+    for(const x of sorted){const seq=run.sequence++;map.set(x.record.id,`sr-${run.id}-${String(seq).padStart(6,'0')}`);x.record.id=map.get(x.record.id);x.record.time.sequence=seq}
+    const records=sorted.map(x=>{x.record.provenance.inputs=resolveTmp(x.record.provenance.inputs,map);return x.record});
+    for(const item of ctx.fresh){if(item.from!==undefined)item.from=resolveTmp(item.from,map);if(item.inputs!==undefined)item.inputs=resolveTmp(item.inputs,map)}
+    for(const key of ctx.written)put(run.lastRecord,ctx.undoLast,key,resolveTmp(run.lastRecord[key],map));
+    for(const [key,q] of Object.entries(run.queues)){if(!q.items.length){delete run.queues[key];continue}for(const item of q.items)if(typeof item.from==='string'&&item.from.startsWith(TMP))item.from=map.get(item.from)}
+    run.pending=run.pending.map(x=>({x,k:pendingKey(x)})).sort((x,y)=>cmp(x.k,y.k)).map(d=>d.x);
     ctx.draws.sort((x,y)=>cmpList([x.entity,x.point,x.channel],[y.entity,y.point,y.channel]));
-    for(const draw of ctx.draws)appendEntry(run,'draw',draw);
-    run.records.push(...records);
-    run.tick=t;run.spent+=ctx.cost;
-    return {ok:true,cost:ctx.cost,records};
+    return {ok:true,cost:ctx.cost,records,draws:ctx.draws};
   }
-  // One step is the earliest tick with scheduled work. Worked on a copy: a refused tick
-  // (BUDGET_SPENT, REPLAY_DIVERGED) leaves the run exactly as it was.
+  // One step is the earliest tick with scheduled work. Worked on a copy of the state a tick
+  // changes (signal, lastRecord, queues, pending, sequence); the ledger and records are only
+  // appended on commit, so a refused tick (BUDGET_SPENT, REPLAY_DIVERGED) leaves the run exactly
+  // as it was. The rest of the run is read-only during a tick and is shared, not copied.
   function step(run){
     if(!isObject(run)||run.runtimeVersion!==RUNTIME_VERSION)return {ok:false,code:'RUN_INVALID',message:`not a ${RUNTIME_VERSION} run`};
     const t=nextTick(run);
     if(t===null)return {ok:true,tick:null,records:[]};
-    const {doc,...rest}=run,work=clone(rest);work.doc=doc;
-    const result=processTick(work,t);
-    if(!result.ok)return result;
-    if(run.spent+result.cost>run.budget)return {ok:false,code:'BUDGET_SPENT',tick:t,left:queuedCount(run),message:`processing tick ${t} takes ${result.cost} events; ${run.budget-run.spent} of the budget ${run.budget} remain`};
-    for(const key of Object.keys(work))run[key]=work[key];
-    return {ok:true,tick:t,records:clone(result.records)};
+    const before={pending:run.pending,queues:run.queues,sequence:run.sequence};
+    const queues={};for(const [key,q] of Object.entries(run.queues))queues[key]={next:q.next,items:q.items.slice()};
+    run.queues=queues;
+    const ctx={t,cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null,fresh:[],written:[],evaluated:new Map(),undoSignal:new Map(),undoLast:new Map()};
+    const result=processTick(run,t,ctx);
+    const refused=!result.ok?result:run.spent+result.cost>run.budget?{ok:false,code:'BUDGET_SPENT',tick:t,left:null,message:`processing tick ${t} takes ${result.cost} events; ${run.budget-run.spent} of the budget ${run.budget} remain`}:null;
+    if(refused){
+      undo(run.signal,ctx.undoSignal);undo(run.lastRecord,ctx.undoLast);Object.assign(run,before);
+      if(refused.code==='BUDGET_SPENT')refused.left=queuedCount(run);
+      return refused;
+    }
+    for(const draw of result.draws)appendEntry(run,'draw',draw);
+    for(const record of result.records)run.records.push(record);
+    run.tick=t;run.spent+=result.cost;
+    return {ok:true,tick:t,records:copy(result.records)};
   }
   function traceOf(run){
-    return {format:TRACE_FORMAT,replayKey:clone(run.ledger[0].body.replayKey),documentRevision:run.doc.revision,budget:run.budget,through:run.tick,head:run.ledger[run.ledger.length-1].hash,ledger:clone(run.ledger),records:clone(run.records)};
+    return {format:TRACE_FORMAT,replayKey:copy(run.ledger[0].body.replayKey),documentRevision:run.doc.revision,budget:run.budget,through:run.tick,head:run.ledger[run.ledger.length-1].hash,ledger:copy(run.ledger),records:copy(run.records)};
   }
   // Shape and every hash link. The chain is recomputed from the start, so a change to any byte
   // of an entry fails that entry and every entry after it.
