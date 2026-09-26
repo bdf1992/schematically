@@ -1311,6 +1311,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   function registerPoints(notation){for(const [id,g] of Object.entries(notation?.glyphs||{}))if(g.points==='terminals')TERMINAL_POINTS.set(id,terminalAttachmentPoints(g))}
   function pointsFor(symbolId){const p=TERMINAL_POINTS.get(symbolId);return p?p.map(x=>({...x})):null}
+  // The built-in notations register their terminal glyphs at load, so a bare gate exposes its
+  // terminals before any document has resolved a notation, whatever the load order (issue #54).
+  for(const n of Object.values(BUILTIN))registerPoints(n);
   function tokens(docOrId){const r=resolve(docOrId);return (r.ok?r.notation:SCHEMATIC).tokens}
   // Corner radius of the rectangle at `inset` inside a card whose bands sum to `total`.
   // Concentric by construction; capped at a quarter of the rectangle's shorter side.
@@ -1435,11 +1438,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   function templatePointSpecs(entity){
     if(attachmentDefaults(entity)==='none')return [];
-    // A glyph that declares its terminals as points (NOTATION-MODEL.md §2) gives the card one
-    // point per terminal: a two-input gate has two inputs.
-    // A terminal is shaped like a declared template port: its flow is its default flow, on `main`.
-    const glyphPoints=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation?.pointsFor?.(entity?.symbolId)?.map(p=>({...p,flow:p.defaultFlow,channels:[{id:'main'}]}));
-    if(glyphPoints)return glyphPoints.map(p=>({...p,role:'boundary'}));
+    // The template's ports come from the one lookup the data core registers (`templatePorts`): the
+    // typed Component trio, or, for a glyph that declares its terminals as points (NOTATION-MODEL.md
+    // §2), one declared port per terminal, so a two-input gate has two inputs (issue #54).
     const declared=templatePortsOf(entity?.symbolId,entity);
     return (Array.isArray(declared)?declared:[]).map(raw=>declaredSpec(raw)).filter(Boolean);
   }
@@ -1602,8 +1603,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // Component template's ports, as it always has).
   const declaredPort=(id,compatId,side,flow)=>({id,compatId,side,t:.5,flow,channels:[{id:'main'}]});
   const COMPONENT_TEMPLATE={ports:[declaredPort('left','in','left','in'),declaredPort('right','out','right','out'),declaredPort('top','control','top','control')]};
+  // A glyph that declares its terminals as points (a logic gate, NOTATION-MODEL.md §2) has those
+  // terminals as its template ports, shaped like declared ports (issue #54): the same registry the
+  // attachment core reads, so an edit's smallest form and a reset compare against the ports the
+  // card actually exposes.
   function templatePorts(symbolId){
-    const preset=TEMPLATE_PRESETS[normalizeSymbolId(symbolId)];
+    const id=normalizeSymbolId(symbolId);
+    const terminals=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation?.pointsFor?.(id);
+    if(terminals)return terminals.map(p=>({id:p.id,compatId:p.compatId,side:p.side,t:p.t,flow:p.defaultFlow,channels:[{id:'main'}]}));
+    const preset=TEMPLATE_PRESETS[id];
     return clone(Array.isArray(preset?.ports)?preset.ports:COMPONENT_TEMPLATE.ports);
   }
   // Loading a file applies the same preset rule as makeComponent: a preset field fills in
@@ -5412,6 +5420,14 @@ const SNAP_RADIUS=34;
 // 0.1 Beta concern: Component, Port, Wire, containment, and normalization model.
 
 const byId=id=>SYMBOLS.find(s=>s.id===id);
+// The symbol a Component is drawn as. A notation glyph (a logic gate, NOTATION-MODEL.md) is not in
+// SYMBOLS; it is read as one here, so nothing that shows a symbol's name, family or meaning has to
+// know which table it came from (issue #55). `byId` alone says whether an id is a SYMBOLS entry.
+function symbolOf(symbolId){
+  const s=byId(symbolId);if(s)return s;
+  const g=SovSchematicNotation.glyphOf(activeNotation(),symbolId);
+  return {id:symbolId,name:g?.title||String(symbolId||''),family:g?.family||'',role:'',diagram_class:'',meaning:g?.meaning||'',verbs:[],properties:[]};
+}
 const Attachment=SovSchematicAttachment;
 function componentAttachmentPointIds(n){return Attachment.pointIds(n)}
 function componentAttachmentPoints(n){return Attachment.descriptors(n,componentConfig(n).ports)}
@@ -6191,7 +6207,7 @@ function quickCommands(){return [
 ]}
 function updateQuickSearch(query=''){
   const q=String(query).trim().toLowerCase(),results=document.getElementById('quickSearchResults');if(!results)return;results.replaceChildren();
-  quickSearchMatches=q?nodes.filter(n=>!isEffectivelyHidden(n)&&[n.id,n.symbolId,componentConfig(n).label,byId(n.symbolId)?.name].some(v=>String(v||'').toLowerCase().includes(q))):[];
+  quickSearchMatches=q?nodes.filter(n=>!isEffectivelyHidden(n)&&[n.id,n.symbolId,componentConfig(n).label,symbolOf(n.symbolId).name].some(v=>String(v||'').toLowerCase().includes(q))):[];
   document.querySelectorAll('.node').forEach(el=>{const match=quickSearchMatches.some(n=>n.id===el.dataset.id);el.classList.toggle('search-match',!!q&&match);el.classList.toggle('search-dim',!!q&&!match)});
   for(const n of quickSearchMatches.slice(0,10)){const b=document.createElement('button');b.type='button';b.className='search-result';b.innerHTML=`<b>${escapeXML(componentDisplayName(n))}</b><small>${escapeXML(n.symbolId)} · ${escapeXML(n.id)}</small>`;b.addEventListener('click',()=>{closeQuickSearch();focusComponent(n)});results.appendChild(b)}
   for(const c of quickCommands().filter(c=>q&&c.name.toLowerCase().includes(q)).slice(0,5)){const b=document.createElement('button');b.type='button';b.className='search-result command';b.innerHTML=`<b>› ${escapeXML(c.name)}</b>`;b.addEventListener('click',()=>{closeQuickSearch();c.run()});results.appendChild(b)}
@@ -6679,7 +6695,7 @@ function portShownFlow(info){
 const PATH_END_FLOW_TITLE="A Path end's direction comes from its role: start receives, end emits";
 function portIsPathEnd(info){return Attachment.resolveSpec(info.owner,info.pointId||info.portId)?.role==='endpoint'}
 function portFlowText(flow){return [...barPortFlow.options].find(o=>o.value===flow)?.textContent||flow}
-function portDisplayName(info){return componentConfig(info.owner).label||byId(info.owner.symbolId).name}
+function portDisplayName(info){return componentConfig(info.owner).label||symbolOf(info.owner.symbolId).name}
 
 function restoreSelectedSurface(){
   if(typeof selected!=='string')return;
@@ -6849,7 +6865,7 @@ function cleanupPaletteGesture({status='Select'}={}){
 }
 function makePaletteFloat(symbolId){
   removePaletteFloat();
-  const s=byId(symbolId),el=document.createElement('div');
+  const s=symbolOf(symbolId),el=document.createElement('div');
   el.className='palette-drag-float';
   el.dataset.paletteGhost='true';
   el.innerHTML=`${glyph(symbolId)}<b>${s.name}</b>`;
@@ -6857,7 +6873,7 @@ function makePaletteFloat(symbolId){
   return el;
 }
 function drawPaletteDropGhost(symbolId,p){
-  const s=byId(symbolId),preset=SovSchematicData.templatePreset(symbolId),dim=preset?.form?.dimension??2;
+  const s=symbolOf(symbolId),preset=SovSchematicData.templatePreset(symbolId),dim=preset?.form?.dimension??2;
   paletteDropLayer.replaceChildren();
   const g=document.createElementNS('http://www.w3.org/2000/svg','g');
   g.setAttribute('class','component-drop-ghost');
@@ -7046,7 +7062,7 @@ function buildSymbolPalette(){
     const h=document.createElement('h2');h.textContent=group;section.appendChild(h);
     const grid=document.createElement('div');grid.className='symbol-grid'+(group==='Primitives'?' primitive-grid':'');section.appendChild(grid);
     ids.forEach(id=>{
-      const g=notation.glyphs?.[id],s=byId(id)||{name:g?.title||id,family:g?.family||'',role:'',diagram_class:''};
+      const g=notation.glyphs?.[id],s=symbolOf(id);
       const b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
       b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
       const caption=preset?`${preset.form.dimension}D · ${sentenceCase(s.role)}`:[s.family,s.diagram_class].filter(Boolean).map(sentenceCase).join(' · ');
@@ -7422,7 +7438,7 @@ function componentAcceptsChildren(n){return formHostsChildren(n)}
 function parentComponent(node){const ownerId=canvasOwnerComponentId(node?.canvasId||GLOBAL_CANVAS_ID);return ownerId?nodes.find(n=>n.id===ownerId)||null:null}
 function componentDisplayName(node){
   if(!node)return '—';
-  return componentConfig(node).label||byId(node.symbolId).name||node.id;
+  return componentConfig(node).label||symbolOf(node.symbolId).name||node.id;
 }
 function componentScopePath(node){
   if(!node)return 'world';const host=componentHostDescriptor(node);
@@ -8326,7 +8342,7 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
 
   componentDetail.hidden=false;
   ensureComponentStructure(n);
-  const s=byId(n.symbolId);
+  const s=symbolOf(n.symbolId);
   iName.textContent=n.boundary.inside.type?s.name:'UNTYPED';
   iOutside.textContent=n.boundary.outside.type;
   {const host=componentHostDescriptor(n);iParent.textContent=host?.ownerKind==='wire'?`Wire · ${host.label||host.ownerId}`:componentDisplayName(parentComponent(n));}
@@ -8388,7 +8404,7 @@ function selectWire(i,{focus=true}={}){
   if(!w){hideSelectionBar();return}
   connectionDetail.hidden=false;
   const cfg=connectionConfig(w),epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b');
-  const endText=(ep,end)=>ep?.kind==='bound'?`${componentConfig(ep.node).label||byId(ep.node.symbolId).name}.${ep.pointId} · ch ${wireEndpointMarker(w,end)}`:ep?`free · ${Math.round(ep.pos.x)}, ${Math.round(ep.pos.y)}`:'—';
+  const endText=(ep,end)=>ep?.kind==='bound'?`${componentConfig(ep.node).label||symbolOf(ep.node.symbolId).name}.${ep.pointId} · ch ${wireEndpointMarker(w,end)}`:ep?`free · ${Math.round(ep.pos.x)}, ${Math.round(ep.pos.y)}`:'—';
   cFrom.textContent=endText(epA,'a');
   cTo.textContent=endText(epB,'b');
   cEnds.textContent=`${epA?.kind==='bound'?'bound':'free'} → ${epB?.kind==='bound'?'bound':'free'}`;
@@ -8799,7 +8815,7 @@ function render(){
   const unplacedIds=new Set(typeof layoutUnplacedIds==='function'?layoutUnplacedIds():[]);
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
     if(isEffectivelyHidden(n))return;
-    const s=byId(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
+    const s=symbolOf(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
     {const form=componentForm(n),backdrop=componentBackdropMode(n);g.setAttribute('class','node'+(unplacedIds.has(n.id)?' unplaced':'')+(n.symbolId==='blank'?' blank':'')+(selectedComponentIds.has(n.id)?' selected':'')+(componentAcceptsChildren(n)?' is-container':'')+(form.frame.mode==='shell'?' form-shell':'')+(form.frame.mode==='frame'?' form-frame':'')+(n.parentId?' nested-child':'')+(componentHostedOnWire(n)?' wire-hosted':'')+(backdrop==='none'?' backdrop-none':'')+(editor.pinned?' is-pinned':'')+(editor.locked?' is-locked':''));}
     g.style.opacity=String(editor.opacity);
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
@@ -9907,11 +9923,16 @@ function beginActiveNodeDrag(e,g,n){
   e.preventDefault();e.stopPropagation();
   if(isEntityLocked(n)||isEntityPinned(n)){statusEl.textContent=isEntityLocked(n)?'Locked · move refused':'Pinned · move refused';selectNode(n.id,{focus:false});return}
   if(!selectedComponentIds.has(n.id)){selectNode(n.id,{focus:false})}
+  // A capture still pending from an earlier edit is committed now, so it cannot fire in the middle
+  // of the gesture and split the move into two transitions at an intermediate position.
+  commitHistoryCapture();
   setHistoryHint(selectedComponentIds.size>1?'Move selection':'Move Component');
   if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'recovered stale drag'});
   if(keyboardMoveNodeId)finishKeyboardMove({});if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
   activeNodeDrag=n.id;captureDragSnapshots(n.id);workspace.classList.add('dragging-node');g.classList.add('dragging');
-  selectNode(n.id,{focus:false});setSelectionBarSuppressed(true);
+  // The pressed Component becomes the primary; a multi-selection it belongs to is kept, so the drag
+  // moves the whole group (issue #49). An unselected Component was selected alone above.
+  selectNode(n.id,{focus:false,preserveSet:true});setSelectionBarSuppressed(true);
   const startPointer=svgPoint(e.clientX,e.clientY);
   const roots=selectedComponentIds.has(n.id)?selectedRootComponents():[n];
   const moved=new Set([n.id,...descendantsOf(n.id).map(x=>x.id)]),groupOrigins=[];
@@ -9935,6 +9956,9 @@ function updateActiveNodeDrag(e){
 function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
   const state=activeNodeDragState;if(!state)return;if(!force&&e?.pointerId!=null&&e.pointerId!==state.pointerId)return;
   const pointerId=state.pointerId;let fault=null,refusal=null;
+  // Whether the pointer moved. The gesture captures the pointer on the workspace, so no click reaches
+  // the card afterwards: a press that did not drag is resolved here (see the finally block).
+  const dragged=Math.hypot(state.pointer.x-state.startPointer.x,state.pointer.y-state.startPointer.y)>2;
   try{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     settleActiveComponent(e||state.modifiers);
@@ -9968,6 +9992,9 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
     activeNodeDragState=null;activeNodeDrag=null;dragRouteSnapshots.clear();
     try{if(workspace.hasPointerCapture?.(pointerId))workspace.releasePointerCapture(pointerId)}catch(_){}
     try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
+    // A plain press on a member of a multi-selection that did not drag selects that member alone,
+    // as a click always has; a drag leaves the group selected (issue #49). Shift keeps the set.
+    if(!dragged&&!force&&!state.modifiers?.shiftKey&&selectedComponentIds.size>1&&selectedComponentIds.has(state.node.id))selectNode(state.node.id,{focus:false});
     restoreSelectionBarAfterGesture();scheduleHistoryCapture();
   }
   statusEl.textContent=fault?'Recovered drag error · ready':refusal?refusal:reason?`Select · ${reason}`:'Select';
@@ -10189,7 +10216,7 @@ function updateWireDrag(e){
     const target=nodes.find(n=>n.id===snap.node); B=portPos(target,snap.side); bSide=snap.side;
     const hit=document.querySelector(`.node[data-id="${snap.node}"] .port-hit[data-side="${snap.side}"]`);
     if(hit) hit.classList.add('snap-target');
-    statusEl.textContent=`Release → ${target.label||byId(target.symbolId).name}`;
+    statusEl.textContent=`Release → ${target.label||symbolOf(target.symbolId).name}`;
   } else {
     armWireBlankCandidate(P);
     statusEl.textContent=wireDrag.blankReady?'Release → new Component':'Hold briefly to grow Component';

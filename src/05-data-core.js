@@ -37,8 +37,15 @@
   // Component template's ports, as it always has).
   const declaredPort=(id,compatId,side,flow)=>({id,compatId,side,t:.5,flow,channels:[{id:'main'}]});
   const COMPONENT_TEMPLATE={ports:[declaredPort('left','in','left','in'),declaredPort('right','out','right','out'),declaredPort('top','control','top','control')]};
+  // A glyph that declares its terminals as points (a logic gate, NOTATION-MODEL.md §2) has those
+  // terminals as its template ports, shaped like declared ports (issue #54): the same registry the
+  // attachment core reads, so an edit's smallest form and a reset compare against the ports the
+  // card actually exposes.
   function templatePorts(symbolId){
-    const preset=TEMPLATE_PRESETS[normalizeSymbolId(symbolId)];
+    const id=normalizeSymbolId(symbolId);
+    const terminals=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation?.pointsFor?.(id);
+    if(terminals)return terminals.map(p=>({id:p.id,compatId:p.compatId,side:p.side,t:p.t,flow:p.defaultFlow,channels:[{id:'main'}]}));
+    const preset=TEMPLATE_PRESETS[id];
     return clone(Array.isArray(preset?.ports)?preset.ports:COMPONENT_TEMPLATE.ports);
   }
   // Loading a file applies the same preset rule as makeComponent: a preset field fills in

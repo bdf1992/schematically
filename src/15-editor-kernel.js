@@ -204,7 +204,7 @@ function quickCommands(){return [
 ]}
 function updateQuickSearch(query=''){
   const q=String(query).trim().toLowerCase(),results=document.getElementById('quickSearchResults');if(!results)return;results.replaceChildren();
-  quickSearchMatches=q?nodes.filter(n=>!isEffectivelyHidden(n)&&[n.id,n.symbolId,componentConfig(n).label,byId(n.symbolId)?.name].some(v=>String(v||'').toLowerCase().includes(q))):[];
+  quickSearchMatches=q?nodes.filter(n=>!isEffectivelyHidden(n)&&[n.id,n.symbolId,componentConfig(n).label,symbolOf(n.symbolId).name].some(v=>String(v||'').toLowerCase().includes(q))):[];
   document.querySelectorAll('.node').forEach(el=>{const match=quickSearchMatches.some(n=>n.id===el.dataset.id);el.classList.toggle('search-match',!!q&&match);el.classList.toggle('search-dim',!!q&&!match)});
   for(const n of quickSearchMatches.slice(0,10)){const b=document.createElement('button');b.type='button';b.className='search-result';b.innerHTML=`<b>${escapeXML(componentDisplayName(n))}</b><small>${escapeXML(n.symbolId)} · ${escapeXML(n.id)}</small>`;b.addEventListener('click',()=>{closeQuickSearch();focusComponent(n)});results.appendChild(b)}
   for(const c of quickCommands().filter(c=>q&&c.name.toLowerCase().includes(q)).slice(0,5)){const b=document.createElement('button');b.type='button';b.className='search-result command';b.innerHTML=`<b>› ${escapeXML(c.name)}</b>`;b.addEventListener('click',()=>{closeQuickSearch();c.run()});results.appendChild(b)}

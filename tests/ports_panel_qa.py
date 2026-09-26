@@ -807,8 +807,29 @@ with sync_playwright() as p:
     assert pg.locator('#barPortFlow').is_enabled()
     pg.close()
 
-    # A gate's glyph terminals keep their directions through a Ports edit: on the half adder, adding
-    # one port to each gate from the panel stores a, b, y as in, in, out, beside the new duplex port.
+    # A gate's glyph terminals are its template ports (issue #54). A bare and2, created before any
+    # logic document has loaded, exposes a, b, y: the registry is filled at module load, not on the
+    # first notation resolve, so a gate's ports do not depend on load order.
+    TERMINALS = [('a', 'in'), ('b', 'in'), ('y', 'out')]
+    pg = browser.new_page(viewport={'width': 1400, 'height': 900})
+    pg.on('pageerror', lambda exc: errors.append(str(exc)))
+    pg.set_content(HTML, wait_until='load')
+    pg.wait_for_timeout(300)
+    pg.evaluate('newSchematic()')
+    bare = pg.evaluate("""()=>{SovSchematicAPI.create('component',{id:'bare',symbolId:'and2',x:400,y:300});render();
+      const n=nodes.find(x=>x.id==='bare');
+      return {specs:Attachment.pointSpecs(n).map(s=>[s.id,s.flow]),template:SovSchematicData.templatePorts('and2').map(p=>[p.id,p.flow]),
+        act:SovSchematicData.templatePorts('act').map(p=>p.id)}}""")
+    assert bare['specs'] == [list(t) for t in TERMINALS], ('a bare gate exposes its terminals', bare)
+    assert bare['template'] == [list(t) for t in TERMINALS], ('templatePorts returns the terminals', bare)
+    assert bare['act'] == ['left', 'right', 'top'], ('a typed Component keeps the trio', bare)
+    pg.close()
+
+    # On the half adder, a gate card is selected by a real click, which opens its inspector and its
+    # Ports panel with no page error (issue #55): the inspector reads the glyph from the notation.
+    # Adding one port stores the smallest form, the template (its terminals) plus the addition;
+    # moving a terminal stores the whole list under 'none'; choosing the template's ports again
+    # resets the terminals and keeps the addition (issue #54).
     pg = browser.new_page(viewport={'width': 1400, 'height': 900})
     pg.on('pageerror', lambda exc: errors.append(str(exc)))
     pg.set_content(HTML, wait_until='load')
@@ -816,25 +837,36 @@ with sync_playwright() as p:
     adder = (ROOT / 'examples/13-half-adder.sov').read_text(encoding='utf-8')
     pg.evaluate("(text)=>{SovSchematicAPI.file.open(text,'13-half-adder.sov');render()}", adder)
     pg.wait_for_timeout(200)
-    TERMINALS = [('a', 'in'), ('b', 'in'), ('y', 'out')]
     for gate in ('sum-gate', 'carry-gate'):
         before = pg.evaluate(STATE, gate)
         assert [x['id'] for x in before['specs']] == ['a', 'b', 'y'] and before['stored'] is None, (gate, before)
-        # Selecting a gate card (selectNode) throws on dev too: the inspector looks the glyph symbol up
-        # in SYMBOLS, which has no logic gates (filed separately). So the gate is made the selection
-        # directly and its panel filled, and the panel's own Add port button is clicked, which runs its
-        # real handler. The data change is synchronous; the selection is cleared in the same task, so
-        # the deferred refresh does not reselect the gate through selectNode.
-        pg.evaluate("(id)=>{closeSelectionSettings();selectedComponentIds.clear();selectedComponentIds.add(id);selected=id;openSelectionSettings('component')}", gate)
-        pg.wait_for_timeout(150)
+        open_panel(pg, gate)
+        title = pg.evaluate("(id)=>componentGlyph(nodes.find(n=>n.id===id)).title", gate)
+        assert pg.locator('#iName').inner_text() == title and title in ('And', 'Exclusive or'), (gate, title, pg.locator('#iName').inner_text())
+        assert pg.evaluate("()=>formAttachments.value") == 'standard', gate
         assert pg.evaluate(ROWS) == ['a', 'b', 'y'], (gate, pg.evaluate(ROWS))
         assert pg.evaluate('()=>!portsAddBtn.disabled'), gate
-        pg.evaluate("()=>{portsAddBtn.click();closeSelectionSettings();selectedComponentIds.clear();selected=null}")
+        pg.locator('#portsAddBtn').click()
         pg.wait_for_timeout(450)
         s = pg.evaluate(STATE, gate)
         assert [(x['id'], x['flow']) for x in s['specs']] == TERMINALS + [('p1', 'duplex')], (gate, s['specs'])
-        assert s['mode'] == 'none' and [(x['id'], x['flow']) for x in s['stored']] == TERMINALS + [('p1', 'duplex')], (gate, s['mode'], s['stored'])
+        assert s['mode'] is None and [(x['id'], x['flow']) for x in s['stored']] == [('p1', 'duplex')], (gate, s['mode'], s['stored'])
         assert all(x['channels'] == ['main'] for x in s['specs']), (gate, s['specs'])
+        # Moving terminal a to the top is a change to the template's ports: the whole list is stored.
+        open_panel(pg, gate)
+        row(pg, 'a', 'port-side').select_option('top')
+        pg.wait_for_timeout(450)
+        s = pg.evaluate(STATE, gate)
+        assert s['mode'] == 'none' and [x['id'] for x in s['stored']] == ['a', 'b', 'y', 'p1'] and s['specs'][0]['side'] == 'top', (gate, s)
+        # Choosing the template's ports resets the terminals to the glyph's and keeps the addition.
+        open_panel(pg, gate)
+        assert pg.evaluate("()=>formAttachments.value") == 'none', gate
+        pg.locator('#formAttachments').select_option('standard')
+        pg.wait_for_timeout(450)
+        assert status(pg) == 'Reset to template ports', (gate, status(pg))
+        s = pg.evaluate(STATE, gate)
+        assert [(x['id'], x['side'], x['flow']) for x in s['specs']] == [('a', 'left', 'in'), ('b', 'left', 'in'), ('y', 'right', 'out'), ('p1', 'right', 'duplex')], (gate, s['specs'])
+        pg.evaluate('()=>closeSelectionSettings()')
     pg.close()
 
     assert not errors, errors

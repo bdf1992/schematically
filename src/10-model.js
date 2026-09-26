@@ -2,6 +2,14 @@
 // 0.1 Beta concern: Component, Port, Wire, containment, and normalization model.
 
 const byId=id=>SYMBOLS.find(s=>s.id===id);
+// The symbol a Component is drawn as. A notation glyph (a logic gate, NOTATION-MODEL.md) is not in
+// SYMBOLS; it is read as one here, so nothing that shows a symbol's name, family or meaning has to
+// know which table it came from (issue #55). `byId` alone says whether an id is a SYMBOLS entry.
+function symbolOf(symbolId){
+  const s=byId(symbolId);if(s)return s;
+  const g=SovSchematicNotation.glyphOf(activeNotation(),symbolId);
+  return {id:symbolId,name:g?.title||String(symbolId||''),family:g?.family||'',role:'',diagram_class:'',meaning:g?.meaning||'',verbs:[],properties:[]};
+}
 const Attachment=SovSchematicAttachment;
 function componentAttachmentPointIds(n){return Attachment.pointIds(n)}
 function componentAttachmentPoints(n){return Attachment.descriptors(n,componentConfig(n).ports)}

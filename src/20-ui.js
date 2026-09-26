@@ -411,7 +411,7 @@ function portShownFlow(info){
 const PATH_END_FLOW_TITLE="A Path end's direction comes from its role: start receives, end emits";
 function portIsPathEnd(info){return Attachment.resolveSpec(info.owner,info.pointId||info.portId)?.role==='endpoint'}
 function portFlowText(flow){return [...barPortFlow.options].find(o=>o.value===flow)?.textContent||flow}
-function portDisplayName(info){return componentConfig(info.owner).label||byId(info.owner.symbolId).name}
+function portDisplayName(info){return componentConfig(info.owner).label||symbolOf(info.owner.symbolId).name}
 
 function restoreSelectedSurface(){
   if(typeof selected!=='string')return;

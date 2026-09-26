@@ -111,11 +111,16 @@ function beginActiveNodeDrag(e,g,n){
   e.preventDefault();e.stopPropagation();
   if(isEntityLocked(n)||isEntityPinned(n)){statusEl.textContent=isEntityLocked(n)?'Locked · move refused':'Pinned · move refused';selectNode(n.id,{focus:false});return}
   if(!selectedComponentIds.has(n.id)){selectNode(n.id,{focus:false})}
+  // A capture still pending from an earlier edit is committed now, so it cannot fire in the middle
+  // of the gesture and split the move into two transitions at an intermediate position.
+  commitHistoryCapture();
   setHistoryHint(selectedComponentIds.size>1?'Move selection':'Move Component');
   if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'recovered stale drag'});
   if(keyboardMoveNodeId)finishKeyboardMove({});if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
   activeNodeDrag=n.id;captureDragSnapshots(n.id);workspace.classList.add('dragging-node');g.classList.add('dragging');
-  selectNode(n.id,{focus:false});setSelectionBarSuppressed(true);
+  // The pressed Component becomes the primary; a multi-selection it belongs to is kept, so the drag
+  // moves the whole group (issue #49). An unselected Component was selected alone above.
+  selectNode(n.id,{focus:false,preserveSet:true});setSelectionBarSuppressed(true);
   const startPointer=svgPoint(e.clientX,e.clientY);
   const roots=selectedComponentIds.has(n.id)?selectedRootComponents():[n];
   const moved=new Set([n.id,...descendantsOf(n.id).map(x=>x.id)]),groupOrigins=[];
@@ -139,6 +144,9 @@ function updateActiveNodeDrag(e){
 function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
   const state=activeNodeDragState;if(!state)return;if(!force&&e?.pointerId!=null&&e.pointerId!==state.pointerId)return;
   const pointerId=state.pointerId;let fault=null,refusal=null;
+  // Whether the pointer moved. The gesture captures the pointer on the workspace, so no click reaches
+  // the card afterwards: a press that did not drag is resolved here (see the finally block).
+  const dragged=Math.hypot(state.pointer.x-state.startPointer.x,state.pointer.y-state.startPointer.y)>2;
   try{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     settleActiveComponent(e||state.modifiers);
@@ -172,6 +180,9 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
     activeNodeDragState=null;activeNodeDrag=null;dragRouteSnapshots.clear();
     try{if(workspace.hasPointerCapture?.(pointerId))workspace.releasePointerCapture(pointerId)}catch(_){}
     try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
+    // A plain press on a member of a multi-selection that did not drag selects that member alone,
+    // as a click always has; a drag leaves the group selected (issue #49). Shift keeps the set.
+    if(!dragged&&!force&&!state.modifiers?.shiftKey&&selectedComponentIds.size>1&&selectedComponentIds.has(state.node.id))selectNode(state.node.id,{focus:false});
     restoreSelectionBarAfterGesture();scheduleHistoryCapture();
   }
   statusEl.textContent=fault?'Recovered drag error · ready':refusal?refusal:reason?`Select · ${reason}`:'Select';
@@ -393,7 +404,7 @@ function updateWireDrag(e){
     const target=nodes.find(n=>n.id===snap.node); B=portPos(target,snap.side); bSide=snap.side;
     const hit=document.querySelector(`.node[data-id="${snap.node}"] .port-hit[data-side="${snap.side}"]`);
     if(hit) hit.classList.add('snap-target');
-    statusEl.textContent=`Release → ${target.label||byId(target.symbolId).name}`;
+    statusEl.textContent=`Release → ${target.label||symbolOf(target.symbolId).name}`;
   } else {
     armWireBlankCandidate(P);
     statusEl.textContent=wireDrag.blankReady?'Release → new Component':'Hold briefly to grow Component';
