@@ -220,6 +220,15 @@ A `.sov` carries three pieces of authored state-space data, and nothing a run co
   written. A Wire `update` with `delay: null` removes it. A Wire `create` or `update` carrying any other value is
   refused with `PATH_DELAY_INVALID` on every surface; loading keeps a stored value as written.
 - **`merge`** on a declared port's channel: the `merge@1` parameters for same-tick arrivals there.
+- **A Point's `self`.** A Point (0D) has one port, `self`, and may declare it, to give it channels and merges, as a
+  single `attachmentPoints` entry `{id: 'self', flow?, channels}` with no `side` or `t`. Loading reads the placeholder
+  form the first runtime wrote (with `side`/`t`) the same way and cleans it to this form; `compactDocument` writes this
+  form. The Point still exposes exactly `self`; its declared channels and merges are what `checkDocument` and the
+  runtime read.
+
+```json
+{"id": "self", "channels": [{"id": "main", "merge": {"combine": "or"}}]}
+```
 
 ```json
 {"id": "in", "side": "left", "t": 0.5, "flow": "in",
@@ -240,3 +249,60 @@ emit; `in`, `duplex`, `control` and `trigger` receive; `duplex` declares forward
 `DEFINITION_UNRESOLVED`, `DEFINITION_INVALID` (the definition resolves but does not validate),
 `DEFINITION_NOT_BINDABLE`, `DEFINITION_PORTS` and `MERGE_INVALID` (including a `declared` order naming a Wire that does not end on the port). A refused document
 still opens.
+
+## Runs and `.sovtrace` (slice 1b, `STATE-SPACE.md`)
+
+A run is one replay key plus a budget, folded by `src/07-state-space.js`: `startRun({doc, packs, inputs, seed,
+budget})` returns `{ok: true, run}` (a plain JSON-safe object) or a typed refusal; `step(run)` processes the earliest
+tick with scheduled work in place and returns `{ok, tick, records}` (`tick: null` when nothing is scheduled; tick 0
+is always processed first: power-on);
+`traceOf(run)` returns the trace; `replay({trace, doc, packs})` re-runs it; `validateTrace(trace)` checks it. None of
+them changes `doc` or `packs`, and nothing a run computes is written to the `.sov`. The runtime version is
+`state-space@1`; slice 1b runs binary channels only.
+
+- **Power-on.** Tick 0's evaluate phase evaluates every device from the state committed after tick 0's inputs,
+  whether or not an input changed; outputs that differ from the starting `false` are recorded (with no input records
+  in their provenance when they read only the unrecorded starting state) and emit. A NOT gives Q = NOT A, and a NOT
+  feeding itself alternates until the budget.
+- **Inputs** are `{entity, point, channel?, value, at}`: at tick `at` the port takes the boolean `value` and emits it;
+  `channel` defaults to `main`, and a port may be named by its compat id (stored as its port id). `budget` defaults to
+  10000 processed events (inputs, arrivals, output changes) and `seed` to `"0"`.
+- **Refusals at start:** `RUN_REFUSED` (with `refusals`) when `checkDocument` does not pass; `MERGE_FORM` for a
+  channel merge with `combine: sum`; `INPUT_INVALID` for an unknown entity, port or channel, a non-boolean `value`, an
+  `at` that is not an integer >= 0, a port a definition owns as an output, two inputs at the same `(entity, point, channel, at)`, a non-string `seed` or a
+  `budget` that is not an integer >= 0. `step` refuses with `BUDGET_SPENT` (`tick`, `left`: what is still queued)
+  and applies nothing of that tick.
+- **Merges on a Point** are declared on its `self` entry (above; `examples/state/merge.sov`). Without a merge,
+  same-tick fan-in uses `{combine: last, order: {kind: stochastic}}`.
+
+A trace, `soveraeign.schematic/trace@0.1` (schema `formats/schematic.trace.schema.json`, MIME
+`application/vnd.soveraeign.schematic-trace+json`), is `{format, replayKey, documentRevision, budget, through, head,
+ledger, records?}`, and its file encoding is `canonicalize(traceOf(run))`: RFC 8785, sorted keys, no whitespace, no final
+newline.
+
+- `replayKey` is `{documentId, documentHash, definitions (every resolved id@version, sorted), runtimeVersion,
+  traceFormat, inputs (in (at, entity, point, channel) order), seed}`. `documentRevision` is a label only.
+- `through` is the last tick processed (`null` before any) and `head` the hash of the last ledger entry. A trace may
+  be taken after any number of steps.
+- `ledger` holds what a replay cannot recompute, hash-chained: every entry is `{seq, kind, body, prev, hash}` with
+  `seq` from 0, `prev` the previous entry's `hash` (64 zeros first) and `hash =
+  sha256Hex(canonicalize({seq, kind, body, prev}))`. The kinds are `start` (body: `{replayKey, budget}`, so the budget is covered by the chain), `input` (one per
+  input, in input order) and `draw` (one per stochastic merge order: `{tick, entity, point, channel, paths, order}`,
+  `order = drawOrder(seed, ['merge', tick, entity, point, channel], paths)`).
+- `records`, optional, are the derived state records (`state-record@0.1`), kept for audit: `vantage: space`, `observable:
+  logic.level`, `form: binary`, `kind: registered` (observer `input`) or `derived` (observer `path:<wireId>`,
+  `rule:<id@version>` or `engine:merge@1`), ids `sr-<run>-<seq6>`, `time.sequence` assigned per tick by sorting on
+  `(entity, point, channel, observable, kind)`. An arrival that an input (or a device's delayed output) overrides is
+  recorded with `provenance.rule: overridden`. The run id is the first 12 hex digits of the replay key's hash.
+
+`validateTrace` checks the shape and recomputes the chain from the start: a change to any byte of an entry fails that
+entry and every entry after it; the start entry must carry the trace's `replayKey` and `budget`, and `head` must equal
+the last entry's hash (a truncated ledger fails there, with `entry` the index of the first missing entry). `replay`
+refuses with `TRACE_INVALID` (naming the first bad `entry`),
+`REPLAY_KEY_MISMATCH` (naming the differing `fields`; the inputs and seed are the trace's own) or `REPLAY_DIVERGED`
+(a recorded draw that does not re-derive from the seed, a run that cannot reach `through`, or a ledger entry or,
+when the trace carries them, a record that differs in canonical bytes), and otherwise processes exactly the ticks up
+to `through` and returns the recomputed records. Golden runs live in `examples/state/`: `and.sov` with `and.00` to
+`and.11.sovtrace`; `not.sov` with `not.0` and `not.1.sovtrace`; `not-loop.sov` with `not-loop.sovtrace` (budget
+40, taken at `BUDGET_SPENT`); and `merge.sov`, `merge.or.sov`, `merge.stochastic.sov` with `merge.declared`,
+`merge.or` and `merge.stochastic.sovtrace`.

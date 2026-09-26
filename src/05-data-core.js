@@ -403,6 +403,12 @@
     if(spec.label)port.label=spec.label;
     return port;
   }
+  // A Point's `self` declaration in its stored form: no side or t.
+  function storedSelf(declared){
+    const port={id:'self'};if(declared.flow)port.flow=declared.flow;
+    port.channels=declared.channels.map(c=>c.merge===undefined?{id:c.id}:{id:c.id,merge:clone(c.merge)});
+    return port;
+  }
   // An end's raw stored reference, the way normalizeWireEndpoints reads one: a real
   // (non-free) attachment's pointId, otherwise the compatibility side.
   function endRawRef(wire,end){
@@ -422,6 +428,15 @@
   // further moves.
   function cleanStoredPorts(doc,component){
     const config=component?.config;if(!isObject(config)||!Array.isArray(config.attachmentPoints))return component;
+    // A Point's `self` declaration is kept in its clean form, `{id: 'self', flow?, channels}`,
+    // first; any other entry is cleaned as a declared port, as before.
+    const self=Attachment.intrinsicDimension(component)===0?Attachment.selfDeclaration(component):null;
+    if(self){
+      const rest=config.attachmentPoints.filter(p=>!(isObject(p)&&String(p.id??'').trim()==='self'));
+      config.attachmentPoints=rest;cleanStoredPorts(doc,component);
+      config.attachmentPoints=[storedSelf(self),...config.attachmentPoints];
+      return component;
+    }
     const specs=Attachment.authoredPointSpecs(component,{keepCollisions:true});
     const surviving=new Set(Attachment.templatePointSpecs(component).concat(specs.filter(spec=>!spec.originalId)).map(spec=>spec.id));
     const wires=Array.isArray(doc?.wires)?doc.wires:[];
@@ -614,6 +629,10 @@
       if(c.config.definition===null)delete c.config.definition; // null is unbound
       // 'none' is always stored; 'standard' only where it overrides a preset of 'none' (a Plane).
       if(c.config.attachmentDefaults==='standard'&&(templatePreset(c.symbolId)?.attachmentDefaults||'standard')==='standard')delete c.config.attachmentDefaults;
+      if(Array.isArray(c.config.attachmentPoints)&&Attachment.intrinsicDimension(c)===0){
+        const self=Attachment.selfDeclaration(c);
+        if(self)c.config.attachmentPoints=c.config.attachmentPoints.map(p=>isObject(p)&&String(p.id??'').trim()==='self'?storedSelf(self):p);
+      }
       if(Array.isArray(c.config.attachmentPoints)&&!c.config.attachmentPoints.length)delete c.config.attachmentPoints;
       if(isObject(c.config.presentation))for(const key of DERIVED_PRESENTATION_KEYS)delete c.config.presentation[key];
       if(isObject(c.config.ports))for(const port of Object.values(c.config.ports)){

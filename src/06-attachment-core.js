@@ -69,8 +69,24 @@
     const declared=templatePortsOf(entity?.symbolId,entity);
     return (Array.isArray(declared)?declared:[]).map(raw=>declaredSpec(raw)).filter(Boolean);
   }
+  // A Point (0D) has one port, `self`. It may declare it, to give it channels and merges, as a
+  // single `config.attachmentPoints` entry `{id: 'self', flow?, channels}` with no side or t (a
+  // placeholder side/t, as the first runtime wrote, is read the same way and cleaned on load).
+  function selfDeclaration(entity){
+    const list=Array.isArray(entity?.config?.attachmentPoints)?entity.config.attachmentPoints:[];
+    const raw=list.find(p=>p&&typeof p==='object'&&String(p.id??'').trim()==='self');
+    if(!raw)return null;
+    const declared={id:'self'};
+    if(PORT_FLOWS.includes(raw.flow))declared.flow=raw.flow;
+    declared.channels=portChannels(raw);
+    return declared;
+  }
   function basePointSpecs(d,entity=null){
-    if(d===0)return [{id:'self',compatId:'out',side:'point',role:'self',defaultFlow:'duplex',t:.5}];
+    if(d===0){
+      const spec={id:'self',compatId:'out',side:'point',role:'self',defaultFlow:'duplex',t:.5},declared=selfDeclaration(entity);
+      if(declared){spec.channels=declared.channels;if(declared.flow){spec.flow=declared.flow;spec.defaultFlow=declared.flow}}
+      return [spec];
+    }
     if(d===1)return [
       {id:'start',compatId:'in',side:'left',role:'endpoint',defaultFlow:'in',t:0},
       {id:'end',compatId:'out',side:'right',role:'endpoint',defaultFlow:'out',t:1}
@@ -156,5 +172,5 @@
     if(end==='a')wire.aSide=spec.compatId;else wire.bSide=spec.compatId;
     return wire[key];
   }
-  return {PORT_SIDES,PORT_FLOWS,useTemplatePorts,portChannels,channelIds,declaredSpec,templatePointSpecs,authoredPointSpecs,intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
+  return {PORT_SIDES,PORT_FLOWS,useTemplatePorts,selfDeclaration,portChannels,channelIds,declaredSpec,templatePointSpecs,authoredPointSpecs,intrinsicDimension,hostDimension,effectiveDimension,attachmentDefaults,pointSpecs,builtinPointIds,pointIds,resolveSpec,pointId,compatId,defaultCompatId,descriptor,descriptors,normalizeOwnedPoint,wireEndpointRef,syncWireEndpoint};
 });

@@ -1,8 +1,9 @@
 'use strict';
-// State space concern, slice 1a (STATE-SPACE.md): the contract layer only. The state
-// record envelope, the closed pattern registry (truth_table@1, merge@1), definitions and
-// the minimal pack envelope, contracts generated from pattern + parameters, ports
-// generated from a bound definition, and the load checks. No ledger, tick or run.
+// State space concern (STATE-SPACE.md). Slice 1a, the contract layer: the state record
+// envelope, the closed pattern registry (truth_table@1, merge@1), definitions and the minimal
+// pack envelope, contracts generated from pattern + parameters, ports generated from a bound
+// definition, and the load checks. Slice 1b, the first runs: the hash-chained ledger, the
+// replay key, two-phase ticks with merges, the trace and replay. No settle, no surfaces.
 // Pure: no DOM, no pack data (packs are passed in), validation hand-written.
 (function(root,factory){
   let Canonical=root.SovSchematicCanonical;
@@ -273,15 +274,15 @@
   // Binds `ref` to the Component: resolves the definition, builds the patch as bindDefinition
   // does, verifies its ports equal the contract, and applies it through the binding path.
   // Returns a receipt: ok, or refused with `error.code` (nothing changed, no revision).
-  const portKey=port=>[port.id,port.flow||port.defaultFlow||'duplex',(port.channels||[{id:'main'}]).map(c=>c.id)];
+  const contractPortKey=port=>[port.id,port.flow||port.defaultFlow||'duplex',(port.channels||[{id:'main'}]).map(c=>c.id)];
   function applyBind(doc,componentId,ref,packs){
     const revision=Number.isInteger(doc?.revision)?doc.revision:0;
     const refused=(code,message)=>({schema:Data.RECEIPT_SCHEMA,operationId:null,ok:false,revisionBefore:revision,revisionAfter:revision,result:null,error:{code,message:`${code}: ${message}`}});
     if(!isObject(doc))return refused('DOCUMENT_INVALID','a document must be an object');
     const operation=bindDefinition(doc,componentId,ref,packs);
     if(operation.ok===false)return refused(operation.code,operation.message);
-    const want=contractPorts(contractOf(resolveDefinition(ref,packs))).map(portKey).sort();
-    const have=operation.patch.config.attachmentPoints.map(portKey).sort();
+    const want=contractPorts(contractOf(resolveDefinition(ref,packs))).map(contractPortKey).sort();
+    const have=operation.patch.config.attachmentPoints.map(contractPortKey).sort();
     if(!same(want,have))return refused('DEFINITION_PORTS',`the binding patch's ports ${JSON.stringify(have)} differ from the contract of ${ref} ${JSON.stringify(want)}`);
     return Data.applyBinding(doc,componentId,operation.patch);
   }
@@ -356,5 +357,362 @@
     return {ok:refusals.length===0,refusals};
   }
 
-  return {RECORD_FORMAT,PACK_FORMAT,validateRecord,patterns,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument};
+  // --- Runtime, slice 1b (STATE-SPACE.md "Runtime semantics (slice 1b)", "Two-phase ticks",
+  // "Merge and ordering"): the hash-chained ledger, the replay key, two-phase ticks with merges,
+  // recorded stochastic order draws, the trace and replay. A run is a plain JSON-safe object;
+  // step() advances it in place and nothing else is touched. Binary channels only.
+  const RUNTIME_VERSION='state-space@1';
+  const TRACE_FORMAT='soveraeign.schematic/trace@0.1';
+  const ZERO_HASH='0'.repeat(64);
+  const LEDGER_KINDS=['start','input','draw'];
+  const REPLAY_KEY_FIELDS=['documentId','documentHash','definitions','runtimeVersion','traceFormat','inputs','seed'];
+  const INPUT_KEYS=['entity','point','channel','value','at'];
+  const DEFAULT_MERGE=Object.freeze({combine:'last',order:Object.freeze({kind:'stochastic'})});
+  const cmp=(x,y)=>x<y?-1:x>y?1:0;
+  const cmpList=(x,y)=>{for(let i=0;i<Math.max(x.length,y.length);i++){const c=cmp(x[i],y[i]);if(c)return c}return 0};
+  const portKey=(entity,point,channel)=>JSON.stringify([entity,point,channel]);
+  const TMP='\u0000tmp:';
+  const walked=(run,list)=>run.walk==='reverse'?list.slice().reverse():list;
+  function ledgerHash(seq,kind,body,prev){return Canonical.sha256Hex(Canonical.canonicalize({seq,kind,body,prev}))}
+  function appendEntry(run,kind,body){
+    const seq=run.ledger.length,prev=seq?run.ledger[seq-1].hash:ZERO_HASH;
+    run.ledger.push({seq,kind,body,prev,hash:ledgerHash(seq,kind,body,prev)});
+  }
+  const specChannels=spec=>(Array.isArray(spec?.channels)&&spec.channels.length?spec.channels:[{id:'main'}]).map(c=>c.id);
+  const specFlow=spec=>spec.flow||spec.defaultFlow||'duplex';
+  // What the run reads of the document, resolved once at start: each Wire's two ports, delay,
+  // the directions it carries and the channels it shares; each Component's role; each merge.
+  function topology(d,definitions){
+    const components={},merges={},wires=[];
+    const specOf=(component,pointId)=>{try{return Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&(s.id===pointId||s.compatId===pointId))||null}catch(_){return null}};
+    const byId=new Map(d.components.map(c=>[c.id,c]));
+    for(const component of d.components){
+      const config=isObject(component.config)?component.config:{};
+      const ref=config.definition!==undefined&&config.definition!==null?config.definition:null;
+      if(ref){const def=definitions[ref];components[component.id]={role:'device',definition:ref,inputs:def.parameters.inputs.slice(),outputs:def.parameters.outputs.slice()}}
+      else components[component.id]={role:component.symbolId==='point'?'point':'absorb'};
+      // A channel merge is read where checkDocument reads it: the stored port list, by port id.
+      for(const port of Array.isArray(config.attachmentPoints)?config.attachmentPoints:[]){
+        for(const channel of Array.isArray(port?.channels)?port.channels:[]){
+          if(isObject(channel)&&channel.merge!==undefined)merges[portKey(component.id,port.id,channel.id)]=clone(channel.merge);
+        }
+      }
+    }
+    for(const wire of d.wires){
+      if(!Data.wireEndBound(wire,'a')||!Data.wireEndBound(wire,'b'))continue;
+      const ends={};
+      for(const end of ['a','b']){
+        const component=byId.get(wire[end]),spec=component?specOf(component,wire[end+'Attachment']?.pointId||wire[end+'Side']):null;
+        if(!spec)break;
+        ends[end]={entity:component.id,point:spec.id,flow:specFlow(spec),channels:specChannels(spec)};
+      }
+      if(!ends.a||!ends.b)continue;
+      const config=isObject(wire.config)?wire.config:{};
+      const direction=['none','forward','reverse','duplex'].includes(config.direction)?config.direction:wire.duplex?'duplex':'forward';
+      const declared=direction==='none'?[]:direction==='duplex'?['forward','reverse']:[direction];
+      const theirs=new Set(ends.b.channels);
+      wires.push({id:wire.id,a:{entity:ends.a.entity,point:ends.a.point},b:{entity:ends.b.entity,point:ends.b.point},delay:config.delay===undefined?1:config.delay,
+        forward:declared.includes('forward')&&EMITS.includes(ends.a.flow)&&RECEIVES.includes(ends.b.flow),
+        reverse:declared.includes('reverse')&&EMITS.includes(ends.b.flow)&&RECEIVES.includes(ends.a.flow),
+        channels:ends.a.channels.filter(c=>theirs.has(c))});
+    }
+    wires.sort((x,y)=>cmp(x.id,y.id));
+    return {components,merges,wires};
+  }
+  function inputRefusal(message){return {ok:false,code:'INPUT_INVALID',message}}
+  // A run: startRun({doc, packs, inputs, seed, budget}). `walk: 'reverse'` reverses the order in
+  // which the engine walks ports, devices and Wires within a phase; no outcome depends on it.
+  function startRun(options){
+    const o=isObject(options)?options:{};
+    const checked=checkDocument(o.doc,o.packs);
+    if(!checked.ok)return {ok:false,code:'RUN_REFUSED',message:`the document does not pass its load checks: ${checked.refusals.map(r=>r.code).join(', ')}`,refusals:checked.refusals};
+    const d=Data.normalizeDocument(clone(o.doc));
+    for(const component of d.components){
+      for(const port of Array.isArray(component.config?.attachmentPoints)?component.config.attachmentPoints:[]){
+        for(const channel of Array.isArray(port?.channels)?port.channels:[]){
+          if(channel?.merge?.combine==='sum')return {ok:false,code:'MERGE_FORM',subject:`component:${component.id}:${port.id}:${channel.id}`,message:`combine sum is not defined on binary channels (${component.id}.${port.id}.${channel.id}); slice 1b runs binary channels only`};
+        }
+      }
+    }
+    const seed=o.seed===undefined?'0':o.seed;
+    if(typeof seed!=='string')return inputRefusal('seed must be a string');
+    const budget=o.budget===undefined?10000:o.budget;
+    if(!natural(budget))return inputRefusal('budget must be an integer >= 0');
+    if(o.walk!==undefined&&!['forward','reverse'].includes(o.walk))return inputRefusal('walk must be forward or reverse');
+    const rawInputs=o.inputs===undefined?[]:o.inputs;
+    if(!Array.isArray(rawInputs))return inputRefusal('inputs must be an array');
+    const inputs=[],seen=new Set();
+    for(let i=0;i<rawInputs.length;i++){
+      const raw=rawInputs[i];
+      if(!isObject(raw))return inputRefusal(`input ${i} must be an object`);
+      const extra=Object.keys(raw).filter(k=>!INPUT_KEYS.includes(k));
+      if(extra.length)return inputRefusal(`input ${i}: unknown key ${extra[0]}`);
+      const component=d.components.find(c=>c.id===raw.entity);
+      if(!component)return inputRefusal(`input ${i}: unknown entity ${JSON.stringify(raw.entity)}`);
+      let spec=null;try{spec=Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&typeof raw.point==='string'&&(s.id===raw.point||s.compatId===raw.point))||null}catch(_){spec=null}
+      if(!spec)return inputRefusal(`input ${i}: ${raw.entity} has no port ${JSON.stringify(raw.point)}`);
+      const bound=component.config?.definition;
+      if(bound!==undefined&&bound!==null&&(resolveDefinition(bound,o.packs)?.parameters?.outputs||[]).includes(spec.id))return inputRefusal(`input ${i}: ${component.id}.${spec.id} is an output of ${bound}; a device's output is the device's`);
+      const channel=raw.channel===undefined?'main':raw.channel;
+      if(!specChannels(spec).includes(channel))return inputRefusal(`input ${i}: port ${raw.entity}.${spec.id} has no channel ${JSON.stringify(channel)}`);
+      if(typeof raw.value!=='boolean')return inputRefusal(`input ${i}: value must be a boolean (binary channels only)`);
+      if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
+      const input={entity:component.id,point:spec.id,channel,value:raw.value,at:raw.at};
+      const key=JSON.stringify([input.at,input.entity,input.point,input.channel]);
+      if(seen.has(key))return inputRefusal(`input ${i}: a second input at (${input.entity}, ${input.point}, ${input.channel}, ${input.at})`);
+      seen.add(key);inputs.push(input);
+    }
+    inputs.sort((x,y)=>cmpList([x.at,x.entity,x.point,x.channel],[y.at,y.entity,y.point,y.channel]));
+    const refs=[...new Set(d.components.map(c=>c.config?.definition).filter(ref=>ref!==undefined&&ref!==null))].sort();
+    const definitions={};
+    for(const ref of refs){const def=resolveDefinition(ref,o.packs);if(def.delay===undefined)def.delay=0;definitions[ref]=def}
+    const replayKey={documentId:d.id,documentHash:Data.documentHash(d),definitions:refs,runtimeVersion:RUNTIME_VERSION,traceFormat:TRACE_FORMAT,inputs,seed};
+    const shape=topology(d,definitions);
+    const run={
+      id:Canonical.sha256Hex(Canonical.canonicalize(replayKey)).slice(0,12),
+      runtimeVersion:RUNTIME_VERSION,doc:d,definitions,components:shape.components,merges:shape.merges,wires:shape.wires,
+      seed,budget,spent:0,tick:null,walk:o.walk||'forward',
+      signal:{},lastRecord:{},queues:{},sequence:0,ledger:[],records:[],replayDraws:null,
+      pending:inputs.map(x=>({kind:'input',...x}))
+    };
+    appendEntry(run,'start',{replayKey:clone(replayKey),budget});
+    for(const input of inputs)appendEntry(run,'input',clone(input));
+    return {ok:true,run};
+  }
+  // Power-on: tick 0 is always processed, even with nothing scheduled at it.
+  function nextTick(run){
+    let t=run.tick===null?0:null;
+    for(const item of run.pending)if(t===null||item.at<t)t=item.at;
+    for(const q of Object.values(run.queues))if(q.items.length&&(t===null||q.next<t))t=q.next;
+    return t;
+  }
+  function queuedCount(run){return run.pending.length+Object.values(run.queues).reduce((n,q)=>n+q.items.length,0)}
+  function makeRecord(run,ctx,{entity,point,channel,kind,value,observer,rule,inputs,phase,rank=0}){
+    const id=`${TMP}${ctx.tmp++}`;
+    ctx.records.push({phase,rank,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind,form:'binary',value,time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none'}});
+    return id;
+  }
+  // Emission: one arrival per bound Wire, per direction it carries out of this port, per shared
+  // channel, at t + path delay; never back onto a Wire in `exclude`.
+  function emit(run,ctx,entity,point,channel,value,exclude,from,phase){
+    for(const wire of walked(run,run.wires)){
+      if(exclude.includes(wire.id)||!wire.channels.includes(channel))continue;
+      for(const [end,other,dir] of [['a','b','forward'],['b','a','reverse']]){
+        if(!wire[dir]||wire[end].entity!==entity||wire[end].point!==point)continue;
+        run.pending.push({kind:'arrival',at:ctx.t+wire.delay,entity:wire[other].entity,point:wire[other].point,channel,value,wire:wire.id,phase,from});
+      }
+    }
+  }
+  // Merge order: the declared Paths first (in their declared order), the rest by a seeded draw
+  // keyed by (seed, tick, entity, port, channel), recorded in the ledger (and, in replay, read from it).
+  function mergeOrder(run,ctx,g,merge){
+    const tag=a=>g.arrivals.filter(x=>x.wire===a.wire).length>1?`${a.wire}#${a.phase}`:a.wire;
+    const items=g.arrivals.map(a=>({a,id:tag(a)})).sort((x,y)=>cmp(x.id,y.id));
+    const declared=merge.order?.kind==='declared'?merge.order.paths:[];
+    const first=[];for(const path of declared)for(const item of items)if(item.a.wire===path)first.push(item);
+    const rest=items.filter(item=>!declared.includes(item.a.wire));
+    let restOrder=rest.map(item=>item.id);
+    if(rest.length>1){
+      const paths=restOrder.slice(),drawn=Canonical.drawOrder(run.seed,['merge',ctx.t,g.entity,g.point,g.channel],paths);
+      if(run.replayDraws){
+        const recorded=run.replayDraws.find(e=>e.body.tick===ctx.t&&e.body.entity===g.entity&&e.body.point===g.point&&e.body.channel===g.channel);
+        if(!recorded||!same(recorded.body.paths,paths)||!same(recorded.body.order,drawn)){
+          ctx.diverged={code:'REPLAY_DIVERGED',entry:recorded?recorded.seq:null,message:recorded?`the draw recorded at ledger entry ${recorded.seq} (${g.entity}.${g.point}.${g.channel}, tick ${ctx.t}) does not re-derive from the seed: recorded ${JSON.stringify(recorded.body.order)}, derived ${JSON.stringify(drawn)}`:`no draw is recorded for ${g.entity}.${g.point}.${g.channel} at tick ${ctx.t}`};
+          return null;
+        }
+        restOrder=recorded.body.order.slice();
+      }else restOrder=drawn;
+      ctx.draws.push({tick:ctx.t,entity:g.entity,point:g.point,channel:g.channel,paths,order:restOrder.slice()});
+    }
+    return [...first,...restOrder.map(id=>rest.find(item=>item.id===id))].map(item=>item.a);
+  }
+  // Update phase for one (entity, port, channel): input, else a device's delayed output, else the
+  // merged arrivals (or a queue's head). What loses is recorded with rule `overridden`.
+  function updatePort(run,ctx,g){
+    const key=portKey(g.entity,g.point,g.channel),old=run.signal[key]===true,role=run.components[g.entity]?.role;
+    const merge=run.merges[key]||DEFAULT_MERGE,queue=merge.combine==='queue'?(run.queues[key]||(run.queues[key]={next:ctx.t+1,items:[]})):null;
+    const base={entity:g.entity,point:g.point,channel:g.channel,phase:0};
+    let win=null;
+    if(g.input)win={value:g.input.value,kind:'registered',observer:'input',rule:'input',inputs:[],always:true,exclude:[]};
+    else if(g.output)win={value:g.output.value,kind:'derived',observer:`rule:${g.output.rule}`,rule:g.output.rule,inputs:g.output.inputs,emits:true,exclude:[]};
+    if(win){
+      for(const a of g.arrivals)makeRecord(run,ctx,{...base,kind:'derived',value:a.value,observer:`path:${a.wire}`,rule:'overridden',inputs:[a.from],rank:a.phase});
+    }else{
+      const arrived=g.arrivals.map(a=>a.wire);
+      const orderFree=['or','and','min','max'].includes(merge.combine);
+      if(orderFree&&g.arrivals.length){
+        const sorted=g.arrivals.slice().sort((x,y)=>cmpList([x.wire,x.phase],[y.wire,y.phase]));
+        const value=merge.combine==='or'||merge.combine==='max'?sorted.some(a=>a.value):sorted.every(a=>a.value);
+        win=sorted.length===1?{value,observer:`path:${sorted[0].wire}`,rule:'path',inputs:[sorted[0].from]}:{value,observer:'engine:merge@1',rule:'merge@1',inputs:sorted.map(a=>a.from)};
+      }else if(queue){
+        if(g.arrivals.length){const ordered=g.arrivals.length>1?mergeOrder(run,ctx,g,merge):g.arrivals;if(!ordered)return;queue.items.push(...ordered.map(a=>({value:a.value,wire:a.wire,phase:a.phase,from:a.from})))}
+        if(queue.items.length){const head=queue.items.shift();win={value:head.value,observer:'engine:merge@1',rule:'merge@1',inputs:[head.from]};if(!arrived.includes(head.wire))arrived.push(head.wire)}
+      }else if(g.arrivals.length===1){
+        const a=g.arrivals[0];win={value:a.value,observer:`path:${a.wire}`,rule:'path',inputs:[a.from]};
+      }else if(g.arrivals.length){
+        const ordered=mergeOrder(run,ctx,g,merge);if(!ordered)return;
+        const pick=merge.combine==='first'?ordered[0]:ordered[ordered.length-1];
+        win={value:pick.value,observer:'engine:merge@1',rule:'merge@1',inputs:ordered.map(a=>a.from)};
+      }
+      if(!win)return;
+      win.kind='derived';win.exclude=arrived;win.emits=role==='point';
+    }
+    if(queue)queue.next=ctx.t+1;
+    const id=makeRecord(run,ctx,{...base,kind:win.kind,value:win.value,observer:win.observer,rule:win.rule,inputs:win.inputs});
+    run.signal[key]=win.value;run.lastRecord[key]=id;
+    const changed=win.value!==old;
+    if(changed)ctx.changed.add(key);
+    if(win.always||(changed&&win.emits))emit(run,ctx,g.entity,g.point,g.channel,win.value,win.exclude,id,0);
+  }
+  // Evaluate phase: a device whose input port changed reads committed state only.
+  function evaluateDevice(run,ctx,entity,committed){
+    const component=run.components[entity],definition=run.definitions[component.definition],p=pattern(definition.pattern);
+    const values={},inputs=[];
+    for(const name of component.inputs){const key=portKey(entity,name,'main');values[name]=committed[key]===true;if(run.lastRecord[key])inputs.push(run.lastRecord[key])}
+    const out=p.evaluate(definition.parameters,values),delay=definition.delay||0;
+    for(const name of component.outputs){
+      const key=portKey(entity,name,'main'),value=out[name];
+      if(delay===0){
+        if(value===(run.signal[key]===true))continue;
+        ctx.cost++;
+        const id=makeRecord(run,ctx,{entity,point:name,channel:'main',kind:'derived',value,observer:`rule:${component.definition}`,rule:component.definition,inputs,phase:1});
+        run.signal[key]=value;run.lastRecord[key]=id;
+        emit(run,ctx,entity,name,'main',value,[],id,1);
+      }else{
+        // Transport delay: schedule every change from the latest value already on its way.
+        let latest=run.signal[key]===true,at=-1;
+        for(const item of run.pending)if(item.kind==='output'&&item.entity===entity&&item.point===name&&item.channel==='main'&&item.at>at){at=item.at;latest=item.value}
+        if(value!==latest)run.pending.push({kind:'output',at:ctx.t+delay,entity,point:name,channel:'main',value,rule:component.definition,inputs:inputs.slice()});
+      }
+    }
+  }
+  function resolveTmp(value,map){
+    if(typeof value==='string')return value.startsWith(TMP)?map.get(value):value;
+    if(Array.isArray(value))return value.map(x=>resolveTmp(x,map));
+    if(isObject(value)){const out={};for(const [k,v] of Object.entries(value))out[k]=resolveTmp(v,map);return out}
+    return value;
+  }
+  function processTick(run,t){
+    const ctx={t,cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null};
+    const due=run.pending.filter(x=>x.at===t);run.pending=run.pending.filter(x=>x.at!==t);
+    const groups=new Map();
+    const group=(entity,point,channel)=>{const key=portKey(entity,point,channel);if(!groups.has(key))groups.set(key,{entity,point,channel,input:null,output:null,arrivals:[]});return groups.get(key)};
+    for(const item of due){
+      const g=group(item.entity,item.point,item.channel);ctx.cost++;
+      if(item.kind==='input')g.input=item;else if(item.kind==='output')g.output=item;else g.arrivals.push(item);
+    }
+    for(const [key,q] of Object.entries(run.queues))if(q.items.length&&q.next===t){const [entity,point,channel]=JSON.parse(key);group(entity,point,channel)}
+    for(const key of walked(run,[...groups.keys()].sort())){updatePort(run,ctx,groups.get(key));if(ctx.diverged)return {ok:false,...ctx.diverged}}
+    const committed=clone(run.signal);
+    const devices=Object.keys(run.components).filter(id=>run.components[id].role==='device'&&(t===0||run.components[id].inputs.some(name=>ctx.changed.has(portKey(id,name,'main'))))).sort();
+    for(const entity of walked(run,devices))evaluateDevice(run,ctx,entity,committed);
+    // Sequence is assigned after the tick, from stable ids only; then every provisional id is resolved.
+    const sortKey=x=>[x.record.subject.entity,x.record.subject.point,x.record.subject.channel,x.record.observable,x.record.kind,x.phase,x.record.observer,x.rank,x.record.value?1:0];
+    ctx.records.sort((x,y)=>cmpList(sortKey(x),sortKey(y)));
+    const map=new Map();
+    for(const x of ctx.records){const seq=run.sequence++;map.set(x.record.id,`sr-${run.id}-${String(seq).padStart(6,'0')}`);x.record.id=map.get(x.record.id);x.record.time.sequence=seq}
+    const records=ctx.records.map(x=>{x.record.provenance.inputs=resolveTmp(x.record.provenance.inputs,map);return x.record});
+    run.pending=resolveTmp(run.pending,map);run.lastRecord=resolveTmp(run.lastRecord,map);run.queues=resolveTmp(run.queues,map);
+    for(const [key,q] of Object.entries(run.queues))if(!q.items.length)delete run.queues[key];
+    run.pending.sort((x,y)=>cmp(Canonical.canonicalize(x),Canonical.canonicalize(y)));
+    ctx.draws.sort((x,y)=>cmpList([x.entity,x.point,x.channel],[y.entity,y.point,y.channel]));
+    for(const draw of ctx.draws)appendEntry(run,'draw',draw);
+    run.records.push(...records);
+    run.tick=t;run.spent+=ctx.cost;
+    return {ok:true,cost:ctx.cost,records};
+  }
+  // One step is the earliest tick with scheduled work. Worked on a copy: a refused tick
+  // (BUDGET_SPENT, REPLAY_DIVERGED) leaves the run exactly as it was.
+  function step(run){
+    if(!isObject(run)||run.runtimeVersion!==RUNTIME_VERSION)return {ok:false,code:'RUN_INVALID',message:`not a ${RUNTIME_VERSION} run`};
+    const t=nextTick(run);
+    if(t===null)return {ok:true,tick:null,records:[]};
+    const {doc,...rest}=run,work=clone(rest);work.doc=doc;
+    const result=processTick(work,t);
+    if(!result.ok)return result;
+    if(run.spent+result.cost>run.budget)return {ok:false,code:'BUDGET_SPENT',tick:t,left:queuedCount(run),message:`processing tick ${t} takes ${result.cost} events; ${run.budget-run.spent} of the budget ${run.budget} remain`};
+    for(const key of Object.keys(work))run[key]=work[key];
+    return {ok:true,tick:t,records:clone(result.records)};
+  }
+  function traceOf(run){
+    return {format:TRACE_FORMAT,replayKey:clone(run.ledger[0].body.replayKey),documentRevision:run.doc.revision,budget:run.budget,through:run.tick,head:run.ledger[run.ledger.length-1].hash,ledger:clone(run.ledger),records:clone(run.records)};
+  }
+  // Shape and every hash link. The chain is recomputed from the start, so a change to any byte
+  // of an entry fails that entry and every entry after it.
+  function validateTrace(trace){
+    const errors=[];let entry=null;
+    const fail=(i,message)=>{errors.push(i===null?message:`ledger ${i}: ${message}`);if(i!==null&&entry===null)entry=i};
+    if(!isObject(trace))return {ok:false,entry,errors:['trace must be an object']};
+    unknownKeys(trace,['format','replayKey','documentRevision','budget','through','head','ledger','records'],'trace',errors);
+    if(trace.through!==null&&!natural(trace.through))errors.push('through must be null or an integer >= 0');
+    if(typeof trace.head!=='string'||!/^[0-9a-f]{64}$/.test(trace.head))errors.push('head must be a 64-digit hex hash');
+    if(trace.format!==TRACE_FORMAT)errors.push(`format must equal ${TRACE_FORMAT}`);
+    if(!natural(trace.documentRevision))errors.push('documentRevision must be an integer >= 0');
+    if(!natural(trace.budget))errors.push('budget must be an integer >= 0');
+    const key=trace.replayKey;
+    if(!isObject(key))errors.push('replayKey must be an object');
+    else{
+      unknownKeys(key,REPLAY_KEY_FIELDS,'replayKey',errors);
+      for(const field of ['documentId','documentHash','runtimeVersion','traceFormat','seed'])if(typeof key[field]!=='string')errors.push(`replayKey.${field} must be a string`);
+      if(!Array.isArray(key.definitions)||!key.definitions.every(nonEmpty))errors.push('replayKey.definitions must be an array of id@version strings');
+      if(!Array.isArray(key.inputs))errors.push('replayKey.inputs must be an array');
+    }
+    if(!Array.isArray(trace.ledger)||!trace.ledger.length)errors.push('ledger must be a non-empty array');
+    else{
+      let running=ZERO_HASH,broken=null;
+      trace.ledger.forEach((e,i)=>{
+        if(broken!==null){fail(i,`follows the broken link at entry ${broken}`);return}
+        if(!isObject(e)){fail(i,'an entry must be an object');broken=i;return}
+        const extra=Object.keys(e).filter(k=>!['seq','kind','body','prev','hash'].includes(k));
+        let bad=extra.length?`unknown key ${extra[0]}`:null;
+        if(!bad&&e.seq!==i)bad=`seq must be ${i}`;
+        if(!bad&&!LEDGER_KINDS.includes(e.kind))bad=`kind must be one of ${LEDGER_KINDS.join(', ')}`;
+        if(!bad&&(i===0)!==(e.kind==='start'))bad=i===0?'the first entry must be start':'only the first entry is start';
+        if(!bad&&e.prev!==running)bad='prev does not link to the entry before';
+        let hash=null;
+        if(!bad){try{hash=ledgerHash(e.seq,e.kind,e.body,e.prev)}catch(_){bad='body is not canonical JSON'}}
+        if(!bad&&e.hash!==hash)bad='hash does not match the entry';
+        if(bad){fail(i,bad);broken=i;return}
+        running=hash;
+      });
+      if(entry===null&&isObject(key)&&!same(trace.ledger[0].body,{replayKey:key,budget:trace.budget}))fail(0,'the start entry does not carry the replayKey and budget');
+      // A consistently truncated (or extended) ledger fails here: head names the entry the trace ends on.
+      if(entry===null&&trace.head!==trace.ledger[trace.ledger.length-1].hash){errors.push(`head does not equal the hash of the last ledger entry (${trace.ledger.length-1})`);entry=trace.ledger.length}
+    }
+    if(trace.records!==undefined&&!Array.isArray(trace.records))errors.push('records must be an array when present');
+    else if(trace.records!==undefined)trace.records.forEach((r,i)=>{const v=validateRecord(r);if(!v.ok)errors.push(`record ${i}: ${v.errors.join('; ')}`)});
+    return {ok:errors.length===0,entry,errors};
+  }
+  // Replay: the trace's replay key recomputed from doc, packs, its inputs and seed; the fold re-run
+  // through the trace's `through` tick, reading draws from the ledger; the ledger compared byte for
+  // byte, and the records too when the trace carries them.
+  function replay(options){
+    const o=isObject(options)?options:{};
+    const trace=o.trace,checked=validateTrace(trace);
+    if(!checked.ok)return {ok:false,code:'TRACE_INVALID',entry:checked.entry,errors:checked.errors,message:checked.entry===null?checked.errors[0]:`the trace fails at ledger entry ${checked.entry}: ${checked.errors[0]}`};
+    const key=trace.replayKey;
+    const started=startRun({doc:o.doc,packs:o.packs,inputs:key.inputs,seed:key.seed,budget:trace.budget});
+    if(!started.ok)return started;
+    const run=started.run,mine=run.ledger[0].body.replayKey;
+    const fields=REPLAY_KEY_FIELDS.filter(field=>!same(mine[field],key[field]));
+    if(fields.length)return {ok:false,code:'REPLAY_KEY_MISMATCH',fields,message:`the replay key differs in ${fields.join(', ')}`};
+    run.replayDraws=trace.ledger.filter(e=>e.kind==='draw').map(e=>({seq:e.seq,body:e.body}));
+    // Exactly the ticks up to `through`.
+    while(trace.through!==null){
+      const next=nextTick(run);
+      if(next===null||next>trace.through)break;
+      const r=step(run);
+      if(!r.ok){if(r.code==='BUDGET_SPENT')return {ok:false,code:'REPLAY_DIVERGED',tick:r.tick,message:`the trace processed tick ${r.tick}, which the recomputed run cannot within the budget ${trace.budget}`};return r}
+    }
+    run.replayDraws=null;
+    if(run.tick!==trace.through)return {ok:false,code:'REPLAY_DIVERGED',tick:run.tick,message:`the recomputed run ends at tick ${run.tick}, the trace at ${trace.through}`};
+    const n=Math.max(run.ledger.length,trace.ledger.length);
+    for(let i=0;i<n;i++)if(Canonical.canonicalize(run.ledger[i]??null)!==Canonical.canonicalize(trace.ledger[i]??null))return {ok:false,code:'REPLAY_DIVERGED',entry:i,message:`ledger entry ${i} differs from the recomputed run`};
+    if(trace.records===undefined)return {ok:true,records:run.records};
+    const m=Math.max(run.records.length,trace.records.length);
+    for(let i=0;i<m;i++)if(Canonical.canonicalize(run.records[i]??null)!==Canonical.canonicalize(trace.records[i]??null))return {ok:false,code:'REPLAY_DIVERGED',record:i,message:`record ${i} differs from the recomputed run`};
+    return {ok:true,records:run.records};
+  }
+
+  return {RECORD_FORMAT,PACK_FORMAT,RUNTIME_VERSION,TRACE_FORMAT,validateRecord,patterns,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument,startRun,step,traceOf,replay,validateTrace};
 });
