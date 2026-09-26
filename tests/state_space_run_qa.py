@@ -387,6 +387,7 @@ def main() -> None:
     names = sorted(p.name for p in STATE.iterdir())
     assert names == ['and.00.sovtrace', 'and.01.sovtrace', 'and.10.sovtrace', 'and.11.sovtrace', 'and.sov',
                      'bench.inputs.json', 'bench.sov', 'bench.sovtrace',
+                     'grow.sov', 'grow.sovtrace',
                      'merge.declared.sovtrace', 'merge.or.sov', 'merge.or.sovtrace', 'merge.sov',
                      'merge.stochastic.sov', 'merge.stochastic.sovtrace',
                      'not-loop.sov', 'not-loop.sovtrace', 'not.0.sovtrace', 'not.1.sovtrace', 'not.sov'], names
