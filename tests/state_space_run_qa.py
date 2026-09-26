@@ -130,7 +130,7 @@ const timeline=run=>run.records.map(r=>[r.time.logical,r.subject.entity,r.subjec
 {
   const q=(order,inputs,walk)=>{const run=started({doc:withMerge({combine:'queue',order:{kind:'declared',paths:order}}),packs,inputs,walk});const steps=settle(run);return {timeline:timeline(run),ticks:steps.map(s=>s.tick),bytes:canon(S.traceOf(run)),queues:run.queues}};
   const three=read('merge.stochastic.sov');three.components.push({id:'S3',symbolId:'point',x:80,y:360,config:{label:'S3'}});
-  three.wires.push({id:'w4',a:'S3',aSide:'self',aAttachment:{kind:'attachment-ref',componentId:'S3',pointId:'self'},b:'J',bSide:'self',bAttachment:{kind:'attachment-ref',componentId:'J',pointId:'self'},config:{direction:'forward'}});
+  three.wires.push({id:'w4',a:'S3',aSide:'self',aAttachment:{kind:'attachment-ref',componentId:'S3',pointId:'self'},b:'J',bSide:'self',bAttachment:{kind:'attachment-ref',componentId:'J',pointId:'self'},config:{direction:'forward',delay:1}});
   three.components.find(c=>c.id==='J').config.attachmentPoints=[{id:'self',channels:[{id:'main',merge:{combine:'queue',order:{kind:'declared',paths:['w4']}}}]}];
   const threeInputs=[...mergeInputs,{entity:'S3',point:'self',value:true,at:0}];
   const r3=started({doc:D.normalizeDocument(clone(three)),packs,inputs:threeInputs});settle(r3);
@@ -158,7 +158,7 @@ const timeline=run=>run.records.map(r=>[r.time.logical,r.subject.entity,r.subjec
     {id:'S',symbolId:'point',x:0,y:0,config:{}},
     {id:'G',symbolId:'act',x:200,y:0,config:{definition:ref,attachmentDefaults:'none',attachmentPoints:[{id:'a',side:'left',t:.5,flow:'in',channels:[{id:'main'}]},{id:'q',side:'right',t:.5,flow:'out',channels:[{id:'main'}]}]}},
     {id:'Q',symbolId:'point',x:400,y:0,config:{}}],
-    wires:[{id:'wS',a:'S',aSide:'self',b:'G',bSide:'a'},{id:'wQ',a:'G',aSide:'q',b:'Q',bSide:'self',config:{delay:2}}],references:[],layout:{}});
+    wires:[{id:'wS',a:'S',aSide:'self',b:'G',bSide:'a',config:{delay:1}},{id:'wQ',a:'G',aSide:'q',b:'Q',bSide:'self',config:{delay:2}}],references:[],layout:{}});
   const go=(ref,inputs,walk)=>{const run=started({doc:docFor(ref),packs:[testPack.pack],inputs,walk});const steps=settle(run);return {timeline:timeline(run),ticks:steps.map(s=>s.tick),bytes:canon(S.traceOf(run)),defs:run.ledger[0].body.replayKey.definitions,replay:S.replay({trace:S.traceOf(run),doc:docFor(ref),packs:[testPack.pack]}).ok}};
   const pulse=[{entity:'S',point:'self',value:true,at:0},{entity:'S',point:'self',value:false,at:1}];
   out.delay={pack:testPack.ok,d0:go('test.buf@1',[{entity:'S',point:'self',value:true,at:0}]),d2:go('test.buf@2',[{entity:'S',point:'self',value:true,at:0}]),

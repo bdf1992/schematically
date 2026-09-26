@@ -3112,7 +3112,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   const TRACE_FORMAT='soveraeign.schematic/trace@0.1';
   const ZERO_HASH='0'.repeat(64);
   const LEDGER_KINDS=['start','input','draw'];
-  const REPLAY_KEY_FIELDS=['documentId','documentHash','definitions','runtimeVersion','traceFormat','inputs','seed'];
+  const REPLAY_KEY_FIELDS=['documentId','documentHash','definitions','runtimeVersion','traceFormat','inputs','seed','tickMs'];
   const INPUT_KEYS=['entity','point','channel','value','at'];
   const DEFAULT_MERGE=Object.freeze({combine:'last',order:Object.freeze({kind:'stochastic'})});
   const cmp=(x,y)=>x<y?-1:x>y?1:0;
@@ -3194,7 +3194,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   // What the run reads of the document, resolved once at start: each Wire's two ports, delay,
   // the directions it carries and the channels it shares; each Component's role; each merge.
-  function topology(d,definitions,bind={}){
+  // Time: one tick is tickMs milliseconds (default 1). A Wire's stored delay is in ticks; without one,
+  // its latencyMs (the graph core's default when absent) is converted, never below one tick.
+  function wireDelay(config,tickMs){
+    if(config.delay!==undefined)return config.delay;
+    const g=typeof globalThis!=='undefined'?globalThis:{},fallback=Number(g.SovSchematicGraph?.DEFAULT_LATENCY_MS??10);
+    const ms=Number.isFinite(Number(config.latencyMs))?Math.max(0,Number(config.latencyMs)):fallback;
+    return Math.max(1,Math.round(ms/tickMs));
+  }
+  function topology(d,definitions,bind={},tickMs=1){
     const components={},merges={},wires=[];
     const specOf=(component,pointId)=>{try{return Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&(s.id===pointId||s.compatId===pointId))||null}catch(_){return null}};
     const byId=new Map(d.components.map(c=>[c.id,c]));
@@ -3223,7 +3231,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const direction=['none','forward','reverse','duplex'].includes(config.direction)?config.direction:wire.duplex?'duplex':'forward';
       const declared=direction==='none'?[]:direction==='duplex'?['forward','reverse']:[direction];
       const theirs=new Set(ends.b.channels);
-      wires.push({id:wire.id,a:{entity:ends.a.entity,point:ends.a.point},b:{entity:ends.b.entity,point:ends.b.point},delay:config.delay===undefined?1:config.delay,
+      wires.push({id:wire.id,a:{entity:ends.a.entity,point:ends.a.point},b:{entity:ends.b.entity,point:ends.b.point},delay:wireDelay(config,tickMs),
         forward:declared.includes('forward')&&EMITS.includes(ends.a.flow)&&RECEIVES.includes(ends.b.flow),
         reverse:declared.includes('reverse')&&EMITS.includes(ends.b.flow)&&RECEIVES.includes(ends.a.flow),
         channels:ends.a.channels.filter(c=>theirs.has(c))});
@@ -3251,6 +3259,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const budget=o.budget===undefined?10000:o.budget;
     if(!natural(budget))return inputRefusal('budget must be an integer >= 0');
     if(o.walk!==undefined&&!['forward','reverse'].includes(o.walk))return inputRefusal('walk must be forward or reverse');
+    const tickMs=o.tickMs===undefined?1:o.tickMs;
+    if(!(typeof tickMs==='number'&&Number.isFinite(tickMs)&&tickMs>0))return inputRefusal('tickMs must be a number above 0');
     const rawInputs=o.inputs===undefined?[]:o.inputs;
     if(!Array.isArray(rawInputs))return inputRefusal('inputs must be an array');
     const inputs=[],seen=new Set();
@@ -3282,13 +3292,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const ref of bound){const def=resolveDefinition(ref,o.packs);if(def.delay===undefined)def.delay=0;definitions[ref]=def}
     Object.assign(definitions,clone(implied.definitions));
     const replayKey={documentId:d.id,documentHash:Data.documentHash(d),definitions:refs,runtimeVersion:RUNTIME_VERSION,traceFormat:TRACE_FORMAT,inputs,seed};
-    const shape=topology(d,definitions,implied.bind);
+    if(tickMs!==1)replayKey.tickMs=tickMs;
+    const shape=topology(d,definitions,implied.bind,tickMs);
     // A declared level is an input the document makes: a caller's input on the same port and tick wins.
     const sources=implied.sources.filter(x=>!seen.has(JSON.stringify([x.at,x.entity,x.point,x.channel])));
     const run={
       id:Canonical.sha256Hex(Canonical.canonicalize(replayKey)).slice(0,12),
       runtimeVersion:RUNTIME_VERSION,doc:d,definitions,components:shape.components,merges:shape.merges,wires:shape.wires,
-      seed,budget,spent:0,tick:null,walk:o.walk||'forward',
+      seed,budget,tickMs,spent:0,tick:null,walk:o.walk||'forward',
       signal:{},lastRecord:{},queues:{},sequence:0,ledger:[],records:[],replayDraws:null,
       pending:[...inputs,...sources].sort((x,y)=>cmpList([x.at,x.entity,x.point,x.channel],[y.at,y.entity,y.point,y.channel])).map(x=>({kind:'input',...x}))
     };
@@ -3568,10 +3579,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const trace=o.trace,checked=validateTrace(trace);
     if(!checked.ok)return {ok:false,code:'TRACE_INVALID',entry:checked.entry,errors:checked.errors,message:checked.entry===null?checked.errors[0]:`the trace fails at ledger entry ${checked.entry}: ${checked.errors[0]}`};
     const key=trace.replayKey;
-    const started=startRun({doc:o.doc,packs:o.packs,inputs:key.inputs,seed:key.seed,budget:trace.budget});
+    const started=startRun({doc:o.doc,packs:o.packs,inputs:key.inputs,seed:key.seed,budget:trace.budget,tickMs:key.tickMs});
     if(!started.ok)return started;
     const run=started.run,mine=run.ledger[0].body.replayKey;
-    const fields=REPLAY_KEY_FIELDS.filter(field=>!same(mine[field],key[field]));
+    const fields=REPLAY_KEY_FIELDS.filter(field=>(mine[field]!==undefined||key[field]!==undefined)&&!same(mine[field],key[field]));
     if(fields.length)return {ok:false,code:'REPLAY_KEY_MISMATCH',fields,message:`the replay key differs in ${fields.join(', ')}`};
     run.replayDraws=trace.ledger.filter(e=>e.kind==='draw').map(e=>({seq:e.seq,body:e.body}));
     // Exactly the ticks up to `through`.
@@ -3750,7 +3761,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // document that references a definition, saying so). A surface start is capped at BUDGET_LIMIT
   // (the engine's startRun is not). Every method returns a run receipt, and none of them touches the
   // document, its revision, history or recovery.
-  const START_KEYS=['inputs','seed','budget'],BUDGET_LIMIT=1000000;
+  const START_KEYS=['inputs','seed','budget','tickMs'],BUDGET_LIMIT=1000000;
   function createRunRegistry(options){
     const o=isObject(options)?options:{};
     const loaded=Array.isArray(o.packs)?o.packs.map(p=>loadPack(p)):null;
@@ -3780,7 +3791,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         if(typeof a.budget==='number'&&a.budget>BUDGET_LIMIT)return runReceipt(op,null,inputRefusal(`budget ${a.budget} is over the surface limit ${BUDGET_LIMIT}`));
         const doc=current(),empty=noPacks(doc);
         if(empty)return runReceipt(op,null,empty);
-        const started=startRun({doc,packs,inputs:a.inputs,seed:a.seed,budget:a.budget});
+        const started=startRun({doc,packs,inputs:a.inputs,seed:a.seed,budget:a.budget,tickMs:a.tickMs});
         if(!started.ok)return runReceipt(op,null,started);
         const handle=`${started.run.id}.${++count}`;
         runs.set(handle,started.run);
