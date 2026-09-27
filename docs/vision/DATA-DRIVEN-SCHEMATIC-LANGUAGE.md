@@ -1,6 +1,15 @@
 # Post-RC vision: data-driven schematic language
 
-> **Non-authoritative horizon.** This document records product direction after the current RC. It does not widen 0.1 acceptance criteria. See `RC-FINISH-LINE.md` and `ROADMAP.md` for the release boundary; see Issue #4 for the root agenda.
+> **Non-authoritative horizon.** This document records product direction beyond the merged RC foundation. It does not widen 0.1 acceptance criteria. See `RC-FINISH-LINE.md` and `ROADMAP.md` for the release boundary; see Issue #4 for the root agenda.
+
+## First product proof
+
+The [root roadmap](../../ROADMAP.md) owns dated milestone scenarios and the
+90-day user proof: model a small workflow, run it, inspect memory/history, change
+a rule, and share a resumable example. Use that loop to choose the first required
+language features. The broader vocabulary below remains a horizon; it is not all
+required for the first product. SOV integration adds governed execution through
+an explicit adapter and does not change the meaning of local simulation evidence.
 
 ## Thesis
 

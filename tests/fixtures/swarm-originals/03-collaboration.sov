@@ -1,0 +1,470 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "swarm-commons",
+  "revision": 0,
+  "meta": {
+    "title": "03 \u2014 Collaboration through governed services",
+    "status": "PROPOSED \u2014 architecture for review; no live execution",
+    "notes": [
+      "Contributors and reviewers are participants operating the same platform. Discovery may be subscription-driven or explicitly assigned.",
+      "Publish problems, inspect evidence, reserve work, submit versioned artifacts, review, and settle through services.",
+      "Claims are atomic reservations with deadlines and fencing. An expired worker cannot overwrite a newer owner.",
+      "A review attaches evidence; acceptance is a separately authorized service transition. Reputation never grants authority by itself.",
+      "Accepted work and unresolved findings become discoverable for later participants. Disagreement can produce revision or an explicit unresolved outcome.",
+      "A participant may represent a nested team. Child authority and resources stay within the parent allocation, with traceable outcomes."
+    ],
+    "source": "https://github.com/bdf1992/schematically",
+    "timeScale": 0
+  },
+  "components": [
+    {
+      "id": "contributor",
+      "symbolId": "act",
+      "x": 110,
+      "y": 380,
+      "config": {
+        "label": "Contributor / team",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          }
+        }
+      }
+    },
+    {
+      "id": "reviewer",
+      "symbolId": "act",
+      "x": 1390,
+      "y": 170,
+      "config": {
+        "label": "Reviewer / witness",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          }
+        }
+      }
+    },
+    {
+      "id": "commons",
+      "symbolId": "plane",
+      "x": 810,
+      "y": 440,
+      "config": {
+        "label": "Shared collaboration services",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 1010,
+            "h": 620
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          }
+        },
+        "attachmentDefaults": "none"
+      },
+      "form": {
+        "dimension": 2,
+        "regions": {
+          "interior": {
+            "state": "open"
+          }
+        }
+      }
+    },
+    {
+      "id": "proposal",
+      "symbolId": "point",
+      "x": 305.0,
+      "y": 378.0,
+      "config": {
+        "label": "Publish",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 24,
+            "h": 24
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none"
+        },
+        "ports": {
+          "out": {
+            "face": "both"
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons",
+      "placement": {
+        "kind": "edge",
+        "hostId": "commons",
+        "side": "left",
+        "t": 0.4
+      }
+    },
+    {
+      "id": "review-input",
+      "symbolId": "point",
+      "x": 1315.0,
+      "y": 316.0,
+      "config": {
+        "label": "Review",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 24,
+            "h": 24
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none"
+        },
+        "ports": {
+          "out": {
+            "face": "both"
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons",
+      "placement": {
+        "kind": "edge",
+        "hostId": "commons",
+        "side": "right",
+        "t": 0.3
+      }
+    },
+    {
+      "id": "feed",
+      "symbolId": "point",
+      "x": 305.0,
+      "y": 626.0,
+      "config": {
+        "label": "Discover",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 24,
+            "h": 24
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "none"
+          },
+          "backdrop": "none"
+        },
+        "ports": {
+          "out": {
+            "face": "both"
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons",
+      "placement": {
+        "kind": "edge",
+        "hostId": "commons",
+        "side": "left",
+        "t": 0.8
+      }
+    },
+    {
+      "id": "work",
+      "symbolId": "hold",
+      "x": 505,
+      "y": 380,
+      "config": {
+        "label": "Published work",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons"
+    },
+    {
+      "id": "claim",
+      "symbolId": "gate",
+      "x": 805,
+      "y": 380,
+      "config": {
+        "label": "Claim / reserve",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons"
+    },
+    {
+      "id": "artifact",
+      "symbolId": "hold",
+      "x": 1105,
+      "y": 380,
+      "config": {
+        "label": "Versioned artifact",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons"
+    },
+    {
+      "id": "review",
+      "symbolId": "observe",
+      "x": 1105,
+      "y": 620,
+      "config": {
+        "label": "Review evidence",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons"
+    },
+    {
+      "id": "accept",
+      "symbolId": "gate",
+      "x": 805,
+      "y": 620,
+      "config": {
+        "label": "Accept / settle",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 150,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons"
+    },
+    {
+      "id": "discovery",
+      "symbolId": "hold",
+      "x": 505,
+      "y": 620,
+      "config": {
+        "label": "Findings / discovery",
+        "signalMode": "passive",
+        "presentation": {
+          "size": {
+            "w": 180,
+            "h": 84
+          },
+          "labelMode": "outside",
+          "graphic": {
+            "kind": "symbol"
+          }
+        }
+      },
+      "parentId": "commons",
+      "canvasId": "canvas:component:commons"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "contributor",
+      "aSide": "out",
+      "b": "proposal",
+      "bSide": "out",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "propose",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w2",
+      "a": "proposal",
+      "aSide": "out",
+      "b": "work",
+      "bSide": "in",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "work",
+      "aSide": "out",
+      "b": "claim",
+      "bSide": "in",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "available",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "claim",
+      "aSide": "out",
+      "b": "artifact",
+      "bSide": "in",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "submit",
+        "direction": "forward",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w5",
+      "a": "artifact",
+      "aSide": "out",
+      "b": "review",
+      "bSide": "control",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "inspect",
+        "direction": "forward",
+        "forwardOperation": "read"
+      }
+    },
+    {
+      "id": "w6",
+      "a": "reviewer",
+      "aSide": "out",
+      "b": "review-input",
+      "bSide": "out",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "findings",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w7",
+      "a": "review-input",
+      "aSide": "out",
+      "b": "review",
+      "bSide": "in",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w8",
+      "a": "review",
+      "aSide": "out",
+      "b": "accept",
+      "bSide": "in",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "evidence",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w9",
+      "a": "accept",
+      "aSide": "out",
+      "b": "discovery",
+      "bSide": "in",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "publish outcome",
+        "direction": "forward",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w10",
+      "a": "discovery",
+      "aSide": "out",
+      "b": "feed",
+      "bSide": "out",
+      "canvasId": "canvas:component:commons",
+      "config": {
+        "label": "",
+        "direction": "forward",
+        "forwardOperation": "none"
+      }
+    },
+    {
+      "id": "w11",
+      "a": "feed",
+      "aSide": "out",
+      "b": "contributor",
+      "bSide": "in",
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "discover",
+        "direction": "forward",
+        "forwardOperation": "read"
+      }
+    }
+  ],
+  "references": []
+}

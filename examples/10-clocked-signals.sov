@@ -1,0 +1,243 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "example-clocked-signals",
+  "revision": 0,
+  "meta": {
+    "title": "Classic 10 — Clock, lever, levels and edges"
+  },
+  "components": [
+    {
+      "id": "clock",
+      "symbolId": "clock",
+      "x": 150,
+      "y": 160,
+      "config": {
+        "label": "Clock · 1s",
+        "signal": {
+          "clock": {
+            "periodMs": 1000,
+            "duty": 0.5
+          }
+        }
+      }
+    },
+    {
+      "id": "enable",
+      "symbolId": "lever",
+      "x": 150,
+      "y": 330,
+      "config": {
+        "label": "Enable",
+        "signal": {
+          "value": 0
+        }
+      }
+    },
+    {
+      "id": "both",
+      "symbolId": "gate",
+      "x": 420,
+      "y": 245,
+      "config": {
+        "label": "Clock AND enable",
+        "signal": {
+          "mode": "derived",
+          "combine": "and"
+        }
+      }
+    },
+    {
+      "id": "lamp",
+      "symbolId": "observe",
+      "x": 690,
+      "y": 245,
+      "config": {
+        "label": "Lamp",
+        "signalMode": "passive",
+        "signal": {
+          "mode": "derived",
+          "emits": false
+        }
+      }
+    },
+    {
+      "id": "sensor",
+      "symbolId": "clock",
+      "x": 150,
+      "y": 500,
+      "config": {
+        "label": "Sensor · sine 4s",
+        "signal": {
+          "clock": {
+            "periodMs": 4000,
+            "wave": "sine",
+            "sampleMs": 100
+          }
+        }
+      }
+    },
+    {
+      "id": "level",
+      "symbolId": "hold",
+      "x": 420,
+      "y": 500,
+      "config": {
+        "label": "Level",
+        "signal": {
+          "mode": "derived",
+          "kind": "continuous",
+          "combine": "max"
+        }
+      }
+    },
+    {
+      "id": "alarm",
+      "symbolId": "limit",
+      "x": 690,
+      "y": 500,
+      "config": {
+        "label": "Over half",
+        "signal": {
+          "mode": "derived",
+          "kind": "binary",
+          "threshold": 0.5,
+          "on": "+",
+          "channel": "job"
+        }
+      }
+    },
+    {
+      "id": "job",
+      "symbolId": "act",
+      "x": 960,
+      "y": 500,
+      "config": {
+        "label": "Nightly job",
+        "signalMode": "passive"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "clock",
+      "aSide": "out",
+      "b": "both",
+      "bSide": "in"
+    },
+    {
+      "id": "w2",
+      "a": "enable",
+      "aSide": "out",
+      "b": "both",
+      "bSide": "in"
+    },
+    {
+      "id": "w3",
+      "a": "both",
+      "aSide": "out",
+      "b": "lamp",
+      "bSide": "in"
+    },
+    {
+      "id": "w4",
+      "a": "sensor",
+      "aSide": "out",
+      "b": "level",
+      "bSide": "in"
+    },
+    {
+      "id": "w5",
+      "a": "level",
+      "aSide": "out",
+      "b": "alarm",
+      "bSide": "in"
+    },
+    {
+      "id": "w6",
+      "a": "alarm",
+      "aSide": "out",
+      "b": "job",
+      "bSide": "in"
+    }
+  ],
+  "references": [
+    {
+      "id": "s-lamp-off",
+      "kind": "scenario",
+      "label": "With the lever down the lamp never lights",
+      "data": {
+        "steps": [
+          {
+            "advance": 5000
+          }
+        ],
+        "expect": {
+          "levels": {
+            "lamp": 0
+          },
+          "edges": {
+            "lamp": {
+              "+": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "s-lamp-follows",
+      "kind": "scenario",
+      "label": "Lever up at 2s: the lamp follows the clock (+ on each rise, − on each fall)",
+      "data": {
+        "steps": [
+          {
+            "at": {
+              "time": 2000,
+              "set": {
+                "node": "enable",
+                "value": 1
+              }
+            }
+          },
+          {
+            "advance": 4999
+          }
+        ],
+        "expect": {
+          "edges": {
+            "lamp": {
+              "+": 3,
+              "-": 3
+            },
+            "enable": {
+              "+": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "s-threshold-schedules",
+      "kind": "scenario",
+      "label": "The continuous level crosses half once per period; each rising crossing starts the job",
+      "data": {
+        "steps": [
+          {
+            "advance": 11999
+          }
+        ],
+        "expect": {
+          "edges": {
+            "alarm": {
+              "+": 3,
+              "-": 3
+            }
+          },
+          "taps": {
+            "job": 3
+          }
+        }
+      }
+    }
+  ]
+}

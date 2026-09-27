@@ -1,49 +1,26 @@
 # Branching and release flow
 
-## Current stabilization
+## Current development · 2026-09-07
 
-`rc/0.1.0-rc1` is the only implementation line for the current RC. It accepts:
+The RC has merged to `main` through [PR #28](https://github.com/bdf1992/schematically/pull/28),
+and `dev` exists. Feature work branches from `dev` and returns to `dev` through PRs.
+See [the roadmap](../ROADMAP.md) for the inspected revisions and product priorities.
 
-- release-blocking defect fixes;
-- primitive refactors required by `RC-FINISH-LINE.md`;
-- regression/golden/performance/mutation tests;
-- docs/schema/example/API/MCP changes required to keep the tested RC coherent.
+When development is coherent enough to stabilize, cut the next `rc/<version>`
+from `dev`. That candidate accepts release-blocking fixes and the tests,
+documentation, schemas, examples, and API/MCP changes needed to keep it coherent.
+Future feature implementation continues separately on `dev`.
 
-It does **not** accept implementation of NEXT/post-RC features.
+## Release gate
 
-## RC merge
+`RC-FINISH-LINE.md` owns release acceptance. The candidate must contain the exact
+source used for acceptance and pass repository CI before merging to `main`.
+Acceptance of a primitive baseline does not complete the broader product vision.
 
-When the finish line and repository CI are satisfied:
+## Historical 0.1 branch boundary
 
-```text
-rc/0.1.0-rc1 → main
-```
-
-The merge records an accepted 0.1 primitive baseline. It does not claim the broader Beta/product vision is complete.
-
-## Development after RC merge
-
-Only after that merge:
-
-```text
-main → dev
-```
-
-Create `dev` from the accepted `main` head. Post-RC feature work branches from `dev` and returns through PRs.
-
-```text
-main
- └─ dev
-    ├─ feature/topology-cell-grammar
-    ├─ feature/data-driven-packs
-    ├─ feature/logic-machine
-    └─ feature/space
-```
-
-When the next set of development concerns is coherent enough to stabilize, cut the next RC from `dev`.
-
-## Why not branch dev before the RC merges?
-
-A pre-merge `dev` branch would bind speculative work to an unaccepted RC state, create avoidable rebase/cherry-pick pressure during final QA, and make it easier for NEXT work to leak back into release acceptance.
-
-Vision documents and NEXT issues may be refined during RC QA; implementation waits for the accepted baseline.
+During stabilization, `rc/0.1.0-rc1` was the sole RC implementation line.
+Post-RC feature implementation waited until the accepted baseline merged to
+`main`, then `dev` was created from that baseline. That ordering avoided binding
+speculative work to an unaccepted RC. It is completed history, not an instruction
+to recreate `dev` or return current feature work to the old candidate.

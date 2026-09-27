@@ -32,7 +32,7 @@ function cleanupPaletteGesture({status='Select'}={}){
 }
 function makePaletteFloat(symbolId){
   removePaletteFloat();
-  const s=byId(symbolId),el=document.createElement('div');
+  const s=symbolOf(symbolId),el=document.createElement('div');
   el.className='palette-drag-float';
   el.dataset.paletteGhost='true';
   el.innerHTML=`${glyph(symbolId)}<b>${s.name}</b>`;
@@ -40,7 +40,7 @@ function makePaletteFloat(symbolId){
   return el;
 }
 function drawPaletteDropGhost(symbolId,p){
-  const s=byId(symbolId),preset=SovSchematicData.templatePreset(symbolId),dim=preset?.form?.dimension??2;
+  const s=symbolOf(symbolId),preset=SovSchematicData.templatePreset(symbolId),dim=preset?.form?.dimension??2;
   paletteDropLayer.replaceChildren();
   const g=document.createElementNS('http://www.w3.org/2000/svg','g');
   g.setAttribute('class','component-drop-ghost');
@@ -215,21 +215,30 @@ document.addEventListener('visibilitychange',()=>{
 });
 
 
-for (const [group, ids] of Object.entries(GROUPS)) {
-  const section=document.createElement('div'); section.className='section';
-  section.dataset.group=group.toLowerCase();
-  section.innerHTML=`<h2>${group}</h2><div class="symbol-grid${group==='Primitives'?' primitive-grid':''}"></div>`;
-  const grid=section.querySelector('.symbol-grid');
-  ids.forEach(id=>{
-    const s=byId(id), b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
-    b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
-    const caption=preset?`${preset.form.dimension}D · ${s.role}`:`${s.family} · ${s.diagram_class}`;
-    b.innerHTML=glyph(id)+`<b>${s.name}</b><small>${caption}</small>`;
-    bindPaletteComponent(b,id);
-    grid.appendChild(b);
-  });
-  palette.appendChild(section);
+// The symbol tray: the built-in groups, then the active notation's own glyphs under its name.
+// Names are shown as the notation titles them, in sentence case.
+let paletteNotationKey=null;
+function buildSymbolPalette(){
+  const notation=activeNotation();if(paletteNotationKey===notation.id&&palette.childElementCount)return;paletteNotationKey=notation.id;
+  palette.replaceChildren();
+  // The same list the bar's type control offers (symbolCatalog, issue #20), one section per group.
+  for(const {group,entries} of symbolCatalog()){
+    const section=document.createElement('div'); section.className='section';
+    section.dataset.group=group.toLowerCase();
+    const h=document.createElement('h2');h.textContent=group;section.appendChild(h);
+    const grid=document.createElement('div');grid.className='symbol-grid'+(group==='Primitives'?' primitive-grid':'');section.appendChild(grid);
+    for(const {id,symbol:s,preset,name:title,dimension} of entries){
+      const b=document.createElement('button');
+      b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
+      const caption=preset?`${dimension}D · ${sentenceCase(s.role)}`:[s.family,s.diagram_class].filter(Boolean).map(sentenceCase).join(' · ');
+      b.innerHTML=glyph(id);const name=document.createElement('b');name.textContent=title;const small=document.createElement('small');small.textContent=caption;b.append(name,small);
+      bindPaletteComponent(b,id);
+      grid.appendChild(b);
+    }
+    palette.appendChild(section);
+  }
 }
+buildSymbolPalette();
 
 function svgPoint(cx,cy){
   const pt=workspace.createSVGPoint(); pt.x=cx; pt.y=cy;
@@ -238,9 +247,17 @@ function svgPoint(cx,cy){
 function currentZoom(){
   return BASE_VIEW.w / camera.w;
 }
+function syncLabelScale(){
+  // The viewBox is also fitted into the actual workspace between the panels.
+  // Nominal camera zoom alone misses this scale, especially on narrow screens.
+  const matrix=workspace.getScreenCTM();
+  const scale=matrix?Math.hypot(matrix.a,matrix.b):1;
+  workspace.style.setProperty('--zoom',String(scale>0?scale:1));
+  placeWireLabels();
+}
 function applyCamera(){
   workspace.setAttribute('viewBox',`${camera.x} ${camera.y} ${camera.w} ${camera.h}`);
-  workspace.style.setProperty('--zoom',String(currentZoom())); // labels clamp their screen size against this (app.css)
+  syncLabelScale();
   zoomReadout.textContent=`${Math.round(currentZoom()*100)}%`;
   requestAnimationFrame(positionSelectionBar);
 }
@@ -344,16 +361,31 @@ function activeCanvasWireSet(canvasId=selectedCanvasContextId()){
 function nodeVisibleInActiveCanvas(){return true}
 function wireVisibleInActiveCanvas(){return true}
 function diagramBounds(canvasId=selectedCanvasContextId()){
-  const nodeIds=activeCanvasNodeIds(canvasId),scopedNodes=nodes.filter(n=>nodeIds.has(n.id));
+  const nodeIds=activeCanvasNodeIds(canvasId);
+  for(const id of [...nodeIds])for(const child of descendantsOf(id))nodeIds.add(child.id);
+  const scopedNodes=nodes.filter(n=>nodeIds.has(n.id)&&!entityEditorState(n).hidden);
   const d=canvasDescriptorById(canvasId);
   if(d?.ownerKind==='component'){
-    const owner=nodes.find(n=>n.id===d.ownerId);if(owner&&!scopedNodes.includes(owner))scopedNodes.unshift(owner);
+    const owner=nodes.find(n=>n.id===d.ownerId);if(owner&&!scopedNodes.includes(owner)){scopedNodes.unshift(owner);nodeIds.add(owner.id)}
   }
   if(!scopedNodes.length&&canvasId===GLOBAL_CANVAS_ID)return null;
   let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
   for(const n of scopedNodes){const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
   const wireIds=activeCanvasWireSet(canvasId),occupied=[];
-  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
+  for(const w of wires)if(nodeIds.has((w.canvasId||'').replace('canvas:component:','')))wireIds.add(w.id);
+  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points,w));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
+  // Text and custom graphics can extend beyond a Component's body. Measure their
+  // actual projection in workspace coordinates, excluding selection/drag chrome.
+  const inverse=workspace.getScreenCTM()?.inverse();
+  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text')){
+    const node=el.closest('.node'),wire=el.closest('[data-wire-id]');
+    if(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId)))continue;
+    if(!el.getClientRects().length||getComputedStyle(el).display==='none')continue;
+    const rect=el.getBBox(),matrix=inverse.multiply(el.getScreenCTM());
+    for(const [x,y] of [[rect.x,rect.y],[rect.x+rect.width,rect.y],[rect.x,rect.y+rect.height],[rect.x+rect.width,rect.y+rect.height]]){
+      const q=new DOMPoint(x,y).matrixTransform(matrix);l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y);
+    }
+  }
   return Number.isFinite(l)?{l,r,t,b}:null;
 }
 function fitDiagram(){
@@ -434,8 +466,13 @@ function settleActiveComponent(mods=null){
     node.y=snapCoord(node.y,step);
   }
   const settleDx=node.x-before.x,settleDy=node.y-before.y;
-  if((settleDx||settleDy)&&activeNodeDragState){
-    for(const item of [...(activeNodeDragState.descendantOrigins||[]),...(activeNodeDragState.groupOrigins||[])]){item.node.x+=settleDx;item.node.y+=settleDy;const cel=document.querySelector(`.node[data-id=\"${item.node.id}\"]`);if(cel)cel.setAttribute('transform',`translate(${item.node.x} ${item.node.y})`)}
+  if(settleDx||settleDy){
+    // Keyboard moves have no pointer state, but the same parent-relative geometry
+    // must survive snapping, including pinned descendants carried by their host.
+    const moved=activeNodeDragState
+      ? [...(activeNodeDragState.descendantOrigins||[]),...(activeNodeDragState.groupOrigins||[])].map(item=>item.node)
+      : descendantsOf(node.id);
+    for(const child of moved){child.x+=settleDx;child.y+=settleDy;const cel=document.querySelector(`.node[data-id="${child.id}"]`);if(cel)cel.setAttribute('transform',`translate(${child.x} ${child.y})`)}
   }
 
   const el=document.querySelector(`.node[data-id="${node.id}"]`);
@@ -488,12 +525,14 @@ function keyboardMoveStep(e){
   if(e.shiftKey) return Math.max(1,canvasGridSize/2);
   return canvasGridSize;
 }
+let keyboardMoveStart=null; // where a keyboard move started, so a refused host can put it back
 function beginKeyboardMove(node){
   if(!node) return;
   if(keyboardMoveNodeId===node.id) return;
 
   if(keyboardMoveNodeId) finishKeyboardMove({});
   keyboardMoveNodeId=node.id;
+  keyboardMoveStart=[node,...descendantsOf(node.id)].map(item=>({node:item,x:item.x,y:item.y}));
   activeNodeDrag=node.id;
   captureDragSnapshots(node.id);
   workspace.classList.add('dragging-node');
@@ -531,14 +570,16 @@ function finishKeyboardMove(mods){
   // Arrow-key steps are intentionally aligned to the selected grid unless Alt
   // was used. Settling still applies the same rule for consistency.
   settleActiveComponent(mods);
-  const movedNode=nodes.find(n=>n.id===keyboardMoveNodeId);if(movedNode)updateContainmentFor(movedNode);
-  settleDraggedRoutes();
+  const movedNode=nodes.find(n=>n.id===keyboardMoveNodeId),hosted=movedNode?updateContainmentFor(movedNode):null;
+  // A refused host refuses the move: the Component and what it carries return to where it started.
+  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();render()}
+  else settleDraggedRoutes();
 
-  keyboardMoveNodeId=null;
+  keyboardMoveNodeId=null;keyboardMoveStart=null;
   activeNodeDrag=null;
   dragRouteSnapshots.clear();
   workspace.classList.remove('dragging-node');
-  statusEl.textContent='Select';
+  statusEl.textContent=hosted?.refused||'Select';
   renderWires();
   positionSelectionBar();
 }
@@ -562,7 +603,7 @@ function componentAcceptsChildren(n){return formHostsChildren(n)}
 function parentComponent(node){const ownerId=canvasOwnerComponentId(node?.canvasId||GLOBAL_CANVAS_ID);return ownerId?nodes.find(n=>n.id===ownerId)||null:null}
 function componentDisplayName(node){
   if(!node)return '—';
-  return componentConfig(node).label||byId(node.symbolId).name||node.id;
+  return componentConfig(node).label||symbolOf(node.symbolId).name||node.id;
 }
 function componentScopePath(node){
   if(!node)return 'world';const host=componentHostDescriptor(node);
@@ -619,17 +660,30 @@ function isDescendantOf(nodeId,parentId){
 
   return false;
 }
-const INLINE_TERMINAL_Y={act:32,hold:32,buffer:32,gate:32,switch:38,limit:32,observe:42,receipt:24};
-function componentInlineTerminalY(node){return INLINE_TERMINAL_Y[node?.symbolId]??null}
+// Where a glyph is wired comes from its declared terminals (NOTATION-MODEL.md §2): the axis is
+// the in and out terminals' line; an icon (no terminals) has none.
+function componentInlineTerminalY(node){return SovSchematicNotation.glyphAxis(componentGlyph(node))}
 function componentInlineGraphicBox(node){
   const p=componentConfig(node).presentation,size=p.size;
-  const w=Math.min(size.w*.72,108),h=Math.min(size.h*.55,70),x=-w/2;
+  // A container's glyph is its title mark: small, at the top inside its skin, with its label
+  // under it, so the name sits with the symbol and the interior is left to the children.
+  if(componentAcceptsChildren(node)&&!componentHostedOnWire(node)){
+    const w=Math.min(size.w*.5,72),h=Math.min(34,size.h*.28);
+    return {x:-w/2,y:-size.h/2+componentSectionInset(node)+10,w,h};
+  }
+  // A glyph whose terminals are its points needs room between them: it takes more of the card.
+  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),size,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type}),x=-w/2;
   if(componentHostedOnWire(node)){
     const axis=componentInlineTerminalY(node);
     return {x,y:axis==null?-h/2:-(axis/64)*h,w,h};
   }
   let y=-Math.min(size.h*.34,38),hh=h;
-  if(componentAcceptsChildren(node)){y=-size.h/2+18;hh=Math.min(52,size.h*.32)}
+  {
+    // A card's symbol axis is its centre line: side points sit at mid-height for every
+    // symbol, so cards aligned by centre are joined by straight wires.
+    const axis=componentInlineTerminalY(node),p=componentConfig(node).presentation;
+    if(axis!=null&&p.graphic.kind==='symbol'){const scale=Math.min(w/96,h/64);y=-axis*scale-(h-64*scale)/2}
+  }
   return {x,y,w,h:hh};
 }
 function componentInlineTerminalHalfSpan(node){
@@ -639,6 +693,25 @@ function componentInlineTerminalHalfSpan(node){
 }
 function componentHostAngle(node){return Number(wireHostPoseCache.get(node?.id)?.angle)||0}
 function rotateVectorByDegrees(x,y,angle){const r=angle*Math.PI/180,c=Math.cos(r),s=Math.sin(r);return{x:x*c-y*s,y:x*s+y*c}}
+// Where a card's symbol meets the world: the glyph's terminal axis and its two lead ends, in
+// the component's local frame. Null when the card draws no symbol with a known axis.
+function componentGlyphAxis(n){
+  if(componentForm(n).dimension!==2||componentHostedOnWire(n)||componentAcceptsChildren(n))return null;
+  const p=componentConfig(n).presentation,axis=componentInlineTerminalY(n);
+  if(axis==null||p.graphic.kind!=='symbol'||(p.graphic.ref&&p.graphic.ref.replace(/^#/,'')!==`sym-${n.symbolId}`))return null;
+  const box=componentInlineGraphicBox(n),scale=Math.min(box.w/96,box.h/64);
+  const x0=box.x+(box.w-96*scale)/2,y0=box.y+(box.h-64*scale)/2;
+  const g=componentGlyph(n),N=SovSchematicNotation,M=N.MARGIN,control=N.terminal(g,'control');
+  return {x0,y0,scale,y:y0+axis*scale,left:x0+M*scale,right:x0+(96-M)*scale,stroke:glyphUnitStroke()*scale,
+    stemTop:control&&control.toward==='top'?y0+M*scale:null,stemX:x0+(control?control.at[0]:48)*scale,
+    has:{in:!!N.terminal(g,'in'),out:!!N.terminal(g,'out'),control:!!control}};
+}
+// How far inside the outline a position on a section sits: to its line, or to its band's middle.
+function sectionPointInset(host,pos){
+  if(!host||!pos)return 0;const s=SovSchematicData.componentSection(host);if(!s||s.lines.length<2)return 0;
+  const sum=k=>s.bands.slice(0,k).reduce((a,b)=>a+b.thickness,0);
+  return pos.line!=null?sum(pos.line):sum(pos.through)+(s.bands[pos.through]?.thickness||0)/2;
+}
 function componentPortLocalPosition(n,pointId){
   const size=componentSize(n),spec=Attachment.resolveSpec(n,pointId);if(!spec)return{x:0,y:0};
   const cfg=componentConfig(n),pcfg=cfg.ports[spec.compatId],effective=Attachment.effectiveDimension(n);
@@ -647,8 +720,16 @@ function componentPortLocalPosition(n,pointId){
     const half=componentHostedOnWire(n)?Math.max(18,componentInlineTerminalHalfSpan(n)):size.w/2;
     return spec.id==='start'?{x:-half,y:0}:{x:half,y:0};
   }
-  const face=pcfg?.face||'external',faceOffset=face==='internal'?-4:face==='both'?0:4,t=Math.max(0,Math.min(1,Number.isFinite(Number(spec.t))?Number(spec.t):.5));
-  const alongX=-size.w/2+size.w*t,alongY=-size.h/2+size.h*t;
+  // A point sits on the boundary itself, so a wire meets the body edge with no gap; the face
+  // is shown by the point's style, not by standing it off the edge.
+  // On a multi-line boundary a point sits on its line, or across its band: inset from the outline.
+  const faceOffset=-sectionPointInset(n,SovSchematicData.pointSectionPosition(diagram,n.id,spec.compatId)),t=Math.max(0,Math.min(1,Number.isFinite(Number(spec.t))?Number(spec.t):.5));
+  const alongX=-size.w/2+size.w*t;
+  // An unplaced side point meets the symbol on its axis, so wire, edge and glyph are one line.
+  // With a glyph terminal of its own, it meets that terminal's line, so every lead is straight.
+  const axis=!spec.placed&&spec.role==='boundary'&&!spec.authored&&(spec.side==='left'||spec.side==='right')?componentGlyphAxis(n):null;
+  const own=axis?SovSchematicNotation.terminal(componentGlyph(n),spec.compatId):null;
+  const alongY=axis?(own&&own.toward===spec.side?axis.y0+own.at[1]*axis.scale:axis.y):-size.h/2+size.h*t;
   if(spec.side==='left')return{x:-size.w/2-faceOffset,y:alongY};
   if(spec.side==='right')return{x:size.w/2+faceOffset,y:alongY};
   if(spec.side==='top')return{x:alongX,y:-size.h/2-faceOffset};
@@ -690,7 +771,9 @@ function nearestPointOnComponentEdge(host,x,y){
 function syncComponentAttachedPose(node){
   const placement=componentPlacement(node);if(!['path','edge'].includes(placement.kind))return;const host=nodes.find(n=>n.id===placement.hostId)||parentComponent(node);if(!host)return;let q=null;
   if(placement.kind==='path'){const half=Math.max(24,componentSize(host).w/2),local=-half+half*2*placement.t,world=rotateVectorByDegrees(local,0,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)}}
-  else{const {w,h}=componentSize(host),side=placement.side||'top',u=Math.max(0,Math.min(1,placement.t));let lx=0,ly=0,a=0;if(side==='top'||side==='bottom'){lx=-w/2+w*u;ly=side==='top'?-h/2:h/2}else{lx=side==='left'?-w/2:w/2;ly=-h/2+h*u;a=90}const world=rotateVectorByDegrees(lx,ly,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)+a}}
+  else{const {w,h}=componentSize(host),side=placement.side||'top',u=Math.max(0,Math.min(1,placement.t));let lx=0,ly=0,a=0;
+    const inset=sectionPointInset(host,SovSchematicData.pointSectionPosition(diagram,node.id,'out'));
+    if(side==='top'||side==='bottom'){lx=-w/2+w*u;ly=side==='top'?-h/2+inset:h/2-inset}else{lx=side==='left'?-w/2+inset:w/2-inset;ly=-h/2+h*u;a=90}const world=rotateVectorByDegrees(lx,ly,componentHostAngle(host));q={x:host.x+world.x,y:host.y+world.y,angle:componentHostAngle(host)+a}}
   node.x=q.x;node.y=q.y;wireHostPoseCache.set(node.id,{...q,hostId:host.id,t:placement.t});
 }
 function componentHostCandidateAtPoint(node,x=node.x,y=node.y){
@@ -710,9 +793,31 @@ function componentHostCandidateAtPoint(node,x=node.x,y=node.y){
   for(const w of wires){if(entityEditorState(w).hidden||ownedIds.has(w.a)||ownedIds.has(w.b))continue;const q=nearestPointOnSvgPath(renderedWirePath(w),x,y);if(q&&q.distance<=24)consider({kind:'wire',entity:w,canvasId:wireCanvas(w).id,placement:q})}
   return best;
 }
+// The host a candidate gives a Component: its canvas and its placement kind. applyComponentHost
+// applies it; componentHostRefusal checks it first. A `canvas` candidate is a fall-back onto a
+// canvas (see componentFallbackPlan); it keeps the Component's placement.
+function componentHostTarget(candidate,node=null){
+  if(candidate?.kind==='canvas')return {canvasId:candidate.canvasId,placement:SovSchematicData.clone(node?.placement)||{kind:'surface'}};
+  if(['component','path','edge'].includes(candidate?.kind))return {canvasId:candidate.canvasId,placement:candidate.kind==='component'?{kind:'surface'}:{kind:candidate.kind,hostId:candidate.entity.id,t:candidate.placement.t,...(candidate.kind==='edge'?{side:candidate.placement.side}:{})}};
+  if(candidate?.kind==='wire')return {canvasId:candidate.canvasId,placement:{kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t}};
+  return {canvasId:GLOBAL_CANVAS_ID,placement:{kind:'surface'}};
+}
+// The one hosting guard. A Component bound to a definition keeps the ports the definition gave
+// it: a host that would change the ports it exposes (a Wire, a Path or a Plane boundary lowers its
+// effective dimension) is refused by the data core's owned-port rule. Returns the refusal, or null.
+function componentHostRefusal(node,candidate){
+  if(!componentDefinitionOwner(node))return null;
+  const target=componentHostTarget(candidate,node),trial=SovSchematicData.clone(node);trial.canvasId=target.canvasId;trial.placement=target.placement;
+  try{SovSchematicData.assertDefinitionPortsKept(node,{placement:target.placement},trial);return null}catch(error){return error.message}
+}
+// Every host change goes through here, checked before anything is applied. A refused host leaves
+// the Component as it was and returns {refused: message}; otherwise it returns the candidate.
 function applyComponentHost(node,candidate){
   if(!node)return null;
-  if(candidate?.kind==='component'){
+  const refusal=componentHostRefusal(node,candidate);if(refusal){statusEl.textContent=refusal;return {refused:refusal}}
+  if(candidate?.kind==='canvas'){
+    node.canvasId=candidate.canvasId;node.parentId=canvasOwnerComponentId(candidate.canvasId);
+  }else if(candidate?.kind==='component'){
     node.canvasId=candidate.canvasId;node.parentId=candidate.entity.id;node.placement={kind:'surface',x:node.x,y:node.y};wireHostPoseCache.delete(node.id)
   }else if(candidate?.kind==='wire'){
     node.canvasId=candidate.canvasId;node.parentId=null;node.placement={kind:'wire',wireId:candidate.entity.id,t:candidate.placement.t};node.x=candidate.placement.x;node.y=candidate.placement.y;
@@ -726,6 +831,20 @@ function applyComponentHost(node,candidate){
   }
   syncNodeBoundaryContext(node);for(const child of descendantsOf(node.id))syncNodeBoundaryContext(child);return candidate;
 }
+// When a host stops hosting (its interior closes, it is retyped or changes dimension, or it is
+// deleted), the Components on its interior fall back to the host's own canvas. The plan is decided
+// here, before the host edit; componentHostPlanRefusal checks every step with the hosting guard, and
+// applyComponentHostPlan applies them. One refused child refuses the whole edit.
+function componentFallbackPlan(host){
+  if(!host)return [];
+  const canvasId=host.canvasId||GLOBAL_CANVAS_ID;
+  return nodes.filter(q=>parentComponent(q)?.id===host.id).map(node=>({node,candidate:{kind:'canvas',canvasId}}));
+}
+function componentHostPlanRefusal(plan){
+  for(const {node,candidate} of plan||[]){const refusal=componentHostRefusal(node,candidate);if(refusal)return refusal}
+  return null;
+}
+function applyComponentHostPlan(plan){for(const {node,candidate} of plan||[])applyComponentHost(node,candidate)}
 function updateContainmentFor(node){if(!node)return null;return applyComponentHost(node,componentHostCandidateAtPoint(node))}
 function moveDescendantsWithState(state,dx,dy){
   for(const item of state.descendantOrigins||[]){

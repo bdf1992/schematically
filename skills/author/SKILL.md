@@ -41,7 +41,27 @@ A child may connect to siblings and Ports exposed to its containing surface. To 
 4. Connect legal Ports with Wires.
 5. Set signal/rate behavior only after topology is valid.
 6. Save a checkpoint at meaningful milestones.
-7. Validate the document before export/share.
+7. Validate, inspect the normal editor and exported SVG in both appearances, then save and reopen. Structural validation alone is not visual QA.
+
+## Layout and review
+
+List topology before layout: participant/service roles, typed Components, exposed ports, parent/surface membership and each wire endpoint. Proposed architecture describes contracts and authority; it does not prove runtime enforcement or external-effect guarantees.
+
+Dimension admission belongs to `05-data-core.js`: presentation width/height default to 112/84, normalize to minima 80/64, and have no browser-only maximum. Plane presets default to 320/220; Points keep a 24-unit footprint. Size hosts from full child extents, boundary points, labels and routing lanes. Rendering must preserve admitted geometry.
+
+Reserve a main request lane, a separate control/feedback lane, title clearance and space on both sides of each crossing. Start with about 200 units between ordinary component centres and 100 units between a crossing and a child edge, then inspect. These are starting clearances, not model limits. Do not change topology to shorten routes. Use brief labels with explanations in `meta.description`, References or the inspector. At 768px and 1440px review an overview, then use zoom/pan or double-click an Objects entry to focus it when needed. Record which views were inspected.
+
+Use a small stable palette and pair it with text or shape. For the default spectrum palette, one useful mapping is C5 (slot 10) requests/actions, C6 (11) authority/control, C4 (9) observations/evidence, C1 (6) refusal/protection; M1 (0) keeps hosts restrained. These roles are chosen by the author, not executable permissions.
+
+`config.colorSlot` colors the Component boundary; `config.presentation.interiorColorSlot` colors its interior separately. Wire colors come from the selected endpoint `config.ports.<id>.connections[index].colorSlot`; author both ends deliberately. A legacy wire `config.colorSlot` migrates once into the A-side connection and is removed. Realized hex colors are derived, not the palette authority. Inspect both themes and standalone export.
+
+Audit ports against the endpoint list before reducing clutter. A bare Plane exposes no built-in points; typed Components have their template contracts. An unused quiet port remains an affordance. Keep connected ports and explicit crossings; use supported attachment descriptors for a different interface. Never delete an endpoint to hide it.
+
+After layout review, pin settled hosts and reference components through Settings → Pin; leave drafts movable. Pin freezes direct geometry gestures; Lock freezes semantic mutation. Existing parent movement carries descendants, including pinned children: pin the ancestor too when the structure must stay in place. Objects marks pinned entries; Settings → Pin also unpins, and Undo reverses it. Exercise gestures and save/reopen, not only the flag.
+
+Custom SVG lives in `config.presentation.graphic: {kind:'custom', svg:'<svg …>'}`. Keep `symbolId` and real ports authoritative. Use a valid viewBox, margin inside the bounds, simple portable shapes and `currentColor`; the renderer sanitizes supported SVG and preserves aspect ratio in the graphic box. Inspect the selected node, thumbnail when applicable, `.sov`, `.sovpak` and standalone SVG. Keep labels and ports separate. `examples/09-proposed-service-review.sov` demonstrates team/history graphics without external assets.
+
+If browser access or source fixtures are missing, name the missing evidence instead of declaring appearance verified. Compare wrapper CSS separately from the normal editor.
 
 ## Refusals
 

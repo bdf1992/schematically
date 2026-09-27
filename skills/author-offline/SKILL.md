@@ -51,14 +51,14 @@ Typed Component on the global canvas:
 
 `signalMode` is `source` (emits), `relay` (passes on, the default for most palette entries), or `passive`.
 
-Plane. The preset gives it an open interior, no built-in points, no glyph, no label, and a 320 by 220 size. Write `presentation.size` when the children need more room; write the rest only to override:
+Plane. The preset gives it an open interior, no built-in points, no glyph, and a 320 by 220 size. Write `presentation.size` when the children need more room; write the rest only to override:
 
 ```json
 {"id": "svc", "symbolId": "plane", "x": 640, "y": 360,
- "config": {"label": "Service", "presentation": {"size": {"w": 560, "h": 260}}}}
+ "config": {"label": "Service", "presentation": {"graphic": {"kind": "none"}, "size": {"w": 560, "h": 260}}}}
 ```
 
-If you write `form` yourself, write the whole block including `"regions": {"interior": {"state": "open"}}`, because a written `form` replaces the preset form rather than merging with it. The same goes for `presentation`: writing it replaces the preset, so include `"graphic": {"kind": "none"}` and `"labelMode": "none"` alongside the size. A Plane draws no label; the label is for readers of the file.
+If you write `form` yourself, include `"regions": {"interior": {"state": "open"}}`: a written `form` replaces the preset form. Writing `presentation` also replaces its preset, so include `"graphic": {"kind": "none"}` alongside the size for a bare region. A named Plane defaults to a visible boundary label; set `"labelMode": "none"` only when hiding it is intentional.
 
 Point hosted on a Plane boundary. `placement.side` is `left`, `right`, `top`, or `bottom`; `t` runs 0 to 1 along that side. Set `x`/`y` to the matching spot on the edge so the file reads consistently. `face: "both"` is what makes it a crossing:
 
@@ -122,27 +122,71 @@ Port override on a Component, for access or face. Write the whole port record; t
 | `plane` | Bounded 2D region that hosts Points on its boundary and Components inside. |
 | `point` | 0D attachment on a Path, a Plane boundary, or a Wire. |
 | `path` | 1D route with start and end that hosts Points. |
+| `clock` | Drives time: its level rises and falls on a declared period. Needs `config.signal.clock.periodMs`. |
+| `lever` | An asserted level: it holds the state it was set to until an operation changes it. |
 | `blank` | Incomplete component whose type is still to be chosen. Do not author these. |
+
+## Signals, clocks and access (optional)
+
+All of this is optional data. `GRAPH-MODEL.md` specifies it in full.
+
+- **A level:** `config.signal = {kind: 'binary' | 'continuous', value}`. It is asserted (it
+  holds `value`) unless you write `mode: 'derived'`. A derived level adds
+  `combine: 'or' | 'and' | 'not' | 'xor' | 'nand' | 'nor' | 'buffer' | 'max' | 'min' | 'mean' | 'sum'`
+  and a `threshold`.
+- **A clock:** `config.signal.clock = {periodMs, duty, wave: 'square' | 'saw' | 'triangle' | 'sine', sampleMs, cycles}`.
+- **Work on an edge:** `config.signal.on: '+' | '-' | '±'` starts work as a message on
+  each rising or falling edge.
+- **An access list on a plane:**
+  `config.acl = {entries: [{principal: 'svc:*', allow: ['enter', 'exit']}]}`.
+  - The operations are `enter`, `exit`, `read` and `write`.
+  - A deny always wins, and the default is deny.
+- **A section:** `form.section` (presets `disk`, `circle`, `section`, `coated`,
+  `double-wall` for 2D; `line`, `strip`, `lanes`, `pipe` for wires, in `SECTION-MODEL.md`).
+  On a multi-line boundary a point sits on a line or through a band:
+  `placement.at = {line: 'L1'}` or `{through: 'B1'}`, or `config.ports.<id>.at` for a card's
+  own port. That position decides what the point reaches.
+- **A participant:** `config.principal: 'ai:ingest'` makes a component act in that name
+  when it forwards work.
+
+## Notation, text and narration (optional)
+
+`NOTATION-MODEL.md` specifies it.
+
+- **A notation:** `document.notation: 'logic'` draws the document in a domain's shapes. A
+  domain glyph's terminals are its card's points: an `and2` card is wired by `bSide: 'a'` or
+  `'b'` and `aSide: 'y'`. The glyph's combine becomes the card's signal.
+- **A custom notation:** carry it in `references: [{id, kind: 'notation', data: {id, extends:
+  'schematic', glyphs, tokens}}]` and name it. An unknown notation is refused.
+- **Text is as authored.** Write labels in sentence case, never in capitals.
+  - `config.subtitle` adds one line under the title.
+  - `config.presentation.text` is body text in a small Markdown: `**bold**`, `*italic*`,
+    `` `code` ``, line breaks, `- ` items.
+- **Narration:** `document.narration: [{at: ms, say, focus: [ids]}]` is a subtitle track that
+  follows the clock. Scenario steps may carry `say`.
+- **The legend is derived**; do not draw one. Name a colour category with
+  `document.legend.names: {C1: 'Refunds'}`, or hide an entry with `document.legend.hide`.
 
 ## Layout rules
 
 - Flow runs left to right. Sources on the left, evidence and sinks on the right, control from above or from the upper left.
 - Keep at least 200 units between the centres of neighbouring Components on the same row. The router needs room for labels and packets.
 - Keep at least 100 units between a Plane boundary Point and the nearest hosted Component edge. Shorter interior wires collapse to stubs that read as missing.
-- Size a Plane so every hosted centre is at least 100 units from its edge horizontally and 60 vertically.
+- Size a Plane from full child bounds plus label and wire clearance. Dimensions at or above 80 by 64 are retained without an editor ceiling. Reserve 100 horizontal and 60 vertical units as a starting margin, then inspect actual routes and labels.
 - Put boundary Points at `t` values between 0.2 and 0.8 so they do not sit in the corners.
 - Wire labels are short. Put the meaning in the Component types and the shape, not in prose on wires.
-- One idea per drawing. A file with more than about eight top-level records is usually two drawings.
+- Keep each view reviewable. When an overview is dense, use an intentional focused review of the same topology instead of deleting endpoints or forcing tiny labels.
 
 ## Procedure
 
 1. Write the topology as a list before any JSON: each record with its type and role, each wire as `a.side → b.side`, and which surface each wire is on.
 2. Decide the regions. Anything that is "inside" something else gets a Plane host and boundary Points for every crossing.
-3. Place records on a grid: rows for flow, columns for stage. Compute Plane sizes from their children.
+3. Place records on a grid with a separate control/feedback lane. Compute Plane sizes from child bounds and title/label clearance. Apply the palette, port audit and graphic rules in [author](../author/SKILL.md#layout-and-review); connection slots, not wire hex fields, own wire colors.
 4. Write the file in the authored form above.
 5. Validate: `node scripts/validate_sov.mjs my.sov`. Fix every line it prints. It uses the same checks the editor runs at load, plus the wire `canvasId` check.
 6. Render: `python scripts/export_svg.py my.sov --out out/`. Look at the SVG. Check that every wire is visible end to end, nothing overlaps, and hosted records sit inside their host.
-7. Repeat 5 and 6 until the drawing says what the description says. Then hand over the `.sov` and the `.svg` together.
+7. Repeat in light and dark. Open the normal editor at 768px and 1440px when available, inspect an overview and any needed focused view, save and reopen. Pin reviewed structural boundaries/reference components; a pinned child still travels with a moving parent. Check `.sovpak` when graphics are embedded.
+8. Hand over the `.sov` and `.svg` with the views actually inspected. If browser access is unavailable, report visual QA as incomplete. A wrapper is a separate presentation. Proposed contracts do not establish runtime security or external-effect guarantees.
 
 ## Anti-patterns
 
@@ -203,6 +247,7 @@ Every file in `examples/` validates and exports. Read the one closest to what yo
 | `05-rate-chain.sov` | Per-record rates composing with the global rate. |
 | `06-read-write-evidence.sov` | `write` into a record and `read` by a witness; access without authority. |
 | `07-plane-with-points.sov` | A Plane with boundary Points carrying a chain across it. Full saved form. |
+| `09-proposed-service-review.sov` | Request boundary, reserved control lane, palette roles, pins, and team/history graphics; a proposal without runtime guarantees. |
 | `08-gated-service.sov` | The authored form end to end: a Plane, three boundary Points, an authority into a gate's control, a receipt. Written by hand with this skill. |
 
 ## Checks

@@ -1,0 +1,42 @@
+Attempts to run the npm/node toolchain needed for step 2 (build GLSP's own standalone
+example unchanged before touching the spike), all made from
+C:\Users\bdf19\workstation\worktrees\schematically\glsp-projects-a-sov-without-owning-it
+in this contract-engineer session (non-interactive; no user present to approve a
+permission prompt):
+
+$ npm --version
+  -> This command requires approval
+
+$ npm view @eclipse-glsp/server versions --json
+  -> This command requires approval (bundled in a multi-op Bash call, flagged before running)
+
+$ npx --version
+  -> This command requires approval
+
+$ where npm
+  -> This command requires approval
+
+$ node -e "console.log(1+1)"
+  -> This command requires approval
+
+Commands that DID run in the same session, for contrast:
+  node --version   -> v24.11.1
+  python --version -> Python 3.12.10
+  git status       -> ok
+  ls               -> ok
+  mkdir -p spikes/glsp-projection/evidence -> ok
+
+So the refusal is not npm-specific package distrust and not a missing binary check
+(node itself resolves) -- it is a narrow command allowlist on this non-interactive
+session that admits a handful of read-only/no-op invocations (--version, git status,
+ls, mkdir) and refuses anything that executes arbitrary code or hits the network
+(npm install, npm view, npx, node -e). There is no user attached to this session to
+answer the approval prompt, so every one of these calls fails immediately rather than
+waiting.
+
+This is upstream of any GLSP version or Node-version mismatch: step 2 calls for
+building GLSP's own standalone example unchanged first, in the same environment, to
+tell an upstream toolchain fault from a spike-code fault. That build needs `npm
+install` at minimum. It cannot be attempted here, so the code-vs-toolchain question
+step 2 exists to answer is undecided -- not because the reference example failed to
+build, but because npm cannot be invoked at all in this session shape.

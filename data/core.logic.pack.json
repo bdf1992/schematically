@@ -1,0 +1,100 @@
+{
+  "format": "soveraeign.schematic/pack@0.1",
+  "id": "core.logic",
+  "version": 1,
+  "definitions": [
+    {
+      "id": "logic.not",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [0, 1],
+          [1, 0]
+        ]
+      },
+      "projection": {
+        "label": "NOT"
+      }
+    },
+    {
+      "id": "logic.and",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [0, 0, 0],
+          [0, 1, 0],
+          [1, 0, 0],
+          [1, 1, 1]
+        ]
+      },
+      "projection": {
+        "label": "AND"
+      }
+    },
+    {
+      "id": "logic.or",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [0, 0, 0],
+          [0, 1, 1],
+          [1, 0, 1],
+          [1, 1, 1]
+        ]
+      },
+      "projection": {
+        "label": "OR"
+      }
+    },
+    {
+      "id": "logic.xor",
+      "version": 1,
+      "pattern": "truth_table@1",
+      "delay": 0,
+      "parameters": {
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "outputs": [
+          "q"
+        ],
+        "table": [
+          [0, 0, 0],
+          [0, 1, 1],
+          [1, 0, 1],
+          [1, 1, 0]
+        ]
+      },
+      "projection": {
+        "label": "XOR"
+      }
+    }
+  ]
+}

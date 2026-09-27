@@ -1,0 +1,488 @@
+{
+ "schema": "soveraeign.schematic/document@0.1",
+ "id": "example-typed-captions",
+ "revision": 0,
+ "meta": {
+  "checkpoints": [],
+  "title": "Classic 09 \u2014 Typed captions",
+  "description": "Typed Components carrying no label of their own show their type caption. One labelled Component proves an authored label still wins."
+ },
+ "components": [
+  {
+   "id": "src",
+   "symbolId": "act",
+   "x": 220,
+   "y": 300,
+   "canvasId": "canvas:global",
+   "form": {
+    "body": {
+     "kind": "surface",
+     "material": "generic",
+     "thickness": 0
+    },
+    "dimension": 2,
+    "frame": {
+     "mode": "none",
+     "thickness": 0,
+     "depth": 0
+    },
+    "regions": {
+     "interior": {
+      "state": "closed"
+     }
+    }
+   },
+   "config": {
+    "label": "",
+    "colorSlot": 0,
+    "signalMode": "source",
+    "presentation": {
+     "graphic": {
+      "kind": "symbol",
+      "ref": "sym-act",
+      "svg": ""
+     },
+     "size": {
+      "w": 112,
+      "h": 84
+     },
+     "interiorColorSlot": 0,
+     "text": "",
+     "padding": 16,
+     "backdrop": "auto"
+    },
+    "ports": {
+     "in": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "in",
+        "access": "read-write"
+       }
+      ]
+     },
+     "out": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "out",
+        "access": "read-write"
+       }
+      ]
+     },
+     "control": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "control",
+        "access": "read-write"
+       }
+      ]
+     }
+    }
+   },
+   "editor": {
+    "pinned": false,
+    "locked": false,
+    "hidden": false,
+    "opacity": 1,
+    "rate": 1
+   },
+   "parentId": null
+  },
+  {
+   "id": "check",
+   "symbolId": "gate",
+   "x": 520,
+   "y": 300,
+   "canvasId": "canvas:global",
+   "form": {
+    "body": {
+     "kind": "surface",
+     "material": "generic",
+     "thickness": 0
+    },
+    "dimension": 2,
+    "frame": {
+     "mode": "none",
+     "thickness": 0,
+     "depth": 0
+    },
+    "regions": {
+     "interior": {
+      "state": "closed"
+     }
+    }
+   },
+   "config": {
+    "label": "",
+    "colorSlot": 0,
+    "signalMode": "relay",
+    "presentation": {
+     "graphic": {
+      "kind": "symbol",
+      "ref": "sym-gate",
+      "svg": ""
+     },
+     "size": {
+      "w": 112,
+      "h": 84
+     },
+     "interiorColorSlot": 0,
+     "text": "",
+     "padding": 16,
+     "backdrop": "auto"
+    },
+    "ports": {
+     "in": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "in",
+        "access": "read-write"
+       }
+      ]
+     },
+     "out": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "out",
+        "access": "read-write"
+       }
+      ]
+     },
+     "control": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "control",
+        "access": "read-write"
+       }
+      ]
+     }
+    }
+   },
+   "editor": {
+    "pinned": false,
+    "locked": false,
+    "hidden": false,
+    "opacity": 1,
+    "rate": 1
+   },
+   "parentId": null
+  },
+  {
+   "id": "store",
+   "symbolId": "hold",
+   "x": 820,
+   "y": 300,
+   "canvasId": "canvas:global",
+   "form": {
+    "body": {
+     "kind": "surface",
+     "material": "generic",
+     "thickness": 0
+    },
+    "dimension": 2,
+    "frame": {
+     "mode": "none",
+     "thickness": 0,
+     "depth": 0
+    },
+    "regions": {
+     "interior": {
+      "state": "closed"
+     }
+    }
+   },
+   "config": {
+    "label": "",
+    "colorSlot": 0,
+    "signalMode": "relay",
+    "presentation": {
+     "graphic": {
+      "kind": "symbol",
+      "ref": "sym-hold",
+      "svg": ""
+     },
+     "size": {
+      "w": 112,
+      "h": 84
+     },
+     "interiorColorSlot": 0,
+     "text": "",
+     "padding": 16,
+     "backdrop": "auto"
+    },
+    "ports": {
+     "in": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "in",
+        "access": "read-write"
+       }
+      ]
+     },
+     "out": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "out",
+        "access": "read-write"
+       }
+      ]
+     },
+     "control": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "control",
+        "access": "read-write"
+       }
+      ]
+     }
+    }
+   },
+   "editor": {
+    "pinned": false,
+    "locked": false,
+    "hidden": false,
+    "opacity": 1,
+    "rate": 1
+   },
+   "parentId": null
+  },
+  {
+   "id": "log",
+   "symbolId": "receipt",
+   "x": 1120,
+   "y": 300,
+   "canvasId": "canvas:global",
+   "form": {
+    "body": {
+     "kind": "surface",
+     "material": "generic",
+     "thickness": 0
+    },
+    "dimension": 2,
+    "frame": {
+     "mode": "none",
+     "thickness": 0,
+     "depth": 0
+    },
+    "regions": {
+     "interior": {
+      "state": "closed"
+     }
+    }
+   },
+   "config": {
+    "label": "Receipt",
+    "colorSlot": 0,
+    "signalMode": "relay",
+    "presentation": {
+     "graphic": {
+      "kind": "symbol",
+      "ref": "sym-receipt",
+      "svg": ""
+     },
+     "size": {
+      "w": 112,
+      "h": 84
+     },
+     "interiorColorSlot": 0,
+     "text": "",
+     "padding": 16,
+     "backdrop": "auto"
+    },
+    "ports": {
+     "in": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "in",
+        "access": "read-write"
+       }
+      ]
+     },
+     "out": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "out",
+        "access": "read-write"
+       }
+      ]
+     },
+     "control": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "control",
+        "access": "read-write"
+       }
+      ]
+     }
+    }
+   },
+   "editor": {
+    "pinned": false,
+    "locked": false,
+    "hidden": false,
+    "opacity": 1,
+    "rate": 1
+   },
+   "parentId": null
+  }
+ ],
+ "wires": [
+  {
+   "id": "k1",
+   "a": "src",
+   "b": "check",
+   "aSide": "out",
+   "bSide": "in",
+   "canvasId": "canvas:global",
+   "lane": 0,
+   "net": 0,
+   "config": {
+    "direction": "forward",
+    "reciprocity": "none",
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "aConnectionIndex": 0,
+    "bConnectionIndex": 0,
+    "aChannelMarker": "1",
+    "bChannelMarker": "1",
+    "label": "request"
+   },
+   "editor": {
+    "pinned": false,
+    "locked": false,
+    "hidden": false,
+    "opacity": 1,
+    "rate": 1
+   }
+  },
+  {
+   "id": "k2",
+   "a": "check",
+   "b": "store",
+   "aSide": "out",
+   "bSide": "in",
+   "canvasId": "canvas:global",
+   "lane": 1,
+   "net": 1,
+   "config": {
+    "direction": "forward",
+    "reciprocity": "none",
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "aConnectionIndex": 0,
+    "bConnectionIndex": 0,
+    "aChannelMarker": "1",
+    "bChannelMarker": "1",
+    "label": ""
+   },
+   "editor": {
+    "pinned": false,
+    "locked": false,
+    "hidden": false,
+    "opacity": 1,
+    "rate": 1
+   }
+  },
+  {
+   "id": "k3",
+   "a": "store",
+   "b": "log",
+   "aSide": "out",
+   "bSide": "in",
+   "canvasId": "canvas:global",
+   "lane": 2,
+   "net": 2,
+   "config": {
+    "direction": "forward",
+    "reciprocity": "none",
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "aConnectionIndex": 0,
+    "bConnectionIndex": 0,
+    "aChannelMarker": "1",
+    "bChannelMarker": "1",
+    "label": "record"
+   },
+   "editor": {
+    "pinned": false,
+    "locked": false,
+    "hidden": false,
+    "opacity": 1,
+    "rate": 1
+   }
+  }
+ ],
+ "references": [],
+ "layout": {}
+}

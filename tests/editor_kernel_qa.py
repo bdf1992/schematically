@@ -41,6 +41,23 @@ async def main():
     assert await page.evaluate('globalTimeScale()')==2
     # No legacy KEYS badge.
     assert 'KEYS' not in await page.locator('body').inner_text()
+    # Paste is all-or-nothing (declared ports, 0b-1 step 19): a clipboard whose second record is
+    # refused inserts neither and leaves history as it was; a valid paste is one history transition.
+    await page.wait_for_timeout(450);await page.evaluate('commitHistoryCapture()')
+    before=await page.evaluate("({n:nodes.length,h:historyList().length})")
+    refused=await page.evaluate('''()=>{
+      semanticClipboard={schema:'soveraeign.schematic/clipboard@0.1',rootIds:['q1','q2'],wires:[],components:[
+        {id:'q1',symbolId:'act',x:100,y:600,config:{}},
+        {id:'q2',symbolId:'act',x:300,y:600,config:{attachmentDefaults:'none',attachmentPoints:[{id:'p',side:'left',t:.5,flow:'in'},{id:'p',side:'right',t:.5,flow:'out'}]}}]};
+      return pasteClipboard();}''')
+    await page.wait_for_timeout(450);await page.evaluate('commitHistoryCapture()')
+    after=await page.evaluate("({n:nodes.length,h:historyList().length})")
+    assert refused==[] and after==before,(refused,before,after)
+    assert 'Paste refused' in await page.locator('#status').inner_text()
+    ok=await page.evaluate('''()=>{semanticClipboard.components[1].config={};return pasteClipboard().length}''')
+    await page.wait_for_timeout(450);await page.evaluate('commitHistoryCapture()')
+    done=await page.evaluate("({n:nodes.length,h:historyList().length})")
+    assert ok==2 and done=={'n':before['n']+2,'h':before['h']+1},(ok,before,done)
     assert not errors,errors
     await browser.close();print('PASS editor kernel QA')
 asyncio.run(main())

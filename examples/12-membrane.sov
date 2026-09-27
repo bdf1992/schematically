@@ -1,0 +1,264 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "example-membrane",
+  "revision": 0,
+  "meta": {
+    "title": "Classic 12 — A membrane: where a point sits decides what it reaches"
+  },
+  "components": [
+    {
+      "id": "cell",
+      "symbolId": "plane",
+      "x": 620,
+      "y": 300,
+      "form": {
+        "dimension": 2,
+        "section": {
+          "lines": [
+            {
+              "id": "L0"
+            },
+            {
+              "id": "L1"
+            }
+          ],
+          "bands": [
+            {
+              "id": "B1",
+              "fill": "solid",
+              "thickness": 12,
+              "role": "skin"
+            }
+          ],
+          "core": {
+            "fill": "space"
+          }
+        }
+      },
+      "config": {
+        "label": "Cell · a skin around space",
+        "attachmentDefaults": "none",
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "boundary",
+          "size": {
+            "w": 440,
+            "h": 280
+          }
+        }
+      }
+    },
+    {
+      "id": "channel",
+      "symbolId": "point",
+      "x": 0,
+      "y": 0,
+      "canvasId": "canvas:component:cell",
+      "parentId": "cell",
+      "placement": {
+        "kind": "edge",
+        "hostId": "cell",
+        "side": "left",
+        "t": 0.32,
+        "at": {
+          "through": "B1"
+        }
+      },
+      "form": {
+        "dimension": 0
+      },
+      "config": {
+        "label": "channel · through the skin",
+        "ports": {
+          "out": {
+            "face": "both"
+          }
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "outside",
+          "backdrop": "none"
+        }
+      }
+    },
+    {
+      "id": "receptor",
+      "symbolId": "point",
+      "x": 0,
+      "y": 0,
+      "canvasId": "canvas:component:cell",
+      "parentId": "cell",
+      "placement": {
+        "kind": "edge",
+        "hostId": "cell",
+        "side": "left",
+        "t": 0.72,
+        "at": {
+          "line": "L0"
+        }
+      },
+      "form": {
+        "dimension": 0
+      },
+      "config": {
+        "label": "receptor · outer line",
+        "ports": {
+          "out": {
+            "face": "both"
+          }
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "outside",
+          "backdrop": "none"
+        }
+      }
+    },
+    {
+      "id": "pore",
+      "symbolId": "point",
+      "x": 0,
+      "y": 0,
+      "canvasId": "canvas:component:cell",
+      "parentId": "cell",
+      "placement": {
+        "kind": "edge",
+        "hostId": "cell",
+        "side": "right",
+        "t": 0.5,
+        "at": {
+          "through": "B1"
+        }
+      },
+      "form": {
+        "dimension": 0
+      },
+      "config": {
+        "label": "pore · through the skin",
+        "ports": {
+          "out": {
+            "face": "both"
+          }
+        },
+        "presentation": {
+          "graphic": {
+            "kind": "none"
+          },
+          "labelMode": "outside",
+          "backdrop": "none"
+        }
+      }
+    },
+    {
+      "id": "signal",
+      "symbolId": "act",
+      "x": 150,
+      "y": 250,
+      "config": {
+        "label": "Signal",
+        "signalMode": "source"
+      }
+    },
+    {
+      "id": "ligand",
+      "symbolId": "act",
+      "x": 150,
+      "y": 362,
+      "config": {
+        "label": "Ligand",
+        "signalMode": "source"
+      }
+    },
+    {
+      "id": "nucleus",
+      "symbolId": "act",
+      "x": 520,
+      "y": 250,
+      "canvasId": "canvas:component:cell",
+      "parentId": "cell",
+      "config": {
+        "label": "Nucleus",
+        "signalMode": "relay"
+      }
+    },
+    {
+      "id": "enzyme",
+      "symbolId": "act",
+      "x": 720,
+      "y": 300,
+      "canvasId": "canvas:component:cell",
+      "parentId": "cell",
+      "config": {
+        "label": "Enzyme",
+        "signalMode": "relay"
+      }
+    },
+    {
+      "id": "world",
+      "symbolId": "act",
+      "x": 1074,
+      "y": 300,
+      "config": {
+        "label": "World",
+        "signalMode": "relay"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "m1",
+      "a": "signal",
+      "aSide": "out",
+      "b": "channel",
+      "bSide": "out",
+      "canvasId": "canvas:global"
+    },
+    {
+      "id": "m2",
+      "a": "channel",
+      "aSide": "out",
+      "b": "nucleus",
+      "bSide": "in",
+      "canvasId": "canvas:component:cell"
+    },
+    {
+      "id": "m3",
+      "a": "ligand",
+      "aSide": "out",
+      "b": "receptor",
+      "bSide": "out",
+      "canvasId": "canvas:global"
+    },
+    {
+      "id": "m4",
+      "a": "nucleus",
+      "aSide": "out",
+      "b": "enzyme",
+      "bSide": "in",
+      "canvasId": "canvas:component:cell"
+    },
+    {
+      "id": "m5",
+      "a": "enzyme",
+      "aSide": "out",
+      "b": "pore",
+      "bSide": "out",
+      "canvasId": "canvas:component:cell"
+    },
+    {
+      "id": "m6",
+      "a": "pore",
+      "aSide": "out",
+      "b": "world",
+      "bSide": "in",
+      "canvasId": "canvas:global"
+    }
+  ],
+  "references": []
+}

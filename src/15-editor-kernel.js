@@ -53,7 +53,8 @@ function clearComponentSelectionSet(){selectedComponentIds.clear()}
 
 // --- History ---------------------------------------------------------------
 const historyState={undo:[],redo:[],baseline:null,timer:null,hint:'Edit',replaying:false,max:120};
-function historyDocument(){return SovSchematicData.makeDocument(SovSchematicData.clone(diagram))}
+// History holds the canonical document: the layout on screen folded back into its view.
+function historyDocument(){return SovSchematicData.makeDocument(typeof canonicalDiagram==='function'?canonicalDiagram():SovSchematicData.clone(diagram))}
 function historyFingerprintOf(doc){
   const d=SovSchematicData.clone(doc);d.revision=0;
   if(d.meta){delete d.meta.updatedAt;delete d.meta.savedAt}
@@ -139,25 +140,49 @@ function copySelection(){
   semanticClipboard={schema:'soveraeign.schematic/clipboard@0.1',createdAt:new Date().toISOString(),rootIds:data.roots.map(x=>x.id),components:data.components,wires:data.wires};
   statusEl.textContent=`Copied · ${data.components.length} Component${data.components.length===1?'':'s'}`;updateEditMenuState();return SovSchematicData.clone(semanticClipboard);
 }
+// A channel merge's declared order names Wires by id. On paste the copies' orders follow the
+// copied Wires (old id -> new id); a Wire that was not copied leaves the list, and an order left
+// with no path is removed so the merge falls back to its default order.
+function remapPastedMergeOrders(components,wireIdMap){
+  for(const component of components){
+    for(const port of Array.isArray(component?.config?.attachmentPoints)?component.config.attachmentPoints:[]){
+      for(const channel of Array.isArray(port?.channels)?port.channels:[]){
+        const order=channel?.merge?.order;
+        if(!order||order.kind!=='declared'||!Array.isArray(order.paths))continue;
+        const paths=order.paths.map(id=>wireIdMap.get(id)).filter(Boolean);
+        if(paths.length)order.paths=paths;else delete channel.merge.order;
+      }
+    }
+  }
+  return components;
+}
 function pasteClipboard({offset=32}={}){
   if(!semanticClipboard?.components?.length){statusEl.textContent='Clipboard empty';return []}
-  setHistoryHint('Paste');const idMap=new Map(),created=[];
+  // All or nothing: every record is built and checked against a staged copy of the document
+  // before any is inserted, so a refused record inserts nothing and leaves history as it was.
+  const stage={...diagram,components:nodes.slice(),wires:wires.slice()};
+  const idMap=new Map(),wireIdMap=new Map(),created=[],createdWires=[];
   const comps=semanticClipboard.components.slice().sort((a,b)=>nodeDepth(a)-nodeDepth(b));
-  for(const old of comps){
-    const value=SovSchematicData.clone(old);delete value.id;
-    value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
-    if(old.parentId&&idMap.has(old.parentId)){
-      value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
-      // A Point stuck to the copied host's boundary or path stays stuck to the copy.
-      if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
-    }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
-    const fresh=SovSchematicData.makeComponent(diagram,value);nodes.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
-  }
+  try{
+    for(const old of comps){
+      const value=SovSchematicData.clone(old);delete value.id;
+      value.x=Number(old.x||0)+offset;value.y=Number(old.y||0)+offset;
+      if(old.parentId&&idMap.has(old.parentId)){
+        value.parentId=idMap.get(old.parentId);value.canvasId=`canvas:component:${value.parentId}`;
+        // A Point stuck to the copied host's boundary or path stays stuck to the copy.
+        if(value.placement&&['edge','path'].includes(value.placement.kind))value.placement.hostId=value.parentId;
+      }else{value.parentId=null;value.canvasId=GLOBAL_CANVAS_ID;value.placement={kind:'surface',x:value.x,y:value.y}};
+      // A copy keeps a bound Component's config.definition as-is (a plain create may not set one).
+      const fresh=SovSchematicData.makeComponent(stage,value,{copy:true});stage.components.push(fresh);idMap.set(old.id,fresh.id);created.push(fresh);
+    }
+  }catch(error){statusEl.textContent=`Paste refused · ${error.message}`;return []}
   for(const old of semanticClipboard.wires||[]){
     if(!idMap.has(old.a)||!idMap.has(old.b))continue;
     const value=SovSchematicData.clone(old);delete value.id;value.a=idMap.get(old.a);value.b=idMap.get(old.b);
-    try{wires.push(SovSchematicData.makeWire(diagram,value))}catch(_){ }
+    try{const w=SovSchematicData.makeWire(stage,value);stage.wires.push(w);createdWires.push(w);wireIdMap.set(old.id,w.id)}catch(_){ }
   }
+  remapPastedMergeOrders(created,wireIdMap);
+  setHistoryHint('Paste');nodes.push(...created);wires.push(...createdWires);
   syncAllNodeBoundaryContext();setComponentSelection(created.filter(n=>semanticClipboard.rootIds.includes([...idMap.entries()].find(([,v])=>v===n.id)?.[0])).map(n=>n.id),created.at(-1)?.id);routeCache.clear();arrowPoseCache.clear();render();scheduleHistoryCapture();statusEl.textContent=`Pasted · ${created.length} Component${created.length===1?'':'s'}`;return created;
 }
 function cutSelection(){if(!copySelection())return;setHistoryHint('Cut');deleteSelected();scheduleHistoryCapture()}
@@ -179,7 +204,7 @@ function quickCommands(){return [
 ]}
 function updateQuickSearch(query=''){
   const q=String(query).trim().toLowerCase(),results=document.getElementById('quickSearchResults');if(!results)return;results.replaceChildren();
-  quickSearchMatches=q?nodes.filter(n=>!isEffectivelyHidden(n)&&[n.id,n.symbolId,componentConfig(n).label,byId(n.symbolId)?.name].some(v=>String(v||'').toLowerCase().includes(q))):[];
+  quickSearchMatches=q?nodes.filter(n=>!isEffectivelyHidden(n)&&[n.id,n.symbolId,componentConfig(n).label,symbolOf(n.symbolId).name].some(v=>String(v||'').toLowerCase().includes(q))):[];
   document.querySelectorAll('.node').forEach(el=>{const match=quickSearchMatches.some(n=>n.id===el.dataset.id);el.classList.toggle('search-match',!!q&&match);el.classList.toggle('search-dim',!!q&&!match)});
   for(const n of quickSearchMatches.slice(0,10)){const b=document.createElement('button');b.type='button';b.className='search-result';b.innerHTML=`<b>${escapeXML(componentDisplayName(n))}</b><small>${escapeXML(n.symbolId)} · ${escapeXML(n.id)}</small>`;b.addEventListener('click',()=>{closeQuickSearch();focusComponent(n)});results.appendChild(b)}
   for(const c of quickCommands().filter(c=>q&&c.name.toLowerCase().includes(q)).slice(0,5)){const b=document.createElement('button');b.type='button';b.className='search-result command';b.innerHTML=`<b>› ${escapeXML(c.name)}</b>`;b.addEventListener('click',()=>{closeQuickSearch();c.run()});results.appendChild(b)}
@@ -212,12 +237,13 @@ function selectedUtilityEntity(kind=selectedSurfaceKind()){
 function syncEntityUtilityPanel(kind){
   const entity=selectedUtilityEntity(kind),panel=document.getElementById('entityUtilityFields');if(!panel)return;panel.hidden=!entity;if(!entity)return;
   const state=entityEditorState(entity),pin=document.getElementById('entityPin'),lock=document.getElementById('entityLock'),hidden=document.getElementById('entityHidden'),opacity=document.getElementById('entityOpacity'),rate=document.getElementById('entityRate');
-  pin.checked=state.pinned;pin.disabled=kind!=='component'||state.locked;lock.checked=state.locked;hidden.checked=state.hidden;opacity.value=String(state.opacity);opacity.disabled=state.locked;rate.value=String(state.rate);rate.disabled=state.locked;
+  // A wire's Pin is its route in the layout on screen.
+  pin.checked=kind==='wire'?(typeof activeRouteSpec==='function'&&activeRouteSpec(entity.id)?.mode==='pinned'):state.pinned;pin.disabled=(kind!=='component'&&kind!=='wire')||state.locked;lock.checked=state.locked;hidden.checked=state.hidden;opacity.value=String(state.opacity);opacity.disabled=state.locked;rate.value=String(state.rate);rate.disabled=state.locked;
   panel.dataset.ownerKind=kind;
 }
 function bindUtilitySettings(){
   const pin=document.getElementById('entityPin'),lock=document.getElementById('entityLock'),hidden=document.getElementById('entityHidden'),opacity=document.getElementById('entityOpacity'),rate=document.getElementById('entityRate');
-  pin?.addEventListener('change',()=>{const e=selectedUtilityEntity();if(!e)return;setHistoryHint(pin.checked?'Pin':'Unpin');entityEditorState(e).pinned=pin.checked;render();scheduleHistoryCapture();restoreSelectedSurface()});
+  pin?.addEventListener('change',()=>{const e=selectedUtilityEntity();if(!e)return;if(wires.includes(e)){const r=toggleWireRoutePin(e,pin.checked);if(!r.ok){pin.checked=false;statusEl.textContent=r.message}restoreSelectedSurface();return}setHistoryHint(pin.checked?'Pin':'Unpin');entityEditorState(e).pinned=pin.checked;render();scheduleHistoryCapture();restoreSelectedSurface()});
   lock?.addEventListener('change',()=>{const e=selectedUtilityEntity();if(!e)return;setHistoryHint(lock.checked?'Lock':'Unlock');entityEditorState(e).locked=lock.checked;render();scheduleHistoryCapture();restoreSelectedSurface()});
   hidden?.addEventListener('change',()=>{const e=selectedUtilityEntity();if(!e)return;setHistoryHint(hidden.checked?'Hide':'Show');entityEditorState(e).hidden=hidden.checked;render();scheduleHistoryCapture();if(hidden.checked){selected=null;clearComponentSelectionSet();selectNode(null)}else restoreSelectedSurface()});
   opacity?.addEventListener('input',()=>{const e=selectedUtilityEntity();if(!e||isEntityLocked(e))return;entityEditorState(e).opacity=Number(opacity.value);setHistoryHint('Change opacity');render();scheduleHistoryCapture()});

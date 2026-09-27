@@ -2,6 +2,27 @@
 // 0.1 Beta concern: Component, Port, Wire, containment, and normalization model.
 
 const byId=id=>SYMBOLS.find(s=>s.id===id);
+// The symbol a Component is drawn as. A notation glyph (a logic gate, NOTATION-MODEL.md) is not in
+// SYMBOLS; it is read as one here, so nothing that shows a symbol's name, family or meaning has to
+// know which table it came from (issue #55). `byId` alone says whether an id is a SYMBOLS entry.
+function symbolOf(symbolId){
+  const s=byId(symbolId);if(s)return s;
+  const g=SovSchematicNotation.glyphOf(activeNotation(),symbolId);
+  return {id:symbolId,name:g?.title||String(symbolId||''),family:g?.family||'',role:'',diagram_class:'',meaning:g?.meaning||'',verbs:[],properties:[]};
+}
+// The one list of what a Component can be, in the order it is shown: Point, Path, Plane, then the
+// Component types, the Signals, then the glyphs the active notation adds. The palette and the bar's
+// type control both read it, so they never diverge (issue #20). Every entry carries the dimension
+// its type gives; dimension is a property of the type, never chosen apart from it.
+function symbolCatalog(){
+  const notation=activeNotation(),own=Object.keys(notation.glyphs||{}).filter(id=>!byId(id));
+  const groups=[...Object.entries(GROUPS),...(own.length?[[notation.name||notation.id,own]]:[])];
+  return groups.map(([group,ids])=>({group,entries:ids.map(id=>{
+    const symbol=symbolOf(id),preset=SovSchematicData.templatePreset(id);
+    return {id,group,symbol,preset,name:notation.glyphs?.[id]?.title||sentenceCase(symbol.name),dimension:preset?.form?.dimension??2,carrier:!!preset?.carrier};
+  })}));
+}
+function symbolCatalogEntry(symbolId){for(const {entries} of symbolCatalog()){const e=entries.find(x=>x.id===symbolId);if(e)return e}return null}
 const Attachment=SovSchematicAttachment;
 function componentAttachmentPointIds(n){return Attachment.pointIds(n)}
 function componentAttachmentPoints(n){return Attachment.descriptors(n,componentConfig(n).ports)}
@@ -58,6 +79,30 @@ function connectionReachability(a,aSide,b,bSide){
 }
 const escapeXML=s=>(s||'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]));
 function glyph(id){ return `<svg viewBox="0 0 96 64"><use href="#sym-${id}"/></svg>`; }
+// The notation this document is drawn in (NOTATION-MODEL.md). An unknown notation is reported
+// and the built-in one is drawn, so the editor never shows a blank canvas; validation refuses it.
+let notationCache={key:null,notation:null,error:null};
+function activeNotation(){
+  const key=`${diagram?.notation||'schematic'}|${(diagram?.references||[]).filter(r=>r?.kind==='notation').map(r=>JSON.stringify(r.data)).join('|')}`;
+  if(notationCache.key===key)return notationCache.notation;
+  const r=SovSchematicNotation.resolve(diagram);
+  notationCache={key,notation:r.ok?r.notation:SovSchematicNotation.resolve('schematic').notation,error:r.ok?null:r};
+  installNotationSymbols(notationCache.notation);
+  return notationCache.notation;
+}
+// A glyph's stroke in its 96 x 64 box: the symbol weight at a standard card's glyph scale.
+function glyphUnitStroke(notation=activeNotation()){return +(notation.tokens.stroke.symbol/.84).toFixed(2)}
+function installNotationSymbols(notation){
+  const defs=document.querySelector('.hidden-symbols defs');if(!defs)return;
+  const stroke=glyphUnitStroke(notation),out=[];
+  for(const [id,g] of Object.entries(notation.glyphs||{})){
+    out.push(`<symbol id="sym-${id}" viewBox="0 0 96 64">${SovSchematicNotation.glyphMarkup(g,{stroke})}</symbol>`);
+    for(const [key,values] of Object.entries(g.variants||{}))for(const value of Object.keys(values))out.push(`<symbol id="sym-${id}-${value}" viewBox="0 0 96 64">${SovSchematicNotation.glyphMarkup(g,{variant:{[key]:value},stroke})}</symbol>`);
+  }
+  defs.innerHTML=out.join('');
+}
+function componentGlyph(node){return SovSchematicNotation.glyphOf(activeNotation(),node?.symbolId)}
+activeNotation();
 function ensureComponentStructure(n){
   if(!n.boundary){
     n.boundary={
@@ -256,6 +301,16 @@ function wirePartPortConfig(w,part){
   if(!['external','internal','both'].includes(part.config.face))part.config.face='external';
   return part.config;
 }
+// Which preset a section is, by structure; 'derived' when nothing is authored.
+function sectionPresetName(form,dimension){
+  if(!form?.section)return dimension===1?'line':'derived';
+  const s=SovSchematicData.normalizeSection(form.section,dimension);if(!s)return dimension===1?'line':'derived';
+  for(const name of Object.keys(SovSchematicData.SECTION_PRESETS)){
+    const p=SovSchematicData.sectionPreset(name,dimension);if(!p||p.lines.length!==s.lines.length||p.bands.length!==s.bands.length)continue;
+    if(p.bands.every((b,i)=>b.fill===s.bands[i].fill&&b.thickness===s.bands[i].thickness)&&(!p.core||p.core.fill===s.core?.fill))return name;
+  }
+  return 'custom';
+}
 function componentForm(n){
   if(!n.form)n.form={};
   const f=n.form,legacy=componentCanvas(n),dim=Number(f.dimension);
@@ -272,6 +327,8 @@ function componentForm(n){
   if(!f.regions)f.regions={};if(!f.regions.interior)f.regions.interior={};
   if(!['open','closed'].includes(f.regions.interior.state))f.regions.interior.state=legacy.state==='open'?'open':'closed';
   if(f.dimension<2)f.regions.interior.state='closed';
+  // An authored section is the authority; frame and interior are its projection.
+  if(f.section!==undefined){const s=SovSchematicData.normalizeSection(f.section,f.dimension);if(s&&f.dimension>0){f.section=s;SovSchematicData.projectSection(f)}else delete f.section}
   legacy.state=f.regions.interior.state;legacy.dimension=f.dimension; // compatibility projection only
   return f;
 }
@@ -295,13 +352,24 @@ function componentIsPoint(n){return componentForm(n).dimension===0}
 function componentIsPath(n){return componentForm(n).dimension===1}
 function componentIsSurface(n){return componentForm(n).dimension===2}
 // A primitive shows no type name of its own; only an authored label is drawn.
-function componentTypeCaption(n,s=byId(n.symbolId)){return isPrimitiveSymbol(n.symbolId)?'':(s?.name||'')}
+// A card with no label shows its glyph's title, in sentence case: "Act", never "ACT".
+function sentenceCase(v){const t=String(v||'').toLowerCase();return t.charAt(0).toUpperCase()+t.slice(1)}
+function componentTypeCaption(n,s=byId(n.symbolId)){return isPrimitiveSymbol(n.symbolId)?'':(componentGlyph(n)?.title||sentenceCase(s?.name||''))}
 // Wires whose endpoint sits on one of this component's built-in points. Used to refuse
 // attachment-default or type changes that would silently orphan a carrier.
 function wiresOnBuiltinPoints(n){
   const ids=new Set(Attachment.builtinPointIds(n));
   return wires.filter(w=>(w.a===n.id&&ids.has(Attachment.pointId(n,w.aAttachment?.pointId||w.aSide)))||(w.b===n.id&&ids.has(Attachment.pointId(n,w.bAttachment?.pointId||w.bSide))));
 }
+// The Wires whose end is bound to this Component's point (by point id or compat id): what the
+// Attached list shows beside each port (#21).
+function wiresOnPoint(n,pointId){
+  const spec=Attachment.resolveSpec(n,pointId);if(!spec)return [];
+  const at=(w,end)=>w[end]===n.id&&Attachment.pointId(n,w[`${end}Attachment`]?.pointId||w[`${end}Side`])===spec.id;
+  return wires.filter(w=>at(w,'a')||at(w,'b'));
+}
+// The Points hosted on this Component's boundary (placement kind `edge`), in document order.
+function hostedPointsOn(n){return nodes.filter(p=>p.id!==n.id&&p.placement?.kind==='edge'&&p.placement.hostId===n.id)}
 function componentHostedOnComponentPath(n){return componentPlacement(n).kind==='path'}
 function componentHostedOnComponentEdge(n){return componentPlacement(n).kind==='edge'}
 function componentBackdropMode(n){
@@ -319,9 +387,9 @@ function componentConfig(n){
   if(!['symbol','custom','none'].includes(presentation.graphic.kind))presentation.graphic.kind='symbol';
   if(typeof presentation.graphic.ref!=='string')presentation.graphic.ref=`sym-${n.symbolId||'blank'}`;
   if(typeof presentation.graphic.svg!=='string')presentation.graphic.svg='';
-  if(!presentation.size)presentation.size={w:112,h:84};
-  presentation.size.w=Math.max(80,Math.min(520,Number(presentation.size.w)||112));
-  presentation.size.h=Math.max(64,Math.min(420,Number(presentation.size.h)||84));
+  // The data core's normaliser, so a file never declares a size the screen silently refuses.
+  presentation.size=SovSchematicData.normalizePresentationSize(presentation.size);
+  presentation.size.w=Math.min(4096,presentation.size.w);presentation.size.h=Math.min(4096,presentation.size.h);
   // The label mode is read through SovSchematicData.effectiveLabelMode; an absent one is derived, never written.
   if(presentation.labelMode!==undefined&&!['boundary','inside','outside','none'].includes(presentation.labelMode))delete presentation.labelMode;
   if(!Number.isInteger(presentation.interiorColorSlot))presentation.interiorColorSlot=n.config.colorSlot??0;
@@ -354,7 +422,7 @@ function componentConfig(n){
   const configuredCompatIds=new Set(specs.map(spec=>spec.compatId));
   for(const compatId of configuredCompatIds){
     const spec=specs.find(item=>item.compatId===compatId);
-    const fallback=defaults[compatId]||{side:spec?.side||'point',channel:'signal',color:'#171715',flow:spec?.defaultFlow||'duplex'};
+    const fallback=(spec?.role!=='self'&&defaults[compatId])||{side:spec?.side||'point',channel:'signal',color:'#171715',flow:spec?.defaultFlow||'duplex'};
     const p=n.config.ports[compatId]||(n.config.ports[compatId]={});
     if(typeof p.label!=='string')p.label='';
     if(!['external','internal','both'].includes(p.face))p.face='external';
@@ -422,6 +490,12 @@ function wireMarkerSummaryForPort(nodeId,pointId){
   return wires.filter(w=>(w.a===nodeId&&w.aSide===compatId)||(w.b===nodeId&&w.bSide===compatId)).map(w=>
     (w.a===nodeId&&w.aSide===compatId)?wireEndpointMarker(w,'a'):wireEndpointMarker(w,'b')
   );
+}
+// A channel marker distinguishes one connection of a port from its others. On a port with a
+// single connection it distinguishes nothing, so it is not drawn.
+function endpointShowsChannelTag(w,end){
+  const p=endpointPortConfig(w,end);if(!p)return false;
+  normalizePortConnections(p);return p.connectionCount>1;
 }
 function endpointMarkerDisplay(w,end){
   return wireEndpointMarker(w,end)||'1';

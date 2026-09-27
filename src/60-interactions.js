@@ -26,7 +26,7 @@ function transformMinimumSize(node){
     minW=Math.max(minW,2*(Math.abs(child.x-node.x)+size.w/2+p.padding));
     minH=Math.max(minH,2*(Math.abs(child.y-node.y)+size.h/2+p.padding));
   }
-  return {w:Math.min(520,minW),h:Math.min(420,minH)};
+  return SovSchematicData.normalizePresentationSize({w:minW,h:minH});
 }
 function scheduleComponentTransformProjection(){
   if(componentTransformFrame)return;
@@ -56,12 +56,12 @@ function updateComponentTransform(e){
   const q=svgPoint(e.clientX,e.clientY),dx=q.x-t.start.x,dy=q.y-t.start.y;
   const p=componentConfig(t.node).presentation,min=transformMinimumSize(t.node);
   let w=t.startSize.w,h=t.startSize.h;
-  if(t.kind==='x'||t.kind==='xy')w=Math.max(min.w,Math.min(520,t.startSize.w+dx*2));
-  if(t.kind==='y'||t.kind==='xy')h=Math.max(min.h,Math.min(420,t.startSize.h+dy*2));
+  if(t.kind==='x'||t.kind==='xy')w=Math.max(min.w,t.startSize.w+dx*2);
+  if(t.kind==='y'||t.kind==='xy')h=Math.max(min.h,t.startSize.h+dy*2);
   if(t.kind==='xy'&&e.shiftKey){
     const byW=w/t.ratio,byH=h*t.ratio;
-    if(Math.abs(dx)>=Math.abs(dy))h=Math.max(min.h,Math.min(420,byW));
-    else w=Math.max(min.w,Math.min(520,byH));
+    if(Math.abs(dx)>=Math.abs(dy))h=Math.max(min.h,byW);
+    else w=Math.max(min.w,byH);
   }
   p.size.w=w;p.size.h=h;
   scheduleComponentTransformProjection();
@@ -111,16 +111,23 @@ function beginActiveNodeDrag(e,g,n){
   e.preventDefault();e.stopPropagation();
   if(isEntityLocked(n)||isEntityPinned(n)){statusEl.textContent=isEntityLocked(n)?'Locked · move refused':'Pinned · move refused';selectNode(n.id,{focus:false});return}
   if(!selectedComponentIds.has(n.id)){selectNode(n.id,{focus:false})}
+  // A capture still pending from an earlier edit is committed now, so it cannot fire in the middle
+  // of the gesture and split the move into two transitions at an intermediate position.
+  commitHistoryCapture();
   setHistoryHint(selectedComponentIds.size>1?'Move selection':'Move Component');
   if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'recovered stale drag'});
   if(keyboardMoveNodeId)finishKeyboardMove({});if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
   activeNodeDrag=n.id;captureDragSnapshots(n.id);workspace.classList.add('dragging-node');g.classList.add('dragging');
-  selectNode(n.id,{focus:false});setSelectionBarSuppressed(true);
+  // The pressed Component becomes the primary; a multi-selection it belongs to is kept, so the drag
+  // moves the whole group (issue #49). An unselected Component was selected alone above.
+  selectNode(n.id,{focus:false,preserveSet:true});setSelectionBarSuppressed(true);
   const startPointer=svgPoint(e.clientX,e.clientY);
   const roots=selectedComponentIds.has(n.id)?selectedRootComponents():[n];
   const moved=new Set([n.id,...descendantsOf(n.id).map(x=>x.id)]),groupOrigins=[];
   for(const root of roots){for(const item of [root,...descendantsOf(root.id)]){if(moved.has(item.id))continue;moved.add(item.id);groupOrigins.push({node:item,x:item.x,y:item.y})}}
-  activeNodeDragState={id:n.id,node:n,el:g,pointerId:e.pointerId,startPointer:{x:startPointer.x,y:startPointer.y},pointer:{x:startPointer.x,y:startPointer.y},origin:{x:n.x,y:n.y},originCanvasId:n.canvasId||GLOBAL_CANVAS_ID,descendantOrigins:descendantsOf(n.id).map(child=>({node:child,x:child.x,y:child.y})),groupOrigins,groupRootIds:roots.map(x=>x.id),modifiers:modifierSnapshot(e),startedAt:performance.now(),hostCandidate:null,hostCandidateKey:'',hostReady:false,hostDwellTimer:null};
+  // Where every moved Component started, so a refused settle can put them all back.
+  const startPositions=[n,...descendantsOf(n.id),...groupOrigins.map(item=>item.node)].map(item=>({node:item,x:item.x,y:item.y}));
+  activeNodeDragState={id:n.id,node:n,el:g,pointerId:e.pointerId,startPositions,startPointer:{x:startPointer.x,y:startPointer.y},pointer:{x:startPointer.x,y:startPointer.y},origin:{x:n.x,y:n.y},originCanvasId:n.canvasId||GLOBAL_CANVAS_ID,descendantOrigins:descendantsOf(n.id).map(child=>({node:child,x:child.x,y:child.y})),groupOrigins,groupRootIds:roots.map(x=>x.id),modifiers:modifierSnapshot(e),startedAt:performance.now(),hostCandidate:null,hostCandidateKey:'',hostReady:false,hostDwellTimer:null};
   try{workspace.setPointerCapture(e.pointerId)}catch(_){}
   applyNodeDragPosition(activeNodeDragState);scheduleDragVisualRefresh();
 }
@@ -136,21 +143,36 @@ function updateActiveNodeDrag(e){
 }
 function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
   const state=activeNodeDragState;if(!state)return;if(!force&&e?.pointerId!=null&&e.pointerId!==state.pointerId)return;
-  const pointerId=state.pointerId;let fault=null;
+  const pointerId=state.pointerId;let fault=null,refusal=null;
+  // Whether the pointer moved. The gesture captures the pointer on the workspace, so no click reaches
+  // the card afterwards: a press that did not drag is resolved here (see the finally block).
+  const dragged=Math.hypot(state.pointer.x-state.startPointer.x,state.pointer.y-state.startPointer.y)>2;
   try{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     settleActiveComponent(e||state.modifiers);
+    // Every root's host is decided first; one refused settle refuses the whole gesture.
+    const plan=[];
     for(const id of state.groupRootIds||[state.node.id]){
-      const root=nodes.find(n=>n.id===id);if(!root)continue;const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID;
+      const root=nodes.find(n=>n.id===id);if(!root)continue;
       let candidate;
       if(root.id===state.node.id){
         candidate=state.hostReady?state.hostCandidate:null;
         if(!candidate){const current=componentHostCandidateAtPoint(root);if(current?.canvasId===state.originCanvasId)candidate=current}
-        applyComponentHost(root,candidate);
-      }else candidate=updateContainmentFor(root);
+      }else candidate=componentHostCandidateAtPoint(root);
+      plan.push({root,candidate});
+    }
+    // The hosting guard (componentHostRefusal, 30-canvas.js) is asked for every root before any is applied.
+    refusal=plan.map(({root,candidate})=>componentHostRefusal(root,candidate)).find(Boolean)||null;
+    if(refusal){
+      // The gesture is refused: every moved Component returns to where it started.
+      for(const item of state.startPositions||[]){item.node.x=item.x;item.node.y=item.y}
+      routeCache.clear();arrowPoseCache.clear();
+    }else for(const {root,candidate} of plan){
+      const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID;
+      applyComponentHost(root,candidate);
       const afterCanvas=root.canvasId||GLOBAL_CANVAS_ID;if(beforeCanvas!==afterCanvas)setHistoryHint(candidate?.kind==='wire'?'Settle Component on Wire':candidate?.kind==='component'?'Settle Component in Component':'Detach Component')
     }
-    clearHostCandidateArm(state);settleDraggedRoutes();
+    clearHostCandidateArm(state);if(refusal)render();else settleDraggedRoutes();
   }catch(err){fault=err;console.error('Recovered Component drag failure',err)}
   finally{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
@@ -158,9 +180,39 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
     activeNodeDragState=null;activeNodeDrag=null;dragRouteSnapshots.clear();
     try{if(workspace.hasPointerCapture?.(pointerId))workspace.releasePointerCapture(pointerId)}catch(_){}
     try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
+    // A plain press on a member of a multi-selection that did not drag selects that member alone,
+    // as a click always has; a drag leaves the group selected (issue #49). Shift keeps the set.
+    if(!dragged&&!force&&!state.modifiers?.shiftKey&&selectedComponentIds.size>1&&selectedComponentIds.has(state.node.id))selectNode(state.node.id,{focus:false});
     restoreSelectionBarAfterGesture();scheduleHistoryCapture();
   }
-  statusEl.textContent=fault?'Recovered drag error · ready':reason?`Select · ${reason}`:'Select';
+  statusEl.textContent=fault?'Recovered drag error · ready':refusal?refusal:reason?`Select · ${reason}`:'Select';
+}
+// Alt-drag a boundary point to slide it around its card's perimeter, corners included. The
+// same edge resolver hosts a free Point on a boundary; Shift releases the eighth-of-a-side snap.
+let portSlide=null;
+function beginPortSlide(e,n,pointId){
+  const spec=Attachment.resolveSpec(n,pointId);
+  if(!spec||spec.role!=='boundary'||componentForm(n).dimension!==2)return false;
+  const editor=entityEditorState(n);if(editor.pinned||editor.locked){statusEl.textContent=editor.locked?'Locked: points stay where they are':'Pinned: geometry is frozen';return true}
+  e.preventDefault();e.stopPropagation();
+  commitHistoryCapture();
+  portSlide={pointerId:e.pointerId,id:n.id,compat:spec.compatId,moved:false};
+  const move=ev=>{if(ev.pointerId!==portSlide?.pointerId)return;movePortSlide(ev)};
+  const end=ev=>{if(ev.pointerId!==portSlide?.pointerId)return;window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',end);window.removeEventListener('pointercancel',end);
+    const done=portSlide;portSlide=null;if(done.moved){commitHistoryCapture('Move point');statusEl.textContent='Point moved along the boundary'}};
+  window.addEventListener('pointermove',move);window.addEventListener('pointerup',end);window.addEventListener('pointercancel',end);
+  return true;
+}
+function slidePortTo(n,compat,x,y,{snap=true}={}){
+  const q=nearestPointOnComponentEdge(n,x,y);if(!q)return null;
+  const t=snap?Math.round(q.t*8)/8:Math.round(q.t*1000)/1000;
+  componentConfig(n).ports[compat].boundary={side:q.side,t};
+  routeCache.clear();arrowPoseCache.clear();render();
+  return {side:q.side,t};
+}
+function movePortSlide(e){
+  const d=portSlide,n=nodes.find(x=>x.id===d.id);if(!n)return;
+  const P=svgPoint(e.clientX,e.clientY);if(slidePortTo(n,d.compat,P.x,P.y,{snap:!e.shiftKey}))d.moved=true;
 }
 function bindNode(g,n){
   g.addEventListener('pointerdown',e=>{
@@ -170,7 +222,7 @@ function bindNode(g,n){
       else if(!selectedComponentIds.has(n.id))selectNode(n.id,{focus:false});
       beginActiveNodeDrag(e,g,n);return;
     }
-    const port=e.target.closest('.port-hit');if(port){beginWireDrag(e,n,port.dataset.point||port.dataset.side,g);return}
+    const port=e.target.closest('.port-hit');if(port){if(e.altKey&&beginPortSlide(e,n,port.dataset.point||port.dataset.side))return;beginWireDrag(e,n,port.dataset.point||port.dataset.side,g);return}
     const transform=e.target.closest('.transform-handle,.transform-handle-halo');if(transform){beginComponentTransform(e,n,transform.dataset.transform);return}
     if(e.shiftKey){selectNode(n.id,{focus:false,additive:true,toggle:true});if(!selectedComponentIds.has(n.id))return}
     else if(!selectedComponentIds.has(n.id))selectNode(n.id,{focus:false});
@@ -352,7 +404,7 @@ function updateWireDrag(e){
     const target=nodes.find(n=>n.id===snap.node); B=portPos(target,snap.side); bSide=snap.side;
     const hit=document.querySelector(`.node[data-id="${snap.node}"] .port-hit[data-side="${snap.side}"]`);
     if(hit) hit.classList.add('snap-target');
-    statusEl.textContent=`Release → ${target.label||byId(target.symbolId).name}`;
+    statusEl.textContent=`Release → ${target.label||symbolOf(target.symbolId).name}`;
   } else {
     armWireBlankCandidate(P);
     statusEl.textContent=wireDrag.blankReady?'Release → new Component':'Hold briefly to grow Component';
@@ -362,7 +414,7 @@ function updateWireDrag(e){
     const WA=carrierEndpointPos(w,'a'), WB=carrierEndpointPos(w,'b');
     if(!WA||!WB) return;
     const pts=stableRouteForWire(i,w,WA,WB,occupied);
-    occupied.push(...routeSegments(pts));
+    occupied.push(...routeSegments(pts,w));
   });
   wireDrag.ghost.setAttribute('d',routePath(
     wireDrag.A,B,wireDrag.sourceSide,bSide,
@@ -448,7 +500,7 @@ function carrierEndPointerMove(e){
   const otherEp=carrierEndpoint(w,d.other);
   if(otherEp){
     const from=d.other==='a',occupied=[];
-    wires.forEach((x,j)=>{if(j===d.i)return;const XA=carrierEndpointPos(x,'a'),XB=carrierEndpointPos(x,'b');if(XA&&XB)occupied.push(...routeSegments(stableRouteForWire(j,x,XA,XB,occupied)))});
+    wires.forEach((x,j)=>{if(j===d.i)return;const XA=carrierEndpointPos(x,'a'),XB=carrierEndpointPos(x,'b');if(XA&&XB)occupied.push(...routeSegments(stableRouteForWire(j,x,XA,XB,occupied),x))});
     const A=from?otherEp.pos:B,Z=from?B:otherEp.pos;
     d.ghost.setAttribute('d',routePath(A,Z,from?(otherEp.compatId||null):(snap?.side||null),from?(snap?.side||null):(otherEp.compatId||null),from?(otherEp.node?.id||null):(snap?.node||null),from?(snap?.node||null):(otherEp.node?.id||null),d.i,occupied));
   }
@@ -503,7 +555,8 @@ workspace.addEventListener('pointerdown',e=>{if(e.target===workspace && !panDrag
 barComponentType.addEventListener('change',()=>{
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'type change'))return;setHistoryHint('Change Component type');
   const next=barComponentType.value;
-  if(!GROUPS.Components.includes(next)&&!GROUPS.Primitives.includes(next)){barComponentType.value=n.symbolId;return}
+  // The bar offers exactly the catalog (symbolCatalog, issue #20); anything else is not a type.
+  if(!symbolCatalogEntry(next)){barComponentType.value=n.symbolId;return}
 
   // A Path is a carrier drawn from the palette; a Component is not retyped into one (#19).
   const preset=SovSchematicData.templatePreset(next);
@@ -514,9 +567,16 @@ barComponentType.addEventListener('change',()=>{
   const f=componentForm(n),nextDimension=preset?.form?.dimension??2,nextDefaults=preset?.attachmentDefaults||'standard';
   const wouldRemoveBuiltins=f.dimension!==nextDimension||(nextDefaults==='none'&&Attachment.attachmentDefaults(n)!=='none');
   if(wouldRemoveBuiltins&&wiresOnBuiltinPoints(n).length){barComponentType.value=n.symbolId;statusEl.textContent='Detach Wires from built-in points first';return}
-  const beforeOpen=formHostsChildren(n);
-  SovSchematicData.applySymbol(n,next);
-  if(beforeOpen&&!formHostsChildren(n)){const fallback=n.canvasId||GLOBAL_CANVAS_ID;for(const child of nodes.filter(q=>parentComponent(q)?.id===n.id)){child.canvasId=fallback;child.parentId=canvasOwnerComponentId(fallback);syncNodeBoundaryContext(child)}}
+  // The data core refuses a retype that would remove a port a Wire ends on (PORT_IN_USE). A retype
+  // that stops this Component hosting makes its Components fall back to its canvas: the hosting
+  // concern (30-canvas.js) decides and checks that before anything changes.
+  let plan=[];
+  try{
+    if(formHostsChildren(n)){const trial=SovSchematicData.clone(n);SovSchematicData.applySymbol(trial,next);if(!formHostsChildren(trial))plan=componentFallbackPlan(n)}
+    const refusal=componentHostPlanRefusal(plan);if(refusal)throw new Error(refusal);
+    SovSchematicData.applySymbol(n,next,diagram);
+  }catch(error){barComponentType.value=n.symbolId;statusEl.textContent=error.message;return}
+  applyComponentHostPlan(plan);
   SovSchematicData.reconcileComponentWirePorts(diagram,n.id);
   ensureComponentStructure(n);
 

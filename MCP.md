@@ -19,14 +19,79 @@ Tools:
 - `schematic.delete`
 - `schematic.document.get`
 - `schematic.document.replace`
+- `schematic.history.undo`, `schematic.history.redo`
+- `schematic.checkpoint.list`, `schematic.checkpoint.create`, `schematic.checkpoint.restore`
+- `schematic.run.start` (`inputs?`, `seed?`, `budget?`), `schematic.run.step` (`handle`), `schematic.run.settle`
+  (`handle`), `schematic.run.trace` (`handle`), `schematic.state.query` (`handle`, `entity`, `point?`, `channel?`,
+  `observable`), `schematic.run.replay` (`trace`)
+- `schematic.markers`
+
+Graph and simulation (`GRAPH-MODEL.md`, read-only over the document):
+
+- `schematic.graph.query` — `{verb, args}`: junctions, reach, paths, cycles, order, cut, boundary, untyped, blocked, acl, signals, export (jgf | dot | graphml)
+- `schematic.sim.set` / `at` / `advance` / `tick` — levels and time (asserted set, scheduled operations, the clock)
+- `schematic.sim.start` / `stop` / `inject` / `step` / `run` / `resume` / `reconcile` / `inspect` / `scenario` / `scenarios`
+
+HTTP: `GET|POST /api/v1/graph/<verb>`, `POST /api/v1/sim/<action>`, `GET /api/v1/sim/inspect?what=…&id=…`.
+
+Arranging (`LAYOUT-MODEL.md`, "As built: layouts"): `schematic.layout {op, …}`.
+- Read-only ops: `list`, `unplaced`.
+- Views: `create`, `rename`, `delete`, `set-default`.
+- Placement: `move`, `place`, `align`, `distribute`.
+- `route` sets `auto`, `guided` or `pinned`.
+- `apply` runs the `layered` engine, with `scope` and `into`.
+
+Refusals are typed (`PINNED`, `LOCKED`, `HOSTED`, `UNPLACED`, `UNKNOWN_*`). Arranging never
+changes what the document means.
+
+Seeing and measuring (`LAYOUT-MODEL.md` §4–5). These need Python with Playwright and a
+Chromium browser (`SOV_RENDER_PYTHON` selects the interpreter). Without them the call is
+refused with `RENDERER_UNAVAILABLE`: over MCP as an error result, over HTTP as a 503.
+
+- `schematic.render`
+  - `{format: 'svg'}` returns the editor's own standalone SVG as text.
+  - `{format: 'png', scale}` returns the picture as MCP **image content**, followed by
+    the score as text.
+- `schematic.layout.metrics` returns the 0–10 score and every finding.
+
+HTTP: `GET /api/v1/render.svg`, `GET /api/v1/render.png?appearance=dark&scale=2`,
+`GET /api/v1/layout/metrics`.
 
 Resources: `component`, `wire`, `reference`.
+
+`schematic.markers` returns `{id, severity, message, rule}` for each current validation finding, delegating to the same `Data.markersFor` the browser API uses — the tool invents no legality of its own.
 
 ## HTTP
 
 `GET /api/v1/formats` advertises document, package, workspace, operation, and receipt schemas.
 
+Runs (state space, slice 1c):
+
+```text
+POST /api/v1/runs                      {inputs?, seed?, budget?}       start a run of the current document
+POST /api/v1/runs/{handle}/step                                        one tick
+POST /api/v1/runs/{handle}/settle                                      quiet | oscillating | budget
+GET  /api/v1/runs/{handle}/trace                                       the trace in `result`
+POST /api/v1/runs/{handle}/query       {entity, point?, channel?, observable}
+POST /api/v1/replay                    <the trace>                     replay against the current document
+```
+
+Every run route and run tool returns a run receipt, `soveraeign.schematic/run-receipt@0.1` (`DATA-FORMATS.md`),
+identical to the browser API's. A start returns the run's content-derived `runId` and a new `handle`, `<runId>.<n>`
+with `n` counting the server's starts from 1; runs are addressed by handle only (URL-encoded in a path), so two clients
+starting the same document and inputs get two runs that never touch each other. A replay is not registered
+(`handle: null`). A budget over 1,000,000 is refused with `INPUT_INVALID`. A refused receipt's `error.details` carries
+what the refusal names. The HTTP status is the only surface-specific field: 201 for a started run, 200 for any other
+success, 404 with receipt code `RUN_NOT_FOUND` for an unknown handle, 400 with receipt code `INPUT_INVALID` for a body
+that is not JSON or a handle in the path that does not decode, 409 with its receipt for any other refusal. Over MCP a
+refused receipt sets `isError`. Runs live in an in-memory registry beside the document and never change the document,
+its revision, history or the `.sov` file; the server reads `data/*.pack.json` at start.
+
 The server persists the canonical `.sov` document. `.sovpak` is a transport/package format around that same document rather than a second mutable authority.
+
+### Optimistic concurrency
+
+`schematic.create`, `schematic.update`, and `schematic.delete` accept an optional `ifRevision` (number): the document revision the caller last observed. It is optional — omit it and the write applies unconditionally, as before. When present and it does not match the document's current revision, the write is refused: the tool call returns `ok:false` with `error.message` of the form `Stale revision: expected <ifRevision>, document is at <current>`, and nothing is mutated.
 
 ## Boundary rule
 
