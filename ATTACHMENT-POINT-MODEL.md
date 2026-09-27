@@ -154,22 +154,29 @@ What is implemented:
   (`CHANNEL_MISMATCH`), so binding by gesture, `wire.create`, `wire.update`, carrier rebinding and document
   validation all refuse the same way. Ports without declared channels share `main`, so no existing document is
   refused.
-- **Form panel.** The attachments control reads "Template ports" (`standard`: the template's ports, then any
-  additions) and "Custom ports" (`none`: the authored list is the complete set). Choosing "Template ports" where the
-  ports differ from the template's resets them and says so ("Reset to template ports"); "Custom ports" is refused
-  while a Wire ends on a template port.
+- **Form panel.** There is no attachments selector (#21). `config.attachmentDefaults` stays a file-format field
+  (`standard`: the template's ports, then any additions; `none`: the authored list is the complete set) that the data
+  core writes in the smallest form after every port edit; the editor never exposes it. The Attached list (below) is
+  the view of what is attached, and "Reset to template ports" is the one control over the template's ports: it sends
+  `standard` with the ports that are not the template's (the additions, which stay) through the same component
+  update as any port edit, so a Wire whose port would change (`PORT_IN_USE`) or a definition that owns the ports
+  (`DEFINITION_PORTS`) refuses it. It is disabled while the template's ports lead the list unchanged, and where
+  the template declares none (a Plane).
 
 - **A Point's `self`.** A component `update` (or `create`) on a Point may set `attachmentPoints` to the single entry
   `{id: 'self', flow?, channels}`, checked like a declared port's channels and flow and stored in the clean form, which
   leaves out a `flow` equal to the default `duplex`; loading cleans the placeholder form the same way, so every form of
   one declaration has one `documentHash`. `CHANNEL_MISMATCH` applies against bound Wires; `self` always stays.
 
-### The Ports panel (landed, contract 0b-2)
+### The Attached list (landed, contract 0b-2; #21)
 
-A 2D Component's settings panel has a **Ports** section below the Attachments control; it is hidden for 0D and 1D
-Components (by effective dimension). It lists every effective port in order, one row each: the id (read-only), label,
-side (`left | right | top | bottom`), position `t` (0-1, step 0.05), flow (`in | out | duplex | control | trigger`),
-channels (comma-separated ids) and a Remove button. "Add port" appends `p1`, `p2`, ... (the first id free as an id or
+A 2D Component's settings panel has an **Attached** section in its Form section; it is hidden for 0D and 1D
+Components (by effective dimension). It lists every effective port in order, one row each: the id (read-only; clicking
+it selects the point), label, side (`left | right | top | bottom`), position `t` (0-1, step 0.05), flow
+(`in | out | duplex | control | trigger`), channels (comma-separated ids), a Remove button, and under them what ends
+on the port (the Wires, by label or id). Below the ports, every Point hosted on the boundary (`placement.kind: edge`)
+has a read-only row of its own with its side, position, flow, channels and the Wires ending on it, and a Select button;
+adding or removing one is creating or deleting a Point, the same gesture as on a Plane. "Add port" appends `p1`, `p2`, ... (the first id free as an id or
 compat id) on the right, at the first of .5, .25, .75, .125, .375, .625, .875 no other right-side port uses, and once
 those are used at the midpoint of the largest free gap on that side (between its ports and the ends 0 and 1; ties to
 the lowest t), so added ports never stack; duplex, on `main`; it is drawn at once and is immediately wireable.
@@ -208,8 +215,9 @@ the record's identity, so a gesture that began on it keeps holding the updated r
   or any host that would change the ports it exposes, is refused with `DEFINITION_PORTS` in the status line, by a
   pointer drag or an arrow-key move alike, and every Component the gesture moved returns to where it was, with no
   history entry. A pointer drag asks the same guard for every root before applying any, so one refusal refuses the
-  whole group. Settling into an open interior stays allowed. The Form panel's dimension and Attachments controls ask
-  the same owned-port rule; the bar retype was already refused (`applySymbol`).
+  whole group. Settling into an open interior stays allowed. The bar retype (the one way the dimension changes) was
+  already refused (`applySymbol`), and "Reset to template ports" goes through the component update, which asks the
+  same rule.
 - **Children fall back through the same guard.** When a Component stops hosting (its interior closes, it is retyped
   or changes dimension, or it is deleted), the Components on its interior fall back to its own canvas.
   `componentFallbackPlan` in `30-canvas.js` decides that before the edit, `componentHostPlanRefusal` checks every

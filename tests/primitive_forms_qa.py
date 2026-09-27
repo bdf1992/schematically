@@ -97,24 +97,29 @@ async def main():
     await page.mouse.up();await page.wait_for_timeout(150)
     assert await page.evaluate('activeNodeDragState===null')
 
-    # Form settings show only what the dimension has; Attachments is a 2D setting.
+    # Form settings show only what the dimension has; the Attached list is a 2D setting, and there
+    # is no Attachments selector any more (#21).
     await page.evaluate('(id)=>{selectNode(id);openSelectionSettings("component")}',pl['id'])
-    assert await page.evaluate('formAttachments.value')=='none'
-    assert await page.evaluate('formAttachments.closest("label").hidden') is False
+    assert await page.evaluate('portsSettings.hidden') is False
+    assert await page.evaluate('document.getElementById("formAttachments")===null')
     await page.evaluate('(id)=>{selectNode(id);openSelectionSettings("component")}',p2['id'])
-    assert await page.evaluate('formAttachments.closest("label").hidden') is True
+    assert await page.evaluate('portsSettings.hidden') is True
     assert await page.evaluate('visualHeight.closest("label").hidden') is True
     assert await page.evaluate('document.getElementById("formBodyKind")===null')
 
-    # Turning built-in points off is refused while a Wire still ends on one.
-    await page.evaluate('(id)=>{selectNode(id);openSelectionSettings("component");formAttachments.value="none";formAttachments.dispatchEvent(new Event("change"))}',act['id'])
-    await page.wait_for_timeout(50)
+    # Removing a built-in point is refused while a Wire still ends on it (PORT_IN_USE).
+    wired=await page.evaluate("(id)=>{const n=nodes.find(x=>x.id===id),w=wiresOnBuiltinPoints(n)[0];return Attachment.pointId(n,w.a===n.id?(w.aAttachment?.pointId||w.aSide):(w.bAttachment?.pointId||w.bSide))}",act['id'])
+    await page.evaluate('(id)=>{selectNode(id);openSelectionSettings("component")}',act['id'])
+    await page.locator(f'#portsList .ports-row[data-port-id="{wired}"] .port-remove').click()
+    await page.wait_for_timeout(120)
     assert await page.evaluate('(id)=>Attachment.attachmentDefaults(nodes.find(n=>n.id===id))',act['id'])=='standard'
-    assert 'Detach' in await page.locator('#status').inner_text()
-    # Without Wires it is allowed, and the built-in points disappear.
+    assert 'PORT_IN_USE' in await page.locator('#status').inner_text()
+    # Without Wires every port can be removed, and the built-in points disappear.
     free=await page.evaluate("window.SovSchematicAPI.create('component',{symbolId:'gate',x:1100,y:620}).result")
-    await page.evaluate('(id)=>{selectNode(id);openSelectionSettings("component");formAttachments.value="none";formAttachments.dispatchEvent(new Event("change"))}',free['id'])
-    await page.wait_for_timeout(50)
+    await page.evaluate('(id)=>{selectNode(id);openSelectionSettings("component")}',free['id'])
+    for pid in ('left','right','top'):
+        await page.locator(f'#portsList .ports-row[data-port-id="{pid}"] .port-remove').click()
+        await page.wait_for_timeout(120)
     assert await page.evaluate('(id)=>componentAttachmentPointIds(nodes.find(n=>n.id===id))',free['id'])==[]
     assert await page.locator(f'.node[data-id="{free["id"]}"] .attachment-point').count()==0
 

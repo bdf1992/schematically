@@ -241,7 +241,7 @@
       <div id="componentSettingsFields" class="settings-surface">
         <div class="settings-head"><b>Component settings</b><span>Form first · appearance second</span></div>
         <details class="form-settings" id="formSettings" open>
-          <summary><b>Form</b><span class="helper-snippet">type · interior · attachments · ports</span></summary>
+          <summary><b>Form</b><span class="helper-snippet">type · interior · attached</span></summary>
           <div class="settings-grid settings-grid-compact">
             <label title="Dimension comes with the type; change the type in the selection bar">Dimension
               <output id="formDimensionReadout" class="form-readout"></output>
@@ -266,17 +266,16 @@
                 <option value="open">Open · hosts Components</option>
               </select>
             </label>
-            <label data-dims="2">Attachments
-              <select id="formAttachments" title="The template's ports, or a custom port list">
-                <option value="standard">Template ports</option>
-                <option value="none">Custom ports</option>
-              </select>
-            </label>
           </div>
+          <!-- The Attached list (#21): every port with the Wires that end on it, then every Point hosted on the
+               boundary. Template ports are data; "Reset to template ports" is the one control over them. -->
           <div class="ports-settings" id="portsSettings" hidden>
-            <div class="ports-head"><b>Ports</b><span class="helper-snippet">side · position · flow · channels</span></div>
-            <div class="ports-list" id="portsList" role="list" aria-label="Ports"></div>
-            <button id="portsAddBtn" class="bar-action settings-action" type="button" title="Add a port on the right side">Add port</button>
+            <div class="ports-head"><b>Attached</b><span class="helper-snippet">ports · hosted Points · wires</span></div>
+            <div class="ports-list" id="portsList" role="list" aria-label="Attached"></div>
+            <div class="ports-actions">
+              <button id="portsAddBtn" class="bar-action settings-action" type="button" title="Add a port on the right side">Add port</button>
+              <button id="portsResetBtn" class="bar-action settings-action" type="button" title="Put the template's ports back">Reset to template ports</button>
+            </div>
           </div>
           <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. It comes with the type: every entry in the type list carries its dimension. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
         </details>

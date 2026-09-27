@@ -22,7 +22,7 @@ HTML = (ROOT / 'index.html').read_text()
 # bar, Form section, settings panel.
 SELECTS = ['#appearanceMode', '#globalRate', '#colorThemeInput', '#gridSizeInput',
            '#barComponentType', '#barConnectionDirection', '#barPortSide',
-           '#formSection', '#formInteriorState', '#formAttachments', '#entityRate']
+           '#formSection', '#formInteriorState', '#barComponentSignalMode', '#entityRate']
 
 READ = """(ids)=>{
   const cs=(el)=>getComputedStyle(el).colorScheme;

@@ -207,7 +207,6 @@ function syncComponentVisualPanel(n){
   formSection.value=sectionPresetName(f,2);
   syncSectionPositionSelect(formPointPosition,formPointPositionRow,n,'out');
   formInteriorState.value=f.regions.interior.state;formFrameMode.value=f.frame.mode;formFrameThickness.value=String(f.frame.thickness);formFrameDepth.value=String(f.frame.depth);
-  formAttachments.value=Attachment.attachmentDefaults(n);
   // Settings are shown per dimension: a Point has no size or frame, a Path no height or interior.
   for(const el of componentSettingsFields.querySelectorAll('[data-dims]')){const dims=String(el.dataset.dims).split('').map(Number);el.hidden=!dims.includes(f.dimension)}
   syncPortsPanel(n);
@@ -220,6 +219,22 @@ function syncComponentVisualPanel(n){
 const portsSettings=document.getElementById('portsSettings');
 const portsList=document.getElementById('portsList');
 const portsAddBtn=document.getElementById('portsAddBtn');
+const portsResetBtn=document.getElementById('portsResetBtn');
+// What ends on a point, as the Attached list says it (#21).
+function attachedWiresText(bound){return bound.length?`${bound.length} wire${bound.length===1?'':'s'} · ${bound.map(w=>connectionConfig(w).label||w.id).join(', ')}`:'no wire'}
+// The template's port list for this Component, as a port edit stores it; empty where the template
+// declares none (a Plane). What "Reset to template ports" puts back.
+function templatePortListOf(n){
+  const preset=SovSchematicData.templatePreset(n.symbolId);
+  return preset?.attachmentDefaults==='none'?[]:SovSchematicData.normalizeDeclaredPorts(SovSchematicData.templatePorts(n.symbolId));
+}
+// Whether the template's ports lead the list unchanged (the data core's own 'standard' rule), and
+// the ports that are not the template's (the additions, by id or compat id).
+function templatePortsKept(n){
+  const template=templatePortListOf(n),current=componentPortList(n),ids=new Set(template.flatMap(p=>[p.id,p.compatId||p.id]));
+  const kept=JSON.stringify(current.slice(0,template.length))===JSON.stringify(template);
+  return {template,kept,additions:current.filter(p=>!ids.has(p.id)&&!ids.has(p.compatId||p.id))};
+}
 const PORT_PANEL_SIDES=['left','right','top','bottom'];
 const PORT_PANEL_FLOWS=['in','out','duplex','control','trigger'];
 function componentPortsEditable(n){return !!n&&Attachment.effectiveDimension(n)===2}
@@ -252,10 +267,37 @@ function syncPortsPanel(n){
     const flow=portPanelSelect('port-flow',`Port ${spec.id} flow`,PORT_PANEL_FLOWS,spec.flow);flow.title=owned||'Flow';if(owner)flow.disabled=true;
     const channels=portPanelControl('input','port-channels',`Port ${spec.id} channels`,{type:'text',placeholder:'main',title:owned||'Channel ids, comma-separated'});channels.value=Attachment.channelIds(spec).join(', ');if(owner)channels.disabled=true;
     const remove=portPanelControl('button','port-remove',`Remove port ${spec.id}`,{type:'button',title:owned||`Remove port ${spec.id}`});remove.textContent='Remove';if(owner)remove.disabled=true;
-    row.append(id,label,side,t,flow,channels,remove);rows.push(row);
+    // What ends on the port (#21). The id cell selects the point.
+    const bound=wiresOnPoint(n,spec.id),attached=document.createElement('span');attached.className='port-attached';
+    attached.textContent=attachedWiresText(bound);attached.title=bound.length?'Wires ending on this port':'Nothing ends on this port';
+    id.title=`${owned||'Port id'} · click to select the point`;
+    row.append(id,label,side,t,flow,channels,remove,attached);rows.push(row);
+  }
+  // The Points hosted on the boundary are attached too (#21): read-only rows, each with a Select
+  // button. Adding or removing one is creating or deleting a Point, the same gesture as on a Plane.
+  for(const p of hostedPointsOn(n)){
+    const row=document.createElement('div');row.className='hosted-row';row.dataset.pointComponentId=p.id;row.setAttribute('role','listitem');
+    const spec=Attachment.pointSpecs(p)[0],pl=p.placement;
+    const cell=(className,label,value,attrs={})=>{const el=portPanelControl('input',className,label,{type:'text',readonly:'',title:'On the hosted Point · select it to edit',...attrs});el.value=value;return el};
+    const id=cell('port-id',`Hosted Point ${p.id}`,p.id,{title:'A Point hosted on the boundary · click to select it'});
+    const label=cell('port-label',`Hosted Point ${p.id} label`,componentConfig(p).label||'');
+    const side=cell('port-side',`Hosted Point ${p.id} side`,pl.side||'');
+    const t=cell('port-t',`Hosted Point ${p.id} position`,String(Math.round((Number(pl.t)||0)*1000)/1000));
+    const flow=cell('port-flow',`Hosted Point ${p.id} flow`,spec?.flow||spec?.defaultFlow||'duplex');
+    const channels=cell('port-channels',`Hosted Point ${p.id} channels`,spec?Attachment.channelIds(spec).join(', '):'main');
+    const select=portPanelControl('button','port-select',`Select Point ${p.id}`,{type:'button',title:'Select this Point'});select.textContent='Select';
+    const bound=wiresOnPoint(p,'self'),attached=document.createElement('span');attached.className='port-attached';
+    attached.textContent=`hosted Point · ${attachedWiresText(bound)}`;attached.title=bound.length?'Wires ending on this Point':'Nothing ends on this Point';
+    row.append(id,label,side,t,flow,channels,select,attached);rows.push(row);
   }
   portsList.replaceChildren(...rows);
   portsAddBtn.disabled=!!owner;portsAddBtn.title=owned||'Add a port on the right side';
+  // Reset stands only where a template port is missing, moved or changed (and the definition does not
+  // own the ports); additions are not the template's and stay. A template that declares no ports
+  // (a Plane) has nothing to put back.
+  const {template,kept}=templatePortsKept(n);
+  portsResetBtn.disabled=!!owner||!template.length||kept;
+  portsResetBtn.title=owned||(!template.length?'The template declares no ports':kept?"The ports are the template's":"Put the template's ports back · added ports stay");
   if(focused){const again=portsList.querySelector(`.ports-row[data-port-id="${CSS.escape(focused[0])}"] .${focused[1]}`);if(again&&!again.disabled)again.focus()}
 }
 function syncSelectionSettings(kind){
