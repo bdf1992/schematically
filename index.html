@@ -3382,12 +3382,13 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // What the run reads of the document, resolved once at start: each Wire's two ports, delay,
   // the directions it carries and the channels it shares; each Component's role; each merge.
   // Time: one tick is tickMs milliseconds (default 1). A Wire's stored delay is in ticks; without one,
-  // its latencyMs (the signal model's default when absent) is converted, rounding half up; 0 ms is a
-  // zero-delay Path, run in delta rounds within its tick (a cycle of them is refused at start).
+  // its latencyMs (the signal model's default when absent) is converted, rounding half up, and a latency
+  // above 0 is never less than one tick; only 0 ms is a zero-delay Path, run in delta rounds within its
+  // tick (a cycle of them is refused at start).
   function wireDelay(config,tickMs){
     if(config.delay!==undefined)return config.delay;
-    const ms=Math.round(Number.isFinite(Number(config.latencyMs))?Math.max(0,Number(config.latencyMs)):Model.DEFAULT_LATENCY_MS);
-    return msToTick(ms,tickMs);
+    const raw=Number.isFinite(Number(config.latencyMs))?Math.max(0,Number(config.latencyMs)):Model.DEFAULT_LATENCY_MS;
+    return raw>0?Math.max(1,msToTick(Math.round(raw),tickMs)):0;
   }
   // Which legs of a Wire carry is the graph core's passability (src/07-graph-core.js build): the
   // Wire's direction, then each leg's emit and receive flows (legacy config.ports connections
@@ -3567,7 +3568,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(tickMs!==1)replayKey.tickMs=tickMs;
     const shape=topology(d,definitions,implied.bind,tickMs);
     const loops=zeroDelayCycles(shape.wires);
-    if(loops.length)return {ok:false,code:'ZERO_DELAY_CYCLE',message:`a cycle must take time: give one of its Paths a delay or latencyMs above 0 (${loops.map(c=>c.wires.join(', ')).join('; ')})`,cycles:loops};
+    if(loops.length)return {ok:false,code:'ZERO_DELAY_CYCLE',message:`a cycle must take time: give one of its Paths a delay of at least 1 or a latencyMs above 0 (${loops.map(c=>c.wires.join(', ')).join('; ')})`,cycles:loops};
     // A declared level is an input the document makes: a caller's input on the same port and tick wins.
     const sources=implied.sources.filter(x=>!seen.has(JSON.stringify([x.at,x.entity,x.point,x.channel])));
     const run={
