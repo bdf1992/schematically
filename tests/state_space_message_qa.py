@@ -150,6 +150,9 @@ for(const channel of ['red','green','blue']){
   const ring=(l1,l2)=>doc([A('a'),A('b')],[{id:'w1',a:'a',aSide:'out',b:'b',bSide:'in',config:{latencyMs:l1}},{id:'w2',a:'b',aSide:'out',b:'a',bSide:'in',config:{latencyMs:l2}}]);
   const r0=S.startRun({doc:ring(0,0),packs});
   zero.ring={code:r0.code,cycles:r0.cycles,dev:G.createSimulation(ring(0,0)).code,timed:S.startRun({doc:ring(0,5),packs}).ok,devTimed:G.createSimulation(ring(0,5)).ok};
+  // A latency above 0 is never less than one tick (2026-09-29): short latencies run as dev runs them.
+  const short=(l,tickMs)=>{const st=S.startRun({doc:ring(l,l),packs,tickMs});return st.ok?st.run.wires.map(w=>w.delay):st.code};
+  zero.short={sub:short(0.4,1),coarse:short(4,10),dev:G.createSimulation(ring(0.4,0.4)).ok};
   // A two-way zero-delay Wire is a ring of two legs, as dev reads it.
   const duplex=doc([P('p'),P('q')],[{id:'wd',a:'p',aSide:'out',b:'q',bSide:'out',config:{direction:'duplex',latencyMs:0}}]);
   zero.duplex={code:S.startRun({doc:duplex,packs}).code,dev:G.createSimulation(duplex).code};
@@ -313,6 +316,7 @@ def main() -> None:
     assert z['ring']['code'] == 'ZERO_DELAY_CYCLE' and z['ring']['cycles'] == [{'nodes': ['a', 'b'], 'wires': ['w1', 'w2']}], z['ring']
     assert z['ring']['dev'] == 'ZERO_LATENCY_CYCLE' and z['ring']['timed'] and z['ring']['devTimed'], z['ring']
     assert z['duplex'] == {'code': 'ZERO_DELAY_CYCLE', 'dev': 'ZERO_LATENCY_CYCLE'}, z['duplex']
+    assert z['short'] == {'sub': [1, 1], 'coarse': [1, 1], 'dev': True}, ('a latency above 0 is at least one tick', z['short'])
     assert z['negative'] == ['PATH_DELAY_INVALID', 'PATH_DELAY_INVALID'], ('both wires carry -1', z['negative'])
 
     # A record never precedes its cause.
