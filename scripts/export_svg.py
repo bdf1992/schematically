@@ -11,6 +11,7 @@ Usage:
     python scripts/export_svg.py a.sov --out build/   # into a directory
     python scripts/export_svg.py --appearance dark    # force light|dark (default: light)
     python scripts/export_svg.py a.sov --loop         # also make the packet animation repeat
+    python scripts/export_svg.py a.sov --legend       # also draw the derived legend below the drawing
 """
 from __future__ import annotations
 import argparse
@@ -29,7 +30,7 @@ EXPORT_JS = "(opts) => window.SovSchematicAPI.file.svg(opts)"
 
 
 
-def export_documents(paths: list[Path], out_dir: Path | None = None, appearance: str = 'light', pad: int = 48, loop: float | None = None) -> list[dict]:
+def export_documents(paths: list[Path], out_dir: Path | None = None, appearance: str = 'light', pad: int = 48, loop: float | None = None, legend: bool = False) -> list[dict]:
     """Export each .sov to .svg. Returns one record per input: {source, target, bytes, errors, loop}.
 
     `loop` is a travel-time budget: when given, every animation is snapped to a divisor of
@@ -55,7 +56,7 @@ def export_documents(paths: list[Path], out_dir: Path | None = None, appearance:
             page.evaluate('([t,n])=>window.SovSchematicAPI.file.open(t,n)', [text, src.name])
             page.evaluate('()=>{ if (typeof fitDiagram === "function") fitDiagram(); }')
             page.wait_for_timeout(300)
-            svg = page.evaluate(EXPORT_JS, {'pad': pad, 'packets': loop is not None})
+            svg = page.evaluate(EXPORT_JS, {'pad': pad, 'packets': loop is not None, 'legend': legend})
             period = 0.0
             if loop is not None:
                 from loop_svg import quantize
@@ -78,13 +79,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument('--loop', nargs='?', type=float, const=0.08, default=None,
                     metavar='BUDGET',
                     help='make the animation repeat; optional travel-time budget (default 0.08)')
+    ap.add_argument('--legend', action='store_true', default=False,
+                    help='draw the derived legend block below the drawing')
     args = ap.parse_args(argv)
     paths = [Path(p) for p in args.paths] or sorted((ROOT / 'examples').glob('*.sov'))
     if not paths:
         print('no .sov inputs', file=sys.stderr)
         return 2
     failed = 0
-    for r in export_documents(paths, args.out, args.appearance, args.pad, args.loop):
+    for r in export_documents(paths, args.out, args.appearance, args.pad, args.loop, args.legend):
         status = 'ok ' if not r['errors'] else 'ERR'
         loop = f", loops at {r['loop']:.2f}s" if r.get('loop') else ''
         print(f"{status} {r['source']} -> {r['target']} ({r['bytes']} bytes{loop})")
