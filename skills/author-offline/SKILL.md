@@ -263,3 +263,30 @@ python scripts/export_svg.py file.sov --out out/  # standalone SVG, light theme;
 ## Read/write axis
 
 Treat direction, access, and authority as separate. `direction ≠ access ≠ authority`. A Port access value constrains representable Read/Write packet operations; it does not grant authority.
+
+## Offline layout
+
+Hand coordinates do not scale: a document generated from data — say 50 records and their
+wires — cannot be placed one card at a time. `node scripts/layout_sov.mjs` runs the same
+layout engine the editor's `schematic.layout apply` uses without a browser, so a generated
+map gets its positions the way a hand-authored one gets its topology.
+
+```
+node scripts/layout_sov.mjs file.sov [--out other.sov] [--view id]
+```
+
+It loads `file.sov` with the same data core the editor and validator run, then arranges it
+with `schematic.layout`'s `layered` engine (`LAYOUT-MODEL.md`): sources on the left, sinks on
+the right, columns by wire direction, rows levelled with the wires crossing them, so it never
+needs an authored `x`/`y` to start from. It writes the result back over the input, or to the
+file named by `--out`, and prints `ok <file> (<placed> placed)`. `--view` arranges a named
+layout instead of the document's default; left out, the default. A refusal from the engine
+(an unknown layout, for one) prints `FAIL` with its code and message and exits 1; a missing
+file argument prints the usage and exits 2.
+
+A generated map needs no hand coordinates: write every Component and Wire with `id`,
+`symbolId`, and `config` only, run `layout_sov.mjs`, then validate and export as above. What
+the layered engine does not place is what it does not own: a Plane's boundary Points still
+follow the placement rules above (`t` between 0.2 and 0.8, at least 100 units of interior
+clearance), since a Point's position is data the generator has to declare or a follow-up
+layout pass has to set, not something the card layout infers for it.
