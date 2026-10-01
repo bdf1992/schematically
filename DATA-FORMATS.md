@@ -254,9 +254,10 @@ A `.sov` carries three pieces of authored state-space data, and nothing a run co
   back to its canvas; a `delete` that would change a bound one's exposed ports that way (the canvas is a Wire's) is
   refused with `DEFINITION_PORTS`, and nothing is deleted. Setting `config.definition` to `null` unbinds and leaves the
   ports as stored.
-- **`config.delay`** on a Wire: its propagation delay in logical ticks, an integer >= 1. Absent means 1 and is not
-  written. A Wire `update` with `delay: null` removes it. A Wire `create` or `update` carrying any other value is
-  refused with `PATH_DELAY_INVALID` on every surface; loading keeps a stored value as written.
+- **`config.delay`** on a Wire: its propagation delay in logical ticks, an integer >= 0. Absent means 1 and is not
+  written. `0` is a zero-delay Path; a cycle made only of zero-delay legs is refused when the run starts, with
+  `ZERO_DELAY_CYCLE`. A Wire `update` with `delay: null` removes it. A Wire `create` or `update` carrying any
+  other value is refused with `PATH_DELAY_INVALID` on every surface; loading keeps a stored value as written.
 - **`merge`** on a declared port's channel: the `merge@1` parameters for same-tick arrivals there.
 - **A Point's `self`.** A Point (0D) has one port, `self`, and may declare it, to give it channels and merges, as a
   single `attachmentPoints` entry `{id: 'self', flow?, channels}` with no `side` or `t`. Loading reads the placeholder
