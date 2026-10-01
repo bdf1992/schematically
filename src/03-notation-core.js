@@ -111,6 +111,9 @@
   }
   function registerPoints(notation){for(const [id,g] of Object.entries(notation?.glyphs||{}))if(g.points==='terminals')TERMINAL_POINTS.set(id,terminalAttachmentPoints(g))}
   function pointsFor(symbolId){const p=TERMINAL_POINTS.get(symbolId);return p?p.map(x=>({...x})):null}
+  // The built-in notations register their terminal glyphs at load, so a bare gate exposes its
+  // terminals before any document has resolved a notation, whatever the load order (issue #54).
+  for(const n of Object.values(BUILTIN))registerPoints(n);
   function tokens(docOrId){const r=resolve(docOrId);return (r.ok?r.notation:SCHEMATIC).tokens}
   // Corner radius of the rectangle at `inset` inside a card whose bands sum to `total`.
   // Concentric by construction; capped at a quarter of the rectangle's shorter side.

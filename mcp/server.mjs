@@ -15,6 +15,7 @@ await import(pathToFileURL(path.join(HERE,'../src/05-data-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/07-state-space.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/07-graph-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/08-layout-core.js')).href);
+const {guide}=await import(pathToFileURL(path.join(HERE,'guide.mjs')).href);
 const Layout=globalThis.SovSchematicLayout;
 const Data=globalThis.SovSchematicData,Graph=globalThis.SovSchematicGraph;
 if(!Data)throw new Error('SovSchematicData core failed to load');
@@ -30,6 +31,15 @@ const PORT=Number(arg('--port',8787));
 const FILE=path.resolve(arg('--file',path.join(HERE,'../data/schematic.sov')));
 const HOST=arg('--host','127.0.0.1');
 const MCP_VERSION='2026-07-28';
+// A standard client opens with initialize and names the protocol it speaks; the server answers in
+// that version when it is one it knows, else in its own.
+const MCP_KNOWN=['2024-11-05','2025-03-26','2025-06-18',MCP_VERSION];
+const SERVER_INFO={name:'soveraeign-schematic',version:'0.1.24'};
+const INSTRUCTIONS=`Schematically: a system drawn as typed components joined by wires, which can also run.
+Read schematic.guide first (no step, then the step it names). Read a slice with schematic.read
+(ids or an area); write many records at once with schematic.apply (one receipt, all or nothing,
+$refs for new ids); check with schematic.markers and schematic.render; run with schematic.run.*.`;
+const readRepoText=relative=>fs.readFileSync(path.join(HERE,'..',relative),'utf8');
 
 function loadDocument(){
   try{return Data.documentFromFilePayload(JSON.parse(fs.readFileSync(FILE,'utf8')))}catch(_){return Data.makeDocument({id:'schematic-1'})}
@@ -96,6 +106,21 @@ const RENDER_TOOLS=[
   {name:'schematic.render',description:'Render the document as the editor exports it: format svg (text) or png (an image, returned as image content for agents that can see). appearance light|dark; scale for png.',inputSchema:{type:'object',properties:{format:{type:'string',enum:['svg','png']},appearance:{type:'string',enum:['light','dark']},scale:{type:'number',minimum:.25,maximum:4},view:{type:'string',description:'A layout id (schematic.layout op list); default: the document\'s default layout'},legend:{type:'boolean',description:'Put the legend (what the marks, colours, glyphs and shapes used mean) below the picture'},narration:{type:'integer',minimum:0,description:'Put narration line i below the picture'}},additionalProperties:false}},
   {name:'schematic.layout.metrics',description:'Measure how the document presents (LAYOUT-MODEL.md §5): a 0-10 score and every finding (overflow, collisions, route escapes, crossings, jogs, unmarked junctions...), each naming the ids it measured.',inputSchema:{type:'object',properties:{view:{type:'string'}},additionalProperties:false}}
 ];
+const AUTHOR_TOOLS=[
+  {name:'schematic.guide',description:'The authoring guide, one step at a time: call with no step for the index, then the step it names (model, palette, apply, layout, check, review, layout-review).',inputSchema:{type:'object',properties:{step:{type:'string'}},additionalProperties:false}},
+  {name:'schematic.read',description:'Read a slice of the document in its stored form: the components and wires named by ids, or every component placed inside an area (with what sits on their interiors) and the wires among them; crossing lists wires that leave the slice.',inputSchema:{type:'object',properties:{ids:{type:'array',items:{type:'string'}},area:{type:'object',properties:{x:{type:'number'},y:{type:'number'},width:{type:'number'},height:{type:'number'}},required:['x','y','width','height'],additionalProperties:false}},additionalProperties:false}},
+  {name:'schematic.apply',description:'Write many records as one: creates, updates and deletes applied in order, all or none, one revision and one receipt. A create may omit its id and name itself ref "$name" for later operations; result.ids maps each $name to its id. See schematic.guide step apply.',inputSchema:{type:'object',properties:{operations:{type:'array',minItems:1,items:{type:'object',properties:{op:{type:'string',enum:['create','update','delete']},resource:{type:'string',enum:['component','wire','reference']},id:{type:'string'},ref:{type:'string',pattern:'^\\$.+'},value:{type:'object'},patch:{type:'object'}},required:['op','resource'],additionalProperties:false}},ifRevision:{type:'number',description:'Document revision the caller observed; refused if the document has moved on.'}},required:['operations'],additionalProperties:false}}
+];
+function executeAuthorTool(name,args={}){
+  if(name==='schematic.guide'){const value=guide(args.step||null,{readText:readRepoText,symbols:Data.symbolIds()});return {ok:value.ok,value,mutates:false}}
+  if(name==='schematic.read'){const value=Data.readScope(documentState,args);return {ok:value.ok,value,mutates:false}}
+  if(name==='schematic.apply'){
+    const before=cloneDoc(),receipt=Data.applyBatch(documentState,{id:`mcp-${Date.now()}`,operations:args.operations,ifRevision:args.ifRevision});
+    if(receipt.ok)recordHistory(before);
+    return {ok:receipt.ok,value:receipt,mutates:receipt.ok};
+  }
+  return null;
+}
 async function executeRenderTool(name,args={}){
   if(name==='schematic.layout.metrics'){const r=await renderDocument(['metrics'],args);return r.ok?{ok:true,value:r.metrics,mutates:false}:{ok:false,value:r,mutates:false}}
   const format=args.format==='png'?'png':'svg';const r=await renderDocument([format,'metrics'],args);
@@ -105,6 +130,7 @@ async function executeRenderTool(name,args={}){
 function executeTool(name,args={}){
   const ran=runTool(name,args);
   if(ran)return {ok:ran.ok,value:ran,mutates:false};
+  const authored=executeAuthorTool(name,args);if(authored)return authored;
   if(RENDER_TOOLS.some(t=>t.name===name))return executeRenderTool(name,args);
   if(name==='schematic.layout'){
     const {op,...rest}=args,readOnly=Layout.isReadOnly(op),before=readOnly?null:cloneDoc();
@@ -137,8 +163,15 @@ function executeTool(name,args={}){
 async function handleMcp(req,res){
   let rpc;try{rpc=await bodyJson(req)}catch(e){return json(res,400,rpcError(null,-32700,'Parse error',e.message),{'MCP-Protocol-Version':MCP_VERSION})}
   const id=rpc.id??null,method=rpc.method;
-  if(method==='server/discover')return json(res,200,rpcResult(id,{protocolVersion:MCP_VERSION,serverInfo:{name:'soveraeign-schematic',version:'0.1.24'},capabilities:{tools:{listChanged:false}},instructions:'CRUD against SOV Schematic document@0.1. File packages use package@0.1.'}),{'MCP-Protocol-Version':MCP_VERSION});
-  if(method==='tools/list'){const extra=[{name:'schematic.markers',description:'List validation markers for the current document, derived from schematic.document validation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}}];return json(res,200,rpcResult(id,{tools:[...Data.operationTools(),...extra,...RUN_TOOLS,...Graph.tools(),...RENDER_TOOLS,Layout.tool()]}),{'MCP-Protocol-Version':MCP_VERSION});}
+  if(method==='initialize'){
+    const asked=rpc.params?.protocolVersion,version=MCP_KNOWN.includes(asked)?asked:MCP_VERSION;
+    return json(res,200,rpcResult(id,{protocolVersion:version,serverInfo:SERVER_INFO,capabilities:{tools:{listChanged:false}},instructions:INSTRUCTIONS}),{'MCP-Protocol-Version':version});
+  }
+  // A notification has no id and wants no answer.
+  if(typeof method==='string'&&method.startsWith('notifications/')){res.writeHead(202,{'access-control-allow-origin':'*'});return res.end()}
+  if(method==='ping')return json(res,200,rpcResult(id,{}),{'MCP-Protocol-Version':MCP_VERSION});
+  if(method==='server/discover')return json(res,200,rpcResult(id,{protocolVersion:MCP_VERSION,serverInfo:SERVER_INFO,capabilities:{tools:{listChanged:false}},instructions:INSTRUCTIONS}),{'MCP-Protocol-Version':MCP_VERSION});
+  if(method==='tools/list'){const extra=[{name:'schematic.markers',description:'List validation markers for the current document, derived from schematic.document validation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}}];return json(res,200,rpcResult(id,{tools:[...AUTHOR_TOOLS,...Data.operationTools(),...extra,...RUN_TOOLS,...Graph.tools(),...RENDER_TOOLS,Layout.tool()]}),{'MCP-Protocol-Version':MCP_VERSION});}
   if(method==='tools/call'){
     const name=rpc.params?.name,args=rpc.params?.arguments||{};
     const result=await executeTool(name,args);if(result.mutates)saveDocument();
@@ -157,6 +190,9 @@ async function handleApi(req,res,url){
       const before=cloneDoc();Data.replaceDocument(documentState,incoming);Data.touch(documentState);recordHistory(before);saveDocument();return json(res,200,Data.clone(documentState));
     }
   }
+  if(url.pathname==='/api/v1/guide'&&req.method==='GET'){const r=executeAuthorTool('schematic.guide',{step:url.searchParams.get('step')||null});return json(res,r.ok?200:404,r.value)}
+  if(url.pathname==='/api/v1/read'&&req.method==='POST'){const r=executeAuthorTool('schematic.read',await bodyJson(req));return json(res,r.ok?200:400,r.value)}
+  if(url.pathname==='/api/v1/apply'&&req.method==='POST'){const r=executeAuthorTool('schematic.apply',await bodyJson(req));if(r.mutates)saveDocument();return json(res,r.ok?200:(r.value.error?.message||'').startsWith('Stale revision')?409:400,r.value)}
   // Runs, addressed by handle: a receipt always; 201 on a start, 404 for an unknown handle, 400 for a
   // body that is not JSON or a path that does not decode, 409 for any other refusal.
   if(parts[0]==='api'&&parts[1]==='v1'&&(parts[2]==='runs'||parts[2]==='replay')){

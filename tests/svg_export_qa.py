@@ -58,6 +58,44 @@ def check(svg_path: Path, doc: dict) -> None:
     assert len(text.encode('utf-8')) < 400_000, f'{svg_path.name}: export unexpectedly large'
 
 
+def check_legend() -> None:
+    """--legend / export_documents(..., legend=True) draws the derived legend block; the
+    plain export carries none of it (NOTATION-MODEL.md §5)."""
+    doc = {
+        'schema': 'soveraeign.schematic/document@0.1',
+        'id': 'legend-check',
+        'revision': 0,
+        'meta': {'updatedAt': '2026-09-29T00:00:00.000Z', 'title': 'Legend check'},
+        'canvas': {'id': 'canvas:global', 'scope': 'global', 'dimension': 2, 'state': 'open'},
+        'components': [
+            {'id': 'a', 'type': 'act', 'symbolId': 'act', 'x': 100, 'y': 200,
+             'config': {'label': 'Alpha', 'colorSlot': 6}},
+            {'id': 'b', 'type': 'act', 'symbolId': 'act', 'x': 400, 'y': 200,
+             'config': {'label': 'Beta', 'colorSlot': 7}},
+        ],
+        'wires': [],
+        'references': [],
+        'layout': {},
+        'legend': {'names': {'C1': 'Record', 'C2': 'Surface'}},
+    }
+    with tempfile.TemporaryDirectory() as with_td, tempfile.TemporaryDirectory() as without_td:
+        with_dir, without_dir = Path(with_td), Path(without_td)
+        src = with_dir / 'legend-check.sov'
+        src.write_text(json.dumps(doc), encoding='utf-8')
+        [with_r] = export_documents([src], with_dir, legend=True)
+        [without_r] = export_documents([src], without_dir, legend=False)
+        assert not with_r['errors'], f"legend export: page errors {with_r['errors']}"
+        assert not without_r['errors'], f"plain export: page errors {without_r['errors']}"
+        with_text = with_r['target'].read_text(encoding='utf-8')
+        without_text = without_r['target'].read_text(encoding='utf-8')
+        ET.fromstring(with_text)
+        ET.fromstring(without_text)
+        for needle in ('picture-legend', 'Record', 'Surface'):
+            assert needle in with_text, f'legend export: missing {needle!r}'
+            assert needle not in without_text, f'plain export: unexpectedly carries {needle!r}'
+    print('PASS legend export QA')
+
+
 def main() -> None:
     examples = sorted((ROOT / 'examples').glob('*.sov'))
     assert examples
@@ -70,6 +108,7 @@ def main() -> None:
             doc = json.loads(r['source'].read_text(encoding='utf-8'))
             check(r['target'], doc)
     print(f'PASS SVG export QA ({len(examples)} documents)')
+    check_legend()
 
 
 if __name__ == '__main__':

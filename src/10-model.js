@@ -2,6 +2,27 @@
 // 0.1 Beta concern: Component, Port, Wire, containment, and normalization model.
 
 const byId=id=>SYMBOLS.find(s=>s.id===id);
+// The symbol a Component is drawn as. A notation glyph (a logic gate, NOTATION-MODEL.md) is not in
+// SYMBOLS; it is read as one here, so nothing that shows a symbol's name, family or meaning has to
+// know which table it came from (issue #55). `byId` alone says whether an id is a SYMBOLS entry.
+function symbolOf(symbolId){
+  const s=byId(symbolId);if(s)return s;
+  const g=SovSchematicNotation.glyphOf(activeNotation(),symbolId);
+  return {id:symbolId,name:g?.title||String(symbolId||''),family:g?.family||'',role:'',diagram_class:'',meaning:g?.meaning||'',verbs:[],properties:[]};
+}
+// The one list of what a Component can be, in the order it is shown: Point, Path, Plane, then the
+// Component types, the Signals, then the glyphs the active notation adds. The palette and the bar's
+// type control both read it, so they never diverge (issue #20). Every entry carries the dimension
+// its type gives; dimension is a property of the type, never chosen apart from it.
+function symbolCatalog(){
+  const notation=activeNotation(),own=Object.keys(notation.glyphs||{}).filter(id=>!byId(id));
+  const groups=[...Object.entries(GROUPS),...(own.length?[[notation.name||notation.id,own]]:[])];
+  return groups.map(([group,ids])=>({group,entries:ids.map(id=>{
+    const symbol=symbolOf(id),preset=SovSchematicData.templatePreset(id);
+    return {id,group,symbol,preset,name:notation.glyphs?.[id]?.title||sentenceCase(symbol.name),dimension:preset?.form?.dimension??2,carrier:!!preset?.carrier};
+  })}));
+}
+function symbolCatalogEntry(symbolId){for(const {entries} of symbolCatalog()){const e=entries.find(x=>x.id===symbolId);if(e)return e}return null}
 const Attachment=SovSchematicAttachment;
 function componentAttachmentPointIds(n){return Attachment.pointIds(n)}
 function componentAttachmentPoints(n){return Attachment.descriptors(n,componentConfig(n).ports)}
@@ -340,6 +361,15 @@ function wiresOnBuiltinPoints(n){
   const ids=new Set(Attachment.builtinPointIds(n));
   return wires.filter(w=>(w.a===n.id&&ids.has(Attachment.pointId(n,w.aAttachment?.pointId||w.aSide)))||(w.b===n.id&&ids.has(Attachment.pointId(n,w.bAttachment?.pointId||w.bSide))));
 }
+// The Wires whose end is bound to this Component's point (by point id or compat id): what the
+// Attached list shows beside each port (#21).
+function wiresOnPoint(n,pointId){
+  const spec=Attachment.resolveSpec(n,pointId);if(!spec)return [];
+  const at=(w,end)=>w[end]===n.id&&Attachment.pointId(n,w[`${end}Attachment`]?.pointId||w[`${end}Side`])===spec.id;
+  return wires.filter(w=>at(w,'a')||at(w,'b'));
+}
+// The Points hosted on this Component's boundary (placement kind `edge`), in document order.
+function hostedPointsOn(n){return nodes.filter(p=>p.id!==n.id&&p.placement?.kind==='edge'&&p.placement.hostId===n.id)}
 function componentHostedOnComponentPath(n){return componentPlacement(n).kind==='path'}
 function componentHostedOnComponentEdge(n){return componentPlacement(n).kind==='edge'}
 function componentBackdropMode(n){

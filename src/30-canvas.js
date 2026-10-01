@@ -32,7 +32,7 @@ function cleanupPaletteGesture({status='Select'}={}){
 }
 function makePaletteFloat(symbolId){
   removePaletteFloat();
-  const s=byId(symbolId),el=document.createElement('div');
+  const s=symbolOf(symbolId),el=document.createElement('div');
   el.className='palette-drag-float';
   el.dataset.paletteGhost='true';
   el.innerHTML=`${glyph(symbolId)}<b>${s.name}</b>`;
@@ -40,7 +40,7 @@ function makePaletteFloat(symbolId){
   return el;
 }
 function drawPaletteDropGhost(symbolId,p){
-  const s=byId(symbolId),preset=SovSchematicData.templatePreset(symbolId),dim=preset?.form?.dimension??2;
+  const s=symbolOf(symbolId),preset=SovSchematicData.templatePreset(symbolId),dim=preset?.form?.dimension??2;
   paletteDropLayer.replaceChildren();
   const g=document.createElementNS('http://www.w3.org/2000/svg','g');
   g.setAttribute('class','component-drop-ghost');
@@ -221,22 +221,20 @@ let paletteNotationKey=null;
 function buildSymbolPalette(){
   const notation=activeNotation();if(paletteNotationKey===notation.id&&palette.childElementCount)return;paletteNotationKey=notation.id;
   palette.replaceChildren();
-  const own=Object.keys(notation.glyphs||{}).filter(id=>!byId(id));
-  const groups=[...Object.entries(GROUPS),...(own.length?[[notation.name||notation.id,own]]:[])];
-  for(const [group,ids] of groups){
+  // The same list the bar's type control offers (symbolCatalog, issue #20), one section per group.
+  for(const {group,entries} of symbolCatalog()){
     const section=document.createElement('div'); section.className='section';
     section.dataset.group=group.toLowerCase();
     const h=document.createElement('h2');h.textContent=group;section.appendChild(h);
     const grid=document.createElement('div');grid.className='symbol-grid'+(group==='Primitives'?' primitive-grid':'');section.appendChild(grid);
-    ids.forEach(id=>{
-      const g=notation.glyphs?.[id],s=byId(id)||{name:g?.title||id,family:g?.family||'',role:'',diagram_class:''};
-      const b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
+    for(const {id,symbol:s,preset,name:title,dimension} of entries){
+      const b=document.createElement('button');
       b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
-      const caption=preset?`${preset.form.dimension}D · ${sentenceCase(s.role)}`:[s.family,s.diagram_class].filter(Boolean).map(sentenceCase).join(' · ');
-      b.innerHTML=glyph(id);const name=document.createElement('b');name.textContent=g?.title||sentenceCase(s.name);const small=document.createElement('small');small.textContent=caption;b.append(name,small);
+      const caption=preset?`${dimension}D · ${sentenceCase(s.role)}`:[s.family,s.diagram_class].filter(Boolean).map(sentenceCase).join(' · ');
+      b.innerHTML=glyph(id);const name=document.createElement('b');name.textContent=title;const small=document.createElement('small');small.textContent=caption;b.append(name,small);
       bindPaletteComponent(b,id);
       grid.appendChild(b);
-    });
+    }
     palette.appendChild(section);
   }
 }
@@ -605,7 +603,7 @@ function componentAcceptsChildren(n){return formHostsChildren(n)}
 function parentComponent(node){const ownerId=canvasOwnerComponentId(node?.canvasId||GLOBAL_CANVAS_ID);return ownerId?nodes.find(n=>n.id===ownerId)||null:null}
 function componentDisplayName(node){
   if(!node)return '—';
-  return componentConfig(node).label||byId(node.symbolId).name||node.id;
+  return componentConfig(node).label||symbolOf(node.symbolId).name||node.id;
 }
 function componentScopePath(node){
   if(!node)return 'world';const host=componentHostDescriptor(node);

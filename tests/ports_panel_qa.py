@@ -116,9 +116,10 @@ with sync_playwright() as p:
     assert page.evaluate("()=>[...document.querySelector('#portsList .port-flow').options].map(o=>o.value)") == ['in', 'out', 'duplex', 'control', 'trigger']
     t_attrs = page.evaluate("()=>{const t=document.querySelector('#portsList .port-t');return [t.type,t.min,t.max,t.step]}")
     assert t_attrs == ['number', '0', '1', '0.05'], t_attrs
-    # The section sits below the Attachments control.
-    below = page.evaluate("()=>formAttachments.closest('label').getBoundingClientRect().bottom<=portsSettings.getBoundingClientRect().top")
+    # The section sits below the Interior control; the Attachments selector is gone (#21).
+    below = page.evaluate("()=>formInteriorState.closest('label').getBoundingClientRect().bottom<=portsSettings.getBoundingClientRect().top")
     assert below
+    assert page.evaluate("()=>document.getElementById('formAttachments')") is None
     # Hidden for 0D and 1D Components.
     open_panel(page, 'q')
     assert page.evaluate('()=>portsSettings.hidden') and not page.locator('#portsSettings').is_visible()
@@ -288,18 +289,16 @@ with sync_playwright() as p:
     assert next(x for x in page.evaluate(STATE, 'and')['specs'] if x['id'] == 'b')['label'] == 'B in'
     one_transition(page, h, c, 'bound label', 'and')
     assert page.evaluate("()=>nodes.find(n=>n.id==='and').config.definition") == 'logic.and@1'
-    # The other Form controls cannot change its ports either.
-    h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
-    page.locator('#formAttachments').select_option('standard')
-    refused(page, h, c, 'DEFINITION_PORTS', 'bound attachments')
-    assert page.evaluate('()=>formAttachments.value') == 'none'
-    h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
-    page.locator('#formDimension').select_option('0')
-    refused(page, h, c, 'DEFINITION_PORTS', 'bound dimension')
-    assert page.evaluate('()=>formDimension.value') == '2'
-    h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
-    page.locator('#barComponentType').select_option('gate')
-    refused(page, h, c, 'DEFINITION_PORTS', 'bound retype')
+    # The other Form controls cannot change its ports either: Reset is disabled, naming the definition.
+    assert page.evaluate('()=>portsResetBtn.disabled') and 'logic.and@1' in page.evaluate('()=>portsResetBtn.title')
+    # Dimension has no control of its own (#20): it changes only with the type, and a retype to a
+    # 2D type or to a Point is refused alike.
+    assert page.evaluate("()=>document.getElementById('formDimension')") is None
+    for target in ('gate', 'point'):
+        h, c = page.evaluate(HASH), page.evaluate(UNDO_COUNT)
+        page.locator('#barComponentType').select_option(target)
+        refused(page, h, c, 'DEFINITION_PORTS', f'bound retype to {target}')
+        assert page.evaluate('()=>barComponentType.value') == 'act'
 
     # --- Step 5: settling a bound Component on a Wire is refused ----------------------------
     page.evaluate('()=>{closeSelectionSettings()}')
@@ -438,8 +437,9 @@ with sync_playwright() as p:
         return armed
 
     # Step 14: the review's case. An unbound `pl` on a Wire with its interior open hosts a bound `and`;
-    # closing pl's interior, retyping pl, changing its dimension or deleting it would make `and` fall
-    # back onto the Wire's canvas (ports start/end). Each is refused: nothing changes, no history.
+    # closing pl's interior, retyping pl (to a 2D type or to a Point, which is how its dimension
+    # changes, #20) or deleting it would make `and` fall back onto the Wire's canvas (ports
+    # start/end). Each is refused: nothing changes, no history.
     for mode in ('interior', 'retype', 'dimension', 'delete'):
         pg = fresh()
         pg.evaluate("""()=>{const A=SovSchematicAPI;
@@ -472,7 +472,7 @@ with sync_playwright() as p:
         elif mode == 'retype':
             pg.locator('#barComponentType').select_option('gate')
         elif mode == 'dimension':
-            pg.locator('#formDimension').select_option('1')
+            pg.locator('#barComponentType').select_option('point')
         else:
             pg.locator('#barDeleteSelection').click()
         pg.wait_for_timeout(450)
@@ -485,7 +485,7 @@ with sync_playwright() as p:
         elif mode == 'retype':
             assert pg.evaluate('()=>barComponentType.value') == 'act'
         elif mode == 'dimension':
-            assert pg.evaluate('()=>formDimension.value') == '2'
+            assert pg.evaluate('()=>barComponentType.value') == 'act' and pg.evaluate('()=>barFormState.textContent') == '2D'
         # An unbound child falls back as before: with `and` unbound, the same edit goes through.
         if mode == 'interior':
             pg.evaluate("()=>{SovSchematicAPI.update('component','and',{config:{definition:null}})}")
@@ -599,13 +599,18 @@ with sync_playwright() as p:
     assert pg.evaluate("()=>nodes.find(x=>x.id==='src').config.attachmentPoints") == [{'id': 'self', 'flow': 'in', 'channels': [{'id': 'main'}]}]
     assert pg.evaluate('()=>barPortFlow.value') == 'in'
 
-    # Step 18: the Attachments control says what it means.
+    # Step 18: "Reset to template ports" stands where a template port is missing, moved or changed
+    # (#21), and puts the template's ports back through the same update as any port edit.
     open_panel(pg, 'g')
-    assert pg.evaluate("()=>[...formAttachments.options].map(o=>[o.value,o.textContent])") == [['standard', 'Template ports'], ['none', 'Custom ports']]
-    assert pg.evaluate('()=>formAttachments.value') == 'none'  # g's ports differ from its template
-    pg.locator('#formAttachments').select_option('standard')
-    pg.wait_for_timeout(120)
+    assert pg.evaluate(STATE, 'g')['mode'] == 'none'  # g's ports differ from its template
+    assert not pg.evaluate('()=>portsResetBtn.disabled')
+    pg.locator('#portsResetBtn').click()
+    pg.wait_for_timeout(450)
     assert status(pg) == 'Reset to template ports', status(pg)
+    s = pg.evaluate(STATE, 'g')
+    assert s['mode'] is None and [x['id'] for x in s['specs']][:3] == ['left', 'right', 'top'], s
+    open_panel(pg, 'g')
+    assert pg.evaluate('()=>portsResetBtn.disabled')
 
     # Step 19: ten added ports all sit at distinct positions on the right side.
     pg.evaluate("()=>{SovSchematicAPI.create('component',{id:'ten',symbolId:'plane',x:900,y:260});render()}")
@@ -807,8 +812,29 @@ with sync_playwright() as p:
     assert pg.locator('#barPortFlow').is_enabled()
     pg.close()
 
-    # A gate's glyph terminals keep their directions through a Ports edit: on the half adder, adding
-    # one port to each gate from the panel stores a, b, y as in, in, out, beside the new duplex port.
+    # A gate's glyph terminals are its template ports (issue #54). A bare and2, created before any
+    # logic document has loaded, exposes a, b, y: the registry is filled at module load, not on the
+    # first notation resolve, so a gate's ports do not depend on load order.
+    TERMINALS = [('a', 'in'), ('b', 'in'), ('y', 'out')]
+    pg = browser.new_page(viewport={'width': 1400, 'height': 900})
+    pg.on('pageerror', lambda exc: errors.append(str(exc)))
+    pg.set_content(HTML, wait_until='load')
+    pg.wait_for_timeout(300)
+    pg.evaluate('newSchematic()')
+    bare = pg.evaluate("""()=>{SovSchematicAPI.create('component',{id:'bare',symbolId:'and2',x:400,y:300});render();
+      const n=nodes.find(x=>x.id==='bare');
+      return {specs:Attachment.pointSpecs(n).map(s=>[s.id,s.flow]),template:SovSchematicData.templatePorts('and2').map(p=>[p.id,p.flow]),
+        act:SovSchematicData.templatePorts('act').map(p=>p.id)}}""")
+    assert bare['specs'] == [list(t) for t in TERMINALS], ('a bare gate exposes its terminals', bare)
+    assert bare['template'] == [list(t) for t in TERMINALS], ('templatePorts returns the terminals', bare)
+    assert bare['act'] == ['left', 'right', 'top'], ('a typed Component keeps the trio', bare)
+    pg.close()
+
+    # On the half adder, a gate card is selected by a real click, which opens its inspector and its
+    # Ports panel with no page error (issue #55): the inspector reads the glyph from the notation.
+    # Adding one port stores the smallest form, the template (its terminals) plus the addition;
+    # moving a terminal stores the whole list under 'none'; choosing the template's ports again
+    # resets the terminals and keeps the addition (issue #54).
     pg = browser.new_page(viewport={'width': 1400, 'height': 900})
     pg.on('pageerror', lambda exc: errors.append(str(exc)))
     pg.set_content(HTML, wait_until='load')
@@ -816,25 +842,37 @@ with sync_playwright() as p:
     adder = (ROOT / 'examples/13-half-adder.sov').read_text(encoding='utf-8')
     pg.evaluate("(text)=>{SovSchematicAPI.file.open(text,'13-half-adder.sov');render()}", adder)
     pg.wait_for_timeout(200)
-    TERMINALS = [('a', 'in'), ('b', 'in'), ('y', 'out')]
     for gate in ('sum-gate', 'carry-gate'):
         before = pg.evaluate(STATE, gate)
         assert [x['id'] for x in before['specs']] == ['a', 'b', 'y'] and before['stored'] is None, (gate, before)
-        # Selecting a gate card (selectNode) throws on dev too: the inspector looks the glyph symbol up
-        # in SYMBOLS, which has no logic gates (filed separately). So the gate is made the selection
-        # directly and its panel filled, and the panel's own Add port button is clicked, which runs its
-        # real handler. The data change is synchronous; the selection is cleared in the same task, so
-        # the deferred refresh does not reselect the gate through selectNode.
-        pg.evaluate("(id)=>{closeSelectionSettings();selectedComponentIds.clear();selectedComponentIds.add(id);selected=id;openSelectionSettings('component')}", gate)
-        pg.wait_for_timeout(150)
+        open_panel(pg, gate)
+        title = pg.evaluate("(id)=>componentGlyph(nodes.find(n=>n.id===id)).title", gate)
+        assert pg.locator('#iName').inner_text() == title and title in ('And', 'Exclusive or'), (gate, title, pg.locator('#iName').inner_text())
+        assert pg.evaluate("()=>portsResetBtn.disabled"), gate  # its ports are the template's (its terminals)
         assert pg.evaluate(ROWS) == ['a', 'b', 'y'], (gate, pg.evaluate(ROWS))
         assert pg.evaluate('()=>!portsAddBtn.disabled'), gate
-        pg.evaluate("()=>{portsAddBtn.click();closeSelectionSettings();selectedComponentIds.clear();selected=null}")
+        pg.locator('#portsAddBtn').click()
         pg.wait_for_timeout(450)
         s = pg.evaluate(STATE, gate)
         assert [(x['id'], x['flow']) for x in s['specs']] == TERMINALS + [('p1', 'duplex')], (gate, s['specs'])
-        assert s['mode'] == 'none' and [(x['id'], x['flow']) for x in s['stored']] == TERMINALS + [('p1', 'duplex')], (gate, s['mode'], s['stored'])
+        assert s['mode'] is None and [(x['id'], x['flow']) for x in s['stored']] == [('p1', 'duplex')], (gate, s['mode'], s['stored'])
         assert all(x['channels'] == ['main'] for x in s['specs']), (gate, s['specs'])
+        # Moving terminal a to the top is a change to the template's ports: the whole list is stored.
+        open_panel(pg, gate)
+        row(pg, 'a', 'port-side').select_option('top')
+        pg.wait_for_timeout(450)
+        s = pg.evaluate(STATE, gate)
+        assert s['mode'] == 'none' and [x['id'] for x in s['stored']] == ['a', 'b', 'y', 'p1'] and s['specs'][0]['side'] == 'top', (gate, s)
+        # Resetting to the template's ports puts the terminals back as the glyph declares them and
+        # keeps the addition: added ports are not the template's.
+        open_panel(pg, gate)
+        assert not pg.evaluate("()=>portsResetBtn.disabled"), gate
+        pg.locator('#portsResetBtn').click()
+        pg.wait_for_timeout(450)
+        assert status(pg) == 'Reset to template ports', (gate, status(pg))
+        s = pg.evaluate(STATE, gate)
+        assert [(x['id'], x['side'], x['flow']) for x in s['specs']] == [('a', 'left', 'in'), ('b', 'left', 'in'), ('y', 'right', 'out'), ('p1', 'right', 'duplex')], (gate, s['specs'])
+        pg.evaluate('()=>closeSelectionSettings()')
     pg.close()
 
     assert not errors, errors

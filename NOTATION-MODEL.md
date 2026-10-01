@@ -175,7 +175,7 @@ contrast (`scripts/contrast_audit.py`).
 | Part | Where | Test |
 | --- | --- | --- |
 | Notations, tokens, glyphs and terminals, the `logic` notation | `src/03-notation-core.js` (no DOM; the server loads it) | `tests/notation_qa.py` |
-| Symbols generated from the notation; pins, leads, terminal points | `src/10-model.js` (`installNotationSymbols`), `src/30-canvas.js`, `src/06-attachment-core.js` | `tests/notation_qa.py`, `tests/boundary_attachment_qa.py` |
+| Symbols generated from the notation; pins, leads, terminal points | `src/10-model.js` (`installNotationSymbols`, `symbolOf`), `src/30-canvas.js`, `src/05-data-core.js` (`templatePorts`: a gate's terminals are its template ports) | `tests/notation_qa.py`, `tests/boundary_attachment_qa.py`, `tests/ports_panel_qa.py` |
 | Radius offset from inside; elevation shadows; recess and raised bevels | `src/55-render.js` | `tests/notation_qa.py`, `tests/sections_qa.py` |
 | Type roles, sentence case, subtitle, Markdown body | `src/55-render.js`, `styles/app.css` | `tests/typography_qa.py` |
 | Narration track | `src/66-narration.js`; pictures in `src/75-persistence.js` | `tests/typography_qa.py` |
@@ -194,6 +194,51 @@ Notes from building it:
   core resolves it while normalising, so a file, the server and the editor agree.
 - An explicit `set` before the simulation's first step replaces a lever's declared starting
   value. Found by the half adder's truth table.
+
+## Domain notation: work-engine
+
+The Work Engine gap map is drawn in its own notation, `work-engine`. It extends `schematic`, so
+every built-in glyph and token still applies, and it adds kinds for records, surfaces and work
+items, so a reader tells a store from a page from a piece of work by its shape.
+
+- The notation lives in `data/work-engine.notation.json`.
+- A document uses it with `"notation": "work-engine"` and carries the file's content unchanged
+  as `references[0]`: `{id: "notation-work-engine", kind: "notation", label: "Work Engine",
+  data: ...}`. `examples/work-engine/notation.sov` is such a document, with one card per glyph.
+- Glyph ids carry the prefix `we-`, because the data core reads a component whose symbol is
+  `port` as a point.
+- Every glyph has an `in` terminal at `[28, 32]` facing left and an `out` terminal at `[68, 32]`
+  facing right, as `act` has, so its body sits between x 28 and x 68.
+- `tests/work_engine_notation_qa.py` checks the file, the example, the resolved glyphs, the
+  statuses and the legend.
+
+**Glyphs**
+
+| Id | Title | Family | Drawn as | Meaning |
+| --- | --- | --- | --- | --- |
+| `we-record` | Record | record | a cylinder | A store the work engine keeps its facts in, such as a table, a file or a log. |
+| `we-surface` | Surface | surface | a window with a title bar | A place a person or an agent reads or acts on the work, such as a page, a panel or a command. |
+| `we-migration` | Migration | work | a sheet with a folded corner and an arrow to the right | Work that moves data or behaviour from one home to another. |
+| `we-port` | Port | work | the sheet with two opposed arrows | Work that connects one part to another so each can reach the other. |
+| `we-refactor` | Refactor | work | the sheet with two curved arrows in a circle | Work that reshapes existing code without changing what it does. |
+| `we-specification` | Specification | work | the sheet with three text lines | Work that writes down what something must do before it is built. |
+
+The four work items share the sheet, so they read as one kind, and differ by the mark inside it.
+
+**Categories.** `C1` Record, `C2` Surface, `C3` Work item. A card's `config.colorSlot` 6, 7 and
+8 are those slots, and the legend names them.
+
+**Statuses.** The notation declares, in order, the values a document drawn in it may give
+`config.status`. Each is `{id, title, meaning, outline: solid | dashed, opacity}`: `outline` is
+how the card's border is drawn, and `opacity`, when present, is how strongly the card is drawn.
+A dashed outline marks a thing that is not built.
+
+| Id | Title | Outline | Opacity | Meaning |
+| --- | --- | --- | --- | --- |
+| `exists` | Exists | solid | | Built and in use today. |
+| `partial` | Partial | solid | | Built in part; some of what it must do is still missing. |
+| `missing` | Missing | dashed | 0.55 | Needed by the work engine and not built yet. |
+| `proposed` | Proposed | dashed | | Planned work that nobody has started. |
 
 ## Open
 

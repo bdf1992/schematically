@@ -21,7 +21,7 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
 
   componentDetail.hidden=false;
   ensureComponentStructure(n);
-  const s=byId(n.symbolId);
+  const s=symbolOf(n.symbolId);
   iName.textContent=n.boundary.inside.type?s.name:'UNTYPED';
   iOutside.textContent=n.boundary.outside.type;
   {const host=componentHostDescriptor(n);iParent.textContent=host?.ownerKind==='wire'?`Wire · ${host.label||host.ownerId}`:componentDisplayName(parentComponent(n));}
@@ -83,7 +83,7 @@ function selectWire(i,{focus=true}={}){
   if(!w){hideSelectionBar();return}
   connectionDetail.hidden=false;
   const cfg=connectionConfig(w),epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b');
-  const endText=(ep,end)=>ep?.kind==='bound'?`${componentConfig(ep.node).label||byId(ep.node.symbolId).name}.${ep.pointId} · ch ${wireEndpointMarker(w,end)}`:ep?`free · ${Math.round(ep.pos.x)}, ${Math.round(ep.pos.y)}`:'—';
+  const endText=(ep,end)=>ep?.kind==='bound'?`${componentConfig(ep.node).label||symbolOf(ep.node.symbolId).name}.${ep.pointId} · ch ${wireEndpointMarker(w,end)}`:ep?`free · ${Math.round(ep.pos.x)}, ${Math.round(ep.pos.y)}`:'—';
   cFrom.textContent=endText(epA,'a');
   cTo.textContent=endText(epB,'b');
   cEnds.textContent=`${epA?.kind==='bound'?'bound':'free'} → ${epB?.kind==='bound'?'bound':'free'}`;

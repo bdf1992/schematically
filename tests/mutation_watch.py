@@ -194,9 +194,9 @@ MUTANTS=[
     },
     {
       'name':'glyph-terminals-not-points',
-      'file':'src/06-attachment-core.js',
-      'old':"if(glyphPoints)return glyphPoints.map(p=>({...p,role:'boundary'}));",
-      'new':"if(false)return glyphPoints;",
+      'file':'src/05-data-core.js',
+      'old':"if(terminals)return terminals.map(p=>({id:p.id,compatId:p.compatId,side:p.side,t:p.t,flow:p.defaultFlow,channels:[{id:'main'}]}));",
+      'new':"if(false)return terminals;",
       'test':'tests/notation_qa.py'
     },
     {

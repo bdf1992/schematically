@@ -28,7 +28,10 @@
     // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
     // component record is the static 1D role (a rail that hosts Points).
     path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},size:{w:240,h:64}}},
-    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}}
+    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}},
+    // A group collects Components for reading (SECTION-MODEL.md "Groups (reading only)"). It is
+    // not a boundary: its interior stays closed, it hosts nothing, and it has no ports.
+    group:{form:{dimension:2},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}}
   };
   // Declared ports: `{id, compatId?, side: left|right|top|bottom, t: 0..1,
   // flow: in|out|control|duplex|trigger, channels: [{id}], label?}`. The typed Component
@@ -37,8 +40,15 @@
   // Component template's ports, as it always has).
   const declaredPort=(id,compatId,side,flow)=>({id,compatId,side,t:.5,flow,channels:[{id:'main'}]});
   const COMPONENT_TEMPLATE={ports:[declaredPort('left','in','left','in'),declaredPort('right','out','right','out'),declaredPort('top','control','top','control')]};
+  // A glyph that declares its terminals as points (a logic gate, NOTATION-MODEL.md §2) has those
+  // terminals as its template ports, shaped like declared ports (issue #54): the same registry the
+  // attachment core reads, so an edit's smallest form and a reset compare against the ports the
+  // card actually exposes.
   function templatePorts(symbolId){
-    const preset=TEMPLATE_PRESETS[normalizeSymbolId(symbolId)];
+    const id=normalizeSymbolId(symbolId);
+    const terminals=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation?.pointsFor?.(id);
+    if(terminals)return terminals.map(p=>({id:p.id,compatId:p.compatId,side:p.side,t:p.t,flow:p.defaultFlow,channels:[{id:'main'}]}));
+    const preset=TEMPLATE_PRESETS[id];
     return clone(Array.isArray(preset?.ports)?preset.ports:COMPONENT_TEMPLATE.ports);
   }
   // Loading a file applies the same preset rule as makeComponent: a preset field fills in
@@ -56,6 +66,7 @@
   }
   function normalizeSymbolId(value){const id=String(value||'blank')||'blank';return LEGACY_SYMBOL_IDS[id]||id}
   function templatePreset(symbolId){return clone(TEMPLATE_PRESETS[normalizeSymbolId(symbolId)]||null)}
+  function symbolIds(){return Object.keys(TEMPLATE_PRESETS)}
   function isPrimitiveSymbol(symbolId){return Object.prototype.hasOwnProperty.call(TEMPLATE_PRESETS,normalizeSymbolId(symbolId))}
   // A label mode is read, never written by a preset: an authored mode is used as written;
   // otherwise a label under a 0D or 1D form sits outside it, under a 2D form on its
@@ -387,6 +398,80 @@
     if(!isObject(config)||config.delay===undefined||(clearable&&config.delay===null))return;
     if(!(Number.isInteger(config.delay)&&config.delay>=1))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
   }
+  // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
+  // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
+  // ports, and a Wire between members of different groups is one Wire on their shared canvas.
+  // `config.members` holds distinct Component ids. The rules, one finding each:
+  //   GROUP_MEMBER_UNKNOWN  a member names no Component (or is not a Component id)
+  //   GROUP_MEMBER_CANVAS   a member's canvasId differs from the group's
+  //   GROUP_MEMBER_HOSTED   a member rides on a host (placement kind edge, wire or path)
+  //   GROUP_MEMBER_GROUP    a member is a group
+  //   GROUP_MEMBER_TWICE    a Component listed twice (by two groups, or twice by one)
+  //   GROUP_PORTS           a group carries config.attachmentPoints or attachmentDefaults 'standard'
+  //   GROUP_HOST            a Component placed on a group (placement.hostId) or in its interior
+  // Loading reports them (validateDocument); create and update refuse an edit that adds one.
+  const GROUP_PAD=24,GROUP_TITLE_BAND=28;
+  function isGroup(component){return !!component&&normalizeSymbolId(component.symbolId||component.type)==='group'}
+  function groupMembers(component){const m=component?.config?.members;return Array.isArray(m)?m:[]}
+  function groupFindings(doc){
+    const components=Array.isArray(doc?.components)?doc.components:[],out=[];
+    const byId=new Map(components.filter(c=>c&&c.id!=null).map(c=>[c.id,c]));
+    const add=(code,id,text)=>out.push({code,id,text});
+    const listedBy=new Map();
+    for(const g of components){
+      if(!isGroup(g))continue;
+      const raw=g.config?.members;
+      if(raw!==undefined&&!Array.isArray(raw))add('GROUP_MEMBER_UNKNOWN',g.id,`group ${g.id} config.members must be an array of Component ids`);
+      for(const member of groupMembers(g)){
+        if(typeof member!=='string'||!byId.has(member)){add('GROUP_MEMBER_UNKNOWN',g.id,`group ${g.id} lists ${JSON.stringify(member)}, which is not a Component`);continue}
+        const m=byId.get(member);
+        if(listedBy.has(member))add('GROUP_MEMBER_TWICE',g.id,`group ${g.id} lists ${member}, already listed by group ${listedBy.get(member)}`);else listedBy.set(member,g.id);
+        if(isGroup(m)){add('GROUP_MEMBER_GROUP',g.id,`group ${g.id} lists ${member}, which is a group`);continue}
+        const kind=m.placement?.kind;
+        if(['edge','wire','path'].includes(kind)||String(m.canvasId||'').startsWith('canvas:wire:')){add('GROUP_MEMBER_HOSTED',g.id,`group ${g.id} lists ${member}, which rides on a host (placement ${kind||'wire'})`);continue}
+        if(containingCanvasId(m)!==containingCanvasId(g))add('GROUP_MEMBER_CANVAS',g.id,`group ${g.id} is on ${containingCanvasId(g)} and lists ${member}, which is on ${containingCanvasId(m)}`);
+      }
+      const cfg=g.config||{};
+      if(Array.isArray(cfg.attachmentPoints)||cfg.attachmentDefaults==='standard')add('GROUP_PORTS',g.id,`group ${g.id} has no ports: it carries ${Array.isArray(cfg.attachmentPoints)?'config.attachmentPoints':"attachmentDefaults 'standard'"}`);
+    }
+    for(const c of components){
+      if(!c)continue;
+      const host=c.placement?.hostId!=null?byId.get(c.placement.hostId):null;
+      const interior=String(c.canvasId||'').startsWith('canvas:component:')?byId.get(String(c.canvasId).slice('canvas:component:'.length)):null;
+      const g=isGroup(host)?host:isGroup(interior)?interior:null;
+      if(g)add('GROUP_HOST',c.id,`component ${c.id} is placed on group ${g.id}; a group hosts nothing`);
+    }
+    return out;
+  }
+  const groupFindingKey=f=>`${f.code}|${f.id}|${f.text}`;
+  // An edit may not add a group finding: the first one the trial document has and the current
+  // document does not is thrown, with its code first, before anything is written.
+  function assertGroupRules(doc,trialComponents){
+    const before=new Set(groupFindings(doc).map(groupFindingKey));
+    const added=groupFindings({...doc,components:trialComponents}).find(f=>!before.has(groupFindingKey(f)));
+    if(added)throw new Error(`${added.code}: ${added.text}`);
+  }
+  // The region a group is drawn as: the union of its members' rectangles (each centred on its
+  // x, y and sized by sizeOf(component)) padded GROUP_PAD on every side and GROUP_TITLE_BAND more
+  // on top for the title. A group with no placed member is its own x, y and presentation.size.
+  // Returned centred, like a Component: {x, y, w, h} plus its edges {l, r, t, b}.
+  function groupRect(doc,groupId,sizeOf){
+    const components=Array.isArray(doc?.components)?doc.components:[];
+    const g=components.find(c=>c?.id===groupId);if(!g)return null;
+    const size=typeof sizeOf==='function'?sizeOf:(c=>normalizePresentationSize(c?.config?.presentation?.size));
+    let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
+    for(const id of groupMembers(g)){
+      const m=components.find(c=>c?.id===id);if(!m||isGroup(m)||!Number.isFinite(Number(m.x))||!Number.isFinite(Number(m.y)))continue;
+      const s=size(m),x=Number(m.x),y=Number(m.y);
+      l=Math.min(l,x-s.w/2);r=Math.max(r,x+s.w/2);t=Math.min(t,y-s.h/2);b=Math.max(b,y+s.h/2);
+    }
+    if(!Number.isFinite(l)){
+      const s=normalizePresentationSize(g.config?.presentation?.size||TEMPLATE_PRESETS.group.presentation.size),x=num(g.x,0),y=num(g.y,0);
+      return {x,y,w:s.w,h:s.h,l:x-s.w/2,r:x+s.w/2,t:y-s.h/2,b:y+s.h/2};
+    }
+    l-=GROUP_PAD;r+=GROUP_PAD;t-=GROUP_PAD+GROUP_TITLE_BAND;b+=GROUP_PAD;
+    return {x:(l+r)/2,y:(t+b)/2,w:r-l,h:b-t,l,r,t,b};
+  }
   // `config.definition` is null (unbound) or an `id@version` string, anywhere it is written
   // (DEFINITION_INVALID). Only the binding path (`applyBinding`) sets it to a non-null value: a
   // plain component update or create may clear it or leave it alone (DEFINITION_BIND_REQUIRED).
@@ -710,6 +795,8 @@
     // A bound definition (`id@version`) is kept only on a copy, so a pasted or duplicated bound Component stays bound.
     if(copy)assertDefinitionValue(value.config?.definition);else assertDefinitionPatch(value,false);
     if(value.config?.definition!==undefined)config.definition=clone(value.config.definition);
+    // A group's members, as written; create checks them (assertGroupRules).
+    if(value.config?.members!==undefined)config.members=clone(value.config.members);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -973,6 +1060,7 @@
     if(resource==='wire'){assertCarrierEndpointAccepts(doc,value?.a);assertCarrierEndpointAccepts(doc,value?.b)}
     const record=resource==='component'?makeComponent(doc,value):resource==='wire'?makeWire(doc,value):makeReference(doc,value);
     if(arr.some(x=>x.id===record.id))throw new Error(`${resource} id already exists: ${record.id}`);
+    if(resource==='component')assertGroupRules(doc,[...doc.components,record]);
     arr.push(record);return clone(record);
   }
   // `binding` is the binding path only (`applyBinding`): the one update that may set a non-null
@@ -1005,6 +1093,7 @@
       if(!binding)assertDefinitionPortsKept(current,patch,candidate);
       assertWiresSurviveEdit(doc,current,candidate);
       normalizeComponentSize(candidate);
+      assertGroupRules(doc,doc.components.map((c,i)=>i===index?candidate:c));
     }else if(resource==='wire'){
       if(isObject(patch?.config))assertPathDelay(patch.config,true);
       if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
@@ -1047,6 +1136,8 @@
       for(const child of fallsBack){const trial=clone(child);trial.canvasId=containing;trial.placement={kind:'surface',x:child.x,y:child.y};assertDefinitionPortsKept(child,{placement:trial.placement},trial)}
       for(const child of fallsBack){child.canvasId=containing;child.parentId=removed.parentId??null;child.placement={kind:'surface',x:child.x,y:child.y};}
       for(let i=doc.wires.length-1;i>=0;i--)if(doc.wires[i].a===id||doc.wires[i].b===id)remove(doc,'wire',doc.wires[i].id);
+      // A deleted Component leaves every group that listed it, in the same operation.
+      for(const g of doc.components)if(isGroup(g)&&Array.isArray(g.config?.members)&&g.config.members.includes(id))g.config.members=g.config.members.filter(m=>m!==id);
     }else if(resource==='wire'){
       const hostedCanvas=`canvas:wire:${id}`;
       for(const component of doc.components)if(component.canvasId===hostedCanvas){component.canvasId=GLOBAL_CANVAS_ID;component.parentId=null;component.placement={kind:'surface',x:component.x,y:component.y};}
@@ -1080,6 +1171,73 @@
       if(mutates)touch(doc);
       return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:value,error:null};
     }catch(error){return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:false,revisionBefore:before,revisionAfter:doc.revision,result:null,error:{message:String(error.message||error)}}}
+  }
+  // A batch is many writes taken as one: every operation applies in order or none does, the
+  // document moves one revision, and one receipt answers it. A create may omit its id (the core
+  // assigns one) and name itself with `ref: "$name"`; any later string equal to "$name" in that
+  // batch (a wire's a or b, a parentId, a placement's hostId) is that created id, and
+  // "canvas:component:$name" is its interior surface. A refused operation leaves the document
+  // exactly as it was and the receipt names its index. Reads are not batched.
+  const BATCH_OPS=['create','update','delete'];
+  function resolveRefs(value,refs){
+    if(typeof value==='string'){
+      if(Object.prototype.hasOwnProperty.call(refs,value))return refs[value];
+      // A surface is named after its owner: canvas:component:$plane is the created plane's surface.
+      const surface=value.match(/^(canvas:(?:component|wire):)(\$.+)$/);
+      return surface&&Object.prototype.hasOwnProperty.call(refs,surface[2])?surface[1]+refs[surface[2]]:value;
+    }
+    if(Array.isArray(value))return value.map(v=>resolveRefs(v,refs));
+    if(isObject(value)){const out={};for(const [k,v] of Object.entries(value))out[k]=resolveRefs(v,refs);return out}
+    return value;
+  }
+  function applyBatch(document,batch={}){
+    const id=batch.id||`batch-${Date.now()}`,operations=Array.isArray(batch.operations)?batch.operations:null;
+    const rawRevision=Math.max(0,Math.trunc(num(document?.revision,0)));
+    const refuse=(message,index=null,revision=rawRevision)=>({schema:RECEIPT_SCHEMA,operationId:id,ok:false,revisionBefore:rawRevision,revisionAfter:revision,result:null,error:{index,message}});
+    if(!operations||!operations.length)return refuse('a batch needs a non-empty operations array');
+    if(typeof batch.ifRevision==='number'&&batch.ifRevision!==rawRevision)return refuse(`Stale revision: expected ${batch.ifRevision}, document is at ${rawRevision}`);
+    const doc=normalizeDocument(document),before=doc.revision,snapshot=clone(doc);
+    const refs={},applied=[],errorsBefore=new Set(validateDocument(doc).errors);
+    const restore=()=>replaceDocument(doc,snapshot);
+    for(const [index,raw] of operations.entries()){
+      const op=raw?.op,resource=raw?.resource;
+      try{
+        if(!BATCH_OPS.includes(op))throw new Error(`op must be one of ${BATCH_OPS.join(', ')}`);
+        if(!RESOURCE_KEYS[resource])throw new Error(`resource must be one of ${Object.keys(RESOURCE_KEYS).join(', ')}`);
+        const ref=raw.ref==null?null:String(raw.ref);
+        if(ref!==null&&(!ref.startsWith('$')||ref.length<2))throw new Error('a ref starts with $ and names something');
+        if(ref!==null&&refs[ref]!==undefined)throw new Error(`ref ${ref} is already used in this batch`);
+        let value;
+        if(op==='create'){
+          value=create(doc,resource,resolveRefs(clone(raw.value||{}),refs));
+          if(ref!==null)refs[ref]=value.id;
+        }else{
+          const target=resolveRefs(raw.id,refs);if(typeof target!=='string'||!target)throw new Error(`${op} needs the id of a ${resource}`);
+          if(op==='update')value=update(doc,resource,target,resolveRefs(clone(raw.patch||{}),refs));
+          else{value=remove(doc,resource,target);if(value===null)throw new Error(`${resource} not found: ${target}`)}
+        }
+        applied.push({index,op,resource,id:value.id,...(ref!==null?{ref}:{})});
+      }catch(error){restore();return refuse(String(error.message||error),index,before)}
+    }
+    // The batch may not leave the document less legal than it found it.
+    const introduced=validateDocument(doc).errors.filter(message=>!errorsBefore.has(message));
+    if(introduced.length){restore();return refuse(`the batch leaves the document invalid: ${introduced.join('; ')}`,null,before)}
+    touch(doc);
+    return {schema:RECEIPT_SCHEMA,operationId:id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:{ids:refs,applied},error:null};
+  }
+  // A slice of the document small enough to read: the named items, or every component whose
+  // position falls in an area, plus the wires among them, in the stored (compact) form.
+  function readScope(document,scope={}){
+    const doc=normalizeDocument(clone(document)),ids=Array.isArray(scope.ids)?new Set(scope.ids.map(String)):null,area=isObject(scope.area)?scope.area:null;
+    if(!ids&&!area)return {ok:false,error:{message:'read needs ids or an area {x, y, width, height}'}};
+    const inArea=c=>area&&num(c.x,NaN)>=num(area.x,0)&&num(c.x,NaN)<=num(area.x,0)+num(area.width,0)&&num(c.y,NaN)>=num(area.y,0)&&num(c.y,NaN)<=num(area.y,0)+num(area.height,0);
+    const picked=new Set(doc.components.filter(c=>(ids&&ids.has(c.id))||inArea(c)).map(c=>c.id));
+    // A component brings what sits on its interior, so a plane is read with its points.
+    let grew=true;while(grew){grew=false;for(const c of doc.components)if(!picked.has(c.id)&&[...picked].some(p=>c.canvasId===`canvas:component:${p}`)){picked.add(c.id);grew=true}}
+    const wires=doc.wires.filter(w=>(ids&&ids.has(w.id))||(picked.has(w.a)&&picked.has(w.b)));
+    const references=ids?doc.references.filter(r=>ids.has(r.id)):[];
+    const edge=doc.wires.filter(w=>!wires.includes(w)&&(picked.has(w.a)!==picked.has(w.b))).map(w=>({id:w.id,a:w.a,b:w.b}));
+    return {ok:true,revision:doc.revision,components:doc.components.filter(c=>picked.has(c.id)).map(compactComponent),wires:wires.map(compactWire),references,crossing:edge};
   }
   // The binding path (`applyBind` in the state space calls it): applies a binding patch,
   // `{config:{definition, attachmentDefaults:'none', attachmentPoints}}`, to a 2D Component with the
@@ -1134,6 +1292,8 @@
       const ws=wire.form?.section;if(ws&&Array.isArray(ws.lines)&&Array.isArray(ws.bands)&&ws.bands.length!==ws.lines.length-1)errors.push(`wire ${wire.id||'?'} section: bands must be one fewer than lines (${ws.lines.length} lines, ${ws.bands.length} bands)`);
       for(const key of ['forwardOperation','reverseOperation'])if(wire.config?.[key]!=null&&!['none','read','write'].includes(wire.config[key]))errors.push(`wire ${wire.id||'?'} invalid ${key}: ${wire.config[key]}`);
     }
+    // Groups: reported, never repaired (the codes are listed at groupFindings).
+    for(const f of groupFindings(input))errors.push(`component ${f.id??'?'}: ${f.code}: ${f.text}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -1173,5 +1333,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });

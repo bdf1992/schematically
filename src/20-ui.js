@@ -173,11 +173,24 @@ function syncSectionPositionSelect(select,row,owner,compat){
   s.bands.forEach((b,k)=>{const o=document.createElement('option');o.value=`through:${k}`;o.textContent=`Through ${b.role||'band'} ${k+1} (${b.fill}) · a crossing`;select.appendChild(o)});
   select.value=pos.line!=null?`line:${pos.line}`:`through:${pos.through}`;
 }
+// The bar's type control offers the same list as the palette (symbolCatalog, issue #20): one
+// optgroup per group, each entry named with the dimension its type gives. Rebuilt when the notation
+// changes, as the palette is; the dimension read-outs (the bar badge, the Form section) follow it.
+let typeOptionsNotationKey=null;
+function syncComponentTypeOptions(){
+  const key=activeNotation().id;if(typeOptionsNotationKey===key&&barComponentType.options.length)return;typeOptionsNotationKey=key;
+  barComponentType.replaceChildren();
+  for(const {group,entries} of symbolCatalog()){
+    const og=document.createElement('optgroup');og.label=group;
+    for(const e of entries){const o=document.createElement('option');o.value=e.id;o.textContent=`${e.name} · ${e.dimension}D`;og.appendChild(o)}
+    barComponentType.appendChild(og);
+  }
+}
 function syncSelectionFormState(kind,entity){
   if(kind==='port'||!entity){barFormState.hidden=true;return}
   barFormState.hidden=false;barFormState.disabled=false;barFormState.classList.remove('wire-form');
   if(kind==='component'){
-    const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;barFormState.title=`${formDimensionLabel(f)} · configure Form`;
+    const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;barFormState.title=`${formDimensionLabel(f)} · comes with the type · configure Form`;
     barFormState.classList.toggle('active',f.frame.mode!=='none'||f.regions.interior.state==='open');
   }else{
     barFormState.textContent='1D';barFormState.title='Wire Form · 1D path · configure Wire settings';barFormState.classList.add('wire-form');
@@ -190,11 +203,10 @@ function syncComponentVisualPanel(n){
   visualText.value=p.text;visualSvgMarkup.value=p.graphic.svg;visualSvgRow.hidden=p.graphic.kind!=='custom';
   setSlotChip(visualInteriorColor,p.interiorColorSlot);
   const f=componentForm(n);
-  formDimension.value=String(f.dimension);formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
+  formDimensionReadout.textContent=`${formDimensionLabel(f)} · ${symbolCatalogEntry(n.symbolId)?.name||symbolOf(n.symbolId).name}`;formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
   formSection.value=sectionPresetName(f,2);
   syncSectionPositionSelect(formPointPosition,formPointPositionRow,n,'out');
   formInteriorState.value=f.regions.interior.state;formFrameMode.value=f.frame.mode;formFrameThickness.value=String(f.frame.thickness);formFrameDepth.value=String(f.frame.depth);
-  formAttachments.value=Attachment.attachmentDefaults(n);
   // Settings are shown per dimension: a Point has no size or frame, a Path no height or interior.
   for(const el of componentSettingsFields.querySelectorAll('[data-dims]')){const dims=String(el.dataset.dims).split('').map(Number);el.hidden=!dims.includes(f.dimension)}
   syncPortsPanel(n);
@@ -207,6 +219,22 @@ function syncComponentVisualPanel(n){
 const portsSettings=document.getElementById('portsSettings');
 const portsList=document.getElementById('portsList');
 const portsAddBtn=document.getElementById('portsAddBtn');
+const portsResetBtn=document.getElementById('portsResetBtn');
+// What ends on a point, as the Attached list says it (#21).
+function attachedWiresText(bound){return bound.length?`${bound.length} wire${bound.length===1?'':'s'} · ${bound.map(w=>connectionConfig(w).label||w.id).join(', ')}`:'no wire'}
+// The template's port list for this Component, as a port edit stores it; empty where the template
+// declares none (a Plane). What "Reset to template ports" puts back.
+function templatePortListOf(n){
+  const preset=SovSchematicData.templatePreset(n.symbolId);
+  return preset?.attachmentDefaults==='none'?[]:SovSchematicData.normalizeDeclaredPorts(SovSchematicData.templatePorts(n.symbolId));
+}
+// Whether the template's ports lead the list unchanged (the data core's own 'standard' rule), and
+// the ports that are not the template's (the additions, by id or compat id).
+function templatePortsKept(n){
+  const template=templatePortListOf(n),current=componentPortList(n),ids=new Set(template.flatMap(p=>[p.id,p.compatId||p.id]));
+  const kept=JSON.stringify(current.slice(0,template.length))===JSON.stringify(template);
+  return {template,kept,additions:current.filter(p=>!ids.has(p.id)&&!ids.has(p.compatId||p.id))};
+}
 const PORT_PANEL_SIDES=['left','right','top','bottom'];
 const PORT_PANEL_FLOWS=['in','out','duplex','control','trigger'];
 function componentPortsEditable(n){return !!n&&Attachment.effectiveDimension(n)===2}
@@ -239,10 +267,37 @@ function syncPortsPanel(n){
     const flow=portPanelSelect('port-flow',`Port ${spec.id} flow`,PORT_PANEL_FLOWS,spec.flow);flow.title=owned||'Flow';if(owner)flow.disabled=true;
     const channels=portPanelControl('input','port-channels',`Port ${spec.id} channels`,{type:'text',placeholder:'main',title:owned||'Channel ids, comma-separated'});channels.value=Attachment.channelIds(spec).join(', ');if(owner)channels.disabled=true;
     const remove=portPanelControl('button','port-remove',`Remove port ${spec.id}`,{type:'button',title:owned||`Remove port ${spec.id}`});remove.textContent='Remove';if(owner)remove.disabled=true;
-    row.append(id,label,side,t,flow,channels,remove);rows.push(row);
+    // What ends on the port (#21). The id cell selects the point.
+    const bound=wiresOnPoint(n,spec.id),attached=document.createElement('span');attached.className='port-attached';
+    attached.textContent=attachedWiresText(bound);attached.title=bound.length?'Wires ending on this port':'Nothing ends on this port';
+    id.title=`${owned||'Port id'} · click to select the point`;
+    row.append(id,label,side,t,flow,channels,remove,attached);rows.push(row);
+  }
+  // The Points hosted on the boundary are attached too (#21): read-only rows, each with a Select
+  // button. Adding or removing one is creating or deleting a Point, the same gesture as on a Plane.
+  for(const p of hostedPointsOn(n)){
+    const row=document.createElement('div');row.className='hosted-row';row.dataset.pointComponentId=p.id;row.setAttribute('role','listitem');
+    const spec=Attachment.pointSpecs(p)[0],pl=p.placement;
+    const cell=(className,label,value,attrs={})=>{const el=portPanelControl('input',className,label,{type:'text',readonly:'',title:'On the hosted Point · select it to edit',...attrs});el.value=value;return el};
+    const id=cell('port-id',`Hosted Point ${p.id}`,p.id,{title:'A Point hosted on the boundary · click to select it'});
+    const label=cell('port-label',`Hosted Point ${p.id} label`,componentConfig(p).label||'');
+    const side=cell('port-side',`Hosted Point ${p.id} side`,pl.side||'');
+    const t=cell('port-t',`Hosted Point ${p.id} position`,String(Math.round((Number(pl.t)||0)*1000)/1000));
+    const flow=cell('port-flow',`Hosted Point ${p.id} flow`,spec?.flow||spec?.defaultFlow||'duplex');
+    const channels=cell('port-channels',`Hosted Point ${p.id} channels`,spec?Attachment.channelIds(spec).join(', '):'main');
+    const select=portPanelControl('button','port-select',`Select Point ${p.id}`,{type:'button',title:'Select this Point'});select.textContent='Select';
+    const bound=wiresOnPoint(p,'self'),attached=document.createElement('span');attached.className='port-attached';
+    attached.textContent=`hosted Point · ${attachedWiresText(bound)}`;attached.title=bound.length?'Wires ending on this Point':'Nothing ends on this Point';
+    row.append(id,label,side,t,flow,channels,select,attached);rows.push(row);
   }
   portsList.replaceChildren(...rows);
   portsAddBtn.disabled=!!owner;portsAddBtn.title=owned||'Add a port on the right side';
+  // Reset stands only where a template port is missing, moved or changed (and the definition does not
+  // own the ports); additions are not the template's and stay. A template that declares no ports
+  // (a Plane) has nothing to put back.
+  const {template,kept}=templatePortsKept(n);
+  portsResetBtn.disabled=!!owner||!template.length||kept;
+  portsResetBtn.title=owned||(!template.length?'The template declares no ports':kept?"The ports are the template's":"Put the template's ports back · added ports stay");
   if(focused){const again=portsList.querySelector(`.ports-row[data-port-id="${CSS.escape(focused[0])}"] .${focused[1]}`);if(again&&!again.disabled)again.focus()}
 }
 function syncSelectionSettings(kind){
@@ -274,6 +329,8 @@ function rectOverlapArea(a,b){if(!a||!b)return 0;const w=Math.min(a.right,b.righ
 function placeSelectionSettingsPanel(){
   const panel=selectionSettingsPanel;if(panel.hidden||selectionBar.hidden)return;
   const bar=selectionBar.getBoundingClientRect(),wrap=document.querySelector('.workspace-wrap').getBoundingClientRect();
+  // The panel never outgrows the workspace: with several sections open it scrolls inside (#23).
+  panel.style.maxHeight=`${Math.max(120,Math.floor(wrap.height-16))}px`;
   const w=panel.offsetWidth||360,h=panel.offsetHeight||240,gap=6,margin=8,entity=selectedEntityScreenRect();
   const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
   const anchorRight=Math.max(bar.right,entity?.right??bar.right),anchorLeft=Math.min(bar.left,entity?.left??bar.left);
@@ -293,6 +350,9 @@ function placeSelectionSettingsPanel(){
   panel.dataset.place=pick.place;panel.style.transform='none';
   panel.style.left=`${pick.left-bar.left}px`;panel.style.top=`${pick.top-bar.top}px`;
 }
+// Opening or closing a section changes the panel's height, so it is placed again (#22, #23). `toggle`
+// does not bubble; the capture listener on the panel still sees every section's.
+selectionSettingsPanel.addEventListener('toggle',()=>placeSelectionSettingsPanel(),true);
 function selectedSurfaceKind(){
   if(typeof selected==='string'&&selected.startsWith('wire:'))return 'wire';
   if(isAttachmentSelectionValue(selected))return 'port';
@@ -302,7 +362,7 @@ function showComponentBar(n){
   const cfg=componentConfig(n);
   selectionBar.hidden=false;
   componentBarFields.hidden=false;connectionBarFields.hidden=true;portBarFields.hidden=true;
-  barComponentType.value=n.symbolId;
+  syncComponentTypeOptions();barComponentType.value=n.symbolId;
   barComponentLabel.value=cfg.label;
   setSlotChip(barComponentColorSlot,cfg.colorSlot);
   syncSelectionFormState('component',n);
@@ -411,7 +471,7 @@ function portShownFlow(info){
 const PATH_END_FLOW_TITLE="A Path end's direction comes from its role: start receives, end emits";
 function portIsPathEnd(info){return Attachment.resolveSpec(info.owner,info.pointId||info.portId)?.role==='endpoint'}
 function portFlowText(flow){return [...barPortFlow.options].find(o=>o.value===flow)?.textContent||flow}
-function portDisplayName(info){return componentConfig(info.owner).label||byId(info.owner.symbolId).name}
+function portDisplayName(info){return componentConfig(info.owner).label||symbolOf(info.owner.symbolId).name}
 
 function restoreSelectedSurface(){
   if(typeof selected!=='string')return;

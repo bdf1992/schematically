@@ -52,15 +52,20 @@ function layoutPathCorners(d){
 function layoutMetrics(options={}){
   const staticView=options.static!==false; // an export or a screenshot freezes animation
   const findings=[],add=(kind,ids,detail)=>findings.push({kind,ids,detail});
-  const visible=nodes.filter(n=>!isEffectivelyHidden(n));
-  const body=new Map(visible.map(n=>[n.id,componentBounds(n)]));
+  // A group (SECTION-MODEL.md "Groups (reading only)") is drawn behind everything and is never an
+  // obstacle: it is left out of every check that measures a body (node-overlap, route-through-node,
+  // a text over a node, cramped labels, route wrapping). Its title is still text, and still counts
+  // in text-collision against other text. Its body is the region it is drawn as.
+  const shown=nodes.filter(n=>!isEffectivelyHidden(n));
+  const visible=shown.filter(n=>!isGroupComponent(n));
+  const body=new Map(shown.map(n=>[n.id,isGroupComponent(n)?SovSchematicData.groupRect(diagram,n.id,componentSize):componentBounds(n)]));
   const nodeEl=id=>nodesG.querySelector(`.node[data-id="${CSS.escape(id)}"]`);
   const ancestors=id=>{const out=new Set();let n=nodes.find(x=>x.id===id);while(n?.parentId){out.add(n.parentId);n=nodes.find(x=>x.id===n.parentId)}return out};
   const is2D=n=>componentForm(n).dimension===2;
 
   // Text: every visible label, in world space.
   const texts=[];
-  for(const el of workspace.querySelectorAll('#nodes text,#wires text')){
+  for(const el of workspace.querySelectorAll('#groupLayer text,#nodes text,#wires text')){
     if(!el.textContent.trim()||layoutEffectiveOpacity(el)<.1)continue;
     if(el.closest('.wire-packet'))continue; // motion, never structure; static exports drop it
     const box=layoutWorldBox(el);if(!box)continue;

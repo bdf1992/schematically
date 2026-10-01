@@ -153,6 +153,86 @@ is a real surface where those two points meet.
 functions of the Section and the placement. The connection rule, "both ends share an
 exposed surface", does not change.
 
+## Groups (reading only)
+
+Built 2026-10-01. Some regions on a drawing are there for the reader, not for the model:
+"these three are records, these two are surfaces". A Plane is the wrong tool for that. A
+Plane is a boundary, so every relation that leaves it has to be cut into segments through
+boundary Points. A group is a separate kind that collects Components without being a
+boundary.
+
+**The kind.** `symbolId: 'group'` is a 2D Component that collects other Components for
+reading. It is a primitive (no type caption, no legend entry) and is not in the palette:
+it is authored as data. Its preset is
+`{form: {dimension: 2}, attachmentDefaults: 'none', presentation: {graphic: {kind: 'none'}, size: {w: 320, h: 220}}}`.
+Its interior stays closed and it is not a surface: it hosts nothing, it has no ports, and
+no Wire ends on it.
+
+**Membership.** `config.members` is an array of distinct Component ids:
+
+```
+{"id": "records", "symbolId": "group", "canvasId": "canvas:global",
+ "config": {"label": "Records", "members": ["case", "recording", "anchor"]}}
+```
+
+A member stays where it is. It keeps its own canvas, its own ports and its own Wires. A
+Wire between members of different groups, or between a member and a card in no group, is
+one Wire on the canvas they share, joining the two cards directly. No boundary Point is
+involved, because there is no boundary to cross.
+
+**Rules.** The data core (`src/05-data-core.js`) checks them in one place,
+`groupFindings`. `validateDocument` reports each one at load as
+`component <id>: <CODE>: ...`. `create` and `update` refuse an edit that would add one,
+with an Error whose message starts with the code, and the document is left unchanged.
+
+| Code | When |
+| --- | --- |
+| `GROUP_MEMBER_UNKNOWN` | a member names no Component, or `config.members` is not an array |
+| `GROUP_MEMBER_CANVAS` | a member's `canvasId` differs from the group's |
+| `GROUP_MEMBER_HOSTED` | a member rides on a host: placement kind `edge`, `wire` or `path` |
+| `GROUP_MEMBER_GROUP` | a member is itself a group (groups do not nest) |
+| `GROUP_MEMBER_TWICE` | one Component is listed by two groups (or twice by one) |
+| `GROUP_PORTS` | a group carries `config.attachmentPoints`, or `attachmentDefaults: 'standard'` |
+| `GROUP_HOST` | a Component's `placement.hostId` is a group, or its `canvasId` is `canvas:component:<group id>` |
+
+Deleting a Component removes its id from every group's `members` in the same operation.
+
+**Geometry.** A group has no geometry of its own while it has members.
+`groupRect(doc, groupId, sizeOf)` is the union of the members' rectangles (each centred
+on its `x, y`, sized by `sizeOf(component)`), padded 24 on each side and 28 more on top
+for the title band. It is returned centred like a Component, `{x, y, w, h}`, with its
+edges `{l, r, t, b}`. A group with no members is its own `x, y` and `presentation.size`.
+
+**Drawing** (`src/55-render.js`). On each canvas, groups are drawn before every other
+node and every wire, so they sit behind them. On the global canvas they are in their own
+layer (`#groupLayer`) just before the wire layer; on a Component's interior they sit
+directly after the host, before the wires drawn there and the host's children. A group is
+`<g class="node group" data-id="<id>">` holding:
+
+- `<rect class="group-region">`: the `groupRect` above with the editor's
+  `componentSize`, corner radius `radius.card`, the structure stroke width in the muted ink
+  colour, and `pointer-events: none`. It is filled with the group's colour slot at 10
+  percent opacity when `config.colorSlot` names a slot other than 0. Slot 0 is the colour
+  every record is given, so it reads as unset and the region has no fill.
+- `<text class="group-title">`: `config.label` in the title text role, 12 in from the
+  left and inside the 28 title band. Its ink is the muted ink, darkened only as far as it
+  needs to reach 4.5:1 on the region, the same rule card text follows.
+
+Nothing in a group carries the class `body`. The region follows its members while they
+are dragged.
+
+**Never an obstacle.** Routing (`src/40-routing.js`) leaves groups out of the obstacles
+a route avoids. The layout metrics (`src/57-layout-metrics.js`) leave them out of
+`node-overlap`, `route-through-node`, the text-over-a-node check, cramped labels and route
+wrapping. The group title is still text, so it counts in `text-collision` against other
+text. The layered layout (`src/08-layout-core.js`) does not place groups as cards.
+
+The invariant from `CANVAS-MODEL.md` is unchanged: there is no implicit reach-through
+across a Component boundary. A group does not weaken it, because a group is not a
+boundary. Real containment still gets a Plane with boundary Points.
+
+Golden example: `examples/work-engine/groups.sov`. QA: `tests/group_region_qa.py`.
+
 ## Ends: how an open Section attaches
 
 The end of a 1-line carrier is a point. It binds as it does today:

@@ -695,7 +695,8 @@ const bound=()=>{const d=D.makeDocument({id:'b47'});mk(d,{id:'g',symbolId:'act',
   const src=fs.readFileSync(process.argv[4],'utf8'),start=src.indexOf("barComponentType.addEventListener('change',"),end=src.indexOf('\n});\n',start)+4;
   let handler=null;const statusEl={textContent:''},hints=[],captures=[];
   const barComponentType={value:'act',addEventListener:(ev,fn)=>{handler=fn}};
-  const ctx=vm.createContext({SovSchematicData:D,Attachment:A,diagram:d,nodes:d.components,selected:'g',barComponentType,statusEl,GROUPS:{Primitives:['point','path','plane'],Components:['blank','act','hold','buffer','gate','switch','limit','receipt','observe']},
+  const catalog=['point','path','plane','blank','act','hold','buffer','gate','switch','limit','receipt','observe'];
+  const ctx=vm.createContext({SovSchematicData:D,Attachment:A,diagram:d,nodes:d.components,selected:'g',barComponentType,statusEl,symbolCatalogEntry:id=>catalog.includes(id)?{id}:null,
     mutationBlocked:()=>false,setHistoryHint:h=>hints.push(h),componentForm:n=>D.clone(n.form),wiresOnBuiltinPoints:()=>[],formHostsChildren:()=>false,
     componentFallbackPlan:()=>[],componentHostPlanRefusal:()=>null,applyComponentHostPlan:()=>{}, // the hosting concern (30-canvas.js); nothing hosted here
     GLOBAL_CANVAS_ID:D.GLOBAL_CANVAS_ID,ensureComponentStructure:()=>{},routeCache:{clear(){}},arrowPoseCache:{clear(){}},render:()=>{},selectNode:()=>{},scheduleHistoryCapture:()=>captures.push(1)});

@@ -184,21 +184,8 @@
         <div class="selection-bar-fields" id="componentBarFields">
       <div class="icon-select component-template-select" aria-label="Component template">
         <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3"></rect><path d="M3 12h3M18 12h3M12 3v3M12 18v3"></path></svg></span>
-        <select id="barComponentType" class="bar-select bar-type" aria-label="Component template" title="Component template">
-        <optgroup label="Primitives">
-        <option value="point">Point</option>
-        <option value="path">Path</option>
-        <option value="plane">Plane</option>
-        </optgroup>
-        <option value="blank">Untyped</option>
-        <option value="act">Act</option>
-        <option value="hold">Hold</option>
-        <option value="buffer">Buffer</option>
-        <option value="gate">Gate</option>
-        <option value="switch">Switch</option>
-        <option value="limit">Limit</option>
-        <option value="receipt">Receipt</option>
-        </select>
+        <!-- Options come from the symbol catalog, the same list as the palette (20-ui.js syncComponentTypeOptions). -->
+        <select id="barComponentType" class="bar-select bar-type" aria-label="Component type" title="Component type · dimension comes with it"></select>
       </div>
       <input id="barComponentLabel" class="bar-input bar-label" type="text" placeholder="Label" aria-label="Component label" title="Component label">
       <button id="barComponentColorSlot" class="color-slot-chip" type="button" title="Boundary color" aria-label="Component boundary palette slot"></button>
@@ -254,14 +241,10 @@
       <div id="componentSettingsFields" class="settings-surface">
         <div class="settings-head"><b>Component settings</b><span>Form first · appearance second</span></div>
         <details class="form-settings" id="formSettings" open>
-          <summary><b>Form</b><span class="helper-snippet">dimension · interior · attachments · ports</span></summary>
+          <summary><b>Form</b><span class="helper-snippet">type · interior · attached</span></summary>
           <div class="settings-grid settings-grid-compact">
-            <label>Dimension
-              <select id="formDimension">
-                <option value="0">0D · Point</option>
-                <option value="1">1D · Path</option>
-                <option value="2">2D · Plane</option>
-              </select>
+            <label title="Dimension comes with the type; change the type in the selection bar">Dimension
+              <output id="formDimensionReadout" class="form-readout"></output>
             </label>
             <label data-dims="0" id="formPointPositionRow" hidden title="On a multi-line boundary a point sits on a line or across a band; that decides which side it reaches">Position
               <select id="formPointPosition" aria-label="Position on the host's section"></select>
@@ -283,19 +266,18 @@
                 <option value="open">Open · hosts Components</option>
               </select>
             </label>
-            <label data-dims="2">Attachments
-              <select id="formAttachments" title="The template's ports, or a custom port list">
-                <option value="standard">Template ports</option>
-                <option value="none">Custom ports</option>
-              </select>
-            </label>
           </div>
+          <!-- The Attached list (#21): every port with the Wires that end on it, then every Point hosted on the
+               boundary. Template ports are data; "Reset to template ports" is the one control over them. -->
           <div class="ports-settings" id="portsSettings" hidden>
-            <div class="ports-head"><b>Ports</b><span class="helper-snippet">side · position · flow · channels</span></div>
-            <div class="ports-list" id="portsList" role="list" aria-label="Ports"></div>
-            <button id="portsAddBtn" class="bar-action settings-action" type="button" title="Add a port on the right side">Add port</button>
+            <div class="ports-head"><b>Attached</b><span class="helper-snippet">ports · hosted Points · wires</span></div>
+            <div class="ports-list" id="portsList" role="list" aria-label="Attached"></div>
+            <div class="ports-actions">
+              <button id="portsAddBtn" class="bar-action settings-action" type="button" title="Add a port on the right side">Add port</button>
+              <button id="portsResetBtn" class="bar-action settings-action" type="button" title="Put the template's ports back">Reset to template ports</button>
+            </div>
           </div>
-          <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
+          <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. It comes with the type: every entry in the type list carries its dimension. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
         </details>
         <details class="form-settings" id="accessSettings">
           <summary><b>Access</b><span class="helper-snippet">principal · access list</span></summary>
@@ -313,9 +295,26 @@
             <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Access rules</summary><div>Checked where work or a level crosses this plane's boundary. Patterns: exact, prefix:*, or *. A deny always wins; no principal is refused.</div></details>
           </div>
         </details>
-        <details class="form-settings">
-          <summary><b>Appearance</b><span class="helper-snippet">graphic · size · material</span></summary>
-          <div class="settings-grid settings-grid-compact">
+        <!-- Appearance is tiered by how often a field is reached for (#23): the frequent three first,
+             size next, the Form's material and frame behind one disclosure, text and SVG behind another. -->
+        <details class="form-settings" id="appearanceSettings">
+          <summary><b>Appearance</b><span class="helper-snippet">label · graphic · signal · size</span></summary>
+          <div class="settings-grid settings-grid-three appearance-tier" id="appearanceFrequent">
+          <label>Label
+            <select id="visualLabelMode" title="Where the label is drawn">
+              <option value="boundary">Boundary</option>
+              <option value="inside">Inside</option>
+              <option value="outside">Outside</option>
+              <option value="none">Hidden</option>
+            </select>
+          </label>
+          <label data-dims="12">Graphic
+            <select id="visualGraphicMode" title="What is drawn inside the Component">
+              <option value="symbol">Symbol</option>
+              <option value="custom">Custom SVG</option>
+              <option value="none">None</option>
+            </select>
+          </label>
           <label>Signal
             <select id="barComponentSignalMode" aria-label="Component signal mode" title="Signal behavior">
               <option value="source">Source</option>
@@ -323,52 +322,49 @@
               <option value="passive">Passive</option>
             </select>
           </label>
-          <label data-dims="12">Graphic
-            <select id="visualGraphicMode">
-              <option value="symbol">Symbol</option>
-              <option value="custom">Custom SVG</option>
-              <option value="none">None</option>
-            </select>
-          </label>
-          <label>Label
-            <select id="visualLabelMode">
-              <option value="boundary">Boundary</option>
-              <option value="inside">Inside</option>
-              <option value="outside">Outside</option>
-              <option value="none">Hidden</option>
-            </select>
-          </label>
+          </div>
+          <div class="settings-grid settings-grid-three appearance-tier" id="appearanceGeometry" data-dims="12" title="Size follows the handles on the canvas; type a number to set it exactly">
           <label data-dims="12">Width <input id="visualWidth" type="number" min="80" step="8"></label>
           <label data-dims="2">Height <input id="visualHeight" type="number" min="64" step="8"></label>
           <label data-dims="2">Interior <button id="visualInteriorColor" class="color-slot-chip" type="button" aria-label="Interior palette slot"></button></label>
-          <label data-dims="2">Material
-            <select id="formMaterial">
-              <option value="generic">Generic</option>
-              <option value="canvas">Canvas</option>
-              <option value="paper">Paper</option>
-              <option value="panel">Panel</option>
-              <option value="wood">Wood</option>
-              <option value="metal">Metal</option>
-              <option value="glass">Glass</option>
-              <option value="custom">Custom</option>
-            </select>
-          </label>
-          <label>Thickness <input id="formBodyThickness" type="number" min="0" max="128" step="1" title="Point radius · Path stroke · Plane depth"></label>
-          <label data-dims="2">Frame
-            <select id="formFrameMode">
-              <option value="none">None</option>
-              <option value="frame">Frame</option>
-              <option value="shell">Shell</option>
-            </select>
-          </label>
-          <label data-dims="2">Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
-          <label data-dims="2">Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
-        </div>
-        <label class="settings-wide" data-dims="12">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
-        <label class="settings-wide" id="visualSvgRow">SVG · viewBox 0 0 96 64
-          <textarea id="visualSvgMarkup" spellcheck="false" placeholder="&lt;path d=&quot;...&quot;/&gt;"></textarea>
-        </label>
-        <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> SVG rules</summary><div>Custom SVG is sanitized and kept inside the Component boundary.</div></details>
+          </div>
+          <details class="mini-disclosure appearance-disclosure" id="appearanceFormTier">
+            <summary><span class="info-dot">+</span> Form appearance <span class="helper-snippet">material · thickness · frame</span></summary>
+            <div class="settings-grid settings-grid-compact appearance-tier">
+            <label data-dims="2">Material
+              <select id="formMaterial">
+                <option value="generic">Generic</option>
+                <option value="canvas">Canvas</option>
+                <option value="paper">Paper</option>
+                <option value="panel">Panel</option>
+                <option value="wood">Wood</option>
+                <option value="metal">Metal</option>
+                <option value="glass">Glass</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label>Thickness <input id="formBodyThickness" type="number" min="0" max="128" step="1" title="Point radius · Path stroke · Plane depth"></label>
+            <label data-dims="2">Frame
+              <select id="formFrameMode">
+                <option value="none">None</option>
+                <option value="frame">Frame</option>
+                <option value="shell">Shell</option>
+              </select>
+            </label>
+            <label data-dims="2">Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
+            <label data-dims="2">Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
+            </div>
+          </details>
+          <details class="mini-disclosure appearance-disclosure" id="appearanceAdvancedTier">
+            <summary><span class="info-dot">+</span> Advanced <span class="helper-snippet">text · SVG</span></summary>
+            <div class="appearance-tier">
+            <label class="settings-wide" data-dims="12">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
+            <label class="settings-wide" id="visualSvgRow">SVG · viewBox 0 0 96 64
+              <textarea id="visualSvgMarkup" spellcheck="false" placeholder="&lt;path d=&quot;...&quot;/&gt;"></textarea>
+            </label>
+            <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> SVG rules</summary><div>Custom SVG is sanitized and kept inside the Component boundary.</div></details>
+            </div>
+          </details>
         </details>
       </div>
 

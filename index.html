@@ -238,7 +238,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .type-note b{font-size:10px;letter-spacing:.06em}.type-note span,.micro-note{font-size:10px;color:var(--muted);line-height:1.4}
 .grammar-compact{padding-top:8px;padding-bottom:8px}.grammar-line{font-size:10px;color:var(--muted);line-height:1.35}.grammar-line b{color:var(--ink)}
 .help-stack{display:flex;flex-direction:column;gap:5px}.help-disclosure,.mini-disclosure,.inline-help{border:0;margin:0}.help-disclosure summary,.mini-disclosure summary,.inline-help summary{list-style:none;cursor:pointer}.help-disclosure summary::-webkit-details-marker,.mini-disclosure summary::-webkit-details-marker,.inline-help summary::-webkit-details-marker{display:none}
-.help-disclosure summary{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:7px;padding:5px 0;font-size:10px}.helper-snippet{color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.help-body{padding:3px 0 7px;font-size:9.5px;line-height:1.45;color:var(--muted)}.help-marks{word-spacing:4px}
+.help-disclosure summary{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:7px;padding:5px 0;font-size:10px}.helper-snippet{color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.help-body{padding:3px 0 7px;font-size:9.5px;line-height:1.45;color:var(--muted)}.help-marks{word-spacing:4px}
 .mini-disclosure{margin-top:6px;color:var(--muted);font-size:9px}.mini-disclosure summary,.inline-help summary{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:9px}.mini-disclosure>div,.inline-help>div{padding:5px 0 1px;line-height:1.4;color:var(--muted);font-size:9px}.inline-help{margin-top:7px}
 .syntax-row{display:flex;justify-content:space-between;gap:8px;padding:4px 0;font-size:10px}.syntax-row span:last-child{color:var(--muted);text-align:right}
 .kind-badge{display:inline-block;margin:0 0 10px;padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:9px;font-weight:800;letter-spacing:.1em}
@@ -300,15 +300,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .bar-settings[aria-expanded="true"]{background:var(--hover);border-color:#8a8a82}
 .selection-settings-panel{
   position:absolute;left:50%;top:calc(100% + 6px);transform:translateX(-50%);
-  z-index:34;width:360px;max-width:calc(100vw - 30px);padding:10px;
+  z-index:34;width:384px;max-width:calc(100vw - 30px);padding:10px;
   border:1px solid var(--line);border-radius:9px;background:var(--panel);
-  box-shadow:0 8px 22px rgba(0,0,0,.12);white-space:normal
+  box-shadow:0 8px 22px rgba(0,0,0,.12);white-space:normal;overflow-y:auto;overscroll-behavior:contain
 }
 .selection-settings-panel[hidden]{display:none}
 /* left/top/transform are set inline by placeSelectionSettingsPanel (20-ui.js) so the panel stays clear of the entity it edits (#22). */
 .settings-surface[hidden]{display:none}
 .form-settings{border:1px solid var(--line);border-radius:8px;background:var(--panel);margin:0 0 7px;overflow:hidden}
-.form-settings>summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;padding:7px 9px;background:var(--panel);font-size:10px}
+.form-settings>summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;padding:7px 9px;background:var(--panel);font-size:11px}
 .form-settings>summary::-webkit-details-marker{display:none}
 .form-settings>.settings-grid{padding:8px}
 .component-frame-inner{fill:none;stroke:var(--component-boundary-color);stroke-width:2;pointer-events:none;opacity:.9}
@@ -316,10 +316,30 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .settings-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:8px;font-size:10px}
 .settings-head span{font-size:9px;color:var(--muted);text-align:right}
 .settings-grid{display:grid;gap:7px 9px}
-.settings-grid-compact{grid-template-columns:1fr 1fr}
-.settings-surface label{display:flex;flex-direction:column;gap:3px;font-size:9px;color:var(--muted);letter-spacing:.03em}
-.settings-surface input,.settings-surface select,.settings-surface textarea{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font-size:10px;padding:5px;outline:none;min-height:29px}
+/* Columns never grow to a control's intrinsic width: a long option or a number input stays inside its column. */
+.settings-grid-compact{grid-template-columns:repeat(2,minmax(0,1fr))}
+.settings-grid-three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.settings-grid input,.settings-grid select,.settings-grid .form-readout{width:100%;min-width:0;box-sizing:border-box}
+/* Controls read at 12px or more (#23); their labels at 10px. */
+.settings-surface label{display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--muted);letter-spacing:.03em}
+/* A field the dimension does not have is hidden by attribute (20-ui.js); the flex display above must not override that. */
+.settings-surface label[hidden],.settings-surface [data-dims][hidden]{display:none}
+.settings-surface input,.settings-surface select,.settings-surface textarea{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font-size:12px;padding:5px;outline:none;min-height:30px}
+/* Appearance tiers (#23): the frequent row and the size row are open grids; the Form-appearance and
+   Advanced tiers are disclosures inside the section, closed until reached for. */
+.appearance-tier[hidden]{display:none}
+.form-settings>#appearanceGeometry{padding-top:0}
+.appearance-disclosure{margin:0;border-top:1px solid var(--line);color:var(--ink);font-size:11px}
+.appearance-disclosure>summary{display:flex;align-items:center;gap:7px;padding:7px 9px;color:var(--ink);font-size:11px;font-weight:600}
+.appearance-disclosure>summary .helper-snippet{font-weight:400;margin-left:auto}
+.appearance-disclosure[open]>summary .info-dot::before{content:'−'}
+.appearance-disclosure>summary .info-dot{font-size:0}
+.appearance-disclosure>summary .info-dot::before{content:'+';font-size:10px}
+.appearance-disclosure>.appearance-tier{padding:0 8px 8px}
+.appearance-disclosure>.appearance-tier .settings-wide:first-child{margin-top:0}
 .settings-surface textarea{height:72px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+/* A value the Form section only reads out (dimension comes with the type, #20): laid out like an input, not editable. */
+.settings-surface .form-readout{display:flex;align-items:center;min-height:30px;padding:5px;border:1px dashed var(--line);border-radius:6px;font-size:12px;color:var(--ink);cursor:default}
 .settings-wide{margin-top:7px}
 .settings-check{justify-content:flex-end;flex-direction:row!important;align-items:center;gap:6px!important}
 .settings-check input{min-height:0}
@@ -329,12 +349,18 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .ports-settings{padding:0 8px 8px}
 .ports-settings[hidden]{display:none}
 .ports-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline;font-size:10px;margin-bottom:4px}
-.ports-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:6px 0;border-top:1px solid var(--line)}
-.ports-row .port-channels{grid-column:span 2}
-.ports-row input[readonly],.ports-row :disabled{color:var(--muted);background:var(--hover)}
-.ports-row input,.ports-row select,.ports-row button{min-width:0}
-.ports-row .port-remove{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font-size:10px;cursor:pointer;min-height:29px}
-.ports-row .port-remove:hover:not(:disabled){background:var(--hover)}
+.ports-row,.hosted-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:6px 0;border-top:1px solid var(--line)}
+.ports-row .port-channels,.hosted-row .port-channels{grid-column:span 2}
+.ports-row input[readonly],.ports-row :disabled,.hosted-row input[readonly]{color:var(--muted);background:var(--hover)}
+.ports-row .port-id,.hosted-row .port-id{cursor:pointer}
+.ports-row input,.ports-row select,.ports-row button,.hosted-row input,.hosted-row button{min-width:0}
+.ports-row .port-remove,.hosted-row .port-select{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font-size:11px;cursor:pointer;min-height:30px}
+.ports-row .port-remove:hover:not(:disabled),.hosted-row .port-select:hover{background:var(--hover)}
+/* What ends on the point (#21): a read-out under the row's controls. */
+.port-attached{grid-column:1 / -1;font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hosted-row{background:color-mix(in srgb,var(--hover) 45%,transparent)}
+.ports-actions{display:flex;gap:6px;flex-wrap:wrap}
+.ports-actions .settings-action:disabled{opacity:.55;cursor:default}
 .color-slot-panel{z-index:36}
 
 /* Diegetic component transforms live on the selected object, not in the command bar. */
@@ -712,21 +738,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         <div class="selection-bar-fields" id="componentBarFields">
       <div class="icon-select component-template-select" aria-label="Component template">
         <span class="icon-select-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3"></rect><path d="M3 12h3M18 12h3M12 3v3M12 18v3"></path></svg></span>
-        <select id="barComponentType" class="bar-select bar-type" aria-label="Component template" title="Component template">
-        <optgroup label="Primitives">
-        <option value="point">Point</option>
-        <option value="path">Path</option>
-        <option value="plane">Plane</option>
-        </optgroup>
-        <option value="blank">Untyped</option>
-        <option value="act">Act</option>
-        <option value="hold">Hold</option>
-        <option value="buffer">Buffer</option>
-        <option value="gate">Gate</option>
-        <option value="switch">Switch</option>
-        <option value="limit">Limit</option>
-        <option value="receipt">Receipt</option>
-        </select>
+        <!-- Options come from the symbol catalog, the same list as the palette (20-ui.js syncComponentTypeOptions). -->
+        <select id="barComponentType" class="bar-select bar-type" aria-label="Component type" title="Component type · dimension comes with it"></select>
       </div>
       <input id="barComponentLabel" class="bar-input bar-label" type="text" placeholder="Label" aria-label="Component label" title="Component label">
       <button id="barComponentColorSlot" class="color-slot-chip" type="button" title="Boundary color" aria-label="Component boundary palette slot"></button>
@@ -782,14 +795,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       <div id="componentSettingsFields" class="settings-surface">
         <div class="settings-head"><b>Component settings</b><span>Form first · appearance second</span></div>
         <details class="form-settings" id="formSettings" open>
-          <summary><b>Form</b><span class="helper-snippet">dimension · interior · attachments · ports</span></summary>
+          <summary><b>Form</b><span class="helper-snippet">type · interior · attached</span></summary>
           <div class="settings-grid settings-grid-compact">
-            <label>Dimension
-              <select id="formDimension">
-                <option value="0">0D · Point</option>
-                <option value="1">1D · Path</option>
-                <option value="2">2D · Plane</option>
-              </select>
+            <label title="Dimension comes with the type; change the type in the selection bar">Dimension
+              <output id="formDimensionReadout" class="form-readout"></output>
             </label>
             <label data-dims="0" id="formPointPositionRow" hidden title="On a multi-line boundary a point sits on a line or across a band; that decides which side it reaches">Position
               <select id="formPointPosition" aria-label="Position on the host's section"></select>
@@ -811,19 +820,18 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
                 <option value="open">Open · hosts Components</option>
               </select>
             </label>
-            <label data-dims="2">Attachments
-              <select id="formAttachments" title="The template's ports, or a custom port list">
-                <option value="standard">Template ports</option>
-                <option value="none">Custom ports</option>
-              </select>
-            </label>
           </div>
+          <!-- The Attached list (#21): every port with the Wires that end on it, then every Point hosted on the
+               boundary. Template ports are data; "Reset to template ports" is the one control over them. -->
           <div class="ports-settings" id="portsSettings" hidden>
-            <div class="ports-head"><b>Ports</b><span class="helper-snippet">side · position · flow · channels</span></div>
-            <div class="ports-list" id="portsList" role="list" aria-label="Ports"></div>
-            <button id="portsAddBtn" class="bar-action settings-action" type="button" title="Add a port on the right side">Add port</button>
+            <div class="ports-head"><b>Attached</b><span class="helper-snippet">ports · hosted Points · wires</span></div>
+            <div class="ports-list" id="portsList" role="list" aria-label="Attached"></div>
+            <div class="ports-actions">
+              <button id="portsAddBtn" class="bar-action settings-action" type="button" title="Add a port on the right side">Add port</button>
+              <button id="portsResetBtn" class="bar-action settings-action" type="button" title="Put the template's ports back">Reset to template ports</button>
+            </div>
           </div>
-          <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
+          <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Form model</summary><div>Dimension is the topology: a Point attaches, a Path carries between its two ends, a Plane bounds a region. It comes with the type: every entry in the type list carries its dimension. Built-in boundary points are template defaults; drop a Point on any boundary to add an attachment there.</div></details>
         </details>
         <details class="form-settings" id="accessSettings">
           <summary><b>Access</b><span class="helper-snippet">principal · access list</span></summary>
@@ -841,9 +849,26 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
             <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> Access rules</summary><div>Checked where work or a level crosses this plane's boundary. Patterns: exact, prefix:*, or *. A deny always wins; no principal is refused.</div></details>
           </div>
         </details>
-        <details class="form-settings">
-          <summary><b>Appearance</b><span class="helper-snippet">graphic · size · material</span></summary>
-          <div class="settings-grid settings-grid-compact">
+        <!-- Appearance is tiered by how often a field is reached for (#23): the frequent three first,
+             size next, the Form's material and frame behind one disclosure, text and SVG behind another. -->
+        <details class="form-settings" id="appearanceSettings">
+          <summary><b>Appearance</b><span class="helper-snippet">label · graphic · signal · size</span></summary>
+          <div class="settings-grid settings-grid-three appearance-tier" id="appearanceFrequent">
+          <label>Label
+            <select id="visualLabelMode" title="Where the label is drawn">
+              <option value="boundary">Boundary</option>
+              <option value="inside">Inside</option>
+              <option value="outside">Outside</option>
+              <option value="none">Hidden</option>
+            </select>
+          </label>
+          <label data-dims="12">Graphic
+            <select id="visualGraphicMode" title="What is drawn inside the Component">
+              <option value="symbol">Symbol</option>
+              <option value="custom">Custom SVG</option>
+              <option value="none">None</option>
+            </select>
+          </label>
           <label>Signal
             <select id="barComponentSignalMode" aria-label="Component signal mode" title="Signal behavior">
               <option value="source">Source</option>
@@ -851,52 +876,49 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
               <option value="passive">Passive</option>
             </select>
           </label>
-          <label data-dims="12">Graphic
-            <select id="visualGraphicMode">
-              <option value="symbol">Symbol</option>
-              <option value="custom">Custom SVG</option>
-              <option value="none">None</option>
-            </select>
-          </label>
-          <label>Label
-            <select id="visualLabelMode">
-              <option value="boundary">Boundary</option>
-              <option value="inside">Inside</option>
-              <option value="outside">Outside</option>
-              <option value="none">Hidden</option>
-            </select>
-          </label>
+          </div>
+          <div class="settings-grid settings-grid-three appearance-tier" id="appearanceGeometry" data-dims="12" title="Size follows the handles on the canvas; type a number to set it exactly">
           <label data-dims="12">Width <input id="visualWidth" type="number" min="80" step="8"></label>
           <label data-dims="2">Height <input id="visualHeight" type="number" min="64" step="8"></label>
           <label data-dims="2">Interior <button id="visualInteriorColor" class="color-slot-chip" type="button" aria-label="Interior palette slot"></button></label>
-          <label data-dims="2">Material
-            <select id="formMaterial">
-              <option value="generic">Generic</option>
-              <option value="canvas">Canvas</option>
-              <option value="paper">Paper</option>
-              <option value="panel">Panel</option>
-              <option value="wood">Wood</option>
-              <option value="metal">Metal</option>
-              <option value="glass">Glass</option>
-              <option value="custom">Custom</option>
-            </select>
-          </label>
-          <label>Thickness <input id="formBodyThickness" type="number" min="0" max="128" step="1" title="Point radius · Path stroke · Plane depth"></label>
-          <label data-dims="2">Frame
-            <select id="formFrameMode">
-              <option value="none">None</option>
-              <option value="frame">Frame</option>
-              <option value="shell">Shell</option>
-            </select>
-          </label>
-          <label data-dims="2">Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
-          <label data-dims="2">Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
-        </div>
-        <label class="settings-wide" data-dims="12">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
-        <label class="settings-wide" id="visualSvgRow">SVG · viewBox 0 0 96 64
-          <textarea id="visualSvgMarkup" spellcheck="false" placeholder="&lt;path d=&quot;...&quot;/&gt;"></textarea>
-        </label>
-        <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> SVG rules</summary><div>Custom SVG is sanitized and kept inside the Component boundary.</div></details>
+          </div>
+          <details class="mini-disclosure appearance-disclosure" id="appearanceFormTier">
+            <summary><span class="info-dot">+</span> Form appearance <span class="helper-snippet">material · thickness · frame</span></summary>
+            <div class="settings-grid settings-grid-compact appearance-tier">
+            <label data-dims="2">Material
+              <select id="formMaterial">
+                <option value="generic">Generic</option>
+                <option value="canvas">Canvas</option>
+                <option value="paper">Paper</option>
+                <option value="panel">Panel</option>
+                <option value="wood">Wood</option>
+                <option value="metal">Metal</option>
+                <option value="glass">Glass</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label>Thickness <input id="formBodyThickness" type="number" min="0" max="128" step="1" title="Point radius · Path stroke · Plane depth"></label>
+            <label data-dims="2">Frame
+              <select id="formFrameMode">
+                <option value="none">None</option>
+                <option value="frame">Frame</option>
+                <option value="shell">Shell</option>
+              </select>
+            </label>
+            <label data-dims="2">Frame thickness <input id="formFrameThickness" type="number" min="0" max="64" step="1"></label>
+            <label data-dims="2">Frame depth <input id="formFrameDepth" type="number" min="0" max="128" step="1"></label>
+            </div>
+          </details>
+          <details class="mini-disclosure appearance-disclosure" id="appearanceAdvancedTier">
+            <summary><span class="info-dot">+</span> Advanced <span class="helper-snippet">text · SVG</span></summary>
+            <div class="appearance-tier">
+            <label class="settings-wide" data-dims="12">Text <input id="visualText" type="text" maxlength="48" placeholder="Optional internal text"></label>
+            <label class="settings-wide" id="visualSvgRow">SVG · viewBox 0 0 96 64
+              <textarea id="visualSvgMarkup" spellcheck="false" placeholder="&lt;path d=&quot;...&quot;/&gt;"></textarea>
+            </label>
+            <details class="mini-disclosure settings-note"><summary><span class="info-dot">i</span> SVG rules</summary><div>Custom SVG is sanitized and kept inside the Component boundary.</div></details>
+            </div>
+          </details>
         </details>
       </div>
 
@@ -1311,6 +1333,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   function registerPoints(notation){for(const [id,g] of Object.entries(notation?.glyphs||{}))if(g.points==='terminals')TERMINAL_POINTS.set(id,terminalAttachmentPoints(g))}
   function pointsFor(symbolId){const p=TERMINAL_POINTS.get(symbolId);return p?p.map(x=>({...x})):null}
+  // The built-in notations register their terminal glyphs at load, so a bare gate exposes its
+  // terminals before any document has resolved a notation, whatever the load order (issue #54).
+  for(const n of Object.values(BUILTIN))registerPoints(n);
   function tokens(docOrId){const r=resolve(docOrId);return (r.ok?r.notation:SCHEMATIC).tokens}
   // Corner radius of the rectangle at `inset` inside a card whose bands sum to `total`.
   // Concentric by construction; capped at a quarter of the rectangle's shorter side.
@@ -1494,11 +1519,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   function templatePointSpecs(entity){
     if(attachmentDefaults(entity)==='none')return [];
-    // A glyph that declares its terminals as points (NOTATION-MODEL.md §2) gives the card one
-    // point per terminal: a two-input gate has two inputs.
-    // A terminal is shaped like a declared template port: its flow is its default flow, on `main`.
-    const glyphPoints=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation?.pointsFor?.(entity?.symbolId)?.map(p=>({...p,flow:p.defaultFlow,channels:[{id:'main'}]}));
-    if(glyphPoints)return glyphPoints.map(p=>({...p,role:'boundary'}));
+    // The template's ports come from the one lookup the data core registers (`templatePorts`): the
+    // typed Component trio, or, for a glyph that declares its terminals as points (NOTATION-MODEL.md
+    // §2), one declared port per terminal, so a two-input gate has two inputs (issue #54).
     const declared=templatePortsOf(entity?.symbolId,entity);
     return (Array.isArray(declared)?declared:[]).map(raw=>declaredSpec(raw)).filter(Boolean);
   }
@@ -1652,7 +1675,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
     // component record is the static 1D role (a rail that hosts Points).
     path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},size:{w:240,h:64}}},
-    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}}
+    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}},
+    // A group collects Components for reading (SECTION-MODEL.md "Groups (reading only)"). It is
+    // not a boundary: its interior stays closed, it hosts nothing, and it has no ports.
+    group:{form:{dimension:2},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}}
   };
   // Declared ports: `{id, compatId?, side: left|right|top|bottom, t: 0..1,
   // flow: in|out|control|duplex|trigger, channels: [{id}], label?}`. The typed Component
@@ -1661,8 +1687,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // Component template's ports, as it always has).
   const declaredPort=(id,compatId,side,flow)=>({id,compatId,side,t:.5,flow,channels:[{id:'main'}]});
   const COMPONENT_TEMPLATE={ports:[declaredPort('left','in','left','in'),declaredPort('right','out','right','out'),declaredPort('top','control','top','control')]};
+  // A glyph that declares its terminals as points (a logic gate, NOTATION-MODEL.md §2) has those
+  // terminals as its template ports, shaped like declared ports (issue #54): the same registry the
+  // attachment core reads, so an edit's smallest form and a reset compare against the ports the
+  // card actually exposes.
   function templatePorts(symbolId){
-    const preset=TEMPLATE_PRESETS[normalizeSymbolId(symbolId)];
+    const id=normalizeSymbolId(symbolId);
+    const terminals=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation?.pointsFor?.(id);
+    if(terminals)return terminals.map(p=>({id:p.id,compatId:p.compatId,side:p.side,t:p.t,flow:p.defaultFlow,channels:[{id:'main'}]}));
+    const preset=TEMPLATE_PRESETS[id];
     return clone(Array.isArray(preset?.ports)?preset.ports:COMPONENT_TEMPLATE.ports);
   }
   // Loading a file applies the same preset rule as makeComponent: a preset field fills in
@@ -1680,6 +1713,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   function normalizeSymbolId(value){const id=String(value||'blank')||'blank';return LEGACY_SYMBOL_IDS[id]||id}
   function templatePreset(symbolId){return clone(TEMPLATE_PRESETS[normalizeSymbolId(symbolId)]||null)}
+  function symbolIds(){return Object.keys(TEMPLATE_PRESETS)}
   function isPrimitiveSymbol(symbolId){return Object.prototype.hasOwnProperty.call(TEMPLATE_PRESETS,normalizeSymbolId(symbolId))}
   // A label mode is read, never written by a preset: an authored mode is used as written;
   // otherwise a label under a 0D or 1D form sits outside it, under a 2D form on its
@@ -2011,6 +2045,80 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!isObject(config)||config.delay===undefined||(clearable&&config.delay===null))return;
     if(!(Number.isInteger(config.delay)&&config.delay>=1))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
   }
+  // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
+  // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
+  // ports, and a Wire between members of different groups is one Wire on their shared canvas.
+  // `config.members` holds distinct Component ids. The rules, one finding each:
+  //   GROUP_MEMBER_UNKNOWN  a member names no Component (or is not a Component id)
+  //   GROUP_MEMBER_CANVAS   a member's canvasId differs from the group's
+  //   GROUP_MEMBER_HOSTED   a member rides on a host (placement kind edge, wire or path)
+  //   GROUP_MEMBER_GROUP    a member is a group
+  //   GROUP_MEMBER_TWICE    a Component listed twice (by two groups, or twice by one)
+  //   GROUP_PORTS           a group carries config.attachmentPoints or attachmentDefaults 'standard'
+  //   GROUP_HOST            a Component placed on a group (placement.hostId) or in its interior
+  // Loading reports them (validateDocument); create and update refuse an edit that adds one.
+  const GROUP_PAD=24,GROUP_TITLE_BAND=28;
+  function isGroup(component){return !!component&&normalizeSymbolId(component.symbolId||component.type)==='group'}
+  function groupMembers(component){const m=component?.config?.members;return Array.isArray(m)?m:[]}
+  function groupFindings(doc){
+    const components=Array.isArray(doc?.components)?doc.components:[],out=[];
+    const byId=new Map(components.filter(c=>c&&c.id!=null).map(c=>[c.id,c]));
+    const add=(code,id,text)=>out.push({code,id,text});
+    const listedBy=new Map();
+    for(const g of components){
+      if(!isGroup(g))continue;
+      const raw=g.config?.members;
+      if(raw!==undefined&&!Array.isArray(raw))add('GROUP_MEMBER_UNKNOWN',g.id,`group ${g.id} config.members must be an array of Component ids`);
+      for(const member of groupMembers(g)){
+        if(typeof member!=='string'||!byId.has(member)){add('GROUP_MEMBER_UNKNOWN',g.id,`group ${g.id} lists ${JSON.stringify(member)}, which is not a Component`);continue}
+        const m=byId.get(member);
+        if(listedBy.has(member))add('GROUP_MEMBER_TWICE',g.id,`group ${g.id} lists ${member}, already listed by group ${listedBy.get(member)}`);else listedBy.set(member,g.id);
+        if(isGroup(m)){add('GROUP_MEMBER_GROUP',g.id,`group ${g.id} lists ${member}, which is a group`);continue}
+        const kind=m.placement?.kind;
+        if(['edge','wire','path'].includes(kind)||String(m.canvasId||'').startsWith('canvas:wire:')){add('GROUP_MEMBER_HOSTED',g.id,`group ${g.id} lists ${member}, which rides on a host (placement ${kind||'wire'})`);continue}
+        if(containingCanvasId(m)!==containingCanvasId(g))add('GROUP_MEMBER_CANVAS',g.id,`group ${g.id} is on ${containingCanvasId(g)} and lists ${member}, which is on ${containingCanvasId(m)}`);
+      }
+      const cfg=g.config||{};
+      if(Array.isArray(cfg.attachmentPoints)||cfg.attachmentDefaults==='standard')add('GROUP_PORTS',g.id,`group ${g.id} has no ports: it carries ${Array.isArray(cfg.attachmentPoints)?'config.attachmentPoints':"attachmentDefaults 'standard'"}`);
+    }
+    for(const c of components){
+      if(!c)continue;
+      const host=c.placement?.hostId!=null?byId.get(c.placement.hostId):null;
+      const interior=String(c.canvasId||'').startsWith('canvas:component:')?byId.get(String(c.canvasId).slice('canvas:component:'.length)):null;
+      const g=isGroup(host)?host:isGroup(interior)?interior:null;
+      if(g)add('GROUP_HOST',c.id,`component ${c.id} is placed on group ${g.id}; a group hosts nothing`);
+    }
+    return out;
+  }
+  const groupFindingKey=f=>`${f.code}|${f.id}|${f.text}`;
+  // An edit may not add a group finding: the first one the trial document has and the current
+  // document does not is thrown, with its code first, before anything is written.
+  function assertGroupRules(doc,trialComponents){
+    const before=new Set(groupFindings(doc).map(groupFindingKey));
+    const added=groupFindings({...doc,components:trialComponents}).find(f=>!before.has(groupFindingKey(f)));
+    if(added)throw new Error(`${added.code}: ${added.text}`);
+  }
+  // The region a group is drawn as: the union of its members' rectangles (each centred on its
+  // x, y and sized by sizeOf(component)) padded GROUP_PAD on every side and GROUP_TITLE_BAND more
+  // on top for the title. A group with no placed member is its own x, y and presentation.size.
+  // Returned centred, like a Component: {x, y, w, h} plus its edges {l, r, t, b}.
+  function groupRect(doc,groupId,sizeOf){
+    const components=Array.isArray(doc?.components)?doc.components:[];
+    const g=components.find(c=>c?.id===groupId);if(!g)return null;
+    const size=typeof sizeOf==='function'?sizeOf:(c=>normalizePresentationSize(c?.config?.presentation?.size));
+    let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
+    for(const id of groupMembers(g)){
+      const m=components.find(c=>c?.id===id);if(!m||isGroup(m)||!Number.isFinite(Number(m.x))||!Number.isFinite(Number(m.y)))continue;
+      const s=size(m),x=Number(m.x),y=Number(m.y);
+      l=Math.min(l,x-s.w/2);r=Math.max(r,x+s.w/2);t=Math.min(t,y-s.h/2);b=Math.max(b,y+s.h/2);
+    }
+    if(!Number.isFinite(l)){
+      const s=normalizePresentationSize(g.config?.presentation?.size||TEMPLATE_PRESETS.group.presentation.size),x=num(g.x,0),y=num(g.y,0);
+      return {x,y,w:s.w,h:s.h,l:x-s.w/2,r:x+s.w/2,t:y-s.h/2,b:y+s.h/2};
+    }
+    l-=GROUP_PAD;r+=GROUP_PAD;t-=GROUP_PAD+GROUP_TITLE_BAND;b+=GROUP_PAD;
+    return {x:(l+r)/2,y:(t+b)/2,w:r-l,h:b-t,l,r,t,b};
+  }
   // `config.definition` is null (unbound) or an `id@version` string, anywhere it is written
   // (DEFINITION_INVALID). Only the binding path (`applyBinding`) sets it to a non-null value: a
   // plain component update or create may clear it or leave it alone (DEFINITION_BIND_REQUIRED).
@@ -2334,6 +2442,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // A bound definition (`id@version`) is kept only on a copy, so a pasted or duplicated bound Component stays bound.
     if(copy)assertDefinitionValue(value.config?.definition);else assertDefinitionPatch(value,false);
     if(value.config?.definition!==undefined)config.definition=clone(value.config.definition);
+    // A group's members, as written; create checks them (assertGroupRules).
+    if(value.config?.members!==undefined)config.members=clone(value.config.members);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -2597,6 +2707,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(resource==='wire'){assertCarrierEndpointAccepts(doc,value?.a);assertCarrierEndpointAccepts(doc,value?.b)}
     const record=resource==='component'?makeComponent(doc,value):resource==='wire'?makeWire(doc,value):makeReference(doc,value);
     if(arr.some(x=>x.id===record.id))throw new Error(`${resource} id already exists: ${record.id}`);
+    if(resource==='component')assertGroupRules(doc,[...doc.components,record]);
     arr.push(record);return clone(record);
   }
   // `binding` is the binding path only (`applyBinding`): the one update that may set a non-null
@@ -2629,6 +2740,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(!binding)assertDefinitionPortsKept(current,patch,candidate);
       assertWiresSurviveEdit(doc,current,candidate);
       normalizeComponentSize(candidate);
+      assertGroupRules(doc,doc.components.map((c,i)=>i===index?candidate:c));
     }else if(resource==='wire'){
       if(isObject(patch?.config))assertPathDelay(patch.config,true);
       if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
@@ -2671,6 +2783,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       for(const child of fallsBack){const trial=clone(child);trial.canvasId=containing;trial.placement={kind:'surface',x:child.x,y:child.y};assertDefinitionPortsKept(child,{placement:trial.placement},trial)}
       for(const child of fallsBack){child.canvasId=containing;child.parentId=removed.parentId??null;child.placement={kind:'surface',x:child.x,y:child.y};}
       for(let i=doc.wires.length-1;i>=0;i--)if(doc.wires[i].a===id||doc.wires[i].b===id)remove(doc,'wire',doc.wires[i].id);
+      // A deleted Component leaves every group that listed it, in the same operation.
+      for(const g of doc.components)if(isGroup(g)&&Array.isArray(g.config?.members)&&g.config.members.includes(id))g.config.members=g.config.members.filter(m=>m!==id);
     }else if(resource==='wire'){
       const hostedCanvas=`canvas:wire:${id}`;
       for(const component of doc.components)if(component.canvasId===hostedCanvas){component.canvasId=GLOBAL_CANVAS_ID;component.parentId=null;component.placement={kind:'surface',x:component.x,y:component.y};}
@@ -2704,6 +2818,73 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(mutates)touch(doc);
       return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:value,error:null};
     }catch(error){return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:false,revisionBefore:before,revisionAfter:doc.revision,result:null,error:{message:String(error.message||error)}}}
+  }
+  // A batch is many writes taken as one: every operation applies in order or none does, the
+  // document moves one revision, and one receipt answers it. A create may omit its id (the core
+  // assigns one) and name itself with `ref: "$name"`; any later string equal to "$name" in that
+  // batch (a wire's a or b, a parentId, a placement's hostId) is that created id, and
+  // "canvas:component:$name" is its interior surface. A refused operation leaves the document
+  // exactly as it was and the receipt names its index. Reads are not batched.
+  const BATCH_OPS=['create','update','delete'];
+  function resolveRefs(value,refs){
+    if(typeof value==='string'){
+      if(Object.prototype.hasOwnProperty.call(refs,value))return refs[value];
+      // A surface is named after its owner: canvas:component:$plane is the created plane's surface.
+      const surface=value.match(/^(canvas:(?:component|wire):)(\$.+)$/);
+      return surface&&Object.prototype.hasOwnProperty.call(refs,surface[2])?surface[1]+refs[surface[2]]:value;
+    }
+    if(Array.isArray(value))return value.map(v=>resolveRefs(v,refs));
+    if(isObject(value)){const out={};for(const [k,v] of Object.entries(value))out[k]=resolveRefs(v,refs);return out}
+    return value;
+  }
+  function applyBatch(document,batch={}){
+    const id=batch.id||`batch-${Date.now()}`,operations=Array.isArray(batch.operations)?batch.operations:null;
+    const rawRevision=Math.max(0,Math.trunc(num(document?.revision,0)));
+    const refuse=(message,index=null,revision=rawRevision)=>({schema:RECEIPT_SCHEMA,operationId:id,ok:false,revisionBefore:rawRevision,revisionAfter:revision,result:null,error:{index,message}});
+    if(!operations||!operations.length)return refuse('a batch needs a non-empty operations array');
+    if(typeof batch.ifRevision==='number'&&batch.ifRevision!==rawRevision)return refuse(`Stale revision: expected ${batch.ifRevision}, document is at ${rawRevision}`);
+    const doc=normalizeDocument(document),before=doc.revision,snapshot=clone(doc);
+    const refs={},applied=[],errorsBefore=new Set(validateDocument(doc).errors);
+    const restore=()=>replaceDocument(doc,snapshot);
+    for(const [index,raw] of operations.entries()){
+      const op=raw?.op,resource=raw?.resource;
+      try{
+        if(!BATCH_OPS.includes(op))throw new Error(`op must be one of ${BATCH_OPS.join(', ')}`);
+        if(!RESOURCE_KEYS[resource])throw new Error(`resource must be one of ${Object.keys(RESOURCE_KEYS).join(', ')}`);
+        const ref=raw.ref==null?null:String(raw.ref);
+        if(ref!==null&&(!ref.startsWith('$')||ref.length<2))throw new Error('a ref starts with $ and names something');
+        if(ref!==null&&refs[ref]!==undefined)throw new Error(`ref ${ref} is already used in this batch`);
+        let value;
+        if(op==='create'){
+          value=create(doc,resource,resolveRefs(clone(raw.value||{}),refs));
+          if(ref!==null)refs[ref]=value.id;
+        }else{
+          const target=resolveRefs(raw.id,refs);if(typeof target!=='string'||!target)throw new Error(`${op} needs the id of a ${resource}`);
+          if(op==='update')value=update(doc,resource,target,resolveRefs(clone(raw.patch||{}),refs));
+          else{value=remove(doc,resource,target);if(value===null)throw new Error(`${resource} not found: ${target}`)}
+        }
+        applied.push({index,op,resource,id:value.id,...(ref!==null?{ref}:{})});
+      }catch(error){restore();return refuse(String(error.message||error),index,before)}
+    }
+    // The batch may not leave the document less legal than it found it.
+    const introduced=validateDocument(doc).errors.filter(message=>!errorsBefore.has(message));
+    if(introduced.length){restore();return refuse(`the batch leaves the document invalid: ${introduced.join('; ')}`,null,before)}
+    touch(doc);
+    return {schema:RECEIPT_SCHEMA,operationId:id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:{ids:refs,applied},error:null};
+  }
+  // A slice of the document small enough to read: the named items, or every component whose
+  // position falls in an area, plus the wires among them, in the stored (compact) form.
+  function readScope(document,scope={}){
+    const doc=normalizeDocument(clone(document)),ids=Array.isArray(scope.ids)?new Set(scope.ids.map(String)):null,area=isObject(scope.area)?scope.area:null;
+    if(!ids&&!area)return {ok:false,error:{message:'read needs ids or an area {x, y, width, height}'}};
+    const inArea=c=>area&&num(c.x,NaN)>=num(area.x,0)&&num(c.x,NaN)<=num(area.x,0)+num(area.width,0)&&num(c.y,NaN)>=num(area.y,0)&&num(c.y,NaN)<=num(area.y,0)+num(area.height,0);
+    const picked=new Set(doc.components.filter(c=>(ids&&ids.has(c.id))||inArea(c)).map(c=>c.id));
+    // A component brings what sits on its interior, so a plane is read with its points.
+    let grew=true;while(grew){grew=false;for(const c of doc.components)if(!picked.has(c.id)&&[...picked].some(p=>c.canvasId===`canvas:component:${p}`)){picked.add(c.id);grew=true}}
+    const wires=doc.wires.filter(w=>(ids&&ids.has(w.id))||(picked.has(w.a)&&picked.has(w.b)));
+    const references=ids?doc.references.filter(r=>ids.has(r.id)):[];
+    const edge=doc.wires.filter(w=>!wires.includes(w)&&(picked.has(w.a)!==picked.has(w.b))).map(w=>({id:w.id,a:w.a,b:w.b}));
+    return {ok:true,revision:doc.revision,components:doc.components.filter(c=>picked.has(c.id)).map(compactComponent),wires:wires.map(compactWire),references,crossing:edge};
   }
   // The binding path (`applyBind` in the state space calls it): applies a binding patch,
   // `{config:{definition, attachmentDefaults:'none', attachmentPoints}}`, to a 2D Component with the
@@ -2758,6 +2939,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const ws=wire.form?.section;if(ws&&Array.isArray(ws.lines)&&Array.isArray(ws.bands)&&ws.bands.length!==ws.lines.length-1)errors.push(`wire ${wire.id||'?'} section: bands must be one fewer than lines (${ws.lines.length} lines, ${ws.bands.length} bands)`);
       for(const key of ['forwardOperation','reverseOperation'])if(wire.config?.[key]!=null&&!['none','read','write'].includes(wire.config[key]))errors.push(`wire ${wire.id||'?'} invalid ${key}: ${wire.config[key]}`);
     }
+    // Groups: reported, never repaired (the codes are listed at groupFindings).
+    for(const f of groupFindings(input))errors.push(`component ${f.id??'?'}: ${f.code}: ${f.text}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -2797,7 +2980,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
 /* END src/05-data-core.js */
 </script>
@@ -4943,6 +5126,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 
   // ---- Geometry -----------------------------------------------------------------------------
   function hosted(c){const k=c?.placement?.kind;return k==='edge'||k==='wire'||k==='path'}
+  // A group (SECTION-MODEL.md "Groups (reading only)") holds Components for reading; it is never an obstacle.
+  function grouping(c){return Data.normalizeSymbolId(c?.symbolId||c?.type)==='group'}
   function size(c){
     if(Number(c?.form?.dimension)===0)return {w:POINT,h:POINT};
     const s=c?.config?.presentation?.size;
@@ -5057,7 +5242,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(scope&&!doc.components.some(c=>c.id===scope))return refusal('UNKNOWN_NODE',`No component ${scope}`);
     const byId=new Map(doc.components.map(c=>[c.id,c])),frozen=[];
     const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,resolvedNotation=N?N.resolve(doc):null,notation=resolvedNotation?.ok?resolvedNotation.notation:null;
-    const inScope=canvas=>doc.components.filter(c=>!hosted(c)&&(c.canvasId||Data.GLOBAL_CANVAS_ID)===canvas);
+    // A group is drawn around its members wherever they land, so it is not a card to place.
+    const inScope=canvas=>doc.components.filter(c=>!hosted(c)&&!grouping(c)&&(c.canvasId||Data.GLOBAL_CANVAS_ID)===canvas);
     const isContainer=c=>c.form?.regions?.interior?.state==='open'&&Number(c.form?.dimension??2)===2;
     // A container drawing its own symbol keeps it clear of its children; a section's skin counts too.
     const topRoom=c=>{const g=c?.config?.presentation?.graphic?.kind;const s=Data.componentSection?Data.componentSection(c):null;
@@ -5214,7 +5400,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         const oid=other(w,p.id),o=byId.get(oid),O=box(oid);
         if(!O||o.canvasId!==host.canvasId||wiresOf(oid).length!==1||o.editor?.pinned||o.editor?.locked||frozen.includes(oid))continue;
         const next=vertical?{...O,y:at}:{...O,x:at};
-        const clash=doc.components.some(k=>k.id!==oid&&!hosted(k)&&k.canvasId===o.canvasId&&(()=>{const K=box(k.id);return K&&Math.abs(K.x-next.x)<(K.w+next.w)/2+8&&Math.abs(K.y-next.y)<(K.h+next.h)/2+8})());
+        const clash=doc.components.some(k=>k.id!==oid&&!hosted(k)&&!grouping(k)&&k.canvasId===o.canvasId&&(()=>{const K=box(k.id);return K&&Math.abs(K.x-next.x)<(K.w+next.w)/2+8&&Math.abs(K.y-next.y)<(K.h+next.h)/2+8})());
         if(!clash)shift(doc,viewId,oid,next.x-O.x,next.y-O.y);
       }
     }
@@ -5345,12 +5531,16 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 'use strict';
 // 0.1 Beta concern: Runtime state, DOM handles, palette/color kernel.
 
-const SYMBOLS = [{"id":"blank","name":"BLANK","family":"UNSET","role":"incomplete","meaning":"Incomplete component. Choose its type.","verbs":[],"properties":["incomplete","type-required"],"diagram_class":"COMPONENT"},{"id":"ground","name":"GROUND","family":"PASSIVE","role":"reference","meaning":"Reference point used to resolve meaning, state, or authority.","verbs":["resolve","reference"],"properties":["non-authoritative-by-itself"],"diagram_class":"REFERENCE"},{"id":"point","name":"POINT","family":"PRIMITIVE","role":"attachment","meaning":"0D attachment. Sticks to a Path, a Plane boundary, or a Wire; Wires end on Points.","verbs":["attach","enter","exit"],"properties":["addressable","0d"],"diagram_class":"BOUNDARY"},{"id":"port","name":"PORT","family":"PASSIVE","role":"boundary","meaning":"Legacy alias of POINT. Documents normalize it to point.","verbs":["enter","exit"],"properties":["addressable","legacy-alias"],"diagram_class":"BOUNDARY"},{"id":"path","name":"PATH","family":"PRIMITIVE","role":"carrier","meaning":"1D route with start and end. Hosts Points along its length. It does not imply permission or success.","verbs":["carry"],"properties":["direction-neutral","1d"],"diagram_class":"CONNECTION"},{"id":"plane","name":"PLANE","family":"PRIMITIVE","role":"surface","meaning":"Bounded 2D region. Hosts Points on its boundary and Components in its interior. A typed Plane is a Component.","verbs":["host","bound"],"properties":["bounded","hosts","2d"],"diagram_class":"SURFACE"},{"id":"join","name":"JOIN","family":"MECHANICAL","role":"connection","meaning":"Paths are connected.","verbs":["join"],"properties":["connected"],"diagram_class":"CONNECTION"},{"id":"cross","name":"CROSS","family":"PASSIVE","role":"connection","meaning":"Paths cross but do not connect.","verbs":["cross"],"properties":["not-connected"],"diagram_class":"CONNECTION"},{"id":"hold","name":"HOLD","family":"PASSIVE","role":"state","meaning":"Keeps bounded state.","verbs":["hold","store"],"properties":["stateful"],"diagram_class":"STATE"},{"id":"buffer","name":"BUFFER","family":"PASSIVE","role":"state","meaning":"Holds flow temporarily, then releases it.","verbs":["buffer","release"],"properties":["temporary-state"],"diagram_class":"STATE"},{"id":"act","name":"ACT","family":"ACTIVE","role":"transform","meaning":"Transforms input into output. Activity does not grant authority.","verbs":["act","transform"],"properties":["agentic","authority-neutral"],"diagram_class":"TRANSFORM"},{"id":"gate","name":"GATE","family":"MECHANICAL","role":"control","meaning":"Passes or refuses flow using a declared condition.","verbs":["check","pass","refuse"],"properties":["conditional","authority-neutral"],"diagram_class":"CONTROL"},{"id":"switch","name":"SWITCH","family":"MECHANICAL","role":"control","meaning":"Opens or closes a path from explicit control.","verbs":["open","close"],"properties":["externally-controlled"],"diagram_class":"CONTROL"},{"id":"limit","name":"LIMIT","family":"PASSIVE","role":"constraint","meaning":"Restricts a flow dimension without judgement.","verbs":["limit"],"properties":["non-judgemental"],"diagram_class":"CONTROL"},{"id":"one-way","name":"ONE-WAY","family":"PASSIVE","role":"direction","meaning":"Allows flow in one direction.","verbs":["pass"],"properties":["directional","non-reciprocal"],"diagram_class":"CONNECTION"},{"id":"return","name":"RETURN","family":"PASSIVE","role":"reciprocity","meaning":"Requires a matching return path.","verbs":["return"],"properties":["reciprocal"],"diagram_class":"CONNECTION"},{"id":"observe","name":"OBSERVE","family":"PASSIVE","role":"evidence","meaning":"Reads evidence from outside the action path.","verbs":["observe"],"properties":["independent-read"],"diagram_class":"EVIDENCE"},{"id":"receipt","name":"RECEIPT","family":"PASSIVE","role":"evidence","meaning":"Durable evidence emitted by a crossing or action.","verbs":["record","return"],"properties":["durable","evidentiary"],"diagram_class":"EVIDENCE"},{"id":"authority","name":"AUTHORITY","family":"PASSIVE","role":"control-reference","meaning":"Typed, scoped permission supplied as a control input.","verbs":["grant","scope"],"properties":["typed","scoped"],"diagram_class":"REFERENCE"},{"id":"refuse","name":"REFUSE","family":"MECHANICAL","role":"termination","meaning":"Ends an attempted path explicitly.","verbs":["refuse","stop"],"properties":["explicit-terminal"],"diagram_class":"TERMINATION"},{"id":"clock","name":"CLOCK","family":"ACTIVE","role":"timing","meaning":"Drives time: its level rises and falls on a declared period. An edge may start work.","verbs":["tick","schedule"],"properties":["asserted","periodic"],"diagram_class":"TIMING"},{"id":"lever","name":"LEVER","family":"MECHANICAL","role":"input","meaning":"An asserted level: it holds the state it was set to until an operation changes it.","verbs":["set","toggle"],"properties":["asserted","stateful"],"diagram_class":"CONTROL"}];
+const SYMBOLS = [{"id":"blank","name":"BLANK","family":"UNSET","role":"incomplete","meaning":"Incomplete component. Choose its type.","verbs":[],"properties":["incomplete","type-required"],"diagram_class":"COMPONENT"},{"id":"ground","name":"GROUND","family":"PASSIVE","role":"reference","meaning":"Reference point used to resolve meaning, state, or authority.","verbs":["resolve","reference"],"properties":["non-authoritative-by-itself"],"diagram_class":"REFERENCE"},{"id":"point","name":"POINT","family":"PRIMITIVE","role":"attachment","meaning":"0D attachment. Sticks to a Path, a Plane boundary, or a Wire; Wires end on Points.","verbs":["attach","enter","exit"],"properties":["addressable","0d"],"diagram_class":"BOUNDARY"},{"id":"port","name":"PORT","family":"PASSIVE","role":"boundary","meaning":"Legacy alias of POINT. Documents normalize it to point.","verbs":["enter","exit"],"properties":["addressable","legacy-alias"],"diagram_class":"BOUNDARY"},{"id":"path","name":"PATH","family":"PRIMITIVE","role":"carrier","meaning":"1D route with start and end. Hosts Points along its length. It does not imply permission or success.","verbs":["carry"],"properties":["direction-neutral","1d"],"diagram_class":"CONNECTION"},{"id":"plane","name":"PLANE","family":"PRIMITIVE","role":"surface","meaning":"Bounded 2D region. Hosts Points on its boundary and Components in its interior. A typed Plane is a Component.","verbs":["host","bound"],"properties":["bounded","hosts","2d"],"diagram_class":"SURFACE"},{"id":"join","name":"JOIN","family":"MECHANICAL","role":"connection","meaning":"Paths are connected.","verbs":["join"],"properties":["connected"],"diagram_class":"CONNECTION"},{"id":"cross","name":"CROSS","family":"PASSIVE","role":"connection","meaning":"Paths cross but do not connect.","verbs":["cross"],"properties":["not-connected"],"diagram_class":"CONNECTION"},{"id":"hold","name":"HOLD","family":"PASSIVE","role":"state","meaning":"Keeps bounded state.","verbs":["hold","store"],"properties":["stateful"],"diagram_class":"STATE"},{"id":"buffer","name":"BUFFER","family":"PASSIVE","role":"state","meaning":"Holds flow temporarily, then releases it.","verbs":["buffer","release"],"properties":["temporary-state"],"diagram_class":"STATE"},{"id":"act","name":"ACT","family":"ACTIVE","role":"transform","meaning":"Transforms input into output. Activity does not grant authority.","verbs":["act","transform"],"properties":["agentic","authority-neutral"],"diagram_class":"TRANSFORM"},{"id":"gate","name":"GATE","family":"MECHANICAL","role":"control","meaning":"Passes or refuses flow using a declared condition.","verbs":["check","pass","refuse"],"properties":["conditional","authority-neutral"],"diagram_class":"CONTROL"},{"id":"switch","name":"SWITCH","family":"MECHANICAL","role":"control","meaning":"Opens or closes a path from explicit control.","verbs":["open","close"],"properties":["externally-controlled"],"diagram_class":"CONTROL"},{"id":"limit","name":"LIMIT","family":"PASSIVE","role":"constraint","meaning":"Restricts a flow dimension without judgement.","verbs":["limit"],"properties":["non-judgemental"],"diagram_class":"CONTROL"},{"id":"one-way","name":"ONE-WAY","family":"PASSIVE","role":"direction","meaning":"Allows flow in one direction.","verbs":["pass"],"properties":["directional","non-reciprocal"],"diagram_class":"CONNECTION"},{"id":"return","name":"RETURN","family":"PASSIVE","role":"reciprocity","meaning":"Requires a matching return path.","verbs":["return"],"properties":["reciprocal"],"diagram_class":"CONNECTION"},{"id":"observe","name":"OBSERVE","family":"PASSIVE","role":"evidence","meaning":"Reads evidence from outside the action path.","verbs":["observe"],"properties":["independent-read"],"diagram_class":"EVIDENCE"},{"id":"receipt","name":"RECEIPT","family":"PASSIVE","role":"evidence","meaning":"Durable evidence emitted by a crossing or action.","verbs":["record","return"],"properties":["durable","evidentiary"],"diagram_class":"EVIDENCE"},{"id":"authority","name":"AUTHORITY","family":"PASSIVE","role":"control-reference","meaning":"Typed, scoped permission supplied as a control input.","verbs":["grant","scope"],"properties":["typed","scoped"],"diagram_class":"REFERENCE"},{"id":"refuse","name":"REFUSE","family":"MECHANICAL","role":"termination","meaning":"Ends an attempted path explicitly.","verbs":["refuse","stop"],"properties":["explicit-terminal"],"diagram_class":"TERMINATION"},{"id":"clock","name":"CLOCK","family":"ACTIVE","role":"timing","meaning":"Drives time: its level rises and falls on a declared period. An edge may start work.","verbs":["tick","schedule"],"properties":["asserted","periodic"],"diagram_class":"TIMING"},{"id":"lever","name":"LEVER","family":"MECHANICAL","role":"input","meaning":"An asserted level: it holds the state it was set to until an operation changes it.","verbs":["set","toggle"],"properties":["asserted","stateful"],"diagram_class":"CONTROL"},{"id":"group","name":"GROUP","family":"PRIMITIVE","role":"grouping","meaning":"Collects Components for reading. Not a boundary: it hosts nothing and has no ports; a Wire between members of different groups is one Wire.","verbs":["group"],"properties":["reading-only","2d"],"diagram_class":"SURFACE"}];
 // Primitives are the dimensional basis (0D / 1D / 2D). Components are typed 2D forms
 // whose attachment defaults are template data; a typed Plane is an ordinary Component.
 const GROUPS = {"Primitives": ["point","path","plane"], "Components": ["blank","act","hold","buffer","gate","switch","limit","receipt","observe"], "Signals": ["clock","lever"]};
-const PRIMITIVE_SYMBOL_IDS=new Set(GROUPS.Primitives);
+// A group (SECTION-MODEL.md "Groups (reading only)") is a primitive that is not in the palette:
+// it collects Components for reading and is authored by data, not drawn from the palette.
+const PRIMITIVE_SYMBOL_IDS=new Set([...GROUPS.Primitives,'group']);
 function isPrimitiveSymbol(id){return PRIMITIVE_SYMBOL_IDS.has(String(id||''))}
+// A group is never an obstacle and never a host: routing, layout and the layout metrics leave it out.
+function isGroupComponent(n){return String(n?.symbolId||'')==='group'}
 const workspace = document.getElementById('workspace');
 const nodesG = document.getElementById('nodes');
 const wiresG = document.getElementById('wires');
@@ -5380,9 +5570,9 @@ const visualInteriorColor=document.getElementById('visualInteriorColor');
 const visualText=document.getElementById('visualText');
 const visualSvgRow=document.getElementById('visualSvgRow');
 const visualSvgMarkup=document.getElementById('visualSvgMarkup');
+const appearanceAdvancedTier=document.getElementById('appearanceAdvancedTier');
 const formSettings=document.getElementById('formSettings');
-const formDimension=document.getElementById('formDimension');
-const formAttachments=document.getElementById('formAttachments');
+const formDimensionReadout=document.getElementById('formDimensionReadout');
 const formMaterial=document.getElementById('formMaterial');
 const formBodyThickness=document.getElementById('formBodyThickness');
 const formInteriorState=document.getElementById('formInteriorState');
@@ -5654,6 +5844,27 @@ const SNAP_RADIUS=34;
 // 0.1 Beta concern: Component, Port, Wire, containment, and normalization model.
 
 const byId=id=>SYMBOLS.find(s=>s.id===id);
+// The symbol a Component is drawn as. A notation glyph (a logic gate, NOTATION-MODEL.md) is not in
+// SYMBOLS; it is read as one here, so nothing that shows a symbol's name, family or meaning has to
+// know which table it came from (issue #55). `byId` alone says whether an id is a SYMBOLS entry.
+function symbolOf(symbolId){
+  const s=byId(symbolId);if(s)return s;
+  const g=SovSchematicNotation.glyphOf(activeNotation(),symbolId);
+  return {id:symbolId,name:g?.title||String(symbolId||''),family:g?.family||'',role:'',diagram_class:'',meaning:g?.meaning||'',verbs:[],properties:[]};
+}
+// The one list of what a Component can be, in the order it is shown: Point, Path, Plane, then the
+// Component types, the Signals, then the glyphs the active notation adds. The palette and the bar's
+// type control both read it, so they never diverge (issue #20). Every entry carries the dimension
+// its type gives; dimension is a property of the type, never chosen apart from it.
+function symbolCatalog(){
+  const notation=activeNotation(),own=Object.keys(notation.glyphs||{}).filter(id=>!byId(id));
+  const groups=[...Object.entries(GROUPS),...(own.length?[[notation.name||notation.id,own]]:[])];
+  return groups.map(([group,ids])=>({group,entries:ids.map(id=>{
+    const symbol=symbolOf(id),preset=SovSchematicData.templatePreset(id);
+    return {id,group,symbol,preset,name:notation.glyphs?.[id]?.title||sentenceCase(symbol.name),dimension:preset?.form?.dimension??2,carrier:!!preset?.carrier};
+  })}));
+}
+function symbolCatalogEntry(symbolId){for(const {entries} of symbolCatalog()){const e=entries.find(x=>x.id===symbolId);if(e)return e}return null}
 const Attachment=SovSchematicAttachment;
 function componentAttachmentPointIds(n){return Attachment.pointIds(n)}
 function componentAttachmentPoints(n){return Attachment.descriptors(n,componentConfig(n).ports)}
@@ -5992,6 +6203,15 @@ function wiresOnBuiltinPoints(n){
   const ids=new Set(Attachment.builtinPointIds(n));
   return wires.filter(w=>(w.a===n.id&&ids.has(Attachment.pointId(n,w.aAttachment?.pointId||w.aSide)))||(w.b===n.id&&ids.has(Attachment.pointId(n,w.bAttachment?.pointId||w.bSide))));
 }
+// The Wires whose end is bound to this Component's point (by point id or compat id): what the
+// Attached list shows beside each port (#21).
+function wiresOnPoint(n,pointId){
+  const spec=Attachment.resolveSpec(n,pointId);if(!spec)return [];
+  const at=(w,end)=>w[end]===n.id&&Attachment.pointId(n,w[`${end}Attachment`]?.pointId||w[`${end}Side`])===spec.id;
+  return wires.filter(w=>at(w,'a')||at(w,'b'));
+}
+// The Points hosted on this Component's boundary (placement kind `edge`), in document order.
+function hostedPointsOn(n){return nodes.filter(p=>p.id!==n.id&&p.placement?.kind==='edge'&&p.placement.hostId===n.id)}
 function componentHostedOnComponentPath(n){return componentPlacement(n).kind==='path'}
 function componentHostedOnComponentEdge(n){return componentPlacement(n).kind==='edge'}
 function componentBackdropMode(n){
@@ -6433,7 +6653,7 @@ function quickCommands(){return [
 ]}
 function updateQuickSearch(query=''){
   const q=String(query).trim().toLowerCase(),results=document.getElementById('quickSearchResults');if(!results)return;results.replaceChildren();
-  quickSearchMatches=q?nodes.filter(n=>!isEffectivelyHidden(n)&&[n.id,n.symbolId,componentConfig(n).label,byId(n.symbolId)?.name].some(v=>String(v||'').toLowerCase().includes(q))):[];
+  quickSearchMatches=q?nodes.filter(n=>!isEffectivelyHidden(n)&&[n.id,n.symbolId,componentConfig(n).label,symbolOf(n.symbolId).name].some(v=>String(v||'').toLowerCase().includes(q))):[];
   document.querySelectorAll('.node').forEach(el=>{const match=quickSearchMatches.some(n=>n.id===el.dataset.id);el.classList.toggle('search-match',!!q&&match);el.classList.toggle('search-dim',!!q&&!match)});
   for(const n of quickSearchMatches.slice(0,10)){const b=document.createElement('button');b.type='button';b.className='search-result';b.innerHTML=`<b>${escapeXML(componentDisplayName(n))}</b><small>${escapeXML(n.symbolId)} · ${escapeXML(n.id)}</small>`;b.addEventListener('click',()=>{closeQuickSearch();focusComponent(n)});results.appendChild(b)}
   for(const c of quickCommands().filter(c=>q&&c.name.toLowerCase().includes(q)).slice(0,5)){const b=document.createElement('button');b.type='button';b.className='search-result command';b.innerHTML=`<b>› ${escapeXML(c.name)}</b>`;b.addEventListener('click',()=>{closeQuickSearch();c.run()});results.appendChild(b)}
@@ -6683,11 +6903,24 @@ function syncSectionPositionSelect(select,row,owner,compat){
   s.bands.forEach((b,k)=>{const o=document.createElement('option');o.value=`through:${k}`;o.textContent=`Through ${b.role||'band'} ${k+1} (${b.fill}) · a crossing`;select.appendChild(o)});
   select.value=pos.line!=null?`line:${pos.line}`:`through:${pos.through}`;
 }
+// The bar's type control offers the same list as the palette (symbolCatalog, issue #20): one
+// optgroup per group, each entry named with the dimension its type gives. Rebuilt when the notation
+// changes, as the palette is; the dimension read-outs (the bar badge, the Form section) follow it.
+let typeOptionsNotationKey=null;
+function syncComponentTypeOptions(){
+  const key=activeNotation().id;if(typeOptionsNotationKey===key&&barComponentType.options.length)return;typeOptionsNotationKey=key;
+  barComponentType.replaceChildren();
+  for(const {group,entries} of symbolCatalog()){
+    const og=document.createElement('optgroup');og.label=group;
+    for(const e of entries){const o=document.createElement('option');o.value=e.id;o.textContent=`${e.name} · ${e.dimension}D`;og.appendChild(o)}
+    barComponentType.appendChild(og);
+  }
+}
 function syncSelectionFormState(kind,entity){
   if(kind==='port'||!entity){barFormState.hidden=true;return}
   barFormState.hidden=false;barFormState.disabled=false;barFormState.classList.remove('wire-form');
   if(kind==='component'){
-    const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;barFormState.title=`${formDimensionLabel(f)} · configure Form`;
+    const f=componentForm(entity);barFormState.textContent=`${f.dimension}D`;barFormState.title=`${formDimensionLabel(f)} · comes with the type · configure Form`;
     barFormState.classList.toggle('active',f.frame.mode!=='none'||f.regions.interior.state==='open');
   }else{
     barFormState.textContent='1D';barFormState.title='Wire Form · 1D path · configure Wire settings';barFormState.classList.add('wire-form');
@@ -6700,11 +6933,10 @@ function syncComponentVisualPanel(n){
   visualText.value=p.text;visualSvgMarkup.value=p.graphic.svg;visualSvgRow.hidden=p.graphic.kind!=='custom';
   setSlotChip(visualInteriorColor,p.interiorColorSlot);
   const f=componentForm(n);
-  formDimension.value=String(f.dimension);formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
+  formDimensionReadout.textContent=`${formDimensionLabel(f)} · ${symbolCatalogEntry(n.symbolId)?.name||symbolOf(n.symbolId).name}`;formMaterial.value=f.body.material;formBodyThickness.value=String(f.body.thickness);
   formSection.value=sectionPresetName(f,2);
   syncSectionPositionSelect(formPointPosition,formPointPositionRow,n,'out');
   formInteriorState.value=f.regions.interior.state;formFrameMode.value=f.frame.mode;formFrameThickness.value=String(f.frame.thickness);formFrameDepth.value=String(f.frame.depth);
-  formAttachments.value=Attachment.attachmentDefaults(n);
   // Settings are shown per dimension: a Point has no size or frame, a Path no height or interior.
   for(const el of componentSettingsFields.querySelectorAll('[data-dims]')){const dims=String(el.dataset.dims).split('').map(Number);el.hidden=!dims.includes(f.dimension)}
   syncPortsPanel(n);
@@ -6717,6 +6949,22 @@ function syncComponentVisualPanel(n){
 const portsSettings=document.getElementById('portsSettings');
 const portsList=document.getElementById('portsList');
 const portsAddBtn=document.getElementById('portsAddBtn');
+const portsResetBtn=document.getElementById('portsResetBtn');
+// What ends on a point, as the Attached list says it (#21).
+function attachedWiresText(bound){return bound.length?`${bound.length} wire${bound.length===1?'':'s'} · ${bound.map(w=>connectionConfig(w).label||w.id).join(', ')}`:'no wire'}
+// The template's port list for this Component, as a port edit stores it; empty where the template
+// declares none (a Plane). What "Reset to template ports" puts back.
+function templatePortListOf(n){
+  const preset=SovSchematicData.templatePreset(n.symbolId);
+  return preset?.attachmentDefaults==='none'?[]:SovSchematicData.normalizeDeclaredPorts(SovSchematicData.templatePorts(n.symbolId));
+}
+// Whether the template's ports lead the list unchanged (the data core's own 'standard' rule), and
+// the ports that are not the template's (the additions, by id or compat id).
+function templatePortsKept(n){
+  const template=templatePortListOf(n),current=componentPortList(n),ids=new Set(template.flatMap(p=>[p.id,p.compatId||p.id]));
+  const kept=JSON.stringify(current.slice(0,template.length))===JSON.stringify(template);
+  return {template,kept,additions:current.filter(p=>!ids.has(p.id)&&!ids.has(p.compatId||p.id))};
+}
 const PORT_PANEL_SIDES=['left','right','top','bottom'];
 const PORT_PANEL_FLOWS=['in','out','duplex','control','trigger'];
 function componentPortsEditable(n){return !!n&&Attachment.effectiveDimension(n)===2}
@@ -6749,10 +6997,37 @@ function syncPortsPanel(n){
     const flow=portPanelSelect('port-flow',`Port ${spec.id} flow`,PORT_PANEL_FLOWS,spec.flow);flow.title=owned||'Flow';if(owner)flow.disabled=true;
     const channels=portPanelControl('input','port-channels',`Port ${spec.id} channels`,{type:'text',placeholder:'main',title:owned||'Channel ids, comma-separated'});channels.value=Attachment.channelIds(spec).join(', ');if(owner)channels.disabled=true;
     const remove=portPanelControl('button','port-remove',`Remove port ${spec.id}`,{type:'button',title:owned||`Remove port ${spec.id}`});remove.textContent='Remove';if(owner)remove.disabled=true;
-    row.append(id,label,side,t,flow,channels,remove);rows.push(row);
+    // What ends on the port (#21). The id cell selects the point.
+    const bound=wiresOnPoint(n,spec.id),attached=document.createElement('span');attached.className='port-attached';
+    attached.textContent=attachedWiresText(bound);attached.title=bound.length?'Wires ending on this port':'Nothing ends on this port';
+    id.title=`${owned||'Port id'} · click to select the point`;
+    row.append(id,label,side,t,flow,channels,remove,attached);rows.push(row);
+  }
+  // The Points hosted on the boundary are attached too (#21): read-only rows, each with a Select
+  // button. Adding or removing one is creating or deleting a Point, the same gesture as on a Plane.
+  for(const p of hostedPointsOn(n)){
+    const row=document.createElement('div');row.className='hosted-row';row.dataset.pointComponentId=p.id;row.setAttribute('role','listitem');
+    const spec=Attachment.pointSpecs(p)[0],pl=p.placement;
+    const cell=(className,label,value,attrs={})=>{const el=portPanelControl('input',className,label,{type:'text',readonly:'',title:'On the hosted Point · select it to edit',...attrs});el.value=value;return el};
+    const id=cell('port-id',`Hosted Point ${p.id}`,p.id,{title:'A Point hosted on the boundary · click to select it'});
+    const label=cell('port-label',`Hosted Point ${p.id} label`,componentConfig(p).label||'');
+    const side=cell('port-side',`Hosted Point ${p.id} side`,pl.side||'');
+    const t=cell('port-t',`Hosted Point ${p.id} position`,String(Math.round((Number(pl.t)||0)*1000)/1000));
+    const flow=cell('port-flow',`Hosted Point ${p.id} flow`,spec?.flow||spec?.defaultFlow||'duplex');
+    const channels=cell('port-channels',`Hosted Point ${p.id} channels`,spec?Attachment.channelIds(spec).join(', '):'main');
+    const select=portPanelControl('button','port-select',`Select Point ${p.id}`,{type:'button',title:'Select this Point'});select.textContent='Select';
+    const bound=wiresOnPoint(p,'self'),attached=document.createElement('span');attached.className='port-attached';
+    attached.textContent=`hosted Point · ${attachedWiresText(bound)}`;attached.title=bound.length?'Wires ending on this Point':'Nothing ends on this Point';
+    row.append(id,label,side,t,flow,channels,select,attached);rows.push(row);
   }
   portsList.replaceChildren(...rows);
   portsAddBtn.disabled=!!owner;portsAddBtn.title=owned||'Add a port on the right side';
+  // Reset stands only where a template port is missing, moved or changed (and the definition does not
+  // own the ports); additions are not the template's and stay. A template that declares no ports
+  // (a Plane) has nothing to put back.
+  const {template,kept}=templatePortsKept(n);
+  portsResetBtn.disabled=!!owner||!template.length||kept;
+  portsResetBtn.title=owned||(!template.length?'The template declares no ports':kept?"The ports are the template's":"Put the template's ports back · added ports stay");
   if(focused){const again=portsList.querySelector(`.ports-row[data-port-id="${CSS.escape(focused[0])}"] .${focused[1]}`);if(again&&!again.disabled)again.focus()}
 }
 function syncSelectionSettings(kind){
@@ -6784,6 +7059,8 @@ function rectOverlapArea(a,b){if(!a||!b)return 0;const w=Math.min(a.right,b.righ
 function placeSelectionSettingsPanel(){
   const panel=selectionSettingsPanel;if(panel.hidden||selectionBar.hidden)return;
   const bar=selectionBar.getBoundingClientRect(),wrap=document.querySelector('.workspace-wrap').getBoundingClientRect();
+  // The panel never outgrows the workspace: with several sections open it scrolls inside (#23).
+  panel.style.maxHeight=`${Math.max(120,Math.floor(wrap.height-16))}px`;
   const w=panel.offsetWidth||360,h=panel.offsetHeight||240,gap=6,margin=8,entity=selectedEntityScreenRect();
   const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
   const anchorRight=Math.max(bar.right,entity?.right??bar.right),anchorLeft=Math.min(bar.left,entity?.left??bar.left);
@@ -6803,6 +7080,9 @@ function placeSelectionSettingsPanel(){
   panel.dataset.place=pick.place;panel.style.transform='none';
   panel.style.left=`${pick.left-bar.left}px`;panel.style.top=`${pick.top-bar.top}px`;
 }
+// Opening or closing a section changes the panel's height, so it is placed again (#22, #23). `toggle`
+// does not bubble; the capture listener on the panel still sees every section's.
+selectionSettingsPanel.addEventListener('toggle',()=>placeSelectionSettingsPanel(),true);
 function selectedSurfaceKind(){
   if(typeof selected==='string'&&selected.startsWith('wire:'))return 'wire';
   if(isAttachmentSelectionValue(selected))return 'port';
@@ -6812,7 +7092,7 @@ function showComponentBar(n){
   const cfg=componentConfig(n);
   selectionBar.hidden=false;
   componentBarFields.hidden=false;connectionBarFields.hidden=true;portBarFields.hidden=true;
-  barComponentType.value=n.symbolId;
+  syncComponentTypeOptions();barComponentType.value=n.symbolId;
   barComponentLabel.value=cfg.label;
   setSlotChip(barComponentColorSlot,cfg.colorSlot);
   syncSelectionFormState('component',n);
@@ -6921,7 +7201,7 @@ function portShownFlow(info){
 const PATH_END_FLOW_TITLE="A Path end's direction comes from its role: start receives, end emits";
 function portIsPathEnd(info){return Attachment.resolveSpec(info.owner,info.pointId||info.portId)?.role==='endpoint'}
 function portFlowText(flow){return [...barPortFlow.options].find(o=>o.value===flow)?.textContent||flow}
-function portDisplayName(info){return componentConfig(info.owner).label||byId(info.owner.symbolId).name}
+function portDisplayName(info){return componentConfig(info.owner).label||symbolOf(info.owner.symbolId).name}
 
 function restoreSelectedSurface(){
   if(typeof selected!=='string')return;
@@ -7091,7 +7371,7 @@ function cleanupPaletteGesture({status='Select'}={}){
 }
 function makePaletteFloat(symbolId){
   removePaletteFloat();
-  const s=byId(symbolId),el=document.createElement('div');
+  const s=symbolOf(symbolId),el=document.createElement('div');
   el.className='palette-drag-float';
   el.dataset.paletteGhost='true';
   el.innerHTML=`${glyph(symbolId)}<b>${s.name}</b>`;
@@ -7099,7 +7379,7 @@ function makePaletteFloat(symbolId){
   return el;
 }
 function drawPaletteDropGhost(symbolId,p){
-  const s=byId(symbolId),preset=SovSchematicData.templatePreset(symbolId),dim=preset?.form?.dimension??2;
+  const s=symbolOf(symbolId),preset=SovSchematicData.templatePreset(symbolId),dim=preset?.form?.dimension??2;
   paletteDropLayer.replaceChildren();
   const g=document.createElementNS('http://www.w3.org/2000/svg','g');
   g.setAttribute('class','component-drop-ghost');
@@ -7280,22 +7560,20 @@ let paletteNotationKey=null;
 function buildSymbolPalette(){
   const notation=activeNotation();if(paletteNotationKey===notation.id&&palette.childElementCount)return;paletteNotationKey=notation.id;
   palette.replaceChildren();
-  const own=Object.keys(notation.glyphs||{}).filter(id=>!byId(id));
-  const groups=[...Object.entries(GROUPS),...(own.length?[[notation.name||notation.id,own]]:[])];
-  for(const [group,ids] of groups){
+  // The same list the bar's type control offers (symbolCatalog, issue #20), one section per group.
+  for(const {group,entries} of symbolCatalog()){
     const section=document.createElement('div'); section.className='section';
     section.dataset.group=group.toLowerCase();
     const h=document.createElement('h2');h.textContent=group;section.appendChild(h);
     const grid=document.createElement('div');grid.className='symbol-grid'+(group==='Primitives'?' primitive-grid':'');section.appendChild(grid);
-    ids.forEach(id=>{
-      const g=notation.glyphs?.[id],s=byId(id)||{name:g?.title||id,family:g?.family||'',role:'',diagram_class:''};
-      const b=document.createElement('button'),preset=SovSchematicData.templatePreset(id);
+    for(const {id,symbol:s,preset,name:title,dimension} of entries){
+      const b=document.createElement('button');
       b.type='button'; b.className='symbol-card'+(preset?' primitive':'');b.dataset.symbolId=id;
-      const caption=preset?`${preset.form.dimension}D · ${sentenceCase(s.role)}`:[s.family,s.diagram_class].filter(Boolean).map(sentenceCase).join(' · ');
-      b.innerHTML=glyph(id);const name=document.createElement('b');name.textContent=g?.title||sentenceCase(s.name);const small=document.createElement('small');small.textContent=caption;b.append(name,small);
+      const caption=preset?`${dimension}D · ${sentenceCase(s.role)}`:[s.family,s.diagram_class].filter(Boolean).map(sentenceCase).join(' · ');
+      b.innerHTML=glyph(id);const name=document.createElement('b');name.textContent=title;const small=document.createElement('small');small.textContent=caption;b.append(name,small);
       bindPaletteComponent(b,id);
       grid.appendChild(b);
-    });
+    }
     palette.appendChild(section);
   }
 }
@@ -7664,7 +7942,7 @@ function componentAcceptsChildren(n){return formHostsChildren(n)}
 function parentComponent(node){const ownerId=canvasOwnerComponentId(node?.canvasId||GLOBAL_CANVAS_ID);return ownerId?nodes.find(n=>n.id===ownerId)||null:null}
 function componentDisplayName(node){
   if(!node)return '—';
-  return componentConfig(node).label||byId(node.symbolId).name||node.id;
+  return componentConfig(node).label||symbolOf(node.symbolId).name||node.id;
 }
 function componentScopePath(node){
   if(!node)return 'world';const host=componentHostDescriptor(node);
@@ -8246,8 +8524,9 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   const inFence=P=>fence?{x:Math.max(fence.l+2,Math.min(fence.r-2,P.x)),y:Math.max(fence.t+2,Math.min(fence.b-2,P.y))}:P;
   const SA=sourceNode?inFence(routeLead(A,B,aSide,sourceNode,wireEndpointInward(routedWire,sourceNode))):A, SB=targetNode?inFence(routeLead(B,A,bSide,targetNode,wireEndpointInward(routedWire,targetNode))):B;
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
+  // A group is drawn behind everything and is never an obstacle (SECTION-MODEL.md "Groups").
   const otherRects=nodes
-    .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
+    .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && !isGroupComponent(n) && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
     .map(n=>rectForNode(n,12));
 
   // Source and target are included after the outward lead. This prevents a path
@@ -8257,7 +8536,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   if(endpointNeedsOuterObstacle(targetNode,bSide,routedWire))endpointRects.push(rectForNode(targetNode,8));
   const obstacles=[...otherRects,...endpointRects];
 
-  const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
+  const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&!isGroupComponent(n)&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
   const xs=[SA.x,SB.x,(SA.x+SB.x)/2];
   const ys=[SA.y,SB.y,(SA.y+SB.y)/2];
   if(fence){xs.push(fence.l+14,fence.r-14);ys.push(fence.t+14,fence.b-14)}
@@ -8354,7 +8633,7 @@ function routeLead(P,Q,portId,node,inward){
   let d=ahead>0?Math.max(4,Math.min(ROUTE_LEAD,ahead/2)):ROUTE_LEAD;
   // Nor into a body in front of it: stop short of the first card the lead would enter.
   for(const other of nodes){
-    if(other.id===node.id||componentForm(other).dimension!==2||isDescendantOf(node.id,other.id)||isEffectivelyHidden(other))continue;
+    if(other.id===node.id||componentForm(other).dimension!==2||isGroupComponent(other)||isDescendantOf(node.id,other.id)||isEffectivelyHidden(other))continue;
     const R=componentBounds(other,10);
     for(let s=2;s<=d;s+=2){const x=P.x+nx*s,y=P.y+ny*s;if(x>R.l&&x<R.r&&y>R.t&&y<R.b){d=Math.max(4,s/2);break}}
   }
@@ -8409,7 +8688,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     // it away if its interior route now collides with a component.
     const routeOnly=normalizePoints([SA,...inner,SB]);
     const endpointRects=[];
-    const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
+    const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && !isGroupComponent(n) && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
     if(endpointNeedsOuterObstacle(sourceNode,w.aSide,w))endpointRects.push(rectForNode(sourceNode,8));
     if(endpointNeedsOuterObstacle(targetNode,w.bSide,w))endpointRects.push(rectForNode(targetNode,8));
     const obstacles=[...otherRects,...endpointRects];
@@ -8427,7 +8706,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
 
   const SA=sourceNode?routeLead(A,B,w.aSide,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?routeLead(B,A,w.bSide,targetNode,wireEndpointInward(w,targetNode)):B;
   const rebuiltCore=normalizePoints([SA,...rebuilt.slice(2,-2),SB]);
-  const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
+  const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && !isGroupComponent(n) && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
   const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied,[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]);
   const anchor=routeAnchor(rebuiltCore);
 
@@ -8568,7 +8847,7 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
 
   componentDetail.hidden=false;
   ensureComponentStructure(n);
-  const s=byId(n.symbolId);
+  const s=symbolOf(n.symbolId);
   iName.textContent=n.boundary.inside.type?s.name:'UNTYPED';
   iOutside.textContent=n.boundary.outside.type;
   {const host=componentHostDescriptor(n);iParent.textContent=host?.ownerKind==='wire'?`Wire · ${host.label||host.ownerId}`:componentDisplayName(parentComponent(n));}
@@ -8630,7 +8909,7 @@ function selectWire(i,{focus=true}={}){
   if(!w){hideSelectionBar();return}
   connectionDetail.hidden=false;
   const cfg=connectionConfig(w),epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b');
-  const endText=(ep,end)=>ep?.kind==='bound'?`${componentConfig(ep.node).label||byId(ep.node.symbolId).name}.${ep.pointId} · ch ${wireEndpointMarker(w,end)}`:ep?`free · ${Math.round(ep.pos.x)}, ${Math.round(ep.pos.y)}`:'—';
+  const endText=(ep,end)=>ep?.kind==='bound'?`${componentConfig(ep.node).label||symbolOf(ep.node.symbolId).name}.${ep.pointId} · ch ${wireEndpointMarker(w,end)}`:ep?`free · ${Math.round(ep.pos.x)}, ${Math.round(ep.pos.y)}`:'—';
   cFrom.textContent=endText(epA,'a');
   cTo.textContent=endText(epB,'b');
   cEnds.textContent=`${epA?.kind==='bound'?'bound':'free'} → ${epB?.kind==='bound'?'bound':'free'}`;
@@ -9030,6 +9309,53 @@ function markerCountEl(){
   }
   return el;
 }
+// Groups (SECTION-MODEL.md "Groups (reading only)"): a region drawn behind every other node and
+// every wire on its canvas. On the global canvas they sit in their own layer just before the wire
+// layer; on a Component's interior, directly after the host, before the wires lifted there and
+// the host's children. A group is not a body: it hosts nothing, has no ports and takes no gesture.
+function groupLayer(){
+  let layer=document.getElementById('groupLayer');
+  if(!layer){layer=document.createElementNS('http://www.w3.org/2000/svg','g');layer.setAttribute('id','groupLayer');workspace.insertBefore(layer,wiresG)}
+  return layer;
+}
+function placeGroupRegion(g,n){
+  const R=SovSchematicData.groupRect(diagram,n.id,componentSize);if(!R)return;
+  const rect=g.querySelector(':scope > .group-region'),title=g.querySelector(':scope > .group-title');
+  if(rect){rect.setAttribute('x',String(R.l));rect.setAttribute('y',String(R.t));rect.setAttribute('width',String(Math.max(1,R.w)));rect.setAttribute('height',String(Math.max(1,R.h)))}
+  if(title){title.setAttribute('x',String(R.l+12));title.setAttribute('y',String(R.t+19))}
+  const badge=g.querySelector(':scope > .marker-badge');if(badge)badge.setAttribute('transform',`translate(${R.r} ${R.t})`);
+}
+// Keeps every drawn region on its members while they move (renderWires runs on drag frames).
+function refreshGroupRegions(){
+  for(const g of workspace.querySelectorAll('.node.group')){const n=nodes.find(x=>x.id===g.dataset.id);if(n)placeGroupRegion(g,n)}
+}
+function renderGroups(markers=markersById()){
+  const layer=groupLayer();layer.replaceChildren();
+  const T=SovSchematicNotation.tokens(diagram);
+  for(const n of nodes){
+    if(!isGroupComponent(n)||isEffectivelyHidden(n))continue;
+    const cfg=n.config||{},surface=n.canvasId||GLOBAL_CANVAS_ID,editor=entityEditorState(n);
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','node group'+(selectedComponentIds.has(n.id)?' selected':''));g.dataset.id=n.id;g.dataset.canvasId=surface;g.style.opacity=String(editor.opacity);
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');rect.setAttribute('class','group-region');
+    rect.setAttribute('rx',String(T.radius?.card??10));
+    // Slot 0 is the colour every record is given, so only a chosen slot tints the region.
+    const slot=Number.isInteger(cfg.colorSlot)&&cfg.colorSlot>0?cfg.colorSlot:null;
+    rect.style.fill=slot!=null?slotColor(slot):'none';if(slot!=null)rect.style.fillOpacity='.1';
+    rect.style.stroke='var(--muted)';rect.style.strokeWidth='var(--stroke-structure)';rect.style.pointerEvents='none';
+    g.appendChild(rect);
+    const label=String(cfg.label||'').trim();
+    if(label){const title=document.createElementNS('http://www.w3.org/2000/svg','text');title.setAttribute('class','group-title');title.dataset.role='title';
+      // The muted ink, darkened (or lightened) only as far as text needs to read on the region: 4.5:1, as card text.
+      const muted=(getComputedStyle(workspace).getPropertyValue('--muted')||'').trim(),ink=/^#[0-9a-f]{6}$/i.test(muted)?muted:'#6C6C65';
+      title.style.fill=ensureContrast(ink,slot!=null?mixHex([canvasTone(),slotColor(slot)],[.9,.1]):canvasTone(),4.6);title.textContent=label;g.appendChild(title)}
+    {const own=markers.get(n.id);if(own)appendMarkerBadge(g,own,0,0)}
+    placeGroupRegion(g,n);
+    const host=surface.startsWith('canvas:component:')?nodesG.querySelector(`:scope > .node[data-id="${CSS.escape(surface.slice('canvas:component:'.length))}"]`):null;
+    if(host){let at=host;while(at.nextElementSibling?.classList.contains('group'))at=at.nextElementSibling;at.after(g)}
+    else layer.appendChild(g);
+  }
+}
 function render(){
   applyNotationTokens();
   if(typeof buildSymbolPalette==='function')buildSymbolPalette();
@@ -9040,8 +9366,8 @@ function render(){
   nodesG.innerHTML='';
   const unplacedIds=new Set(typeof layoutUnplacedIds==='function'?layoutUnplacedIds():[]);
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
-    if(isEffectivelyHidden(n))return;
-    const s=byId(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
+    if(isEffectivelyHidden(n)||isGroupComponent(n))return; // groups are drawn by renderGroups, behind
+    const s=symbolOf(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
     {const form=componentForm(n),backdrop=componentBackdropMode(n);g.setAttribute('class','node'+(unplacedIds.has(n.id)?' unplaced':'')+(n.symbolId==='blank'?' blank':'')+(selectedComponentIds.has(n.id)?' selected':'')+(componentAcceptsChildren(n)?' is-container':'')+(form.frame.mode==='shell'?' form-shell':'')+(form.frame.mode==='frame'?' form-frame':'')+(n.parentId?' nested-child':'')+(componentHostedOnWire(n)?' wire-hosted':'')+(backdrop==='none'?' backdrop-none':'')+(editor.pinned?' is-pinned':'')+(editor.locked?' is-locked':''));}
     g.style.opacity=String(editor.opacity);
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
@@ -9079,6 +9405,7 @@ function render(){
     appendComponentLeads(g,n);appendTerminalMarks(g,n);
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
   });
+  renderGroups(markers);
   renderWires(signalState,markers);
   {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
   renderJunctionDots();
@@ -9321,7 +9648,7 @@ function placeWireLabels(){
   };
   const rect=el=>{const r=el.getBoundingClientRect();return {l:r.left,r:r.right,t:r.top,b:r.bottom}};
   const intersects=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
-  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.component-label,.outside-label,.internal-text')].filter(visible).map(rect);
+  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.group-title,.component-label,.outside-label,.internal-text')].filter(visible).map(rect);
   const entries=[...wireLabelPaths].filter(([path])=>path.isConnected&&visible(path)).map(([path,points])=>({path,points:points.map(screen)}));
   // A slab intersection also handles diagonal carrier segments without sampling.
   const crosses=(box,a,b)=>{
@@ -9376,6 +9703,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
   wireLabelPaths.clear();
   wiresG.innerHTML='';
   nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
+  refreshGroupRegions();
   clearEndpointFocus();
   const occupied=[];
   const dragging=!!activeNodeDrag;
@@ -9485,7 +9813,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const surface=w.canvasId||GLOBAL_CANVAS_ID;
     const hostId=surface.startsWith('canvas:component:')?surface.slice('canvas:component:'.length):null;
     const hostEl=hostId?nodesG.querySelector(`:scope > .node[data-id="${hostId}"]`):null;
-    if(hostEl){(hostAnchors.get(hostId)||hostEl).after(group);hostAnchors.set(hostId,group)}
+    // The host's groups sit directly after it, behind its wires: the first wire goes after them.
+    const firstAnchor=el=>{let at=el;while(at.nextElementSibling?.classList.contains('group'))at=at.nextElementSibling;return at};
+    if(hostEl){(hostAnchors.get(hostId)||firstAnchor(hostEl)).after(group);hostAnchors.set(hostId,group)}
     else wiresG.appendChild(group);
 
     // Marks have no independent positional truth. Every arrow is regenerated
@@ -9615,15 +9945,20 @@ function layoutPathCorners(d){
 function layoutMetrics(options={}){
   const staticView=options.static!==false; // an export or a screenshot freezes animation
   const findings=[],add=(kind,ids,detail)=>findings.push({kind,ids,detail});
-  const visible=nodes.filter(n=>!isEffectivelyHidden(n));
-  const body=new Map(visible.map(n=>[n.id,componentBounds(n)]));
+  // A group (SECTION-MODEL.md "Groups (reading only)") is drawn behind everything and is never an
+  // obstacle: it is left out of every check that measures a body (node-overlap, route-through-node,
+  // a text over a node, cramped labels, route wrapping). Its title is still text, and still counts
+  // in text-collision against other text. Its body is the region it is drawn as.
+  const shown=nodes.filter(n=>!isEffectivelyHidden(n));
+  const visible=shown.filter(n=>!isGroupComponent(n));
+  const body=new Map(shown.map(n=>[n.id,isGroupComponent(n)?SovSchematicData.groupRect(diagram,n.id,componentSize):componentBounds(n)]));
   const nodeEl=id=>nodesG.querySelector(`.node[data-id="${CSS.escape(id)}"]`);
   const ancestors=id=>{const out=new Set();let n=nodes.find(x=>x.id===id);while(n?.parentId){out.add(n.parentId);n=nodes.find(x=>x.id===n.parentId)}return out};
   const is2D=n=>componentForm(n).dimension===2;
 
   // Text: every visible label, in world space.
   const texts=[];
-  for(const el of workspace.querySelectorAll('#nodes text,#wires text')){
+  for(const el of workspace.querySelectorAll('#groupLayer text,#nodes text,#wires text')){
     if(!el.textContent.trim()||layoutEffectiveOpacity(el)<.1)continue;
     if(el.closest('.wire-packet'))continue; // motion, never structure; static exports drop it
     const box=layoutWorldBox(el);if(!box)continue;
@@ -10149,11 +10484,16 @@ function beginActiveNodeDrag(e,g,n){
   e.preventDefault();e.stopPropagation();
   if(isEntityLocked(n)||isEntityPinned(n)){statusEl.textContent=isEntityLocked(n)?'Locked · move refused':'Pinned · move refused';selectNode(n.id,{focus:false});return}
   if(!selectedComponentIds.has(n.id)){selectNode(n.id,{focus:false})}
+  // A capture still pending from an earlier edit is committed now, so it cannot fire in the middle
+  // of the gesture and split the move into two transitions at an intermediate position.
+  commitHistoryCapture();
   setHistoryHint(selectedComponentIds.size>1?'Move selection':'Move Component');
   if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'recovered stale drag'});
   if(keyboardMoveNodeId)finishKeyboardMove({});if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
   activeNodeDrag=n.id;captureDragSnapshots(n.id);workspace.classList.add('dragging-node');g.classList.add('dragging');
-  selectNode(n.id,{focus:false});setSelectionBarSuppressed(true);
+  // The pressed Component becomes the primary; a multi-selection it belongs to is kept, so the drag
+  // moves the whole group (issue #49). An unselected Component was selected alone above.
+  selectNode(n.id,{focus:false,preserveSet:true});setSelectionBarSuppressed(true);
   const startPointer=svgPoint(e.clientX,e.clientY);
   const roots=selectedComponentIds.has(n.id)?selectedRootComponents():[n];
   const moved=new Set([n.id,...descendantsOf(n.id).map(x=>x.id)]),groupOrigins=[];
@@ -10177,6 +10517,9 @@ function updateActiveNodeDrag(e){
 function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
   const state=activeNodeDragState;if(!state)return;if(!force&&e?.pointerId!=null&&e.pointerId!==state.pointerId)return;
   const pointerId=state.pointerId;let fault=null,refusal=null;
+  // Whether the pointer moved. The gesture captures the pointer on the workspace, so no click reaches
+  // the card afterwards: a press that did not drag is resolved here (see the finally block).
+  const dragged=Math.hypot(state.pointer.x-state.startPointer.x,state.pointer.y-state.startPointer.y)>2;
   try{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     settleActiveComponent(e||state.modifiers);
@@ -10210,6 +10553,9 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
     activeNodeDragState=null;activeNodeDrag=null;dragRouteSnapshots.clear();
     try{if(workspace.hasPointerCapture?.(pointerId))workspace.releasePointerCapture(pointerId)}catch(_){}
     try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
+    // A plain press on a member of a multi-selection that did not drag selects that member alone,
+    // as a click always has; a drag leaves the group selected (issue #49). Shift keeps the set.
+    if(!dragged&&!force&&!state.modifiers?.shiftKey&&selectedComponentIds.size>1&&selectedComponentIds.has(state.node.id))selectNode(state.node.id,{focus:false});
     restoreSelectionBarAfterGesture();scheduleHistoryCapture();
   }
   statusEl.textContent=fault?'Recovered drag error · ready':refusal?refusal:reason?`Select · ${reason}`:'Select';
@@ -10431,7 +10777,7 @@ function updateWireDrag(e){
     const target=nodes.find(n=>n.id===snap.node); B=portPos(target,snap.side); bSide=snap.side;
     const hit=document.querySelector(`.node[data-id="${snap.node}"] .port-hit[data-side="${snap.side}"]`);
     if(hit) hit.classList.add('snap-target');
-    statusEl.textContent=`Release → ${target.label||byId(target.symbolId).name}`;
+    statusEl.textContent=`Release → ${target.label||symbolOf(target.symbolId).name}`;
   } else {
     armWireBlankCandidate(P);
     statusEl.textContent=wireDrag.blankReady?'Release → new Component':'Hold briefly to grow Component';
@@ -10582,7 +10928,8 @@ workspace.addEventListener('pointerdown',e=>{if(e.target===workspace && !panDrag
 barComponentType.addEventListener('change',()=>{
   const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'type change'))return;setHistoryHint('Change Component type');
   const next=barComponentType.value;
-  if(!GROUPS.Components.includes(next)&&!GROUPS.Primitives.includes(next)){barComponentType.value=n.symbolId;return}
+  // The bar offers exactly the catalog (symbolCatalog, issue #20); anything else is not a type.
+  if(!symbolCatalogEntry(next)){barComponentType.value=n.symbolId;return}
 
   // A Path is a carrier drawn from the palette; a Component is not retyped into one (#19).
   const preset=SovSchematicData.templatePreset(next);
@@ -10639,7 +10986,8 @@ function mutateSelectedPresentation(mutator,{reroute=false}={}){
   render();selectNode(n.id,{focus:!preserveEditorFocus});scheduleHistoryCapture();
   openSelectionSettings('component');syncComponentVisualPanel(n);
 }
-visualGraphicMode.addEventListener('change',()=>mutateSelectedPresentation(p=>{p.graphic.kind=visualGraphicMode.value;visualSvgRow.hidden=p.graphic.kind!=='custom'}));
+// Choosing Custom SVG opens the Advanced tier, where the SVG lives (#23), so the choice has somewhere to go.
+visualGraphicMode.addEventListener('change',()=>mutateSelectedPresentation(p=>{p.graphic.kind=visualGraphicMode.value;visualSvgRow.hidden=p.graphic.kind!=='custom';if(p.graphic.kind==='custom')appearanceAdvancedTier.open=true}));
 visualLabelMode.addEventListener('change',()=>mutateSelectedPresentation(p=>p.labelMode=visualLabelMode.value));
 visualWidth.addEventListener('change',()=>mutateSelectedPresentation(p=>p.size.w=visualWidth.value,{reroute:true}));
 visualHeight.addEventListener('change',()=>mutateSelectedPresentation(p=>p.size.h=visualHeight.value,{reroute:true}));
@@ -10778,24 +11126,10 @@ barWireSection?.addEventListener('change',()=>{
   if(v==='line')delete w.form.section;else if(v!=='custom')w.form.section=SovSchematicData.sectionPreset(v,1);
   routeCache.clear();renderWires();const i=wires.indexOf(w);selectWire(i,{focus:false});scheduleHistoryCapture();
 });
-formDimension.addEventListener('change',()=>updateSelectedComponentForm(f=>{f.dimension=Number(formDimension.value);f.body.kind=['point','path','surface'][f.dimension]}));
-formAttachments.addEventListener('change',()=>{
-  // Built-in 2D points are template defaults. Turning them off is refused while a Wire
-  // still ends on one, so the change never silently orphans a carrier.
-  const n=nodes.find(n=>n.id===selected);if(!n||mutationBlocked(n,'Attachment defaults edit'))return;
-  const next=formAttachments.value==='none'?'none':'standard';
-  if(next==='none'&&Attachment.attachmentDefaults(n)!=='none'&&wiresOnBuiltinPoints(n).length){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent='Detach Wires from built-in points first';return}
-  // Any Wire the switch would orphan or leave between ports sharing no channel refuses it (data core).
-  const trial=SovSchematicData.clone(n);if(next==='none')trial.config.attachmentDefaults='none';else delete trial.config.attachmentDefaults;
-  try{SovSchematicData.assertDefinitionPortsKept(n,{config:{attachmentDefaults:next}},trial);SovSchematicData.assertWiresSurviveEdit(diagram,n,trial)}catch(error){formAttachments.value=Attachment.attachmentDefaults(n);statusEl.textContent=error.message;return}
-  setHistoryHint('Change attachment defaults');
-  // Choosing the template's ports where the Component's ports differ from them resets them.
-  const differs=next==='standard'&&JSON.stringify(componentPortList(n).slice(0,SovSchematicData.templatePorts(n.symbolId).length))!==JSON.stringify(SovSchematicData.normalizeDeclaredPorts(SovSchematicData.templatePorts(n.symbolId)));
-  if(next==='none')n.config.attachmentDefaults='none';else delete n.config.attachmentDefaults;
-  SovSchematicData.reconcileComponentWirePorts(diagram,n.id);componentConfig(n);
-  routeCache.clear();arrowPoseCache.clear();render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
-  if(differs)statusEl.textContent='Reset to template ports';
-});
+// Dimension has no control of its own: it comes with the type, chosen in the bar (issue #20).
+// Attachments have no selector of their own either: the Attached list shows them, and the ports are
+// edited row by row or put back to the template's (issue #21). `config.attachmentDefaults` stays in
+// the file format; the data core still stores every port list in its smallest form.
 // --- Ports ------------------------------------------------------------------
 // Every Ports edit sends the Component's complete port list through the data core's component
 // update, which stores it in the smallest form and applies every refusal. One edit is one history
@@ -10903,9 +11237,26 @@ portsList.addEventListener('change',e=>{
   else if(el.classList.contains('port-channels'))editComponentPort(n,portId,port=>{port.channels=portChannelsFromText(value,port.channels)},'Change port channels');
 });
 portsList.addEventListener('click',e=>{
+  // A row's id cell selects its point; a hosted Point's Select button selects the Point (#21).
+  const select=e.target.closest('.port-select');
+  if(select){const p=nodes.find(x=>x.id===select.closest('.hosted-row')?.dataset.pointComponentId);if(p){closeSelectionSettings();selectNode(p.id)}return}
+  const idCell=e.target.closest('.port-id');
+  if(idCell){
+    const row=idCell.closest('.ports-row,.hosted-row');if(!row)return;
+    if(row.dataset.portId){closeSelectionSettings();selectPort(row.dataset.componentId,row.dataset.portId)}
+    else if(row.dataset.pointComponentId&&nodes.some(x=>x.id===row.dataset.pointComponentId)){closeSelectionSettings();selectNode(row.dataset.pointComponentId)}
+    return;
+  }
   const button=e.target.closest('.port-remove');if(!button||button.disabled)return;
   const target=button.closest('.ports-row'),n=nodes.find(x=>x.id===target.dataset.componentId);if(!n)return;
   editComponentPort(n,target.dataset.portId,port=>{port.removed=true},'Remove port');
+});
+// The template's ports put back (#21), the added ports kept under them: the same component update as
+// any port edit, so a Wire whose port would change (PORT_IN_USE) or a definition that owns the ports
+// (DEFINITION_PORTS) refuses it.
+portsResetBtn.addEventListener('click',()=>{
+  const n=selectedPortsComponent();if(!n||portsResetBtn.disabled)return;
+  applyComponentPortPatch(n,{attachmentDefaults:'standard',attachmentPoints:templatePortsKept(n).additions},'Reset to template ports');
 });
 // A new port: id p1, p2, ... (the first free), on the right, at the first free position of
 // .5, .25, .75, .125, .375, .625, .875 on that side; once those are used, at the midpoint of the
@@ -12148,6 +12499,17 @@ function runtimeCrud(operation){
   }
   return SovSchematicData.clone(receipt);
 }
+// A batch is one history entry and one recovery save, like a single edit: all or none.
+function runtimeBatch(batch={}){
+  commitHistoryCapture();
+  const receipt=SovSchematicData.applyBatch(diagram,{...batch,id:batch.id||`browser-batch-${Date.now()}`});
+  if(receipt.ok){
+    normalizeRuntimeAfterCrud();
+    commitHistoryCapture(`Apply ${receipt.result.applied.length} change${receipt.result.applied.length===1?'':'s'}`);
+    try{saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false})}catch(_){ }
+  }
+  return SovSchematicData.clone(receipt);
+}
 // Runs live beside the document, not in it (STATE-SPACE.md "Surfaces"): the page's run registry
 // starts every run from snapshotDocument() and reads packs from the build's sov-packs tag. No run
 // operation captures history, changes the document or its revision, or saves recovery.
@@ -12185,6 +12547,8 @@ const SovSchematicAPI={
   update:(resource,id,patch)=>apiOperation('update',resource,id,null,patch),
   delete:(resource,id)=>apiOperation('delete',resource,id),
   execute:(operation)=>runtimeCrud(operation),
+  apply:(batch)=>runtimeBatch(batch),
+  read:(scope)=>SovSchematicData.readScope(snapshotDocument(),scope),
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},

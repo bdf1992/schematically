@@ -288,8 +288,9 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   const inFence=P=>fence?{x:Math.max(fence.l+2,Math.min(fence.r-2,P.x)),y:Math.max(fence.t+2,Math.min(fence.b-2,P.y))}:P;
   const SA=sourceNode?inFence(routeLead(A,B,aSide,sourceNode,wireEndpointInward(routedWire,sourceNode))):A, SB=targetNode?inFence(routeLead(B,A,bSide,targetNode,wireEndpointInward(routedWire,targetNode))):B;
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
+  // A group is drawn behind everything and is never an obstacle (SECTION-MODEL.md "Groups").
   const otherRects=nodes
-    .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
+    .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && !isGroupComponent(n) && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
     .map(n=>rectForNode(n,12));
 
   // Source and target are included after the outward lead. This prevents a path
@@ -299,7 +300,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   if(endpointNeedsOuterObstacle(targetNode,bSide,routedWire))endpointRects.push(rectForNode(targetNode,8));
   const obstacles=[...otherRects,...endpointRects];
 
-  const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
+  const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&!isGroupComponent(n)&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
   const xs=[SA.x,SB.x,(SA.x+SB.x)/2];
   const ys=[SA.y,SB.y,(SA.y+SB.y)/2];
   if(fence){xs.push(fence.l+14,fence.r-14);ys.push(fence.t+14,fence.b-14)}
@@ -396,7 +397,7 @@ function routeLead(P,Q,portId,node,inward){
   let d=ahead>0?Math.max(4,Math.min(ROUTE_LEAD,ahead/2)):ROUTE_LEAD;
   // Nor into a body in front of it: stop short of the first card the lead would enter.
   for(const other of nodes){
-    if(other.id===node.id||componentForm(other).dimension!==2||isDescendantOf(node.id,other.id)||isEffectivelyHidden(other))continue;
+    if(other.id===node.id||componentForm(other).dimension!==2||isGroupComponent(other)||isDescendantOf(node.id,other.id)||isEffectivelyHidden(other))continue;
     const R=componentBounds(other,10);
     for(let s=2;s<=d;s+=2){const x=P.x+nx*s,y=P.y+ny*s;if(x>R.l&&x<R.r&&y>R.t&&y<R.b){d=Math.max(4,s/2);break}}
   }
@@ -451,7 +452,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     // it away if its interior route now collides with a component.
     const routeOnly=normalizePoints([SA,...inner,SB]);
     const endpointRects=[];
-    const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
+    const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && !isGroupComponent(n) && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
     if(endpointNeedsOuterObstacle(sourceNode,w.aSide,w))endpointRects.push(rectForNode(sourceNode,8));
     if(endpointNeedsOuterObstacle(targetNode,w.bSide,w))endpointRects.push(rectForNode(targetNode,8));
     const obstacles=[...otherRects,...endpointRects];
@@ -469,7 +470,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
 
   const SA=sourceNode?routeLead(A,B,w.aSide,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?routeLead(B,A,w.bSide,targetNode,wireEndpointInward(w,targetNode)):B;
   const rebuiltCore=normalizePoints([SA,...rebuilt.slice(2,-2),SB]);
-  const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
+  const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && !isGroupComponent(n) && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
   const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied,[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]);
   const anchor=routeAnchor(rebuiltCore);
 

@@ -377,6 +377,53 @@ function markerCountEl(){
   }
   return el;
 }
+// Groups (SECTION-MODEL.md "Groups (reading only)"): a region drawn behind every other node and
+// every wire on its canvas. On the global canvas they sit in their own layer just before the wire
+// layer; on a Component's interior, directly after the host, before the wires lifted there and
+// the host's children. A group is not a body: it hosts nothing, has no ports and takes no gesture.
+function groupLayer(){
+  let layer=document.getElementById('groupLayer');
+  if(!layer){layer=document.createElementNS('http://www.w3.org/2000/svg','g');layer.setAttribute('id','groupLayer');workspace.insertBefore(layer,wiresG)}
+  return layer;
+}
+function placeGroupRegion(g,n){
+  const R=SovSchematicData.groupRect(diagram,n.id,componentSize);if(!R)return;
+  const rect=g.querySelector(':scope > .group-region'),title=g.querySelector(':scope > .group-title');
+  if(rect){rect.setAttribute('x',String(R.l));rect.setAttribute('y',String(R.t));rect.setAttribute('width',String(Math.max(1,R.w)));rect.setAttribute('height',String(Math.max(1,R.h)))}
+  if(title){title.setAttribute('x',String(R.l+12));title.setAttribute('y',String(R.t+19))}
+  const badge=g.querySelector(':scope > .marker-badge');if(badge)badge.setAttribute('transform',`translate(${R.r} ${R.t})`);
+}
+// Keeps every drawn region on its members while they move (renderWires runs on drag frames).
+function refreshGroupRegions(){
+  for(const g of workspace.querySelectorAll('.node.group')){const n=nodes.find(x=>x.id===g.dataset.id);if(n)placeGroupRegion(g,n)}
+}
+function renderGroups(markers=markersById()){
+  const layer=groupLayer();layer.replaceChildren();
+  const T=SovSchematicNotation.tokens(diagram);
+  for(const n of nodes){
+    if(!isGroupComponent(n)||isEffectivelyHidden(n))continue;
+    const cfg=n.config||{},surface=n.canvasId||GLOBAL_CANVAS_ID,editor=entityEditorState(n);
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','node group'+(selectedComponentIds.has(n.id)?' selected':''));g.dataset.id=n.id;g.dataset.canvasId=surface;g.style.opacity=String(editor.opacity);
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');rect.setAttribute('class','group-region');
+    rect.setAttribute('rx',String(T.radius?.card??10));
+    // Slot 0 is the colour every record is given, so only a chosen slot tints the region.
+    const slot=Number.isInteger(cfg.colorSlot)&&cfg.colorSlot>0?cfg.colorSlot:null;
+    rect.style.fill=slot!=null?slotColor(slot):'none';if(slot!=null)rect.style.fillOpacity='.1';
+    rect.style.stroke='var(--muted)';rect.style.strokeWidth='var(--stroke-structure)';rect.style.pointerEvents='none';
+    g.appendChild(rect);
+    const label=String(cfg.label||'').trim();
+    if(label){const title=document.createElementNS('http://www.w3.org/2000/svg','text');title.setAttribute('class','group-title');title.dataset.role='title';
+      // The muted ink, darkened (or lightened) only as far as text needs to read on the region: 4.5:1, as card text.
+      const muted=(getComputedStyle(workspace).getPropertyValue('--muted')||'').trim(),ink=/^#[0-9a-f]{6}$/i.test(muted)?muted:'#6C6C65';
+      title.style.fill=ensureContrast(ink,slot!=null?mixHex([canvasTone(),slotColor(slot)],[.9,.1]):canvasTone(),4.6);title.textContent=label;g.appendChild(title)}
+    {const own=markers.get(n.id);if(own)appendMarkerBadge(g,own,0,0)}
+    placeGroupRegion(g,n);
+    const host=surface.startsWith('canvas:component:')?nodesG.querySelector(`:scope > .node[data-id="${CSS.escape(surface.slice('canvas:component:'.length))}"]`):null;
+    if(host){let at=host;while(at.nextElementSibling?.classList.contains('group'))at=at.nextElementSibling;at.after(g)}
+    else layer.appendChild(g);
+  }
+}
 function render(){
   applyNotationTokens();
   if(typeof buildSymbolPalette==='function')buildSymbolPalette();
@@ -387,8 +434,8 @@ function render(){
   nodesG.innerHTML='';
   const unplacedIds=new Set(typeof layoutUnplacedIds==='function'?layoutUnplacedIds():[]);
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
-    if(isEffectivelyHidden(n))return;
-    const s=byId(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
+    if(isEffectivelyHidden(n)||isGroupComponent(n))return; // groups are drawn by renderGroups, behind
+    const s=symbolOf(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
     {const form=componentForm(n),backdrop=componentBackdropMode(n);g.setAttribute('class','node'+(unplacedIds.has(n.id)?' unplaced':'')+(n.symbolId==='blank'?' blank':'')+(selectedComponentIds.has(n.id)?' selected':'')+(componentAcceptsChildren(n)?' is-container':'')+(form.frame.mode==='shell'?' form-shell':'')+(form.frame.mode==='frame'?' form-frame':'')+(n.parentId?' nested-child':'')+(componentHostedOnWire(n)?' wire-hosted':'')+(backdrop==='none'?' backdrop-none':'')+(editor.pinned?' is-pinned':'')+(editor.locked?' is-locked':''));}
     g.style.opacity=String(editor.opacity);
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
@@ -426,6 +473,7 @@ function render(){
     appendComponentLeads(g,n);appendTerminalMarks(g,n);
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
   });
+  renderGroups(markers);
   renderWires(signalState,markers);
   {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
   renderJunctionDots();
@@ -668,7 +716,7 @@ function placeWireLabels(){
   };
   const rect=el=>{const r=el.getBoundingClientRect();return {l:r.left,r:r.right,t:r.top,b:r.bottom}};
   const intersects=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
-  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.component-label,.outside-label,.internal-text')].filter(visible).map(rect);
+  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.group-title,.component-label,.outside-label,.internal-text')].filter(visible).map(rect);
   const entries=[...wireLabelPaths].filter(([path])=>path.isConnected&&visible(path)).map(([path,points])=>({path,points:points.map(screen)}));
   // A slab intersection also handles diagonal carrier segments without sampling.
   const crosses=(box,a,b)=>{
@@ -723,6 +771,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
   wireLabelPaths.clear();
   wiresG.innerHTML='';
   nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
+  refreshGroupRegions();
   clearEndpointFocus();
   const occupied=[];
   const dragging=!!activeNodeDrag;
@@ -832,7 +881,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const surface=w.canvasId||GLOBAL_CANVAS_ID;
     const hostId=surface.startsWith('canvas:component:')?surface.slice('canvas:component:'.length):null;
     const hostEl=hostId?nodesG.querySelector(`:scope > .node[data-id="${hostId}"]`):null;
-    if(hostEl){(hostAnchors.get(hostId)||hostEl).after(group);hostAnchors.set(hostId,group)}
+    // The host's groups sit directly after it, behind its wires: the first wire goes after them.
+    const firstAnchor=el=>{let at=el;while(at.nextElementSibling?.classList.contains('group'))at=at.nextElementSibling;return at};
+    if(hostEl){(hostAnchors.get(hostId)||firstAnchor(hostEl)).after(group);hostAnchors.set(hostId,group)}
     else wiresG.appendChild(group);
 
     // Marks have no independent positional truth. Every arrow is regenerated
