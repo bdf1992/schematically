@@ -2,8 +2,10 @@ import asyncio, math
 from pathlib import Path
 from playwright.async_api import async_playwright
 from browser_runtime import chromium_launch_kwargs
+from qa_out import out_dir
 ROOT=Path(__file__).resolve().parents[1]
 HTML=ROOT/'index.html'
+OUT=out_dir()
 async def main():
   async with async_playwright() as p:
     browser=await p.chromium.launch(**chromium_launch_kwargs(disable_gpu=True))
@@ -31,6 +33,6 @@ async def main():
     axis_y=result['useY']+(result['terminalY']/64)*result['box']['h']
     assert abs(axis_y)<.15,(axis_y,result)
     assert not errors,errors
-    await page.screenshot(path=str(ROOT/'tests/beta18-inline-wire.png'),full_page=True)
+    await page.screenshot(path=str(OUT/'beta18-inline-wire.png'),full_page=True)
     await browser.close();print('PASS wire host inline QA')
 asyncio.run(main())
