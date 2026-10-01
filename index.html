@@ -2038,12 +2038,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     }
     return errors;
   }
-  // A Wire's propagation delay (STATE-SPACE.md "Two-phase ticks"): absent means 1; a value an
-  // edit supplies must be an integer >= 1. An update's `delay: null` removes it (`clearable`).
-  // Loading keeps a stored value as written, for the state space's load check to report.
+  // A Wire's propagation delay (STATE-SPACE.md "Two-phase ticks"): absent means 1; an edit may
+  // supply an integer >= 0. 0 is a zero-delay Path, and a cycle made only of zero-delay legs is
+  // refused when the run starts (ZERO_DELAY_CYCLE, src/07-state-space.js). An update's
+  // `delay: null` removes it (`clearable`). Loading keeps a stored value as written, for the
+  // state space's load check to report.
   function assertPathDelay(config,clearable=false){
     if(!isObject(config)||config.delay===undefined||(clearable&&config.delay===null))return;
-    if(!(Number.isInteger(config.delay)&&config.delay>=1))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
+    if(!(Number.isInteger(config.delay)&&config.delay>=0))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 0, not ${JSON.stringify(config.delay)}`);
   }
   // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
   // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no

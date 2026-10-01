@@ -266,11 +266,15 @@ const refusedClean=(doc,fn,pick)=>{const rev=doc.revision,before=JSON.stringify(
   const w=mkw(d,{id:'w',a:'a',aSide:'out',b:'b',bSide:'in',config:{delay:2}});
   const wires=doc=>doc.wires;
   const r={ok:w.ok,create:{},update:{}};
-  for(const [k,v] of Object.entries({zero:0,negative:-1,fraction:1.5,string:'2',nul:null})){
+  for(const [k,v] of Object.entries({negative:-1,fraction:1.5,string:'2',nul:null})){
     r.create[k]=refusedClean(d,()=>mkw(d,{id:'x'+k,a:'a',aSide:'out',b:'b',bSide:'in',config:{delay:v}}),wires);
     // Contract #47 step 7: an update's delay null removes the delay (absent means 1); it is not refused.
     if(v!==null)r.update[k]=refusedClean(d,()=>upd(d,'w',{config:{delay:v}},'wire'),wires);
   }
+  // delay 0 is a zero-delay Path, allowed on create and update; it stores as written.
+  const zc=mkw(d,{id:'xzero',a:'a',aSide:'out',b:'b',bSide:'in',config:{delay:0}});
+  const zu=upd(d,'w',{config:{delay:0}},'wire');
+  r.zero={created:zc.ok&&d.wires.find(x=>x.id==='xzero').config.delay===0,updated:zu.ok&&d.wires.find(x=>x.id==='w').config.delay===0};
   r.accepted=upd(d,'w',{config:{delay:5}},'wire').ok&&d.wires[0].config.delay===5;
   r.unrelated=upd(d,'w',{config:{label:'x'}},'wire').ok;
   const file=JSON.parse(JSON.stringify(D.compactDocument(d)));file.wires[0].config.delay=-1;
@@ -395,9 +399,34 @@ const refusedClean=(doc,fn,pick)=>{const rev=doc.revision,before=JSON.stringify(
   const captures=[],runtime=[];
   const ctx=vm.createContext({window:{},SovSchematicData:D,SovSchematicGraph:require(require('path').join(require('path').dirname(process.argv[1]),'07-graph-core.js')),diagram,Date,Math,String,commitHistoryCapture:label=>captures.push(label===undefined?null:label),normalizeRuntimeAfterCrud:()=>runtime.push('normalize'),saveWorkspaceToStorage:()=>runtime.push('save'),LOCAL_RECOVERY_KEY:'k'});
   vm.runInContext(fs.readFileSync(process.argv[4],'utf8'),ctx,{filename:'85-api.js'});
-  const api=ctx.window.SovSchematicAPI,rev=diagram.revision,before=JSON.stringify(diagram.wires);
-  const u=api.update('wire','w',{config:{delay:0}}),c=api.create('wire',{id:'w2',a:'a',aSide:'out',b:'b',bSide:'in',config:{delay:1.5}});
-  out.adapterDelay={update:u,create:c,labelled:captures.filter(x=>x!==null),runtime,revSame:diagram.revision===rev,same:JSON.stringify(diagram.wires)===before};
+  // 85-api.js declares its own normalizeRuntimeAfterCrud, shadowing the stub above; an accepted
+  // mutation below would reach it and the browser-only globals (nodes, wires, ...) it needs, which
+  // this harness does not provide. Re-bind the name to the stub once the script has loaded.
+  ctx.normalizeRuntimeAfterCrud=()=>runtime.push('normalize');
+  const api=ctx.window.SovSchematicAPI;
+  // delay 0 is a zero-delay Path, allowed through the adapter; it stores as written.
+  const uz=api.update('wire','w',{config:{delay:0}});
+  const zero={ok:uz.ok,stored:diagram.wires.find(x=>x.id==='w').config.delay};
+  const capturedSoFar=captures.length,runtimeSoFar=runtime.length;
+  const rev=diagram.revision,before=JSON.stringify(diagram.wires);
+  const u=api.update('wire','w',{config:{delay:-1}}),c=api.create('wire',{id:'w2',a:'a',aSide:'out',b:'b',bSide:'in',config:{delay:1.5}});
+  out.adapterDelay={update:u,create:c,zero,labelled:captures.slice(capturedSoFar).filter(x=>x!==null),runtime:runtime.slice(runtimeSoFar),revSame:diagram.revision===rev,same:JSON.stringify(diagram.wires)===before};
+}
+
+// A ring made only of zero-delay legs is refused when the run starts (ZERO_DELAY_CYCLE), naming
+// both Wires, through the same S.startRun call the ring case in state_space_message_qa.py uses;
+// with one of the two legs back at delay 1 the run starts.
+{
+  const d=D.makeDocument({id:'ring'});
+  mk(d,{id:'a',symbolId:'act',x:0,y:0});mk(d,{id:'b',symbolId:'act',x:400,y:0});
+  mkw(d,{id:'w1',a:'a',aSide:'out',b:'b',bSide:'in',config:{delay:2}});
+  mkw(d,{id:'w2',a:'b',aSide:'out',b:'a',bSide:'in',config:{delay:2}});
+  const toZero1=upd(d,'w1',{config:{delay:0}},'wire'),toZero2=upd(d,'w2',{config:{delay:0}},'wire');
+  const check=S.checkDocument(d,packs).refusals.map(x=>x.code);
+  const started=S.startRun({doc:d,packs});
+  const toOne=upd(d,'w2',{config:{delay:1}},'wire');
+  const startedTimed=S.startRun({doc:d,packs});
+  out.ringZero={toZero1:toZero1.ok,toZero2:toZero2.ok,check,code:started.code,cycles:started.cycles,toOne:toOne.ok,startedTimed:startedTimed.ok};
 }
 console.log(JSON.stringify(out));
 """
@@ -477,8 +506,10 @@ def check_http_mcp() -> None:
             status, wire = http_json(base + '/api/v1/wires', 'POST', {'id': 'w', 'a': 'g', 'aSide': 'out', 'b': 'h', 'bSide': 'in', 'config': {'delay': 2}})
             assert status == 201 and wire['ok'] and wire['result']['config']['delay'] == 2, wire
             rev = wire['revisionAfter']
-            status, denied = http_json(base + '/api/v1/wires/w', 'PATCH', {'config': {'delay': 0}})
-            assert status == 400 and 'PATH_DELAY_INVALID' in denied['error']['message'] and denied['revisionAfter'] == rev, denied
+            # delay 0 is a zero-delay Path, accepted over HTTP.
+            status, accepted = http_json(base + '/api/v1/wires/w', 'PATCH', {'config': {'delay': 0}})
+            assert status == 200 and accepted['ok'] and accepted['result']['config']['delay'] == 0, accepted
+            rev = accepted['revisionAfter']
             status, denied = http_json(base + '/api/v1/wires', 'POST', {'id': 'w9', 'a': 'g', 'aSide': 'out', 'b': 'h', 'bSide': 'in', 'config': {'delay': 1.5}})
             assert status == 400 and 'PATH_DELAY_INVALID' in denied['error']['message'] and denied['revisionAfter'] == rev, denied
             mcp, is_error = rpc(base, 'schematic.update', {'resource': 'wire', 'id': 'w', 'patch': {'config': {'delay': -1}}}, 5)
@@ -494,8 +525,8 @@ def check_http_mcp() -> None:
             assert is_error and mcp['error']['message'].startswith('DEFINITION_BIND_REQUIRED:') and mcp['revisionAfter'] == rev, mcp
             mcp, is_error = rpc(base, 'schematic.create', {'resource': 'component', 'value': {'id': 'n', 'symbolId': 'act', 'config': {'definition': {'evil': 1}}}}, 8)
             assert is_error and mcp['error']['message'].startswith('DEFINITION_INVALID:') and mcp['revisionAfter'] == rev, mcp
-            # No refusal entered history: three undos remove the Wire, h and the creation of g.
-            for n in range(3):
+            # No refusal entered history: four undos remove the accepted delay 0 PATCH, the Wire, h and the creation of g.
+            for n in range(4):
                 undo, is_error = rpc(base, 'schematic.history.undo', {}, 10 + n)
                 assert not is_error, undo
             assert not undo['components'] and not undo['wires'], undo
@@ -538,11 +569,19 @@ def check_amendment() -> None:
     for kind in ('create', 'update'):
         for key, got in dl[kind].items():
             assert got['ok'] is False and 'PATH_DELAY_INVALID' in got['msg'] and got['rev'] and got['same'], (kind, key, got)
+    assert dl['zero']['created'] and dl['zero']['updated'], dl
     assert dl['loadKeeps'] == -1 and dl['check'] == ['PATH_DELAY_INVALID'], dl
     ad = a['adapterDelay']
     for key in ('update', 'create'):
         assert ad[key]['ok'] is False and 'PATH_DELAY_INVALID' in ad[key]['error']['message'], ad
+    assert ad['zero']['ok'] and ad['zero']['stored'] == 0, ad
     assert ad['labelled'] == [] and ad['runtime'] == [] and ad['revSame'] and ad['same'], ad
+    # A ring made only of zero-delay legs is refused at run start, naming both Wires; one leg
+    # back at delay 1 and the run starts.
+    rz = a['ringZero']
+    assert rz['toZero1'] and rz['toZero2'] and rz['check'] == [], rz
+    assert rz['code'] == 'ZERO_DELAY_CYCLE' and rz['cycles'] == [{'nodes': ['a', 'b'], 'wires': ['w1', 'w2']}], rz
+    assert rz['toOne'] and rz['startedTimed'], rz
 
     # Steps 14 + 16.
     assert a['invalid'] == ['DEFINITION_INVALID'], a['invalid']
