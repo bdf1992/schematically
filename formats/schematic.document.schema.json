@@ -63,6 +63,14 @@
                 },
                 "uniqueItems": true,
                 "description": "On a group (symbolId 'group'): the ids of the Components it collects for reading, all on the group's canvas. A group is not a boundary: it hosts nothing and has no ports, and a Wire between members of different groups is one Wire. See SECTION-MODEL.md 'Groups (reading only)'."
+              },
+              "status": {
+                "$ref": "#/$defs/status",
+                "description": "The Component's status: the id of an entry in the statuses list of the document's notation (notation.statuses). There is no built-in list; a notation that declares no statuses admits none (STATUS_UNDECLARED), and an id it does not declare is STATUS_UNKNOWN. See NOTATION-MODEL.md 'Statuses'."
+              },
+              "waitsOn": {
+                "$ref": "#/$defs/waitsOn",
+                "description": "What the Component waits on: people, rules and decisions, each {kind, id, label?}. Drawn under the card beside the status the notation's statuses list declares; anything else is WAITS_ON_INVALID."
               }
             }
           }
@@ -80,7 +88,22 @@
           "b",
           "bSide"
         ],
-        "description": "Wire config may include forwardOperation/reverseOperation: none | read | write."
+        "description": "Wire config may include forwardOperation/reverseOperation: none | read | write.",
+        "properties": {
+          "config": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "$ref": "#/$defs/status",
+                "description": "The Wire's status: the id of an entry in the statuses list of the document's notation (notation.statuses). There is no built-in list; a notation that declares no statuses admits none (STATUS_UNDECLARED), and an id it does not declare is STATUS_UNKNOWN. See NOTATION-MODEL.md 'Statuses'."
+              },
+              "waitsOn": {
+                "$ref": "#/$defs/waitsOn",
+                "description": "What the Wire waits on: people, rules and decisions, each {kind, id, label?}. Drawn in the Wire's caption after the status the notation's statuses list declares; anything else is WAITS_ON_INVALID."
+              }
+            }
+          }
+        }
       }
     },
     "references": {
@@ -98,6 +121,38 @@
   },
   "additionalProperties": true,
   "$defs": {
+    "status": {
+      "type": "string",
+      "description": "An id from the statuses list of the document's notation (notation.statuses); the values are the notation's, never a fixed set."
+    },
+    "waitsOn": {
+      "type": "array",
+      "description": "Typed references to what a Component or Wire waits on (people, rules and decisions), shown beside the status it takes from the notation's statuses list.",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "person",
+              "rule",
+              "decision"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "declaredPort": {
       "type": "object",
       "required": [
