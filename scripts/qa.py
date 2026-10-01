@@ -57,6 +57,7 @@ BROWSER=[
     'tests/editor_kernel_extended_qa.py',
     'tests/file_surface_qa.py',
     'tests/svg_export_qa.py',
+    'tests/export_picture_fit_qa.py',
     'tests/layout_quality_qa.py',
     'tests/layout_review_qa.py',
     'tests/contrast_qa.py',
