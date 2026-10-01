@@ -2,6 +2,9 @@
   "protocolVersion": "2026-07-28",
   "endpoint": "/mcp",
   "tools": [
+    "schematic.guide",
+    "schematic.read",
+    "schematic.apply",
     "schematic.list",
     "schematic.get",
     "schematic.create",
