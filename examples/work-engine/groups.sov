@@ -1,0 +1,113 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "work-engine-groups",
+  "revision": 0,
+  "meta": {
+    "title": "Work Engine: records and surfaces as reading-only groups"
+  },
+  "components": [
+    {
+      "id": "records",
+      "symbolId": "group",
+      "x": 600,
+      "y": 266,
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "Records",
+        "colorSlot": 2,
+        "members": ["case", "recording", "anchor"],
+        "presentation": {
+          "graphic": {"kind": "none"},
+          "size": {"w": 400, "h": 360}
+        }
+      }
+    },
+    {
+      "id": "surfaces",
+      "symbolId": "group",
+      "x": 160,
+      "y": 266,
+      "canvasId": "canvas:global",
+      "config": {
+        "label": "Surfaces",
+        "colorSlot": 4,
+        "members": ["web-booth", "delivery-broker"],
+        "presentation": {
+          "graphic": {"kind": "none"},
+          "size": {"w": 160, "h": 360}
+        }
+      }
+    },
+    {
+      "id": "case",
+      "symbolId": "hold",
+      "x": 480,
+      "y": 180,
+      "canvasId": "canvas:global",
+      "config": {"label": "Case"}
+    },
+    {
+      "id": "recording",
+      "symbolId": "hold",
+      "x": 480,
+      "y": 380,
+      "canvasId": "canvas:global",
+      "config": {"label": "Recording"}
+    },
+    {
+      "id": "anchor",
+      "symbolId": "hold",
+      "x": 720,
+      "y": 180,
+      "canvasId": "canvas:global",
+      "config": {"label": "Anchor"}
+    },
+    {
+      "id": "web-booth",
+      "symbolId": "act",
+      "x": 160,
+      "y": 180,
+      "canvasId": "canvas:global",
+      "config": {"label": "Web booth", "signalMode": "source"}
+    },
+    {
+      "id": "delivery-broker",
+      "symbolId": "act",
+      "x": 160,
+      "y": 380,
+      "canvasId": "canvas:global",
+      "config": {"label": "Delivery broker", "signalMode": "source"}
+    }
+  ],
+  "wires": [
+    {
+      "id": "booth-to-case",
+      "a": "web-booth",
+      "aSide": "out",
+      "b": "case",
+      "bSide": "in",
+      "canvasId": "canvas:global",
+      "config": {"label": "opens"}
+    },
+    {
+      "id": "broker-to-recording",
+      "a": "delivery-broker",
+      "aSide": "out",
+      "b": "recording",
+      "bSide": "in",
+      "canvasId": "canvas:global",
+      "config": {"label": "delivers"}
+    },
+    {
+      "id": "case-to-anchor",
+      "a": "case",
+      "aSide": "out",
+      "b": "anchor",
+      "bSide": "in",
+      "canvasId": "canvas:global",
+      "config": {"label": "anchors"}
+    }
+  ],
+  "references": [],
+  "layout": {}
+}

@@ -73,6 +73,8 @@
 
   // ---- Geometry -----------------------------------------------------------------------------
   function hosted(c){const k=c?.placement?.kind;return k==='edge'||k==='wire'||k==='path'}
+  // A group (SECTION-MODEL.md "Groups (reading only)") holds Components for reading; it is never an obstacle.
+  function grouping(c){return Data.normalizeSymbolId(c?.symbolId||c?.type)==='group'}
   function size(c){
     if(Number(c?.form?.dimension)===0)return {w:POINT,h:POINT};
     const s=c?.config?.presentation?.size;
@@ -187,7 +189,8 @@
     if(scope&&!doc.components.some(c=>c.id===scope))return refusal('UNKNOWN_NODE',`No component ${scope}`);
     const byId=new Map(doc.components.map(c=>[c.id,c])),frozen=[];
     const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,resolvedNotation=N?N.resolve(doc):null,notation=resolvedNotation?.ok?resolvedNotation.notation:null;
-    const inScope=canvas=>doc.components.filter(c=>!hosted(c)&&(c.canvasId||Data.GLOBAL_CANVAS_ID)===canvas);
+    // A group is drawn around its members wherever they land, so it is not a card to place.
+    const inScope=canvas=>doc.components.filter(c=>!hosted(c)&&!grouping(c)&&(c.canvasId||Data.GLOBAL_CANVAS_ID)===canvas);
     const isContainer=c=>c.form?.regions?.interior?.state==='open'&&Number(c.form?.dimension??2)===2;
     // A container drawing its own symbol keeps it clear of its children; a section's skin counts too.
     const topRoom=c=>{const g=c?.config?.presentation?.graphic?.kind;const s=Data.componentSection?Data.componentSection(c):null;
@@ -344,7 +347,7 @@
         const oid=other(w,p.id),o=byId.get(oid),O=box(oid);
         if(!O||o.canvasId!==host.canvasId||wiresOf(oid).length!==1||o.editor?.pinned||o.editor?.locked||frozen.includes(oid))continue;
         const next=vertical?{...O,y:at}:{...O,x:at};
-        const clash=doc.components.some(k=>k.id!==oid&&!hosted(k)&&k.canvasId===o.canvasId&&(()=>{const K=box(k.id);return K&&Math.abs(K.x-next.x)<(K.w+next.w)/2+8&&Math.abs(K.y-next.y)<(K.h+next.h)/2+8})());
+        const clash=doc.components.some(k=>k.id!==oid&&!hosted(k)&&!grouping(k)&&k.canvasId===o.canvasId&&(()=>{const K=box(k.id);return K&&Math.abs(K.x-next.x)<(K.w+next.w)/2+8&&Math.abs(K.y-next.y)<(K.h+next.h)/2+8})());
         if(!clash)shift(doc,viewId,oid,next.x-O.x,next.y-O.y);
       }
     }

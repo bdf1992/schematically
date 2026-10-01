@@ -55,6 +55,14 @@
                   "$ref": "#/$defs/declaredPort"
                 },
                 "description": "Declared ports: additions under 'standard', the complete list under 'none'."
+              },
+              "members": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true,
+                "description": "On a group (symbolId 'group'): the ids of the Components it collects for reading, all on the group's canvas. A group is not a boundary: it hosts nothing and has no ports, and a Wire between members of different groups is one Wire. See SECTION-MODEL.md 'Groups (reading only)'."
               }
             }
           }
