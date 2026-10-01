@@ -122,6 +122,7 @@ Port override on a Component, for access or face. Write the whole port record; t
 | `plane` | Bounded 2D region that hosts Points on its boundary and Components inside. |
 | `point` | 0D attachment on a Path, a Plane boundary, or a Wire. |
 | `path` | 1D route with start and end that hosts Points. |
+| `group` | Collects Components for reading: `config.members` lists their ids, all on the group's canvas. Not a boundary: it hosts nothing and has no ports, and a Wire between members of different groups is one Wire. Not in the palette; see SECTION-MODEL.md "Groups (reading only)". |
 | `clock` | Drives time: its level rises and falls on a declared period. Needs `config.signal.clock.periodMs`. |
 | `lever` | An asserted level: it holds the state it was set to until an operation changes it. |
 | `blank` | Incomplete component whose type is still to be chosen. Do not author these. |
@@ -180,7 +181,7 @@ All of this is optional data. `GRAPH-MODEL.md` specifies it in full.
 ## Procedure
 
 1. Write the topology as a list before any JSON: each record with its type and role, each wire as `a.side → b.side`, and which surface each wire is on.
-2. Decide the regions. Anything that is "inside" something else gets a Plane host and boundary Points for every crossing.
+2. Decide the regions. A collection drawn only to help the reader (records here, surfaces there) is a `group` with `config.members`; Wires run straight between members, one Wire each, with no boundary Points. Only real containment, something truly inside something else, gets a Plane host and boundary Points for every crossing.
 3. Place records on a grid with a separate control/feedback lane. Compute Plane sizes from child bounds and title/label clearance. Apply the palette, port audit and graphic rules in [author](../author/SKILL.md#layout-and-review); connection slots, not wire hex fields, own wire colors.
 4. Write the file in the authored form above.
 5. Validate: `node scripts/validate_sov.mjs my.sov`. Fix every line it prints. It uses the same checks the editor runs at load, plus the wire `canvasId` check.

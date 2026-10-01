@@ -1616,7 +1616,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
     // component record is the static 1D role (a rail that hosts Points).
     path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},size:{w:240,h:64}}},
-    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}}
+    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}},
+    // A group collects Components for reading (SECTION-MODEL.md "Groups (reading only)"). It is
+    // not a boundary: its interior stays closed, it hosts nothing, and it has no ports.
+    group:{form:{dimension:2},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}}
   };
   // Declared ports: `{id, compatId?, side: left|right|top|bottom, t: 0..1,
   // flow: in|out|control|duplex|trigger, channels: [{id}], label?}`. The typed Component
@@ -1983,6 +1986,80 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!isObject(config)||config.delay===undefined||(clearable&&config.delay===null))return;
     if(!(Number.isInteger(config.delay)&&config.delay>=1))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
   }
+  // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
+  // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
+  // ports, and a Wire between members of different groups is one Wire on their shared canvas.
+  // `config.members` holds distinct Component ids. The rules, one finding each:
+  //   GROUP_MEMBER_UNKNOWN  a member names no Component (or is not a Component id)
+  //   GROUP_MEMBER_CANVAS   a member's canvasId differs from the group's
+  //   GROUP_MEMBER_HOSTED   a member rides on a host (placement kind edge, wire or path)
+  //   GROUP_MEMBER_GROUP    a member is a group
+  //   GROUP_MEMBER_TWICE    a Component listed twice (by two groups, or twice by one)
+  //   GROUP_PORTS           a group carries config.attachmentPoints or attachmentDefaults 'standard'
+  //   GROUP_HOST            a Component placed on a group (placement.hostId) or in its interior
+  // Loading reports them (validateDocument); create and update refuse an edit that adds one.
+  const GROUP_PAD=24,GROUP_TITLE_BAND=28;
+  function isGroup(component){return !!component&&normalizeSymbolId(component.symbolId||component.type)==='group'}
+  function groupMembers(component){const m=component?.config?.members;return Array.isArray(m)?m:[]}
+  function groupFindings(doc){
+    const components=Array.isArray(doc?.components)?doc.components:[],out=[];
+    const byId=new Map(components.filter(c=>c&&c.id!=null).map(c=>[c.id,c]));
+    const add=(code,id,text)=>out.push({code,id,text});
+    const listedBy=new Map();
+    for(const g of components){
+      if(!isGroup(g))continue;
+      const raw=g.config?.members;
+      if(raw!==undefined&&!Array.isArray(raw))add('GROUP_MEMBER_UNKNOWN',g.id,`group ${g.id} config.members must be an array of Component ids`);
+      for(const member of groupMembers(g)){
+        if(typeof member!=='string'||!byId.has(member)){add('GROUP_MEMBER_UNKNOWN',g.id,`group ${g.id} lists ${JSON.stringify(member)}, which is not a Component`);continue}
+        const m=byId.get(member);
+        if(listedBy.has(member))add('GROUP_MEMBER_TWICE',g.id,`group ${g.id} lists ${member}, already listed by group ${listedBy.get(member)}`);else listedBy.set(member,g.id);
+        if(isGroup(m)){add('GROUP_MEMBER_GROUP',g.id,`group ${g.id} lists ${member}, which is a group`);continue}
+        const kind=m.placement?.kind;
+        if(['edge','wire','path'].includes(kind)||String(m.canvasId||'').startsWith('canvas:wire:')){add('GROUP_MEMBER_HOSTED',g.id,`group ${g.id} lists ${member}, which rides on a host (placement ${kind||'wire'})`);continue}
+        if(containingCanvasId(m)!==containingCanvasId(g))add('GROUP_MEMBER_CANVAS',g.id,`group ${g.id} is on ${containingCanvasId(g)} and lists ${member}, which is on ${containingCanvasId(m)}`);
+      }
+      const cfg=g.config||{};
+      if(Array.isArray(cfg.attachmentPoints)||cfg.attachmentDefaults==='standard')add('GROUP_PORTS',g.id,`group ${g.id} has no ports: it carries ${Array.isArray(cfg.attachmentPoints)?'config.attachmentPoints':"attachmentDefaults 'standard'"}`);
+    }
+    for(const c of components){
+      if(!c)continue;
+      const host=c.placement?.hostId!=null?byId.get(c.placement.hostId):null;
+      const interior=String(c.canvasId||'').startsWith('canvas:component:')?byId.get(String(c.canvasId).slice('canvas:component:'.length)):null;
+      const g=isGroup(host)?host:isGroup(interior)?interior:null;
+      if(g)add('GROUP_HOST',c.id,`component ${c.id} is placed on group ${g.id}; a group hosts nothing`);
+    }
+    return out;
+  }
+  const groupFindingKey=f=>`${f.code}|${f.id}|${f.text}`;
+  // An edit may not add a group finding: the first one the trial document has and the current
+  // document does not is thrown, with its code first, before anything is written.
+  function assertGroupRules(doc,trialComponents){
+    const before=new Set(groupFindings(doc).map(groupFindingKey));
+    const added=groupFindings({...doc,components:trialComponents}).find(f=>!before.has(groupFindingKey(f)));
+    if(added)throw new Error(`${added.code}: ${added.text}`);
+  }
+  // The region a group is drawn as: the union of its members' rectangles (each centred on its
+  // x, y and sized by sizeOf(component)) padded GROUP_PAD on every side and GROUP_TITLE_BAND more
+  // on top for the title. A group with no placed member is its own x, y and presentation.size.
+  // Returned centred, like a Component: {x, y, w, h} plus its edges {l, r, t, b}.
+  function groupRect(doc,groupId,sizeOf){
+    const components=Array.isArray(doc?.components)?doc.components:[];
+    const g=components.find(c=>c?.id===groupId);if(!g)return null;
+    const size=typeof sizeOf==='function'?sizeOf:(c=>normalizePresentationSize(c?.config?.presentation?.size));
+    let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
+    for(const id of groupMembers(g)){
+      const m=components.find(c=>c?.id===id);if(!m||isGroup(m)||!Number.isFinite(Number(m.x))||!Number.isFinite(Number(m.y)))continue;
+      const s=size(m),x=Number(m.x),y=Number(m.y);
+      l=Math.min(l,x-s.w/2);r=Math.max(r,x+s.w/2);t=Math.min(t,y-s.h/2);b=Math.max(b,y+s.h/2);
+    }
+    if(!Number.isFinite(l)){
+      const s=normalizePresentationSize(g.config?.presentation?.size||TEMPLATE_PRESETS.group.presentation.size),x=num(g.x,0),y=num(g.y,0);
+      return {x,y,w:s.w,h:s.h,l:x-s.w/2,r:x+s.w/2,t:y-s.h/2,b:y+s.h/2};
+    }
+    l-=GROUP_PAD;r+=GROUP_PAD;t-=GROUP_PAD+GROUP_TITLE_BAND;b+=GROUP_PAD;
+    return {x:(l+r)/2,y:(t+b)/2,w:r-l,h:b-t,l,r,t,b};
+  }
   // `config.definition` is null (unbound) or an `id@version` string, anywhere it is written
   // (DEFINITION_INVALID). Only the binding path (`applyBinding`) sets it to a non-null value: a
   // plain component update or create may clear it or leave it alone (DEFINITION_BIND_REQUIRED).
@@ -2306,6 +2383,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // A bound definition (`id@version`) is kept only on a copy, so a pasted or duplicated bound Component stays bound.
     if(copy)assertDefinitionValue(value.config?.definition);else assertDefinitionPatch(value,false);
     if(value.config?.definition!==undefined)config.definition=clone(value.config.definition);
+    // A group's members, as written; create checks them (assertGroupRules).
+    if(value.config?.members!==undefined)config.members=clone(value.config.members);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -2569,6 +2648,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(resource==='wire'){assertCarrierEndpointAccepts(doc,value?.a);assertCarrierEndpointAccepts(doc,value?.b)}
     const record=resource==='component'?makeComponent(doc,value):resource==='wire'?makeWire(doc,value):makeReference(doc,value);
     if(arr.some(x=>x.id===record.id))throw new Error(`${resource} id already exists: ${record.id}`);
+    if(resource==='component')assertGroupRules(doc,[...doc.components,record]);
     arr.push(record);return clone(record);
   }
   // `binding` is the binding path only (`applyBinding`): the one update that may set a non-null
@@ -2601,6 +2681,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(!binding)assertDefinitionPortsKept(current,patch,candidate);
       assertWiresSurviveEdit(doc,current,candidate);
       normalizeComponentSize(candidate);
+      assertGroupRules(doc,doc.components.map((c,i)=>i===index?candidate:c));
     }else if(resource==='wire'){
       if(isObject(patch?.config))assertPathDelay(patch.config,true);
       if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
@@ -2643,6 +2724,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       for(const child of fallsBack){const trial=clone(child);trial.canvasId=containing;trial.placement={kind:'surface',x:child.x,y:child.y};assertDefinitionPortsKept(child,{placement:trial.placement},trial)}
       for(const child of fallsBack){child.canvasId=containing;child.parentId=removed.parentId??null;child.placement={kind:'surface',x:child.x,y:child.y};}
       for(let i=doc.wires.length-1;i>=0;i--)if(doc.wires[i].a===id||doc.wires[i].b===id)remove(doc,'wire',doc.wires[i].id);
+      // A deleted Component leaves every group that listed it, in the same operation.
+      for(const g of doc.components)if(isGroup(g)&&Array.isArray(g.config?.members)&&g.config.members.includes(id))g.config.members=g.config.members.filter(m=>m!==id);
     }else if(resource==='wire'){
       const hostedCanvas=`canvas:wire:${id}`;
       for(const component of doc.components)if(component.canvasId===hostedCanvas){component.canvasId=GLOBAL_CANVAS_ID;component.parentId=null;component.placement={kind:'surface',x:component.x,y:component.y};}
@@ -2797,6 +2880,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const ws=wire.form?.section;if(ws&&Array.isArray(ws.lines)&&Array.isArray(ws.bands)&&ws.bands.length!==ws.lines.length-1)errors.push(`wire ${wire.id||'?'} section: bands must be one fewer than lines (${ws.lines.length} lines, ${ws.bands.length} bands)`);
       for(const key of ['forwardOperation','reverseOperation'])if(wire.config?.[key]!=null&&!['none','read','write'].includes(wire.config[key]))errors.push(`wire ${wire.id||'?'} invalid ${key}: ${wire.config[key]}`);
     }
+    // Groups: reported, never repaired (the codes are listed at groupFindings).
+    for(const f of groupFindings(input))errors.push(`component ${f.id??'?'}: ${f.code}: ${f.text}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -2836,7 +2921,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
 /* END src/05-data-core.js */
 </script>
@@ -4799,6 +4884,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 
   // ---- Geometry -----------------------------------------------------------------------------
   function hosted(c){const k=c?.placement?.kind;return k==='edge'||k==='wire'||k==='path'}
+  // A group (SECTION-MODEL.md "Groups (reading only)") holds Components for reading; it is never an obstacle.
+  function grouping(c){return Data.normalizeSymbolId(c?.symbolId||c?.type)==='group'}
   function size(c){
     if(Number(c?.form?.dimension)===0)return {w:POINT,h:POINT};
     const s=c?.config?.presentation?.size;
@@ -4913,7 +5000,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(scope&&!doc.components.some(c=>c.id===scope))return refusal('UNKNOWN_NODE',`No component ${scope}`);
     const byId=new Map(doc.components.map(c=>[c.id,c])),frozen=[];
     const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,resolvedNotation=N?N.resolve(doc):null,notation=resolvedNotation?.ok?resolvedNotation.notation:null;
-    const inScope=canvas=>doc.components.filter(c=>!hosted(c)&&(c.canvasId||Data.GLOBAL_CANVAS_ID)===canvas);
+    // A group is drawn around its members wherever they land, so it is not a card to place.
+    const inScope=canvas=>doc.components.filter(c=>!hosted(c)&&!grouping(c)&&(c.canvasId||Data.GLOBAL_CANVAS_ID)===canvas);
     const isContainer=c=>c.form?.regions?.interior?.state==='open'&&Number(c.form?.dimension??2)===2;
     // A container drawing its own symbol keeps it clear of its children; a section's skin counts too.
     const topRoom=c=>{const g=c?.config?.presentation?.graphic?.kind;const s=Data.componentSection?Data.componentSection(c):null;
@@ -5070,7 +5158,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         const oid=other(w,p.id),o=byId.get(oid),O=box(oid);
         if(!O||o.canvasId!==host.canvasId||wiresOf(oid).length!==1||o.editor?.pinned||o.editor?.locked||frozen.includes(oid))continue;
         const next=vertical?{...O,y:at}:{...O,x:at};
-        const clash=doc.components.some(k=>k.id!==oid&&!hosted(k)&&k.canvasId===o.canvasId&&(()=>{const K=box(k.id);return K&&Math.abs(K.x-next.x)<(K.w+next.w)/2+8&&Math.abs(K.y-next.y)<(K.h+next.h)/2+8})());
+        const clash=doc.components.some(k=>k.id!==oid&&!hosted(k)&&!grouping(k)&&k.canvasId===o.canvasId&&(()=>{const K=box(k.id);return K&&Math.abs(K.x-next.x)<(K.w+next.w)/2+8&&Math.abs(K.y-next.y)<(K.h+next.h)/2+8})());
         if(!clash)shift(doc,viewId,oid,next.x-O.x,next.y-O.y);
       }
     }
@@ -5201,12 +5289,16 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 'use strict';
 // 0.1 Beta concern: Runtime state, DOM handles, palette/color kernel.
 
-const SYMBOLS = [{"id":"blank","name":"BLANK","family":"UNSET","role":"incomplete","meaning":"Incomplete component. Choose its type.","verbs":[],"properties":["incomplete","type-required"],"diagram_class":"COMPONENT"},{"id":"ground","name":"GROUND","family":"PASSIVE","role":"reference","meaning":"Reference point used to resolve meaning, state, or authority.","verbs":["resolve","reference"],"properties":["non-authoritative-by-itself"],"diagram_class":"REFERENCE"},{"id":"point","name":"POINT","family":"PRIMITIVE","role":"attachment","meaning":"0D attachment. Sticks to a Path, a Plane boundary, or a Wire; Wires end on Points.","verbs":["attach","enter","exit"],"properties":["addressable","0d"],"diagram_class":"BOUNDARY"},{"id":"port","name":"PORT","family":"PASSIVE","role":"boundary","meaning":"Legacy alias of POINT. Documents normalize it to point.","verbs":["enter","exit"],"properties":["addressable","legacy-alias"],"diagram_class":"BOUNDARY"},{"id":"path","name":"PATH","family":"PRIMITIVE","role":"carrier","meaning":"1D route with start and end. Hosts Points along its length. It does not imply permission or success.","verbs":["carry"],"properties":["direction-neutral","1d"],"diagram_class":"CONNECTION"},{"id":"plane","name":"PLANE","family":"PRIMITIVE","role":"surface","meaning":"Bounded 2D region. Hosts Points on its boundary and Components in its interior. A typed Plane is a Component.","verbs":["host","bound"],"properties":["bounded","hosts","2d"],"diagram_class":"SURFACE"},{"id":"join","name":"JOIN","family":"MECHANICAL","role":"connection","meaning":"Paths are connected.","verbs":["join"],"properties":["connected"],"diagram_class":"CONNECTION"},{"id":"cross","name":"CROSS","family":"PASSIVE","role":"connection","meaning":"Paths cross but do not connect.","verbs":["cross"],"properties":["not-connected"],"diagram_class":"CONNECTION"},{"id":"hold","name":"HOLD","family":"PASSIVE","role":"state","meaning":"Keeps bounded state.","verbs":["hold","store"],"properties":["stateful"],"diagram_class":"STATE"},{"id":"buffer","name":"BUFFER","family":"PASSIVE","role":"state","meaning":"Holds flow temporarily, then releases it.","verbs":["buffer","release"],"properties":["temporary-state"],"diagram_class":"STATE"},{"id":"act","name":"ACT","family":"ACTIVE","role":"transform","meaning":"Transforms input into output. Activity does not grant authority.","verbs":["act","transform"],"properties":["agentic","authority-neutral"],"diagram_class":"TRANSFORM"},{"id":"gate","name":"GATE","family":"MECHANICAL","role":"control","meaning":"Passes or refuses flow using a declared condition.","verbs":["check","pass","refuse"],"properties":["conditional","authority-neutral"],"diagram_class":"CONTROL"},{"id":"switch","name":"SWITCH","family":"MECHANICAL","role":"control","meaning":"Opens or closes a path from explicit control.","verbs":["open","close"],"properties":["externally-controlled"],"diagram_class":"CONTROL"},{"id":"limit","name":"LIMIT","family":"PASSIVE","role":"constraint","meaning":"Restricts a flow dimension without judgement.","verbs":["limit"],"properties":["non-judgemental"],"diagram_class":"CONTROL"},{"id":"one-way","name":"ONE-WAY","family":"PASSIVE","role":"direction","meaning":"Allows flow in one direction.","verbs":["pass"],"properties":["directional","non-reciprocal"],"diagram_class":"CONNECTION"},{"id":"return","name":"RETURN","family":"PASSIVE","role":"reciprocity","meaning":"Requires a matching return path.","verbs":["return"],"properties":["reciprocal"],"diagram_class":"CONNECTION"},{"id":"observe","name":"OBSERVE","family":"PASSIVE","role":"evidence","meaning":"Reads evidence from outside the action path.","verbs":["observe"],"properties":["independent-read"],"diagram_class":"EVIDENCE"},{"id":"receipt","name":"RECEIPT","family":"PASSIVE","role":"evidence","meaning":"Durable evidence emitted by a crossing or action.","verbs":["record","return"],"properties":["durable","evidentiary"],"diagram_class":"EVIDENCE"},{"id":"authority","name":"AUTHORITY","family":"PASSIVE","role":"control-reference","meaning":"Typed, scoped permission supplied as a control input.","verbs":["grant","scope"],"properties":["typed","scoped"],"diagram_class":"REFERENCE"},{"id":"refuse","name":"REFUSE","family":"MECHANICAL","role":"termination","meaning":"Ends an attempted path explicitly.","verbs":["refuse","stop"],"properties":["explicit-terminal"],"diagram_class":"TERMINATION"},{"id":"clock","name":"CLOCK","family":"ACTIVE","role":"timing","meaning":"Drives time: its level rises and falls on a declared period. An edge may start work.","verbs":["tick","schedule"],"properties":["asserted","periodic"],"diagram_class":"TIMING"},{"id":"lever","name":"LEVER","family":"MECHANICAL","role":"input","meaning":"An asserted level: it holds the state it was set to until an operation changes it.","verbs":["set","toggle"],"properties":["asserted","stateful"],"diagram_class":"CONTROL"}];
+const SYMBOLS = [{"id":"blank","name":"BLANK","family":"UNSET","role":"incomplete","meaning":"Incomplete component. Choose its type.","verbs":[],"properties":["incomplete","type-required"],"diagram_class":"COMPONENT"},{"id":"ground","name":"GROUND","family":"PASSIVE","role":"reference","meaning":"Reference point used to resolve meaning, state, or authority.","verbs":["resolve","reference"],"properties":["non-authoritative-by-itself"],"diagram_class":"REFERENCE"},{"id":"point","name":"POINT","family":"PRIMITIVE","role":"attachment","meaning":"0D attachment. Sticks to a Path, a Plane boundary, or a Wire; Wires end on Points.","verbs":["attach","enter","exit"],"properties":["addressable","0d"],"diagram_class":"BOUNDARY"},{"id":"port","name":"PORT","family":"PASSIVE","role":"boundary","meaning":"Legacy alias of POINT. Documents normalize it to point.","verbs":["enter","exit"],"properties":["addressable","legacy-alias"],"diagram_class":"BOUNDARY"},{"id":"path","name":"PATH","family":"PRIMITIVE","role":"carrier","meaning":"1D route with start and end. Hosts Points along its length. It does not imply permission or success.","verbs":["carry"],"properties":["direction-neutral","1d"],"diagram_class":"CONNECTION"},{"id":"plane","name":"PLANE","family":"PRIMITIVE","role":"surface","meaning":"Bounded 2D region. Hosts Points on its boundary and Components in its interior. A typed Plane is a Component.","verbs":["host","bound"],"properties":["bounded","hosts","2d"],"diagram_class":"SURFACE"},{"id":"join","name":"JOIN","family":"MECHANICAL","role":"connection","meaning":"Paths are connected.","verbs":["join"],"properties":["connected"],"diagram_class":"CONNECTION"},{"id":"cross","name":"CROSS","family":"PASSIVE","role":"connection","meaning":"Paths cross but do not connect.","verbs":["cross"],"properties":["not-connected"],"diagram_class":"CONNECTION"},{"id":"hold","name":"HOLD","family":"PASSIVE","role":"state","meaning":"Keeps bounded state.","verbs":["hold","store"],"properties":["stateful"],"diagram_class":"STATE"},{"id":"buffer","name":"BUFFER","family":"PASSIVE","role":"state","meaning":"Holds flow temporarily, then releases it.","verbs":["buffer","release"],"properties":["temporary-state"],"diagram_class":"STATE"},{"id":"act","name":"ACT","family":"ACTIVE","role":"transform","meaning":"Transforms input into output. Activity does not grant authority.","verbs":["act","transform"],"properties":["agentic","authority-neutral"],"diagram_class":"TRANSFORM"},{"id":"gate","name":"GATE","family":"MECHANICAL","role":"control","meaning":"Passes or refuses flow using a declared condition.","verbs":["check","pass","refuse"],"properties":["conditional","authority-neutral"],"diagram_class":"CONTROL"},{"id":"switch","name":"SWITCH","family":"MECHANICAL","role":"control","meaning":"Opens or closes a path from explicit control.","verbs":["open","close"],"properties":["externally-controlled"],"diagram_class":"CONTROL"},{"id":"limit","name":"LIMIT","family":"PASSIVE","role":"constraint","meaning":"Restricts a flow dimension without judgement.","verbs":["limit"],"properties":["non-judgemental"],"diagram_class":"CONTROL"},{"id":"one-way","name":"ONE-WAY","family":"PASSIVE","role":"direction","meaning":"Allows flow in one direction.","verbs":["pass"],"properties":["directional","non-reciprocal"],"diagram_class":"CONNECTION"},{"id":"return","name":"RETURN","family":"PASSIVE","role":"reciprocity","meaning":"Requires a matching return path.","verbs":["return"],"properties":["reciprocal"],"diagram_class":"CONNECTION"},{"id":"observe","name":"OBSERVE","family":"PASSIVE","role":"evidence","meaning":"Reads evidence from outside the action path.","verbs":["observe"],"properties":["independent-read"],"diagram_class":"EVIDENCE"},{"id":"receipt","name":"RECEIPT","family":"PASSIVE","role":"evidence","meaning":"Durable evidence emitted by a crossing or action.","verbs":["record","return"],"properties":["durable","evidentiary"],"diagram_class":"EVIDENCE"},{"id":"authority","name":"AUTHORITY","family":"PASSIVE","role":"control-reference","meaning":"Typed, scoped permission supplied as a control input.","verbs":["grant","scope"],"properties":["typed","scoped"],"diagram_class":"REFERENCE"},{"id":"refuse","name":"REFUSE","family":"MECHANICAL","role":"termination","meaning":"Ends an attempted path explicitly.","verbs":["refuse","stop"],"properties":["explicit-terminal"],"diagram_class":"TERMINATION"},{"id":"clock","name":"CLOCK","family":"ACTIVE","role":"timing","meaning":"Drives time: its level rises and falls on a declared period. An edge may start work.","verbs":["tick","schedule"],"properties":["asserted","periodic"],"diagram_class":"TIMING"},{"id":"lever","name":"LEVER","family":"MECHANICAL","role":"input","meaning":"An asserted level: it holds the state it was set to until an operation changes it.","verbs":["set","toggle"],"properties":["asserted","stateful"],"diagram_class":"CONTROL"},{"id":"group","name":"GROUP","family":"PRIMITIVE","role":"grouping","meaning":"Collects Components for reading. Not a boundary: it hosts nothing and has no ports; a Wire between members of different groups is one Wire.","verbs":["group"],"properties":["reading-only","2d"],"diagram_class":"SURFACE"}];
 // Primitives are the dimensional basis (0D / 1D / 2D). Components are typed 2D forms
 // whose attachment defaults are template data; a typed Plane is an ordinary Component.
 const GROUPS = {"Primitives": ["point","path","plane"], "Components": ["blank","act","hold","buffer","gate","switch","limit","receipt","observe"], "Signals": ["clock","lever"]};
-const PRIMITIVE_SYMBOL_IDS=new Set(GROUPS.Primitives);
+// A group (SECTION-MODEL.md "Groups (reading only)") is a primitive that is not in the palette:
+// it collects Components for reading and is authored by data, not drawn from the palette.
+const PRIMITIVE_SYMBOL_IDS=new Set([...GROUPS.Primitives,'group']);
 function isPrimitiveSymbol(id){return PRIMITIVE_SYMBOL_IDS.has(String(id||''))}
+// A group is never an obstacle and never a host: routing, layout and the layout metrics leave it out.
+function isGroupComponent(n){return String(n?.symbolId||'')==='group'}
 const workspace = document.getElementById('workspace');
 const nodesG = document.getElementById('nodes');
 const wiresG = document.getElementById('wires');
@@ -8190,8 +8282,9 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   const inFence=P=>fence?{x:Math.max(fence.l+2,Math.min(fence.r-2,P.x)),y:Math.max(fence.t+2,Math.min(fence.b-2,P.y))}:P;
   const SA=sourceNode?inFence(routeLead(A,B,aSide,sourceNode,wireEndpointInward(routedWire,sourceNode))):A, SB=targetNode?inFence(routeLead(B,A,bSide,targetNode,wireEndpointInward(routedWire,targetNode))):B;
   const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
+  // A group is drawn behind everything and is never an obstacle (SECTION-MODEL.md "Groups").
   const otherRects=nodes
-    .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
+    .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && !isGroupComponent(n) && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
     .map(n=>rectForNode(n,12));
 
   // Source and target are included after the outward lead. This prevents a path
@@ -8201,7 +8294,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   if(endpointNeedsOuterObstacle(targetNode,bSide,routedWire))endpointRects.push(rectForNode(targetNode,8));
   const obstacles=[...otherRects,...endpointRects];
 
-  const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
+  const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&!isGroupComponent(n)&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
   const xs=[SA.x,SB.x,(SA.x+SB.x)/2];
   const ys=[SA.y,SB.y,(SA.y+SB.y)/2];
   if(fence){xs.push(fence.l+14,fence.r-14);ys.push(fence.t+14,fence.b-14)}
@@ -8298,7 +8391,7 @@ function routeLead(P,Q,portId,node,inward){
   let d=ahead>0?Math.max(4,Math.min(ROUTE_LEAD,ahead/2)):ROUTE_LEAD;
   // Nor into a body in front of it: stop short of the first card the lead would enter.
   for(const other of nodes){
-    if(other.id===node.id||componentForm(other).dimension!==2||isDescendantOf(node.id,other.id)||isEffectivelyHidden(other))continue;
+    if(other.id===node.id||componentForm(other).dimension!==2||isGroupComponent(other)||isDescendantOf(node.id,other.id)||isEffectivelyHidden(other))continue;
     const R=componentBounds(other,10);
     for(let s=2;s<=d;s+=2){const x=P.x+nx*s,y=P.y+ny*s;if(x>R.l&&x<R.r&&y>R.t&&y<R.b){d=Math.max(4,s/2);break}}
   }
@@ -8353,7 +8446,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     // it away if its interior route now collides with a component.
     const routeOnly=normalizePoints([SA,...inner,SB]);
     const endpointRects=[];
-    const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
+    const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && !isGroupComponent(n) && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
     if(endpointNeedsOuterObstacle(sourceNode,w.aSide,w))endpointRects.push(rectForNode(sourceNode,8));
     if(endpointNeedsOuterObstacle(targetNode,w.bSide,w))endpointRects.push(rectForNode(targetNode,8));
     const obstacles=[...otherRects,...endpointRects];
@@ -8371,7 +8464,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
 
   const SA=sourceNode?routeLead(A,B,w.aSide,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?routeLead(B,A,w.bSide,targetNode,wireEndpointInward(w,targetNode)):B;
   const rebuiltCore=normalizePoints([SA,...rebuilt.slice(2,-2),SB]);
-  const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
+  const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && !isGroupComponent(n) && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
   const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied,[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]);
   const anchor=routeAnchor(rebuiltCore);
 
@@ -8974,6 +9067,53 @@ function markerCountEl(){
   }
   return el;
 }
+// Groups (SECTION-MODEL.md "Groups (reading only)"): a region drawn behind every other node and
+// every wire on its canvas. On the global canvas they sit in their own layer just before the wire
+// layer; on a Component's interior, directly after the host, before the wires lifted there and
+// the host's children. A group is not a body: it hosts nothing, has no ports and takes no gesture.
+function groupLayer(){
+  let layer=document.getElementById('groupLayer');
+  if(!layer){layer=document.createElementNS('http://www.w3.org/2000/svg','g');layer.setAttribute('id','groupLayer');workspace.insertBefore(layer,wiresG)}
+  return layer;
+}
+function placeGroupRegion(g,n){
+  const R=SovSchematicData.groupRect(diagram,n.id,componentSize);if(!R)return;
+  const rect=g.querySelector(':scope > .group-region'),title=g.querySelector(':scope > .group-title');
+  if(rect){rect.setAttribute('x',String(R.l));rect.setAttribute('y',String(R.t));rect.setAttribute('width',String(Math.max(1,R.w)));rect.setAttribute('height',String(Math.max(1,R.h)))}
+  if(title){title.setAttribute('x',String(R.l+12));title.setAttribute('y',String(R.t+19))}
+  const badge=g.querySelector(':scope > .marker-badge');if(badge)badge.setAttribute('transform',`translate(${R.r} ${R.t})`);
+}
+// Keeps every drawn region on its members while they move (renderWires runs on drag frames).
+function refreshGroupRegions(){
+  for(const g of workspace.querySelectorAll('.node.group')){const n=nodes.find(x=>x.id===g.dataset.id);if(n)placeGroupRegion(g,n)}
+}
+function renderGroups(markers=markersById()){
+  const layer=groupLayer();layer.replaceChildren();
+  const T=SovSchematicNotation.tokens(diagram);
+  for(const n of nodes){
+    if(!isGroupComponent(n)||isEffectivelyHidden(n))continue;
+    const cfg=n.config||{},surface=n.canvasId||GLOBAL_CANVAS_ID,editor=entityEditorState(n);
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','node group'+(selectedComponentIds.has(n.id)?' selected':''));g.dataset.id=n.id;g.dataset.canvasId=surface;g.style.opacity=String(editor.opacity);
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');rect.setAttribute('class','group-region');
+    rect.setAttribute('rx',String(T.radius?.card??10));
+    // Slot 0 is the colour every record is given, so only a chosen slot tints the region.
+    const slot=Number.isInteger(cfg.colorSlot)&&cfg.colorSlot>0?cfg.colorSlot:null;
+    rect.style.fill=slot!=null?slotColor(slot):'none';if(slot!=null)rect.style.fillOpacity='.1';
+    rect.style.stroke='var(--muted)';rect.style.strokeWidth='var(--stroke-structure)';rect.style.pointerEvents='none';
+    g.appendChild(rect);
+    const label=String(cfg.label||'').trim();
+    if(label){const title=document.createElementNS('http://www.w3.org/2000/svg','text');title.setAttribute('class','group-title');title.dataset.role='title';
+      // The muted ink, darkened (or lightened) only as far as text needs to read on the region: 4.5:1, as card text.
+      const muted=(getComputedStyle(workspace).getPropertyValue('--muted')||'').trim(),ink=/^#[0-9a-f]{6}$/i.test(muted)?muted:'#6C6C65';
+      title.style.fill=ensureContrast(ink,slot!=null?mixHex([canvasTone(),slotColor(slot)],[.9,.1]):canvasTone(),4.6);title.textContent=label;g.appendChild(title)}
+    {const own=markers.get(n.id);if(own)appendMarkerBadge(g,own,0,0)}
+    placeGroupRegion(g,n);
+    const host=surface.startsWith('canvas:component:')?nodesG.querySelector(`:scope > .node[data-id="${CSS.escape(surface.slice('canvas:component:'.length))}"]`):null;
+    if(host){let at=host;while(at.nextElementSibling?.classList.contains('group'))at=at.nextElementSibling;at.after(g)}
+    else layer.appendChild(g);
+  }
+}
 function render(){
   applyNotationTokens();
   if(typeof buildSymbolPalette==='function')buildSymbolPalette();
@@ -8984,7 +9124,7 @@ function render(){
   nodesG.innerHTML='';
   const unplacedIds=new Set(typeof layoutUnplacedIds==='function'?layoutUnplacedIds():[]);
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
-    if(isEffectivelyHidden(n))return;
+    if(isEffectivelyHidden(n)||isGroupComponent(n))return; // groups are drawn by renderGroups, behind
     const s=symbolOf(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
     {const form=componentForm(n),backdrop=componentBackdropMode(n);g.setAttribute('class','node'+(unplacedIds.has(n.id)?' unplaced':'')+(n.symbolId==='blank'?' blank':'')+(selectedComponentIds.has(n.id)?' selected':'')+(componentAcceptsChildren(n)?' is-container':'')+(form.frame.mode==='shell'?' form-shell':'')+(form.frame.mode==='frame'?' form-frame':'')+(n.parentId?' nested-child':'')+(componentHostedOnWire(n)?' wire-hosted':'')+(backdrop==='none'?' backdrop-none':'')+(editor.pinned?' is-pinned':'')+(editor.locked?' is-locked':''));}
     g.style.opacity=String(editor.opacity);
@@ -9023,6 +9163,7 @@ function render(){
     appendComponentLeads(g,n);appendTerminalMarks(g,n);
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
   });
+  renderGroups(markers);
   renderWires(signalState,markers);
   {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
   renderJunctionDots();
@@ -9265,7 +9406,7 @@ function placeWireLabels(){
   };
   const rect=el=>{const r=el.getBoundingClientRect();return {l:r.left,r:r.right,t:r.top,b:r.bottom}};
   const intersects=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
-  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.component-label,.outside-label,.internal-text')].filter(visible).map(rect);
+  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.group-title,.component-label,.outside-label,.internal-text')].filter(visible).map(rect);
   const entries=[...wireLabelPaths].filter(([path])=>path.isConnected&&visible(path)).map(([path,points])=>({path,points:points.map(screen)}));
   // A slab intersection also handles diagonal carrier segments without sampling.
   const crosses=(box,a,b)=>{
@@ -9320,6 +9461,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
   wireLabelPaths.clear();
   wiresG.innerHTML='';
   nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
+  refreshGroupRegions();
   clearEndpointFocus();
   const occupied=[];
   const dragging=!!activeNodeDrag;
@@ -9429,7 +9571,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const surface=w.canvasId||GLOBAL_CANVAS_ID;
     const hostId=surface.startsWith('canvas:component:')?surface.slice('canvas:component:'.length):null;
     const hostEl=hostId?nodesG.querySelector(`:scope > .node[data-id="${hostId}"]`):null;
-    if(hostEl){(hostAnchors.get(hostId)||hostEl).after(group);hostAnchors.set(hostId,group)}
+    // The host's groups sit directly after it, behind its wires: the first wire goes after them.
+    const firstAnchor=el=>{let at=el;while(at.nextElementSibling?.classList.contains('group'))at=at.nextElementSibling;return at};
+    if(hostEl){(hostAnchors.get(hostId)||firstAnchor(hostEl)).after(group);hostAnchors.set(hostId,group)}
     else wiresG.appendChild(group);
 
     // Marks have no independent positional truth. Every arrow is regenerated
@@ -9559,15 +9703,20 @@ function layoutPathCorners(d){
 function layoutMetrics(options={}){
   const staticView=options.static!==false; // an export or a screenshot freezes animation
   const findings=[],add=(kind,ids,detail)=>findings.push({kind,ids,detail});
-  const visible=nodes.filter(n=>!isEffectivelyHidden(n));
-  const body=new Map(visible.map(n=>[n.id,componentBounds(n)]));
+  // A group (SECTION-MODEL.md "Groups (reading only)") is drawn behind everything and is never an
+  // obstacle: it is left out of every check that measures a body (node-overlap, route-through-node,
+  // a text over a node, cramped labels, route wrapping). Its title is still text, and still counts
+  // in text-collision against other text. Its body is the region it is drawn as.
+  const shown=nodes.filter(n=>!isEffectivelyHidden(n));
+  const visible=shown.filter(n=>!isGroupComponent(n));
+  const body=new Map(shown.map(n=>[n.id,isGroupComponent(n)?SovSchematicData.groupRect(diagram,n.id,componentSize):componentBounds(n)]));
   const nodeEl=id=>nodesG.querySelector(`.node[data-id="${CSS.escape(id)}"]`);
   const ancestors=id=>{const out=new Set();let n=nodes.find(x=>x.id===id);while(n?.parentId){out.add(n.parentId);n=nodes.find(x=>x.id===n.parentId)}return out};
   const is2D=n=>componentForm(n).dimension===2;
 
   // Text: every visible label, in world space.
   const texts=[];
-  for(const el of workspace.querySelectorAll('#nodes text,#wires text')){
+  for(const el of workspace.querySelectorAll('#groupLayer text,#nodes text,#wires text')){
     if(!el.textContent.trim()||layoutEffectiveOpacity(el)<.1)continue;
     if(el.closest('.wire-packet'))continue; // motion, never structure; static exports drop it
     const box=layoutWorldBox(el);if(!box)continue;
