@@ -156,6 +156,18 @@ with tempfile.TemporaryDirectory() as td:
         status, by_area = http_json(base + '/api/v1/read', 'POST', {'area': {'x': 500, 'y': 100, 'width': 200, 'height': 200}})
         assert status == 200 and {c['config']['label'] for c in by_area['components']} == {'Kept'}, by_area
 
+        # A child placed on a plane made in the same batch: canvas:component:$plane is its surface.
+        nested, is_error = tool(base, 'schematic.apply', {'operations': [
+            {'op': 'create', 'resource': 'component', 'ref': '$p', 'value': {'symbolId': 'plane', 'x': 1400, 'y': 400}},
+            {'op': 'create', 'resource': 'component', 'ref': '$in', 'value': {'symbolId': 'hold', 'x': 1400, 'y': 400, 'canvasId': 'canvas:component:$p', 'parentId': '$p'}},
+        ]}, 9)
+        assert not is_error, nested
+        inside, _ = tool(base, 'schematic.read', {'ids': [nested['result']['ids']['$p']]})
+        plane_id, child_id = nested['result']['ids']['$p'], nested['result']['ids']['$in']
+        child = next(c for c in inside['components'] if c['id'] == child_id)
+        assert child['canvasId'] == f'canvas:component:{plane_id}' and child['parentId'] == plane_id, child
+        tool(base, 'schematic.history.undo')
+
         # One undo takes the whole batch back.
         undone, _ = tool(base, 'schematic.history.undo')
         assert len(undone['components']) == 2, len(undone['components'])

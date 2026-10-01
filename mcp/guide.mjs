@@ -34,7 +34,8 @@ An operation is one of
   {op: "delete", resource, id: "<id or $name>"}
 
 Leave id out of a create and the core assigns one (c1, k1, r1...). Name it with ref "$name" and use
-"$name" anywhere later in the same batch: a wire's a or b, a canvasId, a parentId. The receipt's
+"$name" anywhere later in the same batch: a wire's a or b, a parentId, a placement's hostId; and
+"canvas:component:$name" is that component's interior surface (a canvasId). The receipt's
 result.ids maps each $name to the id it got; result.applied lists every operation with its id.
 
 A refusal changes nothing: error.index names the operation, error.message says why (a locked

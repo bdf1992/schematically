@@ -1092,11 +1092,17 @@
   // A batch is many writes taken as one: every operation applies in order or none does, the
   // document moves one revision, and one receipt answers it. A create may omit its id (the core
   // assigns one) and name itself with `ref: "$name"`; any later string equal to "$name" in that
-  // batch (a wire's a or b, a canvasId, a parentId) is that created id. A refused operation leaves
-  // the document exactly as it was and the receipt names its index. Reads are not batched.
+  // batch (a wire's a or b, a parentId, a placement's hostId) is that created id, and
+  // "canvas:component:$name" is its interior surface. A refused operation leaves the document
+  // exactly as it was and the receipt names its index. Reads are not batched.
   const BATCH_OPS=['create','update','delete'];
   function resolveRefs(value,refs){
-    if(typeof value==='string')return Object.prototype.hasOwnProperty.call(refs,value)?refs[value]:value;
+    if(typeof value==='string'){
+      if(Object.prototype.hasOwnProperty.call(refs,value))return refs[value];
+      // A surface is named after its owner: canvas:component:$plane is the created plane's surface.
+      const surface=value.match(/^(canvas:(?:component|wire):)(\$.+)$/);
+      return surface&&Object.prototype.hasOwnProperty.call(refs,surface[2])?surface[1]+refs[surface[2]]:value;
+    }
     if(Array.isArray(value))return value.map(v=>resolveRefs(v,refs));
     if(isObject(value)){const out={};for(const [k,v] of Object.entries(value))out[k]=resolveRefs(v,refs);return out}
     return value;
