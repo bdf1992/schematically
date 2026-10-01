@@ -65,6 +65,7 @@ BROWSER=[
     'tests/server_render_qa.py',
     'tests/access_panel_qa.py',
     'tests/layouts_qa.py',
+    'tests/layout_sov_qa.py',
     'tests/sections_qa.py',
     'tests/section_exposure_qa.py',
     'tests/notation_qa.py',
