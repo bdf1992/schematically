@@ -398,6 +398,55 @@
     if(!isObject(config)||config.delay===undefined||(clearable&&config.delay===null))return;
     if(!(Number.isInteger(config.delay)&&config.delay>=1))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
   }
+  // ---- Status and waits-on (NOTATION-MODEL.md "Statuses") -------------------------------------
+  // A Component's or Wire's `config.status` names an entry of its document's notation's
+  // `statuses` list; there is no built-in list, so a notation that declares none admits none.
+  // `config.waitsOn` lists what the thing waits on: `{kind: person|rule|decision, id, label?}`.
+  //   STATUS_UNDECLARED  a status is set and the notation declares no statuses
+  //   STATUS_UNKNOWN     the status is not one the notation declares
+  //   WAITS_ON_INVALID   waitsOn is not that list (the message names the index and the field)
+  // Loading reports them (validateDocument); create and update refuse; an update's null removes.
+  const WAITS_ON_KINDS=['person','rule','decision'],WAITS_ON_KEYS=['kind','id','label'];
+  function notationStatuses(doc){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(!N)return {id:doc?.notation||'schematic',statuses:[]};
+    const r=N.resolve(doc||{});const list=r.ok&&Array.isArray(r.notation.statuses)?r.notation.statuses.filter(s=>isObject(s)&&typeof s.id==='string'):[];
+    return {id:r.ok?r.notation.id:(doc?.notation||'schematic'),statuses:list};
+  }
+  function statusProblems(doc,config,clearable=false){
+    const out=[];if(!isObject(config))return out;
+    const status=config.status;
+    if(status!==undefined&&!(clearable&&status===null)){
+      const {id,statuses}=notationStatuses(doc);
+      if(!statuses.length)out.push(`STATUS_UNDECLARED: config.status ${JSON.stringify(status)} is set, but notation "${id}" declares no statuses`);
+      else if(typeof status!=='string'||!statuses.some(s=>s.id===status))out.push(`STATUS_UNKNOWN: config.status ${JSON.stringify(status)} is not declared by notation "${id}"; declared: ${statuses.map(s=>s.id).join(', ')}`);
+    }
+    const waits=config.waitsOn;
+    if(waits!==undefined&&!(clearable&&waits===null)){
+      if(!Array.isArray(waits))out.push(`WAITS_ON_INVALID: config.waitsOn must be an array, not ${JSON.stringify(waits)}`);
+      else waits.forEach((w,i)=>{
+        const at=`config.waitsOn[${i}]`;
+        if(!isObject(w)){out.push(`WAITS_ON_INVALID: ${at} must be an object`);return}
+        const extra=Object.keys(w).find(k=>!WAITS_ON_KEYS.includes(k));
+        if(!WAITS_ON_KINDS.includes(w.kind))out.push(`WAITS_ON_INVALID: ${at}.kind must be one of ${WAITS_ON_KINDS.join(', ')}, not ${JSON.stringify(w.kind)}`);
+        else if(typeof w.id!=='string'||!w.id.trim())out.push(`WAITS_ON_INVALID: ${at}.id must be a non-empty string`);
+        else if(w.label!==undefined&&typeof w.label!=='string')out.push(`WAITS_ON_INVALID: ${at}.label must be a string`);
+        else if(extra)out.push(`WAITS_ON_INVALID: ${at}.${extra} is not a field of a waitsOn entry (kind, id, label)`);
+      });
+    }
+    return out;
+  }
+  function assertStatusAndWaitsOn(doc,config,clearable=false){const p=statusProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
+  // Copies an authored status and waitsOn onto a record being made.
+  function adoptStatusAndWaitsOn(config,value){
+    if(value?.status!==undefined&&value.status!==null)config.status=value.status;
+    if(value?.waitsOn!==undefined&&value.waitsOn!==null)config.waitsOn=clone(value.waitsOn);
+    return config;
+  }
+  // An update's null removes the key.
+  function clearStatusAndWaitsOn(candidate,patch){
+    if(!isObject(candidate?.config)||!isObject(patch?.config))return;
+    for(const key of ['status','waitsOn'])if(patch.config[key]===null)delete candidate.config[key];
+  }
   // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
   // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
   // ports, and a Wire between members of different groups is one Wire on their shared canvas.
@@ -797,6 +846,7 @@
     if(value.config?.definition!==undefined)config.definition=clone(value.config.definition);
     // A group's members, as written; create checks them (assertGroupRules).
     if(value.config?.members!==undefined)config.members=clone(value.config.members);
+    assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -1010,7 +1060,7 @@
   }
   function makeWire(doc,value={}){
     const id=cleanString(value.id,nextId(doc.wires,'k'));
-    assertPathDelay(value.config);
+    assertPathDelay(value.config);assertStatusAndWaitsOn(doc,value.config);
     const wire={id,a:cleanString(value.a)||null,b:cleanString(value.b)||null,aSide:value.aSide??null,bSide:value.bSide??null,aAttachment:isObject(value.aAttachment)?clone(value.aAttachment):null,bAttachment:isObject(value.bAttachment)?clone(value.bAttachment):null};
     if(!wire.a&&!wire.aAttachment&&!wire.b&&!wire.bAttachment)throw new Error('wire.create requires a and b component ids, or free endpoints');
     for(const end of ['a','b'])if(!wire[end]&&!wire[end+'Attachment'])throw new Error(`wire.create requires ${end} (component id) or ${end}Attachment`);
@@ -1022,7 +1072,7 @@
       form:isObject(value.form)?clone(value.form):{dimension:1,body:{kind:'path',material:'generic',thickness:0}},
       lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
       net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
-      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{})},
+      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{}),...adoptStatusAndWaitsOn({},value.config)},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
     });
@@ -1070,6 +1120,7 @@
     const current=arr[index];assertUnlocked(current,resource);
     if(binding&&resource!=='component')throw new Error('DEFINITION_INVALID: only a component binds a definition');
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
+    if(resource!=='reference')assertStatusAndWaitsOn(doc,patch?.config,true);
     if(resource==='component'){
       assertDefinitionPatch(patch,binding);
       if(!binding)assertDefinitionPortsKept(current,patch,null);
@@ -1120,6 +1171,7 @@
     }
     // The record keeps its identity: an editor holding it (a gesture that has just begun, a bound
     // listener) keeps holding the updated record, not a stale copy.
+    if(resource!=='reference')clearStatusAndWaitsOn(candidate,patch);
     for(const key of Object.keys(current))delete current[key];
     Object.assign(current,candidate);
     if(resource==='component')reconcileComponentWirePorts(doc,id);
@@ -1294,6 +1346,8 @@
     }
     // Groups: reported, never repaired (the codes are listed at groupFindings).
     for(const f of groupFindings(input))errors.push(`component ${f.id??'?'}: ${f.code}: ${f.text}`);
+    // Status and waits-on: reported, never repaired (the codes are listed at statusProblems).
+    for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of statusProblems(input,item?.config))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -1312,6 +1366,7 @@
     if(/^duplicate (?:component|wire|reference) id:/.test(message))return 'identity';
     if(/missing endpoint component:/.test(message))return 'wire-endpoint';
     if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
+    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID):/.test(message))return 'status';
     return 'boundary-legality';
   }
   // Straight from validateDocument's own findings; no legality is re-derived here.
@@ -1333,5 +1388,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
