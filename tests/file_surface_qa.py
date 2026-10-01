@@ -2,9 +2,11 @@ import asyncio, json
 from pathlib import Path
 from playwright.async_api import async_playwright
 from browser_runtime import chromium_launch_kwargs
+from qa_out import out_dir
 
 ROOT=Path(__file__).resolve().parents[1]
 HTML=ROOT/'index.html'
+OUT=out_dir()
 
 async def main():
     async with async_playwright() as p:
@@ -31,7 +33,7 @@ async def main():
         async with page.expect_download() as info:
             await page.click('#fileSaveBtn')
         dl=await info.value
-        sov_path=ROOT/'tests'/'saved-test.sov'
+        sov_path=OUT/'saved-test.sov'
         await dl.save_as(sov_path)
         sov=json.loads(sov_path.read_text())
         assert sov['schema']=='soveraeign.schematic/document@0.1'
@@ -40,7 +42,7 @@ async def main():
         async with page.expect_download() as info2:
             await page.click('#fileExportPakBtn')
         dl2=await info2.value
-        pak_path=ROOT/'tests'/'saved-test.sovpak'
+        pak_path=OUT/'saved-test.sovpak'
         await dl2.save_as(pak_path)
         pak=json.loads(pak_path.read_text())
         assert pak['schema']=='soveraeign.schematic/package@0.1'
@@ -68,7 +70,7 @@ async def main():
         new_info=await page.evaluate('window.SovSchematicAPI.file.info()')
         assert new_info['name']=='Untitled.sov' and new_info['dirty'] is True
         await page.evaluate('window.setFileMenu(true)')
-        await page.screenshot(path=str(ROOT/'tests'/'file-menu.png'), full_page=False)
+        await page.screenshot(path=str(OUT/'file-menu.png'), full_page=False)
         assert not errors, errors
         await browser.close()
         print('PASS file surface QA')

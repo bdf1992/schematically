@@ -2,12 +2,24 @@
 """Single authoritative RC QA runner used locally and in CI."""
 from __future__ import annotations
 import argparse
+import os
+import tempfile
 from pathlib import Path
 import subprocess
 import sys
 import time
 
 ROOT=Path(__file__).resolve().parents[1]
+
+def run_artifact_dir()->Path:
+    """The directory this run's byproducts belong in, outside the working tree: `SCHEMATIC_QA_OUT`
+    when set, else a `schematically-qa` directory under `tempfile.gettempdir()`. Known method:
+    pytest's tmp_path/basetemp pattern and Playwright's output-dir option both keep run byproducts
+    out of the source tree."""
+    configured=os.environ.get('SCHEMATIC_QA_OUT')
+    path=Path(configured) if configured else Path(tempfile.gettempdir())/'schematically-qa'
+    path.mkdir(parents=True,exist_ok=True)
+    return path
 
 STATIC=[
     'tests/canonical_qa.py',
@@ -93,9 +105,9 @@ TAIL=[
     'scripts/golden_run.py',
 ]
 
-def run(path:str)->float:
+def run(path:str,env:dict[str,str])->float:
     start=time.perf_counter()
-    subprocess.run([sys.executable,str(ROOT/path)],cwd=ROOT,check=True)
+    subprocess.run([sys.executable,str(ROOT/path)],cwd=ROOT,check=True,env=env)
     elapsed=time.perf_counter()-start
     print(f'QA PASS {path} ({elapsed:.2f}s)',flush=True)
     return elapsed
@@ -104,10 +116,13 @@ def main()->int:
     parser=argparse.ArgumentParser()
     parser.add_argument('--quick',action='store_true',help='Skip stress/performance browser tests.')
     args=parser.parse_args()
-    subprocess.run([sys.executable,str(ROOT/'build.py')],cwd=ROOT,check=True)
+    out_dir=run_artifact_dir()
+    print(f'QA run artifacts: {out_dir}',flush=True)
+    env=dict(os.environ,SCHEMATIC_QA_OUT=str(out_dir))
+    subprocess.run([sys.executable,str(ROOT/'build.py')],cwd=ROOT,check=True,env=env)
     browser=BROWSER if not args.quick else [p for p in BROWSER if p not in {'tests/drag_lifecycle_stress_qa.py','tests/performance_regression_qa.py'}]
     total=0.0
-    for path in [*STATIC,*browser,*TAIL]: total+=run(path)
+    for path in [*STATIC,*browser,*TAIL]: total+=run(path,env)
     # Node syntax is intentionally part of the same local/CI contract.
     js=[*sorted((ROOT/'src').glob('*.js')),*sorted((ROOT/'mcp').glob('*.mjs'))]
     for path in js:

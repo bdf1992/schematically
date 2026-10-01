@@ -49,9 +49,13 @@ managed machines), point the QA harness at any system Chromium:
 CHROMIUM_PATH=/path/to/chrome python scripts/qa.py
 ```
 
-Note: several browser suites rewrite tracked byproducts under `tests/`
-(screenshots, `saved-test.sov*`, `performance-results.json`). Discard those
-with `git checkout -- tests/` unless you intend to re-baseline them.
+Note: the read/write-access, wire-host-inline and file-surface suites write their
+byproducts (screenshots, `saved-test.sov*`) to the run-artifact directory -
+`SCHEMATIC_QA_OUT` when set, else `schematically-qa` under the system temp
+directory - not into `tests/`. No checkout of `tests/` is needed after a run.
+`performance-results.json` is still written into the tree by the performance
+suite; discard it with `git checkout -- tests/performance-results.json` unless
+you intend to re-baseline it.
 
 ## 4. Deployment pattern
 
