@@ -34,6 +34,7 @@ STATIC=[
     'tests/state_space_perf_qa.py',
     'tests/file_load_wire_canvas_qa.py',
     'tests/desktop_shell_qa.py',
+    'tests/desktop_metadata_qa.py',
     'tests/revision_guard_qa.py',
 ]
 BROWSER=[

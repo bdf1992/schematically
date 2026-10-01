@@ -19,6 +19,10 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Soveraeign",
+    "copyright": "Copyright (c) 2026 bdf1992",
+    "shortDescription": "Schematic editor for .sov documents",
+    "longDescription": "SOV Schematic opens, edits and exports .sov and .sovpak schematic documents in a native desktop window.",
     "icon": ["icons/icon.ico"],
     "fileAssociations": [
       {
