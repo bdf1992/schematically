@@ -26,6 +26,17 @@ function runtimeCrud(operation){
   }
   return SovSchematicData.clone(receipt);
 }
+// A batch is one history entry and one recovery save, like a single edit: all or none.
+function runtimeBatch(batch={}){
+  commitHistoryCapture();
+  const receipt=SovSchematicData.applyBatch(diagram,{...batch,id:batch.id||`browser-batch-${Date.now()}`});
+  if(receipt.ok){
+    normalizeRuntimeAfterCrud();
+    commitHistoryCapture(`Apply ${receipt.result.applied.length} change${receipt.result.applied.length===1?'':'s'}`);
+    try{saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false})}catch(_){ }
+  }
+  return SovSchematicData.clone(receipt);
+}
 // Runs live beside the document, not in it (STATE-SPACE.md "Surfaces"): the page's run registry
 // starts every run from snapshotDocument() and reads packs from the build's sov-packs tag. No run
 // operation captures history, changes the document or its revision, or saves recovery.
@@ -63,6 +74,8 @@ const SovSchematicAPI={
   update:(resource,id,patch)=>apiOperation('update',resource,id,null,patch),
   delete:(resource,id)=>apiOperation('delete',resource,id),
   execute:(operation)=>runtimeCrud(operation),
+  apply:(batch)=>runtimeBatch(batch),
+  read:(scope)=>SovSchematicData.readScope(snapshotDocument(),scope),
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},

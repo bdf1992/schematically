@@ -66,6 +66,7 @@
   }
   function normalizeSymbolId(value){const id=String(value||'blank')||'blank';return LEGACY_SYMBOL_IDS[id]||id}
   function templatePreset(symbolId){return clone(TEMPLATE_PRESETS[normalizeSymbolId(symbolId)]||null)}
+  function symbolIds(){return Object.keys(TEMPLATE_PRESETS)}
   function isPrimitiveSymbol(symbolId){return Object.prototype.hasOwnProperty.call(TEMPLATE_PRESETS,normalizeSymbolId(symbolId))}
   // A label mode is read, never written by a preset: an authored mode is used as written;
   // otherwise a label under a 0D or 1D form sits outside it, under a 2D form on its
@@ -1171,6 +1172,73 @@
       return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:value,error:null};
     }catch(error){return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:false,revisionBefore:before,revisionAfter:doc.revision,result:null,error:{message:String(error.message||error)}}}
   }
+  // A batch is many writes taken as one: every operation applies in order or none does, the
+  // document moves one revision, and one receipt answers it. A create may omit its id (the core
+  // assigns one) and name itself with `ref: "$name"`; any later string equal to "$name" in that
+  // batch (a wire's a or b, a parentId, a placement's hostId) is that created id, and
+  // "canvas:component:$name" is its interior surface. A refused operation leaves the document
+  // exactly as it was and the receipt names its index. Reads are not batched.
+  const BATCH_OPS=['create','update','delete'];
+  function resolveRefs(value,refs){
+    if(typeof value==='string'){
+      if(Object.prototype.hasOwnProperty.call(refs,value))return refs[value];
+      // A surface is named after its owner: canvas:component:$plane is the created plane's surface.
+      const surface=value.match(/^(canvas:(?:component|wire):)(\$.+)$/);
+      return surface&&Object.prototype.hasOwnProperty.call(refs,surface[2])?surface[1]+refs[surface[2]]:value;
+    }
+    if(Array.isArray(value))return value.map(v=>resolveRefs(v,refs));
+    if(isObject(value)){const out={};for(const [k,v] of Object.entries(value))out[k]=resolveRefs(v,refs);return out}
+    return value;
+  }
+  function applyBatch(document,batch={}){
+    const id=batch.id||`batch-${Date.now()}`,operations=Array.isArray(batch.operations)?batch.operations:null;
+    const rawRevision=Math.max(0,Math.trunc(num(document?.revision,0)));
+    const refuse=(message,index=null,revision=rawRevision)=>({schema:RECEIPT_SCHEMA,operationId:id,ok:false,revisionBefore:rawRevision,revisionAfter:revision,result:null,error:{index,message}});
+    if(!operations||!operations.length)return refuse('a batch needs a non-empty operations array');
+    if(typeof batch.ifRevision==='number'&&batch.ifRevision!==rawRevision)return refuse(`Stale revision: expected ${batch.ifRevision}, document is at ${rawRevision}`);
+    const doc=normalizeDocument(document),before=doc.revision,snapshot=clone(doc);
+    const refs={},applied=[],errorsBefore=new Set(validateDocument(doc).errors);
+    const restore=()=>replaceDocument(doc,snapshot);
+    for(const [index,raw] of operations.entries()){
+      const op=raw?.op,resource=raw?.resource;
+      try{
+        if(!BATCH_OPS.includes(op))throw new Error(`op must be one of ${BATCH_OPS.join(', ')}`);
+        if(!RESOURCE_KEYS[resource])throw new Error(`resource must be one of ${Object.keys(RESOURCE_KEYS).join(', ')}`);
+        const ref=raw.ref==null?null:String(raw.ref);
+        if(ref!==null&&(!ref.startsWith('$')||ref.length<2))throw new Error('a ref starts with $ and names something');
+        if(ref!==null&&refs[ref]!==undefined)throw new Error(`ref ${ref} is already used in this batch`);
+        let value;
+        if(op==='create'){
+          value=create(doc,resource,resolveRefs(clone(raw.value||{}),refs));
+          if(ref!==null)refs[ref]=value.id;
+        }else{
+          const target=resolveRefs(raw.id,refs);if(typeof target!=='string'||!target)throw new Error(`${op} needs the id of a ${resource}`);
+          if(op==='update')value=update(doc,resource,target,resolveRefs(clone(raw.patch||{}),refs));
+          else{value=remove(doc,resource,target);if(value===null)throw new Error(`${resource} not found: ${target}`)}
+        }
+        applied.push({index,op,resource,id:value.id,...(ref!==null?{ref}:{})});
+      }catch(error){restore();return refuse(String(error.message||error),index,before)}
+    }
+    // The batch may not leave the document less legal than it found it.
+    const introduced=validateDocument(doc).errors.filter(message=>!errorsBefore.has(message));
+    if(introduced.length){restore();return refuse(`the batch leaves the document invalid: ${introduced.join('; ')}`,null,before)}
+    touch(doc);
+    return {schema:RECEIPT_SCHEMA,operationId:id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:{ids:refs,applied},error:null};
+  }
+  // A slice of the document small enough to read: the named items, or every component whose
+  // position falls in an area, plus the wires among them, in the stored (compact) form.
+  function readScope(document,scope={}){
+    const doc=normalizeDocument(clone(document)),ids=Array.isArray(scope.ids)?new Set(scope.ids.map(String)):null,area=isObject(scope.area)?scope.area:null;
+    if(!ids&&!area)return {ok:false,error:{message:'read needs ids or an area {x, y, width, height}'}};
+    const inArea=c=>area&&num(c.x,NaN)>=num(area.x,0)&&num(c.x,NaN)<=num(area.x,0)+num(area.width,0)&&num(c.y,NaN)>=num(area.y,0)&&num(c.y,NaN)<=num(area.y,0)+num(area.height,0);
+    const picked=new Set(doc.components.filter(c=>(ids&&ids.has(c.id))||inArea(c)).map(c=>c.id));
+    // A component brings what sits on its interior, so a plane is read with its points.
+    let grew=true;while(grew){grew=false;for(const c of doc.components)if(!picked.has(c.id)&&[...picked].some(p=>c.canvasId===`canvas:component:${p}`)){picked.add(c.id);grew=true}}
+    const wires=doc.wires.filter(w=>(ids&&ids.has(w.id))||(picked.has(w.a)&&picked.has(w.b)));
+    const references=ids?doc.references.filter(r=>ids.has(r.id)):[];
+    const edge=doc.wires.filter(w=>!wires.includes(w)&&(picked.has(w.a)!==picked.has(w.b))).map(w=>({id:w.id,a:w.a,b:w.b}));
+    return {ok:true,revision:doc.revision,components:doc.components.filter(c=>picked.has(c.id)).map(compactComponent),wires:wires.map(compactWire),references,crossing:edge};
+  }
   // The binding path (`applyBind` in the state space calls it): applies a binding patch,
   // `{config:{definition, attachmentDefaults:'none', attachmentPoints}}`, to a 2D Component with the
   // Wire checks every component edit runs. It is not a CRUD operation: no surface's `update`
@@ -1265,5 +1333,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
