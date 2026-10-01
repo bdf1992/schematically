@@ -24,9 +24,11 @@ sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'scripts'))
 from browser_runtime import chromium_launch_kwargs  # noqa: E402
 
-# File > Export SVG, the Browser API (file.svg, render.svg), this script and the server's render
-# service share one implementation: renderStandaloneSvg() in src/75-persistence.js.
-EXPORT_JS = "(opts) => window.SovSchematicAPI.file.svg(opts)"
+# This script makes the picture (render.svg): labels at their base size, with no overflow or
+# caption overlap. File > Export SVG makes the snapshot (file.svg): the canvas exactly as on
+# screen, labels at the fitted zoom's clamped screen size. Both call renderStandaloneSvg() in
+# src/75-persistence.js.
+EXPORT_JS = "(opts) => window.SovSchematicAPI.render.svg(opts)"
 
 
 
