@@ -1,0 +1,101 @@
+[
+  {
+    "id": "G01",
+    "capability": "A Component cannot carry a status (exists, partial, missing, proposed) as data; the only place to put one is free text.",
+    "tried": "Looked for a status field in DATA-FORMATS.md, the document schema and src/05-data-core.js; there is none. Wrote the status into config.subtitle as 'Record · partial' and so on.",
+    "workaround": "config.subtitle text on every card. It shows in the picture but is small, cannot be queried or validated, and does not change the card's look (a missing record draws the same as one that exists).",
+    "severity": "awkward",
+    "source_files": ["src/05-data-core.js", "formats/schematic.document.schema.json", "src/55-render.js", "src/67-legend.js"],
+    "task_objective": "Add an optional config.status with a declared value set to the document model, validate it in the data core, draw it as a visible mark on the card, and list the statuses used in the derived legend."
+  },
+  {
+    "id": "G02",
+    "capability": "A Component cannot say what kind of thing it is in the domain (a record, a surface, a work item); the palette symbols are circuit roles.",
+    "tried": "Chose symbolId hold for records (keeps bounded state) and act for surfaces, and gave each kind its own colour slot (6, 7, 8) named in document.legend.names as Record, Surface and Work item.",
+    "workaround": "Palette symbol plus colour slot plus the word in the subtitle. The picture shows two kinds (orange hold cards, olive act cards), but the kind is an inference from glyph and colour, not a field.",
+    "severity": "awkward",
+    "source_files": ["src/03-notation-core.js", "src/00-state.js", "NOTATION-MODEL.md"],
+    "task_objective": "Write a work-engine notation (records, surfaces, work items as glyphs with titles and meanings) carried in references[] of kind notation, with an example document, so the kind is a declared glyph instead of a borrowed circuit symbol."
+  },
+  {
+    "id": "G03",
+    "capability": "The headless SVG export has no legend, so the names given in document.legend.names never reach the picture.",
+    "tried": "Named colour slots C1-C3 in document.legend.names and rendered with scripts/export_svg.py; the flags are paths, --out, --appearance, --pad and --loop, and the output has no legend block.",
+    "workaround": "none; a reader of sample.svg has to be told that orange is a record and olive a surface.",
+    "severity": "awkward",
+    "source_files": ["scripts/export_svg.py", "src/75-persistence.js", "src/67-legend.js"],
+    "task_objective": "Add a --legend flag to scripts/export_svg.py that renders the derived legend block beside the drawing, as render({legend: true}) does in the editor, with a test in tests/svg_export_qa.py."
+  },
+  {
+    "id": "G04",
+    "capability": "A group that only collects Components (Records, Surfaces) does not exist; the closest feature, a Plane, is a boundary, so every relation that leaves the group must be cut into segments through boundary Points.",
+    "tried": "Made Records and Surfaces Planes with an authored one-line form.section (space core). 'Surface registration declares' each surface became five Wires: one inside Records to a boundary Point, one on the global canvas, and three fanning out inside Surfaces from one boundary Point. 'moves' and the port wire were cut the same way.",
+    "workaround": "Boundary Points with face both and wires split per surface. The three 'declares' relations share two segments and a junction, so the model no longer holds 'Surface registration declares Delivery broker' as one relation; it can only be recovered by reach through the junction.",
+    "severity": "blocks",
+    "source_files": ["src/05-data-core.js", "src/30-canvas.js", "formats/schematic.document.schema.json", "SECTION-MODEL.md"],
+    "task_objective": "Specify and build a grouping region that holds Components for reading only (no boundary, no reach-through rule), so a Wire may run from a member of one group to a member of another as one relation, with validation and a golden example."
+  },
+  {
+    "id": "G05",
+    "capability": "A piece of planned work (a migration) has no kind of its own and no way to say it is proposed rather than built.",
+    "tried": "Drew the migration as a gate card (passes or refuses flow on a declared condition) in colour slot 8, with subtitle 'Migration · proposed'.",
+    "workaround": "gate symbol, colour slot 8 and subtitle text; the card reads like a circuit gate, not a work item.",
+    "severity": "awkward",
+    "source_files": ["src/00-state.js", "src/03-notation-core.js", "formats/schematic.document.schema.json"],
+    "task_objective": "Add a work-item glyph (migration, port, task) to the work-engine notation of G02, with a proposed state that draws differently from built things."
+  },
+  {
+    "id": "G06",
+    "capability": "A Component cannot name what it waits on (a person, a rule to amend, a decision id) as data.",
+    "tried": "Put 'Waits on Bdo amending rule R-29 (decision D1)' in config.presentation.text on the migration card.",
+    "workaround": "Body text. It is not a reference, cannot be followed or checked, and in the export it was drawn across the card's glyph and the wire running through the card.",
+    "severity": "awkward",
+    "source_files": ["src/05-data-core.js", "formats/schematic.document.schema.json", "src/55-render.js"],
+    "task_objective": "Add an optional config.waitsOn list of typed references (person, rule, decision) to the model, validated by the data core and drawn as a tag on the card."
+  },
+  {
+    "id": "G07",
+    "capability": "Named channels (the tracks video, event, narration) cannot cross a boundary Point: a Point carries only the default channel main.",
+    "tried": "Declared ports tracks-out on Web booth and tracks-in on Recording with channels video, event and narration; validate_sov.mjs refused both inner wires with 'CHANNEL_MISMATCH: the two ports share no channel', because the boundary Points expose only main (src/06-attachment-core.js portChannels defaults to main).",
+    "workaround": "Added main to both declared ports so each segment shares main; the three track names survive only on the two end ports and in the global wire's caption 'video · event · narration'. The model does not know the wire carries those tracks.",
+    "severity": "blocks",
+    "source_files": ["src/06-attachment-core.js", "src/05-data-core.js", "ATTACHMENT-POINT-MODEL.md"],
+    "task_objective": "Let a hosted boundary Point declare channels (or pass through the channels of the wires bound to it) so a wire carrying named channels can cross a boundary, with validation and a test that the three tracks reach Recording."
+  },
+  {
+    "id": "G08",
+    "capability": "A port as a named thing of its own ('Web booth feeds Recording') has no record kind; it can only be a Component hosted inline on one segment of the wire.",
+    "tried": "Hosted a one-way Component on the global segment w-port-global (placement kind wire, t 0.3) with label 'Web booth feeds Recording' and subtitle 'Port · partial'.",
+    "workaround": "Inline one-way Component. It draws no card body, its label overlaps the segment's own caption, and it sits on one of three segments, so nothing ties it to the two declared ports at the ends.",
+    "severity": "awkward",
+    "source_files": ["src/05-data-core.js", "src/55-render.js"],
+    "task_objective": "Give a Wire (or a chain of Wire segments through boundary Points) an optional name and status of its own, drawn once along the route, so a port is described by the wire rather than by a Component parked on it."
+  },
+  {
+    "id": "G09",
+    "capability": "A caption belongs to one Wire segment, so a relation cut by boundaries shows its caption once per segment, and captions near a fan-out junction overlap.",
+    "tried": "Captioned every segment: 'declares' appears five times, 'moves' twice, and the port shows 'tracks', 'video · event · narration', 'tracks'.",
+    "workaround": "Repeated captions; two 'declares' captions collide at the Surfaces junction in the export.",
+    "severity": "awkward",
+    "source_files": ["src/55-render.js", "src/40-routing.js"],
+    "task_objective": "Place one caption per relation across its segments (and keep captions near a junction apart) in placeWireLabels, with a layout check that fails on overlapping wire captions."
+  },
+  {
+    "id": "G10",
+    "capability": "In the headless export long card labels run past the card edge and short wire captions are drawn under neighbouring cards.",
+    "tried": "Sized cards by hand (220 to 640 wide); 'Continuity records move from JSON files to a transactional SQLite store' and 'Foundry render engine' still ran past their cards' edges in sample.svg, and 'anchored at' is partly hidden under the Anchor card.",
+    "workaround": "Hand-set presentation.size and spacing; the remaining overflow is left in the picture.",
+    "severity": "awkward",
+    "source_files": ["src/55-render.js", "scripts/export_svg.py"],
+    "task_objective": "Make the export wrap or grow a card to fit its title and subtitle (fitComponentLabels) and keep wire captions clear of cards, with a test on a document holding a 70-character label."
+  },
+  {
+    "id": "G11",
+    "capability": "Authoring offline means placing every coordinate and boundary Point by hand; there is no offline layout and no import from a data file such as gapmap.json.",
+    "tried": "Wrote 17 components and 13 wires with hand-computed x, y and boundary t values, re-rendering three times to fix overlaps. The layered layout engine is reachable only through the MCP tool schematic.layout, which this contract's commands did not include, so it was not tried.",
+    "workaround": "Hand layout, following the spacing rules in skills/author-offline/SKILL.md.",
+    "severity": "awkward",
+    "source_files": ["src/08-layout-core.js", "scripts/export_svg.py", "skills/author-offline/SKILL.md"],
+    "task_objective": "Add an offline layout step (for example a --layout layered flag on scripts/export_svg.py or a scripts/layout_sov.mjs over src/08-layout-core.js) and document it in skills/author-offline, so a generated .sov of 50 cards needs no hand coordinates."
+  }
+]
