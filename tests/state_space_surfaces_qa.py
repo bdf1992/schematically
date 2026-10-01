@@ -10,7 +10,7 @@ tests/agent_api_mcp_golden_qa.py starts it), in three documents:
   their details; a trace of a run with no inputs, kept for the next document;
 - examples/state/not-loop.sov: start (budget 40) and settle to oscillating; replay the and.sov trace
   (REPLAY_KEY_MISMATCH with its fields); an unknown handle; a run id used as a handle;
-- and.sov with a Path delay 0: a start refused with RUN_REFUSED and its refusals.
+- and.sov with a Path delay -1: a start refused with RUN_REFUSED and its refusals.
 
 Every run receipt must be identical across the three surfaces; the only surface-specific field is
 the HTTP status. Afterwards the document, its revision and the history are unchanged on every
@@ -43,8 +43,9 @@ LIMIT = 1000000
 
 def bad_document():
     doc = json.loads((STATE / 'and.sov').read_text(encoding='utf-8'))
-    doc['id'] = 'state-and-delay-0'
-    doc['wires'][0]['config'] = {'direction': 'forward', 'delay': 0}
+    # Delay 0 is a zero-delay Path since 2026-09-26; -1 is the refused example.
+    doc['id'] = 'state-and-delay-negative'
+    doc['wires'][0]['config'] = {'direction': 'forward', 'delay': -1}
     return json.dumps(doc)
 
 
