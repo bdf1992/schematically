@@ -150,6 +150,10 @@ Anything else is shown as typed. Nothing is interpreted as HTML.
 - **Glyphs:** each glyph used, with its title and meaning.
 - **Signal shapes:** the clock waveforms and the binary or continuous indicators used.
 - **Sections:** each section preset used (disk, pipe...).
+- **Statuses:** each status a visible card or wire names in `config.status`, in the order the
+  notation's `statuses` list declares them, with its title and meaning. A status is validated
+  against that list, so the legend lists only declared ones; its sample is a small rounded chip,
+  dashed when the status declares `outline: dashed`, as the card's chip and outline are drawn.
 
 In the editor it is a panel. In a picture it is a block placed beside the drawing
 (`render({legend: true})`), never over it.
@@ -239,6 +243,20 @@ A dashed outline marks a thing that is not built.
 | `partial` | Partial | solid | | Built in part; some of what it must do is still missing. |
 | `missing` | Missing | dashed | 0.55 | Needed by the work engine and not built yet. |
 | `proposed` | Proposed | dashed | | Planned work that nobody has started. |
+
+**A status on a card or a wire.** A Component or a Wire names one of these in `config.status`,
+and lists what it waits on in `config.waitsOn` (people, rules and decisions; DATA-FORMATS.md
+"Status and waits-on"). The data core validates a status against the statuses of the document's
+resolved notation, never against a list of its own: a value the notation does not declare is
+`STATUS_UNKNOWN`, and any value in a notation that declares no statuses (such as `schematic`) is
+`STATUS_UNDECLARED`. Create and update refuse them; loading reports them. The renderer draws a
+card's status as a chip in its top-right corner, 6 in from both edges, holding the status title in
+the caption role at its base size; a status with `outline: dashed` dashes the card's outline
+(`6 4`), and one with `opacity` draws the card at that opacity. What a card waits on is a caption
+under it, in the muted ink: "Waits on Bdo, rule R-29, decision D1". A Wire's status title and
+what it waits on follow its label in its caption, and a dashed status dashes its line. The legend
+lists each status used, in the notation's order (section 5). `examples/work-engine/status.sov`
+shows all four statuses; `tests/status_waits_on_qa.py` checks them.
 
 ## Open
 

@@ -181,6 +181,35 @@ with `a`/`aSide` or frees it with `aAttachment: {kind:'free',x,y}`. Validation r
 bound ends to exist and two bound ends to share a surface; free ends are always valid.
 
 
+## Status and waits-on (2026-10-01, `NOTATION-MODEL.md` "Domain notation: work-engine")
+
+A Component or a Wire may say how far along it is and what it waits on. Both keys are optional and
+absent is not written.
+
+- **`config.status`**: a string, the `id` of an entry in the `statuses` list of the document's
+  resolved notation (`SovSchematicNotation.resolve(doc).notation.statuses`). There is no built-in list:
+  the values are the notation's (the `work-engine` notation declares `exists`, `partial`, `missing`,
+  `proposed`). A status in a document whose notation declares no statuses is `STATUS_UNDECLARED`; a
+  value the notation does not declare, or a value that is not a string, is `STATUS_UNKNOWN`, and the
+  message lists the declared ids.
+- **`config.waitsOn`**: an array of `{kind, id, label?}`, where `kind` is `person | rule | decision`,
+  `id` is a non-empty string and `label`, when present, is a string; no other key is allowed. Anything
+  else is `WAITS_ON_INVALID`, and the message names the index and the field
+  (`config.waitsOn[1].kind must be one of person, rule, decision`).
+
+```json
+{"label": "Continuity records move to SQLite", "status": "proposed",
+ "waitsOn": [{"kind": "person", "id": "bdo", "label": "Bdo"}, {"kind": "rule", "id": "R-29"}, {"kind": "decision", "id": "D1"}]}
+```
+
+A `create` or `update` carrying either key in a bad form is refused with the code (the error message
+starts with it) on every surface, and the document is unchanged. An `update` with `status: null` or
+`waitsOn: null` removes that key. Loading keeps the stored values as written and `validateDocument`
+reports each finding as `component <id>: <CODE>: ...` or `wire <id>: <CODE>: ...` (marker rule
+`status`). The schema (`formats/schematic.document.schema.json`) declares both keys on
+`components[].config` and `wires[].config`.
+
+
 ## State space contracts (slice 1a, `STATE-SPACE.md`)
 
 The contract layer of the state space. Its code is `src/07-state-space.js`; validation is hand-written there, and the

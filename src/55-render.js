@@ -424,6 +424,46 @@ function renderGroups(markers=markersById()){
     else layer.appendChild(g);
   }
 }
+// Status and waits-on (NOTATION-MODEL.md "Statuses"). A record's status is the entry its notation
+// declares under that id; there is no built-in list, so an undeclared one draws nothing (validation
+// reports it). Every style is an attribute or an inline style, so a picture carries it.
+function declaredStatus(record){
+  const id=record?.config?.status;if(typeof id!=='string')return null;
+  return (activeNotation().statuses||[]).find(s=>s&&s.id===id)||null;
+}
+function statusTitle(status){return String(status?.title||status?.id||'')}
+// 'Bdo, rule R-29, decision D1': each entry's label, or else its kind and id.
+function waitsOnList(list){return Array.isArray(list)?list.filter(w=>w&&typeof w==='object').map(w=>String(w.label||'').trim()||`${w.kind} ${w.id}`).join(', '):''}
+const CAPTION_STYLE='font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)';
+function statusInk(){const muted=(getComputedStyle(workspace).getPropertyValue('--muted')||'').trim();return ensureContrast(/^#[0-9a-f]{6}$/i.test(muted)?muted:'#6C6C65',canvasTone(),4.6)}
+// A card's status: a chip in its top-right corner, 6 in from both edges, holding the status title in
+// the caption role; a dashed outline and an opacity when the status declares them.
+function appendComponentStatus(g,n){
+  const st=declaredStatus(n);if(!st||componentForm(n).dimension!==2)return;
+  // The caption role at its base size: the chip is part of the card and scales with it.
+  const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
+  const cfg=componentConfig(n),edge=g.style.getPropertyValue('--component-boundary-color').trim()||slotColor(cfg.colorSlot),fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
+  const title=statusTitle(st),ch=Math.round(px*1.5),cw=Math.ceil(title.length*px*.6+px),x=w/2-6-cw,y=-h/2+6;
+  const chip=document.createElementNS('http://www.w3.org/2000/svg','g');chip.setAttribute('class','status-chip');chip.dataset.status=st.id;
+  const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  r.setAttribute('x',String(x));r.setAttribute('y',String(y));r.setAttribute('width',String(cw));r.setAttribute('height',String(ch));r.setAttribute('rx',String(ch/2));
+  r.setAttribute('style',`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.dataset.role='caption';
+  t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
+  t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${ensureContrast(edge,fill,4.6)};stroke:none;pointer-events:none`);t.textContent=title;chip.appendChild(t);
+  g.appendChild(chip);
+  if(st.outline==='dashed'){const body=g.querySelector(':scope > .body');if(body){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}}
+  if(typeof st.opacity==='number'&&Number.isFinite(st.opacity))g.style.opacity=String((Number(g.style.opacity)||1)*Number(st.opacity));
+}
+// What a card waits on, under it and below any outside label: 'Waits on Bdo, rule R-29'.
+function appendComponentWaitsOn(g,n){
+  const list=waitsOnList(n?.config?.waitsOn);if(!list)return;
+  const {h}=componentSize(n);let y=h/2+18;
+  for(const el of g.querySelectorAll(':scope > text.outside-label,:scope > text.component-subtitle')){try{const b=el.getBBox();if(b.height)y=Math.max(y,b.y+b.height+14)}catch(_){}}
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('class','waits-on');t.dataset.role='caption';
+  t.setAttribute('x','0');t.setAttribute('y',String(y));t.setAttribute('text-anchor','middle');
+  t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk()};stroke:none;pointer-events:none`);t.textContent='Waits on '+list;g.appendChild(t);
+}
 function render(){
   applyNotationTokens();
   if(typeof buildSymbolPalette==='function')buildSymbolPalette();
@@ -441,7 +481,7 @@ function render(){
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
-    renderComponentVisual(g,n,cfg,s,signalColor);
+    renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
@@ -471,7 +511,7 @@ function render(){
       }
     }
     appendComponentLeads(g,n);appendTerminalMarks(g,n);
-    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
+    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); appendComponentWaitsOn(g,n);
   });
   renderGroups(markers);
   renderWires(signalState,markers);
@@ -843,6 +883,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const base=document.createElementNS('http://www.w3.org/2000/svg','path');
     base.setAttribute('d',d);
     base.setAttribute('class','wire'+(selected===`wire:${i}`?' selected':''));
+    const wireStatus=declaredStatus(w);
+    if(wireStatus?.outline==='dashed'){base.setAttribute('stroke-dasharray','6 4');base.style.strokeDasharray='6 4';group.dataset.status=wireStatus.id}
+    else if(wireStatus)group.dataset.status=wireStatus.id;
     wireLabelPaths.set(base,clonePoints(points));
 
     const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -902,7 +945,11 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     }
 
     // One mark per place: a labelled duplex wire carries ↔ in its label, not stacked above it.
-    if(cfg.direction==='duplex'&&!cfg.label){
+    // A Wire's caption: its label, then its status title, then what it waits on.
+    const waits=waitsOnList(w.config?.waitsOn);
+    let caption=[cfg.label,wireStatus?statusTitle(wireStatus):''].filter(Boolean).join(' · ');
+    if(waits)caption=caption?`${caption} · waits on ${waits}`:`Waits on ${waits}`;
+    if(cfg.direction==='duplex'&&!caption){
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5);
       const badge=document.createElementNS('http://www.w3.org/2000/svg','text');
       badge.setAttribute('class','net-badge');
@@ -913,9 +960,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     }
 
     if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'return required':'return expected';group.appendChild(mark)}
-    if(cfg.label){
+    if(caption){
       // A label keeps the place clearance gave it while its text and route stand (wire-label clearance).
-      const text=(cfg.direction==='duplex'?'↔ ':'')+cfg.label,lift=13+(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0);
+      const text=(cfg.direction==='duplex'?'↔ ':'')+caption,lift=13+(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0);
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5),previous=previousLabels.get(w.id),label=document.createElementNS('http://www.w3.org/2000/svg','text');
       const keep=previous?.text===text&&previous.d===d;
       label.setAttribute('class','connection-label');label.setAttribute('x',keep?previous.x:q.x);label.setAttribute('y',keep?previous.y:q.y-lift);label.setAttribute('text-anchor','middle');label.textContent=text;group.appendChild(label);

@@ -2047,6 +2047,55 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!isObject(config)||config.delay===undefined||(clearable&&config.delay===null))return;
     if(!(Number.isInteger(config.delay)&&config.delay>=0))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 0, not ${JSON.stringify(config.delay)}`);
   }
+  // ---- Status and waits-on (NOTATION-MODEL.md "Statuses") -------------------------------------
+  // A Component's or Wire's `config.status` names an entry of its document's notation's
+  // `statuses` list; there is no built-in list, so a notation that declares none admits none.
+  // `config.waitsOn` lists what the thing waits on: `{kind: person|rule|decision, id, label?}`.
+  //   STATUS_UNDECLARED  a status is set and the notation declares no statuses
+  //   STATUS_UNKNOWN     the status is not one the notation declares
+  //   WAITS_ON_INVALID   waitsOn is not that list (the message names the index and the field)
+  // Loading reports them (validateDocument); create and update refuse; an update's null removes.
+  const WAITS_ON_KINDS=['person','rule','decision'],WAITS_ON_KEYS=['kind','id','label'];
+  function notationStatuses(doc){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(!N)return {id:doc?.notation||'schematic',statuses:[]};
+    const r=N.resolve(doc||{});const list=r.ok&&Array.isArray(r.notation.statuses)?r.notation.statuses.filter(s=>isObject(s)&&typeof s.id==='string'):[];
+    return {id:r.ok?r.notation.id:(doc?.notation||'schematic'),statuses:list};
+  }
+  function statusProblems(doc,config,clearable=false){
+    const out=[];if(!isObject(config))return out;
+    const status=config.status;
+    if(status!==undefined&&!(clearable&&status===null)){
+      const {id,statuses}=notationStatuses(doc);
+      if(!statuses.length)out.push(`STATUS_UNDECLARED: config.status ${JSON.stringify(status)} is set, but notation "${id}" declares no statuses`);
+      else if(typeof status!=='string'||!statuses.some(s=>s.id===status))out.push(`STATUS_UNKNOWN: config.status ${JSON.stringify(status)} is not declared by notation "${id}"; declared: ${statuses.map(s=>s.id).join(', ')}`);
+    }
+    const waits=config.waitsOn;
+    if(waits!==undefined&&!(clearable&&waits===null)){
+      if(!Array.isArray(waits))out.push(`WAITS_ON_INVALID: config.waitsOn must be an array, not ${JSON.stringify(waits)}`);
+      else waits.forEach((w,i)=>{
+        const at=`config.waitsOn[${i}]`;
+        if(!isObject(w)){out.push(`WAITS_ON_INVALID: ${at} must be an object`);return}
+        const extra=Object.keys(w).find(k=>!WAITS_ON_KEYS.includes(k));
+        if(!WAITS_ON_KINDS.includes(w.kind))out.push(`WAITS_ON_INVALID: ${at}.kind must be one of ${WAITS_ON_KINDS.join(', ')}, not ${JSON.stringify(w.kind)}`);
+        else if(typeof w.id!=='string'||!w.id.trim())out.push(`WAITS_ON_INVALID: ${at}.id must be a non-empty string`);
+        else if(w.label!==undefined&&typeof w.label!=='string')out.push(`WAITS_ON_INVALID: ${at}.label must be a string`);
+        else if(extra)out.push(`WAITS_ON_INVALID: ${at}.${extra} is not a field of a waitsOn entry (kind, id, label)`);
+      });
+    }
+    return out;
+  }
+  function assertStatusAndWaitsOn(doc,config,clearable=false){const p=statusProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
+  // Copies an authored status and waitsOn onto a record being made.
+  function adoptStatusAndWaitsOn(config,value){
+    if(value?.status!==undefined&&value.status!==null)config.status=value.status;
+    if(value?.waitsOn!==undefined&&value.waitsOn!==null)config.waitsOn=clone(value.waitsOn);
+    return config;
+  }
+  // An update's null removes the key.
+  function clearStatusAndWaitsOn(candidate,patch){
+    if(!isObject(candidate?.config)||!isObject(patch?.config))return;
+    for(const key of ['status','waitsOn'])if(patch.config[key]===null)delete candidate.config[key];
+  }
   // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
   // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
   // ports, and a Wire between members of different groups is one Wire on their shared canvas.
@@ -2446,6 +2495,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(value.config?.definition!==undefined)config.definition=clone(value.config.definition);
     // A group's members, as written; create checks them (assertGroupRules).
     if(value.config?.members!==undefined)config.members=clone(value.config.members);
+    assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -2659,7 +2709,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   function makeWire(doc,value={}){
     const id=cleanString(value.id,nextId(doc.wires,'k'));
-    assertPathDelay(value.config);
+    assertPathDelay(value.config);assertStatusAndWaitsOn(doc,value.config);
     const wire={id,a:cleanString(value.a)||null,b:cleanString(value.b)||null,aSide:value.aSide??null,bSide:value.bSide??null,aAttachment:isObject(value.aAttachment)?clone(value.aAttachment):null,bAttachment:isObject(value.bAttachment)?clone(value.bAttachment):null};
     if(!wire.a&&!wire.aAttachment&&!wire.b&&!wire.bAttachment)throw new Error('wire.create requires a and b component ids, or free endpoints');
     for(const end of ['a','b'])if(!wire[end]&&!wire[end+'Attachment'])throw new Error(`wire.create requires ${end} (component id) or ${end}Attachment`);
@@ -2671,7 +2721,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       form:isObject(value.form)?clone(value.form):{dimension:1,body:{kind:'path',material:'generic',thickness:0}},
       lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
       net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
-      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{})},
+      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{}),...adoptStatusAndWaitsOn({},value.config)},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
     });
@@ -2719,6 +2769,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const current=arr[index];assertUnlocked(current,resource);
     if(binding&&resource!=='component')throw new Error('DEFINITION_INVALID: only a component binds a definition');
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
+    if(resource!=='reference')assertStatusAndWaitsOn(doc,patch?.config,true);
     if(resource==='component'){
       assertDefinitionPatch(patch,binding);
       if(!binding)assertDefinitionPortsKept(current,patch,null);
@@ -2769,6 +2820,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     }
     // The record keeps its identity: an editor holding it (a gesture that has just begun, a bound
     // listener) keeps holding the updated record, not a stale copy.
+    if(resource!=='reference')clearStatusAndWaitsOn(candidate,patch);
     for(const key of Object.keys(current))delete current[key];
     Object.assign(current,candidate);
     if(resource==='component')reconcileComponentWirePorts(doc,id);
@@ -2943,6 +2995,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     }
     // Groups: reported, never repaired (the codes are listed at groupFindings).
     for(const f of groupFindings(input))errors.push(`component ${f.id??'?'}: ${f.code}: ${f.text}`);
+    // Status and waits-on: reported, never repaired (the codes are listed at statusProblems).
+    for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of statusProblems(input,item?.config))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -2961,6 +3015,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(/^duplicate (?:component|wire|reference) id:/.test(message))return 'identity';
     if(/missing endpoint component:/.test(message))return 'wire-endpoint';
     if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
+    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID):/.test(message))return 'status';
     return 'boundary-legality';
   }
   // Straight from validateDocument's own findings; no legality is re-derived here.
@@ -2982,7 +3037,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
 /* END src/05-data-core.js */
 </script>
@@ -9358,6 +9413,46 @@ function renderGroups(markers=markersById()){
     else layer.appendChild(g);
   }
 }
+// Status and waits-on (NOTATION-MODEL.md "Statuses"). A record's status is the entry its notation
+// declares under that id; there is no built-in list, so an undeclared one draws nothing (validation
+// reports it). Every style is an attribute or an inline style, so a picture carries it.
+function declaredStatus(record){
+  const id=record?.config?.status;if(typeof id!=='string')return null;
+  return (activeNotation().statuses||[]).find(s=>s&&s.id===id)||null;
+}
+function statusTitle(status){return String(status?.title||status?.id||'')}
+// 'Bdo, rule R-29, decision D1': each entry's label, or else its kind and id.
+function waitsOnList(list){return Array.isArray(list)?list.filter(w=>w&&typeof w==='object').map(w=>String(w.label||'').trim()||`${w.kind} ${w.id}`).join(', '):''}
+const CAPTION_STYLE='font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)';
+function statusInk(){const muted=(getComputedStyle(workspace).getPropertyValue('--muted')||'').trim();return ensureContrast(/^#[0-9a-f]{6}$/i.test(muted)?muted:'#6C6C65',canvasTone(),4.6)}
+// A card's status: a chip in its top-right corner, 6 in from both edges, holding the status title in
+// the caption role; a dashed outline and an opacity when the status declares them.
+function appendComponentStatus(g,n){
+  const st=declaredStatus(n);if(!st||componentForm(n).dimension!==2)return;
+  // The caption role at its base size: the chip is part of the card and scales with it.
+  const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
+  const cfg=componentConfig(n),edge=g.style.getPropertyValue('--component-boundary-color').trim()||slotColor(cfg.colorSlot),fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
+  const title=statusTitle(st),ch=Math.round(px*1.5),cw=Math.ceil(title.length*px*.6+px),x=w/2-6-cw,y=-h/2+6;
+  const chip=document.createElementNS('http://www.w3.org/2000/svg','g');chip.setAttribute('class','status-chip');chip.dataset.status=st.id;
+  const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  r.setAttribute('x',String(x));r.setAttribute('y',String(y));r.setAttribute('width',String(cw));r.setAttribute('height',String(ch));r.setAttribute('rx',String(ch/2));
+  r.setAttribute('style',`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.dataset.role='caption';
+  t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
+  t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${ensureContrast(edge,fill,4.6)};stroke:none;pointer-events:none`);t.textContent=title;chip.appendChild(t);
+  g.appendChild(chip);
+  if(st.outline==='dashed'){const body=g.querySelector(':scope > .body');if(body){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}}
+  if(typeof st.opacity==='number'&&Number.isFinite(st.opacity))g.style.opacity=String((Number(g.style.opacity)||1)*Number(st.opacity));
+}
+// What a card waits on, under it and below any outside label: 'Waits on Bdo, rule R-29'.
+function appendComponentWaitsOn(g,n){
+  const list=waitsOnList(n?.config?.waitsOn);if(!list)return;
+  const {h}=componentSize(n);let y=h/2+18;
+  for(const el of g.querySelectorAll(':scope > text.outside-label,:scope > text.component-subtitle')){try{const b=el.getBBox();if(b.height)y=Math.max(y,b.y+b.height+14)}catch(_){}}
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('class','waits-on');t.dataset.role='caption';
+  t.setAttribute('x','0');t.setAttribute('y',String(y));t.setAttribute('text-anchor','middle');
+  t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk()};stroke:none;pointer-events:none`);t.textContent='Waits on '+list;g.appendChild(t);
+}
 function render(){
   applyNotationTokens();
   if(typeof buildSymbolPalette==='function')buildSymbolPalette();
@@ -9375,7 +9470,7 @@ function render(){
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
-    renderComponentVisual(g,n,cfg,s,signalColor);
+    renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
@@ -9405,7 +9500,7 @@ function render(){
       }
     }
     appendComponentLeads(g,n);appendTerminalMarks(g,n);
-    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
+    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); appendComponentWaitsOn(g,n);
   });
   renderGroups(markers);
   renderWires(signalState,markers);
@@ -9777,6 +9872,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const base=document.createElementNS('http://www.w3.org/2000/svg','path');
     base.setAttribute('d',d);
     base.setAttribute('class','wire'+(selected===`wire:${i}`?' selected':''));
+    const wireStatus=declaredStatus(w);
+    if(wireStatus?.outline==='dashed'){base.setAttribute('stroke-dasharray','6 4');base.style.strokeDasharray='6 4';group.dataset.status=wireStatus.id}
+    else if(wireStatus)group.dataset.status=wireStatus.id;
     wireLabelPaths.set(base,clonePoints(points));
 
     const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -9836,7 +9934,11 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     }
 
     // One mark per place: a labelled duplex wire carries ↔ in its label, not stacked above it.
-    if(cfg.direction==='duplex'&&!cfg.label){
+    // A Wire's caption: its label, then its status title, then what it waits on.
+    const waits=waitsOnList(w.config?.waitsOn);
+    let caption=[cfg.label,wireStatus?statusTitle(wireStatus):''].filter(Boolean).join(' · ');
+    if(waits)caption=caption?`${caption} · waits on ${waits}`:`Waits on ${waits}`;
+    if(cfg.direction==='duplex'&&!caption){
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5);
       const badge=document.createElementNS('http://www.w3.org/2000/svg','text');
       badge.setAttribute('class','net-badge');
@@ -9847,9 +9949,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     }
 
     if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'return required':'return expected';group.appendChild(mark)}
-    if(cfg.label){
+    if(caption){
       // A label keeps the place clearance gave it while its text and route stand (wire-label clearance).
-      const text=(cfg.direction==='duplex'?'↔ ':'')+cfg.label,lift=13+(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0);
+      const text=(cfg.direction==='duplex'?'↔ ':'')+caption,lift=13+(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0);
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5),previous=previousLabels.get(w.id),label=document.createElementNS('http://www.w3.org/2000/svg','text');
       const keep=previous?.text===text&&previous.d===d;
       label.setAttribute('class','connection-label');label.setAttribute('x',keep?previous.x:q.x);label.setAttribute('y',keep?previous.y:q.y-lift);label.setAttribute('text-anchor','middle');label.textContent=text;group.appendChild(label);
@@ -12406,11 +12508,16 @@ function legendEntries(doc=diagram){
     const name=Object.keys(presets).filter(k=>SovSchematicData.sectionPreset(k,dim)).find(k=>JSON.stringify(SovSchematicData.normalizeSection(SovSchematicData.sectionPreset(k,dim),dim))===JSON.stringify(SovSchematicData.normalizeSection(sec,dim)));sections.add(name||`${sec.lines?.length||1} lines`)}
   const describe={disk:'Solid, no inside',circle:'A line around space',section:'A skin around space',coated:'A skin around solid','double-wall':'Two skins with a gap',line:'One line',strip:'A solid band',lanes:'Two lines with space between',pipe:'Walls around a bore'};
   for(const s of sections)add({id:`section:${s}`,kind:'section',sample:{section:s},label:sentenceCase(s.replace('-',' ')),meaning:describe[s]||''});
+  // Statuses: each one a visible card or wire names, in the order the notation declares them.
+  const statusesUsed=new Set([...visible,...wires.filter(w=>!entityEditorState(w).hidden)].map(x=>x?.config?.status).filter(s=>typeof s==='string'));
+  for(const st of (Array.isArray(notation.statuses)?notation.statuses:[]))if(st&&statusesUsed.has(st.id))add({id:`status:${st.id}`,kind:'status',sample:{status:st.id,outline:st.outline==='dashed'?'dashed':'solid'},label:String(st.title||st.id),meaning:String(st.meaning||'')});
   return out;
 }
 // A sample for an entry, as SVG markup in a 28 x 18 box.
 function legendSampleMarkup(e,{ink='currentColor'}={}){
   const s=e.sample||{};
+  // A status: a small rounded chip, dashed when the status draws its card's outline dashed.
+  if(e.kind==='status')return `<rect x="3" y="4" width="22" height="10" rx="5" style="fill:${ink};fill-opacity:.14;stroke:${ink};stroke-width:1.3${s.outline==='dashed'?';stroke-dasharray:3 2':''}"/>`;
   if(s.glyph)return `<use href="#sym-${s.glyph}" x="0" y="0" width="28" height="18" style="color:${ink}"/>`;
   if(s.colour)return `<rect x="4" y="3" width="20" height="12" rx="3" style="fill:${s.colour}"/>`;
   if(s.mark==='out'||s.mark==='in'||s.mark==='control'){const c=getComputedStyle(document.documentElement).getPropertyValue(s.mark==='out'?'--accent-out':s.mark==='in'?'--accent-in':'--canvas-muted').trim()||ink;return `<line x1="2" y1="9" x2="26" y2="9" style="stroke:${ink};stroke-width:2"/><rect x="12" y="3" width="4" height="12" rx="1.2" style="fill:${c}"/>`}
