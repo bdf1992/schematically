@@ -5915,12 +5915,24 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // Left to right by wire direction: cycles broken, longest-path layers, barycentre ordering,
   // then each node pulled level with its predecessors where it fits, for straight chains. A
   // container is laid out inside first, sized to fit, then placed as one node of its parent.
-  function layered(doc,viewId,{scope=null,gapX=80,gapY=56,pad=44}={}){
+  function layered(doc,viewId,{scope=null,gapX=80,gapY=56,pad=44,labelMargin=16}={}){
     const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
     const scopeCanvas=scope?interiorOf(scope):Data.GLOBAL_CANVAS_ID;
     if(scope&&!doc.components.some(c=>c.id===scope))return refusal('UNKNOWN_NODE',`No component ${scope}`);
     const byId=new Map(doc.components.map(c=>[c.id,c])),frozen=[];
     const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,resolvedNotation=N?N.resolve(doc):null,notation=resolvedNotation?.ok?resolvedNotation.notation:null;
+    // One label width estimate, used for both the column gap a label crosses and the row gap a
+    // same-column label spans: characters at the caption size, 0.6 of its size each, plus the
+    // margin on both sides. A wire whose label a bus on its route carries draws no label of its
+    // own (LAYOUT-MODEL.md "As built: buses"), so it widens nothing here either.
+    const capSize=notation&&N?N.drawnSize(notation.tokens.type,'caption'):9;
+    const lineHeight=capSize*1.15;
+    const labelEstimate=text=>text.length*capSize*.6+2*labelMargin;
+    const labelOnBus=w=>{
+      const rt=r.v.routes[w.id],text=String(w.config?.label||'');
+      if(!text||!rt||rt.mode!=='bus'||!Array.isArray(rt.buses))return false;
+      return rt.buses.some(bid=>String(r.v.buses?.[bid]?.label||'')===text);
+    };
     // A group is drawn around its members wherever they land, so it is not a card to place.
     const inScope=canvas=>doc.components.filter(c=>!hosted(c)&&!grouping(c)&&(c.canvasId||Data.GLOBAL_CANVAS_ID)===canvas);
     const isContainer=c=>c.form?.regions?.interior?.state==='open'&&Number(c.form?.dimension??2)===2;
@@ -5972,14 +5984,17 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         for(let l=layers.length-2;l>=0;l--){const bc=u=>{const p=[...succ.get(u)];return p.length?p.reduce((s,q)=>s+pos.get(q),0)/p.length:pos.get(u)};layers[l].sort((a,b)=>bc(a)-bc(b));index()}
       }
       // Coordinates: columns by layer; rows stacked, then pulled level with predecessors.
-      // A gap between columns is wide enough for the widest wire label crossing it.
-      const labelGap=new Map();
+      // A gap between columns is wide enough for the widest wire label that crosses it or has an
+      // end on either side of it; a labelled wire landing in one column (both ends the same
+      // layer) instead widens the row gap between the rows it joins.
+      const labelGap=new Map(),rowNeed=new Map();
       for(const w of doc.wires){
-        const text=String(w.config?.label||'');if(!text)continue;
-        let a=rep(w.a,canvas),b=rep(w.b,canvas);if(!a||!b||!layer.has(a)||!layer.has(b))continue;
-        const la=Math.min(layer.get(a),layer.get(b)),lb=Math.max(layer.get(a),layer.get(b));
-        const need=text.length*7+48+(w.config?.direction==='duplex'?14:0);
-        for(let l=la;l<lb;l++)labelGap.set(l,Math.max(labelGap.get(l)||0,need));
+        const text=String(w.config?.label||'');if(!text||labelOnBus(w))continue;
+        let a=rep(w.a,canvas),b=rep(w.b,canvas);if(!a||!b||a===b||!layer.has(a)||!layer.has(b))continue;
+        const la=layer.get(a),lb=layer.get(b);
+        if(la===lb){const key=a<b?`${a}|${b}`:`${b}|${a}`;rowNeed.set(key,Math.max(rowNeed.get(key)||0,lineHeight+2*labelMargin));continue}
+        const lo=Math.min(la,lb),hi=Math.max(la,lb),need=labelEstimate(text);
+        for(let l=lo;l<hi;l++)labelGap.set(l,Math.max(labelGap.get(l)||0,need));
       }
       // A container's boundary Points label the crossing outside its edge: that side needs room too.
       const pointLabel=(hostId,side)=>Math.max(0,...doc.components.filter(k=>k.placement?.kind==='edge'&&k.placement.hostId===hostId&&k.placement.side===side).map(k=>String(k.config?.label||'').length*7+32));
@@ -5994,11 +6009,16 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const x=new Map(),y=new Map();let cx=0;
       layers.forEach((L,l)=>{const w=Math.max(0,...L.map(u=>boxes.get(u).w));for(const u of L)x.set(u,cx+w/2);cx+=w+Math.max(gapX+Math.max(0,(crossing.get(l)||0)-2)*22,labelGap.get(l)||0)});
       for(const L of layers){
-        let top=0;
+        let top=0,prevId=null;
         for(const u of L){
           // Level with its predecessors by the terminals the wires use, not by card centres.
           const h=boxes.get(u).h,p=[...pred.get(u)].filter(q=>y.has(q)),want=p.length?p.map(q=>y.get(q)+portDy(q,u)).sort((a,b)=>a-b)[Math.floor((p.length-1)/2)]:top+h/2;
-          const at=Math.max(top+h/2,want);y.set(u,at);top=at+h/2+gapY;
+          const at=Math.max(top+h/2,want);y.set(u,at);
+          // A labelled wire joining this card to the one just above it in the same column needs
+          // room for the label's line, not just the default row gap.
+          const rowKey=prevId!=null?(prevId<u?`${prevId}|${u}`:`${u}|${prevId}`):null;
+          const rowGap=rowKey&&rowNeed.has(rowKey)?Math.max(gapY,rowNeed.get(rowKey)):gapY;
+          top=at+h/2+rowGap;prevId=u;
         }
       }
       // Back up the layers: a card with no predecessors levels with its successors instead, by the
@@ -6038,7 +6058,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       write(res,ox,oy);
     }
     straighten(doc,r.id,frozen);
-    return {ok:true,view:r.id,engine:'layered',placed:res.ids.length,frozen};
+    return {ok:true,view:r.id,engine:'layered',placed:res.ids.length,frozen,labelMargin};
   }
 
   // Straight wires where the layout left a free choice: a boundary Point slides along its edge to
@@ -6106,8 +6126,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   const READ_ONLY=new Set(['list','unplaced','buses']);
   function execute(doc,op,args={}){const fn=OPS[op];if(!fn)return refusal('UNKNOWN_OP',`Unknown layout op ${op}`,{ops:Object.keys(OPS)});return fn(doc,isObject(args)?args:{})}
   function tool(){
-    return {name:'schematic.layout',description:`Arrange the document without changing what it means. op: ${Object.keys(OPS).join(' | ')}. view names a layout (default: the document's default). move {id, x,y | dx,dy} · place {id, relation: right-of|left-of|above|below, of, gap} · align {ids, axis: left|center|right|top|middle|bottom} · distribute {ids, axis: x|y, gap?} · route {wireId, mode: auto|guided|pinned|bus, points|via|buses} · bus {id, points: [{x,y}...] 2+ with horizontal or vertical steps, pitch?: 4-16 (6), label?, order?: [wireId...]} sets a bus; bus {id, remove: true} removes it and returns its wires to auto · buses {} lists every bus with the wires that name it · harness {between: [groupA, groupB], pitch?} makes one trunk per wire label in the gap between two groups, and streets in the row gaps for cards with no direct line, and routes the wires between them on those buses · apply {engine: layered, scope?: containerId, into?: new layout name} · create {name, from?, empty?} · rename {view, name} · delete {view} · set-default {view}. Refusals are typed: PINNED, LOCKED, HOSTED, UNPLACED, BAD_POINTS, UNKNOWN_BUS, BUS_GAP, GAP_TOO_NARROW, STREET_TOO_NARROW, UNKNOWN_*.`,
-      inputSchema:{type:'object',properties:{op:{type:'string',enum:Object.keys(OPS)},view:{type:'string'},id:{type:'string'},ids:{type:'array',items:{type:'string'}},of:{type:'string'},relation:{type:'string'},gap:{type:'number'},x:{type:'number'},y:{type:'number'},dx:{type:'number'},dy:{type:'number'},axis:{type:'string'},wireId:{type:'string'},mode:{type:'string'},points:{type:'array'},via:{type:'array'},buses:{type:'array',items:{type:'string'}},pitch:{type:'number'},label:{type:'string'},order:{type:'array',items:{type:'string'}},remove:{type:'boolean'},between:{type:'array',items:{type:'string'},minItems:2,maxItems:2},engine:{type:'string'},scope:{type:'string'},into:{type:'string'},name:{type:'string'},from:{type:'string'},empty:{type:'boolean'},audience:{type:'string'}},required:['op'],additionalProperties:false}};
+    return {name:'schematic.layout',description:`Arrange the document without changing what it means. op: ${Object.keys(OPS).join(' | ')}. view names a layout (default: the document's default). move {id, x,y | dx,dy} · place {id, relation: right-of|left-of|above|below, of, gap} · align {ids, axis: left|center|right|top|middle|bottom} · distribute {ids, axis: x|y, gap?} · route {wireId, mode: auto|guided|pinned|bus, points|via|buses} · bus {id, points: [{x,y}...] 2+ with horizontal or vertical steps, pitch?: 4-16 (6), label?, order?: [wireId...]} sets a bus; bus {id, remove: true} removes it and returns its wires to auto · buses {} lists every bus with the wires that name it · harness {between: [groupA, groupB], pitch?} makes one trunk per wire label in the gap between two groups, and streets in the row gaps for cards with no direct line, and routes the wires between them on those buses · apply {engine: layered, scope?: containerId, into?: new layout name, labelMargin?: margin either side of a crossing wire label's estimated width (16)} · create {name, from?, empty?} · rename {view, name} · delete {view} · set-default {view}. Refusals are typed: PINNED, LOCKED, HOSTED, UNPLACED, BAD_POINTS, UNKNOWN_BUS, BUS_GAP, GAP_TOO_NARROW, STREET_TOO_NARROW, UNKNOWN_*.`,
+      inputSchema:{type:'object',properties:{op:{type:'string',enum:Object.keys(OPS)},view:{type:'string'},id:{type:'string'},ids:{type:'array',items:{type:'string'}},of:{type:'string'},relation:{type:'string'},gap:{type:'number'},x:{type:'number'},y:{type:'number'},dx:{type:'number'},dy:{type:'number'},axis:{type:'string'},wireId:{type:'string'},mode:{type:'string'},points:{type:'array'},via:{type:'array'},buses:{type:'array',items:{type:'string'}},pitch:{type:'number'},label:{type:'string'},order:{type:'array',items:{type:'string'}},remove:{type:'boolean'},between:{type:'array',items:{type:'string'},minItems:2,maxItems:2},engine:{type:'string'},scope:{type:'string'},into:{type:'string'},name:{type:'string'},from:{type:'string'},empty:{type:'boolean'},audience:{type:'string'},labelMargin:{type:'number'}},required:['op'],additionalProperties:false}};
   }
   return {DEFAULT_ID,ROUTE_MODES,views,ensure,defaultId,createView,deleteView,renameView,setDefault,geometry,setGeometry,unplaced,move,place,align,distribute,route,routeFor,busPoints,busMeet,setBus,removeBus,listBuses,harness,layered,execute,isReadOnly:op=>READ_ONLY.has(op),tool,hosted,size};
 });

@@ -68,7 +68,19 @@ QUERY_GAP = 460       # records to queries: the harness's one trunk of 59 lanes 
 MIGRATION_GAP = 80    # the migration card's right edge to the surfaces' left column
 # A gap between group regions is the gap between cards less two GROUP_PAD (24) of region padding.
 # Every gap is only as wide as its harness needs: a wider picture is fitted smaller, and labels
-# that keep their screen size then crowd each other.
+# that keep their screen size then crowd each other. GROUP_GAP and ROW_GAP above already hold
+# at or above what the harness receipts ask for.
+
+LABEL_MARGIN = 16     # src/08-layout-core.js layered's own default margin, mirrored here
+# SCHEMATIC.tokens.type.caption.size (src/03-notation-core.js); work-engine.notation.json
+# carries no "tokens" override, so the Work Engine map draws its captions at this size too.
+CAPTION_SIZE = 9.0
+
+
+def label_estimate(text: str, margin: int = LABEL_MARGIN) -> float:
+    """src/08-layout-core.js layered's own estimate: characters at the caption size, 0.6 of its
+    size each, plus the margin on both sides."""
+    return len(text) * CAPTION_SIZE * 0.6 + 2 * margin
 
 
 def slug(text: str) -> str:
@@ -227,19 +239,37 @@ def build(gap: dict) -> tuple[dict, dict]:
             wires.append({"id": f"w-tracks-{slug(s['name'])}", "a": sid, "aSide": "tracks-out", "b": rec_id["Recording"],
                           "bSide": "tracks-in", "canvasId": GLOBAL, "config": {"label": "feeds tracks"}})
 
-    # Group grid: surfaces | records | queries, each a block of columns.
+    # Group grid: surfaces | records | queries, each a block of columns. The gap between two
+    # adjacent columns of one group is at least COL_GAP, widened to the widest label estimate
+    # among the wires between a card in one of the two columns and a card in the other.
+    def column_gaps(cards: list[dict], cols: int) -> list[int]:
+        col_of = {c["id"]: i % cols for i, c in enumerate(cards)}
+        gaps = []
+        for k in range(cols - 1):
+            need = COL_GAP
+            for w in wires:
+                a, b = w.get("a"), w.get("b")
+                if a not in col_of or b not in col_of or {col_of[a], col_of[b]} != {k, k + 1}:
+                    continue
+                label = w.get("config", {}).get("label")
+                if label:
+                    need = max(need, math.ceil(label_estimate(label)))
+            gaps.append(need)
+        return gaps
+
     def place(cards, x0, cols, y0=0):
         widths = [max(c["config"]["presentation"]["size"]["w"] for c in cards[k::cols]) for k in range(cols)]
+        gaps = column_gaps(cards, cols)
         x = x0
         lefts = []
-        for w in widths:
+        for i, w in enumerate(widths):
             lefts.append(x)
-            x += w + COL_GAP
+            x += w + (gaps[i] if i < len(gaps) else COL_GAP)
         for i, c in enumerate(cards):
             col, row = i % cols, i // cols
             c["x"] = lefts[col] + widths[col] / 2
             c["y"] = y0 + row * (CARD_H + ROW_GAP) + CARD_H / 2
-        return x - COL_GAP
+        return x - (gaps[-1] if gaps else COL_GAP)
 
     # Card order: barycentre against the wires to the other groups, before any card is placed.
     order_by_barycentre([sur_cards, rec_cards, spec_cards], wires)

@@ -6,7 +6,7 @@
 // that cross them (src/08-layout-core.js, the layered engine).
 //
 //   node scripts/layout_sov.mjs file.sov [--out other.sov] [--view id] [--no-arrange]
-//                                        [--harness groupA,groupB ...]
+//                                        [--harness groupA,groupB ...] [--label-margin n]
 //
 // Writes the result back to file.sov (or --out, when given) as the compact saved form, one
 // final newline. --view names a layout to arrange; left out, the document's default layout.
@@ -28,16 +28,17 @@ require(path.join(HERE, '../src/06-attachment-core.js'));
 const Data = require(path.join(HERE, '../src/05-data-core.js'));
 const Layout = require(path.join(HERE, '../src/08-layout-core.js'));
 
-const USAGE = 'usage: node scripts/layout_sov.mjs file.sov [--out other.sov] [--view id] [--no-arrange] [--harness groupA,groupB ...]';
+const USAGE = 'usage: node scripts/layout_sov.mjs file.sov [--out other.sov] [--view id] [--no-arrange] [--harness groupA,groupB ...] [--label-margin n]';
 
 const args = process.argv.slice(2);
-let out = null, view = null, arrange = true;
+let out = null, view = null, arrange = true, labelMargin = null;
 const harnesses = [];
 const positional = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--out') { out = args[++i]; }
   else if (args[i] === '--view') { view = args[++i]; }
   else if (args[i] === '--no-arrange') { arrange = false; }
+  else if (args[i] === '--label-margin') { labelMargin = Number(args[++i]); }
   else if (args[i] === '--harness') {
     const pair = String(args[++i] ?? '').split(',').map(s => s.trim());
     if (pair.length !== 2 || !pair[0] || !pair[1]) { console.error(USAGE); process.exit(2); }
@@ -58,11 +59,14 @@ const fail = (result) => {
   console.log(`  ${result.code}: ${result.message}`);
   process.exit(1);
 };
-let placed = null;
+let placed = null, usedLabelMargin = null;
 if (arrange) {
-  const result = Layout.execute(doc, 'apply', {engine: 'layered', view});
+  const applyArgs = {engine: 'layered', view};
+  if (labelMargin != null && Number.isFinite(labelMargin)) applyArgs.labelMargin = labelMargin;
+  const result = Layout.execute(doc, 'apply', applyArgs);
   if (!result.ok) fail(result);
   placed = result.placed;
+  usedLabelMargin = result.labelMargin;
 }
 const receipts = [];
 for (const between of harnesses) {
@@ -78,7 +82,7 @@ const target = out || file;
 const asRead = !arrange && payload && typeof payload === 'object' && payload.schema === Data.DOCUMENT_SCHEMA;
 const written = asRead ? {...payload, layout: doc.layout} : Data.compactDocument(doc);
 fs.writeFileSync(target, JSON.stringify(written, null, 1) + '\n');
-console.log(`ok ${file}${placed != null ? ` (${placed} placed)` : ''}`);
+console.log(`ok ${file}${placed != null ? ` (${placed} placed) labelMargin ${usedLabelMargin}` : ''}`);
 for (const r of receipts) {
   console.log(`  harness ${r.between.join(',')}: ${r.orientation} gap ${r.gap.have} (needs ${r.gap.need}); ${r.wires.length} wires`);
   for (const b of r.buses) console.log(`    ${b.kind} ${b.id}: ${b.lanes} lane${b.lanes === 1 ? '' : 's'}${b.label ? ` "${b.label}"` : ''}`);
