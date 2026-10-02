@@ -4,6 +4,11 @@ Run from the repository root: python docs/workengine/check_map.py
   --picture PNG  also load map.svg in headless Chromium, measure it the way
                  tests/export_picture_fit_qa.py does (titles inside their cards, no caption on a
                  caption or a card), and save a screenshot to PNG. Needs Playwright.
+  --routing      build the order-only map (build_map.py --no-buses) into a temporary directory,
+                 audit it and map.sov with scripts/layout_audit.py, print both sets of counts, and
+                 fail unless map.sov crosses fewer than DEV_CROSSINGS times and no more than the
+                 order-only map, wraps no route, runs no route through a card, and overlaps no
+                 more than the order-only map. Needs Playwright.
 
 Checks, each failure named:
 - every record, surface and query of gapmap.json appears exactly once, as a card of its kind
@@ -19,6 +24,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tempfile
 from html import escape
 from pathlib import Path
 
@@ -87,6 +93,36 @@ def check_picture(svg: Path, png: Path) -> list[str]:
     return [f"picture: {' '.join(str(x) for x in b[:3])}" for b in bad]
 
 
+DEV_CROSSINGS = 665   # map.sov audited on dev at 8dfde33, before card order and buses
+ROUTING_KINDS = ("crossing", "route-overlap", "route-wraps", "route-through-node", "text-collision")
+
+
+def check_routing() -> list[str]:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from layout_audit import audit  # noqa: E402
+    with tempfile.TemporaryDirectory() as tmp:
+        order_only = Path(tmp) / "map-order-only.sov"
+        run = subprocess.run([sys.executable, str(HERE / "build_map.py"), "--no-buses", "--out", str(order_only)],
+                             capture_output=True, text=True, cwd=ROOT)
+        if run.returncode:
+            return ["build_map.py --no-buses failed: " + (run.stdout + run.stderr).strip().replace("\n", " | ")]
+        base, mapped = audit([order_only, HERE / "map.sov"])
+    count = lambda r, k: r["counts"].get(k, 0)  # noqa: E731
+    for name, r in (("order only", base), ("map.sov", mapped)):
+        print(f"{name:<11} " + ", ".join(f"{k} {count(r, k)}" for k in ROUTING_KINDS))
+    problems = []
+    if not count(mapped, "crossing") < DEV_CROSSINGS:
+        problems.append(f"routing: {count(mapped, 'crossing')} crossings, not below {DEV_CROSSINGS} (dev at 8dfde33)")
+    if count(mapped, "crossing") > count(base, "crossing"):
+        problems.append(f"routing: {count(mapped, 'crossing')} crossings, more than the order-only map's {count(base, 'crossing')}")
+    for kind in ("route-wraps", "route-through-node"):
+        if count(mapped, kind):
+            problems.append(f"routing: {count(mapped, kind)} {kind}")
+    if count(mapped, "route-overlap") > count(base, "route-overlap"):
+        problems.append(f"routing: {count(mapped, 'route-overlap')} route-overlap, more than the order-only map's {count(base, 'route-overlap')}")
+    return problems
+
+
 def main(argv: list[str]) -> int:
     gap = json.loads((HERE / "source" / "gapmap.json").read_text(encoding="utf-8"))
     problems = []
@@ -104,6 +140,8 @@ def main(argv: list[str]) -> int:
         problems.append("validate_sov.mjs failed: " + (run.stdout + run.stderr).strip().replace("\n", " | "))
     if "--picture" in argv:
         problems += check_picture(HERE / "map.svg", Path(argv[argv.index("--picture") + 1]))
+    if "--routing" in argv:
+        problems += check_routing()
     if problems:
         for p in problems:
             print("FAIL", p)

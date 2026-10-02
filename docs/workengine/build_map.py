@@ -3,6 +3,15 @@
 Run from the repository root: python docs/workengine/build_map.py
   --refresh-source  copy gapmap.json from the workstation sketchbook first
   --layered         place cards with node scripts/layout_sov.mjs instead of the group grid
+  --no-buses        order the cards only; leave every wire to the router (no harness)
+  --out PATH        write the map to PATH instead of docs/workengine/map.sov
+
+Each group's cards are ordered by barycentre against the wires to the other groups (8 sweeps,
+surfaces, records, queries and back, ties by source order), then placed as a grid. By default
+the map is then given two harnesses with node scripts/layout_sov.mjs (surfaces to records,
+records to queries): one trunk per wire label in the gap between two groups, streets in the row
+gaps, and every wire between the two groups routed on them (LAYOUT-MODEL.md "As built: buses").
+GROUP_GAP and ROW_GAP are the sizes those harnesses need.
 
 The output is deterministic: the same gapmap.json gives the same map.sov byte for byte.
 Standard library only.
@@ -54,7 +63,12 @@ CARD_H = 120
 SUB_CHAR = 5.4        # width of one subtitle character
 ROW_GAP = 110         # room under a card for its status and waits-on line
 COL_GAP = 140         # room for a waits-on line wider than its card
-GROUP_GAP = 260
+GROUP_GAP = 260       # surfaces to records: the harness's two trunks (20 lanes) need 184 between regions
+QUERY_GAP = 460       # records to queries: the harness's one trunk of 59 lanes needs 402 between regions
+MIGRATION_GAP = 80    # the migration card's right edge to the surfaces' left column
+# A gap between group regions is the gap between cards less two GROUP_PAD (24) of region padding.
+# Every gap is only as wide as its harness needs: a wider picture is fitted smaller, and labels
+# that keep their screen size then crowd each other.
 
 
 def slug(text: str) -> str:
@@ -71,6 +85,28 @@ def short_decision(n: int, text: str) -> str:
 def card_width(label: str, lines: int = 1, floor: int = 200, cap: int = 520) -> int:
     need = math.ceil(len(label) * TITLE_CHAR / lines) + 56
     return int(min(cap, max(floor, math.ceil(need / 20) * 20)))
+
+
+def order_by_barycentre(groups: list[list[dict]], wires: list[dict], sweeps: int = 8) -> None:
+    """Sort each group's cards, in place, by the mean position of what they are wired to in the
+    other groups. A card's position is its rank in its group scaled to 0..1. Sweeps go first to
+    last group and back, alternating; a card with no such wire keeps its place; ties keep source order."""
+    source = {c["id"]: i for g in groups for i, c in enumerate(g)}
+    group_of = {c["id"]: k for k, g in enumerate(groups) for c in g}
+    neighbours: dict[str, list[str]] = {cid: [] for cid in group_of}
+    for w in wires:
+        a, b = w["a"], w["b"]
+        if a in group_of and b in group_of and group_of[a] != group_of[b]:
+            neighbours[a].append(b)
+            neighbours[b].append(a)
+    for sweep in range(sweeps):
+        for k in (range(len(groups)) if sweep % 2 == 0 else reversed(range(len(groups)))):
+            pos = {c["id"]: (i / (len(g) - 1) if len(g) > 1 else 0.5) for g in groups for i, c in enumerate(g)}
+
+            def key(c: dict) -> tuple[float, int]:
+                ns = neighbours[c["id"]]
+                return (sum(pos[n] for n in ns) / len(ns) if ns else pos[c["id"]], source[c["id"]])
+            groups[k].sort(key=key)
 
 
 def backing_names(backing: str) -> list[str]:
@@ -205,12 +241,16 @@ def build(gap: dict) -> tuple[dict, dict]:
             c["y"] = y0 + row * (CARD_H + ROW_GAP) + CARD_H / 2
         return x - COL_GAP
 
+    # Card order: barycentre against the wires to the other groups, before any card is placed.
+    order_by_barycentre([sur_cards, rec_cards, spec_cards], wires)
     right = place(sur_cards, 0, 2)
     right = place(rec_cards, right + GROUP_GAP, 4)
     if migration:
-        migration["x"] = right + GROUP_GAP + migration["config"]["presentation"]["size"]["w"] / 2
+        # Top left, beside the surfaces: its wire to the control store (a left-hand port) stays
+        # inside the picture, and the picture's top stays above the first row of every group.
+        migration["x"] = -MIGRATION_GAP - migration["config"]["presentation"]["size"]["w"] / 2
         migration["y"] = -CARD_H - ROW_GAP + CARD_H / 2
-    place(spec_cards, right + GROUP_GAP, 2)
+    place(spec_cards, right + QUERY_GAP, 2)
 
     def group(gid, label, slot, members):
         xs = [m["x"] for m in members]
@@ -249,8 +289,11 @@ def build(gap: dict) -> tuple[dict, dict]:
     return doc, report
 
 
-def write(doc: dict) -> None:
-    TARGET.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+HARNESSES = ["surfaces,records", "records,queries"]
+
+
+def write(doc: dict, target: Path) -> None:
+    target.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
 
 
 def main(argv: list[str]) -> int:
@@ -258,17 +301,27 @@ def main(argv: list[str]) -> int:
         SOURCE.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(SKETCHBOOK, SOURCE)
         print(f"copied {SKETCHBOOK} -> {SOURCE}")
+    target = Path(argv[argv.index("--out") + 1]).resolve() if "--out" in argv else TARGET
     gap = json.loads(SOURCE.read_text(encoding="utf-8"))
     doc, report = build(gap)
-    write(doc)
-    if "--layered" in argv:
-        run = subprocess.run(["node", str(ROOT / "scripts" / "layout_sov.mjs"), str(TARGET)], capture_output=True, text=True)
+    write(doc, target)
+    layered, buses = "--layered" in argv, "--no-buses" not in argv
+    if layered or buses:
+        # One pass of the shared layout core: arrange (only with --layered), then each harness in turn.
+        cmd = ["node", str(ROOT / "scripts" / "layout_sov.mjs"), str(target)]
+        if not layered:
+            cmd.append("--no-arrange")
+        if buses:
+            for pair in HARNESSES:
+                cmd += ["--harness", pair]
+        run = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
         print(run.stdout.strip())
         if run.returncode:
             print(run.stderr.strip())
             return run.returncode
     cards = sum(1 for c in doc["components"] if c["symbolId"] != "group")
-    print(f"ok  {TARGET.relative_to(ROOT).as_posix()}: {cards} cards, {len(doc['wires'])} wires")
+    shown = target.relative_to(ROOT).as_posix() if target.is_relative_to(ROOT) else str(target)
+    print(f"ok  {shown}: {cards} cards, {len(doc['wires'])} wires{'' if buses else ' (no buses)'}")
     print(f"    decisions on cards: {', '.join(f'D{n}' for n in sorted(report['attached']))}")
     print(f"    decisions on no card: {', '.join(report['unattached']) or 'none'}")
     print(f"    backing names with no record: {'; '.join(report['unmatched']) or 'none'}")

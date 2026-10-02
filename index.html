@@ -484,6 +484,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .wire-blank-ghost .plus{stroke:var(--muted);stroke-width:2.6;stroke-linecap:round}
 .wire-blank-ghost text{font-size:calc(clamp(8px,8px * var(--zoom,1),14px) / var(--zoom,1));font-weight:800;fill:var(--muted);letter-spacing:.05em;paint-order:stroke;stroke:var(--panel);stroke-width:2px}
 @keyframes wireBlankGhostIn{to{opacity:.62}}
+.bus-band{pointer-events:none}.bus-band rect{fill:var(--muted);fill-opacity:.06;stroke:var(--muted);stroke-opacity:.3;stroke-width:var(--stroke-structure,1)}
+.bus-label{font-weight:var(--type-caption-weight,600);letter-spacing:.02em;pointer-events:none}
 .file-menu-item:disabled{color:var(--muted);opacity:.52;cursor:not-allowed}
 .file-menu-item:disabled:hover{background:transparent}
 :root[data-appearance="dark"]{
@@ -501,6 +503,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 :root[data-appearance="dark"] .file-menu-item:disabled{color:#858A8C;opacity:.82}
 :root[data-appearance="dark"] .connection-label,:root[data-appearance="dark"] .reciprocity-mark{fill:var(--ink);stroke:var(--canvas-tone)}
 :root[data-appearance="dark"] .settle-host-ghost text{stroke:var(--canvas-tone)}
+:root[data-appearance="dark"] .bus-band rect{fill:var(--canvas-muted);fill-opacity:.07;stroke:var(--canvas-muted);stroke-opacity:.32}
 
 :root[data-appearance="light"]{color-scheme:light}
 :root[data-appearance="light"] #workspace{background-color:var(--canvas-tone)}
@@ -5254,7 +5257,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   if(!Data)throw new Error('SovSchematicData core is required');
   const clone=Data.clone,isObject=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
   const DEFAULT_ID='main',POINT=24,MAX=4096;
-  const ROUTE_MODES=['auto','guided','pinned'];
+  const ROUTE_MODES=['auto','guided','pinned','bus'];
+  // Buses (LAYOUT-MODEL.md "As built: buses"): a route declared once per layout, which wires name
+  // instead of each finding a path. The yFiles bus descriptor model: the bus is the record, a wire
+  // only names it.
+  const BUS_PITCH=6,BUS_TRUNK_GAP=16,BUS_MARGIN=24,STREET_DROP=36,STREET_ROOM=12;
   const refusal=(code,message,extra={})=>({ok:false,code,message,...extra});
   const num=(v,f)=>Number.isFinite(Number(v))?Number(v):f;
 
@@ -5280,6 +5287,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       // A layout never outlives what it arranges.
       if(v.nodes)for(const k of Object.keys(v.nodes))if(!doc.components.some(c=>c.id===k))delete v.nodes[k];
       for(const k of Object.keys(v.routes))if(!doc.wires.some(w=>w.id===k))delete v.routes[k];
+      // Buses are kept on every view; an order names only wires that exist, and a route never
+      // names a bus that is gone.
+      if(!isObject(v.buses))v.buses={};
+      for(const [bid,b] of Object.entries(v.buses)){
+        if(!isObject(b)||!busPoints(b.points)){delete v.buses[bid];continue}
+        if(Array.isArray(b.order))b.order=b.order.filter(id=>doc.wires.some(w=>w.id===id));
+      }
+      for(const [k,rt] of Object.entries(v.routes))if(rt?.mode==='bus'&&(!Array.isArray(rt.buses)||!rt.buses.length||rt.buses.some(id=>!v.buses[id])))delete v.routes[k];
     }
     return L;
   }
@@ -5289,7 +5304,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   function createView(doc,{id,name,audience=null,from=null,empty=false}={}){
     const L=ensure(doc);let vid=slug(id||name);let k=2;while(L.views[vid])vid=`${slug(id||name)}-${k++}`;
     const source=from??L.default;if(!empty&&!L.views[source])return refusal('UNKNOWN_LAYOUT',`No layout ${source}`);
-    L.views[vid]={name:String(name||id||vid),audience:audience||null,nodes:{},routes:empty?{}:clone(L.views[source].routes||{})};
+    L.views[vid]={name:String(name||id||vid),audience:audience||null,nodes:{},routes:empty?{}:clone(L.views[source].routes||{}),buses:empty?{}:clone(L.views[source].buses||{})};
     if(!empty)for(const c of doc.components)if(!hosted(c)||c.placement?.kind==='edge'){const g=geometry(doc,source,c.id);if(g)L.views[vid].nodes[c.id]=g}
     return {ok:true,id:vid,view:summary(doc,vid)};
   }
@@ -5412,12 +5427,149 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!doc.wires.some(w=>w.id===wireId))return refusal('UNKNOWN_WIRE',`No wire ${wireId}`);
     if(spec==null||spec.mode==='auto'){delete r.v.routes[wireId];return {ok:true,wireId,mode:'auto'}}
     if(!ROUTE_MODES.includes(spec.mode))return refusal('UNKNOWN_MODE',`mode is ${ROUTE_MODES.join(', ')}`);
+    if(spec.mode==='bus'){
+      const ids=Array.isArray(spec.buses)?spec.buses.map(String):[];
+      if(!ids.length)return refusal('BAD_BUSES','buses must name one or more buses, in the order the wire rides them');
+      const missing=ids.find(id=>!r.v.buses[id]);if(missing!=null)return refusal('UNKNOWN_BUS',`No bus ${missing} on layout ${r.id}`);
+      for(let i=1;i<ids.length;i++)if(!busMeet(r.v.buses[ids[i-1]].points,r.v.buses[ids[i]].points))return refusal('BUS_GAP',`Buses ${ids[i-1]} and ${ids[i]} neither cross nor touch: a wire cannot pass from one to the other`,{buses:[ids[i-1],ids[i]]});
+      r.v.routes[wireId]={mode:'bus',buses:ids};
+      return {ok:true,wireId,mode:'bus',buses:ids};
+    }
     const pts=(spec.mode==='pinned'?spec.points:spec.via)||[];
     if(!Array.isArray(pts)||!pts.length||pts.some(p=>!Number.isFinite(Number(p?.x))||!Number.isFinite(Number(p?.y))))return refusal('BAD_POINTS',`${spec.mode==='pinned'?'points':'via'} must be one or more {x, y}`);
     r.v.routes[wireId]={mode:spec.mode,[spec.mode==='pinned'?'points':'via']:pts.map(p=>({x:Number(p.x),y:Number(p.y)}))};
     return {ok:true,wireId,mode:spec.mode};
   }
   function routeFor(doc,viewId,wireId){return doc?.layout?.views?.[viewId??defaultId(doc)]?.routes?.[wireId]||null}
+
+  // ---- Buses --------------------------------------------------------------------------------
+  // A bus's centreline: 2 or more points, every step horizontal or vertical. Anything else is null.
+  function busPoints(points){
+    if(!Array.isArray(points)||points.length<2)return null;
+    const out=[];
+    for(const p of points){
+      if(!isObject(p)||p.x==null||p.y==null)return null;
+      const x=Number(p.x),y=Number(p.y);if(!Number.isFinite(x)||!Number.isFinite(y))return null;out.push({x,y});
+    }
+    for(let i=1;i<out.length;i++)if(out[i].x!==out[i-1].x&&out[i].y!==out[i-1].y)return null;
+    return out;
+  }
+  const busPitch=v=>Math.max(4,Math.min(16,num(v,BUS_PITCH)));
+  // Where two bus centrelines meet, crossing or touching at an end: the first place found walking
+  // the first bus, with the segment of each it lies on; null when they never meet. Axis-aligned
+  // segments meet exactly when their boxes do.
+  function busMeet(a,b){
+    const A=busPoints(a),B=busPoints(b);if(!A||!B)return null;
+    for(let i=1;i<A.length;i++)for(let j=1;j<B.length;j++){
+      const p=A[i-1],q=A[i],s=B[j-1],t=B[j];
+      const l=Math.max(Math.min(p.x,q.x),Math.min(s.x,t.x)),r=Math.min(Math.max(p.x,q.x),Math.max(s.x,t.x));
+      const top=Math.max(Math.min(p.y,q.y),Math.min(s.y,t.y)),bottom=Math.min(Math.max(p.y,q.y),Math.max(s.y,t.y));
+      if(l<=r+1e-6&&top<=bottom+1e-6)return {x:(l+r)/2,y:(top+bottom)/2,a:i-1,b:j-1};
+    }
+    return null;
+  }
+  function wiresOnBus(v,busId){return Object.entries(v.routes||{}).filter(([,rt])=>rt?.mode==='bus'&&Array.isArray(rt.buses)&&rt.buses.includes(busId)).map(([id])=>id).sort()}
+  function setBus(doc,viewId,a={}){
+    const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
+    const id=String(a.id??'').trim();if(!id)return refusal('BAD_BUS','A bus needs an id');
+    const pts=busPoints(a.points);if(!pts)return refusal('BAD_POINTS','points must be 2 or more {x, y}, every step horizontal or vertical');
+    const bus={points:pts,pitch:busPitch(a.pitch)};
+    if(a.label!=null&&String(a.label).trim())bus.label=String(a.label);
+    if(Array.isArray(a.between)&&a.between.length===2)bus.between=a.between.map(String);
+    if(a.order!=null){
+      if(!Array.isArray(a.order))return refusal('BAD_ORDER','order is a list of wire ids');
+      const unknown=a.order.find(w=>!doc.wires.some(x=>x.id===String(w)));if(unknown!=null)return refusal('UNKNOWN_WIRE',`No wire ${unknown}`);
+      bus.order=[...new Set(a.order.map(String))];
+    }
+    r.v.buses[id]=bus;
+    return {ok:true,id,view:r.id,bus:clone(bus),wires:wiresOnBus(r.v,id)};
+  }
+  // Removing a bus returns every wire that named it to the router.
+  function removeBus(doc,viewId,id){
+    const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
+    if(!r.v.buses[id])return refusal('UNKNOWN_BUS',`No bus ${id} on layout ${r.id}`);
+    const freed=wiresOnBus(r.v,id);delete r.v.buses[id];for(const w of freed)delete r.v.routes[w];
+    return {ok:true,id,view:r.id,removed:true,wires:freed};
+  }
+  function listBuses(doc,viewId){
+    const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
+    return {ok:true,view:r.id,buses:Object.keys(r.v.buses).sort().map(id=>({id,...clone(r.v.buses[id]),wires:wiresOnBus(r.v,id)}))};
+  }
+
+  // ---- Harness: trunks between two groups, streets in their row gaps ---------------------------
+  // VLSI standard-cell channel routing: cards sit in rows, wires run in the channels between. One
+  // trunk per wire label in the gap between the groups; a card with another card between it and
+  // the trunk reaches it along a street in the gap under its row (sending) or above it (receiving).
+  const busSlug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'unlabelled';
+  function harness(doc,viewId,{between,pitch}={}){
+    const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
+    if(!Array.isArray(between)||between.length!==2||String(between[0])===String(between[1]))return refusal('BAD_BETWEEN','between names two different groups: [groupA, groupB]');
+    const ids=between.map(String),groups=ids.map(id=>doc.components.find(c=>c.id===id));
+    for(let k=0;k<2;k++)if(!groups[k]||!grouping(groups[k]))return refusal('UNKNOWN_GROUP',`No group ${ids[k]}`);
+    const P=busPitch(pitch);
+    // The group regions as this layout draws them.
+    const placedDoc=r.isDefault?doc:{...doc,components:doc.components.map(c=>{const g=!hosted(c)&&!grouping(c)?geometry(doc,r.id,c.id):null;return g&&g.w?{...c,x:g.x,y:g.y,config:{...(c.config||{}),presentation:{...(c.config?.presentation||{}),size:{w:g.w,h:g.h}}}}:c})};
+    const rects=groups.map(g=>Data.groupRect(placedDoc,g.id,size));
+    const members=groups.map(g=>new Set((Array.isArray(g.config?.members)?g.config.members:[]).map(String)));
+    // Worked for a vertical trunk (groups side by side); stacked groups swap x and y in and out.
+    const gapX=Math.max(rects[1].l-rects[0].r,rects[0].l-rects[1].r),gapY=Math.max(rects[1].t-rects[0].b,rects[0].t-rects[1].b);
+    const vertical=gapX>=gapY,sw=p=>vertical?{x:p.x,y:p.y}:{x:p.y,y:p.x};
+    const R=rects.map(q=>vertical?{l:q.l,r:q.r,t:q.t,b:q.b}:{l:q.t,r:q.b,t:q.l,b:q.r});
+    const left=(R[0].l+R[0].r)<=(R[1].l+R[1].r)?0:1,right=1-left,gapL=R[left].r,gap=R[right].l-gapL;
+    const towardTrunkIsRight=k=>k===left;
+    const side=id=>members[0].has(id)?0:members[1].has(id)?1:-1,labelOf=w=>String(w.config?.label||'');
+    const wires=doc.wires.filter(w=>{const sa=side(w.a),sb=side(w.b);if(sa<0||sb<0||sa===sb)return false;const m=r.v.routes[w.id]?.mode;return m!=='pinned'&&m!=='guided'});
+    if(!wires.length)return refusal('NO_WIRES',`No wire free to route runs between ${ids[0]} and ${ids[1]}`);
+    const labels=[...new Set(wires.map(labelOf))].sort((a,b)=>a<b?-1:a>b?1:0),lanes=labels.map(l=>wires.filter(w=>labelOf(w)===l).length);
+    const total=lanes.reduce((s,n)=>s+n*P,0)+BUS_TRUNK_GAP*(labels.length-1),need=total+2*BUS_MARGIN;
+    if(!(gap>=need))return refusal('GAP_TOO_NARROW',`The gap between ${ids[0]} and ${ids[1]} is ${Math.floor(Math.max(0,gap))} wide; ${labels.length} trunk${labels.length===1?'':'s'} carrying ${wires.length} wires need ${Math.ceil(need)}`,{need:Math.ceil(need),have:Math.floor(Math.max(0,gap))});
+    const trunkX=new Map(),trunkId=l=>`harness-${ids[0]}-${ids[1]}-${busSlug(l)}`;
+    {let at=gapL+(gap-total)/2;labels.forEach((l,i)=>{trunkX.set(l,at+lanes[i]*P/2);at+=lanes[i]*P+BUS_TRUNK_GAP})}
+    // Rows: members whose cards overlap vertically, top to bottom.
+    const lay=[0,1].map(k=>{
+      const items=[...members[k]].map(id=>{const c=doc.components.find(x=>x.id===id);if(!c||hosted(c)||grouping(c))return null;const g=geometry(doc,r.id,id);if(!g||g.w==null)return null;
+        const s=sw(g),w=vertical?g.w:g.h,h=vertical?g.h:g.w;return {id,l:s.x-w/2,r:s.x+w/2,t:s.y-h/2,b:s.y+h/2}}).filter(Boolean).sort((a,b)=>a.t-b.t||a.l-b.l||(a.id<b.id?-1:1));
+      const rows=[];for(const it of items){const row=rows.at(-1);if(row&&it.t<row.b){row.items.push(it);row.b=Math.max(row.b,it.b)}else rows.push({t:it.t,b:it.b,items:[it]})}
+      return {items:new Map(items.map(it=>[it.id,it])),rows};
+    });
+    // A direct line: no other member of its group between the card and the trunk, inside its row band.
+    const direct=(k,id)=>{const m=lay[k].items.get(id);if(!m)return true;return ![...lay[k].items.values()].some(o=>o.id!==id&&o.t<m.b&&o.b>m.t&&(towardTrunkIsRight(k)?o.l>=m.r:o.r<=m.l))};
+    const rowOf=(k,id)=>lay[k].rows.findIndex(row=>row.items.some(it=>it.id===id));
+    const ours=b=>Array.isArray(b?.between)&&b.between.length===2&&ids.includes(b.between[0])&&ids.includes(b.between[1]);
+    // A street id another harness already uses takes the next free suffix.
+    const streetId=base=>{let id=base,k=2;while(r.v.buses[id]&&!ours(r.v.buses[id]))id=`${base}-${k++}`;return id};
+    const streets=new Map();
+    const street=(k,ri,kind,w)=>{const id=streetId(`street-${groups[k].id}-${ri}${kind==='recv'?'-above':''}`);if(!streets.has(id))streets.set(id,{k,row:ri,kind,wires:[],labels:new Set()});const s=streets.get(id);s.wires.push(w.id);s.labels.add(labelOf(w));return id};
+    const plan=wires.map(w=>{const sa=side(w.a),sb=side(w.b);
+      return {w,trunk:trunkId(labelOf(w)),send:direct(sa,w.a)?null:street(sa,rowOf(sa,w.a),'send',w),recv:direct(sb,w.b)?null:street(sb,rowOf(sb,w.b),'recv',w)}});
+    const made=[];let top=Math.min(R[0].t,R[1].t),bottom=Math.max(R[0].b,R[1].b);
+    for(const [id,s] of streets){
+      const rows=lay[s.k].rows,row=rows[s.row],span=(s.wires.length-1)*P,G=R[s.k];let y;
+      if(s.kind==='send'){
+        const next=rows[s.row+1],first=row.b+STREET_DROP;y=first+span/2;
+        if(next&&first+span+STREET_ROOM>next.t)return refusal('STREET_TOO_NARROW',`Street ${id} under row ${s.row} of ${groups[s.k].id} needs ${Math.ceil(STREET_DROP+span+STREET_ROOM)} between the rows; it has ${Math.floor(next.t-row.b)}`,{street:id,need:Math.ceil(STREET_DROP+span+STREET_ROOM),have:Math.floor(next.t-row.b)});
+      }else{
+        const prev=rows[s.row-1],last=row.t-STREET_DROP;y=last-span/2;
+        if(prev&&last-span-STREET_ROOM<prev.b)return refusal('STREET_TOO_NARROW',`Street ${id} above row ${s.row} of ${groups[s.k].id} needs ${Math.ceil(STREET_DROP+span+STREET_ROOM)} between the rows; it has ${Math.floor(row.t-prev.b)}`,{street:id,need:Math.ceil(STREET_DROP+span+STREET_ROOM),have:Math.floor(row.t-prev.b)});
+      }
+      const xs=[...s.labels].map(l=>trunkX.get(l)),to=towardTrunkIsRight(s.k)?Math.max(...xs):Math.min(...xs),far=towardTrunkIsRight(s.k)?G.l:G.r;
+      made.push({id,kind:'street',lanes:s.wires.length,points:[{x:far,y},{x:to,y}]});
+      top=Math.min(top,y-span/2);bottom=Math.max(bottom,y+span/2);
+    }
+    {const byId=new Intl.Collator('en',{numeric:true}).compare;made.sort((a,b)=>byId(a.id,b.id))}
+    labels.forEach((l,i)=>made.splice(i,0,{id:trunkId(l),kind:'trunk',label:l||null,lanes:lanes[i],points:[{x:trunkX.get(l),y:top},{x:trunkX.get(l),y:bottom}]}));
+    const pointsOf=new Map(made.map(b=>[b.id,b.points.map(sw)]));
+    for(const p of plan){const seq=[p.send,p.trunk,p.recv].filter(Boolean);for(let i=1;i<seq.length;i++)if(!busMeet(pointsOf.get(seq[i-1]),pointsOf.get(seq[i])))return refusal('BUS_GAP',`Buses ${seq[i-1]} and ${seq[i]} would not meet`,{buses:[seq[i-1],seq[i]]})}
+    // Write: this pair's earlier harness goes, its wires return to the router unless routed again.
+    const old=Object.keys(r.v.buses).filter(id=>ours(r.v.buses[id]));
+    for(const id of old)delete r.v.buses[id];
+    const freed=[];for(const [wid,rt] of Object.entries(r.v.routes))if(rt?.mode==='bus'&&rt.buses.some(id=>old.includes(id))){delete r.v.routes[wid];if(!plan.some(p=>p.w.id===wid))freed.push(wid)}
+    for(const b of made)r.v.buses[b.id]={points:pointsOf.get(b.id),pitch:P,between:ids,...(b.label?{label:b.label}:{})};
+    for(const p of plan)r.v.routes[p.w.id]={mode:'bus',buses:[p.send,p.trunk,p.recv].filter(Boolean)};
+    return {ok:true,view:r.id,between:ids,orientation:vertical?'vertical':'horizontal',gap:{have:Math.floor(gap),need:Math.ceil(need)},
+      buses:made.map(b=>({id:b.id,kind:b.kind,lanes:b.lanes,...(b.label?{label:b.label}:{})})),
+      wires:plan.map(p=>({id:p.w.id,buses:[p.send,p.trunk,p.recv].filter(Boolean)})),returnedToAuto:freed.sort()};
+  }
 
   // ---- Layered layout -----------------------------------------------------------------------
   // Left to right by wire direction: cycles broken, longest-path layers, barycentre ordering,
@@ -5605,16 +5757,19 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     place:(doc,a)=>place(doc,a.view,a.id,a),
     align:(doc,a)=>align(doc,a.view,a.ids||[],a),
     distribute:(doc,a)=>distribute(doc,a.view,a.ids||[],a),
-    route:(doc,a)=>route(doc,a.view,a.wireId,a.mode?{mode:a.mode,points:a.points,via:a.via}:null),
+    route:(doc,a)=>route(doc,a.view,a.wireId,a.mode?{mode:a.mode,points:a.points,via:a.via,buses:a.buses}:null),
+    bus:(doc,a)=>a.remove?removeBus(doc,a.view,String(a.id??'')):setBus(doc,a.view,a),
+    buses:(doc,a)=>listBuses(doc,a.view),
+    harness:(doc,a)=>harness(doc,a.view,a),
     apply:(doc,a)=>{if((a.engine||'layered')!=='layered')return refusal('UNKNOWN_ENGINE','engine is layered');let view=a.view;if(a.into){const made=createView(doc,{name:a.into,from:a.view,audience:a.audience});if(!made.ok)return made;view=made.id}return layered(doc,view,a)}
   };
-  const READ_ONLY=new Set(['list','unplaced']);
+  const READ_ONLY=new Set(['list','unplaced','buses']);
   function execute(doc,op,args={}){const fn=OPS[op];if(!fn)return refusal('UNKNOWN_OP',`Unknown layout op ${op}`,{ops:Object.keys(OPS)});return fn(doc,isObject(args)?args:{})}
   function tool(){
-    return {name:'schematic.layout',description:`Arrange the document without changing what it means. op: ${Object.keys(OPS).join(' | ')}. view names a layout (default: the document's default). move {id, x,y | dx,dy} · place {id, relation: right-of|left-of|above|below, of, gap} · align {ids, axis: left|center|right|top|middle|bottom} · distribute {ids, axis: x|y, gap?} · route {wireId, mode: auto|guided|pinned, points|via} · apply {engine: layered, scope?: containerId, into?: new layout name} · create {name, from?, empty?} · rename {view, name} · delete {view} · set-default {view}. Refusals are typed: PINNED, LOCKED, HOSTED, UNPLACED, UNKNOWN_*.`,
-      inputSchema:{type:'object',properties:{op:{type:'string',enum:Object.keys(OPS)},view:{type:'string'},id:{type:'string'},ids:{type:'array',items:{type:'string'}},of:{type:'string'},relation:{type:'string'},gap:{type:'number'},x:{type:'number'},y:{type:'number'},dx:{type:'number'},dy:{type:'number'},axis:{type:'string'},wireId:{type:'string'},mode:{type:'string'},points:{type:'array'},via:{type:'array'},engine:{type:'string'},scope:{type:'string'},into:{type:'string'},name:{type:'string'},from:{type:'string'},empty:{type:'boolean'},audience:{type:'string'}},required:['op'],additionalProperties:false}};
+    return {name:'schematic.layout',description:`Arrange the document without changing what it means. op: ${Object.keys(OPS).join(' | ')}. view names a layout (default: the document's default). move {id, x,y | dx,dy} · place {id, relation: right-of|left-of|above|below, of, gap} · align {ids, axis: left|center|right|top|middle|bottom} · distribute {ids, axis: x|y, gap?} · route {wireId, mode: auto|guided|pinned|bus, points|via|buses} · bus {id, points: [{x,y}...] 2+ with horizontal or vertical steps, pitch?: 4-16 (6), label?, order?: [wireId...]} sets a bus; bus {id, remove: true} removes it and returns its wires to auto · buses {} lists every bus with the wires that name it · harness {between: [groupA, groupB], pitch?} makes one trunk per wire label in the gap between two groups, and streets in the row gaps for cards with no direct line, and routes the wires between them on those buses · apply {engine: layered, scope?: containerId, into?: new layout name} · create {name, from?, empty?} · rename {view, name} · delete {view} · set-default {view}. Refusals are typed: PINNED, LOCKED, HOSTED, UNPLACED, BAD_POINTS, UNKNOWN_BUS, BUS_GAP, GAP_TOO_NARROW, STREET_TOO_NARROW, UNKNOWN_*.`,
+      inputSchema:{type:'object',properties:{op:{type:'string',enum:Object.keys(OPS)},view:{type:'string'},id:{type:'string'},ids:{type:'array',items:{type:'string'}},of:{type:'string'},relation:{type:'string'},gap:{type:'number'},x:{type:'number'},y:{type:'number'},dx:{type:'number'},dy:{type:'number'},axis:{type:'string'},wireId:{type:'string'},mode:{type:'string'},points:{type:'array'},via:{type:'array'},buses:{type:'array',items:{type:'string'}},pitch:{type:'number'},label:{type:'string'},order:{type:'array',items:{type:'string'}},remove:{type:'boolean'},between:{type:'array',items:{type:'string'},minItems:2,maxItems:2},engine:{type:'string'},scope:{type:'string'},into:{type:'string'},name:{type:'string'},from:{type:'string'},empty:{type:'boolean'},audience:{type:'string'}},required:['op'],additionalProperties:false}};
   }
-  return {DEFAULT_ID,ROUTE_MODES,views,ensure,defaultId,createView,deleteView,renameView,setDefault,geometry,setGeometry,unplaced,move,place,align,distribute,route,routeFor,layered,execute,isReadOnly:op=>READ_ONLY.has(op),tool,hosted,size};
+  return {DEFAULT_ID,ROUTE_MODES,views,ensure,defaultId,createView,deleteView,renameView,setDefault,geometry,setGeometry,unplaced,move,place,align,distribute,route,routeFor,busPoints,busMeet,setBus,removeBus,listBuses,harness,layered,execute,isReadOnly:op=>READ_ONLY.has(op),tool,hosted,size};
 });
 /* END src/08-layout-core.js */
 </script>
@@ -8659,7 +8814,8 @@ function settleDraggedRoutes(){
     const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
     if(!A||!B) return;
 
-    if(w.a===activeNodeDrag || w.b===activeNodeDrag){
+    // A wire on buses settles onto its buses, not onto a route of its own.
+    if((w.a===activeNodeDrag || w.b===activeNodeDrag) && !(typeof busSpecOf==='function'&&busSpecOf(w))){
       const candidate=routePoints(A,B,w.aSide,w.bSide,w.a,w.b,w.lane??i,occupied,w.id);
       routeCache.set(i,routeCacheFromCandidate(candidate));
       dragRouteSnapshots.set(i,{
@@ -8670,6 +8826,7 @@ function settleDraggedRoutes(){
       occupied.push(...routeSegments(candidate.points,w));
     }else{
       const points=stableRouteForWire(i,w,A,B,occupied);
+      if(w.a===activeNodeDrag || w.b===activeNodeDrag)dragRouteSnapshots.set(i,{points:clonePoints(points),aPos:{x:A.x,y:A.y},bPos:{x:B.x,y:B.y}});
       occupied.push(...routeSegments(points,w));
     }
   });
@@ -8842,9 +8999,11 @@ function routePath(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSe
   return pathD(routePoints(A,B,aSide,bSide,sourceId,targetId,laneSeed,occupied).points);
 }
 function stableRouteForWire(index,w,A,B,occupied=[]){
-  // A route the layout on screen pins or guides is drawn as declared, not re-derived.
+  // A route the layout on screen pins or guides is drawn as declared, not re-derived. A wire on
+  // buses rides them (src/41-buses.js); when that route cannot be built the router takes over.
   const spec=typeof activeRouteSpec==='function'?activeRouteSpec(w.id):null;
-  if(spec){const declared=routeThroughSpec(A,B,w,spec);if(declared)return declared}
+  if(spec?.mode==='bus'){const onBus=typeof busRouteFor==='function'?busRouteFor(w):null;if(onBus)return onBus}
+  else if(spec){const declared=routeThroughSpec(A,B,w,spec);if(declared)return declared}
   const candidate=routePoints(A,B,w.aSide,w.bSide,w.a,w.b,w.lane??index,occupied,w.id);
   const cached=routeCache.get(index);
 
@@ -9008,6 +9167,221 @@ function addNode(symbolId,x=null,y=null,mods=null,options={}){
   return n;
 }
 /* END src/40-routing.js */
+</script>
+<script data-beta-module="src/41-buses.js">
+/* BEGIN src/41-buses.js */
+'use strict';
+// 0.1 concern: the route of a wire on buses (LAYOUT-MODEL.md "As built: buses"). A bus is a layout
+// record (src/08-layout-core.js): a centreline declared once in a layout, which wires name in their
+// route ({mode: 'bus', buses: [id, ...]}) instead of each finding a path. A wire taps on to the first
+// bus from the end of its source lead, rides each bus on its own lane, turns once where one bus
+// meets the next, and taps off the last bus to the end of its target lead. Lanes are ordered once
+// per render, before any auto route, so auto routes keep clear of the buses. Presentation only:
+// nothing here writes the document.
+
+function activeBuses(){const v=diagram.layout?.views?.[activeLayoutId()];return v&&v.buses&&typeof v.buses==='object'&&!Array.isArray(v.buses)?v.buses:{}}
+function busSpecOf(w){const s=typeof activeRouteSpec==='function'?activeRouteSpec(w.id):null;return s?.mode==='bus'&&Array.isArray(s.buses)&&s.buses.length?s:null}
+function busPitchOf(bus){const p=Number(bus?.pitch);return Number.isFinite(p)?Math.max(4,Math.min(16,p)):6}
+
+// ---- Bus geometry: a centreline measured along its length --------------------------------------
+function busLine(bus){
+  const raw=SovSchematicLayout.busPoints(bus?.points);if(!raw)return null;
+  const pts=normalizePoints(raw);if(pts.length<2)return null;
+  const segs=[];let s=0;
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1],b=pts[i],len=Math.abs(b.x-a.x)+Math.abs(b.y-a.y),dir={x:Math.sign(b.x-a.x),y:Math.sign(b.y-a.y)};
+    // The lane normal: the direction of travel turned a quarter, the same on every segment.
+    segs.push({a,b,s0:s,s1:s+len,dir,n:{x:-dir.y,y:dir.x}});s+=len;
+  }
+  return {pts,segs,length:s};
+}
+// The nearest point of the centreline to p, and how far along the bus it lies.
+function busProject(line,p){
+  let best=null;
+  line.segs.forEach((g,k)=>{
+    const x=Math.max(Math.min(g.a.x,g.b.x),Math.min(Math.max(g.a.x,g.b.x),p.x)),y=Math.max(Math.min(g.a.y,g.b.y),Math.min(Math.max(g.a.y,g.b.y),p.y));
+    const d=Math.hypot(p.x-x,p.y-y);
+    if(!best||d<best.d-1e-9)best={d,x,y,k,s:g.s0+Math.abs(x-g.a.x)+Math.abs(y-g.a.y)};
+  });
+  return best;
+}
+// The point s along the bus, o across it (on the lane normal). At a corner, where the two lanes meet.
+function busAt(line,s,o){
+  const t=Math.max(0,Math.min(line.length,s));
+  for(let k=0;k<line.segs.length;k++){
+    const g=line.segs[k];if(t>g.s1+1e-9&&k<line.segs.length-1)continue;
+    const next=line.segs[k+1];
+    if(next&&Math.abs(t-g.s1)<1e-9)return {x:g.b.x+o*(g.n.x+next.n.x),y:g.b.y+o*(g.n.y+next.n.y)};
+    const along=t-g.s0;return {x:g.a.x+g.dir.x*along+o*g.n.x,y:g.a.y+g.dir.y*along+o*g.n.y};
+  }
+  return {x:line.pts[0].x,y:line.pts[0].y};
+}
+// Riding a lane from s1 to s2, in either direction: the two ends and every corner between.
+function busRide(line,s1,s2,o){
+  const out=[busAt(line,s1,o)],lo=Math.min(s1,s2),hi=Math.max(s1,s2);
+  const corners=line.segs.slice(0,-1).map(g=>g.s1).filter(s=>s>lo+1e-9&&s<hi-1e-9);
+  if(s2<s1)corners.reverse();
+  for(const s of corners)out.push(busAt(line,s,o));
+  out.push(busAt(line,s2,o));
+  return out;
+}
+
+// ---- A wire's plan on its buses: where it joins and leaves each one -----------------------------
+function busPlan(w,A,B,spec){
+  const all=activeBuses(),legs=spec.buses.map(id=>({id,bus:all[id],line:busLine(all[id])}));
+  if(!A||!B||legs.some(l=>!l.line))return null;
+  const meets=[];
+  for(let i=1;i<legs.length;i++){
+    const m=SovSchematicLayout.busMeet(legs[i-1].bus.points,legs[i].bus.points);if(!m)return null;
+    const p=busProject(legs[i-1].line,m),q=busProject(legs[i].line,m);
+    meets.push({x:m.x,y:m.y,sFrom:p.s,sTo:q.s,nFrom:legs[i-1].line.segs[p.k].n,nTo:legs[i].line.segs[q.k].n});
+  }
+  const a=w.a?nodes.find(n=>n.id===w.a):null,b=w.b?nodes.find(n=>n.id===w.b):null;
+  const first=legs[0].line,last=legs.at(-1).line,pa=busProject(first,A),pb=busProject(last,B);
+  // The leads are the router's own (routeLead), aimed at where the wire meets its bus.
+  const SA=a?routeLead(A,{x:pa.x,y:pa.y},w.aSide,a,wireEndpointInward(w,a)):A,SB=b?routeLead(B,{x:pb.x,y:pb.y},w.bSide,b,wireEndpointInward(w,b)):B;
+  const on=busProject(first,SA),off=busProject(last,SB);
+  legs.forEach((l,i)=>{l.sIn=i===0?on.s:meets[i-1].sTo;l.sOut=i===legs.length-1?off.s:meets[i].sFrom});
+  return {w,A,B,SA,SB,legs,meets,
+    horizA:Math.abs(SA.x-A.x)>=Math.abs(SA.y-A.y),horizB:Math.abs(SB.x-B.x)>=Math.abs(SB.y-B.y)};
+}
+// The drawn route for a plan, given the wire's lane offset on each of its buses.
+function busPlanPoints(plan,offsets){
+  const o=i=>offsets.get(plan.legs[i].id)||0,L=plan.legs,n=L.length;
+  // Tap on: one L from the end of the lead to the lane, its first leg continuing the lead.
+  const T=busAt(L[0].line,L[0].sIn,o(0));
+  const out=[plan.A,plan.SA,plan.horizA?{x:T.x,y:plan.SA.y}:{x:plan.SA.x,y:T.y}];
+  for(let i=0;i<n;i++){
+    out.push(...busRide(L[i].line,L[i].sIn,L[i].sOut,o(i)));
+    if(i<n-1){
+      // One turn, where the two lanes meet.
+      const m=plan.meets[i],perpendicular=Math.abs(m.nFrom.x*m.nTo.x+m.nFrom.y*m.nTo.y)<.5;
+      if(perpendicular)out.push({x:m.x+o(i)*m.nFrom.x+o(i+1)*m.nTo.x,y:m.y+o(i)*m.nFrom.y+o(i+1)*m.nTo.y});
+    }
+  }
+  // Tap off: the mirror of tap on.
+  const U=busAt(L[n-1].line,L[n-1].sOut,o(n-1));
+  out.push(plan.horizB?{x:U.x,y:plan.SB.y}:{x:plan.SB.x,y:U.y},plan.SB,plan.B);
+  // Two consecutive points off one axis (a parallel hand-over) get a corner between them.
+  const ortho=[out[0]];
+  for(let i=1;i<out.length;i++){const p=ortho.at(-1),q=out[i];if(Math.abs(p.x-q.x)>.01&&Math.abs(p.y-q.y)>.01)ortho.push({x:q.x,y:p.y});ortho.push(q)}
+  return normalizePoints(ortho);
+}
+// Two routes cross, or (sharing no end) run on one track, which a reader cannot tell from a crossing.
+function busRoutesCross(p,q,related=false){
+  for(let i=1;i<p.length;i++)for(let j=1;j<q.length;j++){
+    if(segmentsCross(p[i-1],p[i],q[j-1],q[j]))return true;
+    if(!related&&onOneTrack(p[i-1],p[i],q[j-1],q[j],8))return true;
+  }
+  return false;
+}
+const busWiresRelated=(a,b)=>[`${a.a}:${a.aSide}`,`${a.b}:${a.bSide}`].some(e=>e===`${b.a}:${b.aSide}`||e===`${b.b}:${b.bSide}`);
+
+// ---- Lanes, once per render ---------------------------------------------------------------------
+// A bus's own order when it has one. Otherwise wires start in the order they leave the bus (ties by
+// where they join, then wire id), then up to 8 passes of adjacent swaps keep a swap only when the
+// number of crossing pairs among that bus's wires strictly drops: the greedy form of the slot
+// ordering in ELK's OrthogonalRoutingGenerator.
+let busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map()};
+function busRoutesForRender(){
+  const all=activeBuses(),entries=[];
+  wires.forEach(w=>{
+    const spec=busSpecOf(w);if(!spec||entityEditorState(w).hidden||!carrierIsRenderable(w))return;
+    entries.push({w,spec,A:carrierEndpoint(w,'a').pos,B:carrierEndpoint(w,'b').pos});
+  });
+  if(!entries.length&&!Object.keys(all).length){busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map()};return busRouteState}
+  const key=JSON.stringify([activeLayoutId(),all,entries.map(e=>[e.w.id,e.spec.buses,e.w.aSide,e.w.bSide,e.A?.x,e.A?.y,e.B?.x,e.B?.y]),nodes.map(n=>[n.id,n.x,n.y,n.config?.presentation?.size])]);
+  if(key===busRouteState.key)return busRouteState;
+  const plans=new Map(),fallback=new Set();
+  for(const e of entries){const p=busPlan(e.w,e.A,e.B,e.spec);if(p)plans.set(e.w.id,p);else fallback.add(e.w.id)}
+  const on=new Map();
+  for(const [id,p] of plans)for(const l of p.legs){if(!on.has(l.id))on.set(l.id,[]);if(!on.get(l.id).includes(id))on.get(l.id).push(id)}
+  const order=new Map();
+  for(const [bid,list] of on){
+    const leg=id=>plans.get(id).legs.find(l=>l.id===bid);
+    const natural=[...list].sort((x,y)=>leg(x).sOut-leg(y).sOut||leg(x).sIn-leg(y).sIn||(x<y?-1:x>y?1:0));
+    const own=Array.isArray(all[bid]?.order)?all[bid].order.filter(id=>list.includes(id)):[];
+    order.set(bid,own.length?[...own,...natural.filter(id=>!own.includes(id))]:natural);
+  }
+  const offsetsOf=id=>new Map(plans.get(id).legs.map(l=>{const L=order.get(l.id);return [l.id,(L.indexOf(id)-(L.length-1)/2)*busPitchOf(all[l.id])]}));
+  const routes=new Map();for(const id of plans.keys())routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)));
+  const pair=(x,y)=>x<y?`${x}|${y}`:`${y}|${x}`;
+  const crosses=(x,y)=>busRoutesCross(routes.get(x),routes.get(y),busWiresRelated(plans.get(x).w,plans.get(y).w))?1:0;
+  const crossingsOn=L=>{const cross=new Map();let total=0;for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length;j++){const c=crosses(L[i],L[j]);cross.set(pair(L[i],L[j]),c);total+=c}return {cross,total}};
+  for(const bid of [...on.keys()].sort()){
+    if(Array.isArray(all[bid]?.order)&&all[bid].order.length)continue;
+    const L=order.get(bid);if(L.length<2)continue;
+    // Which side the first leaver takes depends on where the wires go next: the order as sorted
+    // and reversed are both measured, and the swaps start from the one that crosses less.
+    let {cross,total}=crossingsOn(L);
+    {const keep=[...L];L.reverse();for(const id of L)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)));
+     const rev=crossingsOn(L);
+     if(rev.total<total){cross=rev.cross;total=rev.total}else{L.splice(0,L.length,...keep);for(const id of L)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)))}}
+    for(let pass=0;pass<8&&total>0;pass++){
+      let improved=false;
+      for(let k=0;k+1<L.length;k++){
+        const u=L[k],v=L[k+1],keep={u:routes.get(u),v:routes.get(v)},was=new Map();
+        L[k]=v;L[k+1]=u;routes.set(u,busPlanPoints(plans.get(u),offsetsOf(u)));routes.set(v,busPlanPoints(plans.get(v),offsetsOf(v)));
+        let next=total;
+        for(const z of L)for(const x of [u,v]){
+          if(z===x||(x===v&&z===u))continue;const key=pair(x,z),c=crosses(x,z);
+          if(!was.has(key))was.set(key,cross.get(key));next+=c-cross.get(key);cross.set(key,c);
+        }
+        if(next<total){total=next;improved=true;continue}
+        L[k]=u;L[k+1]=v;routes.set(u,keep.u);routes.set(v,keep.v);for(const [key,c] of was)cross.set(key,c);
+      }
+      if(!improved)break;
+    }
+  }
+  busRouteState={key,routes,fallback,on,order};
+  return busRouteState;
+}
+// The drawn route of a bus-routed wire, or null when it cannot be built (the router takes over).
+function busRouteFor(w){const st=busRoutesForRender(),pts=st.routes.get(w.id);return pts?clonePoints(pts):null}
+
+// ---- What the renderer asks ---------------------------------------------------------------------
+// Two wires that cross inside the band of a bus they both ride draw no hop there.
+function busBandHolds(wa,wb,c){
+  const st=busRouteState,sa=busSpecOf(wa),sb=busSpecOf(wb);if(!sa||!sb||!st.routes.has(wa.id)||!st.routes.has(wb.id))return false;
+  const all=activeBuses();
+  for(const id of sa.buses){
+    if(!sb.buses.includes(id))continue;const line=busLine(all[id]);if(!line)continue;
+    const hw=((st.on.get(id)?.length||0)*busPitchOf(all[id])+8)/2;
+    for(const g of line.segs)if(c.x>=Math.min(g.a.x,g.b.x)-hw&&c.x<=Math.max(g.a.x,g.b.x)+hw&&c.y>=Math.min(g.a.y,g.b.y)-hw&&c.y<=Math.max(g.a.y,g.b.y)+hw)return true;
+  }
+  return false;
+}
+// The labels of the buses a wire rides: its own label is not drawn again when one of them carries it.
+function busLabelsOfWire(w){
+  const spec=busSpecOf(w);if(!spec||!busRouteState.routes.has(w.id))return [];
+  const all=activeBuses();return spec.buses.map(id=>all[id]?.label).filter(l=>typeof l==='string'&&l);
+}
+// Each bus as a band behind the wires: n lanes times its pitch, plus 8, with rounded ends; its
+// label once, beyond its start, reading along it.
+function renderBuses(layer){
+  const all=activeBuses(),st=busRoutesForRender(),SVG='http://www.w3.org/2000/svg';
+  for(const id of Object.keys(all).sort()){
+    const bus=all[id],line=busLine(bus);if(!line)continue;
+    const n=st.on.get(id)?.length||0,hw=(n*busPitchOf(bus)+8)/2;
+    const g=document.createElementNS(SVG,'g');g.setAttribute('class','bus-band');g.dataset.busId=id;g.dataset.lanes=String(n);
+    for(const s of line.segs){
+      const r=document.createElementNS(SVG,'rect');
+      r.setAttribute('x',String(Math.min(s.a.x,s.b.x)-hw));r.setAttribute('y',String(Math.min(s.a.y,s.b.y)-hw));
+      r.setAttribute('width',String(Math.abs(s.b.x-s.a.x)+2*hw));r.setAttribute('height',String(Math.abs(s.b.y-s.a.y)+2*hw));
+      r.setAttribute('rx',String(hw));r.setAttribute('ry',String(hw));g.appendChild(r);
+    }
+    layer.appendChild(g);
+    const label=typeof bus.label==='string'?bus.label.trim():'';if(!label)continue;
+    const d=line.segs[0].dir,at={x:line.pts[0].x-d.x*(hw+6),y:line.pts[0].y-d.y*(hw+6)};
+    const t=document.createElementNS(SVG,'text');t.setAttribute('class','bus-label');t.dataset.busId=id;t.dataset.role='caption';
+    t.setAttribute('x',String(at.x));t.setAttribute('y',String(at.y));t.setAttribute('dominant-baseline','central');
+    if(d.y!==0){t.setAttribute('text-anchor','start');t.setAttribute('transform',`rotate(${d.y>0?-90:90} ${at.x} ${at.y})`)}
+    else t.setAttribute('text-anchor',d.x>0?'end':'start');
+    t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk()};stroke:none;pointer-events:none`);
+    t.textContent=label;layer.appendChild(t);
+  }
+}
+/* END src/41-buses.js */
 </script>
 <script data-beta-module="src/50-selection.js">
 /* BEGIN src/50-selection.js */
@@ -9633,6 +10007,8 @@ function render(){
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); appendComponentWaitsOn(g,n);
   });
   renderGroups(markers);
+  // Buses (src/41-buses.js): bands in the group layer, after the group regions, behind every wire.
+  if(typeof renderBuses==='function')renderBuses(groupLayer());
   renderWires(signalState,markers);
   {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
   renderJunctionDots();
@@ -9939,6 +10315,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
   // Every route first, so each wire knows the crossings it makes: the later wire hops over the
   // earlier one, and neither puts an arrowhead on the crossing. Wires sharing an end never hop.
   const routes=new Map();
+  // Wires on buses are laid out first, lanes and all, so every auto route keeps clear of them.
+  const busState=typeof busRoutesForRender==='function'?busRoutesForRender():null;
+  if(busState)for(const [id,pts] of busState.routes){const w=wires.find(x=>x.id===id);if(w)occupied.push(...routeSegments(pts,w))}
   wires.forEach((w,i)=>{
     if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
@@ -9947,7 +10326,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     // interior, endpoint leads, arrows, or direction marks on pointer frames.
     const points=snapshot?clonePoints(snapshot.points):stableRouteForWire(i,w,A,B,occupied);
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
-    occupied.push(...routes.get(i).segs);
+    if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
   });
   const hops=new Map(),order=[...routes.keys()];arrowKeepClear=[];
   for(let x=0;x<order.length;x++)for(let y=x+1;y<order.length;y++){
@@ -9956,6 +10335,8 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
       if(p.ends&&q.ends&&p.ends.some(e=>q.ends.includes(e)))continue;
       if(!segmentsCross(p.a,p.b,q.a,q.b))continue;
       const c=segmentAxis(p.a,p.b)==='h'?{x:q.a.x,y:p.a.y}:{x:p.a.x,y:q.a.y};
+      // Two wires on one bus cross inside its band where they take their lanes: no hop there.
+      if(busState&&typeof busBandHolds==='function'&&busBandHolds(wires[order[x]],wires[order[y]],c))continue;
       if(!hops.has(order[y]))hops.set(order[y],[]);hops.get(order[y]).push(c);arrowKeepClear.push(c);
     }
   }
@@ -9980,6 +10361,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const signal=wireSignalColors(w,signalState);
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
     group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':'')+((epA.kind==='free'||epB.kind==='free')?' has-free-end':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
+    if(busState?.fallback.has(w.id))group.dataset.busFallback='true';
 
     const gradientId=`wire-gradient-${i}-${renderEpoch++}`;
     const gradient=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
@@ -10066,7 +10448,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     // One mark per place: a labelled duplex wire carries ↔ in its label, not stacked above it.
     // A Wire's caption: its label, then its status title, then what it waits on.
     const waits=waitsOnList(w.config?.waitsOn);
-    let caption=[cfg.label,wireStatus?statusTitle(wireStatus):''].filter(Boolean).join(' · ');
+    // A bus that carries the wire's label says it once for every wire on it; the label stays in the data.
+    const ownLabel=cfg.label&&typeof busLabelsOfWire==='function'&&busLabelsOfWire(w).includes(String(cfg.label))?'':cfg.label;
+    let caption=[ownLabel,wireStatus?statusTitle(wireStatus):''].filter(Boolean).join(' · ');
     if(waits)caption=caption?`${caption} · waits on ${waits}`:`Waits on ${waits}`;
     if(cfg.direction==='duplex'&&!caption){
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5);
@@ -12823,6 +13207,10 @@ const SovSchematicAPI={
     align:(ids,options={})=>SovSchematicData.clone(runLayoutOp('align',{...options,ids},'Align')),
     distribute:(ids,options={})=>SovSchematicData.clone(runLayoutOp('distribute',{...options,ids},'Distribute')),
     route:(wireId,spec=null)=>SovSchematicData.clone(runLayoutOp('route',{wireId,...(spec||{mode:'auto'})},'Route')),
+    // Buses (LAYOUT-MODEL.md "As built: buses"): harness({between:[groupA, groupB], pitch?}) or harness([groupA, groupB], options).
+    harness:(between,options={})=>SovSchematicData.clone(runLayoutOp('harness',Array.isArray(between)?{...options,between}:{...(between||{})},'Harness')),
+    bus:(id,spec={})=>{const a=id&&typeof id==='object'?{...id}:{...(spec||{}),id};return SovSchematicData.clone(runLayoutOp('bus',a,a.remove?'Remove bus':'Bus'))},
+    buses:(options={})=>SovSchematicData.clone(runLayoutOp('buses',options||{})),
     apply:(options={})=>SovSchematicData.clone(runLayoutOp('apply',{engine:'layered',...options},'Arrange layout')),
     metrics:(options={})=>SovSchematicData.clone(options.static===false?layoutMetrics(options):withPictureLabels(()=>layoutMetrics(options))),
     contrast:(options={})=>SovSchematicData.clone(options.static===false?contrastAudit(options):withPictureLabels(()=>contrastAudit(options))),

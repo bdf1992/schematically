@@ -78,6 +78,22 @@ Wire endpoints accept canonical built-in attachment IDs (`self`, `start`, `end`,
 Wire ends may be free: create with `aAttachment: {kind:'free',x,y}` (and/or `bAttachment`), rebind with `a`/`aSide`, free again with a free attachment. Two bound ends must share an exposed surface.
 
 
+## Layout buses
+
+```js
+SovSchematicAPI.layout.harness({between: ['groupA', 'groupB'], pitch: 6, view})   // or harness(['groupA', 'groupB'], {pitch, view})
+SovSchematicAPI.layout.bus({id, points: [{x, y}, ...], pitch, label, order})       // or bus(id, {points, ...})
+SovSchematicAPI.layout.bus({id, remove: true})
+SovSchematicAPI.layout.buses({view})                                                // read-only
+SovSchematicAPI.layout.route(wireId, {mode: 'bus', buses: [busId, ...]})
+```
+
+A bus is a route declared once in a layout; wires name it in their route and ride it on their own lane
+(`LAYOUT-MODEL.md` "As built: buses"). Each call runs the shared layout op through `runLayoutOp`, like
+`layout.route`, so MCP's `schematic.layout` serves the same ops. A refusal (`BAD_POINTS`, `UNKNOWN_BUS`,
+`BUS_GAP`, `GAP_TOO_NARROW`, `STREET_TOO_NARROW`, ...) comes back with its code and changes nothing. The
+harness receipt lists the buses it made and the wires it put on them.
+
 ## Runs (state space, slice 1c)
 
 ```js

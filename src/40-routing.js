@@ -236,7 +236,8 @@ function settleDraggedRoutes(){
     const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
     if(!A||!B) return;
 
-    if(w.a===activeNodeDrag || w.b===activeNodeDrag){
+    // A wire on buses settles onto its buses, not onto a route of its own.
+    if((w.a===activeNodeDrag || w.b===activeNodeDrag) && !(typeof busSpecOf==='function'&&busSpecOf(w))){
       const candidate=routePoints(A,B,w.aSide,w.bSide,w.a,w.b,w.lane??i,occupied,w.id);
       routeCache.set(i,routeCacheFromCandidate(candidate));
       dragRouteSnapshots.set(i,{
@@ -247,6 +248,7 @@ function settleDraggedRoutes(){
       occupied.push(...routeSegments(candidate.points,w));
     }else{
       const points=stableRouteForWire(i,w,A,B,occupied);
+      if(w.a===activeNodeDrag || w.b===activeNodeDrag)dragRouteSnapshots.set(i,{points:clonePoints(points),aPos:{x:A.x,y:A.y},bPos:{x:B.x,y:B.y}});
       occupied.push(...routeSegments(points,w));
     }
   });
@@ -419,9 +421,11 @@ function routePath(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSe
   return pathD(routePoints(A,B,aSide,bSide,sourceId,targetId,laneSeed,occupied).points);
 }
 function stableRouteForWire(index,w,A,B,occupied=[]){
-  // A route the layout on screen pins or guides is drawn as declared, not re-derived.
+  // A route the layout on screen pins or guides is drawn as declared, not re-derived. A wire on
+  // buses rides them (src/41-buses.js); when that route cannot be built the router takes over.
   const spec=typeof activeRouteSpec==='function'?activeRouteSpec(w.id):null;
-  if(spec){const declared=routeThroughSpec(A,B,w,spec);if(declared)return declared}
+  if(spec?.mode==='bus'){const onBus=typeof busRouteFor==='function'?busRouteFor(w):null;if(onBus)return onBus}
+  else if(spec){const declared=routeThroughSpec(A,B,w,spec);if(declared)return declared}
   const candidate=routePoints(A,B,w.aSide,w.bSide,w.a,w.b,w.lane??index,occupied,w.id);
   const cached=routeCache.get(index);
 

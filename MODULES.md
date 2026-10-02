@@ -20,6 +20,7 @@ relative order): `03-canonical.js`,
 - `25-signal.js` — derived signal state.
 - `30-canvas.js` — camera, spatial movement and Form-region containment.
 - `40-routing.js` — Wire geometry.
+- `41-buses.js` — the route of a wire on buses: taps on and off, lanes ordered once per render before any auto route, bus bands and labels. Bus records live in `08-layout-core.js`; this module only draws. Loads after `40-routing.js`.
 - `50-selection.js` — selection projection.
 - `55-render.js` — SVG projection and measured wire-label clearance. Canvas scale changes call its placement pass; routing and document geometry remain inputs.
 - `65-sim-control.js` — the canvas control plane: one clock drives the graph engine over the live document; projects levels, edges and waiting steps; never writes the document.
