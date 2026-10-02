@@ -11,50 +11,50 @@
   {
    "id": "records",
    "symbolId": "group",
-   "x": 1865,
+   "x": 1730,
    "y": 1095,
    "canvasId": "canvas:global",
    "config": {
     "label": "Records",
     "colorSlot": 2,
     "members": [
-     "rec-case",
+     "rec-subscription-follow",
      "rec-mission",
-     "rec-task",
-     "rec-session",
-     "rec-participant",
-     "rec-agent-behavior-profile",
-     "rec-booth-session",
-     "rec-recording",
+     "rec-narration-line",
+     "rec-feed-projection",
+     "rec-relationship",
+     "rec-topic",
      "rec-video-track",
      "rec-event-track",
      "rec-terminal-track",
      "rec-artifact-track",
-     "rec-narration-line",
-     "rec-anchor",
-     "rec-contribution",
-     "rec-relationship",
-     "rec-comment",
-     "rec-message",
-     "rec-reaction",
-     "rec-publication-edition",
-     "rec-clip",
-     "rec-edit-manifest",
      "rec-source-manifest",
-     "rec-voiceover-caption-track",
-     "rec-evaluation-review",
-     "rec-obligation",
+     "rec-publication-edition",
+     "rec-recording",
+     "rec-reaction",
+     "rec-anchor",
+     "rec-clip",
      "rec-grant-acl",
-     "rec-subscription-follow",
-     "rec-feed-projection",
-     "rec-notification-delivery",
-     "rec-event",
+     "rec-edit-manifest",
      "rec-receipt",
-     "rec-checkpoint",
-     "rec-render-job",
+     "rec-comment",
      "rec-surface-registration",
+     "rec-case",
+     "rec-booth-session",
+     "rec-task",
+     "rec-obligation",
+     "rec-voiceover-caption-track",
+     "rec-session",
      "rec-resource-reservation",
-     "rec-topic",
+     "rec-message",
+     "rec-event",
+     "rec-agent-behavior-profile",
+     "rec-evaluation-review",
+     "rec-notification-delivery",
+     "rec-render-job",
+     "rec-checkpoint",
+     "rec-participant",
+     "rec-contribution",
      "rec-lesson"
     ],
     "presentation": {
@@ -80,11 +80,11 @@
      "sur-desktop-booth",
      "sur-booth-watch-stream-worker",
      "sur-terminal-claude-code-codex-b-dos-console",
+     "sur-workstation-control-store",
+     "sur-artifact-mirror",
      "sur-owner-s-chrome-bridge",
      "sur-delivery-broker",
      "sur-gmail-mailroom-channel",
-     "sur-workstation-control-store",
-     "sur-artifact-mirror",
      "sur-native-work-engine"
     ],
     "presentation": {
@@ -97,37 +97,37 @@
   {
    "id": "queries",
    "symbolId": "group",
-   "x": 3470,
+   "x": 3670,
    "y": 1325,
    "canvasId": "canvas:global",
    "config": {
     "label": "Screen queries (specifications)",
     "colorSlot": 5,
     "members": [
-     "spec-01-live",
-     "spec-02-live",
-     "spec-03-live",
-     "spec-04-live",
-     "spec-05-live",
-     "spec-06-topic",
      "spec-07-topic",
-     "spec-08-watch",
-     "spec-09-watch",
-     "spec-10-watch",
+     "spec-02-live",
+     "spec-06-topic",
      "spec-11-watch",
+     "spec-05-live",
+     "spec-08-watch",
      "spec-12-studio",
-     "spec-13-studio",
-     "spec-14-studio",
+     "spec-04-live",
+     "spec-10-watch",
+     "spec-09-watch",
      "spec-15-studio",
      "spec-16-surfaces",
+     "spec-01-live",
      "spec-17-surfaces",
-     "spec-18-surfaces",
-     "spec-19-profile",
+     "spec-03-live",
+     "spec-22-inbox",
+     "spec-13-studio",
+     "spec-24-inbox",
      "spec-20-profile",
      "spec-21-profile",
-     "spec-22-inbox",
-     "spec-23-inbox",
-     "spec-24-inbox"
+     "spec-14-studio",
+     "spec-18-surfaces",
+     "spec-19-profile",
+     "spec-23-inbox"
     ],
     "presentation": {
      "graphic": {
@@ -139,8 +139,8 @@
   {
    "id": "rec-case",
    "symbolId": "we-record",
-   "x": 1140,
-   "y": 60,
+   "x": 1390,
+   "y": 1210,
    "canvasId": "canvas:global",
    "config": {
     "label": "Case",
@@ -158,7 +158,7 @@
   {
    "id": "rec-mission",
    "symbolId": "we-record",
-   "x": 1660,
+   "x": 1390,
    "y": 60,
    "canvasId": "canvas:global",
    "config": {
@@ -184,8 +184,8 @@
   {
    "id": "rec-task",
    "symbolId": "we-record",
-   "x": 2120,
-   "y": 60,
+   "x": 2460,
+   "y": 1210,
    "canvasId": "canvas:global",
    "config": {
     "label": "Task",
@@ -210,8 +210,8 @@
   {
    "id": "rec-session",
    "symbolId": "we-record",
-   "x": 2590,
-   "y": 60,
+   "x": 1860,
+   "y": 1440,
    "canvasId": "canvas:global",
    "config": {
     "label": "Session",
@@ -229,8 +229,8 @@
   {
    "id": "rec-participant",
    "symbolId": "we-record",
-   "x": 1140,
-   "y": 290,
+   "x": 2460,
+   "y": 1900,
    "canvasId": "canvas:global",
    "config": {
     "label": "Participant",
@@ -255,8 +255,8 @@
   {
    "id": "rec-agent-behavior-profile",
    "symbolId": "we-record",
-   "x": 1660,
-   "y": 290,
+   "x": 1860,
+   "y": 1670,
    "canvasId": "canvas:global",
    "config": {
     "label": "Agent behavior profile",
@@ -274,8 +274,8 @@
   {
    "id": "rec-booth-session",
    "symbolId": "we-record",
-   "x": 2120,
-   "y": 290,
+   "x": 1860,
+   "y": 1210,
    "canvasId": "canvas:global",
    "config": {
     "label": "Booth session",
@@ -293,8 +293,8 @@
   {
    "id": "rec-recording",
    "symbolId": "we-record",
-   "x": 2590,
-   "y": 290,
+   "x": 1000,
+   "y": 750,
    "canvasId": "canvas:global",
    "config": {
     "label": "Recording",
@@ -342,8 +342,8 @@
   {
    "id": "rec-video-track",
    "symbolId": "we-record",
-   "x": 1140,
-   "y": 520,
+   "x": 1860,
+   "y": 290,
    "canvasId": "canvas:global",
    "config": {
     "label": "Video track",
@@ -361,8 +361,8 @@
   {
    "id": "rec-event-track",
    "symbolId": "we-record",
-   "x": 1660,
-   "y": 520,
+   "x": 2460,
+   "y": 290,
    "canvasId": "canvas:global",
    "config": {
     "label": "Event track",
@@ -380,7 +380,7 @@
   {
    "id": "rec-terminal-track",
    "symbolId": "we-record",
-   "x": 2120,
+   "x": 1000,
    "y": 520,
    "canvasId": "canvas:global",
    "config": {
@@ -399,7 +399,7 @@
   {
    "id": "rec-artifact-track",
    "symbolId": "we-record",
-   "x": 2590,
+   "x": 1390,
    "y": 520,
    "canvasId": "canvas:global",
    "config": {
@@ -418,8 +418,8 @@
   {
    "id": "rec-narration-line",
    "symbolId": "we-record",
-   "x": 1140,
-   "y": 750,
+   "x": 1860,
+   "y": 60,
    "canvasId": "canvas:global",
    "config": {
     "label": "Narration line",
@@ -437,7 +437,7 @@
   {
    "id": "rec-anchor",
    "symbolId": "we-record",
-   "x": 1660,
+   "x": 1860,
    "y": 750,
    "canvasId": "canvas:global",
    "config": {
@@ -456,8 +456,8 @@
   {
    "id": "rec-contribution",
    "symbolId": "we-record",
-   "x": 2120,
-   "y": 750,
+   "x": 1000,
+   "y": 2130,
    "canvasId": "canvas:global",
    "config": {
     "label": "Contribution",
@@ -475,8 +475,8 @@
   {
    "id": "rec-relationship",
    "symbolId": "we-record",
-   "x": 2590,
-   "y": 750,
+   "x": 1000,
+   "y": 290,
    "canvasId": "canvas:global",
    "config": {
     "label": "Relationship",
@@ -494,7 +494,7 @@
   {
    "id": "rec-comment",
    "symbolId": "we-record",
-   "x": 1140,
+   "x": 2460,
    "y": 980,
    "canvasId": "canvas:global",
    "config": {
@@ -520,8 +520,8 @@
   {
    "id": "rec-message",
    "symbolId": "we-record",
-   "x": 1660,
-   "y": 980,
+   "x": 1000,
+   "y": 1670,
    "canvasId": "canvas:global",
    "config": {
     "label": "Message",
@@ -539,8 +539,8 @@
   {
    "id": "rec-reaction",
    "symbolId": "we-record",
-   "x": 2120,
-   "y": 980,
+   "x": 1390,
+   "y": 750,
    "canvasId": "canvas:global",
    "config": {
     "label": "Reaction",
@@ -565,8 +565,8 @@
   {
    "id": "rec-publication-edition",
    "symbolId": "we-record",
-   "x": 2590,
-   "y": 980,
+   "x": 2460,
+   "y": 520,
    "canvasId": "canvas:global",
    "config": {
     "label": "Publication / edition",
@@ -596,8 +596,8 @@
   {
    "id": "rec-clip",
    "symbolId": "we-record",
-   "x": 1140,
-   "y": 1210,
+   "x": 2460,
+   "y": 750,
    "canvasId": "canvas:global",
    "config": {
     "label": "Clip",
@@ -615,8 +615,8 @@
   {
    "id": "rec-edit-manifest",
    "symbolId": "we-record",
-   "x": 1660,
-   "y": 1210,
+   "x": 1390,
+   "y": 980,
    "canvasId": "canvas:global",
    "config": {
     "label": "Edit manifest",
@@ -634,8 +634,8 @@
   {
    "id": "rec-source-manifest",
    "symbolId": "we-record",
-   "x": 2120,
-   "y": 1210,
+   "x": 1860,
+   "y": 520,
    "canvasId": "canvas:global",
    "config": {
     "label": "Source manifest",
@@ -653,8 +653,8 @@
   {
    "id": "rec-voiceover-caption-track",
    "symbolId": "we-record",
-   "x": 2590,
-   "y": 1210,
+   "x": 1390,
+   "y": 1440,
    "canvasId": "canvas:global",
    "config": {
     "label": "Voiceover / caption track",
@@ -672,8 +672,8 @@
   {
    "id": "rec-evaluation-review",
    "symbolId": "we-record",
-   "x": 1140,
-   "y": 1440,
+   "x": 2460,
+   "y": 1670,
    "canvasId": "canvas:global",
    "config": {
     "label": "Evaluation / review",
@@ -698,7 +698,7 @@
   {
    "id": "rec-obligation",
    "symbolId": "we-record",
-   "x": 1660,
+   "x": 1000,
    "y": 1440,
    "canvasId": "canvas:global",
    "config": {
@@ -717,8 +717,8 @@
   {
    "id": "rec-grant-acl",
    "symbolId": "we-record",
-   "x": 2120,
-   "y": 1440,
+   "x": 1000,
+   "y": 980,
    "canvasId": "canvas:global",
    "config": {
     "label": "Grant / ACL",
@@ -743,8 +743,8 @@
   {
    "id": "rec-subscription-follow",
    "symbolId": "we-record",
-   "x": 2590,
-   "y": 1440,
+   "x": 1000,
+   "y": 60,
    "canvasId": "canvas:global",
    "config": {
     "label": "Subscription / follow",
@@ -769,8 +769,8 @@
   {
    "id": "rec-feed-projection",
    "symbolId": "we-record",
-   "x": 1140,
-   "y": 1670,
+   "x": 2460,
+   "y": 60,
    "canvasId": "canvas:global",
    "config": {
     "label": "Feed projection",
@@ -795,8 +795,8 @@
   {
    "id": "rec-notification-delivery",
    "symbolId": "we-record",
-   "x": 1660,
-   "y": 1670,
+   "x": 1000,
+   "y": 1900,
    "canvasId": "canvas:global",
    "config": {
     "label": "Notification / delivery",
@@ -814,7 +814,7 @@
   {
    "id": "rec-event",
    "symbolId": "we-record",
-   "x": 2120,
+   "x": 1390,
    "y": 1670,
    "canvasId": "canvas:global",
    "config": {
@@ -840,8 +840,8 @@
   {
    "id": "rec-receipt",
    "symbolId": "we-record",
-   "x": 2590,
-   "y": 1670,
+   "x": 1860,
+   "y": 980,
    "canvasId": "canvas:global",
    "config": {
     "label": "Receipt",
@@ -859,7 +859,7 @@
   {
    "id": "rec-checkpoint",
    "symbolId": "we-record",
-   "x": 1140,
+   "x": 1860,
    "y": 1900,
    "canvasId": "canvas:global",
    "config": {
@@ -878,7 +878,7 @@
   {
    "id": "rec-render-job",
    "symbolId": "we-record",
-   "x": 1660,
+   "x": 1390,
    "y": 1900,
    "canvasId": "canvas:global",
    "config": {
@@ -897,8 +897,8 @@
   {
    "id": "rec-surface-registration",
    "symbolId": "we-record",
-   "x": 2120,
-   "y": 1900,
+   "x": 1000,
+   "y": 1210,
    "canvasId": "canvas:global",
    "config": {
     "label": "Surface registration",
@@ -916,8 +916,8 @@
   {
    "id": "rec-resource-reservation",
    "symbolId": "we-record",
-   "x": 2590,
-   "y": 1900,
+   "x": 2460,
+   "y": 1440,
    "canvasId": "canvas:global",
    "config": {
     "label": "Resource reservation",
@@ -942,8 +942,8 @@
   {
    "id": "rec-topic",
    "symbolId": "we-record",
-   "x": 1140,
-   "y": 2130,
+   "x": 1390,
+   "y": 290,
    "canvasId": "canvas:global",
    "config": {
     "label": "Topic",
@@ -961,7 +961,7 @@
   {
    "id": "rec-lesson",
    "symbolId": "we-record",
-   "x": 1660,
+   "x": 1390,
    "y": 2130,
    "canvasId": "canvas:global",
    "config": {
@@ -1211,7 +1211,7 @@
    "id": "sur-owner-s-chrome-bridge",
    "symbolId": "we-surface",
    "x": 120,
-   "y": 750,
+   "y": 980,
    "canvasId": "canvas:global",
    "config": {
     "label": "Owner's Chrome (bridge)",
@@ -1230,7 +1230,7 @@
    "id": "sur-delivery-broker",
    "symbolId": "we-surface",
    "x": 500,
-   "y": 750,
+   "y": 980,
    "canvasId": "canvas:global",
    "config": {
     "label": "Delivery broker",
@@ -1249,7 +1249,7 @@
    "id": "sur-gmail-mailroom-channel",
    "symbolId": "we-surface",
    "x": 120,
-   "y": 980,
+   "y": 1210,
    "canvasId": "canvas:global",
    "config": {
     "label": "Gmail / mailroom channel",
@@ -1274,8 +1274,8 @@
   {
    "id": "sur-workstation-control-store",
    "symbolId": "we-surface",
-   "x": 500,
-   "y": 980,
+   "x": 120,
+   "y": 750,
    "canvasId": "canvas:global",
    "config": {
     "label": "Workstation control store",
@@ -1307,8 +1307,8 @@
   {
    "id": "sur-artifact-mirror",
    "symbolId": "we-surface",
-   "x": 120,
-   "y": 1210,
+   "x": 500,
+   "y": 750,
    "canvasId": "canvas:global",
    "config": {
     "label": "Artifact mirror",
@@ -1366,8 +1366,8 @@
   {
    "id": "spec-01-live",
    "symbolId": "we-specification",
-   "x": 3190,
-   "y": 60,
+   "x": 3390,
+   "y": 1440,
    "canvasId": "canvas:global",
    "config": {
     "label": "List live booths now, each with owner session, seat, task, case and mission",
@@ -1385,7 +1385,7 @@
   {
    "id": "spec-02-live",
    "symbolId": "we-specification",
-   "x": 3750,
+   "x": 3950,
    "y": 60,
    "canvasId": "canvas:global",
    "config": {
@@ -1404,8 +1404,8 @@
   {
    "id": "spec-03-live",
    "symbolId": "we-specification",
-   "x": 3190,
-   "y": 290,
+   "x": 3390,
+   "y": 1670,
    "canvasId": "canvas:global",
    "config": {
     "label": "Show open obligations and waiting-on for the case being worked",
@@ -1423,8 +1423,8 @@
   {
    "id": "spec-04-live",
    "symbolId": "we-specification",
-   "x": 3750,
-   "y": 290,
+   "x": 3950,
+   "y": 750,
    "canvasId": "canvas:global",
    "config": {
     "label": "Post and read comments and reactions against the live edge",
@@ -1442,7 +1442,7 @@
   {
    "id": "spec-05-live",
    "symbolId": "we-specification",
-   "x": 3190,
+   "x": 3390,
    "y": 520,
    "canvasId": "canvas:global",
    "config": {
@@ -1461,8 +1461,8 @@
   {
    "id": "spec-06-topic",
    "symbolId": "we-specification",
-   "x": 3750,
-   "y": 520,
+   "x": 3390,
+   "y": 290,
    "canvasId": "canvas:global",
    "config": {
     "label": "List publications, cases and missions classified under a topic, access-filtered, with cursor",
@@ -1480,8 +1480,8 @@
   {
    "id": "spec-07-topic",
    "symbolId": "we-specification",
-   "x": 3190,
-   "y": 750,
+   "x": 3390,
+   "y": 60,
    "canvasId": "canvas:global",
    "config": {
     "label": "Follow or unfollow the topic and see why each item appears",
@@ -1499,8 +1499,8 @@
   {
    "id": "spec-08-watch",
    "symbolId": "we-specification",
-   "x": 3750,
-   "y": 750,
+   "x": 3950,
+   "y": 520,
    "canvasId": "canvas:global",
    "config": {
     "label": "Load a recording's segments, frames, actions and cut by time range",
@@ -1518,7 +1518,7 @@
   {
    "id": "spec-09-watch",
    "symbolId": "we-specification",
-   "x": 3190,
+   "x": 3950,
    "y": 980,
    "canvasId": "canvas:global",
    "config": {
@@ -1537,7 +1537,7 @@
   {
    "id": "spec-10-watch",
    "symbolId": "we-specification",
-   "x": 3750,
+   "x": 3390,
    "y": 980,
    "canvasId": "canvas:global",
    "config": {
@@ -1556,8 +1556,8 @@
   {
    "id": "spec-11-watch",
    "symbolId": "we-specification",
-   "x": 3190,
-   "y": 1210,
+   "x": 3950,
+   "y": 290,
    "canvasId": "canvas:global",
    "config": {
     "label": "Show chapters from actions and page changes",
@@ -1575,8 +1575,8 @@
   {
    "id": "spec-12-studio",
    "symbolId": "we-specification",
-   "x": 3750,
-   "y": 1210,
+   "x": 3390,
+   "y": 750,
    "canvasId": "canvas:global",
    "config": {
     "label": "Assemble a source manifest across recordings, terminal and artifacts in one case",
@@ -1594,8 +1594,8 @@
   {
    "id": "spec-13-studio",
    "symbolId": "we-specification",
-   "x": 3190,
-   "y": 1440,
+   "x": 3390,
+   "y": 1900,
    "canvasId": "canvas:global",
    "config": {
     "label": "Save and list versions of an edit manifest and see which reviews and captions each invalidates",
@@ -1613,8 +1613,8 @@
   {
    "id": "spec-14-studio",
    "symbolId": "we-specification",
-   "x": 3750,
-   "y": 1440,
+   "x": 3390,
+   "y": 2360,
    "canvasId": "canvas:global",
    "config": {
     "label": "Submit a render or speech job and follow its attempt, spend and outputs",
@@ -1632,8 +1632,8 @@
   {
    "id": "spec-15-studio",
    "symbolId": "we-specification",
-   "x": 3190,
-   "y": 1670,
+   "x": 3390,
+   "y": 1210,
    "canvasId": "canvas:global",
    "config": {
     "label": "Publish an edition to an audience and record its lineage",
@@ -1651,8 +1651,8 @@
   {
    "id": "spec-16-surfaces",
    "symbolId": "we-specification",
-   "x": 3750,
-   "y": 1670,
+   "x": 3950,
+   "y": 1210,
    "canvasId": "canvas:global",
    "config": {
     "label": "List registered surfaces with kind, capabilities, tracks they emit, owned state and health",
@@ -1670,8 +1670,8 @@
   {
    "id": "spec-17-surfaces",
    "symbolId": "we-specification",
-   "x": 3190,
-   "y": 1900,
+   "x": 3950,
+   "y": 1440,
    "canvasId": "canvas:global",
    "config": {
     "label": "See who holds input on each surface and which processes it started",
@@ -1689,8 +1689,8 @@
   {
    "id": "spec-18-surfaces",
    "symbolId": "we-specification",
-   "x": 3750,
-   "y": 1900,
+   "x": 3950,
+   "y": 2360,
    "canvasId": "canvas:global",
    "config": {
     "label": "Show the render/compute queue per surface",
@@ -1708,8 +1708,8 @@
   {
    "id": "spec-19-profile",
    "symbolId": "we-specification",
-   "x": 3190,
-   "y": 2130,
+   "x": 3390,
+   "y": 2590,
    "canvasId": "canvas:global",
    "config": {
     "label": "Show a participant's attributed contributions and reviews across sessions and models",
@@ -1727,7 +1727,7 @@
   {
    "id": "spec-20-profile",
    "symbolId": "we-specification",
-   "x": 3750,
+   "x": 3390,
    "y": 2130,
    "canvasId": "canvas:global",
    "config": {
@@ -1746,8 +1746,8 @@
   {
    "id": "spec-21-profile",
    "symbolId": "we-specification",
-   "x": 3190,
-   "y": 2360,
+   "x": 3950,
+   "y": 2130,
    "canvasId": "canvas:global",
    "config": {
     "label": "Show an agent's behavior profile and model binding history",
@@ -1765,8 +1765,8 @@
   {
    "id": "spec-22-inbox",
    "symbolId": "we-specification",
-   "x": 3750,
-   "y": 2360,
+   "x": 3950,
+   "y": 1670,
    "canvasId": "canvas:global",
    "config": {
     "label": "List obligations waiting on me, apart from ranked feed items",
@@ -1784,7 +1784,7 @@
   {
    "id": "spec-23-inbox",
    "symbolId": "we-specification",
-   "x": 3190,
+   "x": 3950,
    "y": 2590,
    "canvasId": "canvas:global",
    "config": {
@@ -1803,8 +1803,8 @@
   {
    "id": "spec-24-inbox",
    "symbolId": "we-specification",
-   "x": 3750,
-   "y": 2590,
+   "x": 3950,
+   "y": 1900,
    "canvasId": "canvas:global",
    "config": {
     "label": "List notifications with delivered, read and acknowledged states and replies to my comments",
@@ -1822,7 +1822,7 @@
   {
    "id": "mig-continuity-to-sqlite",
    "symbolId": "we-migration",
-   "x": 3120,
+   "x": -220,
    "y": -170,
    "canvasId": "canvas:global",
    "config": {
@@ -3009,5 +3009,1080 @@
     ]
    }
   }
- ]
+ ],
+ "layout": {
+  "default": "main",
+  "views": {
+   "main": {
+    "name": "Main",
+    "routes": {
+     "w-registered-unity-game-engine-catalystcorev2": {
+      "mode": "bus",
+      "buses": [
+       "street-surfaces-0",
+       "harness-surfaces-records-registered-by"
+      ]
+     },
+     "w-tracks-unity-game-engine-catalystcorev2": {
+      "mode": "bus",
+      "buses": [
+       "street-surfaces-0",
+       "harness-surfaces-records-feeds-tracks"
+      ]
+     },
+     "w-registered-foundry-render-engine": {
+      "mode": "bus",
+      "buses": [
+       "harness-surfaces-records-registered-by"
+      ]
+     },
+     "w-tracks-foundry-render-engine": {
+      "mode": "bus",
+      "buses": [
+       "harness-surfaces-records-feeds-tracks"
+      ]
+     },
+     "w-registered-web-booth": {
+      "mode": "bus",
+      "buses": [
+       "street-surfaces-1",
+       "harness-surfaces-records-registered-by"
+      ]
+     },
+     "w-tracks-web-booth": {
+      "mode": "bus",
+      "buses": [
+       "street-surfaces-1",
+       "harness-surfaces-records-feeds-tracks"
+      ]
+     },
+     "w-registered-desktop-booth": {
+      "mode": "bus",
+      "buses": [
+       "harness-surfaces-records-registered-by"
+      ]
+     },
+     "w-tracks-desktop-booth": {
+      "mode": "bus",
+      "buses": [
+       "harness-surfaces-records-feeds-tracks"
+      ]
+     },
+     "w-registered-booth-watch-stream-worker": {
+      "mode": "bus",
+      "buses": [
+       "street-surfaces-2",
+       "harness-surfaces-records-registered-by"
+      ]
+     },
+     "w-tracks-booth-watch-stream-worker": {
+      "mode": "bus",
+      "buses": [
+       "street-surfaces-2",
+       "harness-surfaces-records-feeds-tracks"
+      ]
+     },
+     "w-registered-terminal-claude-code-codex-b-dos-console": {
+      "mode": "bus",
+      "buses": [
+       "harness-surfaces-records-registered-by"
+      ]
+     },
+     "w-tracks-terminal-claude-code-codex-b-dos-console": {
+      "mode": "bus",
+      "buses": [
+       "harness-surfaces-records-feeds-tracks"
+      ]
+     },
+     "w-registered-owner-s-chrome-bridge": {
+      "mode": "bus",
+      "buses": [
+       "street-surfaces-4",
+       "harness-surfaces-records-registered-by"
+      ]
+     },
+     "w-registered-delivery-broker": {
+      "mode": "bus",
+      "buses": [
+       "harness-surfaces-records-registered-by"
+      ]
+     },
+     "w-registered-gmail-mailroom-channel": {
+      "mode": "bus",
+      "buses": [
+       "street-surfaces-5",
+       "harness-surfaces-records-registered-by"
+      ]
+     },
+     "w-registered-workstation-control-store": {
+      "mode": "bus",
+      "buses": [
+       "street-surfaces-3",
+       "harness-surfaces-records-registered-by"
+      ]
+     },
+     "w-tracks-workstation-control-store": {
+      "mode": "bus",
+      "buses": [
+       "street-surfaces-3",
+       "harness-surfaces-records-feeds-tracks"
+      ]
+     },
+     "w-registered-artifact-mirror": {
+      "mode": "bus",
+      "buses": [
+       "harness-surfaces-records-registered-by"
+      ]
+     },
+     "w-tracks-artifact-mirror": {
+      "mode": "bus",
+      "buses": [
+       "harness-surfaces-records-feeds-tracks"
+      ]
+     },
+     "w-registered-native-work-engine": {
+      "mode": "bus",
+      "buses": [
+       "harness-surfaces-records-registered-by"
+      ]
+     },
+     "w-backs-booth-session-01": {
+      "mode": "bus",
+      "buses": [
+       "street-records-5",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-session-01": {
+      "mode": "bus",
+      "buses": [
+       "street-records-6",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-case-01": {
+      "mode": "bus",
+      "buses": [
+       "street-records-5",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-video-track-02": {
+      "mode": "bus",
+      "buses": [
+       "street-records-1",
+       "harness-records-queries-backs",
+       "street-queries-0-above"
+      ]
+     },
+     "w-backs-narration-line-02": {
+      "mode": "bus",
+      "buses": [
+       "street-records-0",
+       "harness-records-queries-backs",
+       "street-queries-0-above"
+      ]
+     },
+     "w-backs-event-track-02": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs",
+       "street-queries-0-above"
+      ]
+     },
+     "w-backs-obligation-03": {
+      "mode": "bus",
+      "buses": [
+       "street-records-6",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-task-03": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-comment-04": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs",
+       "street-queries-3-above"
+      ]
+     },
+     "w-backs-reaction-04": {
+      "mode": "bus",
+      "buses": [
+       "street-records-3",
+       "harness-records-queries-backs",
+       "street-queries-3-above"
+      ]
+     },
+     "w-backs-anchor-04": {
+      "mode": "bus",
+      "buses": [
+       "street-records-3",
+       "harness-records-queries-backs",
+       "street-queries-3-above"
+      ]
+     },
+     "w-backs-recording-05": {
+      "mode": "bus",
+      "buses": [
+       "street-records-3",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-topic-06": {
+      "mode": "bus",
+      "buses": [
+       "street-records-1",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-relationship-06": {
+      "mode": "bus",
+      "buses": [
+       "street-records-1",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-feed-projection-06": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-publication-edition-06": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-subscription-follow-07": {
+      "mode": "bus",
+      "buses": [
+       "street-records-0",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-feed-projection-07": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-recording-08": {
+      "mode": "bus",
+      "buses": [
+       "street-records-3",
+       "harness-records-queries-backs",
+       "street-queries-2-above"
+      ]
+     },
+     "w-backs-video-track-08": {
+      "mode": "bus",
+      "buses": [
+       "street-records-1",
+       "harness-records-queries-backs",
+       "street-queries-2-above"
+      ]
+     },
+     "w-backs-event-track-08": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs",
+       "street-queries-2-above"
+      ]
+     },
+     "w-backs-edit-manifest-08": {
+      "mode": "bus",
+      "buses": [
+       "street-records-4",
+       "harness-records-queries-backs",
+       "street-queries-2-above"
+      ]
+     },
+     "w-backs-anchor-09": {
+      "mode": "bus",
+      "buses": [
+       "street-records-3",
+       "harness-records-queries-backs",
+       "street-queries-4-above"
+      ]
+     },
+     "w-backs-comment-09": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs",
+       "street-queries-4-above"
+      ]
+     },
+     "w-backs-edit-manifest-09": {
+      "mode": "bus",
+      "buses": [
+       "street-records-4",
+       "harness-records-queries-backs",
+       "street-queries-4-above"
+      ]
+     },
+     "w-backs-clip-10": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-publication-edition-10": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-grant-acl-10": {
+      "mode": "bus",
+      "buses": [
+       "street-records-4",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-event-track-11": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs",
+       "street-queries-1-above"
+      ]
+     },
+     "w-backs-source-manifest-12": {
+      "mode": "bus",
+      "buses": [
+       "street-records-2",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-recording-12": {
+      "mode": "bus",
+      "buses": [
+       "street-records-3",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-terminal-track-12": {
+      "mode": "bus",
+      "buses": [
+       "street-records-2",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-artifact-track-12": {
+      "mode": "bus",
+      "buses": [
+       "street-records-2",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-edit-manifest-13": {
+      "mode": "bus",
+      "buses": [
+       "street-records-4",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-voiceover-caption-track-13": {
+      "mode": "bus",
+      "buses": [
+       "street-records-6",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-evaluation-review-13": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-render-job-14": {
+      "mode": "bus",
+      "buses": [
+       "street-records-8",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-resource-reservation-14": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-notification-delivery-14": {
+      "mode": "bus",
+      "buses": [
+       "street-records-8",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-publication-edition-15": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-grant-acl-15": {
+      "mode": "bus",
+      "buses": [
+       "street-records-4",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-receipt-15": {
+      "mode": "bus",
+      "buses": [
+       "street-records-4",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-surface-registration-16": {
+      "mode": "bus",
+      "buses": [
+       "street-records-5",
+       "harness-records-queries-backs",
+       "street-queries-5-above"
+      ]
+     },
+     "w-backs-booth-session-17": {
+      "mode": "bus",
+      "buses": [
+       "street-records-5",
+       "harness-records-queries-backs",
+       "street-queries-6-above"
+      ]
+     },
+     "w-backs-resource-reservation-17": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs",
+       "street-queries-6-above"
+      ]
+     },
+     "w-backs-render-job-18": {
+      "mode": "bus",
+      "buses": [
+       "street-records-8",
+       "harness-records-queries-backs",
+       "street-queries-10-above"
+      ]
+     },
+     "w-backs-notification-delivery-18": {
+      "mode": "bus",
+      "buses": [
+       "street-records-8",
+       "harness-records-queries-backs",
+       "street-queries-10-above"
+      ]
+     },
+     "w-backs-participant-19": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-contribution-19": {
+      "mode": "bus",
+      "buses": [
+       "street-records-9",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-evaluation-review-19": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-session-20": {
+      "mode": "bus",
+      "buses": [
+       "street-records-6",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-event-20": {
+      "mode": "bus",
+      "buses": [
+       "street-records-7",
+       "harness-records-queries-backs"
+      ]
+     },
+     "w-backs-agent-behavior-profile-21": {
+      "mode": "bus",
+      "buses": [
+       "street-records-7",
+       "harness-records-queries-backs",
+       "street-queries-9-above"
+      ]
+     },
+     "w-backs-session-21": {
+      "mode": "bus",
+      "buses": [
+       "street-records-6",
+       "harness-records-queries-backs",
+       "street-queries-9-above"
+      ]
+     },
+     "w-backs-obligation-22": {
+      "mode": "bus",
+      "buses": [
+       "street-records-6",
+       "harness-records-queries-backs",
+       "street-queries-7-above"
+      ]
+     },
+     "w-backs-task-22": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs",
+       "street-queries-7-above"
+      ]
+     },
+     "w-backs-notification-delivery-24": {
+      "mode": "bus",
+      "buses": [
+       "street-records-8",
+       "harness-records-queries-backs",
+       "street-queries-8-above"
+      ]
+     },
+     "w-backs-message-24": {
+      "mode": "bus",
+      "buses": [
+       "street-records-7",
+       "harness-records-queries-backs",
+       "street-queries-8-above"
+      ]
+     },
+     "w-backs-comment-24": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-queries-backs",
+       "street-queries-8-above"
+      ]
+     }
+    },
+    "buses": {
+     "harness-surfaces-records-feeds-tracks": {
+      "points": [
+       {
+        "x": 706,
+        "y": -52
+       },
+       {
+        "x": 706,
+        "y": 2214
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "surfaces",
+       "records"
+      ],
+      "label": "feeds tracks"
+     },
+     "harness-surfaces-records-registered-by": {
+      "points": [
+       {
+        "x": 782,
+        "y": -52
+       },
+       {
+        "x": 782,
+        "y": 2214
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "surfaces",
+       "records"
+      ],
+      "label": "registered by"
+     },
+     "street-surfaces-0": {
+      "points": [
+       {
+        "x": -24,
+        "y": 159
+       },
+       {
+        "x": 782,
+        "y": 159
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "surfaces",
+       "records"
+      ]
+     },
+     "street-surfaces-1": {
+      "points": [
+       {
+        "x": -24,
+        "y": 389
+       },
+       {
+        "x": 782,
+        "y": 389
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "surfaces",
+       "records"
+      ]
+     },
+     "street-surfaces-2": {
+      "points": [
+       {
+        "x": -24,
+        "y": 619
+       },
+       {
+        "x": 782,
+        "y": 619
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "surfaces",
+       "records"
+      ]
+     },
+     "street-surfaces-3": {
+      "points": [
+       {
+        "x": -24,
+        "y": 849
+       },
+       {
+        "x": 782,
+        "y": 849
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "surfaces",
+       "records"
+      ]
+     },
+     "street-surfaces-4": {
+      "points": [
+       {
+        "x": -24,
+        "y": 1076
+       },
+       {
+        "x": 782,
+        "y": 1076
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "surfaces",
+       "records"
+      ]
+     },
+     "street-surfaces-5": {
+      "points": [
+       {
+        "x": -24,
+        "y": 1306
+       },
+       {
+        "x": 782,
+        "y": 1306
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "surfaces",
+       "records"
+      ]
+     },
+     "harness-records-queries-backs": {
+      "points": [
+       {
+        "x": 2950,
+        "y": -52
+       },
+       {
+        "x": 2950,
+        "y": 2674
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ],
+      "label": "backs"
+     },
+     "street-queries-0-above": {
+      "points": [
+       {
+        "x": 4184,
+        "y": -42
+       },
+       {
+        "x": 2950,
+        "y": -42
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-queries-1-above": {
+      "points": [
+       {
+        "x": 4184,
+        "y": 194
+       },
+       {
+        "x": 2950,
+        "y": 194
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-queries-2-above": {
+      "points": [
+       {
+        "x": 4184,
+        "y": 415
+       },
+       {
+        "x": 2950,
+        "y": 415
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-queries-3-above": {
+      "points": [
+       {
+        "x": 4184,
+        "y": 648
+       },
+       {
+        "x": 2950,
+        "y": 648
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-queries-4-above": {
+      "points": [
+       {
+        "x": 4184,
+        "y": 878
+       },
+       {
+        "x": 2950,
+        "y": 878
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-queries-5-above": {
+      "points": [
+       {
+        "x": 4184,
+        "y": 1114
+       },
+       {
+        "x": 2950,
+        "y": 1114
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-queries-6-above": {
+      "points": [
+       {
+        "x": 4184,
+        "y": 1341
+       },
+       {
+        "x": 2950,
+        "y": 1341
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-queries-7-above": {
+      "points": [
+       {
+        "x": 4184,
+        "y": 1571
+       },
+       {
+        "x": 2950,
+        "y": 1571
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-queries-8-above": {
+      "points": [
+       {
+        "x": 4184,
+        "y": 1798
+       },
+       {
+        "x": 2950,
+        "y": 1798
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-queries-9-above": {
+      "points": [
+       {
+        "x": 4184,
+        "y": 2031
+       },
+       {
+        "x": 2950,
+        "y": 2031
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-queries-10-above": {
+      "points": [
+       {
+        "x": 4184,
+        "y": 2261
+       },
+       {
+        "x": 2950,
+        "y": 2261
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-records-0": {
+      "points": [
+       {
+        "x": 856,
+        "y": 159
+       },
+       {
+        "x": 2950,
+        "y": 159
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-records-1": {
+      "points": [
+       {
+        "x": 856,
+        "y": 395
+       },
+       {
+        "x": 2950,
+        "y": 395
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-records-2": {
+      "points": [
+       {
+        "x": 856,
+        "y": 622
+       },
+       {
+        "x": 2950,
+        "y": 622
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-records-3": {
+      "points": [
+       {
+        "x": 856,
+        "y": 861
+       },
+       {
+        "x": 2950,
+        "y": 861
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-records-4": {
+      "points": [
+       {
+        "x": 856,
+        "y": 1091
+       },
+       {
+        "x": 2950,
+        "y": 1091
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-records-5": {
+      "points": [
+       {
+        "x": 856,
+        "y": 1315
+       },
+       {
+        "x": 2950,
+        "y": 1315
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-records-6": {
+      "points": [
+       {
+        "x": 856,
+        "y": 1551
+       },
+       {
+        "x": 2950,
+        "y": 1551
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-records-7": {
+      "points": [
+       {
+        "x": 856,
+        "y": 1772
+       },
+       {
+        "x": 2950,
+        "y": 1772
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-records-8": {
+      "points": [
+       {
+        "x": 856,
+        "y": 2008
+       },
+       {
+        "x": 2950,
+        "y": 2008
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     },
+     "street-records-9": {
+      "points": [
+       {
+        "x": 856,
+        "y": 2226
+       },
+       {
+        "x": 2950,
+        "y": 2226
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "queries"
+      ]
+     }
+    }
+   }
+  }
+ }
 }

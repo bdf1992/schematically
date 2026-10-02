@@ -14,7 +14,11 @@
   if(!Data)throw new Error('SovSchematicData core is required');
   const clone=Data.clone,isObject=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
   const DEFAULT_ID='main',POINT=24,MAX=4096;
-  const ROUTE_MODES=['auto','guided','pinned'];
+  const ROUTE_MODES=['auto','guided','pinned','bus'];
+  // Buses (LAYOUT-MODEL.md "As built: buses"): a route declared once per layout, which wires name
+  // instead of each finding a path. The yFiles bus descriptor model: the bus is the record, a wire
+  // only names it.
+  const BUS_PITCH=6,BUS_TRUNK_GAP=16,BUS_MARGIN=24,STREET_DROP=36,STREET_ROOM=12;
   const refusal=(code,message,extra={})=>({ok:false,code,message,...extra});
   const num=(v,f)=>Number.isFinite(Number(v))?Number(v):f;
 
@@ -40,6 +44,14 @@
       // A layout never outlives what it arranges.
       if(v.nodes)for(const k of Object.keys(v.nodes))if(!doc.components.some(c=>c.id===k))delete v.nodes[k];
       for(const k of Object.keys(v.routes))if(!doc.wires.some(w=>w.id===k))delete v.routes[k];
+      // Buses are kept on every view; an order names only wires that exist, and a route never
+      // names a bus that is gone.
+      if(!isObject(v.buses))v.buses={};
+      for(const [bid,b] of Object.entries(v.buses)){
+        if(!isObject(b)||!busPoints(b.points)){delete v.buses[bid];continue}
+        if(Array.isArray(b.order))b.order=b.order.filter(id=>doc.wires.some(w=>w.id===id));
+      }
+      for(const [k,rt] of Object.entries(v.routes))if(rt?.mode==='bus'&&(!Array.isArray(rt.buses)||!rt.buses.length||rt.buses.some(id=>!v.buses[id])))delete v.routes[k];
     }
     return L;
   }
@@ -49,7 +61,7 @@
   function createView(doc,{id,name,audience=null,from=null,empty=false}={}){
     const L=ensure(doc);let vid=slug(id||name);let k=2;while(L.views[vid])vid=`${slug(id||name)}-${k++}`;
     const source=from??L.default;if(!empty&&!L.views[source])return refusal('UNKNOWN_LAYOUT',`No layout ${source}`);
-    L.views[vid]={name:String(name||id||vid),audience:audience||null,nodes:{},routes:empty?{}:clone(L.views[source].routes||{})};
+    L.views[vid]={name:String(name||id||vid),audience:audience||null,nodes:{},routes:empty?{}:clone(L.views[source].routes||{}),buses:empty?{}:clone(L.views[source].buses||{})};
     if(!empty)for(const c of doc.components)if(!hosted(c)||c.placement?.kind==='edge'){const g=geometry(doc,source,c.id);if(g)L.views[vid].nodes[c.id]=g}
     return {ok:true,id:vid,view:summary(doc,vid)};
   }
@@ -172,12 +184,149 @@
     if(!doc.wires.some(w=>w.id===wireId))return refusal('UNKNOWN_WIRE',`No wire ${wireId}`);
     if(spec==null||spec.mode==='auto'){delete r.v.routes[wireId];return {ok:true,wireId,mode:'auto'}}
     if(!ROUTE_MODES.includes(spec.mode))return refusal('UNKNOWN_MODE',`mode is ${ROUTE_MODES.join(', ')}`);
+    if(spec.mode==='bus'){
+      const ids=Array.isArray(spec.buses)?spec.buses.map(String):[];
+      if(!ids.length)return refusal('BAD_BUSES','buses must name one or more buses, in the order the wire rides them');
+      const missing=ids.find(id=>!r.v.buses[id]);if(missing!=null)return refusal('UNKNOWN_BUS',`No bus ${missing} on layout ${r.id}`);
+      for(let i=1;i<ids.length;i++)if(!busMeet(r.v.buses[ids[i-1]].points,r.v.buses[ids[i]].points))return refusal('BUS_GAP',`Buses ${ids[i-1]} and ${ids[i]} neither cross nor touch: a wire cannot pass from one to the other`,{buses:[ids[i-1],ids[i]]});
+      r.v.routes[wireId]={mode:'bus',buses:ids};
+      return {ok:true,wireId,mode:'bus',buses:ids};
+    }
     const pts=(spec.mode==='pinned'?spec.points:spec.via)||[];
     if(!Array.isArray(pts)||!pts.length||pts.some(p=>!Number.isFinite(Number(p?.x))||!Number.isFinite(Number(p?.y))))return refusal('BAD_POINTS',`${spec.mode==='pinned'?'points':'via'} must be one or more {x, y}`);
     r.v.routes[wireId]={mode:spec.mode,[spec.mode==='pinned'?'points':'via']:pts.map(p=>({x:Number(p.x),y:Number(p.y)}))};
     return {ok:true,wireId,mode:spec.mode};
   }
   function routeFor(doc,viewId,wireId){return doc?.layout?.views?.[viewId??defaultId(doc)]?.routes?.[wireId]||null}
+
+  // ---- Buses --------------------------------------------------------------------------------
+  // A bus's centreline: 2 or more points, every step horizontal or vertical. Anything else is null.
+  function busPoints(points){
+    if(!Array.isArray(points)||points.length<2)return null;
+    const out=[];
+    for(const p of points){
+      if(!isObject(p)||p.x==null||p.y==null)return null;
+      const x=Number(p.x),y=Number(p.y);if(!Number.isFinite(x)||!Number.isFinite(y))return null;out.push({x,y});
+    }
+    for(let i=1;i<out.length;i++)if(out[i].x!==out[i-1].x&&out[i].y!==out[i-1].y)return null;
+    return out;
+  }
+  const busPitch=v=>Math.max(4,Math.min(16,num(v,BUS_PITCH)));
+  // Where two bus centrelines meet, crossing or touching at an end: the first place found walking
+  // the first bus, with the segment of each it lies on; null when they never meet. Axis-aligned
+  // segments meet exactly when their boxes do.
+  function busMeet(a,b){
+    const A=busPoints(a),B=busPoints(b);if(!A||!B)return null;
+    for(let i=1;i<A.length;i++)for(let j=1;j<B.length;j++){
+      const p=A[i-1],q=A[i],s=B[j-1],t=B[j];
+      const l=Math.max(Math.min(p.x,q.x),Math.min(s.x,t.x)),r=Math.min(Math.max(p.x,q.x),Math.max(s.x,t.x));
+      const top=Math.max(Math.min(p.y,q.y),Math.min(s.y,t.y)),bottom=Math.min(Math.max(p.y,q.y),Math.max(s.y,t.y));
+      if(l<=r+1e-6&&top<=bottom+1e-6)return {x:(l+r)/2,y:(top+bottom)/2,a:i-1,b:j-1};
+    }
+    return null;
+  }
+  function wiresOnBus(v,busId){return Object.entries(v.routes||{}).filter(([,rt])=>rt?.mode==='bus'&&Array.isArray(rt.buses)&&rt.buses.includes(busId)).map(([id])=>id).sort()}
+  function setBus(doc,viewId,a={}){
+    const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
+    const id=String(a.id??'').trim();if(!id)return refusal('BAD_BUS','A bus needs an id');
+    const pts=busPoints(a.points);if(!pts)return refusal('BAD_POINTS','points must be 2 or more {x, y}, every step horizontal or vertical');
+    const bus={points:pts,pitch:busPitch(a.pitch)};
+    if(a.label!=null&&String(a.label).trim())bus.label=String(a.label);
+    if(Array.isArray(a.between)&&a.between.length===2)bus.between=a.between.map(String);
+    if(a.order!=null){
+      if(!Array.isArray(a.order))return refusal('BAD_ORDER','order is a list of wire ids');
+      const unknown=a.order.find(w=>!doc.wires.some(x=>x.id===String(w)));if(unknown!=null)return refusal('UNKNOWN_WIRE',`No wire ${unknown}`);
+      bus.order=[...new Set(a.order.map(String))];
+    }
+    r.v.buses[id]=bus;
+    return {ok:true,id,view:r.id,bus:clone(bus),wires:wiresOnBus(r.v,id)};
+  }
+  // Removing a bus returns every wire that named it to the router.
+  function removeBus(doc,viewId,id){
+    const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
+    if(!r.v.buses[id])return refusal('UNKNOWN_BUS',`No bus ${id} on layout ${r.id}`);
+    const freed=wiresOnBus(r.v,id);delete r.v.buses[id];for(const w of freed)delete r.v.routes[w];
+    return {ok:true,id,view:r.id,removed:true,wires:freed};
+  }
+  function listBuses(doc,viewId){
+    const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
+    return {ok:true,view:r.id,buses:Object.keys(r.v.buses).sort().map(id=>({id,...clone(r.v.buses[id]),wires:wiresOnBus(r.v,id)}))};
+  }
+
+  // ---- Harness: trunks between two groups, streets in their row gaps ---------------------------
+  // VLSI standard-cell channel routing: cards sit in rows, wires run in the channels between. One
+  // trunk per wire label in the gap between the groups; a card with another card between it and
+  // the trunk reaches it along a street in the gap under its row (sending) or above it (receiving).
+  const busSlug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'unlabelled';
+  function harness(doc,viewId,{between,pitch}={}){
+    const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
+    if(!Array.isArray(between)||between.length!==2||String(between[0])===String(between[1]))return refusal('BAD_BETWEEN','between names two different groups: [groupA, groupB]');
+    const ids=between.map(String),groups=ids.map(id=>doc.components.find(c=>c.id===id));
+    for(let k=0;k<2;k++)if(!groups[k]||!grouping(groups[k]))return refusal('UNKNOWN_GROUP',`No group ${ids[k]}`);
+    const P=busPitch(pitch);
+    // The group regions as this layout draws them.
+    const placedDoc=r.isDefault?doc:{...doc,components:doc.components.map(c=>{const g=!hosted(c)&&!grouping(c)?geometry(doc,r.id,c.id):null;return g&&g.w?{...c,x:g.x,y:g.y,config:{...(c.config||{}),presentation:{...(c.config?.presentation||{}),size:{w:g.w,h:g.h}}}}:c})};
+    const rects=groups.map(g=>Data.groupRect(placedDoc,g.id,size));
+    const members=groups.map(g=>new Set((Array.isArray(g.config?.members)?g.config.members:[]).map(String)));
+    // Worked for a vertical trunk (groups side by side); stacked groups swap x and y in and out.
+    const gapX=Math.max(rects[1].l-rects[0].r,rects[0].l-rects[1].r),gapY=Math.max(rects[1].t-rects[0].b,rects[0].t-rects[1].b);
+    const vertical=gapX>=gapY,sw=p=>vertical?{x:p.x,y:p.y}:{x:p.y,y:p.x};
+    const R=rects.map(q=>vertical?{l:q.l,r:q.r,t:q.t,b:q.b}:{l:q.t,r:q.b,t:q.l,b:q.r});
+    const left=(R[0].l+R[0].r)<=(R[1].l+R[1].r)?0:1,right=1-left,gapL=R[left].r,gap=R[right].l-gapL;
+    const towardTrunkIsRight=k=>k===left;
+    const side=id=>members[0].has(id)?0:members[1].has(id)?1:-1,labelOf=w=>String(w.config?.label||'');
+    const wires=doc.wires.filter(w=>{const sa=side(w.a),sb=side(w.b);if(sa<0||sb<0||sa===sb)return false;const m=r.v.routes[w.id]?.mode;return m!=='pinned'&&m!=='guided'});
+    if(!wires.length)return refusal('NO_WIRES',`No wire free to route runs between ${ids[0]} and ${ids[1]}`);
+    const labels=[...new Set(wires.map(labelOf))].sort((a,b)=>a<b?-1:a>b?1:0),lanes=labels.map(l=>wires.filter(w=>labelOf(w)===l).length);
+    const total=lanes.reduce((s,n)=>s+n*P,0)+BUS_TRUNK_GAP*(labels.length-1),need=total+2*BUS_MARGIN;
+    if(!(gap>=need))return refusal('GAP_TOO_NARROW',`The gap between ${ids[0]} and ${ids[1]} is ${Math.floor(Math.max(0,gap))} wide; ${labels.length} trunk${labels.length===1?'':'s'} carrying ${wires.length} wires need ${Math.ceil(need)}`,{need:Math.ceil(need),have:Math.floor(Math.max(0,gap))});
+    const trunkX=new Map(),trunkId=l=>`harness-${ids[0]}-${ids[1]}-${busSlug(l)}`;
+    {let at=gapL+(gap-total)/2;labels.forEach((l,i)=>{trunkX.set(l,at+lanes[i]*P/2);at+=lanes[i]*P+BUS_TRUNK_GAP})}
+    // Rows: members whose cards overlap vertically, top to bottom.
+    const lay=[0,1].map(k=>{
+      const items=[...members[k]].map(id=>{const c=doc.components.find(x=>x.id===id);if(!c||hosted(c)||grouping(c))return null;const g=geometry(doc,r.id,id);if(!g||g.w==null)return null;
+        const s=sw(g),w=vertical?g.w:g.h,h=vertical?g.h:g.w;return {id,l:s.x-w/2,r:s.x+w/2,t:s.y-h/2,b:s.y+h/2}}).filter(Boolean).sort((a,b)=>a.t-b.t||a.l-b.l||(a.id<b.id?-1:1));
+      const rows=[];for(const it of items){const row=rows.at(-1);if(row&&it.t<row.b){row.items.push(it);row.b=Math.max(row.b,it.b)}else rows.push({t:it.t,b:it.b,items:[it]})}
+      return {items:new Map(items.map(it=>[it.id,it])),rows};
+    });
+    // A direct line: no other member of its group between the card and the trunk, inside its row band.
+    const direct=(k,id)=>{const m=lay[k].items.get(id);if(!m)return true;return ![...lay[k].items.values()].some(o=>o.id!==id&&o.t<m.b&&o.b>m.t&&(towardTrunkIsRight(k)?o.l>=m.r:o.r<=m.l))};
+    const rowOf=(k,id)=>lay[k].rows.findIndex(row=>row.items.some(it=>it.id===id));
+    const ours=b=>Array.isArray(b?.between)&&b.between.length===2&&ids.includes(b.between[0])&&ids.includes(b.between[1]);
+    // A street id another harness already uses takes the next free suffix.
+    const streetId=base=>{let id=base,k=2;while(r.v.buses[id]&&!ours(r.v.buses[id]))id=`${base}-${k++}`;return id};
+    const streets=new Map();
+    const street=(k,ri,kind,w)=>{const id=streetId(`street-${groups[k].id}-${ri}${kind==='recv'?'-above':''}`);if(!streets.has(id))streets.set(id,{k,row:ri,kind,wires:[],labels:new Set()});const s=streets.get(id);s.wires.push(w.id);s.labels.add(labelOf(w));return id};
+    const plan=wires.map(w=>{const sa=side(w.a),sb=side(w.b);
+      return {w,trunk:trunkId(labelOf(w)),send:direct(sa,w.a)?null:street(sa,rowOf(sa,w.a),'send',w),recv:direct(sb,w.b)?null:street(sb,rowOf(sb,w.b),'recv',w)}});
+    const made=[];let top=Math.min(R[0].t,R[1].t),bottom=Math.max(R[0].b,R[1].b);
+    for(const [id,s] of streets){
+      const rows=lay[s.k].rows,row=rows[s.row],span=(s.wires.length-1)*P,G=R[s.k];let y;
+      if(s.kind==='send'){
+        const next=rows[s.row+1],first=row.b+STREET_DROP;y=first+span/2;
+        if(next&&first+span+STREET_ROOM>next.t)return refusal('STREET_TOO_NARROW',`Street ${id} under row ${s.row} of ${groups[s.k].id} needs ${Math.ceil(STREET_DROP+span+STREET_ROOM)} between the rows; it has ${Math.floor(next.t-row.b)}`,{street:id,need:Math.ceil(STREET_DROP+span+STREET_ROOM),have:Math.floor(next.t-row.b)});
+      }else{
+        const prev=rows[s.row-1],last=row.t-STREET_DROP;y=last-span/2;
+        if(prev&&last-span-STREET_ROOM<prev.b)return refusal('STREET_TOO_NARROW',`Street ${id} above row ${s.row} of ${groups[s.k].id} needs ${Math.ceil(STREET_DROP+span+STREET_ROOM)} between the rows; it has ${Math.floor(row.t-prev.b)}`,{street:id,need:Math.ceil(STREET_DROP+span+STREET_ROOM),have:Math.floor(row.t-prev.b)});
+      }
+      const xs=[...s.labels].map(l=>trunkX.get(l)),to=towardTrunkIsRight(s.k)?Math.max(...xs):Math.min(...xs),far=towardTrunkIsRight(s.k)?G.l:G.r;
+      made.push({id,kind:'street',lanes:s.wires.length,points:[{x:far,y},{x:to,y}]});
+      top=Math.min(top,y-span/2);bottom=Math.max(bottom,y+span/2);
+    }
+    {const byId=new Intl.Collator('en',{numeric:true}).compare;made.sort((a,b)=>byId(a.id,b.id))}
+    labels.forEach((l,i)=>made.splice(i,0,{id:trunkId(l),kind:'trunk',label:l||null,lanes:lanes[i],points:[{x:trunkX.get(l),y:top},{x:trunkX.get(l),y:bottom}]}));
+    const pointsOf=new Map(made.map(b=>[b.id,b.points.map(sw)]));
+    for(const p of plan){const seq=[p.send,p.trunk,p.recv].filter(Boolean);for(let i=1;i<seq.length;i++)if(!busMeet(pointsOf.get(seq[i-1]),pointsOf.get(seq[i])))return refusal('BUS_GAP',`Buses ${seq[i-1]} and ${seq[i]} would not meet`,{buses:[seq[i-1],seq[i]]})}
+    // Write: this pair's earlier harness goes, its wires return to the router unless routed again.
+    const old=Object.keys(r.v.buses).filter(id=>ours(r.v.buses[id]));
+    for(const id of old)delete r.v.buses[id];
+    const freed=[];for(const [wid,rt] of Object.entries(r.v.routes))if(rt?.mode==='bus'&&rt.buses.some(id=>old.includes(id))){delete r.v.routes[wid];if(!plan.some(p=>p.w.id===wid))freed.push(wid)}
+    for(const b of made)r.v.buses[b.id]={points:pointsOf.get(b.id),pitch:P,between:ids,...(b.label?{label:b.label}:{})};
+    for(const p of plan)r.v.routes[p.w.id]={mode:'bus',buses:[p.send,p.trunk,p.recv].filter(Boolean)};
+    return {ok:true,view:r.id,between:ids,orientation:vertical?'vertical':'horizontal',gap:{have:Math.floor(gap),need:Math.ceil(need)},
+      buses:made.map(b=>({id:b.id,kind:b.kind,lanes:b.lanes,...(b.label?{label:b.label}:{})})),
+      wires:plan.map(p=>({id:p.w.id,buses:[p.send,p.trunk,p.recv].filter(Boolean)})),returnedToAuto:freed.sort()};
+  }
 
   // ---- Layered layout -----------------------------------------------------------------------
   // Left to right by wire direction: cycles broken, longest-path layers, barycentre ordering,
@@ -365,14 +514,17 @@
     place:(doc,a)=>place(doc,a.view,a.id,a),
     align:(doc,a)=>align(doc,a.view,a.ids||[],a),
     distribute:(doc,a)=>distribute(doc,a.view,a.ids||[],a),
-    route:(doc,a)=>route(doc,a.view,a.wireId,a.mode?{mode:a.mode,points:a.points,via:a.via}:null),
+    route:(doc,a)=>route(doc,a.view,a.wireId,a.mode?{mode:a.mode,points:a.points,via:a.via,buses:a.buses}:null),
+    bus:(doc,a)=>a.remove?removeBus(doc,a.view,String(a.id??'')):setBus(doc,a.view,a),
+    buses:(doc,a)=>listBuses(doc,a.view),
+    harness:(doc,a)=>harness(doc,a.view,a),
     apply:(doc,a)=>{if((a.engine||'layered')!=='layered')return refusal('UNKNOWN_ENGINE','engine is layered');let view=a.view;if(a.into){const made=createView(doc,{name:a.into,from:a.view,audience:a.audience});if(!made.ok)return made;view=made.id}return layered(doc,view,a)}
   };
-  const READ_ONLY=new Set(['list','unplaced']);
+  const READ_ONLY=new Set(['list','unplaced','buses']);
   function execute(doc,op,args={}){const fn=OPS[op];if(!fn)return refusal('UNKNOWN_OP',`Unknown layout op ${op}`,{ops:Object.keys(OPS)});return fn(doc,isObject(args)?args:{})}
   function tool(){
-    return {name:'schematic.layout',description:`Arrange the document without changing what it means. op: ${Object.keys(OPS).join(' | ')}. view names a layout (default: the document's default). move {id, x,y | dx,dy} · place {id, relation: right-of|left-of|above|below, of, gap} · align {ids, axis: left|center|right|top|middle|bottom} · distribute {ids, axis: x|y, gap?} · route {wireId, mode: auto|guided|pinned, points|via} · apply {engine: layered, scope?: containerId, into?: new layout name} · create {name, from?, empty?} · rename {view, name} · delete {view} · set-default {view}. Refusals are typed: PINNED, LOCKED, HOSTED, UNPLACED, UNKNOWN_*.`,
-      inputSchema:{type:'object',properties:{op:{type:'string',enum:Object.keys(OPS)},view:{type:'string'},id:{type:'string'},ids:{type:'array',items:{type:'string'}},of:{type:'string'},relation:{type:'string'},gap:{type:'number'},x:{type:'number'},y:{type:'number'},dx:{type:'number'},dy:{type:'number'},axis:{type:'string'},wireId:{type:'string'},mode:{type:'string'},points:{type:'array'},via:{type:'array'},engine:{type:'string'},scope:{type:'string'},into:{type:'string'},name:{type:'string'},from:{type:'string'},empty:{type:'boolean'},audience:{type:'string'}},required:['op'],additionalProperties:false}};
+    return {name:'schematic.layout',description:`Arrange the document without changing what it means. op: ${Object.keys(OPS).join(' | ')}. view names a layout (default: the document's default). move {id, x,y | dx,dy} · place {id, relation: right-of|left-of|above|below, of, gap} · align {ids, axis: left|center|right|top|middle|bottom} · distribute {ids, axis: x|y, gap?} · route {wireId, mode: auto|guided|pinned|bus, points|via|buses} · bus {id, points: [{x,y}...] 2+ with horizontal or vertical steps, pitch?: 4-16 (6), label?, order?: [wireId...]} sets a bus; bus {id, remove: true} removes it and returns its wires to auto · buses {} lists every bus with the wires that name it · harness {between: [groupA, groupB], pitch?} makes one trunk per wire label in the gap between two groups, and streets in the row gaps for cards with no direct line, and routes the wires between them on those buses · apply {engine: layered, scope?: containerId, into?: new layout name} · create {name, from?, empty?} · rename {view, name} · delete {view} · set-default {view}. Refusals are typed: PINNED, LOCKED, HOSTED, UNPLACED, BAD_POINTS, UNKNOWN_BUS, BUS_GAP, GAP_TOO_NARROW, STREET_TOO_NARROW, UNKNOWN_*.`,
+      inputSchema:{type:'object',properties:{op:{type:'string',enum:Object.keys(OPS)},view:{type:'string'},id:{type:'string'},ids:{type:'array',items:{type:'string'}},of:{type:'string'},relation:{type:'string'},gap:{type:'number'},x:{type:'number'},y:{type:'number'},dx:{type:'number'},dy:{type:'number'},axis:{type:'string'},wireId:{type:'string'},mode:{type:'string'},points:{type:'array'},via:{type:'array'},buses:{type:'array',items:{type:'string'}},pitch:{type:'number'},label:{type:'string'},order:{type:'array',items:{type:'string'}},remove:{type:'boolean'},between:{type:'array',items:{type:'string'},minItems:2,maxItems:2},engine:{type:'string'},scope:{type:'string'},into:{type:'string'},name:{type:'string'},from:{type:'string'},empty:{type:'boolean'},audience:{type:'string'}},required:['op'],additionalProperties:false}};
   }
-  return {DEFAULT_ID,ROUTE_MODES,views,ensure,defaultId,createView,deleteView,renameView,setDefault,geometry,setGeometry,unplaced,move,place,align,distribute,route,routeFor,layered,execute,isReadOnly:op=>READ_ONLY.has(op),tool,hosted,size};
+  return {DEFAULT_ID,ROUTE_MODES,views,ensure,defaultId,createView,deleteView,renameView,setDefault,geometry,setGeometry,unplaced,move,place,align,distribute,route,routeFor,busPoints,busMeet,setBus,removeBus,listBuses,harness,layered,execute,isReadOnly:op=>READ_ONLY.has(op),tool,hosted,size};
 });

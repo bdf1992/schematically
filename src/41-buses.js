@@ -1,0 +1,211 @@
+'use strict';
+// 0.1 concern: the route of a wire on buses (LAYOUT-MODEL.md "As built: buses"). A bus is a layout
+// record (src/08-layout-core.js): a centreline declared once in a layout, which wires name in their
+// route ({mode: 'bus', buses: [id, ...]}) instead of each finding a path. A wire taps on to the first
+// bus from the end of its source lead, rides each bus on its own lane, turns once where one bus
+// meets the next, and taps off the last bus to the end of its target lead. Lanes are ordered once
+// per render, before any auto route, so auto routes keep clear of the buses. Presentation only:
+// nothing here writes the document.
+
+function activeBuses(){const v=diagram.layout?.views?.[activeLayoutId()];return v&&v.buses&&typeof v.buses==='object'&&!Array.isArray(v.buses)?v.buses:{}}
+function busSpecOf(w){const s=typeof activeRouteSpec==='function'?activeRouteSpec(w.id):null;return s?.mode==='bus'&&Array.isArray(s.buses)&&s.buses.length?s:null}
+function busPitchOf(bus){const p=Number(bus?.pitch);return Number.isFinite(p)?Math.max(4,Math.min(16,p)):6}
+
+// ---- Bus geometry: a centreline measured along its length --------------------------------------
+function busLine(bus){
+  const raw=SovSchematicLayout.busPoints(bus?.points);if(!raw)return null;
+  const pts=normalizePoints(raw);if(pts.length<2)return null;
+  const segs=[];let s=0;
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1],b=pts[i],len=Math.abs(b.x-a.x)+Math.abs(b.y-a.y),dir={x:Math.sign(b.x-a.x),y:Math.sign(b.y-a.y)};
+    // The lane normal: the direction of travel turned a quarter, the same on every segment.
+    segs.push({a,b,s0:s,s1:s+len,dir,n:{x:-dir.y,y:dir.x}});s+=len;
+  }
+  return {pts,segs,length:s};
+}
+// The nearest point of the centreline to p, and how far along the bus it lies.
+function busProject(line,p){
+  let best=null;
+  line.segs.forEach((g,k)=>{
+    const x=Math.max(Math.min(g.a.x,g.b.x),Math.min(Math.max(g.a.x,g.b.x),p.x)),y=Math.max(Math.min(g.a.y,g.b.y),Math.min(Math.max(g.a.y,g.b.y),p.y));
+    const d=Math.hypot(p.x-x,p.y-y);
+    if(!best||d<best.d-1e-9)best={d,x,y,k,s:g.s0+Math.abs(x-g.a.x)+Math.abs(y-g.a.y)};
+  });
+  return best;
+}
+// The point s along the bus, o across it (on the lane normal). At a corner, where the two lanes meet.
+function busAt(line,s,o){
+  const t=Math.max(0,Math.min(line.length,s));
+  for(let k=0;k<line.segs.length;k++){
+    const g=line.segs[k];if(t>g.s1+1e-9&&k<line.segs.length-1)continue;
+    const next=line.segs[k+1];
+    if(next&&Math.abs(t-g.s1)<1e-9)return {x:g.b.x+o*(g.n.x+next.n.x),y:g.b.y+o*(g.n.y+next.n.y)};
+    const along=t-g.s0;return {x:g.a.x+g.dir.x*along+o*g.n.x,y:g.a.y+g.dir.y*along+o*g.n.y};
+  }
+  return {x:line.pts[0].x,y:line.pts[0].y};
+}
+// Riding a lane from s1 to s2, in either direction: the two ends and every corner between.
+function busRide(line,s1,s2,o){
+  const out=[busAt(line,s1,o)],lo=Math.min(s1,s2),hi=Math.max(s1,s2);
+  const corners=line.segs.slice(0,-1).map(g=>g.s1).filter(s=>s>lo+1e-9&&s<hi-1e-9);
+  if(s2<s1)corners.reverse();
+  for(const s of corners)out.push(busAt(line,s,o));
+  out.push(busAt(line,s2,o));
+  return out;
+}
+
+// ---- A wire's plan on its buses: where it joins and leaves each one -----------------------------
+function busPlan(w,A,B,spec){
+  const all=activeBuses(),legs=spec.buses.map(id=>({id,bus:all[id],line:busLine(all[id])}));
+  if(!A||!B||legs.some(l=>!l.line))return null;
+  const meets=[];
+  for(let i=1;i<legs.length;i++){
+    const m=SovSchematicLayout.busMeet(legs[i-1].bus.points,legs[i].bus.points);if(!m)return null;
+    const p=busProject(legs[i-1].line,m),q=busProject(legs[i].line,m);
+    meets.push({x:m.x,y:m.y,sFrom:p.s,sTo:q.s,nFrom:legs[i-1].line.segs[p.k].n,nTo:legs[i].line.segs[q.k].n});
+  }
+  const a=w.a?nodes.find(n=>n.id===w.a):null,b=w.b?nodes.find(n=>n.id===w.b):null;
+  const first=legs[0].line,last=legs.at(-1).line,pa=busProject(first,A),pb=busProject(last,B);
+  // The leads are the router's own (routeLead), aimed at where the wire meets its bus.
+  const SA=a?routeLead(A,{x:pa.x,y:pa.y},w.aSide,a,wireEndpointInward(w,a)):A,SB=b?routeLead(B,{x:pb.x,y:pb.y},w.bSide,b,wireEndpointInward(w,b)):B;
+  const on=busProject(first,SA),off=busProject(last,SB);
+  legs.forEach((l,i)=>{l.sIn=i===0?on.s:meets[i-1].sTo;l.sOut=i===legs.length-1?off.s:meets[i].sFrom});
+  return {w,A,B,SA,SB,legs,meets,
+    horizA:Math.abs(SA.x-A.x)>=Math.abs(SA.y-A.y),horizB:Math.abs(SB.x-B.x)>=Math.abs(SB.y-B.y)};
+}
+// The drawn route for a plan, given the wire's lane offset on each of its buses.
+function busPlanPoints(plan,offsets){
+  const o=i=>offsets.get(plan.legs[i].id)||0,L=plan.legs,n=L.length;
+  // Tap on: one L from the end of the lead to the lane, its first leg continuing the lead.
+  const T=busAt(L[0].line,L[0].sIn,o(0));
+  const out=[plan.A,plan.SA,plan.horizA?{x:T.x,y:plan.SA.y}:{x:plan.SA.x,y:T.y}];
+  for(let i=0;i<n;i++){
+    out.push(...busRide(L[i].line,L[i].sIn,L[i].sOut,o(i)));
+    if(i<n-1){
+      // One turn, where the two lanes meet.
+      const m=plan.meets[i],perpendicular=Math.abs(m.nFrom.x*m.nTo.x+m.nFrom.y*m.nTo.y)<.5;
+      if(perpendicular)out.push({x:m.x+o(i)*m.nFrom.x+o(i+1)*m.nTo.x,y:m.y+o(i)*m.nFrom.y+o(i+1)*m.nTo.y});
+    }
+  }
+  // Tap off: the mirror of tap on.
+  const U=busAt(L[n-1].line,L[n-1].sOut,o(n-1));
+  out.push(plan.horizB?{x:U.x,y:plan.SB.y}:{x:plan.SB.x,y:U.y},plan.SB,plan.B);
+  // Two consecutive points off one axis (a parallel hand-over) get a corner between them.
+  const ortho=[out[0]];
+  for(let i=1;i<out.length;i++){const p=ortho.at(-1),q=out[i];if(Math.abs(p.x-q.x)>.01&&Math.abs(p.y-q.y)>.01)ortho.push({x:q.x,y:p.y});ortho.push(q)}
+  return normalizePoints(ortho);
+}
+// Two routes cross, or (sharing no end) run on one track, which a reader cannot tell from a crossing.
+function busRoutesCross(p,q,related=false){
+  for(let i=1;i<p.length;i++)for(let j=1;j<q.length;j++){
+    if(segmentsCross(p[i-1],p[i],q[j-1],q[j]))return true;
+    if(!related&&onOneTrack(p[i-1],p[i],q[j-1],q[j],8))return true;
+  }
+  return false;
+}
+const busWiresRelated=(a,b)=>[`${a.a}:${a.aSide}`,`${a.b}:${a.bSide}`].some(e=>e===`${b.a}:${b.aSide}`||e===`${b.b}:${b.bSide}`);
+
+// ---- Lanes, once per render ---------------------------------------------------------------------
+// A bus's own order when it has one. Otherwise wires start in the order they leave the bus (ties by
+// where they join, then wire id), then up to 8 passes of adjacent swaps keep a swap only when the
+// number of crossing pairs among that bus's wires strictly drops: the greedy form of the slot
+// ordering in ELK's OrthogonalRoutingGenerator.
+let busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map()};
+function busRoutesForRender(){
+  const all=activeBuses(),entries=[];
+  wires.forEach(w=>{
+    const spec=busSpecOf(w);if(!spec||entityEditorState(w).hidden||!carrierIsRenderable(w))return;
+    entries.push({w,spec,A:carrierEndpoint(w,'a').pos,B:carrierEndpoint(w,'b').pos});
+  });
+  if(!entries.length&&!Object.keys(all).length){busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map()};return busRouteState}
+  const key=JSON.stringify([activeLayoutId(),all,entries.map(e=>[e.w.id,e.spec.buses,e.w.aSide,e.w.bSide,e.A?.x,e.A?.y,e.B?.x,e.B?.y]),nodes.map(n=>[n.id,n.x,n.y,n.config?.presentation?.size])]);
+  if(key===busRouteState.key)return busRouteState;
+  const plans=new Map(),fallback=new Set();
+  for(const e of entries){const p=busPlan(e.w,e.A,e.B,e.spec);if(p)plans.set(e.w.id,p);else fallback.add(e.w.id)}
+  const on=new Map();
+  for(const [id,p] of plans)for(const l of p.legs){if(!on.has(l.id))on.set(l.id,[]);if(!on.get(l.id).includes(id))on.get(l.id).push(id)}
+  const order=new Map();
+  for(const [bid,list] of on){
+    const leg=id=>plans.get(id).legs.find(l=>l.id===bid);
+    const natural=[...list].sort((x,y)=>leg(x).sOut-leg(y).sOut||leg(x).sIn-leg(y).sIn||(x<y?-1:x>y?1:0));
+    const own=Array.isArray(all[bid]?.order)?all[bid].order.filter(id=>list.includes(id)):[];
+    order.set(bid,own.length?[...own,...natural.filter(id=>!own.includes(id))]:natural);
+  }
+  const offsetsOf=id=>new Map(plans.get(id).legs.map(l=>{const L=order.get(l.id);return [l.id,(L.indexOf(id)-(L.length-1)/2)*busPitchOf(all[l.id])]}));
+  const routes=new Map();for(const id of plans.keys())routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)));
+  const pair=(x,y)=>x<y?`${x}|${y}`:`${y}|${x}`;
+  const crosses=(x,y)=>busRoutesCross(routes.get(x),routes.get(y),busWiresRelated(plans.get(x).w,plans.get(y).w))?1:0;
+  const crossingsOn=L=>{const cross=new Map();let total=0;for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length;j++){const c=crosses(L[i],L[j]);cross.set(pair(L[i],L[j]),c);total+=c}return {cross,total}};
+  for(const bid of [...on.keys()].sort()){
+    if(Array.isArray(all[bid]?.order)&&all[bid].order.length)continue;
+    const L=order.get(bid);if(L.length<2)continue;
+    // Which side the first leaver takes depends on where the wires go next: the order as sorted
+    // and reversed are both measured, and the swaps start from the one that crosses less.
+    let {cross,total}=crossingsOn(L);
+    {const keep=[...L];L.reverse();for(const id of L)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)));
+     const rev=crossingsOn(L);
+     if(rev.total<total){cross=rev.cross;total=rev.total}else{L.splice(0,L.length,...keep);for(const id of L)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)))}}
+    for(let pass=0;pass<8&&total>0;pass++){
+      let improved=false;
+      for(let k=0;k+1<L.length;k++){
+        const u=L[k],v=L[k+1],keep={u:routes.get(u),v:routes.get(v)},was=new Map();
+        L[k]=v;L[k+1]=u;routes.set(u,busPlanPoints(plans.get(u),offsetsOf(u)));routes.set(v,busPlanPoints(plans.get(v),offsetsOf(v)));
+        let next=total;
+        for(const z of L)for(const x of [u,v]){
+          if(z===x||(x===v&&z===u))continue;const key=pair(x,z),c=crosses(x,z);
+          if(!was.has(key))was.set(key,cross.get(key));next+=c-cross.get(key);cross.set(key,c);
+        }
+        if(next<total){total=next;improved=true;continue}
+        L[k]=u;L[k+1]=v;routes.set(u,keep.u);routes.set(v,keep.v);for(const [key,c] of was)cross.set(key,c);
+      }
+      if(!improved)break;
+    }
+  }
+  busRouteState={key,routes,fallback,on,order};
+  return busRouteState;
+}
+// The drawn route of a bus-routed wire, or null when it cannot be built (the router takes over).
+function busRouteFor(w){const st=busRoutesForRender(),pts=st.routes.get(w.id);return pts?clonePoints(pts):null}
+
+// ---- What the renderer asks ---------------------------------------------------------------------
+// Two wires that cross inside the band of a bus they both ride draw no hop there.
+function busBandHolds(wa,wb,c){
+  const st=busRouteState,sa=busSpecOf(wa),sb=busSpecOf(wb);if(!sa||!sb||!st.routes.has(wa.id)||!st.routes.has(wb.id))return false;
+  const all=activeBuses();
+  for(const id of sa.buses){
+    if(!sb.buses.includes(id))continue;const line=busLine(all[id]);if(!line)continue;
+    const hw=((st.on.get(id)?.length||0)*busPitchOf(all[id])+8)/2;
+    for(const g of line.segs)if(c.x>=Math.min(g.a.x,g.b.x)-hw&&c.x<=Math.max(g.a.x,g.b.x)+hw&&c.y>=Math.min(g.a.y,g.b.y)-hw&&c.y<=Math.max(g.a.y,g.b.y)+hw)return true;
+  }
+  return false;
+}
+// The labels of the buses a wire rides: its own label is not drawn again when one of them carries it.
+function busLabelsOfWire(w){
+  const spec=busSpecOf(w);if(!spec||!busRouteState.routes.has(w.id))return [];
+  const all=activeBuses();return spec.buses.map(id=>all[id]?.label).filter(l=>typeof l==='string'&&l);
+}
+// Each bus as a band behind the wires: n lanes times its pitch, plus 8, with rounded ends; its
+// label once, beyond its start, reading along it.
+function renderBuses(layer){
+  const all=activeBuses(),st=busRoutesForRender(),SVG='http://www.w3.org/2000/svg';
+  for(const id of Object.keys(all).sort()){
+    const bus=all[id],line=busLine(bus);if(!line)continue;
+    const n=st.on.get(id)?.length||0,hw=(n*busPitchOf(bus)+8)/2;
+    const g=document.createElementNS(SVG,'g');g.setAttribute('class','bus-band');g.dataset.busId=id;g.dataset.lanes=String(n);
+    for(const s of line.segs){
+      const r=document.createElementNS(SVG,'rect');
+      r.setAttribute('x',String(Math.min(s.a.x,s.b.x)-hw));r.setAttribute('y',String(Math.min(s.a.y,s.b.y)-hw));
+      r.setAttribute('width',String(Math.abs(s.b.x-s.a.x)+2*hw));r.setAttribute('height',String(Math.abs(s.b.y-s.a.y)+2*hw));
+      r.setAttribute('rx',String(hw));r.setAttribute('ry',String(hw));g.appendChild(r);
+    }
+    layer.appendChild(g);
+    const label=typeof bus.label==='string'?bus.label.trim():'';if(!label)continue;
+    const d=line.segs[0].dir,at={x:line.pts[0].x-d.x*(hw+6),y:line.pts[0].y-d.y*(hw+6)};
+    const t=document.createElementNS(SVG,'text');t.setAttribute('class','bus-label');t.dataset.busId=id;t.dataset.role='caption';
+    t.setAttribute('x',String(at.x));t.setAttribute('y',String(at.y));t.setAttribute('dominant-baseline','central');
+    if(d.y!==0){t.setAttribute('text-anchor','start');t.setAttribute('transform',`rotate(${d.y>0?-90:90} ${at.x} ${at.y})`)}
+    else t.setAttribute('text-anchor',d.x>0?'end':'start');
+    t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk()};stroke:none;pointer-events:none`);
+    t.textContent=label;layer.appendChild(t);
+  }
+}

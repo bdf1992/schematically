@@ -99,6 +99,10 @@ const SovSchematicAPI={
     align:(ids,options={})=>SovSchematicData.clone(runLayoutOp('align',{...options,ids},'Align')),
     distribute:(ids,options={})=>SovSchematicData.clone(runLayoutOp('distribute',{...options,ids},'Distribute')),
     route:(wireId,spec=null)=>SovSchematicData.clone(runLayoutOp('route',{wireId,...(spec||{mode:'auto'})},'Route')),
+    // Buses (LAYOUT-MODEL.md "As built: buses"): harness({between:[groupA, groupB], pitch?}) or harness([groupA, groupB], options).
+    harness:(between,options={})=>SovSchematicData.clone(runLayoutOp('harness',Array.isArray(between)?{...options,between}:{...(between||{})},'Harness')),
+    bus:(id,spec={})=>{const a=id&&typeof id==='object'?{...id}:{...(spec||{}),id};return SovSchematicData.clone(runLayoutOp('bus',a,a.remove?'Remove bus':'Bus'))},
+    buses:(options={})=>SovSchematicData.clone(runLayoutOp('buses',options||{})),
     apply:(options={})=>SovSchematicData.clone(runLayoutOp('apply',{engine:'layered',...options},'Arrange layout')),
     metrics:(options={})=>SovSchematicData.clone(options.static===false?layoutMetrics(options):withPictureLabels(()=>layoutMetrics(options))),
     contrast:(options={})=>SovSchematicData.clone(options.static===false?contrastAudit(options):withPictureLabels(()=>contrastAudit(options))),

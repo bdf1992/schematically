@@ -85,6 +85,10 @@ What the full map still works around:
 - Wire routing: with 80 Wires, many routes leave a card on its fixed right-hand terminal and run
   around the grid. The picture is complete but busy; a reader follows a relation in the editor
   more easily than in `map.svg`.
+- Wire routing, since 2026-10-02: `build_map.py` orders each group's cards by barycentre and gives the
+  map two harnesses (`layout.harness`, surfaces to records and records to queries): every wire between
+  two groups rides a labelled trunk in the gap and a street in the row gaps, so crossings fall from 665
+  on dev to 185, with no wrapped route (`check_map.py --routing`).
 - Four backing names in the queries are not records in the gap map (ProcessRecord, Judgement board
   rows, Handoff, Reception), so they have no Wire; `build_map.py` prints them and the document's
   description names them.

@@ -514,6 +514,8 @@ function render(){
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); appendComponentWaitsOn(g,n);
   });
   renderGroups(markers);
+  // Buses (src/41-buses.js): bands in the group layer, after the group regions, behind every wire.
+  if(typeof renderBuses==='function')renderBuses(groupLayer());
   renderWires(signalState,markers);
   {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
   renderJunctionDots();
@@ -820,6 +822,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
   // Every route first, so each wire knows the crossings it makes: the later wire hops over the
   // earlier one, and neither puts an arrowhead on the crossing. Wires sharing an end never hop.
   const routes=new Map();
+  // Wires on buses are laid out first, lanes and all, so every auto route keeps clear of them.
+  const busState=typeof busRoutesForRender==='function'?busRoutesForRender():null;
+  if(busState)for(const [id,pts] of busState.routes){const w=wires.find(x=>x.id===id);if(w)occupied.push(...routeSegments(pts,w))}
   wires.forEach((w,i)=>{
     if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
@@ -828,7 +833,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     // interior, endpoint leads, arrows, or direction marks on pointer frames.
     const points=snapshot?clonePoints(snapshot.points):stableRouteForWire(i,w,A,B,occupied);
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
-    occupied.push(...routes.get(i).segs);
+    if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
   });
   const hops=new Map(),order=[...routes.keys()];arrowKeepClear=[];
   for(let x=0;x<order.length;x++)for(let y=x+1;y<order.length;y++){
@@ -837,6 +842,8 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
       if(p.ends&&q.ends&&p.ends.some(e=>q.ends.includes(e)))continue;
       if(!segmentsCross(p.a,p.b,q.a,q.b))continue;
       const c=segmentAxis(p.a,p.b)==='h'?{x:q.a.x,y:p.a.y}:{x:p.a.x,y:q.a.y};
+      // Two wires on one bus cross inside its band where they take their lanes: no hop there.
+      if(busState&&typeof busBandHolds==='function'&&busBandHolds(wires[order[x]],wires[order[y]],c))continue;
       if(!hops.has(order[y]))hops.set(order[y],[]);hops.get(order[y]).push(c);arrowKeepClear.push(c);
     }
   }
@@ -861,6 +868,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const signal=wireSignalColors(w,signalState);
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
     group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':'')+((epA.kind==='free'||epB.kind==='free')?' has-free-end':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
+    if(busState?.fallback.has(w.id))group.dataset.busFallback='true';
 
     const gradientId=`wire-gradient-${i}-${renderEpoch++}`;
     const gradient=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
@@ -947,7 +955,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     // One mark per place: a labelled duplex wire carries ↔ in its label, not stacked above it.
     // A Wire's caption: its label, then its status title, then what it waits on.
     const waits=waitsOnList(w.config?.waitsOn);
-    let caption=[cfg.label,wireStatus?statusTitle(wireStatus):''].filter(Boolean).join(' · ');
+    // A bus that carries the wire's label says it once for every wire on it; the label stays in the data.
+    const ownLabel=cfg.label&&typeof busLabelsOfWire==='function'&&busLabelsOfWire(w).includes(String(cfg.label))?'':cfg.label;
+    let caption=[ownLabel,wireStatus?statusTitle(wireStatus):''].filter(Boolean).join(' · ');
     if(waits)caption=caption?`${caption} · waits on ${waits}`:`Waits on ${waits}`;
     if(cfg.direction==='duplex'&&!caption){
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5);

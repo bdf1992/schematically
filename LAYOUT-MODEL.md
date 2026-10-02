@@ -349,6 +349,112 @@ Where they are used:
 
 Dark mode has its own values for the accents and the shadow.
 
+## As built: buses (2026-10-02)
+
+At map scale (`docs/workengine/map.sov`, about 70 cards) every wire finding its own path makes a
+tangle. A **bus** is a route declared once in a layout; wires name it instead of each finding a
+path. This is the yFiles bus descriptor model (the bus is the record, a wire only names it), and
+the harness below is VLSI standard-cell channel routing (cards in rows, wires in the channels
+between them). Routing stays presentation: a bus is a layout record, never a Wire or a Path in
+`doc.wires`, it hosts nothing, and no wire's ends, ports, surface or config change.
+
+### Record
+
+```text
+document.layout.views[<layoutId>].buses[<busId>] = {
+  points: [{x, y}, ...],    2 or more; every step horizontal or vertical
+  pitch:  4..16 (6),        distance between lanes
+  label?, between?: [groupA, groupB], order?: [wireId, ...]
+}
+document.layout.views[<layoutId>].routes[<wireId>] = {mode: 'bus', buses: [busId, ...]}
+```
+
+`ensure()` keeps `buses` an object on every view, the default included, drops an `order` entry
+naming a wire that is gone, and drops a route that names a bus that is gone (the wire returns to
+`auto`). A new layout copied from another copies its buses with its routes.
+
+### Ops
+
+`schematic.layout` (`src/08-layout-core.js`), the Browser API `layout.*` (`src/85-api.js`, through
+`runLayoutOp`) and MCP serve the same ops:
+
+| Op | Does |
+| --- | --- |
+| `bus {id, points, pitch?, label?, order?}` | sets one bus |
+| `bus {id, remove: true}` | removes it; every wire that named it returns to `auto` and is listed in the receipt |
+| `buses {view?}` | read-only: every bus with the wires that name it |
+| `route {wireId, mode: 'bus', buses}` | puts a wire on buses, in the order it rides them |
+| `harness {between: [groupA, groupB], pitch?}` | builds the buses between two groups and routes their wires on them (below) |
+
+`scripts/layout_sov.mjs file.sov --no-arrange --harness groupA,groupB [--harness ...]` runs harnesses
+from the command line, after any arranging, in order, printing each receipt. With `--no-arrange` the
+file is written as it was read with only its `layout` replaced.
+
+### Harness
+
+Between two groups (SECTION-MODEL.md "Groups"), using their regions from `Data.groupRect`:
+
+- **Wires**: those with one end a member of each group, except wires whose route is pinned or guided.
+- **Trunks**: one per distinct wire label, sorted by label, id `harness-<groupA>-<groupB>-<label slug>`,
+  carrying its label. Side by side groups get vertical trunks centred in the gap, spanning both regions
+  (and any street below or above them); stacked groups get horizontal ones. Trunks sit 16 apart.
+- **Direct line**: a member has one when no other member of its group lies between it and the trunk
+  inside its row band (its card's vertical extent, for a vertical trunk).
+- **Streets**: a sending member without a direct line gets a street in the gap under its row, its first
+  lane 36 below the row's lowest card edge, running from the group's far edge to the farthest trunk it
+  needs, id `street-<group>-<row>`. A receiving member's street is in the gap above its row, its last
+  lane 36 above the row's top edge, id `street-<group>-<row>-above` (the suffix keeps a group that both
+  sends and receives from naming two streets alike). An id another harness already holds takes `-2`.
+- Each wire gets `{mode: 'bus', buses: [sending street?, trunk, receiving street?]}`. Running the
+  harness again for the same pair replaces its buses.
+
+### Refusals
+
+| Code | When | Carries |
+| --- | --- | --- |
+| `BAD_POINTS` | a bus with fewer than 2 points or a diagonal step | |
+| `UNKNOWN_BUS` | a route or a removal names a bus not on the layout | |
+| `BUS_GAP` | two consecutive buses of a route neither cross nor touch | `buses` |
+| `GAP_TOO_NARROW` | the gap is narrower than the trunks (lanes × pitch each, 16 between) plus 24 each side | `need`, `have` |
+| `STREET_TOO_NARROW` | a street's last lane plus 12 does not fit before the next row (or after the previous one) | `need`, `have`, `street` |
+| `UNKNOWN_GROUP`, `BAD_BETWEEN`, `NO_WIRES` | the harness has no two groups, or nothing to route | |
+
+A refusal changes nothing.
+
+### Drawing (`src/41-buses.js`, `src/55-render.js`)
+
+- **Lanes**: on a bus with n wires, lane offset = (index − (n − 1) / 2) × pitch, perpendicular to each segment.
+- **Tap on**: the end of the source lead (the router's `routeLead`) is projected onto the first bus's
+  centreline, clamped to its extent and offset by the wire's lane, and joined by one orthogonal L whose
+  first leg continues the lead. The wire rides each bus on its lane and turns once where two buses meet,
+  where the two lanes meet. **Tap off** is the mirror of tap on.
+- **Lane order**, once per render, before any auto route: a bus's own `order` when it has one. Otherwise
+  wires start in the order they leave the bus (ties by where they join, then wire id); that order and its
+  reverse are both measured and the one with fewer crossing pairs is kept; then up to 8 passes of adjacent
+  swaps keep a swap only when the crossing pairs among that bus's wires strictly drop (the greedy form of
+  the slot ordering in ELK's `OrthogonalRoutingGenerator`). Two wires sharing no end that run on one track
+  count as a crossing pair.
+- Bus routes go into `occupied` before any auto route, so auto routes keep clear of them. A pinned or
+  guided route still wins; a bus route that cannot be built falls back to the router, and its wire group
+  carries `data-bus-fallback`.
+- Each bus is a band in `#groupLayer` after the group regions: width n × pitch + 8, rounded ends, the
+  muted ink at about 6%, its edge in the structure stroke at low opacity (`.bus-band`, `data-bus-id`;
+  light and dark in `styles/app.css`). A labelled bus draws its label once (`.bus-label`) beyond its
+  start, reading along it.
+- Two wires on one bus draw no hop where they cross inside that bus's band; every other hop is unchanged.
+- A wire's own label is not drawn when a bus it rides carries the same text; the label stays in the data
+  and the API. Wires keep their own paths, arrows, colours and packets.
+
+The rubric (`LAYOUT_RUBRIC`, `src/57-layout-metrics.js`) is unchanged and judges the result.
+Tests: `tests/routing_buses_qa.py`; `python docs/workengine/check_map.py --routing` on the map.
+
+**Measured on the Work Engine map** (`scripts/layout_audit.py`): on dev at 8dfde33, 665 crossings,
+110 route-overlap, 7 route-wraps, 22 route-through-node and 80 text-collision. With card order alone
+(barycentre, `build_map.py --no-buses`): 207 crossings, 29 route-overlap, 2 route-wraps, 5
+route-through-node, 80 text-collision. With order and both harnesses: 185, 23, 0, 0, 75.
+Text-collision follows the fitted zoom more than the routes: labels keep their screen size, so a
+wider picture is fitted smaller and titles crowd their subtitles.
+
 ## 6. Order of work
 
 1. `document.layout.views` with a `main` view migrated from entity geometry. Route
