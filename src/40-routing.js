@@ -426,6 +426,16 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
   const spec=typeof activeRouteSpec==='function'?activeRouteSpec(w.id):null;
   if(spec?.mode==='bus'){const onBus=typeof busRouteFor==='function'?busRouteFor(w):null;if(onBus)return onBus}
   else if(spec){const declared=routeThroughSpec(A,B,w,spec);if(declared)return declared}
+  // Two free ends have no normal to meet and no boundary to leave: there is nothing for
+  // orthogonal routing to do, so the carrier is the segment between its own two points -
+  // straight even when the ends are not aligned, the same thing a 1D Form's body is between its
+  // own two boundary points. A pinned, guided or bus route above still wins; this only replaces
+  // the open router's own elbow. The cache is dropped so a route chosen while an end was still
+  // bound cannot survive the unbinding, and binding an end again starts fresh.
+  if(carrierEndpoint(w,'a')?.kind==='free'&&carrierEndpoint(w,'b')?.kind==='free'){
+    routeCache.delete(index);
+    return normalizePoints([A,B]);
+  }
   const candidate=routePoints(A,B,w.aSide,w.bSide,w.a,w.b,w.lane??index,occupied,w.id);
   const cached=routeCache.get(index);
 
