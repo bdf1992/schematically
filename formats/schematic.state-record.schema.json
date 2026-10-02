@@ -87,11 +87,12 @@
         "binary",
         "continuous",
         "categorical",
-        "message"
+        "message",
+        "state"
       ]
     },
     "value": {
-      "description": "a boolean for binary, a finite number for continuous, a string for categorical, a message {id, root, parent, channel, payload, origin} for message",
+      "description": "a boolean for binary, a finite number for continuous, a string for categorical, a message {id, root, parent, channel, payload, origin} for message, a device's memory (an object whose numbers are safe integers; observable device.state, vantage point) for state",
       "type": [
         "boolean",
         "number",
@@ -303,6 +304,23 @@
         "properties": {
           "value": {
             "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "form": {
+            "const": "state"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "type": "object",
+            "description": "a flow card's committed state, written at the end of the tick it changed in (STATE-SPACE.md, Flow cards)"
           }
         }
       }
