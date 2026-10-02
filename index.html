@@ -11980,6 +11980,10 @@ let currentFileHandle=null;
 let currentFileName='Untitled.sov';
 let currentFileFormat='document';
 let lastFileFingerprint=null;
+// The fingerprint of a document the editor made and nobody has touched. Set whenever a
+// document is placed fresh (startup, File -> New); cleared whenever a file is opened,
+// restored or saved, since lastFileFingerprint then carries the comparison instead.
+let pristineFingerprint=null;
 
 function snapshotDocument(){
   // Files and API snapshots carry authored truth only; runtime projections are rebuilt on load.
@@ -11991,7 +11995,10 @@ function snapshotDocument(){
 function semanticFingerprint(){
   const doc=snapshotDocument();
   doc.revision=0;
-  if(doc.meta){delete doc.meta.updatedAt;delete doc.meta.savedAt}
+  // Timestamps, and the checkpoint list (lazily created by the editor kernel's own startup, not
+  // by anything the user did), are not document content: documentHash() strips the same fields
+  // for undo/redo identity, so a fresh checkpoint store must not read as an edit here either.
+  if(doc.meta){delete doc.meta.updatedAt;delete doc.meta.savedAt;delete doc.meta.checkpoints}
   return JSON.stringify(doc);
 }
 function captureWorkspace(){
@@ -12161,7 +12168,7 @@ function snapshotPackage(){
 function packageFileText(){return JSON.stringify(snapshotPackage(),null,2)}
 function fileTextForFormat(format){return format==='package'?packageFileText():documentFileText()}
 function mimeForFormat(format){return format==='package'?'application/vnd.soveraeign.schematic-package+json':'application/vnd.soveraeign.schematic+json'}
-function isFileDirty(){return lastFileFingerprint===null||semanticFingerprint()!==lastFileFingerprint}
+function isFileDirty(){return lastFileFingerprint===null?semanticFingerprint()!==pristineFingerprint:semanticFingerprint()!==lastFileFingerprint}
 function updateFileReadout(){
   const dirty=isFileDirty();
   if(fileNameReadout)fileNameReadout.textContent=currentFileName||suggestedFileName(currentFileFormat);
@@ -12173,6 +12180,7 @@ function markFileSaved(name,format,handle=null){
   currentFileFormat=format||'document';
   currentFileHandle=handle||null;
   lastFileFingerprint=semanticFingerprint();
+  pristineFingerprint=null;
   updateFileReadout();
 }
 function triggerDownload(text,name,mime){
@@ -12239,6 +12247,7 @@ function applyOpenedPayload(parsed,name='Untitled.sov',handle=null){
   currentFileName=name||suggestedFileName(currentFileFormat);
   currentFileHandle=handle;
   lastFileFingerprint=semanticFingerprint();
+  pristineFingerprint=null;
   saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false});
   updateFileReadout();
   return snapshotDocument();
@@ -12273,6 +12282,7 @@ function newSchematic(){
   const doc=SovSchematicData.makeDocument({id:`schematic-${Date.now()}`,meta:{title:'Untitled'}});
   replaceRuntimeDocument(doc);
   currentFileHandle=null;currentFileName='Untitled.sov';currentFileFormat='document';lastFileFingerprint=null;
+  pristineFingerprint=semanticFingerprint();
   saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false});
   updateFileReadout();
   statusEl.textContent='New schematic';
@@ -12283,6 +12293,7 @@ function restoreRecovery(){
   const raw=localStorage.getItem(LOCAL_RECOVERY_KEY)||localStorage.getItem(LEGACY_LOCAL_SAVE_KEY);if(!raw)throw new Error('No recovery snapshot found');
   applyWorkspace(JSON.parse(raw));
   currentFileHandle=null;currentFileName='Recovered.sov';currentFileFormat='document';lastFileFingerprint=null;
+  pristineFingerprint=null;
   updateFileReadout();
   statusEl.textContent='Recovery restored · save to keep it';
   return true;
@@ -12433,6 +12444,7 @@ function setFileMenu(open){
 function initializePersistenceTracking(){
   persistenceFingerprint=semanticFingerprint();
   lastFileFingerprint=null;
+  pristineFingerprint=semanticFingerprint();
   updateRevisionReadout();
 }
 async function openDesktopLaunchDocument(){
