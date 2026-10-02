@@ -3082,7 +3082,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   const FORMS=['binary','continuous','categorical','message'];
   const TIME_MODES=['observed','predicted'];
   const PERTURBATIONS=['none','disturbed','created'];
-  const RECORD_KEYS=['format','id','subject','vantage','reference','observable','kind','form','value','time','certainty','observer','provenance','perturbation','principal','hop'];
+  const RECORD_KEYS=['format','id','subject','vantage','reference','observable','kind','form','value','time','certainty','observer','provenance','perturbation','principal','hop','level'];
   // A message is a recorded value on the message channel: its value names it ({id, root, parent,
   // channel, payload, origin}); the record's principal says who it acts for and its hop what
   // happened to it here. The hop events are the graph core's (src/07-graph-core.js).
@@ -3137,6 +3137,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(record.form==='message')checkMessageValue(v,errors);
     }
     if(record.principal!==undefined&&record.principal!==null&&!nonEmpty(record.principal))errors.push('principal must be null or a non-empty string');
+    // A plane crossing's own refusal (STATE-SPACE.md, access control): level true marks it apart
+    // from a message's hop refused, the same acl: reason text the graph core gives.
+    if(record.level!==undefined&&typeof record.level!=='boolean')errors.push('level must be a boolean');
     if(record.hop!==undefined){
       const hop=record.hop;
       if(record.form!=='message')errors.push('hop is only allowed on a record of form message');
@@ -3541,7 +3544,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(!wire[dir])continue;
       const entity=wire[from].entity;
       if(!legs.has(entity))legs.set(entity,[]);
-      legs.get(entity).push({wire:wire.id,point:wire[fromPoint],to:{entity:wire[to].entity,point:wire[toPoint]},accepts:wire.accepts??null,delay:wire.delay});
+      legs.get(entity).push({wire:wire.id,point:wire[fromPoint],to:{entity:wire[to].entity,point:wire[toPoint]},accepts:wire.accepts??null,delay:wire.delay,
+        operation:dir==='forward'?wire.forwardOperation:wire.reverseOperation});
     }
     index={components:run.components,out,devices,legs};
     INDEX.set(run.wires,index);
@@ -3705,7 +3709,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const channels=ends.a.channels.filter(c=>theirs.has(c));
       if(!channels.includes(MESSAGE))channels.push(MESSAGE);
       wires.push({id:wire.id,a:land('a',reverse),b:land('b',forward),aPoint:ends.a.point,bPoint:ends.b.point,delay:wireDelay(config,tickMs),forward,reverse,
-        channels,accepts:Array.isArray(config.accepts)?config.accepts.map(String):null});
+        channels,accepts:Array.isArray(config.accepts)?config.accepts.map(String):null,
+        // A leg's own read/write operation, the graph core's forwardOperation/reverseOperation
+        // (src/07-graph-core.js build), checked after a crossing on the message channel.
+        forwardOperation:['read','write'].includes(config.forwardOperation)?config.forwardOperation:'none',
+        reverseOperation:['read','write'].includes(config.reverseOperation)?config.reverseOperation:'none'});
     }
     wires.sort((x,y)=>cmp(x.id,y.id));
     for(const c of Object.values(components))if(c.combine){const p=definitions[c.definition].parameters;p.data.sort();p.control.sort();c.inputs.sort()}
@@ -3815,7 +3823,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       id:Canonical.sha256Hex(Canonical.canonicalize(replayKey)).slice(0,12),
       runtimeVersion:RUNTIME_VERSION,doc:d,definitions,components:shape.components,merges:shape.merges,wires:shape.wires,
       seed,budget,tickMs,spent:0,tick:null,walk:o.walk||'forward',
-      signal:{},lastRecord:{},queues:{},sequence:0,ledger:[],records:[],replayDraws:null,
+      // levelPrincipal mirrors signal/lastRecord for the level channel's own principal (STATE-SPACE.md,
+      // access control): a side cache, never part of the trace or a replay comparison, so a device's
+      // own wire-named inputs can read what last set them, the way a Point reads its own arrivals.
+      signal:{},lastRecord:{},levelPrincipal:{},queues:{},sequence:0,ledger:[],records:[],replayDraws:null,
       clocks:Object.fromEntries(implied.clocks.map(c=>[portKey(c.entity,c.point,'main'),c])),
       blocked:shape.blocked,
       // A message input carries the ledger seq of its input entry: its message is m-<seq>.
@@ -3870,19 +3881,29 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       run.queues[key]=q;
     }
   }
-  function makeRecord(run,ctx,{entity,point,channel,kind,value,observer,rule,inputs,phase,rank=0}){
+  // A record carries its principal when one applies (STATE-SPACE.md, access control): the key is
+  // left out entirely otherwise, so a document with no ACL and no principal records exactly as
+  // before (examples/state, tests/golden stay byte-unchanged).
+  function makeRecord(run,ctx,{entity,point,channel,kind,value,observer,rule,inputs,phase,rank=0,principal}){
     const id=`${TMP}${ctx.tmp++}`;
-    ctx.records.push({round:ctx.round,phase,rank,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind,form:typeof value==='number'?'continuous':'binary',value,time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none'}});
+    ctx.records.push({round:ctx.round,phase,rank,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind,form:typeof value==='number'?'continuous':'binary',value,time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none',...(principal?{principal}:{})}});
     return id;
   }
   // Emission: one arrival per bound Wire, per direction it carries out of this port, per shared
-  // channel, at t + path delay; never back onto a Wire in `exclude`.
-  function emit(run,ctx,entity,point,channel,value,exclude,from,phase){
+  // channel, at t + path delay; never back onto a Wire in `exclude`. `via` is the wire this value
+  // itself arrived by (null at a source); an emission that crosses a plane is checked under
+  // `principal` and the crossing op (src/07-graph-core.js setLevel, 439-444): a refusal is a level
+  // record (rule refused, level true, the graph core's reason) and that Wire carries nothing this tick.
+  function emit(run,ctx,entity,point,channel,value,exclude,from,phase,principal=null,via=null){
     const ends=indexOf(run).out.get(entity+'\u0000'+point);
     if(!ends)return;
     for(const {wire,to} of walked(run,ends)){
       if(exclude.includes(wire.id)||!wire.channels.includes(channel))continue;
-      const item={kind:'arrival',at:ctx.t+wire.delay,entity:to.entity,point:to.point,channel,value,wire:wire.id,phase,from};
+      const crossing=aclCheck(run,entity,via,wire.id,principal,null);
+      if(!crossing.ok){levelRefusalRecord(run,ctx,{entity,point,channel,principal,reason:crossing.reason});continue}
+      // principal is left out when it is null, so a document with no ACL hashes and records
+      // exactly as before (stateHash spreads a pending item's own keys; see slice 1c below).
+      const item={kind:'arrival',at:ctx.t+wire.delay,entity:to.entity,point:to.point,channel,value,wire:wire.id,phase,from,...(principal?{principal}:{})};
       run.pending.push(item);ctx.fresh.push(item);
     }
   }
@@ -3913,6 +3934,77 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   // Update phase for one (entity, port, channel): input, else a device's delayed output, else the
   // merged arrivals (or a queue's head). What loses is recorded with rule `overridden`.
+  // --- Access control (STATE-SPACE.md, GRAPH-MODEL.md): a plane's config.acl, the crossing a value
+  // makes at a boundary point (placement.kind edge) or a plane's own open interior, and the
+  // decision a principal gets there — the same algorithm the graph core specifies and exports
+  // (src/07-graph-core.js aclConfig/aclDecide/crossingAt, 31-55, 99-105), read fresh here over this
+  // run's own document instead of through that module, so a run's behaviour never depends on
+  // whether something else happens to have loaded the graph core (tests/state_space_message_qa.py's
+  // load-order check requires exactly that).
+  const ACL_OPS=['enter','exit','read','write'];
+  function aclConfigOf(c){
+    const a=c?.config?.acl;if(!isObject(a))return null;
+    const list=v=>Array.isArray(v)?v.map(String).filter(x=>ACL_OPS.includes(x)):[];
+    return {default:a.default==='allow'?'allow':'deny',entries:(Array.isArray(a.entries)?a.entries:[]).filter(isObject).map(e=>({principal:String(e.principal??''),allow:list(e.allow),deny:list(e.deny)}))};
+  }
+  function aclPrincipalMatches(pattern,principal){
+    if(principal==null||principal==='')return false;
+    if(pattern==='*')return true;
+    return pattern.endsWith('*')?String(principal).startsWith(pattern.slice(0,-1)):pattern===String(principal);
+  }
+  function aclDecideLocal(plane,principal,op){
+    const acl=plane.acl;if(!acl)return {ok:true};
+    const name=plane.label||plane.id;
+    if(principal==null||principal==='')return {ok:false,reason:`acl: no principal may ${op} ${name} anonymously`};
+    const matching=acl.entries.filter(e=>aclPrincipalMatches(e.principal,principal));
+    if(matching.some(e=>e.deny.includes(op)))return {ok:false,reason:`acl: ${principal} is denied ${op} on ${name}`};
+    if(matching.some(e=>e.allow.includes(op)))return {ok:true};
+    return acl.default==='allow'?{ok:true}:{ok:false,reason:`acl: ${principal} may not ${op} ${name}`};
+  }
+  const ACL_INDEX=new WeakMap();
+  function aclIndexOf(run){
+    let idx=ACL_INDEX.get(run.doc);
+    if(idx)return idx;
+    idx={byId:new Map(run.doc.components.map(c=>[c.id,c])),wireCanvas:new Map(run.doc.wires.map(w=>[w.id,w.canvasId||Data.GLOBAL_CANVAS_ID]))};
+    ACL_INDEX.set(run.doc,idx);
+    return idx;
+  }
+  function aclPlaneInfo(byId,id){
+    const c=byId.get(id);if(!c)return null;
+    return {id:c.id,label:c.config?.label||c.id,acl:aclConfigOf(c),interior:Data.componentCanvasId(c)};
+  }
+  // The plane a value crosses at `entity`, turning from the wire it arrived by (`via`, null at a
+  // source: a source cannot cross) to the one it leaves by (`toWire`): null off a boundary, else
+  // {plane, op: enter|exit}.
+  function aclCrossing(run,entity,via,toWire){
+    if(via==null)return null;
+    const {byId,wireCanvas}=aclIndexOf(run);
+    const n=byId.get(entity);if(!n)return null;
+    const plane=n.placement?.kind==='edge'?aclPlaneInfo(byId,n.placement.hostId):(n.form?.regions?.interior?.state==='open'?aclPlaneInfo(byId,n.id):null);
+    if(!plane)return null;
+    const side=c=>c===plane.interior?'in':'out',a=side(wireCanvas.get(via)),b=side(wireCanvas.get(toWire));
+    return a===b?null:{plane,op:a==='out'?'enter':'exit'};
+  }
+  // {ok:true, crossed} when there is no boundary or the principal clears it; {ok:false, crossed:true,
+  // reason} with the same acl: reason text the graph core gives otherwise. extraOp is the Wire's
+  // own read/write operation, checked after the crossing's enter/exit (messages only; levels pass null).
+  function aclCheck(run,entity,via,toWire,principal,extraOp){
+    const cross=aclCrossing(run,entity,via,toWire);
+    if(!cross)return {ok:true,crossed:false};
+    for(const op of [cross.op,...(extraOp&&extraOp!=='none'?[extraOp]:[])]){
+      const d=aclDecideLocal(cross.plane,principal,op);
+      if(!d.ok)return {ok:false,crossed:true,reason:d.reason};
+    }
+    return {ok:true,crossed:true};
+  }
+  // A level's own crossing refusal: rule refused, level true, the graph core's reason as the
+  // record's value (STATE-SPACE.md), apart from a message's hop refused.
+  function levelRefusalRecord(run,ctx,{entity,point,channel,principal,reason}){
+    const id=`${TMP}${ctx.tmp++}`;
+    ctx.records.push({round:ctx.round,phase:0,rank:0,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind:'derived',form:'categorical',value:reason,level:true,
+      time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer:'engine:acl',provenance:{rule:'refused',inputs:[]},perturbation:'none',...(principal?{principal}:{})}});
+    return id;
+  }
   // --- Messages (the graph core's inject, forward and send, src/07-graph-core.js 299-352, 429-454).
   // Each thing that happens to a message is one record of form message on the message channel: its
   // value names the message, principal says who it acts for, hop what happened. A message's hops are
@@ -3928,7 +4020,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // A message at a component, after it arrived by `via` (null for an inject): a passive card absorbs
   // it; otherwise it leaves by every carried leg of the component but `via` whose Wire accepts its
   // channel, one child per leg (<id>.<n>, n in leg order); with no such leg it is delivered, unless
-  // legs exist and all refuse its channel, when it is refused, never dropped.
+  // legs exist and all refuse its channel, when it is refused, never dropped. A leg that crosses a
+  // plane is checked under the message's principal, the crossing op then the Wire's own operation
+  // (src/07-graph-core.js send, 283-297): refused writes a hop refused record with the graph core's
+  // reason and that leg is not taken; admitted writes a crossed hop first.
   function messageAt(run,ctx,entity,point,message,principal,via,from){
     const component=run.components[entity]||{};
     const end=(event,reason)=>messageRecord(run,ctx,{entity,point,observer:'engine:message',rule:event,inputs:[from],message,principal,hop:reason?{event,reason}:{event}});
@@ -3940,6 +4035,13 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const forwarded=messageRecord(run,ctx,{entity,point,observer:'engine:fanout',rule:'fanout',inputs:[from],message,principal,hop:{event:'forwarded'}});
     open.forEach((leg,n)=>{
       const child={...copy(message),id:`${message.id}.${n}`,parent:message.id};
+      const crossing=aclCheck(run,entity,via,leg.wire,principal,leg.operation);
+      if(!crossing.ok){
+        messageRecord(run,ctx,{entity,point:leg.point,observer:'engine:fanout',rule:'fanout',inputs:[forwarded],message:child,principal,hop:{event:'sent',wire:leg.wire,to:leg.to.entity}});
+        messageRecord(run,ctx,{entity,point:leg.point,observer:'engine:acl',rule:'fanout',inputs:[forwarded],message:child,principal,hop:{event:'refused',reason:crossing.reason}});
+        return;
+      }
+      if(crossing.crossed)messageRecord(run,ctx,{entity,point:leg.point,observer:'engine:acl',rule:'fanout',inputs:[forwarded],message:child,principal,hop:{event:'crossed',wire:leg.wire,to:leg.to.entity}});
       const sent=messageRecord(run,ctx,{entity,point:leg.point,observer:'engine:fanout',rule:'fanout',inputs:[forwarded],message:child,principal,hop:{event:'sent',wire:leg.wire,to:leg.to.entity}});
       const item={kind:'arrival',at:ctx.t+leg.delay,entity:leg.to.entity,point:leg.to.point,channel:MESSAGE,value:child,principal:principal??null,wire:leg.wire,phase:0,from:sent};
       run.pending.push(item);ctx.fresh.push(item);
@@ -3974,17 +4076,28 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer:'engine:passability',provenance:{rule:'blocked',inputs:[]},perturbation:'none'}});
     }
   }
+  // A level record's own principal (STATE-SPACE.md, access control): the node's own, else the
+  // principal of the arrival that set it, the first in wire-id order whose value equals the
+  // winning one (several may share a tick). `source` carries that arrival's wire too, the `via`
+  // an emission is later checked under; a node's own principal does not change it, since the
+  // crossing is about which side of a boundary the value came from, not who speaks for the node.
+  function pickArrivalSource(arrivals,value){
+    const sorted=arrivals.slice().sort((x,y)=>cmp(x.wire,y.wire));
+    const hit=sorted.find(a=>a.value===value);
+    return hit?{wire:hit.wire,principal:hit.principal??null}:null;
+  }
   function updatePort(run,ctx,g){
     if(g.channel===MESSAGE)return messagePort(run,ctx,g);
     const key=portKey(g.entity,g.point,g.channel),old=run.signal[key]===true,role=run.components[g.entity]?.role;
+    const nodePrincipal=run.components[g.entity]?.principal??null;
     const merge=run.merges[key]||DEFAULT_MERGE,queue=merge.combine==='queue'?ensureQueue(run,ctx,key):null;
     const base={entity:g.entity,point:g.point,channel:g.channel,phase:0};
     let win=null;
-    if(g.input&&g.input.kind==='clock')win={value:g.input.value,kind:'derived',observer:'rule:clock',rule:'clock',inputs:[],always:true,exclude:[]};
-    else if(g.input)win={value:g.input.value,kind:'registered',observer:'input',rule:'input',inputs:[],always:true,exclude:[]};
-    else if(g.output)win={value:g.output.value,kind:'derived',observer:`rule:${g.output.rule}`,rule:g.output.rule,inputs:g.output.inputs,emits:true,exclude:[]};
+    if(g.input&&g.input.kind==='clock')win={value:g.input.value,kind:'derived',observer:'rule:clock',rule:'clock',inputs:[],always:true,exclude:[],source:null};
+    else if(g.input)win={value:g.input.value,kind:'registered',observer:'input',rule:'input',inputs:[],always:true,exclude:[],source:null};
+    else if(g.output)win={value:g.output.value,kind:'derived',observer:`rule:${g.output.rule}`,rule:g.output.rule,inputs:g.output.inputs,emits:true,exclude:[],source:null};
     if(win){
-      for(const a of g.arrivals)makeRecord(run,ctx,{...base,kind:'derived',value:a.value,observer:`path:${a.wire}`,rule:'overridden',inputs:[a.from],rank:a.phase});
+      for(const a of g.arrivals)makeRecord(run,ctx,{...base,kind:'derived',value:a.value,observer:`path:${a.wire}`,rule:'overridden',inputs:[a.from],rank:a.phase,principal:a.principal??null});
     }else{
       const arrived=g.arrivals.map(a=>a.wire);
       const orderFree=['or','and','min','max'].includes(merge.combine);
@@ -3992,47 +4105,64 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         const sorted=g.arrivals.slice().sort((x,y)=>cmpList([x.wire,x.phase],[y.wire,y.phase]));
         const value=merge.combine==='or'||merge.combine==='max'?sorted.some(a=>a.value):sorted.every(a=>a.value);
         win=sorted.length===1?{value,observer:`path:${sorted[0].wire}`,rule:'path',inputs:[sorted[0].from]}:{value,observer:'engine:merge@1',rule:'merge@1',inputs:sorted.map(a=>a.from)};
+        win.source=pickArrivalSource(sorted,value);
       }else if(queue){
-        if(g.arrivals.length){const ordered=g.arrivals.length>1?mergeOrder(run,ctx,g,merge):g.arrivals;if(!ordered)return;for(const a of ordered)queue.items.push({value:a.value,wire:a.wire,phase:a.phase,from:a.from})}
+        if(g.arrivals.length){const ordered=g.arrivals.length>1?mergeOrder(run,ctx,g,merge):g.arrivals;if(!ordered)return;for(const a of ordered)queue.items.push({value:a.value,wire:a.wire,phase:a.phase,from:a.from,principal:a.principal??null})}
         // A queue delivers once per tick, whatever delta round its arrivals come in.
-        if(queue.items.length>queue.head&&!ctx.delivered.has(key)){ctx.delivered.add(key);const item=queue.items[queue.head++];win={value:item.value,observer:'engine:merge@1',rule:'merge@1',inputs:[item.from]};if(!arrived.includes(item.wire))arrived.push(item.wire)}
+        if(queue.items.length>queue.head&&!ctx.delivered.has(key)){ctx.delivered.add(key);const item=queue.items[queue.head++];win={value:item.value,observer:'engine:merge@1',rule:'merge@1',inputs:[item.from],source:{wire:item.wire,principal:item.principal??null}};if(!arrived.includes(item.wire))arrived.push(item.wire)}
       }else if(g.arrivals.length===1){
-        const a=g.arrivals[0];win={value:a.value,observer:`path:${a.wire}`,rule:'path',inputs:[a.from]};
+        const a=g.arrivals[0];win={value:a.value,observer:`path:${a.wire}`,rule:'path',inputs:[a.from],source:{wire:a.wire,principal:a.principal??null}};
       }else if(g.arrivals.length){
         const ordered=mergeOrder(run,ctx,g,merge);if(!ordered)return;
         const pick=merge.combine==='first'?ordered[0]:ordered[ordered.length-1];
-        win={value:pick.value,observer:'engine:merge@1',rule:'merge@1',inputs:ordered.map(a=>a.from)};
+        win={value:pick.value,observer:'engine:merge@1',rule:'merge@1',inputs:ordered.map(a=>a.from),source:{wire:pick.wire,principal:pick.principal??null}};
       }
       if(!win){if(queue)queue.next=ctx.t+1;return}
       win.kind='derived';win.exclude=arrived;win.emits=role==='point';
     }
     if(queue)queue.next=ctx.t+1;
-    const id=makeRecord(run,ctx,{...base,kind:win.kind,value:win.value,observer:win.observer,rule:win.rule,inputs:win.inputs});
-    put(run.signal,ctx.undoSignal,key,win.value);put(run.lastRecord,ctx.undoLast,key,id);ctx.written.push(key);
+    const principal=nodePrincipal??win.source?.principal??null,via=win.source?win.source.wire:null;
+    const id=makeRecord(run,ctx,{...base,kind:win.kind,value:win.value,observer:win.observer,rule:win.rule,inputs:win.inputs,principal});
+    put(run.signal,ctx.undoSignal,key,win.value);put(run.lastRecord,ctx.undoLast,key,id);put(run.levelPrincipal,ctx.undoPrincipal,key,principal);ctx.written.push(key);
     const changed=win.value!==old;
     if(changed)ctx.changed.add(key);
-    if(win.always||(changed&&win.emits))emit(run,ctx,g.entity,g.point,g.channel,win.value,win.exclude,id,0);
+    if(win.always||(changed&&win.emits))emit(run,ctx,g.entity,g.point,g.channel,win.value,win.exclude,id,0,principal,via);
   }
   // Evaluate phase: a device whose input port changed reads committed state only.
+  // A combine@1 device's own named input is `<port>:<wireId>` (topology's land): the wire is the
+  // tail after the last colon. A device from a definition carries no such name (its ports are its
+  // own, not one Wire's), so it has no via either, the way an asserted source has none.
+  function deviceWire(name){const i=name.lastIndexOf(':');return i<0?null:name.slice(i+1)}
   function evaluateDevice(run,ctx,entity,committed){
     const component=run.components[entity],definition=run.definitions[component.definition],p=pattern(definition.pattern);
+    const nodePrincipal=component.principal??null;
     const values={},inputs=[];
     for(const name of component.inputs){const key=portKey(entity,name,'main');values[name]=component.combine?committed(key):committed(key)===true;if(run.lastRecord[key])inputs.push(run.lastRecord[key])}
     const out=p.evaluate(definition.parameters,values),delay=definition.delay||0,epsilon=definition.parameters.epsilon||0;
+    // A combine@1 device relays its own Wires into one value, the way a Point's arrivals merge
+    // (STATE-SPACE.md, access control): the node's own principal, else the first input in wire-id
+    // order whose value equals the output, same as `pickArrivalSource`. A device from an authored
+    // definition (truth_table, merge) has no Wire-named ports to pick from and so no via either.
     for(const name of component.outputs){
       const key=portKey(entity,name,'main'),value=out[name];
+      let source=null;
+      if(component.combine){
+        const named=component.inputs.map(n=>({wire:deviceWire(n),principal:run.levelPrincipal[portKey(entity,n,'main')]??null,value:values[n]})).filter(x=>x.wire).sort((x,y)=>cmp(x.wire,y.wire));
+        source=named.find(x=>x.value===value)||null;
+      }
+      const principal=nodePrincipal??source?.principal??null,via=source?source.wire:null;
       if(delay===0){
         if(sameLevel(value,run.signal[key],epsilon))continue;
         ctx.cost++;
-        const id=makeRecord(run,ctx,{entity,point:name,channel:'main',kind:'derived',value,observer:`rule:${component.definition}`,rule:component.definition,inputs,phase:1});
+        const id=makeRecord(run,ctx,{entity,point:name,channel:'main',kind:'derived',value,observer:`rule:${component.definition}`,rule:component.definition,inputs,phase:1,principal});
         if(!ctx.evaluated.has(key))ctx.evaluated.set(key,run.signal[key]);
-        put(run.signal,ctx.undoSignal,key,value);put(run.lastRecord,ctx.undoLast,key,id);ctx.written.push(key);
-        emit(run,ctx,entity,name,'main',value,[],id,1);
+        put(run.signal,ctx.undoSignal,key,value);put(run.lastRecord,ctx.undoLast,key,id);put(run.levelPrincipal,ctx.undoPrincipal,key,principal);ctx.written.push(key);
+        emit(run,ctx,entity,name,'main',value,[],id,1,principal,via);
       }else{
         // Transport delay: schedule every change from the latest value already on its way.
         let latest=run.signal[key],at=-1;
         for(const item of run.pending)if(item.kind==='output'&&item.entity===entity&&item.point===name&&item.channel==='main'&&item.at>at){at=item.at;latest=item.value}
-        if(!sameLevel(value,latest,epsilon)){const item={kind:'output',at:ctx.t+delay,entity,point:name,channel:'main',value,rule:component.definition,inputs:inputs.slice()};run.pending.push(item);ctx.fresh.push(item)}
+        if(!sameLevel(value,latest,epsilon)){const item={kind:'output',at:ctx.t+delay,entity,point:name,channel:'main',value,rule:component.definition,inputs:inputs.slice(),...(principal?{principal}:{})};run.pending.push(item);ctx.fresh.push(item)}
       }
     }
   }
@@ -4123,11 +4253,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const t=nextTick(run);
     if(t===null)return {ok:true,tick:null,records:[]};
     const before={pending:run.pending,sequence:run.sequence};
-    const ctx={t,round:0,delivery:0,delivered:new Set(),cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null,fresh:[],written:[],evaluated:new Map(),undoSignal:new Map(),undoLast:new Map(),queueUndo:new Map()};
+    const ctx={t,round:0,delivery:0,delivered:new Set(),cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null,fresh:[],written:[],evaluated:new Map(),undoSignal:new Map(),undoLast:new Map(),undoPrincipal:new Map(),queueUndo:new Map()};
     const result=processTick(run,t,ctx);
     const refused=!result.ok?result:run.spent+result.cost>run.budget?{ok:false,code:'BUDGET_SPENT',tick:t,left:null,message:`processing tick ${t} takes ${result.cost} events; ${run.budget-run.spent} of the budget ${run.budget} remain`}:null;
     if(refused){
-      undo(run.signal,ctx.undoSignal);undo(run.lastRecord,ctx.undoLast);Object.assign(run,before);
+      undo(run.signal,ctx.undoSignal);undo(run.lastRecord,ctx.undoLast);undo(run.levelPrincipal,ctx.undoPrincipal);Object.assign(run,before);
       undoQueues(run,ctx.queueUndo);
       if(refused.code==='BUDGET_SPENT')refused.left=queuedCount(run);
       return refused;
@@ -5110,7 +5240,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
 
-  return {POLICIES,DEFAULT_LATENCY_MS,COMBINES,signalConfig,activeConnection,canEmit,canReceive,accessAllows,build,query,queries:Object.keys(QUERIES),createSimulation,runScenario,createSession,tools};
+  return {POLICIES,DEFAULT_LATENCY_MS,COMBINES,signalConfig,activeConnection,canEmit,canReceive,accessAllows,build,query,queries:Object.keys(QUERIES),createSimulation,runScenario,createSession,tools,aclConfig,aclDecide,crossingAt};
 });
 /* END src/07-graph-core.js */
 </script>
@@ -11526,6 +11656,10 @@ let currentFileHandle=null;
 let currentFileName='Untitled.sov';
 let currentFileFormat='document';
 let lastFileFingerprint=null;
+// The fingerprint of a document the editor made and nobody has touched. Set whenever a
+// document is placed fresh (startup, File -> New); cleared whenever a file is opened,
+// restored or saved, since lastFileFingerprint then carries the comparison instead.
+let pristineFingerprint=null;
 
 function snapshotDocument(){
   // Files and API snapshots carry authored truth only; runtime projections are rebuilt on load.
@@ -11537,7 +11671,10 @@ function snapshotDocument(){
 function semanticFingerprint(){
   const doc=snapshotDocument();
   doc.revision=0;
-  if(doc.meta){delete doc.meta.updatedAt;delete doc.meta.savedAt}
+  // Timestamps, and the checkpoint list (lazily created by the editor kernel's own startup, not
+  // by anything the user did), are not document content: documentHash() strips the same fields
+  // for undo/redo identity, so a fresh checkpoint store must not read as an edit here either.
+  if(doc.meta){delete doc.meta.updatedAt;delete doc.meta.savedAt;delete doc.meta.checkpoints}
   return JSON.stringify(doc);
 }
 function captureWorkspace(){
@@ -11707,7 +11844,7 @@ function snapshotPackage(){
 function packageFileText(){return JSON.stringify(snapshotPackage(),null,2)}
 function fileTextForFormat(format){return format==='package'?packageFileText():documentFileText()}
 function mimeForFormat(format){return format==='package'?'application/vnd.soveraeign.schematic-package+json':'application/vnd.soveraeign.schematic+json'}
-function isFileDirty(){return lastFileFingerprint===null||semanticFingerprint()!==lastFileFingerprint}
+function isFileDirty(){return lastFileFingerprint===null?semanticFingerprint()!==pristineFingerprint:semanticFingerprint()!==lastFileFingerprint}
 function updateFileReadout(){
   const dirty=isFileDirty();
   if(fileNameReadout)fileNameReadout.textContent=currentFileName||suggestedFileName(currentFileFormat);
@@ -11719,6 +11856,7 @@ function markFileSaved(name,format,handle=null){
   currentFileFormat=format||'document';
   currentFileHandle=handle||null;
   lastFileFingerprint=semanticFingerprint();
+  pristineFingerprint=null;
   updateFileReadout();
 }
 function triggerDownload(text,name,mime){
@@ -11785,6 +11923,7 @@ function applyOpenedPayload(parsed,name='Untitled.sov',handle=null){
   currentFileName=name||suggestedFileName(currentFileFormat);
   currentFileHandle=handle;
   lastFileFingerprint=semanticFingerprint();
+  pristineFingerprint=null;
   saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false});
   updateFileReadout();
   return snapshotDocument();
@@ -11819,6 +11958,7 @@ function newSchematic(){
   const doc=SovSchematicData.makeDocument({id:`schematic-${Date.now()}`,meta:{title:'Untitled'}});
   replaceRuntimeDocument(doc);
   currentFileHandle=null;currentFileName='Untitled.sov';currentFileFormat='document';lastFileFingerprint=null;
+  pristineFingerprint=semanticFingerprint();
   saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false});
   updateFileReadout();
   statusEl.textContent='New schematic';
@@ -11829,6 +11969,7 @@ function restoreRecovery(){
   const raw=localStorage.getItem(LOCAL_RECOVERY_KEY)||localStorage.getItem(LEGACY_LOCAL_SAVE_KEY);if(!raw)throw new Error('No recovery snapshot found');
   applyWorkspace(JSON.parse(raw));
   currentFileHandle=null;currentFileName='Recovered.sov';currentFileFormat='document';lastFileFingerprint=null;
+  pristineFingerprint=null;
   updateFileReadout();
   statusEl.textContent='Recovery restored · save to keep it';
   return true;
@@ -11979,6 +12120,7 @@ function setFileMenu(open){
 function initializePersistenceTracking(){
   persistenceFingerprint=semanticFingerprint();
   lastFileFingerprint=null;
+  pristineFingerprint=semanticFingerprint();
   updateRevisionReadout();
 }
 async function openDesktopLaunchDocument(){
