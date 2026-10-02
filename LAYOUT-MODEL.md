@@ -283,7 +283,12 @@ Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLA
   - each node is pulled level with its predecessors, for straight chains
 - A container is laid out inside first and fitted to its contents, then placed as one
   node of its parent.
-- A column gap widens to fit the widest wire label that crosses it.
+- A column gap widens to fit the widest wire label that crosses it, or that has an end on
+  either side of it: `characters × the notation's caption size × 0.6 + 2 × labelMargin`
+  (`labelMargin`, an `apply` option, default 16). A row gap in a column widens the same way
+  when a labelled wire joins two cards in different rows of that column, to the caption line
+  height plus `2 × labelMargin`. A wire whose label a bus on its route carries draws no label
+  of its own (see "As built: buses"), so it widens neither.
 - Afterwards, boundary Points slide to meet what they connect to inside. A Point wired to
   a top or bottom port aims clear of that card. Points sharing a side keep 40px apart.
 - A single-connection neighbour outside moves level with its Point when nothing is in the
