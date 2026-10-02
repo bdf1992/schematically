@@ -39,6 +39,7 @@ BROWSER=[
     'tests/settings_panel_placement_qa.py',
     'tests/document_compaction_qa.py',
     'tests/carrier_path_qa.py',
+    'tests/free_segment_route_qa.py',
     'tests/attachment_interaction_parity_qa.py',
     'tests/attachment_growth_direction_qa.py',
     'tests/attachment_terminal_identity_qa.py',
