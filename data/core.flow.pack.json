@@ -1,0 +1,153 @@
+{
+  "format": "soveraeign.schematic/pack@0.1",
+  "id": "core.flow",
+  "version": 1,
+  "definitions": [
+    {
+      "id": "flow.fanout",
+      "version": 1,
+      "pattern": "route@1",
+      "delay": 0,
+      "parameters": {
+        "policy": "fanout"
+      },
+      "projection": {
+        "label": "FANOUT"
+      }
+    },
+    {
+      "id": "flow.distribute",
+      "version": 1,
+      "pattern": "route@1",
+      "delay": 0,
+      "parameters": {
+        "policy": "distribute"
+      },
+      "projection": {
+        "label": "DISTRIBUTE"
+      }
+    },
+    {
+      "id": "flow.select",
+      "version": 1,
+      "pattern": "route@1",
+      "delay": 0,
+      "parameters": {
+        "policy": "select"
+      },
+      "projection": {
+        "label": "SELECT"
+      }
+    },
+    {
+      "id": "flow.join",
+      "version": 1,
+      "pattern": "join@1",
+      "delay": 0,
+      "parameters": {},
+      "projection": {
+        "label": "JOIN"
+      }
+    },
+    {
+      "id": "flow.buffer",
+      "version": 1,
+      "pattern": "buffer@1",
+      "delay": 0,
+      "parameters": {},
+      "projection": {
+        "label": "BUFFER"
+      }
+    },
+    {
+      "id": "flow.limit",
+      "version": 1,
+      "pattern": "limit@1",
+      "delay": 0,
+      "parameters": {},
+      "projection": {
+        "label": "LIMIT"
+      }
+    },
+    {
+      "id": "flow.switch",
+      "version": 1,
+      "pattern": "gate@1",
+      "delay": 0,
+      "parameters": {
+        "kind": "switch"
+      },
+      "projection": {
+        "label": "SWITCH"
+      }
+    },
+    {
+      "id": "flow.gate",
+      "version": 1,
+      "pattern": "gate@1",
+      "delay": 0,
+      "parameters": {
+        "kind": "gate"
+      },
+      "projection": {
+        "label": "GATE"
+      }
+    },
+    {
+      "id": "flow.observe",
+      "version": 1,
+      "pattern": "terminal@1",
+      "delay": 0,
+      "parameters": {
+        "kind": "observe"
+      },
+      "projection": {
+        "label": "OBSERVE"
+      }
+    },
+    {
+      "id": "flow.receipt",
+      "version": 1,
+      "pattern": "terminal@1",
+      "delay": 0,
+      "parameters": {
+        "kind": "receipt"
+      },
+      "projection": {
+        "label": "RECEIPT"
+      }
+    },
+    {
+      "id": "flow.refuse",
+      "version": 1,
+      "pattern": "terminal@1",
+      "delay": 0,
+      "parameters": {
+        "kind": "refuse"
+      },
+      "projection": {
+        "label": "REFUSE"
+      }
+    },
+    {
+      "id": "flow.hold",
+      "version": 1,
+      "pattern": "hold@1",
+      "delay": 0,
+      "parameters": {},
+      "projection": {
+        "label": "HOLD"
+      }
+    }
+  ],
+  "bindings": {
+    "buffer": "flow.buffer@1",
+    "gate": "flow.gate@1",
+    "hold": "flow.hold@1",
+    "limit": "flow.limit@1",
+    "observe": "flow.observe@1",
+    "receipt": "flow.receipt@1",
+    "refuse": "flow.refuse@1",
+    "switch": "flow.switch@1"
+  }
+}

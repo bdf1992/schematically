@@ -119,7 +119,7 @@ Every claim has the same coordinates, whether it is a logic level, a gate verdic
 | `vantage` | seen from where | `space` (Eulerian: the whole graph at a time), `point` (Lagrangian: one subject's history), `relative` (against a `reference`) |
 | `observable` | what is measured | a declared observable id, e.g. `logic.level`, `device.state`, `cost` |
 | `kind` | how it became true | `registered`, `measured`, `derived`, `predicted` (`estimated` from slice 4) |
-| `form` | its shape | `binary`, `continuous`, `categorical`, `message` |
+| `form` | its shape | `binary`, `continuous`, `categorical`, `message`, `state` (a device's memory, see *Device state*) |
 | `value` | the value | per `form`, under the numeric policy; for `message`, `{id, root, parent, channel, payload, origin}` with the payload JSON whose numbers are all safe integers, canonicalized by RFC 8785 |
 | `time` | when | `{logical, sequence, mode: observed \| predicted}` |
 | `certainty` | how sure | `{kind: exact}` until slice 4 |
@@ -204,6 +204,39 @@ A message flow traces and replays the way a level run does: the same ledger (sta
 A device with memory keeps it in the log, not in the runtime. Its memory is a `device.state` record (`vantage: point`, `kind: derived`) written at commit; a stateful rule reads its own committed state and its inputs, and nothing else. A device's **initial state** is a registered value declared in the document; a stateful device without one refuses to run.
 
 This is the one mechanism for memory: hysteresis (slice 2) and latches, edges and clocks (slice 5) all mean "a rule that reads its own prior records".
+
+A flow card (below) is the first stateful device. Its initial state is its pattern's default, not a value declared in the document, so a flow card always runs. The messages that reach one card in one tick are handled one after another in delivery order (a buffer's releases, then injects, then arrivals in merge order), each seeing the state the one before it left; the card reads the state committed at the previous tick when the tick starts, and what it holds at the end of the tick is committed as one `device.state` record (form `state`, `vantage: point`, `kind: derived`, observer and rule the card's definition, inputs the message records that changed it). The run keeps the latest value beside its signal state, and `settle` hashes it with the rest of the state that determines the future, leaving out the record ids it names.
+
+### Flow cards
+
+What a card does with a message is a **flow pattern**, the graph core's `arrive`, `continueAt`, `forward` and `release` (`src/07-graph-core.js` at `7b939e3`, lines 334-352 and 375-459). A flow pattern acts on the message channel only: the card's level is still its signal model or its bound definition, so one card may have both. Flow patterns generate no ports, so no Component binds one through `config.definition` (`DEFINITION_NOT_BINDABLE`); a card reaches one only through **the binding lookup**:
+
+1. a declared `config.flow.policy` other than `fanout` names `flow.<policy>@1`, when the packs define it;
+2. else the first pack whose `bindings` name the card's symbol id gives the definition;
+3. else the card relays by fanout as before. A Point is looked up like any card, so a Point with `config.flow` relays with that policy.
+
+A pack's optional `bindings` maps a symbol id to an `id@version` of a flow definition in the same pack; a binding to a definition the pack does not hold, or to a level pattern, is refused with `PACK_INVALID`. The built-ins are the `core.flow` pack in `data/`: `flow.fanout`, `flow.distribute`, `flow.select`, `flow.join`, `flow.buffer`, `flow.limit`, `flow.switch`, `flow.gate`, `flow.observe`, `flow.receipt`, `flow.refuse` and `flow.hold`, with bindings for `buffer`, `limit`, `switch`, `gate`, `observe`, `receipt`, `refuse` and `hold`. A run without `core.flow` relays those cards by fanout. The definitions a run reaches this way are in its replay key.
+
+Instance settings are the card's own, read once at start as the graph core's `flowConfig` reads them: `config.flow` `by`, `key`, `capacity`, `releaseMs` (default 10 ms) and `rate {count, windowMs}`, and `config.behavior.handler`. Times are converted to ticks once, a time above 0 never under one tick.
+
+| Pattern | Parameters | device.state (initial) | What it does |
+|---|---|---|---|
+| `route@1` | `policy`: `fanout`, `distribute`, `select` | `{rr: 0}` | fanout to every open end; distribute to one, by round-robin (the counter), by `channel` (the first end declaring it, else `no end declares channel X`) or by `key` (the fnv of the key's canonical text, `message has no key K` when absent); select refuses `select needs a handler (config.behavior.handler)` |
+| `join@1` | none | `{fifos: {}}` | one FIFO per incoming Path; each arrival waits (`waiting`); when every Path has one, a joined message `<id>.j` with payload `{parts: {wireId: payload}}` (`joined`) goes on from the card |
+| `buffer@1` | none | `{queue: [], releasing: false}` | refuses `buffer full (n)` at capacity; holds the message (`buffered`) and releases one every `releaseMs` (`released`), which goes on by the Path it came by. Timed: a cycle through a buffer is not a zero-delay cycle |
+| `limit@1` | none | `{arrivals: []}` | the arrival ticks within the rate's span; refuses `limit has no rate (config.flow.rate {count, windowMs})` and `limit n per Wms exceeded` |
+| `gate@1` | `kind`: `switch`, `gate` | `{open: false}` | a message on a control Path (one landing on a control port) sets `open` from `payload.open`, default true, and ends `controlled`; a switch refuses `switch is closed` while shut; a service gate with no control Path and no handler refuses `gate has no condition: wire its control point or name a handler`, and while shut `gate is closed: no control has opened it` |
+| `terminal@1` | `kind`: `observe`, `receipt`, `refuse` | none (stateless) | observe ends the message (`observed`, rule `observation`); receipt writes a record of observable `receipt` (rule `receipt`) and passes the message on; refuse refuses `REFUSE terminal` |
+| `hold@1` | none | `{value: null}` | keeps the payload, then forwards |
+
+After its pattern takes a message in, a flow card naming `config.behavior.handler` refuses `no handler registered: <name>`, since a run has no handler registry (the graph core's answer when no handler is registered); a passive card absorbs; otherwise the message is forwarded, by the legs the pattern chooses. A flow card's records carry its definition as observer (`rule:flow.gate@1`) and rule.
+
+Two signal behaviours the graph core runs for every card come with them:
+
+- **Levels set by messages.** A message reaching a card whose signal is asserted (a lever, a clock, or `config.signal.mode` asserted, by the signal model) with `set` or `toggle` in its payload ends `asserted` (rule `asserted`) and sets the card's level on its out ports in the next delta round of the tick: `set` is quantized at the card's threshold, `toggle` inverts the current level.
+- **Edges that start work.** When a card's level on its first out port changes and its `config.signal.on` (`+`, `-` or `±`) matches the polarity, a message `e-<card>-<tick>` starts on `config.signal.channel` (default `edge`) with payload `{node, polarity, from, to, at}` (`at` in ms; `from` and `to` 0 or 1 on a binary card), origin the card and principal the card's own (`edge`, rule `edge`), and goes on from that card. Edges noted in a delta round start their messages at the end of that round, card by card.
+
+Within a round, level ports are updated in the walk's order and message ports always in port order, so no outcome depends on the walk. `tests/state_space_flow_qa.py` runs each flow case of `tests/graph_core_qa.py` in ticks against the graph core on the same document.
 
 ### Assertions: binary as a cut through continuous
 
