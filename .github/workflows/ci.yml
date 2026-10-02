@@ -34,6 +34,25 @@ jobs:
         with:
           path: _site
 
+  # Builds the Tauri shell and launches it on a document: it passes only when the page inside the
+  # built binary reports the document's own component and wire counts (tests/desktop_launch_qa.py).
+  desktop:
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the page the shell embeds
+        run: python build.py
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build the desktop shell
+        run: cargo build --release --manifest-path desktop/src-tauri/Cargo.toml
+      - name: Launch the shell on a document
+        run: python tests/desktop_launch_qa.py --binary desktop/src-tauri/target/release/sov-schematic-desktop.exe
+
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: verify

@@ -2,7 +2,8 @@
 
 Static checks over the desktop/ Tauri shell and its one seam into the editor:
 `tauri.conf.json` registers both file associations and a Windows icon,
-`main.rs` exposes the `opened_document` command, and `src/75-persistence.js`
+`main.rs` exposes the `opened_document` command and, for a smoke run, `--smoke-report`
+and `report_loaded`, and `src/75-persistence.js`
 only reaches `window.__TAURI__` behind a presence check. No browser, no cargo build.
 """
 from __future__ import annotations
@@ -36,8 +37,14 @@ def main() -> None:
     main_rs = (ROOT / 'desktop/src-tauri/src/main.rs').read_text(encoding='utf-8')
     assert re.search(r'fn\s+opened_document\s*\(', main_rs), 'opened_document command missing'
     assert 'tauri::command' in main_rs
+    # The smoke run tests/desktop_launch_qa.py drives: a flag naming the report file, and the
+    # command the page calls once the launch document is (or is not) applied.
+    assert re.search(r'fn\s+report_loaded\s*\(', main_rs), 'report_loaded command missing'
+    assert '"--smoke-report"' in main_rs, '--smoke-report option missing'
+    assert re.search(r'generate_handler!\[[^\]]*\breport_loaded\b', main_rs), 'report_loaded is not registered'
 
     persistence = (ROOT / 'src/75-persistence.js').read_text(encoding='utf-8')
+    assert "invoke('report_loaded'" in persistence, 'the page never reports what it loaded'
     guard = re.search(r'if\s*\(\s*!\s*window\.__TAURI__\s*\)\s*return', persistence)
     assert guard, 'no presence-checked guard for window.__TAURI__'
     first_use = persistence.index('window.__TAURI__')
