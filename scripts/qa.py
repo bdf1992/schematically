@@ -17,6 +17,7 @@ STATIC=[
     'tests/author_offline_qa.py',
     'tests/file_load_presets_qa.py',
     'tests/declared_ports_qa.py',
+    'tests/boundary_channels_qa.py',
     'tests/state_space_contracts_qa.py',
     'tests/state_space_run_qa.py',
     'tests/state_space_message_qa.py',
