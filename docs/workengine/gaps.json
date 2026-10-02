@@ -59,8 +59,10 @@
     "tried": "Declared ports tracks-out on Web booth and tracks-in on Recording with channels video, event and narration; validate_sov.mjs refused both inner wires with 'CHANNEL_MISMATCH: the two ports share no channel', because the boundary Points expose only main (src/06-attachment-core.js portChannels defaults to main).",
     "workaround": "Added main to both declared ports so each segment shares main; the three track names survive only on the two end ports and in the global wire's caption 'video · event · narration'. The model does not know the wire carries those tracks.",
     "severity": "blocks",
-    "source_files": ["src/06-attachment-core.js", "src/05-data-core.js", "ATTACHMENT-POINT-MODEL.md"],
-    "task_objective": "Let a hosted boundary Point declare channels (or pass through the channels of the wires bound to it) so a wire carrying named channels can cross a boundary, with validation and a test that the three tracks reach Recording."
+    "source_files": ["src/06-attachment-core.js", "src/05-data-core.js", "src/07-graph-core.js", "ATTACHMENT-POINT-MODEL.md", "tests/boundary_channels_qa.py"],
+    "task_objective": "Let a hosted boundary Point declare channels (or pass through the channels of the wires bound to it) so a wire carrying named channels can cross a boundary, with validation and a test that the three tracks reach Recording.",
+    "status": "closed",
+    "closed_by": "resolveSpec already read a Point's self declaration by the Point's own dimension, not by what hosts it, so a boundary Point hosted on a Plane edge declares its channels the same way a free Point does; no source change was needed there. rec-port-in and sur-port-out now declare self: {channels: [video, event, narration]}, tracks-out and tracks-in no longer need main, and both inner wires validate with exactly those three channels (tests/boundary_channels_qa.py). graph.query's reach verb takes an optional channel and follows only a Wire whose two bound ports share it, so 'reach from Web booth on video' crosses the boundary Point to Recording and 'on main' does not (src/07-graph-core.js)."
   },
   {
     "id": "G08",

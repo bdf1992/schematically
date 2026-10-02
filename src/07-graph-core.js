@@ -85,7 +85,11 @@
         // The same passability rule as the derived signal (src/25-signal.js wireDirectionActive).
         const reason=!canEmit(fp,fromPort)?`${from}.${fromPort} cannot emit`:!canReceive(tp,toPort)?`${to}.${toPort} cannot receive`:(!accessAllows(fp,op)||!accessAllows(tp,op))?`access refuses ${op}`:null;
         if(reason){blocked.push({wireId:w.id,from,to,reason});continue}
-        arcs.push({wireId:w.id,canvasId:w.canvasId||Data.GLOBAL_CANVAS_ID,from,fromPort,to,toPort,latencyMs:latency,accepts,operation:op,control:activeConnection(tp,toPort)?.flow==='control'||toPort==='control'});
+        // The channels the two bound ports actually share (Attachment.channelIds, matched by
+        // id): what a reach query with a channel argument follows, independent of a wire's own
+        // `accepts` declaration, which still governs simulation routing at a junction.
+        const channels=Data.sharedChannelIds(doc,from,fromPort,to,toPort);
+        arcs.push({wireId:w.id,canvasId:w.canvasId||Data.GLOBAL_CANVAS_ID,from,fromPort,to,toPort,latencyMs:latency,accepts,channels,operation:op,control:activeConnection(tp,toPort)?.flow==='control'||toPort==='control'});
       }
     }
     const out=new Map(),inc=new Map();
@@ -107,10 +111,14 @@
   function junctions(g){
     return [...g.nodes.values()].filter(n=>g.ends.get(n.id)>=3).map(n=>({id:n.id,label:n.label,ends:g.ends.get(n.id),policy:n.flow.policy,declared:n.flow.declared,incoming:g.in.get(n.id).length,outgoing:g.out.get(n.id).length}));
   }
+  // With a channel, reach follows only a Wire whose two bound ports share that channel id
+  // (the arc's `channels`, from Data.sharedChannelIds): a hosted boundary Point that declares
+  // the channel passes it through, one that does not (or carries only `main`) blocks it. The
+  // result names the channel it followed (null when none was given).
   function reach(g,from,{channel=null}={}){
     if(!g.nodes.has(from))return refusal('UNKNOWN_NODE',`No component ${from}`);
     const seen=new Set([from]),queue=[from],via=[];
-    while(queue.length){const id=queue.shift();for(const a of g.out.get(id)){if(a.control)continue;if(channel&&a.accepts&&!a.accepts.includes(channel))continue;via.push(a.wireId);if(!seen.has(a.to)){seen.add(a.to);queue.push(a.to)}}}
+    while(queue.length){const id=queue.shift();for(const a of g.out.get(id)){if(a.control)continue;if(channel&&!(a.channels||[]).includes(channel))continue;via.push(a.wireId);if(!seen.has(a.to)){seen.add(a.to);queue.push(a.to)}}}
     seen.delete(from);return {ok:true,from,channel,nodes:[...seen],wires:[...new Set(via)]};
   }
   function paths(g,a,b,{limit=20}={}){
@@ -649,7 +657,7 @@
   function tools(){
     const obj=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
     return [
-      {name:'schematic.graph.query',description:`Read-only graph query. verb: ${Object.keys(QUERIES).join(' | ')}. args e.g. {from,to} for paths/cut/reach, {componentId} for boundary, {format: jgf|dot|graphml} for export.`,inputSchema:obj({verb:{type:'string',enum:Object.keys(QUERIES)},args:{type:'object'}},['verb'])},
+      {name:'schematic.graph.query',description:`Read-only graph query. verb: ${Object.keys(QUERIES).join(' | ')}. args e.g. {from,to} for paths/cut, {from,channel} for reach (channel is optional: it follows only Wires whose two bound ports share that channel, so it crosses a boundary Point only where its self declares the channel), {componentId} for boundary, {format: jgf|dot|graphml} for export.`,inputSchema:obj({verb:{type:'string',enum:Object.keys(QUERIES)},args:{type:'object'}},['verb'])},
       {name:'schematic.sim.start',description:'Start a message simulation over the current document. handlers maps a handler name to {kind: stub | fixture}; scenarioId borrows a saved scenario\'s handlers. A handler a node names but nobody registered refuses its messages.',inputSchema:obj({handlers:{type:'object'},scenarioId:{type:'string'}})},
       {name:'schematic.sim.stop',description:'Discard the running simulation.',inputSchema:obj({})},
       {name:'schematic.sim.inject',description:'Emit a message from a component (it leaves by that component\'s outgoing wires). principal names who acts; a plane with an ACL checks it at its boundary.',inputSchema:obj({node:{type:'string'},channel:{type:'string'},payload:{},at:{type:'number'},principal:{type:'string'}},['node'])},

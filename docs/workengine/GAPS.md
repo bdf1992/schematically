@@ -7,7 +7,7 @@ with `skills/author-offline`, validated with `node scripts/validate_sov.mjs` and
 `python scripts/export_svg.py` to `sample.svg`. `check_sample.py` checks the files.
 `gaps.json` holds the same gaps as data.
 
-Eleven gaps: two block authoring the full map, nine make it awkward.
+Eleven gaps: one blocks authoring the full map, nine make it awkward, and G07 is closed.
 
 | Id | Capability missing or awkward | What the sample uses instead | Severity | Files a fix would change |
 | --- | --- | --- | --- | --- |
@@ -17,7 +17,7 @@ Eleven gaps: two block authoring the full map, nine make it awkward.
 | G04 | A group that collects cards without being a boundary | Planes named Records and Surfaces; every crossing relation is cut into segments through boundary Points | blocks | `src/05-data-core.js`, `src/30-canvas.js`, `formats/schematic.document.schema.json`, `SECTION-MODEL.md` |
 | G05 | A work item (migration) kind with a proposed state | `gate` card, colour slot 8, subtitle `Migration · proposed` | awkward | `src/00-state.js`, `src/03-notation-core.js`, `formats/schematic.document.schema.json` |
 | G06 | What a thing waits on (person, rule, decision) | Body text `Waits on Bdo amending rule R-29 (decision D1)` | awkward | `src/05-data-core.js`, `formats/schematic.document.schema.json`, `src/55-render.js` |
-| G07 | Named channels (video, event, narration) crossing a boundary Point | `main` added to both end ports; track names only in a caption | blocks | `src/06-attachment-core.js`, `src/05-data-core.js`, `ATTACHMENT-POINT-MODEL.md` |
+| G07 | Named channels (video, event, narration) crossing a boundary Point | **closed**: `rec-port-in` and `sur-port-out` declare `self: {channels: [video, event, narration]}`; `tracks-out`/`tracks-in` no longer carry `main` | closed | `src/06-attachment-core.js`, `src/05-data-core.js`, `src/07-graph-core.js`, `ATTACHMENT-POINT-MODEL.md` |
 | G08 | A port as a named thing | A `one-way` card hosted inline on the middle segment; no body drawn, label overlaps the caption | awkward | `src/05-data-core.js`, `src/55-render.js` |
 | G09 | One caption per relation across segments | The caption repeated on every segment; two collide at a junction | awkward | `src/55-render.js`, `src/40-routing.js` |
 | G10 | Labels fitted to cards in the export | Hand-sized cards; two titles still run past their card, one caption sits under a card | awkward | `src/55-render.js`, `scripts/export_svg.py` |
@@ -25,16 +25,20 @@ Eleven gaps: two block authoring the full map, nine make it awkward.
 
 ## What blocks the full map (38 records, 12 surfaces)
 
-Two gaps block it, because the model cannot hold what the map is meant to say:
+One gap still blocks it, because the model cannot hold what the map is meant to say:
 
 - **G04, groups are boundaries.** In the full map most relations run from a record to a surface
   or between groups. Each one has to be cut into three or more Wires through boundary Points, and
   relations that share a boundary Point merge at a junction, so "Surface registration declares
   Delivery broker" stops being one relation in the file. With 50 cards that is both a lot of
   hand work and a loss of meaning.
-- **G07, tracks cannot cross a boundary.** Every surface in `gapmap.json` lists its tracks. A
-  typed channel stops at the first boundary Point, so the full map could only name tracks in
-  captions, and no query could ask which tracks reach a record.
+
+G07, tracks crossing a boundary, is closed: a boundary Point declares the channels it carries
+across the boundary the same way a free Point's `self` does (`resolveSpec` reads it by the
+Point's own dimension, not by what hosts it), an undeclared Point still carries only `main`,
+and `schematic.graph.query`'s `reach` verb takes an optional `channel` that follows only a Wire
+whose two bound ports share it. `sample.sov`'s `rec-port-in` and `sur-port-out` now declare
+`video`, `event` and `narration` on `self`, and `tracks-out`/`tracks-in` no longer need `main`.
 
 The other nine make it awkward but not impossible: status, kind, work items, holders and ports
 can all be carried as text, colour and borrowed symbols (G01, G02, G05, G06, G08); the picture
