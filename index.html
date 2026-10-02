@@ -6505,7 +6505,15 @@ function nearestSlot(hex){
 }
 function lighten(hex,amount=.88){return mixHex([hex,'#FFFFFF'],[1-amount,amount])}
 function darken(hex,amount=.72){return mixHex([hex,'#111315'],[1-amount,amount])}
-function componentSurfaceFill(hex,amount=.86){return surfaceAppearance()==='dark'?darken(hex,Math.min(.88,amount*.82)):lighten(hex,amount)}
+// A region's fill is the ground it sits on moved toward the region's own colour - not the
+// colour moved toward the ground. The two constructions agree in a light theme and disagree
+// badly in a dark one (a dark-only darken and a light-only lighten made every coloured region a
+// bright slab against a near-black canvas); starting from the ground is symmetric by
+// construction and reads as a surface in both appearances. `ground` is the surface this region
+// sits inside - the host's drawn interior for a nested region, a group's own fill for a member,
+// canvasTone() otherwise - so a nested region is always the one above it moved toward its own
+// colour, never the bare canvas moved twice.
+function componentSurfaceFill(hex,amount=.86,ground=canvasTone()){return mixHex([ground,hex],[amount,1-amount])}
 
 const DEFAULT_COMPONENT_COLOR='#171715';
 const DEFAULT_WIRE_COLOR='#171715';
@@ -10071,16 +10079,36 @@ function materialFillColor(base,material){
   if(material==='panel')return mixHex([base,dark?'#3B3E3D':'#d3d4cf'],[.85,.15]);
   return base;
 }
+// The ground this region's fill moves toward its colour from: a card nested on a Component's
+// interior takes that host's own drawn fill (read back from the DOM, since hosts are rendered
+// before their children by nodeDepth), a card that is a member of a coloured group on the global
+// canvas takes that group's region fill, and any other card takes the bare canvas. Each level is
+// then the one above it moved toward its own colour, so nesting reads without a shadow.
+function componentFillGround(n){
+  const surface=n.canvasId||GLOBAL_CANVAS_ID;
+  if(surface.startsWith('canvas:component:')){
+    const host=nodesG.querySelector(`:scope > .node[data-id="${CSS.escape(surface.slice('canvas:component:'.length))}"]`);
+    const hostFill=host?host.style.getPropertyValue('--component-interior-fill').trim():'';
+    if(/^#[0-9a-f]{6}$/i.test(hostFill))return hostFill;
+    return canvasTone();
+  }
+  const group=nodes.find(g=>isGroupComponent(g)&&!isEffectivelyHidden(g)
+    &&Array.isArray(g.config?.members)&&g.config.members.includes(n.id)
+    &&Number.isInteger(g.config?.colorSlot)&&g.config.colorSlot>0);
+  if(group)return componentSurfaceFill(slotColor(group.config.colorSlot),.9);
+  return canvasTone();
+}
 function renderComponentVisual(g,n,cfg,s,signalColor){
   const p=cfg.presentation,size=p.size,form=componentForm(n);
   const boundaryColor=slotColor(cfg.colorSlot),interiorColor=slotColor(p.interiorColorSlot);
   const mixedInterior=colorEngine.diffuse?mixHex([interiorColor,signalColor],[.66,.34]):interiorColor;
+  const ground=componentFillGround(n);
   // A card is a light tint of its slot, so ink and accents carry the picture, not a gray mass;
   // a container is lighter still, a wash that holds its children without competing with them.
-  const materialFill=materialFillColor(componentSurfaceFill(mixedInterior,componentAcceptsChildren(n)?.975:.955),form.body.material);
+  const materialFill=materialFillColor(componentSurfaceFill(mixedInterior,componentAcceptsChildren(n)?.975:.955,ground),form.body.material);
   // A section fills its regions by what they are: solid is the card's material, space is a wash.
-  g.style.setProperty('--section-solid',materialFillColor(componentSurfaceFill(mixedInterior,.86),form.body.material));
-  g.style.setProperty('--section-space',componentSurfaceFill(mixedInterior,.985));
+  g.style.setProperty('--section-solid',materialFillColor(componentSurfaceFill(mixedInterior,.86,ground),form.body.material));
+  g.style.setProperty('--section-space',componentSurfaceFill(mixedInterior,.985,ground));
   g.dataset.material=form.body.material;g.dataset.dimension=String(form.dimension);
   g.style.setProperty('--component-color',boundaryColor);
   g.style.setProperty('--component-boundary-color',boundaryColor);
@@ -10242,14 +10270,15 @@ function renderGroups(markers=markersById()){
     rect.setAttribute('rx',String(T.radius?.card??10));
     // Slot 0 is the colour every record is given, so only a chosen slot tints the region.
     const slot=Number.isInteger(cfg.colorSlot)&&cfg.colorSlot>0?cfg.colorSlot:null;
-    rect.style.fill=slot!=null?slotColor(slot):'none';if(slot!=null)rect.style.fillOpacity='.1';
+    const regionFill=slot!=null?componentSurfaceFill(slotColor(slot),.9):null;
+    rect.style.fill=regionFill??'none';rect.style.fillOpacity='1';
     rect.style.stroke='var(--muted)';rect.style.strokeWidth='var(--stroke-structure)';rect.style.pointerEvents='none';
     g.appendChild(rect);
     const label=String(cfg.label||'').trim();
     if(label){const title=document.createElementNS('http://www.w3.org/2000/svg','text');title.setAttribute('class','group-title');title.dataset.role='title';
       // The muted ink, darkened (or lightened) only as far as text needs to read on the region: 4.5:1, as card text.
       const muted=(getComputedStyle(workspace).getPropertyValue('--muted')||'').trim(),ink=/^#[0-9a-f]{6}$/i.test(muted)?muted:'#6C6C65';
-      title.style.fill=ensureContrast(ink,slot!=null?mixHex([canvasTone(),slotColor(slot)],[.9,.1]):canvasTone(),4.6);title.textContent=label;g.appendChild(title)}
+      title.style.fill=ensureContrast(ink,regionFill??canvasTone(),4.6);title.textContent=label;g.appendChild(title)}
     {const own=markers.get(n.id);if(own)appendMarkerBadge(g,own,0,0)}
     placeGroupRegion(g,n);
     const host=surface.startsWith('canvas:component:')?nodesG.querySelector(`:scope > .node[data-id="${CSS.escape(surface.slice('canvas:component:'.length))}"]`):null;

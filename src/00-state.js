@@ -293,7 +293,15 @@ function nearestSlot(hex){
 }
 function lighten(hex,amount=.88){return mixHex([hex,'#FFFFFF'],[1-amount,amount])}
 function darken(hex,amount=.72){return mixHex([hex,'#111315'],[1-amount,amount])}
-function componentSurfaceFill(hex,amount=.86){return surfaceAppearance()==='dark'?darken(hex,Math.min(.88,amount*.82)):lighten(hex,amount)}
+// A region's fill is the ground it sits on moved toward the region's own colour - not the
+// colour moved toward the ground. The two constructions agree in a light theme and disagree
+// badly in a dark one (a dark-only darken and a light-only lighten made every coloured region a
+// bright slab against a near-black canvas); starting from the ground is symmetric by
+// construction and reads as a surface in both appearances. `ground` is the surface this region
+// sits inside - the host's drawn interior for a nested region, a group's own fill for a member,
+// canvasTone() otherwise - so a nested region is always the one above it moved toward its own
+// colour, never the bare canvas moved twice.
+function componentSurfaceFill(hex,amount=.86,ground=canvasTone()){return mixHex([ground,hex],[amount,1-amount])}
 
 const DEFAULT_COMPONENT_COLOR='#171715';
 const DEFAULT_WIRE_COLOR='#171715';
