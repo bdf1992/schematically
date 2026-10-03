@@ -18,10 +18,12 @@ await import(pathToFileURL(path.join(HERE,'../src/04-signal-model.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/06-attachment-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/05-data-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/07-state-space.js')).href);
+await import(pathToFileURL(path.join(HERE,'../src/07-state-surface.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/07-graph-core.js')).href);
 await import(pathToFileURL(path.join(HERE,'../src/08-layout-core.js')).href);
 if(!globalThis.SovSchematicData)throw new Error('SovSchematicData core failed to load');
 if(!globalThis.SovSchematicStateSpace)throw new Error('SovSchematicStateSpace failed to load');
+if(!globalThis.SovSchematicSimSurface)throw new Error('SovSchematicSimSurface failed to load');
 if(!globalThis.SovSchematicGraph)throw new Error('SovSchematicGraph core failed to load');
 
 const args=process.argv.slice(2);
