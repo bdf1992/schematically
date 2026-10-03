@@ -41,3 +41,10 @@ The desktop shell lives under `desktop/` (a Tauri crate wrapping the same standa
 
 ### `src/06-attachment-core.js`
 Pure 0D attachment-point topology, dimensional cardinality, host-dimensional projection, and legacy Port/Wire endpoint compatibility mapping. No DOM or rendering authority.
+
+### `mcp/`
+- `mcp/surface.mjs` — the MCP/HTTP request-handling core (`MCP.md` "One surface, any runtime"): every tool, every `/api/v1` route, history, checkpoints, runs and the root description, as `createSurface({store, packs, render, readText, describe, editorHtml}) -> {handle(request)}`. Imports no `node:` module; reads the cores from `globalThis`.
+- `mcp/store-file.mjs` — `createFileStore(file)`: the durable `.sov` document on disk (mkdir, write `.tmp`, rename).
+- `mcp/store-memory.mjs` — `createMemoryStore(text)`: an in-memory document with a `writes` counter, for a test or a hosted entrypoint with nowhere durable to write. Imports nothing.
+- `mcp/server.mjs` — the Node entrypoint only: arguments, the cores and `guide.mjs` by file URL, `data/*.pack.json`, the spawn-based `render` function, a file store, and an `http.createServer` adapter over `surface.mjs`'s `handle`.
+- `mcp/guide.mjs` — the authoring guide text, one step at a time, from `readText` and the data core's symbol ids; no imports.
