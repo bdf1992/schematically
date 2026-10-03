@@ -56,6 +56,7 @@ one-runtime plan, 2026-10-03):
 - `schematic.graph.query` — `{verb, args}`: junctions, reach, paths, cycles, order, cut, boundary, untyped, blocked, acl, signals, export (jgf | dot | graphml)
 - `schematic.sim.set` / `at` / `advance` / `tick` — levels and time (asserted set, scheduled operations, the clock); `at`'s time and `advance`'s ms are milliseconds, carried over the engine's own ticks at the declared `tickMs` (default 1 ms per tick)
 - `schematic.sim.start` / `stop` / `inject` / `step` / `run` / `resume` / `reconcile` / `inspect` / `scenario` / `scenarios` — `step` counts ticks, not milliseconds; `run`'s `until` is ms, like `advance`
+- `schematic.sim.travel` / `spectrum` — pure reads of the run (`STATE-SPACE.md`, "Reading a run: travel and spectrum"). `travel` `{}` gives `{ok, tickMs, wires: [{id, a, b, forward, reverse, delayTicks, travelMs}]}`: each wire's declared delay as the run resolved it (`config.delay` in ticks, else `latencyMs` converted). `spectrum` `{fromMs, toMs, stepMs, harmonics = 8, nodes}` gives, per node, `{node, periodMs, samples, mean, energy, harmonics: [{n, amplitude, phase}], rest, parsevalError, reason}` over a window that has elapsed; refusals `WINDOW_NOT_ELAPSED`, `WINDOW_STEP`, `WINDOW_TOO_LONG`, `UNKNOWN_NODE`
 
 HTTP: `GET|POST /api/v1/graph/<verb>`, `POST /api/v1/sim/<action>`, `GET /api/v1/sim/inspect?what=…&id=…`.
 

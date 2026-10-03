@@ -135,6 +135,8 @@ const SovSchematicAPI={
     resume:(parkId,options={})=>graphCall('schematic.sim.resume',{...options,parkId}),
     reconcile:(effectKey,options={})=>graphCall('schematic.sim.reconcile',{...options,effectKey}),
     inspect:(what='state',id)=>graphCall('schematic.sim.inspect',{what,id}),
+    travel:()=>graphCall('schematic.sim.travel'),
+    spectrum:(window={})=>graphCall('schematic.sim.spectrum',window),
     scenario:(idOrScenario,handlers)=>graphCall('schematic.sim.scenario',typeof idOrScenario==='string'?{id:idOrScenario,handlers}:{scenario:idOrScenario,handlers}),
     scenarios:()=>graphCall('schematic.sim.scenarios')
   },

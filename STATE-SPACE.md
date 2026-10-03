@@ -524,6 +524,24 @@ These are not CRUD: `operation@0.1` covers create / read / update / delete on co
 
 **Standards live at the edges, never in the core record (slice 4).** Export provenance as PROV-JSON (observer → Agent, rule application → Activity, record → Entity, inputs → wasDerivedFrom). Import measured records from OpenTelemetry, with metrics becoming signal state and spans becoming particles, and CloudEvents for discrete events. Each import adapter pins its semantic-convention version; the GenAI conventions are still pre-stable.
 
+### Reading a run: travel and spectrum
+
+The sim surface (`src/07-state-surface.js`) has two reads of the run it drives: `sim.travel()` and `sim.spectrum(window)`, served as `schematic.sim.travel` and `schematic.sim.spectrum` over MCP, `POST /api/v1/sim/travel|spectrum` over HTTP and `SovSchematicAPI.sim.travel|spectrum` in the browser. Both read `run.wires`, `run.clocks` and `run.records`, write nothing into the run, its records or its ledger, and give byte-identical canonical JSON for the same document and inputs, a restored run included. Floating point is used only in these views; the run keeps its integers (Numeric policy).
+
+**Travel** is a wire's declared delay and nothing else: `{ok, tickMs, wires: [{id, a, b, forward, reverse, delayTicks, travelMs}]}` in `run.wires` order. `delayTicks` is the delay the engine resolved at start (`config.delay` in ticks, else `latencyMs` converted, rounding half up, never under one tick above 0 ms), and `travelMs = delayTicks * tickMs`. A zero-delay wire reports 0: it runs in delta rounds within its tick. A wire that carries in neither direction is listed with `forward` and `reverse` false. No speed, length or distance is computed.
+
+**A node's period** is the least common multiple of the `periodMs` of every clock its level depends on, found by following carrying legs (each wire's forward and reverse) upstream from the node to `run.clocks`; a clock's period is its own. A node no clock reaches has no period.
+
+**Spectrum** `{fromMs, toMs, stepMs, harmonics = 8, nodes}` (`nodes` defaults to every component with a level) takes M = (toMs - fromMs) / stepMs samples per node: x_j is the level (0..1, as `levels()` reports it) in effect at t_j = fromMs + j·stepMs, after every level record at a tick at or before t_j / tickMs. Per node it gives `{node, periodMs, samples, mean, energy, harmonics, rest, parsevalError, reason}`:
+
+- `energy` = mean((x − mean)²), the signal's power with its mean removed;
+- with q = (toMs − fromMs) / periodMs a whole number, X_k = Σ_j x_j·e^(−2πijk/M) by direct DFT, and `harmonics` = `[{n, amplitude, phase}]` for n = 1..harmonics with n·q under M/2: amplitude 2|X_(nq)|/M and phase atan2(Im, Re) of X_(nq) in radians, so x ≈ mean + Σ a_n cos(2πn(t − fromMs)/periodMs + phase_n);
+- `rest` = energy − Σ a_n²/2, the power above the last harmonic given;
+- `parsevalError` = |energy − Σ_(k=1..M−1) |X_k|²/M²|, Parseval's theorem as the check;
+- a window that is not a whole number of periods gives `harmonics: null` and `reason: 'window-not-whole-periods'`; a node with no period gives `harmonics: null` and `reason: 'no-period'`; `energy` and `parsevalError` are given either way.
+
+A sampled square or saw falls as 1/sin(πk/N) over N samples a period, not 1/k, so its ratios are those of the sampled wave. Refusals, typed `{ok: false, code, message}`: `WINDOW_NOT_ELAPSED` when `toMs` is after the surface's time; `WINDOW_STEP` when `stepMs` is not a positive whole multiple of `tickMs` or `toMs − fromMs` not a positive whole multiple of `stepMs`; `WINDOW_TOO_LONG` over 4096 samples; `UNKNOWN_NODE`. `tests/run_spectrum_qa.py` checks the values against the sampled waves' closed forms, Parseval to 1e-12, replay and restore identity, and the same JSON over node, MCP and HTTP.
+
 ## Module ownership
 
 Proposed additions to `MODULES.md`:

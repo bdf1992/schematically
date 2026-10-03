@@ -5458,9 +5458,12 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
           v.edges.push(edge);v.log.push({at,event:'edge',node:s.entity,from:old,to:value,polarity,cause:edge.cause});
         }
         v.level[s.entity]=value;
+        // Each level as it was set, [tick, value], in record order: what sim.spectrum samples.
+        (v.series[s.entity]||(v.series[s.entity]=[])).push([t,value]);
         if(stopAfter.has(i))v.log.push({at,event:'clock-stopped',node:stopAfter.get(i)});
       });
       flushLedger(null);
+      v.levelNodes=new Set(Object.keys(levelPoint));
       cache=v;return v;
     }
     const kindOf=id=>{const c=run.components[id]||{};if(c.asserted)return c.asserted.kind;if(c.role==='device'&&c.combine)return run.definitions[c.definition]?.parameters?.kind||'binary';return 'binary'};
@@ -5500,6 +5503,81 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(!r.ok)return r;
       cache=null;
       return {ok:true,messageId:`m-${r.seq}`};
+    }
+
+    // ---- Reading a run: travel and spectrum (STATE-SPACE.md, Surfaces). Pure reads of run.wires,
+    // run.clocks and run.records; nothing is written into the run, its records or its ledger.
+    // Floating point is used only here, in the view; the run keeps its integers.
+    // A wire's travel is its declared delay as the engine resolved it at start, and nothing else.
+    function travel(){
+      return {ok:true,tickMs:TICK,wires:run.wires.map(w=>({id:w.id,a:w.a.entity,b:w.b.entity,forward:!!w.forward,reverse:!!w.reverse,delayTicks:w.delay,travelMs:w.delay*TICK}))};
+    }
+    const gcd=(x,y)=>{while(y){[x,y]=[y,x%y]}return x};
+    // A node's period: the least common multiple of the periods of every clock its level depends
+    // on, found by following carrying legs upstream to run.clocks; null when no clock reaches it.
+    function periodOf(nodeId){
+      const clockPeriods={};
+      for(const src of Object.values(run.clocks||{})){(clockPeriods[src.entity]||(clockPeriods[src.entity]=[])).push(src.clock.periodMs)}
+      const upstream={};
+      for(const w of run.wires){
+        if(w.forward)(upstream[w.b.entity]||(upstream[w.b.entity]=[])).push(w.a.entity);
+        if(w.reverse)(upstream[w.a.entity]||(upstream[w.a.entity]=[])).push(w.b.entity);
+      }
+      const seen=new Set([nodeId]),todo=[nodeId];let period=null;
+      while(todo.length){
+        const id=todo.shift();
+        // A clock's level is its own wave: its period ends the walk on that branch.
+        if(clockPeriods[id]){for(const p of clockPeriods[id])period=period===null?p:period/gcd(period,p)*p;continue}
+        for(const up of upstream[id]||[])if(!seen.has(up)){seen.add(up);todo.push(up)}
+      }
+      return period;
+    }
+    function spectrum({fromMs,toMs,stepMs,harmonics=8,nodes}={}){
+      const from=Number(fromMs),to=Number(toMs),stepSize=Number(stepMs),span=to-from;
+      if(!Number.isFinite(from)||!Number.isFinite(to))return refusal('WINDOW_STEP','fromMs and toMs are numbers of milliseconds');
+      if(to>time)return refusal('WINDOW_NOT_ELAPSED',`the window ends at ${to} ms, after the run's time ${time} ms`,{toMs:to,time});
+      if(!(stepSize>0)||!Number.isSafeInteger(stepSize/TICK))return refusal('WINDOW_STEP',`stepMs ${stepMs} is not a positive whole multiple of the tick (${TICK} ms)`,{stepMs,tickMs:TICK});
+      if(!(span>0)||!Number.isSafeInteger(span/stepSize))return refusal('WINDOW_STEP',`toMs - fromMs (${span} ms) is not a positive whole multiple of stepMs ${stepSize}`,{fromMs:from,toMs:to,stepMs:stepSize});
+      const M=span/stepSize;
+      if(M>4096)return refusal('WINDOW_TOO_LONG',`the window holds ${M} samples; at most 4096`,{samples:M});
+      const H=harmonics==null||!Number.isFinite(Number(harmonics))?8:Math.max(0,Math.floor(Number(harmonics)));
+      const v=views();
+      const ids=Array.isArray(nodes)?nodes.map(String):typeof nodes==='string'?[nodes]:run.doc.components.map(c=>c.id).filter(id=>v.levelNodes.has(id));
+      for(const id of ids)if(!run.components[id])return refusal('UNKNOWN_NODE',`No component ${id}`,{node:id});
+      // One table of the M-th roots of unity, indexed by j*k mod M, so every bin uses exact angles.
+      const cosT=new Array(M),sinT=new Array(M);
+      for(let k=0;k<M;k++){const a=2*Math.PI*k/M;cosT[k]=Math.cos(a);sinT[k]=Math.sin(a)}
+      const out=[];
+      for(const id of ids){
+        // x_j: the level in effect at t_j, after every level record at a tick at or before t_j / tickMs.
+        const series=v.series[id]||[],x=new Array(M);let r=0,level=0;
+        for(let j=0;j<M;j++){
+          const limit=(from+j*stepSize)/TICK;
+          while(r<series.length&&series[r][0]<=limit){level=series[r][1];r++}
+          x[j]=level;
+        }
+        let sum=0;for(let j=0;j<M;j++)sum+=x[j];
+        const mean=sum/M;
+        let energy=0;for(let j=0;j<M;j++){const d=x[j]-mean;energy+=d*d}
+        energy/=M;
+        const re=new Array(M),im=new Array(M);
+        for(let k=0;k<M;k++){let a=0,b=0;for(let j=0;j<M;j++){const i=(j*k)%M;a+=x[j]*cosT[i];b-=x[j]*sinT[i]}re[k]=a;im[k]=b}
+        let binPower=0;for(let k=1;k<M;k++)binPower+=(re[k]*re[k]+im[k]*im[k])/(M*M);
+        const periodMs=periodOf(id),q=periodMs?span/periodMs:null;
+        let list=null,rest=null,reason=null;
+        if(periodMs===null)reason='no-period';
+        else if(!Number.isInteger(q))reason='window-not-whole-periods';
+        else{
+          list=[];let held=0;
+          for(let n=1;n<=H&&n*q<M/2;n++){
+            const k=n*q,amplitude=2*Math.hypot(re[k],im[k])/M;
+            list.push({n,amplitude,phase:Math.atan2(im[k],re[k])});held+=amplitude*amplitude/2;
+          }
+          rest=energy-held;
+        }
+        out.push({node:id,periodMs,samples:M,mean,energy,harmonics:list,rest,parsevalError:Math.abs(energy-binPower),reason});
+      }
+      return {ok:true,fromMs:from,toMs:to,stepMs:stepSize,tickMs:TICK,nodes:out};
     }
     const sim={
       inject,
@@ -5556,6 +5634,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       refusals(){return clone(views().refusals)},
       receipts(){return clone(views().receipts)},
       log(){return clone(views().log)},
+      travel,
+      spectrum,
       state(){const v=views();return {time,pending:pendingCount(run),parked:Object.keys(run.parked||{}).length,messages:v.messages.size,refusals:v.refusals.length,effects:Object.keys(run.effects||{}).length,edges:v.edges.length,high:Object.values(v.level).filter(x=>x>0).length}},
       // A copy of the run, with the surface's time; createSimulation(doc, {restore}) continues from it.
       snapshot(){return {run:clone(run),time,startInputs:clone(startInputs),internal:[...internal]}},
@@ -5636,6 +5716,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       'sim.run':(doc,a)=>need()||sim.run({until:a.until==null?Infinity:Number(a.until),maxEvents:Number(a.maxEvents)||10000}),
       'sim.resume':(doc,a)=>need()||sim.resume(a.parkId,a),
       'sim.reconcile':(doc,a)=>need()||sim.reconcile(a.effectKey,a),
+      'sim.travel':()=>need()||sim.travel(),
+      'sim.spectrum':(doc,a)=>need()||sim.spectrum({fromMs:a.fromMs,toMs:a.toMs,stepMs:a.stepMs,harmonics:a.harmonics,nodes:a.nodes}),
       'sim.inspect':(doc,a)=>{
         const n=need();if(n)return n;
         const what=a.what||'state',stale=startedRevision!=null&&doc.revision!==startedRevision;
@@ -5651,7 +5733,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     };
     return {execute(name,doc,args={}){const fn=actions[String(name).replace(/^schematic\./,'')];if(!fn)return refusal('UNKNOWN_TOOL',`Unknown tool ${name}`);return fn(doc,isObject(args)?args:{})},names:Object.keys(actions).map(n=>'schematic.'+n)};
   }
-  // The same schematic.graph.query and 14 schematic.sim.* tools as src/07-graph-core.js; step counts ticks.
+  // The same schematic.graph.query and 14 schematic.sim.* tools as src/07-graph-core.js (step counts
+  // ticks), and two reads of the run of this surface's own: schematic.sim.travel and schematic.sim.spectrum.
   function tools(){
     const obj=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
     const verbs=graph().queries;
@@ -5668,6 +5751,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       {name:'schematic.sim.run',description:'Process events until the queue is empty, a time is reached, or maxEvents.',inputSchema:obj({until:{type:'number'},maxEvents:{type:'integer',minimum:1}})},
       {name:'schematic.sim.resume',description:'Resume a message parked at a human step: decision approve | reject, optional payload merged in.',inputSchema:obj({parkId:{type:'string'},decision:{type:'string',enum:['approve','reject']},payload:{},reason:{type:'string'}},['parkId'])},
       {name:'schematic.sim.reconcile',description:'Settle an ambiguous effect: confirmed true records it as done (it will not repeat), false clears it for retry.',inputSchema:obj({effectKey:{type:'string'},confirmed:{type:'boolean'},result:{}},['effectKey','confirmed'])},
+      {name:'schematic.sim.travel',description:'Each wire\'s travel time, in run order: its declared delay in ticks as the run resolved it (config.delay, else latencyMs converted, never under one tick above 0 ms; 0 is a zero-delay wire) and that in ms, with the directions it carries. A pure read.',inputSchema:obj({})},
+      {name:'schematic.sim.spectrum',description:'Each node\'s level over a past window [fromMs, toMs) sampled every stepMs: mean, energy (mean square with the mean removed), harmonics n = 1..harmonics of the node\'s period (amplitude, phase in radians, cosine convention) when the window holds whole periods, rest, and the Parseval check. nodes defaults to every component with a level. A pure read.',inputSchema:obj({fromMs:{type:'number'},toMs:{type:'number'},stepMs:{type:'number',exclusiveMinimum:0},harmonics:{type:'integer',minimum:0},nodes:{type:'array',items:{type:'string'}}},['fromMs','toMs','stepMs'])},
       {name:'schematic.sim.inspect',description:'Read simulation state. what: state | levels | edges | parked | log | effects | refusals | receipts | trace | taps | lineage | snapshot; id names the message (trace, lineage) or component (taps, edges).',inputSchema:obj({what:{type:'string'},id:{type:'string'}})},
       {name:'schematic.sim.scenario',description:'Run a saved scenario (document.references kind scenario) or an inline one in a fresh engine and return its checks as evidence.',inputSchema:obj({id:{type:'string'},scenario:{type:'object'},handlers:{type:'object'}})},
       {name:'schematic.sim.scenarios',description:'List the scenarios saved in the document.',inputSchema:obj({})}
@@ -14271,6 +14356,8 @@ const SovSchematicAPI={
     resume:(parkId,options={})=>graphCall('schematic.sim.resume',{...options,parkId}),
     reconcile:(effectKey,options={})=>graphCall('schematic.sim.reconcile',{...options,effectKey}),
     inspect:(what='state',id)=>graphCall('schematic.sim.inspect',{what,id}),
+    travel:()=>graphCall('schematic.sim.travel'),
+    spectrum:(window={})=>graphCall('schematic.sim.spectrum',window),
     scenario:(idOrScenario,handlers)=>graphCall('schematic.sim.scenario',typeof idOrScenario==='string'?{id:idOrScenario,handlers}:{scenario:idOrScenario,handlers}),
     scenarios:()=>graphCall('schematic.sim.scenarios')
   },
