@@ -143,7 +143,7 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .sim-edge{font:800 13px ui-sans-serif,system-ui,sans-serif;animation:sim-edge-fade .7s ease-out forwards}
 .sim-edge.rise{fill:var(--accent-out)}.sim-edge.fall{fill:var(--accent-in)}
 @keyframes sim-edge-fade{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-6px)}}
-.wire-group.level-high .wire{stroke:var(--accent-out)}
+.wire-group.level-high .wire{stroke:var(--wire-lit,var(--accent-out))}
 .sim-waiting-bg{fill:var(--panel);stroke:var(--accent-in);stroke-width:1.4}
 .sim-waiting-text{font:700 10px ui-sans-serif,system-ui,sans-serif;fill:var(--accent-in)}
 .sim-decide circle{fill:var(--canvas-tone);stroke:var(--canvas-muted);stroke-width:1}
@@ -13509,7 +13509,7 @@ function renderStandaloneSvgNow(opts={}){
   clone.querySelector('#paletteDropLayer')?.replaceChildren();
   // A running clock's overlay is a moment, not the document.
   clone.querySelector('#simLayer')?.replaceChildren();
-  clone.querySelectorAll('.level-high').forEach(x => x.classList.remove('level-high'));
+  clone.querySelectorAll('.level-high').forEach(x => { x.classList.remove('level-high'); x.style.removeProperty('--wire-lit'); });
   clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
   clone.querySelectorAll('.port-hit,.wire-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
   // A still picture cannot show travel: a packet frozen mid-wire reads as a junction.
@@ -13987,7 +13987,7 @@ function paintSim(){
   if(typeof legendState!=='undefined'&&legendState.open)renderLegendPanel();
   simLayer.replaceChildren();
   workspace.classList.toggle('sim-live',!!simClock.run);
-  for(const gEl of workspace.querySelectorAll('.wire-group.level-high'))gEl.classList.remove('level-high');
+  for(const gEl of workspace.querySelectorAll('.wire-group.level-high')){gEl.classList.remove('level-high');gEl.style.removeProperty('--wire-lit')}
   const run=simClock.run;if(!run)return;
   const levels=run.levels();
   const wired=new Set(wires.flatMap(w=>[w.a,w.b]));
@@ -14015,8 +14015,10 @@ function paintSim(){
     const title=simEl('title',{});title.textContent=`Send a message from ${componentConfig(n).label||n.id}`;send.appendChild(title);
     send.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();simSend(n.id)});simLayer.appendChild(send);
   }
-  // A wire is lit while its source end is high.
-  for(const w of wires){const v=levels[w.a]?.value??0;if(v<=0)continue;const gEl=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"]`);if(gEl){gEl.classList.add('level-high');gEl.style.setProperty('--level',String(v))}}
+  // A wire is lit while its source end is high. A source in a role or status slot (6-11) lights it in
+  // that slot's own tone (litTone); any other source keeps the output accent.
+  for(const w of wires){const v=levels[w.a]?.value??0;if(v<=0)continue;const gEl=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"]`);if(gEl){gEl.classList.add('level-high');gEl.style.setProperty('--level',String(v));
+    const src=nodes.find(n=>n.id===w.a),slot=src?Number(componentConfig(src).colorSlot):NaN;if(Number.isInteger(slot)&&slot>=6){const tone=litTone(slot,surfaceAppearance());if(tone)gEl.style.setProperty('--wire-lit',tone)}}}
   // New edges flash + or − beside their node.
   const edges=run.edges().edges;
   for(const e of edges.slice(simClock.edgeMark)){
