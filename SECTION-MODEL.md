@@ -225,7 +225,9 @@ are dragged.
 a route avoids. The layout metrics (`src/57-layout-metrics.js`) leave them out of
 `node-overlap`, `route-through-node`, the text-over-a-node check, cramped labels and route
 wrapping. The group title is still text, so it counts in `text-collision` against other
-text. The layered layout (`src/08-layout-core.js`) does not place groups as cards.
+text. The layered layout (`src/08-layout-core.js`) does not place groups as cards: it places
+each group's members as one block, laid out on its own and padded as the region is drawn, so
+the group's region is the block (LAYOUT-MODEL.md "What `layered` does").
 
 The invariant from `CANVAS-MODEL.md` is unchanged: there is no implicit reach-through
 across a Component boundary. A group does not weaken it, because a group is not a
