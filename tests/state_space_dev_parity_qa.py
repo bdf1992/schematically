@@ -192,9 +192,10 @@ def main() -> None:
 
     # (3) The named intended difference (STATE-SPACE.md Settled item 15): one recorded draw at the
     # door decides its level; a level refusal there exists exactly when the anonymous lever's value
-    # wins; the graph core's first-in-first-out order always lets the anonymous lever win.
-    assert dev['door'] == {'refusal': True, 'inside': 0}, dev['door']
+    # wins. Since contract 09 the graph core delegates to the state-space engine, so its default run
+    # gives the same drawn result as the authored case here, not the retired first-in-first-out answer.
     cases = [r['door']['authored'], *r['door']['seeds']]
+    assert dev['door'] == {'refusal': cases[0]['refusal'], 'inside': 0}, (dev['door'], cases[0])
     for c in cases:
         assert c['draws'] == 1 and len(c['atDoor']) == 1, c
         assert c['atDoor'][0]['paths'] == ['k3', 'k4'] and c['atDoor'][0]['channel'] == 'main', c

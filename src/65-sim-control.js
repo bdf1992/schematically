@@ -1,6 +1,6 @@
 'use strict';
-// 0.1 concern: the canvas control plane. One clock drives the graph engine
-// (src/07-graph-core.js) over the live document; this module only projects its state onto the
+// 0.1 concern: the canvas control plane. One clock drives the sim surface
+// (src/07-state-surface.js, over the state-space engine) over the live document; this module only projects its state onto the
 // canvas (levels, edges, waiting steps) and turns gestures into engine operations. It never
 // writes the document: a simulation reads a snapshot and restarts when the document changes.
 
@@ -18,7 +18,7 @@ function simHandlersFor(doc){
 }
 function simStart(){
   const doc=snapshotDocument(),{handlers,stubbed}=simHandlersFor(doc);
-  const made=SovSchematicGraph.createSimulation(doc,{handlers});
+  const made=SovSchematicSimSurface.createSimulation(doc,{handlers});
   simClock.fingerprint=semanticFingerprint();simClock.edgeMark=0;simClock.stubbed=stubbed;
   if(!made.ok){simClock.run=null;simClock.note=made.message;simPause();paintSim();updateSimReadout();return made}
   simClock.run=made.sim;simClock.note=stubbed.length?`stubbed: ${stubbed.join(', ')}`:'';

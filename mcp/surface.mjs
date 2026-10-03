@@ -2,8 +2,8 @@
 // history, checkpoints, runs and the root description, with no second copy of the logic for a
 // second runtime. This module imports nothing from node: (no node:http, node:fs, node:path,
 // node:child_process, node:url); it reads the cores from globalThis (SovSchematicData,
-// SovSchematicGraph, SovSchematicStateSpace, SovSchematicLayout), which the entrypoint loads
-// first. A hosted entrypoint supplies:
+// SovSchematicGraph, SovSchematicStateSpace, SovSchematicSimSurface, SovSchematicLayout),
+// which the entrypoint loads first. A hosted entrypoint supplies:
 //   store    {read(): string|null, write(text): void}  the document's one durable copy
 //   packs    [pack json, ...]                          read at start (data/*.pack.json on Node)
 //   render(formats, args) -> Promise<result>           optional; omit it and every render tool
@@ -18,8 +18,9 @@
 import {guide} from './guide.mjs';
 
 export function createSurface({store,packs,render,readText,describe,editorHtml}){
-  const Data=globalThis.SovSchematicData,Graph=globalThis.SovSchematicGraph;
+  const Data=globalThis.SovSchematicData;
   const State=globalThis.SovSchematicStateSpace,Layout=globalThis.SovSchematicLayout;
+  const SimSurface=globalThis.SovSchematicSimSurface;
   const MCP_VERSION='2026-07-28';
   // A standard client opens with initialize and names the protocol it speaks; the server answers in
   // that version when it is one it knows, else in its own.
@@ -37,7 +38,10 @@ $refs for new ids); check with schematic.markers and schematic.render; run with 
   }
   let documentState=loadDocument();
   // Graph queries and the simulation are read-only over the document; one session per surface.
-  const graphSession=Graph.createSession();
+  // The simulation side is the sim surface (src/07-state-surface.js, over the state-space
+  // engine, contract 09 of the one-runtime plan); schematic.graph.query still reaches
+  // src/07-graph-core.js's graph reading.
+  const graphSession=SimSurface.createSession();
   // Runs live beside the document, not in it: an in-memory registry, every run started from the
   // current document, packs read from data/*.pack.json (file-name order) at start.
   const runs=State.createRunRegistry({packs:packs||[],document:()=>Data.clone(documentState)});
@@ -170,7 +174,7 @@ $refs for new ids); check with schematic.markers and schematic.render; run with 
     if(typeof method==='string'&&method.startsWith('notifications/'))return {status:202,headers:{'access-control-allow-origin':'*'},body:''};
     if(method==='ping')return jsonResponse(200,rpcResult(id,{}),{'mcp-protocol-version':MCP_VERSION});
     if(method==='server/discover')return jsonResponse(200,rpcResult(id,{protocolVersion:MCP_VERSION,serverInfo:SERVER_INFO,capabilities:{tools:{listChanged:false}},instructions:INSTRUCTIONS}),{'mcp-protocol-version':MCP_VERSION});
-    if(method==='tools/list'){const extra=[{name:'schematic.markers',description:'List validation markers for the current document, derived from schematic.document validation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}},{name:'schematic.live.selection',description:'What the live browser editor currently has selected, with the selected record and no document body. Returns connected:false when no editor is pushing.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.live.get',description:'The full live editor snapshot: file identity, revision, camera, appearance, selection, and the in-browser document. Reflects unsaved editor state, not the server file.',inputSchema:{type:'object',properties:{},additionalProperties:false}}];return jsonResponse(200,rpcResult(id,{tools:[...AUTHOR_TOOLS,...Data.operationTools(),...extra,...RUN_TOOLS,...Graph.tools(),...RENDER_TOOLS,Layout.tool()]}),{'mcp-protocol-version':MCP_VERSION});}
+    if(method==='tools/list'){const extra=[{name:'schematic.markers',description:'List validation markers for the current document, derived from schematic.document validation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}},{name:'schematic.live.selection',description:'What the live browser editor currently has selected, with the selected record and no document body. Returns connected:false when no editor is pushing.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.live.get',description:'The full live editor snapshot: file identity, revision, camera, appearance, selection, and the in-browser document. Reflects unsaved editor state, not the server file.',inputSchema:{type:'object',properties:{},additionalProperties:false}}];return jsonResponse(200,rpcResult(id,{tools:[...AUTHOR_TOOLS,...Data.operationTools(),...extra,...RUN_TOOLS,...SimSurface.tools(),...RENDER_TOOLS,Layout.tool()]}),{'mcp-protocol-version':MCP_VERSION});}
     if(method==='tools/call'){
       const name=rpc.params?.name,args=rpc.params?.arguments||{};
       const result=await executeTool(name,args);if(result.mutates)saveDocument();

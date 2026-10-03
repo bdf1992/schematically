@@ -3,13 +3,17 @@
 // message simulation. No DOM; shared by the browser API and the MCP/HTTP server.
 // Specified in GRAPH-MODEL.md.
 (function(root,factory){
-  let Data=root.SovSchematicData,Model=root.SovSchematicSignalModel;
+  let Data=root.SovSchematicData,Model=root.SovSchematicSignalModel,surface=()=>root.SovSchematicSimSurface;
   if(!Model&&typeof module!=='undefined'&&module.exports)Model=require('./04-signal-model.js');
   if(!Data&&typeof module!=='undefined'&&module.exports){require('./06-attachment-core.js');Data=require('./05-data-core.js')}
-  const api=factory(Data,Model);
+  // Under node, createSimulation/runScenario/createSession/tools delegate to the sim surface
+  // (src/07-state-surface.js, contract 09 of the one-runtime plan), required at call time so
+  // the two modules' mutual require does not run at load time.
+  if(typeof module!=='undefined'&&module.exports)surface=()=>root.SovSchematicSimSurface||require('./07-state-surface.js');
+  const api=factory(Data,Model,surface);
   root.SovSchematicGraph=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(Data,Model){
+})(typeof globalThis!=='undefined'?globalThis:this,function(Data,Model,surface){
   if(!Data)throw new Error('SovSchematicData core is required');
   if(!Model)throw new Error('SovSchematicSignalModel (src/04-signal-model.js) is required');
   const clone=Data.clone;
@@ -255,7 +259,9 @@
     return {refuse:`unknown handler kind ${spec.kind}`};
   }
 
-  function createSimulation(doc,options={}){
+  // Kept for contract 10 to delete; unreachable now that createSimulation below delegates
+  // to the sim surface (src/07-state-surface.js).
+  function legacyCreateSimulation(doc,options={}){
     const g=build(doc);
     const zero=cycles(g).cycles.filter(c=>!c.timed);
     if(zero.length)return refusal('ZERO_LATENCY_CYCLE','A message cycle must take time: give a wire latencyMs above 0 or pass through a buffer or hold',{cycles:zero});
@@ -578,11 +584,13 @@
   // ---- Scenarios -----------------------------------------------------------------------
   // {handlers, steps:[{inject:{node,channel,payload}} | {run:{until}} | {resume:{node, decision, payload}}
   //   | {restart:true} | {reconcile:{effectKey, confirmed}}], expect:{taps:{node:n}, refusals:n, effects:{confirmed:n}, parked:n}}
-  function runScenario(doc,scenario,options={}){
+  // Kept for contract 10 to delete; unreachable now that runScenario below delegates to the
+  // sim surface (src/07-state-surface.js).
+  function legacyRunScenario(doc,scenario,options={}){
     const sc=isObject(scenario?.data)?scenario.data:scenario;
     if(!isObject(sc)||!Array.isArray(sc.steps))return refusal('BAD_SCENARIO','A scenario needs steps[]');
     const handlers={...(sc.handlers||{}),...(options.handlers||{})};
-    let made=createSimulation(doc,{handlers});if(!made.ok)return made;
+    let made=legacyCreateSimulation(doc,{handlers});if(!made.ok)return made;
     let sim=made.sim;const notes=[];
     for(const [i,step] of sc.steps.entries()){
       if(step.inject){const r=sim.inject(step.inject.node,step.inject);if(!r.ok)return {...r,step:i}}
@@ -593,7 +601,7 @@
       }
       else if(step.restart){
         // Kill and restart the engine from its durable snapshot, as a process restart would.
-        made=createSimulation(doc,{handlers,restore:sim.snapshot()});if(!made.ok)return made;sim=made.sim;notes.push({step:i,restarted:true});
+        made=legacyCreateSimulation(doc,{handlers,restore:sim.snapshot()});if(!made.ok)return made;sim=made.sim;notes.push({step:i,restarted:true});
       }
       else if(step.reconcile)sim.reconcile(step.reconcile.effectKey,step.reconcile);
       else if(step.set){const r=sim.set(step.set.node,step.set.value);if(!r.ok)return {...r,step:i}}
@@ -617,7 +625,9 @@
 
   // ---- One session, one dispatch: served identically by the browser API, HTTP and MCP -----
   function scenariosOf(doc){return (doc?.references||[]).filter(r=>r.kind==='scenario')}
-  function createSession(){
+  // Kept for contract 10 to delete; unreachable now that createSession below delegates to the
+  // sim surface (src/07-state-surface.js).
+  function legacyCreateSession(){
     let sim=null,startedAt=null,startedRevision=null;
     const need=()=>sim?null:refusal('NO_SIMULATION','Start a simulation first (schematic.sim.start)');
     const actions={
@@ -625,7 +635,7 @@
       'sim.start':(doc,a)=>{
         let handlers=isObject(a.handlers)?a.handlers:{};
         if(a.scenarioId){const sc=scenariosOf(doc).find(r=>r.id===a.scenarioId);if(!sc)return refusal('UNKNOWN_SCENARIO',`No scenario ${a.scenarioId}`);handlers={...(sc.data?.handlers||{}),...handlers}}
-        const made=createSimulation(doc,{handlers});if(!made.ok)return made;
+        const made=legacyCreateSimulation(doc,{handlers});if(!made.ok)return made;
         sim=made.sim;startedAt=new Date().toISOString();startedRevision=doc.revision??null;
         return {ok:true,startedAt,revision:startedRevision,handlers:Object.keys(handlers),state:sim.state()};
       },
@@ -648,13 +658,15 @@
       'sim.scenario':(doc,a)=>{
         const sc=a.scenario||scenariosOf(doc).find(r=>r.id===a.id);
         if(!sc)return refusal('UNKNOWN_SCENARIO',`No scenario ${a.id}`,{scenarios:scenariosOf(doc).map(r=>r.id)});
-        return runScenario(doc,sc,{handlers:isObject(a.handlers)?a.handlers:{}});
+        return legacyRunScenario(doc,sc,{handlers:isObject(a.handlers)?a.handlers:{}});
       },
       'sim.scenarios':(doc)=>({ok:true,scenarios:scenariosOf(doc).map(r=>({id:r.id,label:r.label}))})
     };
     return {execute(name,doc,args={}){const fn=actions[String(name).replace(/^schematic\./,'')];if(!fn)return refusal('UNKNOWN_TOOL',`Unknown tool ${name}`);return fn(doc,isObject(args)?args:{})},names:Object.keys(actions).map(n=>'schematic.'+n)};
   }
-  function tools(){
+  // Kept for contract 10 to delete; unreachable now that tools below delegates to the sim
+  // surface (src/07-state-surface.js).
+  function legacyTools(){
     const obj=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
     return [
       {name:'schematic.graph.query',description:`Read-only graph query. verb: ${Object.keys(QUERIES).join(' | ')}. args e.g. {from,to} for paths/cut, {from,channel} for reach (channel is optional: it follows only Wires whose two bound ports share that channel, so it crosses a boundary Point only where its self declares the channel), {componentId} for boundary, {format: jgf|dot|graphml} for export.`,inputSchema:obj({verb:{type:'string',enum:Object.keys(QUERIES)},args:{type:'object'}},['verb'])},
@@ -674,6 +686,15 @@
       {name:'schematic.sim.scenarios',description:'List the scenarios saved in the document.',inputSchema:obj({})}
     ];
   }
+
+  // ---- One runtime (contract 09 of the one-runtime plan): createSimulation, runScenario,
+  // createSession and tools delegate to SovSchematicSimSurface (src/07-state-surface.js, over
+  // the state-space engine) so callers and suites keep their names; the legacy* functions above
+  // are the retired message engine, unreachable, for contract 10 to delete.
+  const createSimulation=(...a)=>surface().createSimulation(...a);
+  const runScenario=(...a)=>surface().runScenario(...a);
+  const createSession=(...a)=>surface().createSession(...a);
+  const tools=(...a)=>surface().tools(...a);
 
   return {POLICIES,DEFAULT_LATENCY_MS,COMBINES,signalConfig,activeConnection,canEmit,canReceive,accessAllows,build,query,queries:Object.keys(QUERIES),createSimulation,runScenario,createSession,tools,aclConfig,aclDecide,crossingAt};
 });

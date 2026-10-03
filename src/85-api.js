@@ -47,7 +47,10 @@ function pagePacks(){
 }
 function pageRuns(){return pageRunRegistry||(pageRunRegistry=SovSchematicStateSpace.createRunRegistry({packs:pagePacks(),document:()=>snapshotDocument()}))}
 // Graph queries and the message simulation read the live document; one session per page.
-const graphSession=SovSchematicGraph.createSession();
+// The simulation side of the session is the sim surface (src/07-state-surface.js, over the
+// state-space engine, contract 09 of the one-runtime plan); schematic.graph.query still reaches
+// src/07-graph-core.js's graph reading.
+const graphSession=SovSchematicSimSurface.createSession();
 function graphCall(name,args={}){return SovSchematicData.clone(graphSession.execute(name,snapshotDocument(),args))}
 function apiOperation(op,resource,resourceId,value,patch,query){return runtimeCrud({schema:SovSchematicData.OPERATION_SCHEMA,id:`browser-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,op,resource,resourceId,value,patch,query})}
 
@@ -139,6 +142,6 @@ const SovSchematicAPI={
     start:(args)=>pageRuns().start(args),step:(handle)=>pageRuns().step(handle),settle:(handle)=>pageRuns().settle(handle),
     trace:(handle)=>pageRuns().trace(handle),query:(handle,subject)=>pageRuns().query(handle,subject),replay:(trace)=>pageRuns().replay(trace)
   },
-  tools:()=>[...SovSchematicData.operationTools(),...SovSchematicGraph.tools()]
+  tools:()=>[...SovSchematicData.operationTools(),...SovSchematicSimSurface.tools()]
 };
 window.SovSchematicAPI=SovSchematicAPI;
