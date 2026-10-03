@@ -118,8 +118,8 @@ MUTANTS=[
     {
       'name':'interior-route-unfenced',
       'file':'src/40-routing.js',
-      'old':'.filter(points=>pathValid(points,obstacles)&&routeInsideFence(points,fence))',
-      'new':'.filter(points=>pathValid(points,obstacles))',
+      'old':'.filter(points=>routeClear(points,obstacles,leads)&&routeInsideFence(points,fence))',
+      'new':'.filter(points=>routeClear(points,obstacles,leads))',
       'test':'tests/layout_quality_qa.py'
     },
     {
