@@ -157,8 +157,9 @@
     // (a line step of 1.15 and a line box of 1.45 title sizes) and 2 above and below it. The glyph
     // shrinks to make that room, keeping its aspect, never below 60% of its size; else unchanged.
     // Whether it needs a second line is judged from per-character advance widths, so the layout
-    // engine (no fonts in Node) and the renderer agree.
-    if(lines===2&&!subtitle&&titleWidth(title)*ts>avail){const room=size.h-2*(2.6*ts+4);if(room<h){const k=Math.max(.6,room/h);w*=k;h*=k}}
+    // engine (no fonts in Node) and the renderer agree; past 85% of the text width counts, a margin
+    // for fonts up to 15% wider than the table (DejaVu on Linux runs about 10% wider).
+    if(lines===2&&!subtitle&&titleWidth(title)*ts>avail*.85){const room=size.h-2*(2.6*ts+4);if(room<h){const k=Math.max(.6,room/h);w*=k;h*=k}}
     return {w,h,scale:Math.min(w/96,h/64)};
   }
   // A title's advance width in ems at the title weight (600), from a sans-serif width table in the

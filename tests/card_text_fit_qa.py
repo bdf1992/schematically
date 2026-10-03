@@ -15,6 +15,10 @@
 - The full-text tooltip is a <title> on the card's group, never inside the drawn <text>.
 - A one-word title ('Witness' on a default observe card) drawn 15% wider than here, or wider
   than the text width but within the full inner width (w - 8), is drawn whole.
+- Every example exported (render.svg, the SVG export's own route) with every card title drawn 15%
+  wider than this host's font: no title is cut but the case card of examples/09. This stands in
+  for Linux fonts (DejaVu runs about 10% wider), so a glyph that keeps full height because the
+  width table misjudges a wider font fails here.
 """
 from __future__ import annotations
 import sys
@@ -97,6 +101,29 @@ WORD_AT = r"""([id,factor])=>{const g0=()=>nodesG.querySelector(`.node[data-id="
   style.textContent='';render();
   return {natural,target,drawnWidth,max:size.w-12,wide:size.w-8,size,texts,truncated:t.dataset.truncated||null}}"""
 
+# Every example, exported as scripts/export_svg.py exports it (render.svg, labels at screen scale 1),
+# with each card title widened by letter-spacing to WIDER x its width on this host. Returns the
+# cards whose title the export draws cut, and how many titles were widened.
+EXAMPLES = sorted((ROOT / 'examples').glob('*.sov'))
+WIDER = 1.15
+CUT_OK = {('09-print-ai-proof-run.sov', 'case')}
+WIDE_EXPORT = r"""(factor)=>{const prev=workspace.style.getPropertyValue('--zoom');workspace.style.setProperty('--zoom','1');render();
+  let style=document.getElementById('wide-font-probe');if(!style){style=document.createElement('style');style.id='wide-font-probe';document.head.appendChild(style)}
+  style.textContent='';const rules=[];
+  for(const g of nodesG.querySelectorAll('.node:not(.group)')){
+    const n=nodes.find(x=>x.id===g.dataset.id);if(!n||componentForm(n).dimension!==2)continue;
+    const t=g.querySelector(':scope > text.component-label');if(!t)continue;
+    const full=t.dataset.full||t.textContent,probe=t.cloneNode(false);probe.textContent=full;g.appendChild(probe);
+    const w=probe.getComputedTextLength(),base=parseFloat(getComputedStyle(probe).letterSpacing)||0;probe.remove();
+    const chars=[...full].length;if(!chars)continue;
+    rules.push(`.node[data-id="${CSS.escape(n.id)}"] > text.component-label{letter-spacing:${base+w*(factor-1)/chars}px !important}`)}
+  style.textContent=rules.join('\n');workspace.style.setProperty('--zoom',prev);render();
+  const svg=window.SovSchematicAPI.render.svg({pad:48});
+  style.textContent='';render();
+  const doc=new DOMParser().parseFromString(svg,'image/svg+xml'),cut=[];
+  for(const t of doc.querySelectorAll('text.component-label[data-truncated="true"]'))cut.push([t.closest('[data-id]')?.getAttribute('data-id')||'?',t.textContent]);
+  return {widened:rules.length,cut}}"""
+
 inside = lambda a, R, tol=0.5: a['l'] >= R['l'] - tol and a['r'] <= R['r'] + tol and a['t'] >= R['t'] - tol and a['b'] <= R['b'] + tol
 
 missing = [doc.relative_to(ROOT).as_posix() for doc in DOCS if not doc.exists()]
@@ -136,6 +163,12 @@ with sync_playwright() as p:
     page.wait_for_timeout(100)
     for name, factor in WORD_WIDTHS.items():
         word[name] = page.evaluate(WORD_AT, [wid, factor])
+    wide_cuts = {}
+    for doc in EXAMPLES:
+        page.evaluate('([t,n])=>window.SovSchematicAPI.file.open(t,n)', [doc.read_text(encoding='utf-8'), doc.name])
+        page.evaluate('()=>fitDiagram()')
+        page.wait_for_timeout(150)
+        wide_cuts[doc.name] = page.evaluate(WIDE_EXPORT, WIDER)
     browser.close()
 
 for name, r in docs.items():
@@ -206,4 +239,10 @@ for name, w in word.items():
     assert abs(w['drawnWidth'] - w['target']) < 0.5, (name, 'the probe widened the word to its target', w)
     assert w['texts'].count('Witness') == 1 and w['truncated'] is None and not any('…' in s for s in w['texts']), (name, 'a single word within the inner width is drawn whole', w['texts'])
 assert word['between']['max'] < word['between']['drawnWidth'] <= word['between']['wide'], ('the bite case sits between text and inner width', word['between'])
+# With every title 15% wider than here, the export cuts no example title but the case card's.
+widened = sum(r['widened'] for r in wide_cuts.values())
+unexpected = [(name, cid, text) for name, r in wide_cuts.items() for cid, text in r['cut'] if (name, cid) not in CUT_OK]
+print(f"titles {WIDER:.2f}x wider: {widened} widened across {len(wide_cuts)} examples; cut {[(n, c, t) for n, r in wide_cuts.items() for c, t in r['cut']]}")
+assert widened > 0, 'no title was widened'
+assert not unexpected, ('with a font 15% wider, the export cuts example titles', unexpected)
 print('PASS card text fit QA')
