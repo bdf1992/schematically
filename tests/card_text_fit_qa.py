@@ -15,12 +15,14 @@
 - The full-text tooltip is a <title> on the card's group, never inside the drawn <text>.
 - A one-word title ('Witness' on a default observe card) drawn 15% wider than here, or wider
   than the text width but within the full inner width (w - 8), is drawn whole.
-- Every example exported (render.svg, the SVG export's own route) with every card title drawn 15%
-  wider than this host's font: no title is cut but the case card of examples/09. This stands in
-  for Linux fonts (DejaVu runs about 10% wider), so a glyph that keeps full height because the
+- Every example exported (render.svg, the SVG export's own route) with every card title drawn at
+  least 15% wider than glyphBox's width table estimates it: no title is cut but the case card of
+  examples/09. The target is the same on every host, and stands in for fonts wider than this
+  host's (DejaVu on Linux runs about 10% wider), so a glyph that keeps full height because the
   width table misjudges a wider font fails here.
 """
 from __future__ import annotations
+import os
 import sys
 from pathlib import Path
 
@@ -102,12 +104,21 @@ WORD_AT = r"""([id,factor])=>{const g0=()=>nodesG.querySelector(`.node[data-id="
   return {natural,target,drawnWidth,max:size.w-12,wide:size.w-8,size,texts,truncated:t.dataset.truncated||null}}"""
 
 # Every example, exported as scripts/export_svg.py exports it (render.svg, labels at screen scale 1),
-# with each card title widened by letter-spacing to WIDER x its width on this host. Returns the
-# cards whose title the export draws cut, and how many titles were widened.
+# with each card title widened by letter-spacing to WIDER x the width glyphBox's width table
+# estimates for it (titleWidth(title) x title size), the same target on every host. A title the host
+# font already draws wider than that gets no spacing; nothing is narrowed. Returns the cards whose
+# title the export draws cut, and how many titles were widened. CARD_TEXT_WIDER overrides WIDER
+# (1.0 checks that nothing is cut at the table's own width).
 EXAMPLES = sorted((ROOT / 'examples').glob('*.sov'))
-WIDER = 1.15
+WIDER = float(os.environ.get('CARD_TEXT_WIDER', '1.15'))
 CUT_OK = {('09-print-ai-proof-run.sov', 'case')}
-WIDE_EXPORT = r"""(factor)=>{const prev=workspace.style.getPropertyValue('--zoom');workspace.style.setProperty('--zoom','1');render();
+# The width table, copied byte for byte from src/03-notation-core.js; the copy is checked against
+# the source below, so the test cannot drift from the product.
+TABLE_JS = r"""const ADVANCE=[['iljI.,:;!|\'·',.3],['frt ()[]-',.38],['sJ"',.55],['mwMW',.88],['ABCDGHKNOQRUVXY&',.72],['EFLPSTZ',.64]];
+function titleWidth(title){let em=0;for(const c of String(title||'')){const hit=ADVANCE.find(([cs])=>cs.includes(c));em+=hit?hit[1]:c>='A'&&c<='Z'?.68:.59}return em*.94}"""
+WIDE_EXPORT = r"""(factor)=>{""" + TABLE_JS + r"""
+  const ts=SovSchematicNotation.drawnSize(activeNotation().tokens.type,'title');
+  const prev=workspace.style.getPropertyValue('--zoom');workspace.style.setProperty('--zoom','1');render();
   let style=document.getElementById('wide-font-probe');if(!style){style=document.createElement('style');style.id='wide-font-probe';document.head.appendChild(style)}
   style.textContent='';const rules=[];
   for(const g of nodesG.querySelectorAll('.node:not(.group)')){
@@ -115,8 +126,8 @@ WIDE_EXPORT = r"""(factor)=>{const prev=workspace.style.getPropertyValue('--zoom
     const t=g.querySelector(':scope > text.component-label');if(!t)continue;
     const full=t.dataset.full||t.textContent,probe=t.cloneNode(false);probe.textContent=full;g.appendChild(probe);
     const w=probe.getComputedTextLength(),base=parseFloat(getComputedStyle(probe).letterSpacing)||0;probe.remove();
-    const chars=[...full].length;if(!chars)continue;
-    rules.push(`.node[data-id="${CSS.escape(n.id)}"] > text.component-label{letter-spacing:${base+w*(factor-1)/chars}px !important}`)}
+    const chars=[...full].length,target=factor*titleWidth(full)*ts;if(!chars||target<=w)continue;
+    rules.push(`.node[data-id="${CSS.escape(n.id)}"] > text.component-label{letter-spacing:${base+(target-w)/chars}px !important}`)}
   style.textContent=rules.join('\n');workspace.style.setProperty('--zoom',prev);render();
   const svg=window.SovSchematicAPI.render.svg({pad:48});
   style.textContent='';render();
@@ -127,6 +138,8 @@ WIDE_EXPORT = r"""(factor)=>{const prev=workspace.style.getPropertyValue('--zoom
 inside = lambda a, R, tol=0.5: a['l'] >= R['l'] - tol and a['r'] <= R['r'] + tol and a['t'] >= R['t'] - tol and a['b'] <= R['b'] + tol
 
 missing = [doc.relative_to(ROOT).as_posix() for doc in DOCS if not doc.exists()]
+NOTATION_SRC = (ROOT / 'src' / '03-notation-core.js').read_text(encoding='utf-8')
+assert all(line in NOTATION_SRC for line in TABLE_JS.splitlines()), 'the width table copy differs from src/03-notation-core.js'
 
 with sync_playwright() as p:
     browser = p.chromium.launch(**chromium_launch_kwargs(disable_gpu=True))
@@ -242,7 +255,7 @@ assert word['between']['max'] < word['between']['drawnWidth'] <= word['between']
 # With every title 15% wider than here, the export cuts no example title but the case card's.
 widened = sum(r['widened'] for r in wide_cuts.values())
 unexpected = [(name, cid, text) for name, r in wide_cuts.items() for cid, text in r['cut'] if (name, cid) not in CUT_OK]
-print(f"titles {WIDER:.2f}x wider: {widened} widened across {len(wide_cuts)} examples; cut {[(n, c, t) for n, r in wide_cuts.items() for c, t in r['cut']]}")
-assert widened > 0, 'no title was widened'
-assert not unexpected, ('with a font 15% wider, the export cuts example titles', unexpected)
+print(f"titles at {WIDER:.2f}x the width table's estimate: {widened} widened across {len(wide_cuts)} examples; cut {[(n, c, t) for n, r in wide_cuts.items() for c, t in r['cut']]}")
+assert widened > 0 or WIDER <= 1.0, 'no title was widened'
+assert not unexpected, (f'with titles at {WIDER:.2f}x the width table, the export cuts example titles', unexpected)
 print('PASS card text fit QA')
