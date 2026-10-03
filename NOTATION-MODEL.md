@@ -121,6 +121,20 @@ has no label.
 | **caption** | wire labels, point labels, channel tags | `type.caption` |
 | **narration** | the subtitle track (below) | `type.narration` |
 
+**A card's title and subtitle are one block**, laid out at the size they are drawn at (after
+the on-screen clamp, so the block is laid out again when the zoom changes):
+- the title wraps at word breaks to at most two lines within the card's text width
+  (`w - 12 - 2 × section inset`); a line still too long ends in an ellipsis
+- the subtitle is one line, cut the same way, and its top sits `space.textGap` (3) under the
+  title's last line
+- the block's foot stays where a lone title sits; under a container's glyph or below the body
+  the block grows down from there instead
+- inside a card the block stays below the glyph (its foot plus 2) and inside the inner edge;
+  when it cannot, the least important line goes first: the subtitle is hidden
+  (`data-lod="hidden"`), then the title is cut to one line
+- a cut line keeps the full text in a `<title>` child and sets `data-truncated`; the status chip
+  does not move, and a waits-on caption follows the block's real foot
+
 **Body text is a small, safe Markdown:**
 - `**bold**`, `*italic*` and `` `code` ``
 - line breaks
@@ -182,6 +196,7 @@ contrast (`scripts/contrast_audit.py`).
 | Symbols generated from the notation; pins, leads, terminal points | `src/10-model.js` (`installNotationSymbols`, `symbolOf`), `src/30-canvas.js`, `src/05-data-core.js` (`templatePorts`: a gate's terminals are its template ports) | `tests/notation_qa.py`, `tests/boundary_attachment_qa.py`, `tests/ports_panel_qa.py` |
 | Radius offset from inside; elevation shadows; recess and raised bevels | `src/55-render.js` | `tests/notation_qa.py`, `tests/sections_qa.py` |
 | Type roles, sentence case, subtitle, Markdown body | `src/55-render.js`, `styles/app.css` | `tests/typography_qa.py` |
+| Title and subtitle as one block inside the card | `src/55-render.js` (`fitComponentLabels`), `space.textGap` in `src/03-notation-core.js` | `tests/card_text_fit_qa.py` |
 | Narration track | `src/66-narration.js`; pictures in `src/75-persistence.js` | `tests/typography_qa.py` |
 | Legend | `src/67-legend.js` | `tests/legend_qa.py`, `tests/server_render_qa.py` |
 | Crossings drawn as hops | `src/55-render.js`, `src/40-routing.js` | `tests/wire_crossing_qa.py` |

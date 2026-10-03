@@ -1240,7 +1240,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       radius:{core:6,card:10},
       // World units. Selected and highlighted states multiply these, never replace them.
       stroke:{structure:1.5,section:1.25,flow:2.25,symbol:2.6},
-      space:{labelClear:10,bevel:3.5,pin:14},
+      // textGap: the gap between stacked text lines on a card (a title's last line and its subtitle).
+      space:{labelClear:10,bevel:3.5,pin:14,textGap:3},
       // Text roles (NOTATION-MODEL.md §4). `size` is the base at zoom 1; on screen every role is
       // clamped to `screen` (a subtitle keeps its own lower floor, so it stays under its title).
       type:{screen:{min:12,max:16},title:{size:10,weight:600},subtitle:{size:8.5,weight:400,min:8},body:{size:9,weight:400},caption:{size:9,weight:600},narration:{size:15,weight:500}},
@@ -9971,33 +9972,90 @@ function appendTerminalMarks(g,n){
     }
   }
 }
+// A card's title and subtitle are one block, laid out at the size they are drawn at (after the
+// screen clamp, so the block is laid out again when the zoom changes): the title wraps at word
+// breaks to at most two lines within the card's text width, a line still too long ends in an
+// ellipsis, the subtitle is one line cut the same way, and its top sits space.textGap under the
+// title's last line. The block's foot stays where the title sat (or, below a glyph or the body, its
+// head does). Inside a card the block keeps clear of the glyph and inside the inner edge; when it
+// cannot, the least important line goes first: the subtitle is hidden (data-lod="hidden"), then the
+// title is cut to one line. A cut keeps the full text in a <title> child and sets data-truncated.
+const SVG_NS='http://www.w3.org/2000/svg';
+function setFittedText(el,lines,x,step,full){
+  el.textContent='';
+  lines.forEach((line,i)=>{const span=document.createElementNS(SVG_NS,'tspan');span.setAttribute('x',x);span.setAttribute('dy',i?String(step):'0');span.textContent=line;el.appendChild(span)});
+  if(lines.length>1||lines[0]!==full){const title=document.createElementNS(SVG_NS,'title');title.textContent=full;el.appendChild(title)}
+}
 function fitComponentLabels(g,n){
   if(componentForm(n).dimension!==2)return;
-  const size=componentSize(n),max=size.w-12-componentSectionInset(n)*2;
-  for(const t of g.querySelectorAll(':scope > text.component-label,:scope > text.outside-label')){
-    // Fit at the label's base size: the on-screen clamp changes its size with zoom, and a label
-    // must not wrap or cut differently as the reader zooms.
-    const role=t.classList.contains('outside-label')?'caption':'title',base=SovSchematicNotation.drawnSize(SovSchematicNotation.tokens(diagram).type,role);
-    const k=base/(parseFloat(getComputedStyle(t).fontSize)||base),len=()=>t.getComputedTextLength()*k;
-    const full=t.textContent;if(!full||len()<=max)continue;
-    const words=full.split(/\s+/),lines=[''];
-    for(const word of words){
-      const trial=lines.at(-1)?lines.at(-1)+' '+word:word;
-      t.textContent=trial;
-      if(len()<=max||!lines.at(-1))lines[lines.length-1]=trial;else lines.push(word);
+  const t=g.querySelector(':scope > text.component-label,:scope > text.outside-label');if(!t)return;
+  const u=g.querySelector(':scope > text.component-subtitle');
+  // A refit starts from what was authored, never from the last fit.
+  if(t.dataset.full==null)t.dataset.full=t.textContent;
+  if(u&&u.dataset.full==null)u.dataset.full=u.textContent;
+  const full=t.dataset.full,subFull=u?u.dataset.full:'';if(!full)return;
+  const size=componentSize(n),inset=componentSectionInset(n),max=size.w-12-inset*2,x=t.getAttribute('x')||'0';
+  const gap=Number(SovSchematicNotation.tokens(diagram).space?.textGap)||3,down=t.dataset.grow==='down';
+  const y0=t.dataset.y0!=null?Number(t.dataset.y0):Number(t.getAttribute('y'))||0;
+  const inCard=!t.classList.contains('outside-label')&&componentBackdropMode(n)!=='none';
+  delete t.dataset.truncated;
+  if(u){delete u.dataset.truncated;delete u.dataset.lod;u.style.visibility=''}
+  const fits=(el,s)=>{el.textContent=s;return el.getComputedTextLength()<=max};
+  const cut=(el,s)=>{if(fits(el,s))return s;let c=s;while(c.length>1){c=c.slice(0,-1).trimEnd();if(fits(el,c+'…'))return c+'…'}return '…'};
+  const wrap=limit=>{
+    const lines=[];let cur='';
+    for(const w of full.split(/\s+/).filter(Boolean)){const trial=cur?cur+' '+w:w;if(!cur||fits(t,trial))cur=trial;else{lines.push(cur);cur=w}}
+    if(cur)lines.push(cur);
+    const kept=lines.length>limit?[...lines.slice(0,limit-1),lines.slice(limit-1).join(' ')]:lines;
+    return kept.map(l=>cut(t,l));
+  };
+  // Where the title sat on its own: the block's foot (growing up) or head (growing down).
+  t.textContent=full;t.setAttribute('y',String(y0));
+  const b0=t.getBBox(),innerTop=-size.h/2+inset+2,innerBottom=size.h/2-inset-2;
+  const foot=inCard&&!down?Math.min(b0.y+b0.height,innerBottom):b0.y+b0.height,head=b0.y;
+  const graphic=componentConfig(n).presentation?.graphic;
+  let topLimit=innerTop;
+  if(graphic?.kind&&graphic.kind!=='none'){const box=componentInlineGraphicBox(n);if(!down)topLimit=Math.max(topLimit,box.y+box.h+2)}
+  const em=parseFloat(getComputedStyle(t).fontSize)||10;
+  const subLine=u&&subFull?cut(u,subFull):null;
+  const place=(lines,showSub)=>{
+    setFittedText(t,lines,x,em*1.15,full);t.setAttribute('y','0');
+    const bt=t.getBBox();let top=bt.y,bottom=bt.y+bt.height;
+    if(u){
+      setFittedText(u,[subLine??''],x,0,subFull);u.setAttribute('y','0');
+      // A hidden subtitle keeps its place under the title; only a shown one adds to the block.
+      const bu=u.getBBox();u.setAttribute('y',String(bottom+gap-bu.y));if(showSub&&subLine!=null)bottom=bottom+gap+bu.height;
     }
-    if(lines.length>2)lines.splice(1,lines.length-1,lines.slice(1).join(' '));
-    t.textContent=lines[lines.length-1];
-    while(len()>max&&t.textContent.length>1){t.textContent=t.textContent.slice(0,-2)+'…';t.dataset.truncated='true'}
-    lines[lines.length-1]=t.textContent;
-    const em=parseFloat(getComputedStyle(t).fontSize)||9,x=t.getAttribute('x')||'0',outside=t.classList.contains('outside-label');
-    t.textContent='';
-    lines.forEach((line,i)=>{const span=document.createElementNS('http://www.w3.org/2000/svg','tspan');span.setAttribute('x',x);
-      // Inside the body the block grows upward from its baseline; below the body it grows down.
-      span.setAttribute('dy',i===0?(outside?'0':String(-(lines.length-1)*em*1.15)):String(em*1.15));span.textContent=line;t.appendChild(span)});
-    const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=full;t.appendChild(title);
+    const shift=down?head-top:foot-bottom;
+    t.setAttribute('y',String(shift));
+    if(u)u.setAttribute('y',String((Number(u.getAttribute('y'))||0)+shift));
+    return {top:top+shift,bottom:bottom+shift,lines,showSub};
+  };
+  const ok=r=>!inCard||(r.top>=topLimit-.01&&r.bottom<=innerBottom+.01);
+  let r=place(wrap(2),!!subLine);
+  if(!ok(r)&&r.showSub)r=place(r.lines,false);
+  if(!ok(r)&&r.lines.length>1)r=place(wrap(1),false);
+  if(u&&(!r.showSub)){u.style.visibility='hidden';u.dataset.lod='hidden'}
+  // Wrapping onto two lines is not a cut; only an ellipsis is.
+  if(r.lines.some(l=>l.endsWith('…')))t.dataset.truncated='true';
+  if(u&&r.showSub&&subLine!==subFull)u.dataset.truncated='true';
+}
+// The zoom changes the size labels are drawn at, so each card's text block is laid out again on
+// the next frame after it changes, and a waits-on caption follows the block's new foot.
+let componentLabelFitZoom=null,componentLabelFitFrame=0;
+function refitComponentLabels(){
+  componentLabelFitFrame=0;
+  const zoom=workspace.style.getPropertyValue('--zoom');if(zoom===componentLabelFitZoom)return;componentLabelFitZoom=zoom;
+  const byId=new Map(nodes.map(n=>[n.id,n]));
+  for(const g of nodesG.querySelectorAll('.node:not(.group)')){
+    const n=byId.get(g.dataset.id);if(!n||componentForm(n).dimension!==2)continue;
+    fitComponentLabels(g,n);
+    const waits=g.querySelector(':scope > text.waits-on');if(waits){waits.remove();appendComponentWaitsOn(g,n)}
   }
 }
+if(typeof MutationObserver==='function'&&typeof workspace!=='undefined'&&workspace)
+  new MutationObserver(()=>{if(workspace.style.getPropertyValue('--zoom')!==componentLabelFitZoom&&!componentLabelFitFrame)componentLabelFitFrame=requestAnimationFrame(refitComponentLabels)})
+    .observe(workspace,{attributes:true,attributeFilter:['style']});
 // A bevel inside a rounded rectangle w x h: raised (lit from the top left) or recessed.
 function appendBevel(g,w,h,rx,mode='raised'){
   const d=SovSchematicNotation.tokens(diagram).space.bevel;w-=d*2;h-=d*2;if(w<12||h<12)return;
@@ -10029,7 +10087,12 @@ function appendComponentText(g,n,cfg,s){
     else if(componentAcceptsChildren(n)&&((p.graphic?.kind&&p.graphic.kind!=='none')||nodes.some(c=>c.parentId===n.id))){const box=componentInlineGraphicBox(n),glyph=p.graphic?.kind&&p.graphic.kind!=='none';t.setAttribute('x','0');t.setAttribute('y',String(glyph?box.y+box.h+12:box.y+10))}
     else {const inset=componentSectionInset(n),sec=componentForm(n).section?SovSchematicData.componentSection(n):null,bevel=sec&&(sec.core?.fill||'solid')==='solid';t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-(bevel?15:inset?11:8)-inset))}
     t.textContent=label;g.appendChild(t);
-    // A subtitle sits under its title; the title steps up a line to make room.
+    // Where the title sits before any subtitle, and which way its block grows from there: up from
+    // the foot of a card, down under a container's glyph, below the body, or under a wire's glyph.
+    {const y0=Number(t.getAttribute('y'))||0;t.dataset.y0=String(y0);
+     t.dataset.grow=labelMode==='outside'||(componentAcceptsChildren(n)&&y0<0)||(componentHostedOnWire(n)&&componentBackdropMode(n)==='none')?'down':'up'}
+    // A subtitle sits under its title; the title steps up a line to make room. On a card the two
+    // are laid out again as one block once drawn (fitComponentLabels).
     const subtitle=String(cfg.subtitle||'').trim();
     if(subtitle&&labelMode!=='none'){
       const u=document.createElementNS('http://www.w3.org/2000/svg','text');u.setAttribute('class','component-subtitle');u.setAttribute('text-anchor','middle');
@@ -10351,13 +10414,14 @@ function appendComponentStatus(g,n){
 function appendComponentWaitsOn(g,n){
   const list=waitsOnList(n?.config?.waitsOn);if(!list)return;
   const {h}=componentSize(n);let y=h/2+18;
-  for(const el of g.querySelectorAll(':scope > text.outside-label,:scope > text.component-subtitle')){try{const b=el.getBBox();if(b.height)y=Math.max(y,b.y+b.height+14)}catch(_){}}
+  for(const el of g.querySelectorAll(':scope > text.outside-label,:scope > text.component-subtitle')){if(el.dataset.lod==='hidden')continue;try{const b=el.getBBox();if(b.height)y=Math.max(y,b.y+b.height+14)}catch(_){}}
   const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('class','waits-on');t.dataset.role='caption';
   t.setAttribute('x','0');t.setAttribute('y',String(y));t.setAttribute('text-anchor','middle');
   t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk()};stroke:none;pointer-events:none`);t.textContent='Waits on '+list;g.appendChild(t);
 }
 function render(){
   applyNotationTokens();
+  componentLabelFitZoom=workspace.style.getPropertyValue('--zoom'); // the cards drawn below are fitted at this zoom
   if(typeof buildSymbolPalette==='function')buildSymbolPalette();
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
