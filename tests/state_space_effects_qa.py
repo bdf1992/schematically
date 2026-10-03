@@ -178,7 +178,7 @@ def main() -> None:
     assert r['scenarios']['s-retry']['mid'] == ['input', 'resume', 'input', 'resume'], r['scenarios']['s-retry']['mid']
     assert r['scenarios']['s-reject']['refusals'] == ['rejected at Human review'],r['scenarios']['s-reject']
     assert r['scenarios']['s-eval-fails']['refusals'] == ['eval: proof below threshold'], r['scenarios']['s-eval-fails']
-    # The one fraction in the fixtures, stated in thousandths; as authored it is refused at evaluate.
+    # Example 09 states its score in thousandths (930), so no fixture carries a fraction; a copy set back to 0.93 is refused at evaluate.
     assert r['changed'] == [], ('no fraction left in any scenario fixture', r['changed'])
     assert r['fraction'] == {'refused': ['handler evaluate result.payload.score is 0.93, not a safe integer; a run records no floating point'], 'customer': 0}, r['fraction']
 
