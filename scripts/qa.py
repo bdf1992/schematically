@@ -105,6 +105,7 @@ BROWSER=[
     'tests/wire_label_clearance_qa.py',
     'tests/drag_lifecycle_stress_qa.py',
     'tests/performance_regression_qa.py',
+    'tests/live_link_qa.py',
 ]
 TAIL=[
     'tests/mutation_watch.py',

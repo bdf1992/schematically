@@ -17,6 +17,8 @@
     "schematic.checkpoint.list",
     "schematic.checkpoint.create",
     "schematic.checkpoint.restore",
+    "schematic.live.get",
+    "schematic.live.selection",
     "schematic.run.start",
     "schematic.run.step",
     "schematic.run.settle",
