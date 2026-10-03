@@ -4,6 +4,29 @@
 
 Default durable server file: `data/schematic.sov`.
 
+## One surface, any runtime
+
+`mcp/surface.mjs` is the whole request-handling core: every MCP tool, every `/api/v1` route,
+history, checkpoints, runs and the root description, behind `createSurface({store, packs, render,
+readText, describe, editorHtml}) -> {handle(request)}`. It imports nothing from `node:` (no
+`node:http`, `node:fs`, `node:path`, `node:child_process`, `node:url`); it reads the cores
+(`SovSchematicData`, `SovSchematicGraph`, `SovSchematicStateSpace`, `SovSchematicLayout`) from
+`globalThis`, which an entrypoint loads first. `request` is `{method, path, query (an object of
+strings), headers (lower-case keys), body (a string or null)}`; `handle` resolves to `{status,
+headers, body}` with `body` a string or a `Uint8Array`.
+
+Two stores ship beside it: `mcp/store-file.mjs` (`createFileStore(file)`, the durable `.sov` file
+on disk) and `mcp/store-memory.mjs` (`createMemoryStore(text)`, in-memory with a `writes` counter,
+for a test or a hosted entrypoint with nowhere durable to write).
+
+`mcp/server.mjs` is the Node entrypoint: it parses arguments, loads the cores and `guide.mjs` by
+file URL, reads `data/*.pack.json`, builds the spawn-based `render` function and a file store, and
+adapts `http.createServer` to `surface.handle` — reading the request body (the same 5,000,000
+character limit), calling `handle`, and writing back `status`, `headers` and `body`. A hosted
+entrypoint for another runtime supplies a store, packs, a transport adapter over `handle`, and
+optionally `render`; render tools and routes answer `RENDERER_UNAVAILABLE` (503 over HTTP) when it
+is absent. No second copy of the request logic exists anywhere in the package.
+
 ## MCP
 
 ```text
@@ -60,6 +83,34 @@ HTTP: `GET /api/v1/render.svg`, `GET /api/v1/render.png?appearance=dark&scale=2`
 Resources: `component`, `wire`, `reference`.
 
 `schematic.markers` returns `{id, severity, message, rule}` for each current validation finding, delegating to the same `Data.markersFor` the browser API uses — the tool invents no legality of its own.
+
+## Live link
+
+The browser editor can publish a read-only snapshot of what its operator is looking at — file
+identity, revision, camera, appearance, the current selection with the selected record, and the
+in-browser document — so an agent can see what the person has selected without the two ever
+sharing authority. The editor must be asked to publish: open it with `?live=1` (same origin when
+served from `/editor`, otherwise `http://127.0.0.1:8787`), `?live=http://host:port` to name one, or
+call `window.SovSchematicLive.start()`. It pushes on every selection and revision change (at most
+every 250 ms), plus a 5 s heartbeat, backs off 5 s after a failed push, and stops with
+`SovSchematicLive.stop()`. Pushing never mutates the server's document, its revision or its file.
+
+```text
+POST /api/v1/live      # editor -> server, schema soveraeign.schematic/live@0.1
+GET  /api/v1/live      # {connected, ageMs, receivedAt, stale, snapshot}
+GET  /api/v1/live?selection=1   # the snapshot without the document body
+GET  /editor           # the built editor, served from this origin so the push is same-origin
+```
+
+MCP: `schematic.live.get` (the full snapshot) and `schematic.live.selection` (the selection, no
+document body). Both answer `connected:false` when no editor is pushing, and carry `ageMs` and
+`stale` (after 15 s) so an old snapshot is never mistaken for a live one. A snapshot in another
+schema is refused with 400. The snapshot is the **unsaved editor state**, a different document
+from the `.sov` file this server owns; `schematic.document.get` still reads the server's file.
+
+`GET /editor` (and `GET /index.html`) serve the built `index.html` with `cache-control: no-store`,
+or 404 naming `python build.py` when no build exists. The root description's `editor` field is
+`/editor`.
 
 ## HTTP
 

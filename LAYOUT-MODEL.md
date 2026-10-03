@@ -200,6 +200,15 @@ The score is `10 - Σ min(cap, count × penalty)` over these kinds:
 | route-wraps (a route running outside every card it connects) | 1.5 (3) |
 | empty-container (children filling under 20% of the interior) | 1.5 (3) |
 
+Reported in counts and findings, with no weight in the score:
+
+| Kind | Measures |
+| --- | --- |
+| route-hugs-node | a route segment other than its first and last running parallel to an edge of a 2D card (not a container, not a group), outside it and under 8 from that edge, for an overlap of 16 or more |
+
+A card hosted on a wire (drawn inline on the line) is not counted by route-through-node or
+route-hugs-node against its own host wire.
+
 The rubric is a declared heuristic, not a truth. Each finding names the ids it measured,
 so a person or an agent can check it against the picture.
 
@@ -334,6 +343,31 @@ A crossing never reads as a junction.
 - A multi-line wire (strip, lanes, pipe) is a band and does not hop.
 
 Tests: `tests/wire_crossing_qa.py`.
+
+## As built: routes clear of cards (2026-10-02)
+
+A wire never runs through a card or along its edge.
+
+- **Obstacles.** Every visible card that is not a group and not a container holding both ends,
+  padded by the clearance 12, and the wire's own end cards padded 8 (`routeObstacleSet` in
+  `src/40-routing.js`). A card hosted on the wire itself sits on the line and is not in the way.
+- **Leads.** The one part of a route allowed inside its own card's padding is each end's lead,
+  the stub from the port to its first bend.
+- **Search.** The router first tries straight, L, HVH and VHV shapes through the channel lines
+  (card edges plus and minus 18, the ends, the midpoints, the lane offset). When none clears, it
+  runs A* over the grid of those channel lines from one lead's end to the other's, along grid
+  edges that enter no padded obstacle, at cost length + 46 per bend + the crossing (90),
+  shared-track (5 per unit) and crowding (260 one track, 70 beside) terms against the routes
+  already drawn. This is orthogonal connector routing over a visibility grid (Wybrow, Marriott
+  and Stuckey, GD 2009; libavoid; the yFiles EdgeRouter).
+- **Blocked.** Only when the grid has no clear route is the old perimeter route drawn, and the
+  route is recorded as blocked (`routeBlockedAt(index)`); its wire group carries
+  `data-route-blocked="true"`.
+- **The cached route** a drag keeps is held to the same rule: a rebuilt route that enters any
+  padded obstacle, its own end cards included and leads excepted, is dropped for a fresh one.
+
+Tests: `tests/route_clear_of_cards_qa.py` (the Miro parity frames 4 and 5, a 4 x 4 grid with
+12 wires, a row of three, and a pocket only the search clears).
 
 ## As built: presentation (2026-09-25)
 

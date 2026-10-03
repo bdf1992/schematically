@@ -135,6 +135,7 @@ function layoutMetrics(options={}){
   }
 
   // Routes.
+  const onWire=w=>nodes.filter(n=>(n.canvasId||'')===localCanvasId('wire',w.id)).map(n=>n.id);
   const routes=[];
   for(const g of workspace.querySelectorAll('.wire-group')){
     const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
@@ -151,7 +152,9 @@ function layoutMetrics(options={}){
     // A route may leave and meet its own end cards at their ports, but never run through them.
     const inner=pts.slice(Math.min(pts.length,4),Math.max(0,pts.length-4));
     for(const end of [w.a,w.b]){const n=end&&nodes.find(x=>x.id===end);if(!n||!is2D(n)||componentAcceptsChildren(n))continue;const R=body.get(n.id);if(R&&inner.some(p=>layoutInside(p,R,3))){add('route-through-node',[w.id,n.id],`runs through its own end ${n.config?.label||n.id}`);break}}
-    const exempt=new Set([w.a,w.b,canvasOwner,...ancestors(w.a),...ancestors(w.b)].filter(Boolean));
+    // A card hosted on this wire is drawn on the line itself (inline): the wire is its host, not
+    // a route through it.
+    const exempt=new Set([w.a,w.b,canvasOwner,...ancestors(w.a),...ancestors(w.b),...onWire(w)].filter(Boolean));
     for(const n of visible){
       if(exempt.has(n.id)||!is2D(n))continue;
       const R=body.get(n.id),inner=componentAcceptsChildren(n);
@@ -163,6 +166,28 @@ function layoutMetrics(options={}){
   for(const {w,pts} of routes)for(const n of visible){
     if(!componentAcceptsChildren(n))continue;const gl=nodeEl(n.id)?.querySelector(':scope > .glyph');if(!gl)continue;
     const G=layoutWorldBox(gl);if(G&&pts.some(p=>layoutInside(p,G,4))){add('route-through-node',[w.id,n.id],`crosses the symbol of ${n.config?.label||n.id}`)}
+  }
+  // Hugging: a middle segment (not the lead out of a port or into one) running along a card's
+  // edge, outside it but under 8 from it, for 16 or more: a reader cannot tell the wire from the
+  // card's outline. Hops are stripped first, and collinear corners merged, so a hop does not split
+  // a lead into a lead and a middle segment.
+  for(const g of workspace.querySelectorAll('.wire-group')){
+    const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
+    const m=layoutWorldMatrix(path);
+    const raw=layoutPathCorners(String(path.getAttribute('d')||'').replace(/A[^A-Z]*?(?=[MLHV])/g,'')).map(q=>m?new DOMPoint(q.x,q.y).matrixTransform(m):q);
+    const c=[];for(const q of raw){const p={x:Math.round(q.x*100)/100,y:Math.round(q.y*100)/100},l=c.at(-1);if(l&&Math.abs(l.x-p.x)<.5&&Math.abs(l.y-p.y)<.5)continue;
+      if(c.length>=2){const a=c.at(-2);if((Math.abs(a.x-l.x)<.5&&Math.abs(l.x-p.x)<.5)||(Math.abs(a.y-l.y)<.5&&Math.abs(l.y-p.y)<.5)){c[c.length-1]=p;continue}}c.push(p)}
+    let hugged=null;const inline=new Set(onWire(w));
+    for(let s=1;s+2<c.length&&!hugged;s++){
+      const P=c[s],Q=c[s+1],h=Math.abs(P.y-Q.y)<.5,v=Math.abs(P.x-Q.x)<.5;if(!h&&!v)continue;
+      for(const n of visible){
+        if(!is2D(n)||componentAcceptsChildren(n)||inline.has(n.id))continue;const R=body.get(n.id);if(!R)continue;
+        const along=h?overlap1D(P.x,Q.x,R.l,R.r):overlap1D(P.y,Q.y,R.t,R.b);if(along<16)continue;
+        const at=h?P.y:P.x,lo=h?R.t:R.l,hi=h?R.b:R.r,gap=at<=lo+.5?lo-at:at>=hi-.5?at-hi:-1;
+        if(gap>=-.5&&gap<8){hugged=n;break}
+      }
+    }
+    if(hugged)add('route-hugs-node',[w.id,hugged.id],`runs along the edge of ${hugged.config?.label||hugged.id}`);
   }
   for(let i=0;i<routes.length;i++)for(let j=i+1;j<routes.length;j++){
     const A=routes[i],B=routes[j],shared=[A.w.a,A.w.b].some(x=>x&&(x===B.w.a||x===B.w.b));

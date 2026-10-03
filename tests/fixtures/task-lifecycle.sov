@@ -1,0 +1,613 @@
+{
+ "schema": "soveraeign.schematic/document@0.1",
+ "id": "workstation-task-lifecycle",
+ "revision": 0,
+ "meta": {
+  "title": "Workstation task lifecycle: request to tombstone, with three stalls and exits",
+  "description": "Authored by hand for the Miro parity study (2026-10-01). GitHub is a plane whose only crossings are the broker's points."
+ },
+ "legend": {
+  "names": {
+   "C1": "Main path",
+   "C2": "Stall or exit",
+   "C3": "Landed"
+  }
+ },
+ "components": [
+  {
+   "id": "req",
+   "symbolId": "act",
+   "x": 140,
+   "y": 300,
+   "config": {
+    "label": "Bdo's request",
+    "signalMode": "source",
+    "principal": "person:bdo",
+    "colorSlot": 6,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  },
+  {
+   "id": "queued",
+   "symbolId": "buffer",
+   "x": 480,
+   "y": 300,
+   "config": {
+    "label": "Task queued",
+    "subtitle": "QUEUED",
+    "colorSlot": 6,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  },
+  {
+   "id": "claimed",
+   "symbolId": "gate",
+   "x": 820,
+   "y": 300,
+   "config": {
+    "label": "Claimed by a seat",
+    "subtitle": "CLAIMED",
+    "principal": "seat:contractor",
+    "colorSlot": 6,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  },
+  {
+   "id": "tree",
+   "symbolId": "hold",
+   "x": 1160,
+   "y": 300,
+   "config": {
+    "label": "Worktree and branch",
+    "subtitle": "ws session sandbox",
+    "principal": "seat:contractor",
+    "colorSlot": 6,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  },
+  {
+   "id": "commits",
+   "symbolId": "act",
+   "x": 1500,
+   "y": 300,
+   "config": {
+    "label": "Commits",
+    "subtitle": "one per task",
+    "principal": "seat:contractor",
+    "colorSlot": 6,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  },
+  {
+   "id": "github",
+   "symbolId": "plane",
+   "x": 2300,
+   "y": 300,
+   "form": {
+    "dimension": 2,
+    "regions": {
+     "interior": {
+      "state": "open"
+     }
+    }
+   },
+   "config": {
+    "label": "GitHub",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "labelMode": "boundary",
+     "size": {
+      "w": 1080,
+      "h": 320
+     }
+    }
+   }
+  },
+  {
+   "id": "gh-push",
+   "symbolId": "point",
+   "x": 1760,
+   "y": 252,
+   "canvasId": "canvas:component:github",
+   "parentId": "github",
+   "placement": {
+    "kind": "edge",
+    "hostId": "github",
+    "side": "left",
+    "t": 0.35
+   },
+   "form": {
+    "dimension": 0
+   },
+   "config": {
+    "label": "",
+    "ports": {
+     "out": {
+      "face": "both"
+     }
+    }
+   }
+  },
+  {
+   "id": "gh-fail",
+   "symbolId": "point",
+   "x": 1760,
+   "y": 380,
+   "canvasId": "canvas:component:github",
+   "parentId": "github",
+   "placement": {
+    "kind": "edge",
+    "hostId": "github",
+    "side": "left",
+    "t": 0.75
+   },
+   "form": {
+    "dimension": 0
+   },
+   "config": {
+    "label": "",
+    "ports": {
+     "out": {
+      "face": "both"
+     }
+    }
+   }
+  },
+  {
+   "id": "gh-merge",
+   "symbolId": "point",
+   "x": 2840,
+   "y": 300,
+   "canvasId": "canvas:component:github",
+   "parentId": "github",
+   "placement": {
+    "kind": "edge",
+    "hostId": "github",
+    "side": "right",
+    "t": 0.5
+   },
+   "form": {
+    "dimension": 0
+   },
+   "config": {
+    "label": "",
+    "ports": {
+     "out": {
+      "face": "both"
+     }
+    }
+   }
+  },
+  {
+   "id": "gh-drop",
+   "symbolId": "point",
+   "x": 2300,
+   "y": 460,
+   "canvasId": "canvas:component:github",
+   "parentId": "github",
+   "placement": {
+    "kind": "edge",
+    "hostId": "github",
+    "side": "bottom",
+    "t": 0.5
+   },
+   "form": {
+    "dimension": 0
+   },
+   "config": {
+    "label": "",
+    "ports": {
+     "out": {
+      "face": "both"
+     }
+    }
+   }
+  },
+  {
+   "id": "pr",
+   "symbolId": "buffer",
+   "x": 1960,
+   "y": 300,
+   "canvasId": "canvas:component:github",
+   "parentId": "github",
+   "config": {
+    "label": "Pull request",
+    "colorSlot": 6,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  },
+  {
+   "id": "checks",
+   "symbolId": "gate",
+   "x": 2300,
+   "y": 300,
+   "canvasId": "canvas:component:github",
+   "parentId": "github",
+   "config": {
+    "label": "Checks",
+    "colorSlot": 6,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  },
+  {
+   "id": "merged",
+   "symbolId": "switch",
+   "x": 2640,
+   "y": 300,
+   "canvasId": "canvas:component:github",
+   "parentId": "github",
+   "config": {
+    "label": "Merged",
+    "subtitle": "by the opening seat",
+    "colorSlot": 6,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  },
+  {
+   "id": "landing",
+   "symbolId": "observe",
+   "x": 3140,
+   "y": 300,
+   "config": {
+    "label": "Landing observed",
+    "subtitle": "ws close, LANDED",
+    "principal": "seat:closure",
+    "colorSlot": 8,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  },
+  {
+   "id": "tomb",
+   "symbolId": "receipt",
+   "x": 3480,
+   "y": 300,
+   "config": {
+    "label": "Tombstone",
+    "subtitle": "CLOSED",
+    "principal": "seat:closure",
+    "colorSlot": 8,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  },
+  {
+   "id": "blocked",
+   "symbolId": "hold",
+   "x": 820,
+   "y": 680,
+   "config": {
+    "label": "Blocked",
+    "subtitle": "BLOCKED, waits on a named holder",
+    "colorSlot": 7,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  },
+  {
+   "id": "folded",
+   "symbolId": "buffer",
+   "x": 1160,
+   "y": 680,
+   "config": {
+    "label": "Worktree folded",
+    "subtitle": "idle 72 h, branch kept",
+    "colorSlot": 7,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  },
+  {
+   "id": "abandoned",
+   "symbolId": "refuse",
+   "x": 2300,
+   "y": 720,
+   "config": {
+    "label": "Abandoned",
+    "subtitle": "ABANDONED",
+    "colorSlot": 7,
+    "presentation": {
+     "size": {
+      "w": 260,
+      "h": 120
+     }
+    }
+   }
+  }
+ ],
+ "wires": [
+  {
+   "id": "w1",
+   "a": "req",
+   "aSide": "out",
+   "b": "queued",
+   "bSide": "in",
+   "canvasId": "canvas:global"
+  },
+  {
+   "id": "w2",
+   "a": "queued",
+   "aSide": "out",
+   "b": "claimed",
+   "bSide": "in",
+   "canvasId": "canvas:global"
+  },
+  {
+   "id": "w3",
+   "a": "claimed",
+   "aSide": "out",
+   "b": "tree",
+   "bSide": "in",
+   "canvasId": "canvas:global"
+  },
+  {
+   "id": "w4",
+   "a": "tree",
+   "aSide": "out",
+   "b": "commits",
+   "bSide": "in",
+   "canvasId": "canvas:global"
+  },
+  {
+   "id": "w5",
+   "a": "commits",
+   "aSide": "out",
+   "b": "gh-push",
+   "bSide": "out",
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "push, through the broker"
+   }
+  },
+  {
+   "id": "w6",
+   "a": "gh-push",
+   "aSide": "out",
+   "b": "pr",
+   "bSide": "in",
+   "canvasId": "canvas:component:github"
+  },
+  {
+   "id": "w7",
+   "a": "pr",
+   "aSide": "out",
+   "b": "checks",
+   "bSide": "in",
+   "canvasId": "canvas:component:github"
+  },
+  {
+   "id": "w8",
+   "a": "checks",
+   "aSide": "out",
+   "b": "merged",
+   "bSide": "in",
+   "canvasId": "canvas:component:github",
+   "config": {
+    "label": "pass"
+   }
+  },
+  {
+   "id": "w9",
+   "a": "merged",
+   "aSide": "out",
+   "b": "gh-merge",
+   "bSide": "out",
+   "canvasId": "canvas:component:github"
+  },
+  {
+   "id": "w10",
+   "a": "gh-merge",
+   "aSide": "out",
+   "b": "landing",
+   "bSide": "in",
+   "canvasId": "canvas:global"
+  },
+  {
+   "id": "w11",
+   "a": "landing",
+   "aSide": "out",
+   "b": "tomb",
+   "bSide": "in",
+   "canvasId": "canvas:global"
+  },
+  {
+   "id": "f1",
+   "a": "claimed",
+   "aSide": "out",
+   "b": "blocked",
+   "bSide": "in",
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "waits"
+   }
+  },
+  {
+   "id": "f2",
+   "a": "blocked",
+   "aSide": "out",
+   "b": "claimed",
+   "bSide": "control",
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "answered"
+   }
+  },
+  {
+   "id": "f3",
+   "a": "tree",
+   "aSide": "out",
+   "b": "folded",
+   "bSide": "in",
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "idle"
+   }
+  },
+  {
+   "id": "f4",
+   "a": "folded",
+   "aSide": "out",
+   "b": "tree",
+   "bSide": "control",
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "made again"
+   }
+  },
+  {
+   "id": "f5",
+   "a": "checks",
+   "aSide": "out",
+   "b": "gh-fail",
+   "bSide": "out",
+   "canvasId": "canvas:component:github",
+   "config": {
+    "label": "fail"
+   }
+  },
+  {
+   "id": "f6",
+   "a": "gh-fail",
+   "aSide": "out",
+   "b": "commits",
+   "bSide": "control",
+   "canvasId": "canvas:global"
+  },
+  {
+   "id": "f7",
+   "a": "checks",
+   "aSide": "out",
+   "b": "gh-drop",
+   "bSide": "out",
+   "canvasId": "canvas:component:github"
+  },
+  {
+   "id": "f8",
+   "a": "gh-drop",
+   "aSide": "out",
+   "b": "abandoned",
+   "bSide": "in",
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "dropped"
+   }
+  },
+  {
+   "id": "f9",
+   "a": "abandoned",
+   "aSide": "out",
+   "b": "tomb",
+   "bSide": "in",
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "disposition"
+   }
+  }
+ ],
+ "references": [],
+ "narration": [
+  {
+   "at": 0,
+   "say": "Bdo asks; the request becomes a task in a queue.",
+   "focus": [
+    "req",
+    "queued"
+   ]
+  },
+  {
+   "at": 1500,
+   "say": "A seat claims it and gets a worktree and branch of its own.",
+   "focus": [
+    "claimed",
+    "tree"
+   ]
+  },
+  {
+   "at": 3000,
+   "say": "Commits cross into GitHub only through the broker.",
+   "focus": [
+    "commits",
+    "gh-push",
+    "pr"
+   ]
+  },
+  {
+   "at": 4500,
+   "say": "Checks pass, the opening seat merges, and the closure seat observes the landing.",
+   "focus": [
+    "checks",
+    "merged",
+    "landing"
+   ]
+  },
+  {
+   "at": 6000,
+   "say": "A blocked task names who it waits on; an idle tree folds; abandoned work still gets a tombstone.",
+   "focus": [
+    "blocked",
+    "folded",
+    "abandoned",
+    "tomb"
+   ]
+  }
+ ]
+}
