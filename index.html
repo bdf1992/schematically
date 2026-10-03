@@ -5308,6 +5308,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return null;
   }
 
+  // createSimulation(doc, {handlers, effects, restore, packs, tickMs, seed}): seed is the run's
+  // merge-draw seed (default '0', the engine's), so a caller can see both outcomes of a recorded draw.
   function createSimulation(input,options={}){
     const o=isObject(options)?options:{};
     let doc;
@@ -5325,7 +5327,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const internal=new Set(restored?o.restore.internal||[]:[]);
     let time=restored?Number(o.restore.time)||0:0;
     const start=()=>{
-      const r=S.startRun({doc,packs,handlers,inputs:startInputs,budget:BUDGET,...(tickMs!==undefined?{tickMs}:{}),...(isObject(o.effects)?{effects:clone(o.effects)}:{})});
+      const r=S.startRun({doc,packs,handlers,inputs:startInputs,budget:BUDGET,...(tickMs!==undefined?{tickMs}:{}),...(o.seed!==undefined?{seed:o.seed}:{}),...(isObject(o.effects)?{effects:clone(o.effects)}:{})});
       if(!r.ok&&r.code==='ZERO_DELAY_CYCLE')return refusal('ZERO_LATENCY_CYCLE','A message cycle must take time: give a wire latencyMs above 0 or pass through a buffer or hold',{cycles:r.cycles});
       return r;
     };
