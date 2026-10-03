@@ -332,9 +332,10 @@
   // Left to right by wire direction: cycles broken, longest-path layers, barycentre ordering,
   // then each node pulled level with its predecessors where it fits, for straight chains. A
   // container is laid out inside first, sized to fit, then placed as one node of its parent.
-  function layered(doc,viewId,{scope=null,gapX=80,gapY=56,pad=44,labelMargin=16}={}){
+  function layered(doc,viewId,{scope=null,gapX=80,gapY:gapY0=56,pad=44,labelMargin=16}={}){
     const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
     const scopeCanvas=scope?interiorOf(scope):Data.GLOBAL_CANVAS_ID;
+    let packed=null; // set when the canvas laid out here is packed in rows
     if(scope&&!doc.components.some(c=>c.id===scope))return refusal('UNKNOWN_NODE',`No component ${scope}`);
     const byId=new Map(doc.components.map(c=>[c.id,c])),frozen=[];
     const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,resolvedNotation=N?N.resolve(doc):null,notation=resolvedNotation?.ok?resolvedNotation.notation:null;
@@ -393,8 +394,8 @@
       const blocks=new Map();
       for(const c of members)if(blockOf.has(c.id)){const k=blockOf.get(c.id);if(!blocks.has(k))blocks.set(k,[]);blocks.get(k).push(c.id)}
       // A block's box is its members' extent padded as the region is drawn.
-      const layoutBlock=(ids,startKey)=>{
-        const res=arrange(ids,boxes,R,canvas,startKey);let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
+      const layoutBlock=(ids,startKey,rowGap)=>{
+        const res=arrange(ids,boxes,R,canvas,startKey,rowGap);let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
         for(const u of ids){const B=boxes.get(u),x=res.x.get(u),y=res.y.get(u);l=Math.min(l,x-B.w/2);r=Math.max(r,x+B.w/2);t=Math.min(t,y-B.h/2);b=Math.max(b,y+B.h/2)}
         return {w:r-l+2*GROUP_PAD,h:b-t+2*GROUP_PAD+GROUP_TITLE_BAND,inner:null,block:{res,l,t}};
       };
@@ -402,26 +403,54 @@
       const top=[];for(const c of members){const u=blockOf.get(c.id)||c.id;if(!top.includes(u))top.push(u)}
       const R2=id=>{const u=R(id);return u&&blockOf.has(u)?blockOf.get(u):u};
       const placeCanvas=made=>{const tb=new Map();for(const u of top)tb.set(u,made.has(u)?made.get(u):boxes.get(u));return arrange(top,tb,R2,canvas,null)};
-      const made=new Map();for(const [k,ids] of blocks)made.set(k,layoutBlock(ids,null));
-      const first=placeCanvas(made);
-      // Within each block: each layer starts in the order of the mean height of the cards its
-      // members are wired to outside the block, then the canvas is placed again.
-      const atY=new Map();
-      for(const u of first.ids){const b=first.boxes.get(u);if(!b.block){atY.set(u,first.y.get(u));continue}
-        for(const m of b.block.res.ids)atY.set(m,first.y.get(u)-b.h/2+GROUP_PAD+GROUP_TITLE_BAND+b.block.res.y.get(m)-b.block.t)}
-      for(const [k,ids] of blocks){
-        const sum=new Map();
-        for(const w of doc.wires){const a=R(w.a),b=R(w.b);if(!a||!b||a===b)continue;
-          for(const [m,o] of [[a,b],[b,a]])if(blockOf.get(m)===k&&blockOf.get(o)!==k&&atY.has(o)){const s=sum.get(m)||[0,0];s[0]+=atY.get(o);s[1]++;sum.set(m,s)}}
-        made.set(k,layoutBlock(ids,new Map([...sum].map(([m,[s,n]])=>[m,s/n]))));
-      }
-      return placeCanvas(made);
+      const passes=rowGap=>{
+        const made=new Map();for(const [k,ids] of blocks)made.set(k,layoutBlock(ids,null,rowGap));
+        const first=placeCanvas(made);
+        // Within each block: each layer starts in the order of the mean height of the cards its
+        // members are wired to outside the block, then the canvas is placed again.
+        const atY=new Map();
+        for(const u of first.ids){const b=first.boxes.get(u);if(!b.block){atY.set(u,first.y.get(u));continue}
+          for(const m of b.block.res.ids)atY.set(m,first.y.get(u)-b.h/2+GROUP_PAD+GROUP_TITLE_BAND+b.block.res.y.get(m)-b.block.t)}
+        for(const [k,ids] of blocks){
+          const sum=new Map();
+          for(const w of doc.wires){const a=R(w.a),b=R(w.b);if(!a||!b||a===b)continue;
+            for(const [m,o] of [[a,b],[b,a]])if(blockOf.get(m)===k&&blockOf.get(o)!==k&&atY.has(o)){const s=sum.get(m)||[0,0];s[0]+=atY.get(o);s[1]++;sum.set(m,s)}}
+          made.set(k,layoutBlock(ids,new Map([...sum].map(([m,[s,n]])=>[m,s/n])),rowGap));
+        }
+        return placeCanvas(made);
+      };
+      const placed=passes(gapY0);
+      // A grouped canvas much wider than tall is packed in rows instead (LAYOUT-MODEL.md "What
+      // layered does"): shelf packing, next-fit, as ELK's SimpleRowGraphPlacer packs components
+      // and Graphviz pack does in array mode, with the row width chosen to bring the canvas
+      // nearest square. Any other canvas keeps the layered placement.
+      if(!(placed.w>2.5*placed.h))return placed;
+      // One gap G between items and between rows, wide enough for the harness's trunks between
+      // the busiest pair of groups (24 margin each side, 6 a lane, 16 between trunks), and blocks
+      // laid out again with G between their rows so a street fits under each.
+      const pairCount=new Map(),labels=new Set();
+      for(const w of doc.wires){const a=R(w.a),b=R(w.b),ga=a&&blockOf.get(a),gb=b&&blockOf.get(b);if(!ga||!gb||ga===gb)continue;
+        const key=ga<gb?`${ga}|${gb}`:`${gb}|${ga}`;pairCount.set(key,(pairCount.get(key)||0)+1);labels.add(String(w.config?.label||''))}
+      const most=Math.max(0,...pairCount.values()),G=Math.max(200,48+BUS_PITCH*most+BUS_TRUNK_GAP*(Math.max(1,labels.size)-1));
+      const res=passes(G),tb=res.boxes;
+      const items=[...res.ids].sort((a,b)=>res.x.get(a)-res.x.get(b)||res.y.get(a)-res.y.get(b));
+      const area=items.reduce((s,u)=>s+(tb.get(u).w+G)*(tb.get(u).h+G),0),widest=Math.max(...items.map(u=>tb.get(u).w));
+      const pack=W=>{
+        const x=new Map(),y=new Map();let cx=0,cy=0,rowH=0,rows=1;
+        for(const u of items){const b=tb.get(u);if(cx>0&&cx+b.w>W){cx=0;cy+=rowH+G;rowH=0;rows++}x.set(u,cx+b.w/2);y.set(u,cy+b.h/2);cx+=b.w+G;rowH=Math.max(rowH,b.h)}
+        return {w:Math.max(...items.map(u=>x.get(u)+tb.get(u).w/2)),h:cy+rowH,x,y,rows};
+      };
+      let best=null;
+      for(let k=0;k<=20;k++){const p=pack(Math.max(widest,Math.sqrt(area)*(1+.05*k)));if(!best||Math.abs(p.w/p.h-1)<Math.abs(best.w/best.h-1))best=p}
+      if(canvas===scopeCanvas)packed={rows:best.rows,aspect:Math.round(best.w/best.h*100)/100};
+      return {...res,w:best.w,h:best.h,x:best.x,y:best.y};
     }
     // The layered steps over one set of nodes: ids in document order, their boxes, and R mapping
     // a wire end to the node it lands on (a wire whose ends land outside ids is not drawn here).
     // startKey, when given, sets each layer's starting order before the barycentre sweeps: keyed
-    // nodes sorted by key among their own places, the rest kept where they are.
-    function arrange(ids,boxes,R,canvas,startKey){
+    // nodes sorted by key among their own places, the rest kept where they are. gapY, when given,
+    // is the row gap (a packed canvas's blocks leave a harness street's room between rows).
+    function arrange(ids,boxes,R,canvas,startKey,gapY=gapY0){
       const succ=new Map(ids.map(i=>[i,new Set()])),pred=new Map(ids.map(i=>[i,new Set()]));
       // How far below q's centre u's centre sits when the wire between them runs straight:
       // the difference of the two terminals' offsets from their cards' centres.
@@ -532,7 +561,51 @@
       write(res,ox,oy);
     }
     straighten(doc,r.id,frozen);
-    return {ok:true,view:r.id,engine:'layered',placed:cards(res).length,frozen,labelMargin};
+    const bundles=scope?null:bundleGroups(doc,r);
+    return {ok:true,view:r.id,engine:'layered',placed:cards(res).length,frozen,labelMargin,...(bundles?{bundles}:{}),...(packed?{packed}:{})};
+  }
+  // Bundling after a layout of the top-level canvas: the wires between each pair of groups ride
+  // one harness (trunks in the gap between them, streets in their row gaps), run exactly as the
+  // harness op runs it. Pairs go busiest first; a harness is kept only when it refuses nothing,
+  // runs through no third group, and, on a vertical trunk, carries every wire left to right.
+  function bundleGroups(doc,r){
+    const G0=Data.GLOBAL_CANVAS_ID,groups=doc.components.filter(c=>grouping(c)&&(c.canvasId||G0)===G0&&Array.isArray(c.config?.members));
+    if(groups.length<2)return null;
+    const of=new Map();for(const g of groups)for(const m of g.config.members)if(!of.has(String(m)))of.set(String(m),g.id);
+    const pairs=new Map();
+    for(const w of doc.wires){const a=of.get(w.a),b=of.get(w.b);if(!a||!b||a===b)continue;
+      const between=a<b?[a,b]:[b,a],key=between.join('|');if(!pairs.has(key))pairs.set(key,{between,wires:[]});pairs.get(key).wires.push(w)}
+    const cmp=(a,b)=>a<b?-1:a>b?1:0;
+    const order=[...pairs.values()].filter(p=>p.wires.length>=2).sort((p,q)=>q.wires.length-p.wires.length||cmp(p.between[0],q.between[0])||cmp(p.between[1],q.between[1]));
+    // The group regions as this layout draws them (as the harness reads them).
+    const placedDoc=r.isDefault?doc:{...doc,components:doc.components.map(c=>{const g=!hosted(c)&&!grouping(c)?geometry(doc,r.id,c.id):null;return g&&g.w?{...c,x:g.x,y:g.y,config:{...(c.config||{}),presentation:{...(c.config?.presentation||{}),size:{w:g.w,h:g.h}}}}:c})};
+    const rect=new Map(groups.map(g=>[g.id,Data.groupRect(placedDoc,g.id,size)]));
+    const out=[];
+    for(const {between,wires} of order){
+      const entry={between:[...between],wires:wires.length};out.push(entry);
+      const ours=bid=>{const bt=r.v.buses?.[bid]?.between;return Array.isArray(bt)&&bt.length===2&&between.includes(bt[0])&&between.includes(bt[1])};
+      const elsewhere=wires.some(w=>{const rt=r.v.routes[w.id];if(!rt)return false;if(rt.mode==='pinned'||rt.mode==='guided')return true;return rt.mode==='bus'&&Array.isArray(rt.buses)&&rt.buses.some(bid=>!ours(bid))});
+      if(elsewhere){entry.kept=false;entry.reason='ROUTED_ELSEWHERE';continue}
+      const snapshot={buses:clone(r.v.buses||{}),routes:clone(r.v.routes||{})};
+      const res=harness(doc,r.id,{between:[...between]});
+      let reason=null;
+      if(!res.ok)reason=res.code;
+      else{
+        const others=groups.filter(g=>!between.includes(g.id)).map(g=>rect.get(g.id)).filter(Boolean);
+        const meets=res.buses.some(b=>{const P=r.v.buses[b.id]?.points||[];if(!P.length)return false;
+          const l=Math.min(...P.map(p=>p.x)),rr=Math.max(...P.map(p=>p.x)),t=Math.min(...P.map(p=>p.y)),bb=Math.max(...P.map(p=>p.y));
+          return others.some(R=>l<R.r&&rr>R.l&&t<R.b&&bb>R.t)});
+        if(meets)reason='THIRD_GROUP';
+        else if(res.orientation==='vertical'){
+          const Ra=rect.get(between[0]),Rb=rect.get(between[1]),leftG=(Ra.l+Ra.r)<=(Rb.l+Rb.r)?between[0]:between[1];
+          const against=res.wires.some(wr=>{const w=doc.wires.find(x=>x.id===wr.id);const src=w?.config?.direction==='reverse'?w.b:w?.a;return of.get(src)!==leftG});
+          if(against)reason='AGAINST_FLOW';
+        }
+      }
+      if(reason){r.v.buses=snapshot.buses;r.v.routes=snapshot.routes;entry.kept=false;entry.reason=reason}
+      else entry.kept=true;
+    }
+    return out;
   }
 
   // Straight wires where the layout left a free choice: a boundary Point slides along its edge to

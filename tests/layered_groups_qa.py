@@ -19,7 +19,8 @@ Browser part (index.html, the way scripts/layout_audit.py reads a document), on 
 Byte check, with --base REF: layout_sov.mjs and src/ from git merge-base HEAD REF, against the
 working tree, on every group-free example and on the two fixtures with their groups removed;
 the outputs are equal once meta.updatedAt is dropped. The base layout of the grouped fixture
-must overlap at least one region pair, so the check bites on the old code.
+must have a region aspect (union of group regions, width / height) above 2.5, so the check
+bites on the code before groups packed into rows (5.19 at a902dca).
 
     python tests/layered_groups_qa.py [--base origin/dev]
 """
@@ -286,9 +287,11 @@ def byte_check(ref: str, tmp: Path) -> None:
         assert pa.returncode == pb.returncode, (name, pa.stdout + pa.stderr, pb.stdout + pb.stderr)
         if pa.returncode == 0:
             assert normalised(a) == normalised(b), f'{name}: layout differs from base {base[:7]}'
-    hit, total = region_pairs(laid_out(build_fixture(), tmp, 'fixture-base', root=old))
-    assert hit > 0, f'base {base[:7]} lays the grouped fixture out with no overlapping region: the check does not bite'
-    print(f'byte check: {len(cases)} group-free documents equal to base {base[:7]}; base overlaps {hit} of {total} fixture region pairs')
+    based = laid_out(build_fixture(), tmp, 'fixture-base', root=old)
+    regions = [region(based, c['id']) for c in based['components'] if is_group(c)]
+    aspect = (max(r[1] for r in regions) - min(r[0] for r in regions)) / (max(r[3] for r in regions) - min(r[2] for r in regions))
+    assert aspect > 2.5, f'base {base[:7]} lays the grouped fixture out with region aspect {aspect:.2f}, not above 2.5: the check does not bite'
+    print(f'byte check: {len(cases)} group-free documents equal to base {base[:7]}; base lays the fixture out with region aspect {aspect:.2f}')
 
 
 def main() -> None:

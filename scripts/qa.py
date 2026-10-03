@@ -82,6 +82,7 @@ BROWSER=[
     'tests/layout_sov_qa.py',
     'tests/layout_label_gutters_qa.py',
     'tests/layered_groups_qa.py',
+    'tests/group_rows_qa.py',
     'tests/sections_qa.py',
     'tests/section_exposure_qa.py',
     'tests/notation_qa.py',
