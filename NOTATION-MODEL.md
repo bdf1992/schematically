@@ -134,6 +134,10 @@ the on-screen clamp, so the block is laid out again when the zoom changes):
   (`data-lod="hidden"`), then the title is cut to one line
 - a cut line keeps the full text in a `<title>` child and sets `data-truncated`; the status chip
   does not move, and a waits-on caption follows the block's real foot
+- a title drawn outside its card (outside label mode, under the card) is not held to the card's
+  width: it stays on one line, uncut, and only its subtitle's place follows `space.textGap`
+- the SVG export (`scripts/export_svg.py`) draws through the same code, so it wraps and cuts the
+  same way
 
 **Body text is a small, safe Markdown:**
 - `**bold**`, `*italic*` and `` `code` ``

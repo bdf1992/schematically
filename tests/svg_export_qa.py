@@ -17,6 +17,24 @@ from export_svg import export_documents  # noqa: E402
 
 SVG_NS = '{http://www.w3.org/2000/svg}'
 EDITOR_ONLY = ('selected', 'snap-target', 'wiring-source', 'port-hit', 'wire-hit')
+# A card whose text area holds one line draws its title cut with an ellipsis; the full title stays
+# in the <title> child (NOTATION-MODEL.md section 4). Judging seat ruling, 2026-10-03: this card only.
+TRUNCATED_OK = {('09-print-ai-proof-run.svg', 'Case · Customer proof 48219')}
+
+
+def cut_title_rendered(root: ET.Element, label: str) -> bool:
+    """A <text> marked data-truncated whose <title> is the full label and whose visible text is a
+    prefix of the label ending in an ellipsis."""
+    for t in root.iter(f'{SVG_NS}text'):
+        if t.get('data-truncated') != 'true':
+            continue
+        title = t.find(f'{SVG_NS}title')
+        if title is None or (title.text or '') != label:
+            continue
+        shown = ' '.join(filter(None, [(t.text or '').strip()] + [(s.text or '').strip() for s in t.iter(f'{SVG_NS}tspan')]))
+        if shown.endswith('…') and label.startswith(shown[:-1].rstrip()):
+            return True
+    return False
 
 
 def check(svg_path: Path, doc: dict) -> None:
@@ -35,6 +53,8 @@ def check(svg_path: Path, doc: dict) -> None:
     # A label wrapped to fit its body is one <text> whose lines are <tspan>s; read it as one line.
     texts = '\n'.join(' '.join(filter(None, [(t.text or '').strip()] + [(s.text or '').strip() for s in t.iter(f'{SVG_NS}tspan')])) for t in root.iter(f'{SVG_NS}text'))
     for label in labels:
+        if (svg_path.name, label) in TRUNCATED_OK and cut_title_rendered(root, label):
+            continue
         assert label in texts, f'{svg_path.name}: label {label!r} not rendered'
     if labels:
         assert root.get('width') and root.get('height'), f'{svg_path.name}: not self-sizing'

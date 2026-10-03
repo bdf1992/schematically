@@ -6,6 +6,9 @@
 - One card, 200 x 120, with a long title and a subtitle, across zooms 0.25 to 2: the title box and
   the visible subtitle box are apart by space.textGap or more and both sit inside the card body;
   where both cannot fit, the subtitle is hidden and says so (data-lod="hidden").
+- A title that needs three lines draws two, the second ending in an ellipsis, with
+  data-truncated="true" and the full title in its <title>; config.label is unchanged.
+- A title drawn outside its card is one line, uncut, and its subtitle sits textGap under it.
 """
 from __future__ import annotations
 import sys
@@ -44,6 +47,21 @@ MEASURE = r"""()=>{const g=nodesG.querySelector('.node[data-id="card"]'),w=200,h
   return {title:box(t),sub:box(u),subVisible:getComputedStyle(u).visibility!=='hidden',lod:u.dataset.lod||null,
     lines:[...t.querySelectorAll(':scope > tspan')].map(s=>s.textContent),glyph:componentInlineGraphicBox(nodes.find(x=>x.id==='card')),em:parseFloat(getComputedStyle(t).fontSize),body:{l:-w/2,r:w/2,t:-h/2,b:h/2}}}"""
 
+# A title that needs three lines inside a card, and the same long title drawn outside its card.
+# The card is 200 x 200: below a lone title's (larger) glyph, a 200 x 120 card has room for one line.
+LONG_TITLE = 'Worktree and branch for the bound task under the contractor seat with its claim receipt and the queue state'
+TWO_CARDS = r"""(title)=>{const A=window.SovSchematicAPI;
+  A.document.replace({schema:SovSchematicData.DOCUMENT_SCHEMA,id:'fit-cut',components:[
+    {id:'long',symbolId:'act',x:300,y:300,config:{label:title,presentation:{size:{w:200,h:200}}}},
+    {id:'out',symbolId:'act',x:700,y:300,config:{label:title,subtitle:'claimed by the contractor seat',presentation:{size:{w:120,h:80},labelMode:'outside'}}}],wires:[]});
+  camera={x:500-BASE_VIEW.w/2,y:300-BASE_VIEW.h/2,w:BASE_VIEW.w,h:BASE_VIEW.h};applyCamera();return currentZoom()}"""
+READ_TWO = r"""()=>{const read=(id,sel)=>{const g=nodesG.querySelector(`.node[data-id="${id}"]`),t=g.querySelector(sel),u=g.querySelector(':scope > text.component-subtitle');
+    const b=t.getBBox(),bu=u?u.getBBox():null;
+    return {lines:[...t.querySelectorAll(':scope > tspan')].map(s=>s.textContent),own:[...t.childNodes].filter(c=>c.nodeType===3).map(c=>c.textContent).join(''),
+      truncated:t.dataset.truncated||null,title:t.querySelector(':scope > title')?.textContent??null,label:nodes.find(x=>x.id===id).config.label,
+      box:{l:b.x,r:b.x+b.width,t:b.y,b:b.y+b.height},sub:bu?{t:bu.y,b:bu.y+bu.height}:null}};
+  return {long:read('long',':scope > text.component-label'),out:read('out',':scope > text.outside-label')}}"""
+
 inside = lambda a, R, tol=0.5: a['l'] >= R['l'] - tol and a['r'] <= R['r'] + tol and a['t'] >= R['t'] - tol and a['b'] <= R['b'] + tol
 
 missing = [doc.relative_to(ROOT).as_posix() for doc in DOCS if not doc.exists()]
@@ -73,6 +91,9 @@ with sync_playwright() as p:
         page.evaluate(SET_ZOOM, z)
         page.wait_for_timeout(150)  # the block is laid out again on the next frame after a zoom
         zooms[z] = page.evaluate(MEASURE)
+    page.evaluate(TWO_CARDS, LONG_TITLE)
+    page.wait_for_timeout(200)
+    two = page.evaluate(READ_TWO)
     browser.close()
 
 for name, r in docs.items():
@@ -98,4 +119,20 @@ for z, m in zooms.items():
         assert m['lod'] == 'hidden', (z, 'a hidden subtitle carries data-lod="hidden"', m['lod'])
 # Where there is room (zoom 2: the title fits on one line) the subtitle is shown, not hidden by default.
 assert zooms[2]['subVisible'], {z: m['subVisible'] for z, m in zooms.items()}
+
+# A title that needs three lines draws two, the second ending in an ellipsis; the full title stays
+# in the data and in the hover <title>.
+lng, out = two['long'], two['out']
+print(f"three-line title: lines {lng['lines']}, data-truncated {lng['truncated']}, <title> {lng['title']!r}")
+print(f"outside title: lines {out['lines']}, own text {out['own']!r}, box {out['box']}, subtitle {out['sub']}")
+assert len(lng['lines']) == 2, ('a three-line title draws two lines', lng['lines'])
+assert lng['lines'][1].endswith('…'), ('the second line ends in an ellipsis', lng['lines'])
+assert lng['truncated'] == 'true', ('a cut title sets data-truncated', lng['truncated'])
+assert lng['title'] == LONG_TITLE, ('the full title stays in <title>', lng['title'])
+assert lng['label'] == LONG_TITLE, ('config.label is never changed', lng['label'])
+# A title drawn outside its card is one line, at its own width, uncut.
+out_lines = out['lines'] or [out['own']]
+assert len(out_lines) == 1 and out_lines[0] == LONG_TITLE, ('an outside title is one uncut line', out['lines'], out['own'])
+assert out['box']['r'] - out['box']['l'] > 120, ('an outside title is not held to the card width', out['box'])
+assert out['sub'] and out['sub']['t'] - out['box']['b'] >= gap - 0.01, ('the outside subtitle sits textGap under its title', out['box'], out['sub'])
 print('PASS card text fit QA')

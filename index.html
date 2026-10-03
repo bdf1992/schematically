@@ -10468,6 +10468,8 @@ function appendTerminalMarks(g,n){
 // head does). Inside a card the block keeps clear of the glyph and inside the inner edge; when it
 // cannot, the least important line goes first: the subtitle is hidden (data-lod="hidden"), then the
 // title is cut to one line. A cut keeps the full text in a <title> child and sets data-truncated.
+// A title drawn outside its card (outside label mode) keeps one line at its own width, uncut, and
+// only its subtitle's place follows space.textGap.
 const SVG_NS='http://www.w3.org/2000/svg';
 function setFittedText(el,lines,x,step,full){
   el.textContent='';
@@ -10485,12 +10487,14 @@ function fitComponentLabels(g,n){
   const size=componentSize(n),inset=componentSectionInset(n),max=size.w-12-inset*2,x=t.getAttribute('x')||'0';
   const gap=Number(SovSchematicNotation.tokens(diagram).space?.textGap)||3,down=t.dataset.grow==='down';
   const y0=t.dataset.y0!=null?Number(t.dataset.y0):Number(t.getAttribute('y'))||0;
-  const inCard=!t.classList.contains('outside-label')&&componentBackdropMode(n)!=='none';
+  // A title drawn outside its card (under it) is not held to the card's width: it stays one line.
+  const outside=t.classList.contains('outside-label'),inCard=!outside&&componentBackdropMode(n)!=='none';
   delete t.dataset.truncated;
   if(u){delete u.dataset.truncated;delete u.dataset.lod;u.style.visibility=''}
   const fits=(el,s)=>{el.textContent=s;return el.getComputedTextLength()<=max};
-  const cut=(el,s)=>{if(fits(el,s))return s;let c=s;while(c.length>1){c=c.slice(0,-1).trimEnd();if(fits(el,c+'…'))return c+'…'}return '…'};
+  const cut=(el,s)=>{if(outside||fits(el,s))return s;let c=s;while(c.length>1){c=c.slice(0,-1).trimEnd();if(fits(el,c+'…'))return c+'…'}return '…'};
   const wrap=limit=>{
+    if(outside)return [full];
     const lines=[];let cur='';
     for(const w of full.split(/\s+/).filter(Boolean)){const trial=cur?cur+' '+w:w;if(!cur||fits(t,trial))cur=trial;else{lines.push(cur);cur=w}}
     if(cur)lines.push(cur);
