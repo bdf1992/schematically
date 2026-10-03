@@ -50,7 +50,7 @@
       "items": {
         "$ref": "#/$defs/entry"
       },
-      "description": "hash-chained; what a replay cannot recompute: the start entry (carrying {replayKey, budget}), each input, each stochastic order draw"
+      "description": "hash-chained; what a replay cannot recompute: the start entry (carrying {replayKey, budget}), an effects ledger handed in (right after start), each input (one given mid-run carries after), each stochastic order draw, each function handler's answer (result), each resume and each reconcile (with after). Replay applies an entry carrying after once the tick it names is processed, before the next"
     },
     "records": {
       "type": "array",
@@ -169,12 +169,123 @@
           "description": "default main"
         },
         "value": {
-          "type": "boolean",
-          "description": "binary channels only in slice 1b"
+          "type": [
+            "boolean",
+            "object"
+          ],
+          "description": "a level (a boolean) on a binary channel; on channel message, {channel, payload, principal}"
         },
         "at": {
           "type": "integer",
           "minimum": 0
+        },
+        "after": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "only on an input given mid-run (addInput): the tick processed before it was given. It is scheduled at max(at, after + 1), at 0 when after is null"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "tick",
+        "entity",
+        "messageId"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tick": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entity": {
+          "type": "string"
+        },
+        "messageId": {
+          "type": "string"
+        },
+        "result": {
+          "description": "what the function answered, as JSON: {payload?, channel?, port?}, a list of them, {refuse}, {absorb} or null; an answer that is not JSON or carries a fraction is recorded as {refuse: reason}"
+        },
+        "error": {
+          "type": "string",
+          "description": "the message the function threw; exactly one of result and error is present"
+        }
+      },
+      "description": "a function handler's answer, recorded when the run first reaches it; replay reads it and never calls the function"
+    },
+    "resume": {
+      "type": "object",
+      "required": [
+        "after",
+        "parkId",
+        "decision"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "parkId": {
+          "type": "string",
+          "description": "p-<message id>"
+        },
+        "decision": {
+          "type": "string",
+          "description": "approve continues at the card; anything else refuses the message"
+        },
+        "payload": {
+          "description": "laid over an object message payload, else replacing it"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "reconcile": {
+      "type": "object",
+      "required": [
+        "after",
+        "effectKey",
+        "confirmed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "effectKey": {
+          "type": "string",
+          "description": "<card id>:<business key>"
+        },
+        "confirmed": {
+          "type": "boolean"
+        },
+        "result": {
+          "description": "present when confirmed"
+        }
+      }
+    },
+    "effects": {
+      "type": "object",
+      "required": [
+        "effects"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "effects": {
+          "type": "object",
+          "description": "effect key to {key, node, status, at, messageId, result?, error?, confirmedAt?, reconciled?}, from an earlier run"
         }
       }
     },
@@ -239,11 +350,15 @@
           "enum": [
             "start",
             "input",
-            "draw"
+            "draw",
+            "result",
+            "resume",
+            "reconcile",
+            "effects"
           ]
         },
         "body": {
-          "description": "start: {replayKey, budget}; input: one input; draw: one stochastic merge order"
+          "description": "start: {replayKey, budget}; input: one input; draw: one stochastic merge order; result: a function handler's answer; resume: a person's answer to a parked message; reconcile: the answer to an ambiguous effect; effects: an effects ledger handed in at start"
         },
         "prev": {
           "type": "string",
@@ -301,6 +416,70 @@
             "properties": {
               "body": {
                 "$ref": "#/$defs/draw"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "result"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/result"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "resume"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/resume"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "reconcile"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/reconcile"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "effects"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/effects"
               }
             }
           }

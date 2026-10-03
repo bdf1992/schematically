@@ -4,6 +4,29 @@
 
 Default durable server file: `data/schematic.sov`.
 
+## One surface, any runtime
+
+`mcp/surface.mjs` is the whole request-handling core: every MCP tool, every `/api/v1` route,
+history, checkpoints, runs and the root description, behind `createSurface({store, packs, render,
+readText, describe, editorHtml}) -> {handle(request)}`. It imports nothing from `node:` (no
+`node:http`, `node:fs`, `node:path`, `node:child_process`, `node:url`); it reads the cores
+(`SovSchematicData`, `SovSchematicGraph`, `SovSchematicStateSpace`, `SovSchematicLayout`) from
+`globalThis`, which an entrypoint loads first. `request` is `{method, path, query (an object of
+strings), headers (lower-case keys), body (a string or null)}`; `handle` resolves to `{status,
+headers, body}` with `body` a string or a `Uint8Array`.
+
+Two stores ship beside it: `mcp/store-file.mjs` (`createFileStore(file)`, the durable `.sov` file
+on disk) and `mcp/store-memory.mjs` (`createMemoryStore(text)`, in-memory with a `writes` counter,
+for a test or a hosted entrypoint with nowhere durable to write).
+
+`mcp/server.mjs` is the Node entrypoint: it parses arguments, loads the cores and `guide.mjs` by
+file URL, reads `data/*.pack.json`, builds the spawn-based `render` function and a file store, and
+adapts `http.createServer` to `surface.handle` — reading the request body (the same 5,000,000
+character limit), calling `handle`, and writing back `status`, `headers` and `body`. A hosted
+entrypoint for another runtime supplies a store, packs, a transport adapter over `handle`, and
+optionally `render`; render tools and routes answer `RENDERER_UNAVAILABLE` (503 over HTTP) when it
+is absent. No second copy of the request logic exists anywhere in the package.
+
 ## MCP
 
 ```text

@@ -23,10 +23,12 @@ STATIC=[
     'tests/state_space_message_qa.py',
     'tests/state_space_acl_qa.py',
     'tests/state_space_flow_qa.py',
+    'tests/state_space_effects_qa.py',
     'tests/state_space_perf_qa.py',
     'tests/file_load_wire_canvas_qa.py',
     'tests/desktop_shell_qa.py',
     'tests/revision_guard_qa.py',
+    'tests/mcp_surface_qa.py',
 ]
 BROWSER=[
     'tests/attachment_point_refactor_qa.py',
