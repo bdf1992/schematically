@@ -84,7 +84,9 @@ Loading a file cannot be used to make a child Component implicitly reach through
 
 ## Editor utility fields
 
-Components and Wires may carry an `editor` object with `pinned`, `locked`, `hidden`, `opacity`, and `rate`. Named checkpoints persist in `document.meta.checkpoints`; each checkpoint stores a non-recursive document snapshot. Global rate is `document.meta.timeScale`.
+Components and Wires may carry an `editor` object with `pinned`, `locked`, `hidden`, `opacity`, and `rate`. Named checkpoints persist in `document.meta.checkpoints`; each checkpoint stores a non-recursive document snapshot.
+
+`document.meta.timeScale` is the document's own rate (issue #40: the document's rate beats the view's). It is a finite number >= 0, where 0 means paused; anything else - negative, `NaN`, `Infinity`, `null`, a string, a boolean - is refused with `TIME_SCALE_INVALID`, by file open, by `PUT /api/v1/document` and by `view.setGlobalRate` alike (one admission rule). A workspace never rewrites it: `view.playbackSpeed` is the view's own playback speed (the simulation clock), independent of the document's rate.
 
 
 ### Access axis
