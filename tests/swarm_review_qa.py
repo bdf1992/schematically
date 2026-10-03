@@ -77,11 +77,8 @@ def main():
                         reopened = page.evaluate('snapshotDocument()')
                         assert reopened['components'] == admitted['components'], (stem, suffix, 'components')
                         assert reopened['wires'] == admitted['wires'], (stem, suffix, 'wires')
-                        # updatedAt is volatile; timeScale package precedence is a separately
-                        # rate-policy defect (#40), outside this presentation acceptance.
                         for key in raw['meta']:
-                            if key != 'timeScale':
-                                assert reopened['meta'][key] == admitted['meta'][key], (stem, suffix, key)
+                            assert reopened['meta'][key] == admitted['meta'][key], (stem, suffix, key)
                         assert page.locator('.custom-graphic').count() == expected_graphics
                         if suffix == 'sovpak':
                             package = json.loads(saved.read_text(encoding='utf-8'))

@@ -47,7 +47,10 @@ function pagePacks(){
 }
 function pageRuns(){return pageRunRegistry||(pageRunRegistry=SovSchematicStateSpace.createRunRegistry({packs:pagePacks(),document:()=>snapshotDocument()}))}
 // Graph queries and the message simulation read the live document; one session per page.
-const graphSession=SovSchematicGraph.createSession();
+// The simulation side of the session is the sim surface (src/07-state-surface.js, over the
+// state-space engine, contract 09 of the one-runtime plan); schematic.graph.query still reaches
+// src/07-graph-core.js's graph reading.
+const graphSession=SovSchematicSimSurface.createSession();
 function graphCall(name,args={}){return SovSchematicData.clone(graphSession.execute(name,snapshotDocument(),args))}
 function apiOperation(op,resource,resourceId,value,patch,query){return runtimeCrud({schema:SovSchematicData.OPERATION_SCHEMA,id:`browser-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,op,resource,resourceId,value,patch,query})}
 
@@ -80,7 +83,7 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
-  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()}},
   render:{
     svg:(options={})=>renderStandaloneSvg(options),
     png:(options={})=>renderStandalonePng(options)
@@ -139,6 +142,6 @@ const SovSchematicAPI={
     start:(args)=>pageRuns().start(args),step:(handle)=>pageRuns().step(handle),settle:(handle)=>pageRuns().settle(handle),
     trace:(handle)=>pageRuns().trace(handle),query:(handle,subject)=>pageRuns().query(handle,subject),replay:(trace)=>pageRuns().replay(trace)
   },
-  tools:()=>[...SovSchematicData.operationTools(),...SovSchematicGraph.tools()]
+  tools:()=>[...SovSchematicData.operationTools(),...SovSchematicSimSurface.tools()]
 };
 window.SovSchematicAPI=SovSchematicAPI;

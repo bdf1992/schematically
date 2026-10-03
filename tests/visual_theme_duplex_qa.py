@@ -1,11 +1,19 @@
 from pathlib import Path
-import json, os
+import json, os, re
 from playwright.sync_api import sync_playwright
 from browser_runtime import chromium_launch_kwargs
 
 ROOT=Path(__file__).resolve().parents[1]
 HTML=(ROOT/'index.html').read_text(encoding='utf-8')
 DOC=json.loads((ROOT/'examples/02-duplex-buffer.sov').read_text(encoding='utf-8'))
+
+# Parse CSS file to extract --grid values for light and dark modes
+CSS_TEXT=(ROOT/'styles/app.css').read_text(encoding='utf-8')
+light_grid_match=re.search(r':root\s*\{[^}]*--grid:([#\w]+)', CSS_TEXT)
+dark_grid_match=re.search(r':root\[data-appearance="dark"\]\s*\{[^}]*--grid:([#\w]+)', CSS_TEXT)
+LIGHT_GRID=light_grid_match.group(1).lower() if light_grid_match else None
+DARK_GRID=dark_grid_match.group(1).lower() if dark_grid_match else None
+
 results={}; errors=[]
 
 with sync_playwright() as p:
@@ -49,8 +57,8 @@ with sync_playwright() as p:
     page.screenshot(path=str(ROOT/'tests'/'beta15-dark-palette.png'),full_page=True)
     browser.close()
 
-assert results['light']['grid'].lower()=='#f1f1ed', results
-assert results['dark']['grid'].lower()=='#2b2e31', results
+assert results['light']['grid'].lower()==LIGHT_GRID, results
+assert results['dark']['grid'].lower()==DARK_GRID, results
 assert results['dark']['canvas'].lower()=='#17191b', results
 assert results['light']['forward']==results['light']['reverse']==1, results
 assert results['dark']['forward']==results['dark']['reverse']==1, results

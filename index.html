@@ -621,7 +621,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       <button class="btn" id="viewBtn" title="View" aria-expanded="false">View</button>
       <div class="editor-menu view-menu" id="viewMenu" hidden>
         <label class="menu-field"><span>Appearance</span><select id="appearanceMode"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-        <label class="menu-field"><span>Global rate</span><select id="globalRate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        <label class="menu-field"><span>Global rate</span><select id="globalRate"><option value="0">Paused</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
         <div class="file-menu-separator"></div>
         <button class="file-menu-item" id="viewObjectsBtn" type="button"><span>Objects</span></button>
         <button class="file-menu-item" id="viewFocusBtn" type="button"><span>Focus selection</span><kbd>Enter</kbd></button>
@@ -1073,7 +1073,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 </aside>
 </div>
 
-<script type="application/json" id="sov-packs">[{"format":"soveraeign.schematic/pack@0.1","id":"core.flow","version":1,"definitions":[{"id":"flow.fanout","version":1,"pattern":"route@1","delay":0,"parameters":{"policy":"fanout"},"projection":{"label":"FANOUT"}},{"id":"flow.distribute","version":1,"pattern":"route@1","delay":0,"parameters":{"policy":"distribute"},"projection":{"label":"DISTRIBUTE"}},{"id":"flow.select","version":1,"pattern":"route@1","delay":0,"parameters":{"policy":"select"},"projection":{"label":"SELECT"}},{"id":"flow.join","version":1,"pattern":"join@1","delay":0,"parameters":{},"projection":{"label":"JOIN"}},{"id":"flow.buffer","version":1,"pattern":"buffer@1","delay":0,"parameters":{},"projection":{"label":"BUFFER"}},{"id":"flow.limit","version":1,"pattern":"limit@1","delay":0,"parameters":{},"projection":{"label":"LIMIT"}},{"id":"flow.switch","version":1,"pattern":"gate@1","delay":0,"parameters":{"kind":"switch"},"projection":{"label":"SWITCH"}},{"id":"flow.gate","version":1,"pattern":"gate@1","delay":0,"parameters":{"kind":"gate"},"projection":{"label":"GATE"}},{"id":"flow.observe","version":1,"pattern":"terminal@1","delay":0,"parameters":{"kind":"observe"},"projection":{"label":"OBSERVE"}},{"id":"flow.receipt","version":1,"pattern":"terminal@1","delay":0,"parameters":{"kind":"receipt"},"projection":{"label":"RECEIPT"}},{"id":"flow.refuse","version":1,"pattern":"terminal@1","delay":0,"parameters":{"kind":"refuse"},"projection":{"label":"REFUSE"}},{"id":"flow.hold","version":1,"pattern":"hold@1","delay":0,"parameters":{},"projection":{"label":"HOLD"}}],"bindings":{"buffer":"flow.buffer@1","gate":"flow.gate@1","hold":"flow.hold@1","limit":"flow.limit@1","observe":"flow.observe@1","receipt":"flow.receipt@1","refuse":"flow.refuse@1","switch":"flow.switch@1"}},{"format":"soveraeign.schematic/pack@0.1","id":"core.logic","version":1,"definitions":[{"id":"logic.not","version":1,"pattern":"truth_table@1","delay":0,"parameters":{"inputs":["a"],"outputs":["q"],"table":[[0,1],[1,0]]},"projection":{"label":"NOT"}},{"id":"logic.and","version":1,"pattern":"truth_table@1","delay":0,"parameters":{"inputs":["a","b"],"outputs":["q"],"table":[[0,0,0],[0,1,0],[1,0,0],[1,1,1]]},"projection":{"label":"AND"}},{"id":"logic.or","version":1,"pattern":"truth_table@1","delay":0,"parameters":{"inputs":["a","b"],"outputs":["q"],"table":[[0,0,0],[0,1,1],[1,0,1],[1,1,1]]},"projection":{"label":"OR"}},{"id":"logic.xor","version":1,"pattern":"truth_table@1","delay":0,"parameters":{"inputs":["a","b"],"outputs":["q"],"table":[[0,0,0],[0,1,1],[1,0,1],[1,1,0]]},"projection":{"label":"XOR"}}]}]</script>
+<script type="application/json" id="sov-packs">[{"format":"soveraeign.schematic/pack@0.1","id":"core.flow","version":1,"definitions":[{"id":"flow.fanout","version":1,"pattern":"route@1","delay":0,"parameters":{"policy":"fanout"},"projection":{"label":"FANOUT"}},{"id":"flow.distribute","version":1,"pattern":"route@1","delay":0,"parameters":{"policy":"distribute"},"projection":{"label":"DISTRIBUTE"}},{"id":"flow.select","version":1,"pattern":"route@1","delay":0,"parameters":{"policy":"select"},"projection":{"label":"SELECT"}},{"id":"flow.join","version":1,"pattern":"join@1","delay":0,"parameters":{},"projection":{"label":"JOIN"}},{"id":"flow.buffer","version":1,"pattern":"buffer@1","delay":0,"parameters":{},"projection":{"label":"BUFFER"}},{"id":"flow.limit","version":1,"pattern":"limit@1","delay":0,"parameters":{},"projection":{"label":"LIMIT"}},{"id":"flow.switch","version":1,"pattern":"gate@1","delay":0,"parameters":{"kind":"switch"},"projection":{"label":"SWITCH"}},{"id":"flow.gate","version":1,"pattern":"gate@1","delay":0,"parameters":{"kind":"gate"},"projection":{"label":"GATE"}},{"id":"flow.observe","version":1,"pattern":"terminal@1","delay":0,"parameters":{"kind":"observe"},"projection":{"label":"OBSERVE"}},{"id":"flow.receipt","version":1,"pattern":"terminal@1","delay":0,"parameters":{"kind":"receipt"},"projection":{"label":"RECEIPT"}},{"id":"flow.refuse","version":1,"pattern":"terminal@1","delay":0,"parameters":{"kind":"refuse"},"projection":{"label":"REFUSE"}},{"id":"flow.hold","version":1,"pattern":"hold@1","delay":0,"parameters":{},"projection":{"label":"HOLD"}},{"id":"flow.handler","version":1,"pattern":"handler@1","delay":0,"parameters":{},"projection":{"label":"HANDLER"}},{"id":"flow.effect","version":1,"pattern":"effect@1","delay":0,"parameters":{},"projection":{"label":"EFFECT"}},{"id":"flow.park","version":1,"pattern":"park@1","delay":0,"parameters":{},"projection":{"label":"PARK"}}],"bindings":{"buffer":"flow.buffer@1","gate":"flow.gate@1","hold":"flow.hold@1","limit":"flow.limit@1","observe":"flow.observe@1","receipt":"flow.receipt@1","refuse":"flow.refuse@1","switch":"flow.switch@1"}},{"format":"soveraeign.schematic/pack@0.1","id":"core.logic","version":1,"definitions":[{"id":"logic.not","version":1,"pattern":"truth_table@1","delay":0,"parameters":{"inputs":["a"],"outputs":["q"],"table":[[0,1],[1,0]]},"projection":{"label":"NOT"}},{"id":"logic.and","version":1,"pattern":"truth_table@1","delay":0,"parameters":{"inputs":["a","b"],"outputs":["q"],"table":[[0,0,0],[0,1,0],[1,0,0],[1,1,1]]},"projection":{"label":"AND"}},{"id":"logic.or","version":1,"pattern":"truth_table@1","delay":0,"parameters":{"inputs":["a","b"],"outputs":["q"],"table":[[0,0,0],[0,1,1],[1,0,1],[1,1,1]]},"projection":{"label":"OR"}},{"id":"logic.xor","version":1,"pattern":"truth_table@1","delay":0,"parameters":{"inputs":["a","b"],"outputs":["q"],"table":[[0,0,0],[0,1,1],[1,0,1],[1,1,0]]},"projection":{"label":"XOR"}}]}]</script>
 <script data-beta-module="src/03-canonical.js">
 /* BEGIN src/03-canonical.js */
 'use strict';
@@ -2051,6 +2051,17 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!isObject(config)||config.delay===undefined||(clearable&&config.delay===null))return;
     if(!(Number.isInteger(config.delay)&&config.delay>=0))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 0, not ${JSON.stringify(config.delay)}`);
   }
+  // ---- meta.timeScale (issue #40, "The document's rate beats the view's") ---------------------
+  // The document's own rate: absent means unset (the view defaults it to 1); a finite number >= 0
+  // is admitted as written, 0 meaning paused. Anything else - negative, NaN, Infinity, null, a
+  // string, a boolean - is refused with TIME_SCALE_INVALID. One rule for the file (validateDocument,
+  // below), the HTTP/MCP surface (PUT /api/v1/document already answers 400 from validateDocument's
+  // errors) and the view (src/15-editor-kernel.js setGlobalTimeScale runs this same function).
+  function admitTimeScale(value){
+    if(value===undefined)return {ok:true,present:false};
+    if(typeof value==='number'&&Number.isFinite(value)&&value>=0)return {ok:true,present:true,value};
+    return {ok:false,code:'TIME_SCALE_INVALID',message:`TIME_SCALE_INVALID: meta.timeScale must be a finite number >= 0, not ${JSON.stringify(value)}`};
+  }
   // ---- Status and waits-on (NOTATION-MODEL.md "Statuses") -------------------------------------
   // A Component's or Wire's `config.status` names an entry of its document's notation's
   // `statuses` list; there is no built-in list, so a notation that declares none admits none.
@@ -2985,6 +2996,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null;if(N&&input.notation!=null){const r=N.resolve(input);if(!r.ok)errors.push(`notation: ${r.message} (${r.code})`)}}
     if(input.narration!=null&&!Array.isArray(input.narration))errors.push('narration must be an array of {at, say}');
     for(const [i,line] of (Array.isArray(input.narration)?input.narration:[]).entries())if(!isObject(line)||typeof line.say!=='string')errors.push(`narration[${i}] needs a say`);
+    // meta.timeScale: one admission rule for the file, the API and the view (issue #40).
+    if(isObject(input.meta)){const ts=admitTimeScale(input.meta.timeScale);if(!ts.ok)errors.push(ts.message)}
     // A section's regions sit between its lines: n lines bound exactly n-1 bands. Never repaired.
     for(const c of input.components||[]){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)errors.push(`component ${c.id||'?'} section: bands must be one fewer than lines (${s.lines.length} lines, ${s.bands.length} bands)`)}
     for(const wire of input.wires||[]){
@@ -3041,7 +3054,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {admitTimeScale,statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
 /* END src/05-data-core.js */
 </script>
@@ -3412,8 +3425,46 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // hold@1 (392): keeps the payload in device.state, then forwards.
   const holdPattern=flowPattern('hold',{initial:()=>({value:null}),
     intake(parameters,state,settings,message){state.value=copy(message.value.payload);return {pass:true}}});
+  // A service gate (gate@1, kind gate) whose handler answers {pass: false} refuses with its reason
+  // (src/07-graph-core.js:449 at 7b939e3); a switch does not judge a handler's answer.
+  gatePattern.judge=(parameters,result)=>parameters.kind==='gate'&&isObject(result)&&result.pass===false?{refuse:result.reason||'gate refused'}:null;
+  // --- Behaviours: what a card does after its flow pattern takes a message in, the graph core's
+  // continueAt (src/07-graph-core.js:422-454 at 7b939e3): park for a person, then effect mediation,
+  // then a handler, then the flow policy. A card reaches each through the one binding lookup from
+  // its config.behavior (behaviorBindingsOf below); none keeps device.state. The effects ledger and
+  // the parked messages are the run's own state.
+  // handler@1 (267-283, 353-372): a handler named by config.behavior.handler. A declarative one is
+  // evaluated here: {kind: stub} passes the payload through; {kind: fixture, key, responses,
+  // otherwise?, merge?} answers by the value at key. A function is the caller's and is called by the
+  // engine, once, its answer recorded in the ledger. An answer is {payload?, channel?, port?}, a
+  // list of them, {refuse: reason} or {absorb: true}.
+  const handlerPattern=flowPattern('handler',{stateful:false,behavior:true,
+    evaluate(spec,message){
+      if(!isObject(spec))return {refuse:'handler is not callable'};
+      if(spec.kind==='stub')return {payload:copy(message.payload)};
+      if(spec.kind==='fixture'){
+        const k=readPath(message,spec.key),has=isObject(spec.responses)&&Object.prototype.hasOwnProperty.call(spec.responses,String(k));
+        const hit=has?spec.responses[String(k)]:spec.otherwise;
+        if(hit===undefined)return {refuse:`fixture has no response for ${spec.key}=${JSON.stringify(k)}`};
+        const out=clone(hit);
+        // merge: true lays the response over the incoming payload instead of replacing it.
+        if(spec.merge&&isObject(out)&&isObject(out.payload)&&isObject(message.payload))out.payload={...copy(message.payload),...out.payload};
+        return out;
+      }
+      return {refuse:`unknown handler kind ${spec.kind}`};
+    }});
+  // effect@1 (292-295, 429-444): the effect key is the declared business key at the effect site,
+  // <card id>:<value at config.behavior.effect.key>, a string as it is and any other value as its JSON.
+  const effectPattern=flowPattern('effect',{stateful:false,behavior:true,
+    identity(settings,entity,message){
+      const v=readPath(message,settings.key);
+      if(v===undefined||v===null||v==='')return {refuse:`effect has no identity (${settings.key})`};
+      return {key:`${entity}:${typeof v==='string'?v:JSON.stringify(v)}`};
+    }});
+  // park@1 (422-425, 576-584): the message waits for a person as p-<message id> until a resume.
+  const parkPattern=flowPattern('park',{stateful:false,behavior:true,parkId:message=>`p-${message.id}`});
   const PATTERNS=[truthTable,merge,combinePattern].map(p=>Object.freeze(p));
-  const FLOW_PATTERNS=[routePattern,joinPattern,bufferPattern,limitPattern,gatePattern,terminalPattern,holdPattern].map(p=>Object.freeze(p));
+  const FLOW_PATTERNS=[routePattern,joinPattern,bufferPattern,limitPattern,gatePattern,terminalPattern,holdPattern,handlerPattern,effectPattern,parkPattern].map(p=>Object.freeze(p));
   const refOf=p=>`${p.id}@${p.version}`;
   // patterns() is the level registry (each a contract over ports); flowPatterns() the message one. pattern() finds either.
   function patterns(){return PATTERNS.slice()}
@@ -3633,7 +3684,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   const RUNTIME_VERSION='state-space@1';
   const TRACE_FORMAT='soveraeign.schematic/trace@0.1';
   const ZERO_HASH='0'.repeat(64);
-  const LEDGER_KINDS=['start','input','draw'];
+  // What a replay cannot recompute: the start, each input (an input given mid-run carries `after`,
+  // the tick processed before it was given), each stochastic draw, each function handler's answer
+  // (result), each resume and reconcile (with `after`), and an effects ledger handed in at start.
+  const LEDGER_KINDS=['start','input','draw','result','resume','reconcile','effects'];
+  const MID_RUN_KINDS=['input','resume','reconcile'];
   const REPLAY_KEY_FIELDS=['documentId','documentHash','definitions','runtimeVersion','traceFormat','inputs','seed','tickMs'];
   const INPUT_KEYS=['entity','point','channel','value','at'];
   const DEFAULT_MERGE=Object.freeze({combine:'last',order:Object.freeze({kind:'stochastic'})});
@@ -3707,8 +3762,21 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const policy=isObject(c?.config?.flow)?c.config.flow.policy:undefined,candidates=[];
     if(typeof policy==='string'&&policy&&policy!=='fanout')candidates.push(`flow.${policy}@1`);
     for(const pack of packList(packs))if(isObject(pack?.bindings)&&typeof c?.symbolId==='string'&&Object.prototype.hasOwnProperty.call(pack.bindings,c.symbolId)){candidates.push(pack.bindings[c.symbolId]);break}
-    for(const ref of candidates){const def=resolveDefinition(ref,packs);if(def&&pattern(def.pattern)?.messages)return ref}
+    return lookupRef(candidates,packs,false);
+  }
+  // The first candidate the packs define as a flow pattern of the asked layer (a behaviour or not).
+  function lookupRef(candidates,packs,behavior){
+    for(const ref of candidates){const def=resolveDefinition(ref,packs),p=def?pattern(def.pattern):null;if(p?.messages&&!!p.behavior===behavior)return ref}
     return null;
+  }
+  // The same lookup for a card's behaviours: config.behavior.human names flow.park@1, .effect
+  // flow.effect@1 and .handler flow.handler@1, each when the packs define it; without them the card
+  // relays as before. Returns {human?, effect?, handler?} of id@version.
+  const BEHAVIORS=[['human','park'],['effect','effect'],['handler','handler']];
+  function behaviorBindingsOf(c,packs){
+    const b=isObject(c?.config?.behavior)?c.config.behavior:{},out={};
+    for(const [key,name] of BEHAVIORS)if(b[key]){const ref=lookupRef([`flow.${name}@1`],packs,true);if(ref)out[key]=ref}
+    return out;
   }
   // A card's flow settings, as the graph core's flowConfig reads them (src/07-graph-core.js:34-37 at
   // 7b939e3), times converted to ticks once: releaseMs (default the signal model's 10 ms) and the rate's
@@ -3724,12 +3792,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       spanTicks:rate&&Number(rate.spanMs)>0?ticks(Number(rate.spanMs)):0,handler:typeof b.handler==='string'&&b.handler?b.handler:null};
   }
   function impliedDevices(d,packs){
-    const g=typeof globalThis!=='undefined'?globalThis:{},N=g.SovSchematicNotation,out={definitions:{},bind:{},sources:[],clocks:[],flow:{},asserted:{},edges:{}};
+    const g=typeof globalThis!=='undefined'?globalThis:{},N=g.SovSchematicNotation,out={definitions:{},bind:{},sources:[],clocks:[],flow:{},behavior:{},asserted:{},edges:{}};
     let glyphs={};try{const r=N?N.resolve(d):null;glyphs=r?.ok?(r.notation?.glyphs||{}):{}}catch(_){glyphs={}}
     for(const c of d.components){
       const config=isObject(c.config)?c.config:{};
       const flow=flowBindingOf(c,packs);
       if(flow)out.flow[c.id]=flow;
+      const behavior=behaviorBindingsOf(c,packs);
+      if(Object.keys(behavior).length)out.behavior[c.id]=behavior;
       if(config.definition!==undefined&&config.definition!==null)continue;
       const glyph=glyphs[c.symbolId]||null;
       // A Point relays what reaches it (the engine's own 'point' role); every card has a signal,
@@ -3913,6 +3983,52 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return out.sort((x,y)=>cmp(x.nodes[0],y.nodes[0]));
   }
   function inputRefusal(message){return {ok:false,code:'INPUT_INVALID',message}}
+  // A run's function handlers, kept beside the run and never in it (a run stays plain JSON); and the
+  // answers of functions already called in a tick that was then refused, so a retry does not call
+  // them again: a function is called once, when the run first reaches it.
+  const FUNCTIONS=new WeakMap(),HELD=new WeakMap();
+  // One input, checked against the normalized document: {ok, input} with the input as the ledger
+  // records it, or the refusal. startRun checks each of its inputs this way and addInput a mid-run one.
+  function checkInput(d,packs,raw,i){
+    if(!isObject(raw))return inputRefusal(`input ${i} must be an object`);
+    const extra=Object.keys(raw).filter(k=>!INPUT_KEYS.includes(k));
+    if(extra.length)return inputRefusal(`input ${i}: unknown key ${extra[0]}`);
+    const component=d.components.find(c=>c.id===raw.entity);
+    if(!component)return inputRefusal(`input ${i}: unknown entity ${JSON.stringify(raw.entity)}`);
+    let spec=null;try{spec=Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&typeof raw.point==='string'&&(s.id===raw.point||s.compatId===raw.point))||null}catch(_){spec=null}
+    if(!spec)return inputRefusal(`input ${i}: ${raw.entity} has no port ${JSON.stringify(raw.point)}`);
+    const channel=raw.channel===undefined?'main':raw.channel;
+    if(channel===MESSAGE){
+      // An inject: a message {channel, payload, principal} put in at a port; several may share a port and tick.
+      if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
+      const v=raw.value;
+      if(!isObject(v))return inputRefusal(`input ${i}: a message input's value must be an object {channel, payload, principal}`);
+      const extra=Object.keys(v).filter(k=>!['channel','payload','principal'].includes(k));
+      if(extra.length)return inputRefusal(`input ${i}: unknown key value.${extra[0]}`);
+      if(v.channel!==undefined&&v.channel!==null&&typeof v.channel!=='string')return inputRefusal(`input ${i}: value.channel must be a string or null`);
+      if(v.principal!==undefined&&v.principal!==null&&!nonEmpty(v.principal))return inputRefusal(`input ${i}: value.principal must be a non-empty string or null`);
+      try{Canonical.canonicalize(v.payload??null)}catch(_){return inputRefusal(`input ${i}: value.payload must be JSON`)}
+      // No floating point anywhere a run records, payloads included: every number is a safe integer.
+      const fraction=firstFraction(v.payload??null,`inputs[${i}].value.payload`);
+      if(fraction)return {ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`input ${i}: ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the number in integer units (e.g. 1.5 kg as 1500 g, 0.25 as 250 thousandths) and name the unit in the payload'};
+      return {ok:true,input:{entity:component.id,point:spec.id,channel,value:{channel:v.channel??null,payload:clone(v.payload??null),principal:v.principal??null},at:raw.at}};
+    }
+    const bound=component.config?.definition;
+    if(bound!==undefined&&bound!==null&&(resolveDefinition(bound,packs)?.parameters?.outputs||[]).includes(spec.id))return inputRefusal(`input ${i}: ${component.id}.${spec.id} is an output of ${bound}; a device's output is the device's`);
+    if(!specChannels(spec).includes(channel))return inputRefusal(`input ${i}: port ${raw.entity}.${spec.id} has no channel ${JSON.stringify(channel)}`);
+    const fraction=firstFraction(raw.value,`inputs[${i}].value`);
+    if(fraction)return {ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`input ${i}: ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the value in integer units (a level as a boolean on a binary channel)'};
+    if(typeof raw.value!=='boolean')return inputRefusal(`input ${i}: value must be a boolean (binary channels only)`);
+    if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
+    return {ok:true,input:{entity:component.id,point:spec.id,channel,value:raw.value,at:raw.at}};
+  }
+  // A value a caller hands the run (a resume payload, a reconcile result, an effects ledger): JSON
+  // whose numbers are all safe integers, or the refusal naming the path to the first that is not.
+  function fractionRefusal(value,path){
+    try{Canonical.canonicalize(value)}catch(_){return inputRefusal(`${path} must be JSON`)}
+    const fraction=firstFraction(value,path);
+    return fraction?{ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the number in integer units (e.g. 0.25 as 250 thousandths) and name the unit'}:null;
+  }
   // A run: startRun({doc, packs, inputs, seed, budget}). `walk: 'reverse'` reverses the order in
   // which the engine walks ports, devices and Wires within a phase; no outcome depends on it.
   function startRun(options){
@@ -3939,42 +4055,26 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!Array.isArray(rawInputs))return inputRefusal('inputs must be an array');
     const inputs=[],seen=new Set();
     for(let i=0;i<rawInputs.length;i++){
-      const raw=rawInputs[i];
-      if(!isObject(raw))return inputRefusal(`input ${i} must be an object`);
-      const extra=Object.keys(raw).filter(k=>!INPUT_KEYS.includes(k));
-      if(extra.length)return inputRefusal(`input ${i}: unknown key ${extra[0]}`);
-      const component=d.components.find(c=>c.id===raw.entity);
-      if(!component)return inputRefusal(`input ${i}: unknown entity ${JSON.stringify(raw.entity)}`);
-      let spec=null;try{spec=Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&typeof raw.point==='string'&&(s.id===raw.point||s.compatId===raw.point))||null}catch(_){spec=null}
-      if(!spec)return inputRefusal(`input ${i}: ${raw.entity} has no port ${JSON.stringify(raw.point)}`);
-      const channel=raw.channel===undefined?'main':raw.channel;
-      if(channel===MESSAGE){
-        // An inject: a message {channel, payload, principal} put in at a port; several may share a port and tick.
-        if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
-        const v=raw.value;
-        if(!isObject(v))return inputRefusal(`input ${i}: a message input's value must be an object {channel, payload, principal}`);
-        const extra=Object.keys(v).filter(k=>!['channel','payload','principal'].includes(k));
-        if(extra.length)return inputRefusal(`input ${i}: unknown key value.${extra[0]}`);
-        if(v.channel!==undefined&&v.channel!==null&&typeof v.channel!=='string')return inputRefusal(`input ${i}: value.channel must be a string or null`);
-        if(v.principal!==undefined&&v.principal!==null&&!nonEmpty(v.principal))return inputRefusal(`input ${i}: value.principal must be a non-empty string or null`);
-        try{Canonical.canonicalize(v.payload??null)}catch(_){return inputRefusal(`input ${i}: value.payload must be JSON`)}
-        // No floating point anywhere a run records, payloads included: every number is a safe integer.
-        const fraction=firstFraction(v.payload??null,`inputs[${i}].value.payload`);
-        if(fraction)return {ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`input ${i}: ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the number in integer units (e.g. 1.5 kg as 1500 g, 0.25 as 250 thousandths) and name the unit in the payload'};
-        inputs.push({entity:component.id,point:spec.id,channel,value:{channel:v.channel??null,payload:clone(v.payload??null),principal:v.principal??null},at:raw.at});
-        continue;
-      }
-      const bound=component.config?.definition;
-      if(bound!==undefined&&bound!==null&&(resolveDefinition(bound,o.packs)?.parameters?.outputs||[]).includes(spec.id))return inputRefusal(`input ${i}: ${component.id}.${spec.id} is an output of ${bound}; a device's output is the device's`);
-      if(!specChannels(spec).includes(channel))return inputRefusal(`input ${i}: port ${raw.entity}.${spec.id} has no channel ${JSON.stringify(channel)}`);
-      const fraction=firstFraction(raw.value,`inputs[${i}].value`);
-      if(fraction)return {ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`input ${i}: ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the value in integer units (a level as a boolean on a binary channel)'};
-      if(typeof raw.value!=='boolean')return inputRefusal(`input ${i}: value must be a boolean (binary channels only)`);
-      if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
-      const input={entity:component.id,point:spec.id,channel,value:raw.value,at:raw.at};
+      const checked=checkInput(d,o.packs,rawInputs[i],i);
+      if(!checked.ok)return checked;
+      const input=checked.input;
+      if(input.channel===MESSAGE){inputs.push(input);continue}
       const key=JSON.stringify([input.at,input.entity,input.point,input.channel]);
       if(seen.has(key))return inputRefusal(`input ${i}: a second input at (${input.entity}, ${input.point}, ${input.channel}, ${input.at})`);
       seen.add(key);inputs.push(input);
+    }
+    // Handlers by name: a declarative one is plain JSON and is kept in the run; a function is kept
+    // beside the run (FUNCTIONS), never in it, and its answers go into the ledger.
+    if(o.handlers!==undefined&&!isObject(o.handlers))return inputRefusal('handlers must be an object of name to handler');
+    const declared={},functions={};
+    for(const [name,spec] of Object.entries(o.handlers||{})){
+      if(typeof spec==='function'){functions[name]=spec;continue}
+      try{declared[name]=JSON.parse(JSON.stringify(spec===undefined?null:spec))}catch(_){return inputRefusal(`handlers.${name} must be JSON or a function`)}
+    }
+    // An effects ledger handed in from an earlier run: what it confirmed is not sent again.
+    if(o.effects!==undefined){
+      if(!isObject(o.effects))return inputRefusal('effects must be an object of effect key to effect');
+      const bad=fractionRefusal(o.effects,'effects');if(bad)return bad;
     }
     // Message inputs at one port and tick are ordered by their canonical value, so the order is the caller's no more.
     const tie=x=>x.channel===MESSAGE?Canonical.canonicalize(x.value):'';
@@ -3982,7 +4082,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const implied=impliedDevices(d,o.packs);
     const bound=[...new Set(d.components.map(c=>c.config?.definition).filter(ref=>ref!==undefined&&ref!==null))];
     // Flow definitions a card reaches through the binding lookup are resolved definitions of the run too.
-    const flowRefs=[...new Set(Object.values(implied.flow))];
+    const flowRefs=[...new Set([...Object.values(implied.flow),...Object.values(implied.behavior).flatMap(b=>Object.values(b))])];
     const refs=[...new Set([...bound,...Object.keys(implied.definitions),...flowRefs])].sort();
     const definitions={};
     for(const ref of [...bound,...flowRefs]){const def=resolveDefinition(ref,o.packs);if(def.delay===undefined)def.delay=0;definitions[ref]=def}
@@ -3997,6 +4097,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       shape.components[id].flow={ref,pattern:def.pattern,parameters:clone(def.parameters),control:at.control.slice(),
         settings:{...flowSettings(byId.get(id),tickMs),controlled:at.control.length>0,incoming:at.incoming.slice()}};
       if(pattern(def.pattern).timed)timed.add(id);
+    }
+    // Behaviours: park with its prompt, effect with its key path, handler with its name, read once here.
+    for(const [id,refs] of Object.entries(implied.behavior)){
+      const b=byId.get(id).config.behavior,c=byId.get(id).config,out={};
+      if(refs.human)out.park={ref:refs.human,prompt:isObject(b.human)&&typeof b.human.prompt==='string'?b.human.prompt:null,label:typeof c.label==='string'&&c.label?c.label:id};
+      if(refs.effect)out.effect={ref:refs.effect,key:isObject(b.effect)&&typeof b.effect.key==='string'?b.effect.key:null};
+      if(refs.handler)out.handler={ref:refs.handler,name:String(b.handler)};
+      shape.components[id].behavior=out;
     }
     for(const [id,a] of Object.entries(implied.asserted))shape.components[id].asserted=a;
     for(const [id,e] of Object.entries(implied.edges))shape.components[id].edge=e;
@@ -4015,11 +4123,17 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       signal:{},lastRecord:{},levelPrincipal:{},queues:{},deviceState:{},sequence:0,ledger:[],records:[],replayDraws:null,
       clocks:Object.fromEntries(implied.clocks.map(c=>[portKey(c.entity,c.point,'main'),c])),
       blocked:shape.blocked,
+      // The run's effects ledger by effect key, the messages parked for a person by park id, and the
+      // declarative handlers by name: plain JSON, so a run copied or restored keeps them.
+      effects:o.effects!==undefined?clone(o.effects):{},parked:{},handlers:declared,replayResults:null,
       // A message input carries the ledger seq of its input entry: its message is m-<seq>.
-      pending:[...inputs.map((x,i)=>x.channel===MESSAGE?{kind:'input',...clone(x),seq:i+1}:{kind:'input',...x}),...sources.map(x=>({kind:'input',...x})),...implied.clocks.map(c=>clockEdge(c,tickMs,0,true,null)).filter(Boolean)]
+      pending:[...inputs.map((x,i)=>x.channel===MESSAGE?{kind:'input',...clone(x),seq:i+(o.effects!==undefined?2:1)}:{kind:'input',...x}),...sources.map(x=>({kind:'input',...x})),...implied.clocks.map(c=>clockEdge(c,tickMs,0,true,null)).filter(Boolean)]
         .sort((x,y)=>cmpList([x.at,x.entity,x.point,x.channel],[y.at,y.entity,y.point,y.channel]))
     };
+    if(Object.keys(functions).length)FUNCTIONS.set(run,functions);
     appendEntry(run,'start',{replayKey:clone(replayKey),budget});
+    // An effects ledger handed in is recorded right after start, so a replay starts from the same one.
+    if(o.effects!==undefined)appendEntry(run,'effects',{effects:clone(o.effects)});
     for(const input of inputs)appendEntry(run,'input',clone(input));
     return {ok:true,run};
   }
@@ -4261,24 +4375,146 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       }
       if(d.receipt)prev=messageRecord(run,ctx,{entity,point,observer:`rule:${flow.ref}`,rule:'receipt',inputs:[prev],message,principal,observable:'receipt'});
     }
+    // A card with config.behavior.human parks the message for a person (park@1): it waits as
+    // p-<message id> in the run's parked set until a resume names it (src/07-graph-core.js:422-425).
+    const park=component.behavior?.park;
+    if(park){
+      const parkId=behaviorPattern(run,park).parkId(message);
+      const id=messageRecord(run,ctx,{entity,point,observer:`rule:${park.ref}`,rule:park.ref,inputs:[prev],message,principal,hop:{event:'parked',parkId}});
+      const held={id:parkId,entity,point,messageId:message.id,message:copy(message),principal:principal??null,via:via??null,at:ctx.t,prompt:park.prompt,from:id};
+      put(run.parked,ctx.undoParked,parkId,held);ctx.fresh.push(held);
+      return;
+    }
     return continueAt(run,ctx,entity,point,message,principal,via,prev);
   }
-  // After intake (the graph core's continueAt): a flow card naming a handler refuses, since a run has
-  // no handler registry (the graph core's answer with no handlers registered); a passive card absorbs
-  // the message; otherwise it leaves by every carried leg of the component but `via` whose Wire
-  // accepts its channel, one child per leg (<id>.<n>, n in leg order), or by the legs the card's flow
-  // pattern chooses among those; with no such leg it is delivered, unless legs exist and all refuse
-  // its channel, when it is refused, never dropped. A leg that crosses a plane is checked under the
-  // message's principal, the crossing op then the Wire's own operation (src/07-graph-core.js send,
-  // 283-297): refused writes a hop refused record with the graph core's reason and that leg is not
-  // taken; admitted writes a crossed hop first.
+  // A behaviour's pattern, through the definition the card's binding names.
+  const behaviorPattern=(run,b)=>pattern(run.definitions[b.ref].pattern);
+  // After intake (the graph core's continueAt, src/07-graph-core.js:427-454 at 7b939e3): effect
+  // mediation, then the handler, then the flow policy. A flow card naming a handler with no handler
+  // behaviour bound (no core.flow pack defines flow.handler@1) refuses `no handler registered`; a
+  // passive card absorbs the message; otherwise forwardAt.
   function continueAt(run,ctx,entity,point,message,principal,via,from){
-    const component=run.components[entity]||{},flow=component.flow||null,p=flow?pattern(flow.pattern):null;
+    const component=run.components[entity]||{},flow=component.flow||null,b=component.behavior||{};
+    if(b.effect)return effectAt(run,ctx,entity,point,message,principal,via,from);
+    if(b.handler)return handlerAt(run,ctx,entity,point,message,principal,via,from);
     const observer=flow?`rule:${flow.ref}`:null;
     const end=(event,reason)=>{const id=messageRecord(run,ctx,{entity,point,observer:observer||'engine:message',rule:flow?flow.ref:event,inputs:[from],message,principal,hop:reason?{event,reason}:{event}});if(flow)stateCause(ctx,entity,id);return id};
     if(flow&&flow.settings.handler)return end('refused',`no handler registered: ${flow.settings.handler}`);
     if(component.passive)return end('absorbed');
-    const legs=(indexOf(run).legs.get(entity)||[]).filter(leg=>leg.wire!==via);
+    return forwardAt(run,ctx,entity,point,message,principal,via,from,null);
+  }
+  // A record about a message at a behaviour (observer and rule its definition), its id.
+  function behaviorRecord(run,ctx,entity,point,ref,message,principal,from,hop){
+    const id=messageRecord(run,ctx,{entity,point,observer:`rule:${ref}`,rule:ref,inputs:[from],message,principal,hop});
+    if(run.components[entity]?.flow)stateCause(ctx,entity,id);
+    return id;
+  }
+  // The handler's answer for this message (handler@1): {missing}, {error}, or {result}. A function's
+  // answer is read from the ledger in a replay (never called), else from an answer held from a
+  // refused tick, else the function is called; each is appended as a result entry. A declarative
+  // handler is evaluated. An answer that is not JSON or carries a fraction is a refusal.
+  function handlerAnswer(run,ctx,entity,message,principal,name){
+    const recordedKey=e=>e.body.tick===ctx.t&&e.body.entity===entity&&e.body.messageId===message.id;
+    const asResult=body=>body.error!==undefined?{error:body.error}:{result:body.result};
+    if(run.replayResults){
+      const i=run.replayResults.findIndex(recordedKey);
+      if(i>=0){const body=copy(run.replayResults[i].body);run.replayResults.splice(i,1);ctx.results.push(body);return asResult(body)}
+    }
+    const fn=FUNCTIONS.get(run)?.[name];
+    if(typeof fn==='function'){
+      if(run.replayResults){ctx.diverged={code:'REPLAY_DIVERGED',entry:null,message:`no result is recorded for handler ${name} at ${entity}, message ${message.id}, tick ${ctx.t}; a replay never calls a function`};return {error:'not recorded'}}
+      const key=`${ctx.t}\u0000${entity}\u0000${message.id}`,held=HELD.get(run);
+      let body=held&&held.has(key)?held.get(key):null;
+      if(!body){
+        body={tick:ctx.t,entity,messageId:message.id};
+        try{body.result=takeAnswer(name,fn(copy({...message,principal:principal??null}),{node:entity,tick:ctx.t,ms:ctx.t*run.tickMs}))}
+        catch(e){body.error=String(e?.message||e)}
+      }
+      ctx.results.push(body);ctx.called.set(key,body);
+      return asResult(body);
+    }
+    const spec=own(run.handlers||{},name)?run.handlers[name]:undefined;
+    if(spec===undefined)return {missing:true};
+    const p=pattern(run.definitions[run.components[entity].behavior.handler.ref].pattern);
+    return {result:takeAnswer(name,p.evaluate(spec,{...message,principal:principal??null}))};
+  }
+  function takeAnswer(name,answer){
+    let value;
+    try{value=JSON.parse(JSON.stringify(answer===undefined?null:answer))}catch(_){return {refuse:`handler ${name} answered with a value that is not JSON`}}
+    const fraction=firstFraction(value,'result');
+    return fraction?{refuse:`handler ${name} ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`}:value;
+  }
+  // Runs the card's handler (the graph core's runHandler, 363-372): {refused}, {absorbed}, {error}
+  // or {result}; a refusal or an absorb is recorded here, an error and a result by the caller.
+  function runHandler(run,ctx,entity,point,message,principal,from){
+    const h=run.components[entity].behavior.handler;
+    const a=handlerAnswer(run,ctx,entity,message,principal,h.name);
+    if(a.missing){behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'refused',reason:`no handler registered: ${h.name}`});return {refused:true}}
+    if(a.error!==undefined)return {error:a.error};
+    const r=a.result;
+    if(r==null||r.absorb){behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'absorbed'});return {absorbed:true}}
+    if(r.refuse){behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'refused',reason:String(r.refuse)});return {refused:true}}
+    return {result:r};
+  }
+  // handler@1 at a card with no effect: an error refuses `handler <name> failed: <error>`; a service
+  // gate judges {pass: false}; otherwise the outputs go on (emitOutputs).
+  function handlerAt(run,ctx,entity,point,message,principal,via,from){
+    const component=run.components[entity],h=component.behavior.handler;
+    const out=runHandler(run,ctx,entity,point,message,principal,from);
+    if(out.error!==undefined)return behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'refused',reason:`handler ${h.name} failed: ${out.error}`});
+    if(!out.result)return;
+    const flow=component.flow,judged=flow&&!Array.isArray(out.result)?pattern(flow.pattern).judge?.(flow.parameters,out.result):null;
+    if(judged)return behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'refused',reason:judged.refuse});
+    return emitOutputs(run,ctx,entity,point,message,principal,via,from,out.result,h.ref,null);
+  }
+  // The graph core's emitOutputs (353-361): a list fans out, one child per output, <id>.h<i>, with
+  // the output's channel and payload (else the message's), forwarded by the output's port when it
+  // names one; an empty list absorbs the message. `handled` carries the effect key at an effect site.
+  function emitOutputs(run,ctx,entity,point,message,principal,via,from,result,ref,effectKey){
+    const outs=Array.isArray(result)?result:[result];
+    if(!outs.length)return behaviorRecord(run,ctx,entity,point,ref,message,principal,from,{event:'absorbed'});
+    const handled=behaviorRecord(run,ctx,entity,point,ref,message,principal,from,{event:'handled',...(effectKey?{effectKey}:{})});
+    outs.forEach((o,i)=>{
+      if(!isObject(o))return;
+      const child={id:`${message.id}.h${i}`,root:message.root,parent:message.id,channel:o.channel!==undefined?o.channel:message.channel,payload:o.payload!==undefined?copy(o.payload):copy(message.payload),origin:message.origin};
+      forwardAt(run,ctx,entity,point,child,principal,via,handled,typeof o.port==='string'?o.port:null);
+    });
+  }
+  // effect@1 (429-444): the effect key from the message; a confirmed effect is not sent again (the
+  // message ends `replayed`); an ambiguous one refuses until reconciled; otherwise the attempt is
+  // entered in the run's effects ledger and the handler runs: an error leaves the effect ambiguous,
+  // a refusal or an absorb removes the attempt, a result confirms it and its outputs go on.
+  function effectAt(run,ctx,entity,point,message,principal,via,from){
+    const component=run.components[entity],e=component.behavior.effect,h=component.behavior.handler;
+    const id=behaviorPattern(run,e).identity(e,entity,{...message,principal:principal??null});
+    if(id.refuse)return behaviorRecord(run,ctx,entity,point,e.ref,message,principal,from,{event:'refused',reason:id.refuse});
+    const ek=id.key,prior=run.effects[ek];
+    if(prior&&prior.status==='confirmed')return behaviorRecord(run,ctx,entity,point,e.ref,message,principal,from,{event:'replayed',effectKey:ek});
+    if(prior&&prior.status==='ambiguous')return behaviorRecord(run,ctx,entity,point,e.ref,message,principal,from,{event:'refused',reason:`effect ${ek} is ambiguous: reconcile before retrying`});
+    const attempt={key:ek,node:entity,status:'attempted',at:ctx.t,messageId:message.id};
+    put(run.effects,ctx.undoEffects,ek,attempt);
+    const out=h?runHandler(run,ctx,entity,point,message,principal,from):{result:{payload:copy(message.payload)}};
+    if(out.error!==undefined){
+      put(run.effects,ctx.undoEffects,ek,{...attempt,status:'ambiguous',error:out.error});
+      return behaviorRecord(run,ctx,entity,point,e.ref,message,principal,from,{event:'ambiguous',effectKey:ek,reason:out.error});
+    }
+    if(out.refused||out.absorbed){drop(run.effects,ctx.undoEffects,ek);return}
+    put(run.effects,ctx.undoEffects,ek,{...attempt,status:'confirmed',confirmedAt:ctx.t,result:copy(out.result)});
+    return emitOutputs(run,ctx,entity,point,message,principal,via,from,out.result,e.ref,ek);
+  }
+  // The flow policy (the graph core's forward): the message leaves by every carried leg of the
+  // component but `via` (only those from `port` when an output names one) whose Wire accepts its
+  // channel, one child per leg (<id>.<n>, n in leg order), or by the legs the card's flow pattern
+  // chooses among those; with no such leg it is delivered, unless legs exist and all refuse its
+  // channel, when it is refused, never dropped. A leg that crosses a plane is checked under the
+  // message's principal, the crossing op then the Wire's own operation (src/07-graph-core.js send,
+  // 283-297): refused writes a hop refused record with the graph core's reason and that leg is not
+  // taken; admitted writes a crossed hop first.
+  function forwardAt(run,ctx,entity,point,message,principal,via,from,port){
+    const component=run.components[entity]||{},flow=component.flow||null,p=flow?pattern(flow.pattern):null;
+    const observer=flow?`rule:${flow.ref}`:null;
+    const end=(event,reason)=>{const id=messageRecord(run,ctx,{entity,point,observer:observer||'engine:message',rule:flow?flow.ref:event,inputs:[from],message,principal,hop:reason?{event,reason}:{event}});if(flow)stateCause(ctx,entity,id);return id};
+    const legs=(indexOf(run).legs.get(entity)||[]).filter(leg=>leg.wire!==via&&(port===null||leg.point===port));
     const open=legs.filter(leg=>!message.channel||!leg.accepts||leg.accepts.includes(message.channel));
     if(!open.length)return legs.length?end('refused',`no end accepts channel ${message.channel}`):end('delivered');
     let chosen=open.map((_,n)=>n);
@@ -4318,6 +4554,18 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     stateCause(ctx,entity,id);
     continueAt(run,ctx,entity,it.point,it.message,it.principal,it.via,id);
   }
+  // A resume taken up in the tick after it was given (the graph core's resume, 576-584): approve
+  // continues at the card (effect, handler, flow policy) with an object payload laid over an object
+  // message payload (any other payload replaces it); any other decision refuses the message with the
+  // reason given or `rejected at <label or id>`.
+  function resumeAt(run,ctx,item){
+    const park=run.components[item.entity].behavior.park,p=item.park;
+    if(item.decision!=='approve')return behaviorRecord(run,ctx,item.entity,item.point,park.ref,p.message,p.principal,p.from,{event:'refused',reason:item.reason?String(item.reason):`rejected at ${park.label}`});
+    const message=copy(p.message);
+    if(item.payload!==undefined)message.payload=isObject(message.payload)&&isObject(item.payload)?{...message.payload,...copy(item.payload)}:copy(item.payload);
+    const id=behaviorRecord(run,ctx,item.entity,item.point,park.ref,message,p.principal,p.from,{event:'resumed'});
+    continueAt(run,ctx,item.entity,item.point,message,p.principal,p.via,id);
+  }
   // An edge that starts work (src/07-graph-core.js:469-473 at 7b939e3): a level change on a card whose
   // config.signal.on matches its polarity starts a message on config.signal.channel, payload {node,
   // polarity, from, to, at} (at in ms; from and to 0/1 on a binary card, levels on a continuous one),
@@ -4336,7 +4584,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const message={id,root:id,parent:null,channel:edge.channel,payload:{node:entity,polarity,from:scale(from),to:scale(to),at:ctx.t*run.tickMs},origin:entity};
     const principal=component.principal??null;
     const rid=messageRecord(run,ctx,{entity,point:edge.point,observer:'rule:edge',rule:'edge',inputs:[record],message,principal,hop:{event:'edge'}});
-    messageAt(run,ctx,entity,edge.point,message,principal,null,rid);
+    // An edge message goes on from the card's own continueAt, as the graph core's setLevel hands it
+    // (src/07-graph-core.js:469-473 at 7b939e3): a card never takes its own edge message through its
+    // own intake (control, asserted set or toggle, flow intake, park).
+    continueAt(run,ctx,entity,edge.point,message,principal,null,rid);
   }
   // Update phase on the message channel of one port: injects start their messages; arrivals are put in
   // merge order (the declared Paths first, the rest a draw recorded like any merge) and every one is
@@ -4344,8 +4595,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // tick is the level channel's queue merge only.)
   function messagePort(run,ctx,g){
     ctx.delivery=0;
-    // A buffer's releases due now come first, then injects, then arrivals.
+    // A buffer's releases due now come first, then resumes in ledger order, then injects, then arrivals.
     for(let i=0;i<g.releases.length;i++){ctx.delivery++;releaseAt(run,ctx,g.entity)}
+    for(const item of g.resumes.slice().sort((x,y)=>x.seq-y.seq)){ctx.delivery++;resumeAt(run,ctx,item)}
     for(const input of g.injects.slice().sort((x,y)=>x.seq-y.seq)){
       ctx.delivery++;
       const id=`m-${input.seq}`,message={id,root:id,parent:null,channel:input.value.channel,payload:copy(input.value.payload),origin:g.entity};
@@ -4487,6 +4739,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // tick, so a refused tick is undone in place (a key the tick added is removed again).
   const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
   function put(obj,undo,key,value){if(!undo.has(key))undo.set(key,own(obj,key)?[true,obj[key]]:[false]);obj[key]=value}
+  function drop(obj,undo,key){if(!undo.has(key))undo.set(key,own(obj,key)?[true,obj[key]]:[false]);delete obj[key]}
   function undo(obj,log){for(const [key,[had,value]] of log)if(had)obj[key]=value;else delete obj[key]}
   // A record never precedes its cause: the key-sorted records of one tick, reordered only as far as
   // needed so that every record comes after the records of this tick it names in provenance.inputs
@@ -4512,10 +4765,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(ctx.round>0){ctx.changed=new Set();ctx.evaluated=new Map()}
       const due=run.pending.filter(x=>x.at===t);run.pending=run.pending.filter(x=>x.at!==t);
       const groups=new Map();
-      const group=(entity,point,channel)=>{const key=portKey(entity,point,channel);if(!groups.has(key))groups.set(key,{entity,point,channel,input:null,output:null,arrivals:[],injects:[],releases:[]});return groups.get(key)};
+      const group=(entity,point,channel)=>{const key=portKey(entity,point,channel);if(!groups.has(key))groups.set(key,{entity,point,channel,input:null,output:null,arrivals:[],injects:[],releases:[],resumes:[]});return groups.get(key)};
       for(const item of due){
         const g=group(item.entity,item.point,item.channel);ctx.cost++;
-        if(item.channel===MESSAGE)(item.kind==='input'?g.injects:item.kind==='release'?g.releases:g.arrivals).push(item);
+        if(item.channel===MESSAGE)(item.kind==='input'?g.injects:item.kind==='release'?g.releases:item.kind==='resume'?g.resumes:g.arrivals).push(item);
         else if(item.kind==='input'||item.kind==='clock'||item.kind==='assert')g.input=item;else if(item.kind==='output')g.output=item;else g.arrivals.push(item);
         if(item.kind==='clock'){
           const source=run.clocks[portKey(item.entity,item.point,item.channel)];
@@ -4583,20 +4836,79 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(t===null)return {ok:true,tick:null,records:[]};
     const before={pending:run.pending,sequence:run.sequence};
     const ctx={t,round:0,delivery:0,delivered:new Set(),cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null,fresh:[],written:[],evaluated:new Map(),undoSignal:new Map(),undoLast:new Map(),undoPrincipal:new Map(),queueUndo:new Map(),
-      undoState:new Map(),stateTouched:new Map(),stateRecords:[],edges:[]};
+      undoState:new Map(),stateTouched:new Map(),stateRecords:[],edges:[],undoEffects:new Map(),undoParked:new Map(),results:[],called:new Map()};
     if(!isObject(run.deviceState))run.deviceState={};
+    if(!isObject(run.effects))run.effects={};
+    if(!isObject(run.parked))run.parked={};
+    const replayResults=run.replayResults?run.replayResults.slice():null;
     const result=processTick(run,t,ctx);
     const refused=!result.ok?result:run.spent+result.cost>run.budget?{ok:false,code:'BUDGET_SPENT',tick:t,left:null,message:`processing tick ${t} takes ${result.cost} events; ${run.budget-run.spent} of the budget ${run.budget} remain`}:null;
     if(refused){
       undo(run.signal,ctx.undoSignal);undo(run.lastRecord,ctx.undoLast);undo(run.levelPrincipal,ctx.undoPrincipal);undo(run.deviceState,ctx.undoState);Object.assign(run,before);
+      undo(run.effects,ctx.undoEffects);undo(run.parked,ctx.undoParked);if(replayResults)run.replayResults=replayResults;
       undoQueues(run,ctx.queueUndo);
+      // A function already called keeps its answer for the retry.
+      if(ctx.called.size){const held=HELD.get(run)||new Map();for(const [k,v] of ctx.called)held.set(k,v);HELD.set(run,held)}
       if(refused.code==='BUDGET_SPENT')refused.left=queuedCount(run);
       return refused;
     }
+    if(ctx.called.size&&HELD.has(run)){const held=HELD.get(run);for(const k of ctx.called.keys())held.delete(k)}
     for(const draw of result.draws)appendEntry(run,'draw',draw);
+    // Each function handler's answer, in the order the tick reached them.
+    for(const body of ctx.results)appendEntry(run,'result',body);
     for(const record of result.records)run.records.push(record);
     run.tick=t;run.spent+=result.cost;
     return {ok:true,tick:t,records:copy(result.records)};
+  }
+  // --- Mid-run ledger entries. Each is appended with `after`, the tick processed before it was
+  // given (null before any), and a replay applies it at that same point.
+  const runRefusal=run=>!isObject(run)||run.runtimeVersion!==RUNTIME_VERSION?{ok:false,code:'RUN_INVALID',message:`not a ${RUNTIME_VERSION} run`}:null;
+  const nextAt=run=>run.tick===null?0:run.tick+1;
+  // addInput(run, input): an input given mid-run, checked as startRun checks one, scheduled at
+  // max(input.at, the next tick); a message input's message is m-<seq> of its ledger entry.
+  function addInput(run,input){
+    const bad=runRefusal(run);if(bad)return bad;
+    const checked=checkInput(run.doc,null,input,run.ledger.length);
+    if(!checked.ok)return checked;
+    const x=checked.input,at=Math.max(x.at,nextAt(run));
+    if(x.channel!==MESSAGE){
+      const bound=run.components[x.entity]?.definition;
+      if(bound&&(run.definitions[bound]?.parameters?.outputs||[]).includes(x.point))return inputRefusal(`input ${run.ledger.length}: ${x.entity}.${x.point} is an output of ${bound}; a device's output is the device's`);
+      if(run.pending.some(p=>p.kind==='input'&&p.at===at&&p.entity===x.entity&&p.point===x.point&&p.channel===x.channel))return inputRefusal(`input ${run.ledger.length}: a second input at (${x.entity}, ${x.point}, ${x.channel}, ${at})`);
+    }
+    const seq=run.ledger.length;
+    appendEntry(run,'input',{...clone(x),after:run.tick});
+    run.pending.push(x.channel===MESSAGE?{kind:'input',...clone(x),at,seq}:{kind:'input',...x,at});
+    return {ok:true,seq,at};
+  }
+  // resume(run, parkId, {decision, payload, reason}): the person's answer to a parked message, taken
+  // up in the next tick (resumeAt). UNKNOWN_PARK when nothing is parked under that id.
+  function resume(run,parkId,options){
+    const bad=runRefusal(run);if(bad)return bad;
+    const o=isObject(options)?options:{},p=isObject(run.parked)?run.parked[parkId]:undefined;
+    if(!p)return {ok:false,code:'UNKNOWN_PARK',message:`Nothing parked as ${parkId}`};
+    const decision=o.decision===undefined?'approve':String(o.decision);
+    if(o.payload!==undefined){const f=fractionRefusal(o.payload,'payload');if(f)return f}
+    const body={after:run.tick,parkId,decision,...(o.payload!==undefined?{payload:clone(o.payload)}:{}),...(o.reason!==undefined&&o.reason!==null?{reason:String(o.reason)}:{})};
+    const seq=run.ledger.length;
+    appendEntry(run,'resume',body);
+    delete run.parked[parkId];
+    run.pending.push({kind:'resume',at:nextAt(run),entity:p.entity,point:p.point,channel:MESSAGE,seq,parkId,decision,park:copy(p),...(body.payload!==undefined?{payload:clone(body.payload)}:{}),...(body.reason!==undefined?{reason:body.reason}:{})});
+    return {ok:true,decision};
+  }
+  // reconcile(run, effectKey, {confirmed, result}): the answer to an ambiguous effect. Confirmed, the
+  // effect is confirmed with the result and is not sent again; not confirmed, it is cleared and the
+  // next attempt sends. NOT_AMBIGUOUS when the effect is not awaiting reconciliation.
+  function reconcile(run,effectKey,options){
+    const bad=runRefusal(run);if(bad)return bad;
+    const o=isObject(options)?options:{},e=isObject(run.effects)?run.effects[effectKey]:undefined;
+    if(!e||e.status!=='ambiguous')return {ok:false,code:'NOT_AMBIGUOUS',message:`Effect ${effectKey} is not awaiting reconciliation`};
+    const confirmed=!!o.confirmed,result=o.result===undefined?null:o.result;
+    if(confirmed){const f=fractionRefusal(result,'result');if(f)return f}
+    appendEntry(run,'reconcile',{after:run.tick,effectKey,confirmed,...(confirmed?{result:clone(result)}:{})});
+    if(confirmed)run.effects[effectKey]={...e,status:'confirmed',confirmedAt:run.tick,result:clone(result),reconciled:true};
+    else delete run.effects[effectKey];
+    return {ok:true,effectKey,status:confirmed?'confirmed':'cleared'};
   }
   function traceOf(run){
     return {format:TRACE_FORMAT,replayKey:copy(run.ledger[0].body.replayKey),documentRevision:run.doc.revision,budget:run.budget,through:run.tick,head:run.ledger[run.ledger.length-1].hash,ledger:copy(run.ledger),records:copy(run.records)};
@@ -4632,6 +4944,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         if(!bad&&e.seq!==i)bad=`seq must be ${i}`;
         if(!bad&&!LEDGER_KINDS.includes(e.kind))bad=`kind must be one of ${LEDGER_KINDS.join(', ')}`;
         if(!bad&&(i===0)!==(e.kind==='start'))bad=i===0?'the first entry must be start':'only the first entry is start';
+        if(!bad&&e.kind==='effects'&&i!==1)bad='an effects entry is only the entry right after start';
+        if(!bad&&['resume','reconcile'].includes(e.kind)&&!(isObject(e.body)&&own(e.body,'after')))bad=`a ${e.kind} entry carries after`;
         if(!bad&&e.prev!==running)bad='prev does not link to the entry before';
         let hash=null;
         if(!bad){try{hash=ledgerHash(e.seq,e.kind,e.body,e.prev)}catch(_){bad='body is not canonical JSON'}}
@@ -4655,20 +4969,39 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const trace=o.trace,checked=validateTrace(trace);
     if(!checked.ok)return {ok:false,code:'TRACE_INVALID',entry:checked.entry,errors:checked.errors,message:checked.entry===null?checked.errors[0]:`the trace fails at ledger entry ${checked.entry}: ${checked.errors[0]}`};
     const key=trace.replayKey;
-    const started=startRun({doc:o.doc,packs:o.packs,inputs:key.inputs,seed:key.seed,budget:trace.budget,tickMs:key.tickMs});
+    // The declarative handlers are the caller's to give again (o.handlers); a function's answers are
+    // read from the trace's result entries and the function is never called.
+    const handed=trace.ledger.find(e=>e.kind==='effects');
+    const started=startRun({doc:o.doc,packs:o.packs,inputs:key.inputs,seed:key.seed,budget:trace.budget,tickMs:key.tickMs,handlers:o.handlers,...(handed?{effects:handed.body.effects}:{})});
     if(!started.ok)return started;
     const run=started.run,mine=run.ledger[0].body.replayKey;
     const fields=REPLAY_KEY_FIELDS.filter(field=>(mine[field]!==undefined||key[field]!==undefined)&&!same(mine[field],key[field]));
     if(fields.length)return {ok:false,code:'REPLAY_KEY_MISMATCH',fields,message:`the replay key differs in ${fields.join(', ')}`};
     run.replayDraws=trace.ledger.filter(e=>e.kind==='draw').map(e=>({seq:e.seq,body:e.body}));
+    run.replayResults=trace.ledger.filter(e=>e.kind==='result').map(e=>({seq:e.seq,body:e.body}));
+    // Mid-run entries (an input with `after`, a resume, a reconcile) are applied where they were
+    // given: after the tick they name, before the next one is processed.
+    const mid=trace.ledger.filter(e=>MID_RUN_KINDS.includes(e.kind)&&isObject(e.body)&&own(e.body,'after'));
+    let cursor=0;
+    const apply=()=>{
+      while(cursor<mid.length&&mid[cursor].body.after===run.tick){
+        const e=mid[cursor++],{after,...body}=e.body;
+        if(run.ledger.length!==e.seq)return {ok:false,code:'REPLAY_DIVERGED',entry:e.seq,message:`ledger entry ${e.seq} (${e.kind}) is applied at entry ${run.ledger.length} of the recomputed run`};
+        const r=e.kind==='input'?addInput(run,body):e.kind==='resume'?resume(run,body.parkId,body):reconcile(run,body.effectKey,body);
+        if(!r.ok)return {ok:false,code:'REPLAY_DIVERGED',entry:e.seq,message:`ledger entry ${e.seq} (${e.kind}) does not apply to the recomputed run: ${r.code} ${r.message}`};
+      }
+      return null;
+    };
+    let failed=apply();if(failed)return failed;
     // Exactly the ticks up to `through`.
     while(trace.through!==null){
       const next=nextTick(run);
       if(next===null||next>trace.through)break;
       const r=step(run);
       if(!r.ok){if(r.code==='BUDGET_SPENT')return {ok:false,code:'REPLAY_DIVERGED',tick:r.tick,message:`the trace processed tick ${r.tick}, which the recomputed run cannot within the budget ${trace.budget}`};return r}
+      failed=apply();if(failed)return failed;
     }
-    run.replayDraws=null;
+    run.replayDraws=null;run.replayResults=null;
     if(run.tick!==trace.through)return {ok:false,code:'REPLAY_DIVERGED',tick:run.tick,message:`the recomputed run ends at tick ${run.tick}, the trace at ${trace.through}`};
     const n=Math.max(run.ledger.length,trace.ledger.length);
     for(let i=0;i<n;i++)if(Canonical.canonicalize(run.ledger[i]??null)!==Canonical.canonicalize(trace.ledger[i]??null))return {ok:false,code:'REPLAY_DIVERGED',entry:i,message:`ledger entry ${i} differs from the recomputed run`};
@@ -4690,7 +5023,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return Canonical.sha256Hex(Canonical.canonicalize({signal,queues:q,pending:p,...(dev!=='{}'?{device:dev}:{})}));
   }
   const trueKeys=signal=>Object.keys(signal).filter(k=>signal[k]===true).sort();
-  const deviceText=run=>Canonical.canonicalize(stripFrom(isObject(run.deviceState)?run.deviceState:{}));
+  // The run's effects ledger and parked messages determine the future too: hashed with the
+  // device state when the run holds any (a run without them hashes exactly as before).
+  const filled=o=>isObject(o)&&Object.keys(o).length>0;
+  const hasState=run=>filled(run.deviceState)||filled(run.effects)||filled(run.parked);
+  const deviceText=run=>{
+    const d=Canonical.canonicalize(stripFrom(isObject(run.deviceState)?run.deviceState:{}));
+    if(!filled(run.effects)&&!filled(run.parked))return d;
+    return Canonical.canonicalize({device:d,effects:filled(run.effects)?run.effects:{},parked:filled(run.parked)?stripFrom(run.parked):{}});
+  };
   function futureHash(run){return stateHash(run.tick,trueKeys(run.signal),Object.keys(run.queues).sort().map(k=>[k,run.queues[k].next,queueItems(run.queues[k])]),run.pending,deviceText(run))}
   // A cheap 32-bit code (FNV-1a) of a string, and of a pending or queue item's future-determining
   // part, cached per item (items are never changed once scheduled). Codes only decide when the full
@@ -4756,7 +5097,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       return entry.hash;
     };
     const visit=t=>{
-      dev=isObject(run.deviceState)&&Object.keys(run.deviceState).length?deviceText(run):'{}';
+      dev=hasState(run)?deviceText(run):'{}';
       const key=summary(t),list=seen.get(key),entry=snapshot(t);
       if(list){
         entry.hash=futureHash(run);
@@ -4893,9 +5234,439 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     };
   }
 
-  return {RECORD_FORMAT,PACK_FORMAT,RUNTIME_VERSION,TRACE_FORMAT,RUN_RECEIPT_FORMAT,RUN_OPERATIONS,BUDGET_LIMIT,validateRecord,patterns,flowPatterns,flowBindingOf,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument,startRun,step,settle,query,runReceipt,createRunRegistry,traceOf,replay,validateTrace,queueItems};
+  return {RECORD_FORMAT,PACK_FORMAT,RUNTIME_VERSION,TRACE_FORMAT,RUN_RECEIPT_FORMAT,RUN_OPERATIONS,BUDGET_LIMIT,validateRecord,patterns,flowPatterns,flowBindingOf,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument,startRun,addInput,resume,reconcile,behaviorBindingsOf,step,settle,query,runReceipt,createRunRegistry,traceOf,replay,validateTrace,queueItems};
 });
 /* END src/07-state-space.js */
+</script>
+<script data-beta-module="src/07-state-surface.js">
+/* BEGIN src/07-state-surface.js */
+'use strict';
+// The sim surface (contract 08 of the one-runtime plan): dev's simulation API (src/07-graph-core.js
+// at 7b939e3, createSimulation, runScenario, createSession and tools) over one state-space run.
+// Time is in milliseconds here and in ticks in the run; every step is the engine's step, every input
+// the engine's addInput, resume or reconcile, and every view is read from the run's records and
+// ledger. Nothing in the engine is changed or reached past its exports; the run stays plain JSON.
+(function(root,factory){
+  let S=root.SovSchematicStateSpace,Data=root.SovSchematicData,Canonical=root.SovSchematicCanonical,nodePacks=null,graph=()=>root.SovSchematicGraph;
+  if(typeof module!=='undefined'&&module.exports){
+    if(!Canonical)Canonical=require('./03-canonical.js');
+    if(!Data){require('./06-attachment-core.js');Data=require('./05-data-core.js')}
+    if(!S)S=require('./07-state-space.js');
+    // Under node the packs are data/*.pack.json beside this module, in file-name order, as mcp/server.mjs reads them.
+    nodePacks=()=>{const fs=require('fs'),path=require('path'),dir=path.join(__dirname,'..','data');
+      return fs.readdirSync(dir).filter(n=>n.endsWith('.pack.json')).sort().map(n=>JSON.parse(fs.readFileSync(path.join(dir,n),'utf8')))};
+    graph=()=>root.SovSchematicGraph||require('./07-graph-core.js');
+  }
+  const api=factory(S,Data,Canonical,nodePacks,graph);
+  root.SovSchematicSimSurface=api;
+  if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof globalThis!=='undefined'?globalThis:this,function(S,Data,Canonical,nodePacks,graph){
+  if(!S)throw new Error('SovSchematicStateSpace (src/07-state-space.js) is required');
+  if(!Data)throw new Error('SovSchematicData core is required');
+  if(!Canonical)throw new Error('SovSchematicCanonical core is required');
+  const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
+  const isObject=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
+  function refusal(code,message,extra={}){return {ok:false,code,message,...extra}}
+  // A continuous level in a record is an integer 0..LEVEL, the engine's fixed point (2^20, see
+  // src/07-state-space.js "No floating point in a run"); a binary one is a boolean. Views give dev's 0..1.
+  const LEVEL=1<<20;
+  const levelValue=v=>v===true?1:v===false||v==null?0:typeof v==='number'?v/LEVEL:0;
+  // A surface run is never stopped by the engine's event budget: maxEvents, until and advance bound it.
+  const BUDGET=Number.MAX_SAFE_INTEGER;
+  const MESSAGE='message';
+
+  // Packs: options.packs when given; under node data/*.pack.json; in the browser the build's sov-packs tag.
+  function defaultPacks(){
+    if(nodePacks)return nodePacks();
+    const tag=typeof document!=='undefined'&&document.getElementById?document.getElementById('sov-packs'):null;
+    if(!tag)return [];
+    try{return JSON.parse(tag.textContent||'[]')}catch(_){return []}
+  }
+  function loadPacks(raw){
+    const out=[],errors=[];
+    for(const p of Array.isArray(raw)?raw:[]){const r=S.loadPack(p);if(r.ok)out.push(r.pack);else errors.push(...r.errors)}
+    return {packs:out,errors};
+  }
+
+  // The tick a run takes next, as the engine's nextTick reads it: tick 0 before the first, else the
+  // earliest pending item or queue head; null when nothing is due.
+  function nextTick(run){
+    let t=run.tick===null?0:null;
+    for(const item of run.pending)if(t===null||item.at<t)t=item.at;
+    for(const q of Object.values(run.queues||{}))if(S.queueItems(q).length&&(t===null||q.next<t))t=q.next;
+    return t;
+  }
+  const pendingCount=run=>run.pending.length+Object.values(run.queues||{}).reduce((n,q)=>n+S.queueItems(q).length,0);
+  const ceilDiv=(a,b)=>Math.ceil(Math.max(0,Number(a)||0)/b);
+
+  // CLOCK_HAS_NO_PERIOD, checked before the run starts (7b939e3 lines 290-292): a declared clock
+  // needs periodMs above 0, and a clock card needs a declared clock.
+  function clockRefusal(doc){
+    for(const c of doc.components||[]){
+      const clock=isObject(c.config?.signal)&&isObject(c.config.signal.clock)?c.config.signal.clock:null;
+      if((clock&&!(Number(clock.periodMs)>0))||(c.symbolId==='clock'&&!clock))return refusal('CLOCK_HAS_NO_PERIOD',`Clock ${c.config?.label||c.id} needs config.signal.clock.periodMs above 0`,{node:c.id});
+    }
+    return null;
+  }
+
+  // createSimulation(doc, {handlers, effects, restore, packs, tickMs, seed}): seed is the run's
+  // merge-draw seed (default '0', the engine's), so a caller can see both outcomes of a recorded draw.
+  function createSimulation(input,options={}){
+    const o=isObject(options)?options:{};
+    let doc;
+    try{doc=Data.makeDocument(clone(input||{}))}catch(e){return refusal('DOCUMENT_INVALID',String(e?.message||e))}
+    const noPeriod=clockRefusal(doc);if(noPeriod)return noPeriod;
+    const loaded=loadPacks(o.packs!==undefined?o.packs:defaultPacks());
+    if(loaded.errors.length)return refusal('PACK_INVALID',`the packs do not load: ${loaded.errors.map(e=>`${e.subject}: ${e.message}`).join('; ')}`,{refusals:loaded.errors});
+    const packs=loaded.packs,handlers=Object.assign({},o.handlers||{});
+    const metaTick=Number(doc.meta?.tickMs);
+    const tickMs=o.tickMs!==undefined?o.tickMs:(Number.isSafeInteger(metaTick)&&metaTick>0?metaTick:undefined);
+    const restored=isObject(o.restore)&&isObject(o.restore.run);
+    // Inputs given before the first tick are the run's start inputs: the run is started again with
+    // them, so an explicit set at tick 0 replaces the declared starting level instead of colliding with it.
+    let startInputs=restored?clone(o.restore.startInputs||[]):[];
+    const internal=new Set(restored?o.restore.internal||[]:[]);
+    let time=restored?Number(o.restore.time)||0:0;
+    const start=()=>{
+      const r=S.startRun({doc,packs,handlers,inputs:startInputs,budget:BUDGET,...(tickMs!==undefined?{tickMs}:{}),...(o.seed!==undefined?{seed:o.seed}:{}),...(isObject(o.effects)?{effects:clone(o.effects)}:{})});
+      if(!r.ok&&r.code==='ZERO_DELAY_CYCLE')return refusal('ZERO_LATENCY_CYCLE','A message cycle must take time: give a wire latencyMs above 0 or pass through a buffer or hold',{cycles:r.cycles});
+      return r;
+    };
+    let run;
+    if(restored)run=clone(o.restore.run);
+    else{const r=start();if(!r.ok)return r;run=r.run}
+    const TICK=run.tickMs;
+    const tickAt=ms=>ceilDiv(ms,TICK);
+
+    // One input: before the first tick it joins the start inputs (the run is started again); after
+    // it, the engine's addInput. Returns {ok, seq} with the input's ledger seq, or the refusal.
+    function give(x){
+      if(run.tick===null){
+        const trial=[...startInputs,x];
+        const before=startInputs;startInputs=trial;
+        const r=start();
+        if(!r.ok){startInputs=before;return r}
+        run=r.run;
+        const body=Canonical.canonicalize(x);
+        // The seq of this input's entry: the last entry equal to it (equal inputs are interchangeable).
+        let seq=null;for(const e of run.ledger)if(e.kind==='input'&&Canonical.canonicalize(e.body)===body)seq=e.seq;
+        return {ok:true,seq};
+      }
+      return S.addInput(run,x);
+    }
+    const componentOf=id=>run.doc.components.find(c=>c.id===id)||null;
+    // The port a message is put in at: out, else the first port that emits, else the first.
+    function portOf(id){
+      let specs=[];try{specs=Data.canonicalAttachmentPointDescriptors(componentOf(id)).filter(Boolean)}catch(_){specs=[]}
+      const flow=s=>s.flow||s.defaultFlow||'duplex';
+      const pick=specs.find(s=>s.id==='out')||specs.find(s=>['out','duplex'].includes(flow(s)))||specs[0];
+      return pick?pick.id:null;
+    }
+
+    // ---- Views, read from the run's records and ledger, cached until the run moves.
+    let cache=null;
+    function views(){
+      const key=`${run.records.length}:${run.ledger.length}:${internal.size}:${run.tick}`;
+      if(cache&&cache.key===key)return cache;
+      const v={key,messages:new Map(),order:[],log:[],refusals:[],receipts:[],series:{},edges:[],level:{}};
+      // The point whose records are a node's level: a device's first output, an asserted card's first out, any port of a Point.
+      const levelPoint={};
+      for(const [id,c] of Object.entries(run.components)){
+        if(c.role==='device'&&c.outputs?.length)levelPoint[id]=c.outputs[0];
+        else if(c.asserted?.outs?.length)levelPoint[id]=c.asserted.outs[0];
+        else if(c.role==='point')levelPoint[id]='*';
+      }
+      const causeOf=rule=>rule==='input'?'set':rule==='clock'?'clock':rule==='asserted'?'message':'derived';
+      // Ledger entries (resume, reconcile) are logged after the records of the tick they follow.
+      const ledgerEvents=[];
+      for(const e of run.ledger){
+        if(e.kind==='reconcile')ledgerEvents.push({after:e.body.after,event:{event:'effect-reconciled',effectKey:e.body.effectKey,confirmed:!!e.body.confirmed}});
+        if(e.kind==='resume')ledgerEvents.push({after:e.body.after,resume:e.body});
+      }
+      let li=0;
+      const parkedAt={};
+      const flushLedger=t=>{
+        while(li<ledgerEvents.length&&(ledgerEvents[li].after===null||t===null||ledgerEvents[li].after<t)){
+          const x=ledgerEvents[li++],at=x.after===null?0:x.after*TICK;
+          if(x.event)v.log.push({at,...x.event});
+          else{const p=parkedAt[x.resume.parkId]||{};v.log.push({at,event:'resumed',node:p.node??null,messageId:p.messageId??null,parkId:x.resume.parkId,decision:x.resume.decision})}
+        }
+      };
+      // A clock with cycles that has nothing more scheduled has stopped, after its last record.
+      const stopped={};
+      for(const [k,src] of Object.entries(run.clocks||{})){
+        if(!src.clock.cycles)continue;
+        if(run.pending.some(p=>p.kind==='clock'&&p.entity===src.entity&&p.point===src.point))continue;
+        stopped[`${src.entity}\u0000${src.point}`]=src.entity;
+      }
+      const lastClockRecord={};
+      run.records.forEach((r,i)=>{const s=r.subject;if(r.provenance.rule==='clock'&&stopped[`${s.entity}\u0000${s.point}`])lastClockRecord[`${s.entity}\u0000${s.point}`]=i});
+      const stopAfter=new Map(Object.entries(lastClockRecord).map(([k,i])=>[i,stopped[k]]));
+      run.records.forEach((r,i)=>{
+        const s=r.subject,t=r.time.logical,at=t*TICK;
+        flushLedger(t);
+        if(r.form==='message'){
+          const m=r.value;if(internal.has(m.root))return;
+          let msg=v.messages.get(m.id);
+          if(!msg){msg={id:m.id,root:m.root,parent:m.parent,principal:r.principal??null,channel:m.channel,payload:clone(m.payload),origin:m.origin,at,status:'live',hops:[]};v.messages.set(m.id,msg);v.order.push(m.id)}
+          msg.payload=clone(m.payload);msg.channel=m.channel;if(r.principal!=null)msg.principal=r.principal;
+          if(r.observable==='receipt'){v.receipts.push({at,kind:'receipt',node:s.entity,messageId:m.id,root:m.root,channel:m.channel,payload:clone(m.payload)});return}
+          const h=r.hop;if(!h)return;
+          const hop={at,node:s.entity,event:h.event};
+          if(h.wire)hop.wireId=h.wire;if(h.to)hop.to=h.to;if(h.reason)hop.reason=h.reason;if(h.parkId)hop.parkId=h.parkId;if(h.effectKey)hop.effectKey=h.effectKey;
+          if(h.event==='arrived')hop.port=s.point;
+          msg.hops.push(hop);
+          msg.status=['injected','arrived','sent','crossed','released','resumed','edge'].includes(h.event)?'live':h.event==='waiting'?'joined':h.event;
+          const base={messageId:m.id,node:s.entity};
+          switch(h.event){
+            case 'injected':v.log.push({at,event:'injected',messageId:m.id,node:s.entity,channel:m.channel});break;
+            case 'sent':v.log.push({at,event:'sent',messageId:m.id,from:s.entity,to:h.to,wireId:h.wire});break;
+            case 'arrived':v.log.push({at,event:'arrived',messageId:m.id,node:s.entity,port:s.point,wireId:h.wire});break;
+            case 'refused':v.log.push({at,event:'refused',...base,reason:h.reason});v.refusals.push({at,messageId:m.id,root:m.root,node:s.entity,reason:h.reason});break;
+            case 'delivered':case 'absorbed':case 'asserted':v.log.push({at,event:h.event,...base});break;
+            case 'observed':v.log.push({at,event:'observed',...base});v.receipts.push({at,kind:'observation',node:s.entity,messageId:m.id,root:m.root,channel:m.channel,payload:clone(m.payload)});break;
+            case 'controlled':{const open=isObject(m.payload)&&'open' in m.payload?!!m.payload.open:true;v.log.push({at,event:'controlled',...base},{at,event:'control',node:s.entity,open});break}
+            case 'edge':v.log.push({at,event:'edge-message',...base,polarity:m.payload?.polarity});break;
+            case 'replayed':v.log.push({at,event:'effect-replayed',...base,effectKey:h.effectKey});break;
+            case 'handled':if(h.effectKey)v.log.push({at,event:'effect-confirmed',...base,effectKey:h.effectKey});break;
+            case 'ambiguous':v.log.push({at,event:'effect-ambiguous',...base,effectKey:h.effectKey,error:h.reason});break;
+            case 'parked':parkedAt[h.parkId]={node:s.entity,messageId:m.id};v.log.push({at,event:'parked',...base,parkId:h.parkId});break;
+            case 'released':v.log.push({at,event:'released',...base});break;
+            case 'joined':v.log.push({at,event:'joined',...base,from:r.provenance.inputs.length?[m.parent]:[]});break;
+            default:break;
+          }
+          return;
+        }
+        if(r.level===true){v.refusals.push({at,level:true,node:s.entity,reason:r.value});v.log.push({at,event:'refused',node:s.entity,reason:r.value,level:true});return}
+        if(r.form!=='binary'&&r.form!=='continuous')return;
+        if(s.channel===MESSAGE||r.provenance.rule==='overridden')return;
+        const lp=levelPoint[s.entity];
+        if(lp===undefined||(lp!=='*'&&lp!==s.point))return;
+        const value=levelValue(r.value),old=v.level[s.entity]??0;
+        if(value!==old){
+          const polarity=value>old?'+':'-',edge={at,node:s.entity,from:old,to:value,polarity,cause:causeOf(r.provenance.rule)};
+          v.edges.push(edge);v.log.push({at,event:'edge',node:s.entity,from:old,to:value,polarity,cause:edge.cause});
+        }
+        v.level[s.entity]=value;
+        if(stopAfter.has(i))v.log.push({at,event:'clock-stopped',node:stopAfter.get(i)});
+      });
+      flushLedger(null);
+      cache=v;return v;
+    }
+    const kindOf=id=>{const c=run.components[id]||{};if(c.asserted)return c.asserted.kind;if(c.role==='device'&&c.combine)return run.definitions[c.definition]?.parameters?.kind||'binary';return 'binary'};
+    const modeOf=id=>run.components[id]?.asserted?'asserted':'derived';
+    const msOf=t=>t==null?t:t*TICK;
+    const effectView=e=>({...clone(e),...(e.at!=null?{at:msOf(e.at)}:{}),...(e.confirmedAt!=null?{confirmedAt:msOf(e.confirmedAt)}:{})});
+    const progress=(processed,extra={})=>({ok:true,processed,time,pending:pendingCount(run),...extra});
+
+    // One engine step; the surface's time follows the tick it processed.
+    function stepOnce(){
+      const r=S.step(run);
+      if(!r.ok)return r;
+      if(r.tick!==null)time=Math.max(time,r.tick*TICK);
+      return r;
+    }
+    function steps(n){
+      let done=0;
+      while(done<n){const r=stepOnce();if(!r.ok)return r;if(r.tick===null)break;done++}
+      return progress(done);
+    }
+    function set(nodeId,value,at=null){
+      const c=run.components[nodeId];if(!c)return refusal('UNKNOWN_NODE',`No component ${nodeId}`);
+      if(!c.asserted)return refusal('DERIVED_SIGNAL',`${componentOf(nodeId)?.config?.label||nodeId} is derived from its inputs; only an asserted signal is set`);
+      const v=Math.max(0,Math.min(1,Number(value)||0));
+      if(v!==0&&v!==1&&c.asserted.kind==='continuous')return refusal('LEVEL_FRACTION',`${nodeId} is continuous: this runtime sets an asserted level to 0 or 1 only (a run records no floating point)`,{node:nodeId,value});
+      const high=c.asserted.kind==='continuous'?v>=1:v*LEVEL>=c.asserted.threshold,tick=at==null?tickAt(time):at;
+      const was=views().level[nodeId]??0;
+      for(const point of c.asserted.outs){const r=give({entity:nodeId,point,channel:'main',value:high,at:tick});if(!r.ok)return r}
+      cache=null;
+      return {ok:true,node:nodeId,value:high?1:0,changed:(high?1:0)!==was,at:tick*TICK};
+    }
+    function inject(nodeId,{channel=null,payload=null,at=null,principal=null}={}){
+      if(!run.components[nodeId])return refusal('UNKNOWN_NODE',`No component ${nodeId}`);
+      const point=portOf(nodeId);if(!point)return refusal('NO_PORT',`${nodeId} has no port to put a message in at`);
+      const tick=tickAt(at==null?time:Math.max(time,Number(at)));
+      const r=give({entity:nodeId,point,channel:MESSAGE,value:{channel:channel??null,payload:payload===undefined?null:clone(payload),principal:principal??null},at:tick});
+      if(!r.ok)return r;
+      cache=null;
+      return {ok:true,messageId:`m-${r.seq}`};
+    }
+    const sim={
+      inject,
+      // step(n): n ticks of the run; tick(): the next tick.
+      step(n=1){return steps(Math.max(1,Number(n)||1))},
+      tick(){return steps(1)},
+      run({until=Infinity,maxEvents=10000}={}){
+        let done=0;const cap=Number(maxEvents)||10000;
+        for(;;){
+          const t=nextTick(run);
+          if(t===null||t*TICK>until||done>=cap)break;
+          const r=stepOnce();if(!r.ok)return r;if(r.tick===null)break;done++;
+        }
+        if(until!==Infinity&&Number.isFinite(until))time=Math.max(time,until);
+        const capped=done>=cap&&nextTick(run)!==null;
+        return {ok:!capped,processed:done,time,pending:pendingCount(run),parked:Object.keys(run.parked||{}).length,...(capped?{code:'MAX_EVENTS',message:`stopped after ${cap} ticks`}:{})};
+      },
+      // Time is the driver: every tick due up to time + ms is processed, then time is that target.
+      advance(ms){
+        const target=time+Math.max(0,Number(ms)||0);let done=0;
+        for(;;){const t=nextTick(run);if(t===null||t*TICK>target)break;const r=stepOnce();if(!r.ok)return r;if(r.tick===null)break;done++}
+        time=target;
+        return progress(done,{parked:Object.keys(run.parked||{}).length});
+      },
+      set(nodeId,value){return set(nodeId,value)},
+      // An operation at a time (ms): {set:{node,value}} | {toggle:{node}} | {inject:{node,channel,payload,principal}}.
+      at(when,action={}){
+        const t=Math.max(time,Number(when)||0);
+        if(action.inject)return inject(action.inject.node,{...action.inject,at:t});
+        if(!(action.set||action.toggle))return refusal('BAD_ACTION','An action is {set}, {toggle} or {inject}');
+        const id=(action.set||action.toggle).node,c=run.components[id];if(!c)return refusal('UNKNOWN_NODE',`No component ${id}`);
+        if(!c.asserted)return refusal('DERIVED_SIGNAL',`${id} is derived; only an asserted signal is set`);
+        if(action.set){const r=set(id,action.set.value,tickAt(t));return r.ok?{ok:true,at:r.at}:r}
+        // A toggle reads the level when it happens: a message {toggle: true} to the card, which the
+        // engine turns into the new level; the message is the surface's own and no view shows it.
+        const point=c.asserted.outs[0]||portOf(id);if(!point)return refusal('NO_PORT',`${id} has no port`);
+        const r=give({entity:id,point,channel:MESSAGE,value:{channel:null,payload:{toggle:true},principal:null},at:tickAt(t)});
+        if(!r.ok)return r;
+        internal.add(`m-${r.seq}`);cache=null;
+        return {ok:true,at:tickAt(t)*TICK};
+      },
+      levels(){const lv=views().level;return Object.fromEntries(run.doc.components.map(c=>[c.id,{value:lv[c.id]??0,kind:kindOf(c.id),mode:modeOf(c.id)}]))},
+      edges({node=null,since=null}={}){return {ok:true,edges:views().edges.filter(e=>(!node||e.node===node)&&(since==null||e.at>=since)).map(clone)}},
+      parked(){return Object.values(run.parked||{}).sort((x,y)=>x.id<y.id?-1:x.id>y.id?1:0).map(p=>({id:p.id,node:p.entity,messageId:p.messageId,wireId:p.via??null,at:msOf(p.at),prompt:p.prompt??null}))},
+      resume(parkId,{decision='approve',payload,reason}={}){
+        const r=S.resume(run,parkId,{decision,...(payload!==undefined?{payload}:{}),...(reason!=null?{reason}:{})});
+        cache=null;return r.ok?{ok:true,decision:r.decision}:r;
+      },
+      reconcile(effectKey,{confirmed,result=null}={}){const r=S.reconcile(run,effectKey,{confirmed:!!confirmed,result});cache=null;return r},
+      trace(messageId){const m=views().messages.get(messageId);if(!m)return refusal('UNKNOWN_MESSAGE',`No message ${messageId}`);return {ok:true,message:clone(m)}},
+      lineage(rootId){const v=views();return {ok:true,root:rootId,messages:v.order.map(id=>v.messages.get(id)).filter(m=>m.root===rootId).map(m=>({id:m.id,parent:m.parent,status:m.status,last:clone(m.hops.at(-1))}))}},
+      taps(nodeId){const v=views();return {ok:true,node:nodeId,arrivals:v.order.map(id=>v.messages.get(id)).filter(m=>m.hops.some(h=>h.node===nodeId&&h.event==='arrived')).map(m=>({id:m.id,root:m.root,channel:m.channel,payload:clone(m.payload),status:m.status}))}},
+      effects(){return Object.fromEntries(Object.entries(run.effects||{}).map(([k,e])=>[k,effectView(e)]))},
+      refusals(){return clone(views().refusals)},
+      receipts(){return clone(views().receipts)},
+      log(){return clone(views().log)},
+      state(){const v=views();return {time,pending:pendingCount(run),parked:Object.keys(run.parked||{}).length,messages:v.messages.size,refusals:v.refusals.length,effects:Object.keys(run.effects||{}).length,edges:v.edges.length,high:Object.values(v.level).filter(x=>x>0).length}},
+      // A copy of the run, with the surface's time; createSimulation(doc, {restore}) continues from it.
+      snapshot(){return {run:clone(run),time,startInputs:clone(startInputs),internal:[...internal]}},
+      // A declarative handler is kept in the run (plain JSON); a function can be given only before the first tick.
+      setHandler(name,spec){
+        if(typeof spec==='function'){
+          if(run.tick!==null)return refusal('HANDLER_AFTER_START',`a function handler is given before the first tick; ${name} comes after it`);
+          handlers[name]=spec;const r=start();if(!r.ok)return r;run=r.run;cache=null;return {ok:true,name};
+        }
+        handlers[name]=spec;run.handlers[name]=clone(spec);cache=null;return {ok:true,name};
+      },
+      // The run itself, for a caller that reads its records or its trace (the canvas, contract 09).
+      currentRun:()=>run
+    };
+    return {ok:true,sim};
+  }
+
+  // ---- Scenarios (7b939e3 lines 605-643), over the surface.
+  function runScenario(doc,scenario,options={}){
+    const sc=isObject(scenario?.data)?scenario.data:scenario;
+    if(!isObject(sc)||!Array.isArray(sc.steps))return refusal('BAD_SCENARIO','A scenario needs steps[]');
+    const handlers={...(sc.handlers||{}),...(options.handlers||{})};
+    const base={handlers,...(options.packs!==undefined?{packs:options.packs}:{})};
+    let made=createSimulation(doc,base);if(!made.ok)return made;
+    let sim=made.sim;const notes=[];
+    for(const [i,step] of sc.steps.entries()){
+      if(step.inject){const r=sim.inject(step.inject.node,step.inject);if(!r.ok)return {...r,step:i}}
+      else if(step.resume){
+        const p=sim.parked().find(x=>!step.resume.node||x.node===step.resume.node);
+        if(!p)return refusal('NOTHING_PARKED',`step ${i}: nothing parked${step.resume.node?' at '+step.resume.node:''}`,{step:i,log:sim.log()});
+        sim.resume(p.id,step.resume);
+      }
+      else if(step.restart){
+        // Kill and restart the engine from its snapshot, as a process restart would.
+        made=createSimulation(doc,{...base,restore:sim.snapshot()});if(!made.ok)return made;sim=made.sim;notes.push({step:i,restarted:true});
+      }
+      else if(step.reconcile)sim.reconcile(step.reconcile.effectKey,step.reconcile);
+      else if(step.set){const r=sim.set(step.set.node,step.set.value);if(!r.ok)return {...r,step:i}}
+      else if(step.at){const {time,...action}=step.at;const r=sim.at(time,action);if(!r.ok)return {...r,step:i}}
+      if(step.advance!=null)sim.advance(step.advance);
+      else if(step.tick!=null){for(let k=0;k<(Number(step.tick)||1);k++)sim.tick()}
+      else if(step.run||step.inject||step.resume||step.restart||step.reconcile||step.set)sim.run(step.run||{});
+    }
+    const checks=[],exp=sc.expect||{};
+    for(const [node,n] of Object.entries(exp.taps||{})){const actual=sim.taps(node).arrivals.length;checks.push({name:`taps ${node}`,expected:n,actual,pass:actual===n})}
+    if(exp.levelRefusals!=null){const actual=sim.refusals().filter(r=>r.level).length;checks.push({name:'level refusals',expected:exp.levelRefusals,actual,pass:actual===exp.levelRefusals})}
+    if(exp.refusals!=null){const actual=sim.refusals().filter(r=>!r.level).length;checks.push({name:'refusals',expected:exp.refusals,actual,pass:actual===exp.refusals})}
+    if(exp.parked!=null){const actual=sim.parked().length;checks.push({name:'parked',expected:exp.parked,actual,pass:actual===exp.parked})}
+    for(const [status,n] of Object.entries(exp.effects||{})){const actual=Object.values(sim.effects()).filter(e=>e.status===status).length;checks.push({name:`effects ${status}`,expected:n,actual,pass:actual===n})}
+    const levels=sim.levels();
+    for(const [node,v] of Object.entries(exp.levels||{})){const actual=levels[node]?.value;checks.push({name:`level ${node}`,expected:v,actual,pass:actual!=null&&Math.abs(actual-v)<1e-6})}
+    for(const [node,want] of Object.entries(exp.edges||{}))for(const [pol,n] of Object.entries(want)){const actual=sim.edges({node}).edges.filter(e=>e.polarity===pol).length;checks.push({name:`edges ${node} ${pol}`,expected:n,actual,pass:actual===n})}
+    for(const [event,n] of Object.entries(exp.events||{})){const actual=sim.log().filter(e=>e.event===event).length;checks.push({name:`events ${event}`,expected:n,actual,pass:actual===n})}
+    return {ok:checks.every(c=>c.pass),scenario:scenario?.id||sc.id||null,checks,state:sim.state(),refusals:sim.refusals(),receipts:sim.receipts(),notes};
+  }
+
+  // ---- One session, one dispatch (7b939e3 lines 645-683): the browser API, HTTP and MCP serve it alike.
+  function scenariosOf(doc){return (doc?.references||[]).filter(r=>r.kind==='scenario')}
+  function createSession(){
+    let sim=null,startedAt=null,startedRevision=null;
+    const need=()=>sim?null:refusal('NO_SIMULATION','Start a simulation first (schematic.sim.start)');
+    const actions={
+      'graph.query':(doc,a)=>graph().query(doc,a.verb,a.args||{}),
+      'sim.start':(doc,a)=>{
+        let handlers=isObject(a.handlers)?a.handlers:{};
+        if(a.scenarioId){const sc=scenariosOf(doc).find(r=>r.id===a.scenarioId);if(!sc)return refusal('UNKNOWN_SCENARIO',`No scenario ${a.scenarioId}`);handlers={...(sc.data?.handlers||{}),...handlers}}
+        const made=createSimulation(doc,{handlers});if(!made.ok)return made;
+        sim=made.sim;startedAt=new Date().toISOString();startedRevision=doc.revision??null;
+        return {ok:true,startedAt,revision:startedRevision,handlers:Object.keys(handlers),state:sim.state()};
+      },
+      'sim.stop':()=>{const was=!!sim;sim=null;return {ok:true,stopped:was}},
+      'sim.inject':(doc,a)=>need()||sim.inject(a.node,a),
+      'sim.set':(doc,a)=>need()||sim.set(a.node,a.value),
+      'sim.at':(doc,a)=>need()||sim.at(a.time,a),
+      'sim.advance':(doc,a)=>need()||sim.advance(a.ms),
+      'sim.tick':(doc,a)=>{const n=need();if(n)return n;let r;for(let k=0;k<(Number(a.n)||1);k++)r=sim.tick();return r},
+      'sim.step':(doc,a)=>need()||sim.step(Number(a.n)||1),
+      'sim.run':(doc,a)=>need()||sim.run({until:a.until==null?Infinity:Number(a.until),maxEvents:Number(a.maxEvents)||10000}),
+      'sim.resume':(doc,a)=>need()||sim.resume(a.parkId,a),
+      'sim.reconcile':(doc,a)=>need()||sim.reconcile(a.effectKey,a),
+      'sim.inspect':(doc,a)=>{
+        const n=need();if(n)return n;
+        const what=a.what||'state',stale=startedRevision!=null&&doc.revision!==startedRevision;
+        const views={state:()=>({ok:true,...sim.state(),stale,startedAt,revision:startedRevision}),parked:()=>({ok:true,parked:sim.parked()}),log:()=>({ok:true,log:sim.log()}),effects:()=>({ok:true,effects:sim.effects()}),refusals:()=>({ok:true,refusals:sim.refusals()}),receipts:()=>({ok:true,receipts:sim.receipts()}),trace:()=>sim.trace(a.id),levels:()=>({ok:true,time:sim.state().time,levels:sim.levels()}),edges:()=>sim.edges({node:a.id||null,since:a.since??null}),taps:()=>sim.taps(a.id),lineage:()=>sim.lineage(a.id),snapshot:()=>({ok:true,snapshot:sim.snapshot()})};
+        return views[what]?views[what]():refusal('UNKNOWN_VIEW',`Unknown view ${what}`,{views:Object.keys(views)});
+      },
+      'sim.scenario':(doc,a)=>{
+        const sc=a.scenario||scenariosOf(doc).find(r=>r.id===a.id);
+        if(!sc)return refusal('UNKNOWN_SCENARIO',`No scenario ${a.id}`,{scenarios:scenariosOf(doc).map(r=>r.id)});
+        return runScenario(doc,sc,{handlers:isObject(a.handlers)?a.handlers:{}});
+      },
+      'sim.scenarios':(doc)=>({ok:true,scenarios:scenariosOf(doc).map(r=>({id:r.id,label:r.label}))})
+    };
+    return {execute(name,doc,args={}){const fn=actions[String(name).replace(/^schematic\./,'')];if(!fn)return refusal('UNKNOWN_TOOL',`Unknown tool ${name}`);return fn(doc,isObject(args)?args:{})},names:Object.keys(actions).map(n=>'schematic.'+n)};
+  }
+  // The same schematic.graph.query and 14 schematic.sim.* tools as src/07-graph-core.js; step counts ticks.
+  function tools(){
+    const obj=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
+    const verbs=graph().queries;
+    return [
+      {name:'schematic.graph.query',description:`Read-only graph query. verb: ${verbs.join(' | ')}. args e.g. {from,to} for paths/cut, {from,channel} for reach (channel is optional: it follows only Wires whose two bound ports share that channel, so it crosses a boundary Point only where its self declares the channel), {componentId} for boundary, {format: jgf|dot|graphml} for export.`,inputSchema:obj({verb:{type:'string',enum:verbs},args:{type:'object'}},['verb'])},
+      {name:'schematic.sim.start',description:'Start a message simulation over the current document. handlers maps a handler name to {kind: stub | fixture}; scenarioId borrows a saved scenario\'s handlers. A handler a node names but nobody registered refuses its messages.',inputSchema:obj({handlers:{type:'object'},scenarioId:{type:'string'}})},
+      {name:'schematic.sim.stop',description:'Discard the running simulation.',inputSchema:obj({})},
+      {name:'schematic.sim.inject',description:'Emit a message from a component (it leaves by that component\'s outgoing wires). principal names who acts; a plane with an ACL checks it at its boundary.',inputSchema:obj({node:{type:'string'},channel:{type:'string'},payload:{},at:{type:'number'},principal:{type:'string'}},['node'])},
+      {name:'schematic.sim.set',description:'Assert a signal: set a lever, source or other asserted node to a level (binary 0|1, continuous 0..1). A derived signal is refused: it is computed from its inputs.',inputSchema:obj({node:{type:'string'},value:{type:'number',minimum:0,maximum:1}},['node','value'])},
+      {name:'schematic.sim.at',description:'Schedule an operation at a simulation time (ms): {set:{node,value}} | {toggle:{node}} | {inject:{node,channel,payload,principal}}.',inputSchema:obj({time:{type:'number'},set:{type:'object'},toggle:{type:'object'},inject:{type:'object'}},['time'])},
+      {name:'schematic.sim.advance',description:'Drive the clock: advance simulation time by ms, processing everything due (clocks, levels, messages).',inputSchema:obj({ms:{type:'number',minimum:0}},['ms'])},
+      {name:'schematic.sim.tick',description:'Take the next instant n times: process every event due at the next scheduled time.',inputSchema:obj({n:{type:'integer',minimum:1}})},
+      {name:'schematic.sim.step',description:'Process the next n ticks: each tick is one instant of the run, everything due in it.',inputSchema:obj({n:{type:'integer',minimum:1}})},
+      {name:'schematic.sim.run',description:'Process events until the queue is empty, a time is reached, or maxEvents.',inputSchema:obj({until:{type:'number'},maxEvents:{type:'integer',minimum:1}})},
+      {name:'schematic.sim.resume',description:'Resume a message parked at a human step: decision approve | reject, optional payload merged in.',inputSchema:obj({parkId:{type:'string'},decision:{type:'string',enum:['approve','reject']},payload:{},reason:{type:'string'}},['parkId'])},
+      {name:'schematic.sim.reconcile',description:'Settle an ambiguous effect: confirmed true records it as done (it will not repeat), false clears it for retry.',inputSchema:obj({effectKey:{type:'string'},confirmed:{type:'boolean'},result:{}},['effectKey','confirmed'])},
+      {name:'schematic.sim.inspect',description:'Read simulation state. what: state | levels | edges | parked | log | effects | refusals | receipts | trace | taps | lineage | snapshot; id names the message (trace, lineage) or component (taps, edges).',inputSchema:obj({what:{type:'string'},id:{type:'string'}})},
+      {name:'schematic.sim.scenario',description:'Run a saved scenario (document.references kind scenario) or an inline one in a fresh engine and return its checks as evidence.',inputSchema:obj({id:{type:'string'},scenario:{type:'object'},handlers:{type:'object'}})},
+      {name:'schematic.sim.scenarios',description:'List the scenarios saved in the document.',inputSchema:obj({})}
+    ];
+  }
+
+  return {createSimulation,runScenario,createSession,tools,LEVEL};
+});
+/* END src/07-state-surface.js */
 </script>
 <script data-beta-module="src/07-graph-core.js">
 /* BEGIN src/07-graph-core.js */
@@ -4904,13 +5675,17 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 // message simulation. No DOM; shared by the browser API and the MCP/HTTP server.
 // Specified in GRAPH-MODEL.md.
 (function(root,factory){
-  let Data=root.SovSchematicData,Model=root.SovSchematicSignalModel;
+  let Data=root.SovSchematicData,Model=root.SovSchematicSignalModel,surface=()=>root.SovSchematicSimSurface;
   if(!Model&&typeof module!=='undefined'&&module.exports)Model=require('./04-signal-model.js');
   if(!Data&&typeof module!=='undefined'&&module.exports){require('./06-attachment-core.js');Data=require('./05-data-core.js')}
-  const api=factory(Data,Model);
+  // Under node, createSimulation/runScenario/createSession/tools delegate to the sim surface
+  // (src/07-state-surface.js, contract 09 of the one-runtime plan), required at call time so
+  // the two modules' mutual require does not run at load time.
+  if(typeof module!=='undefined'&&module.exports)surface=()=>root.SovSchematicSimSurface||require('./07-state-surface.js');
+  const api=factory(Data,Model,surface);
   root.SovSchematicGraph=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(Data,Model){
+})(typeof globalThis!=='undefined'?globalThis:this,function(Data,Model,surface){
   if(!Data)throw new Error('SovSchematicData core is required');
   if(!Model)throw new Error('SovSchematicSignalModel (src/04-signal-model.js) is required');
   const clone=Data.clone;
@@ -5134,447 +5909,16 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return fn(build(doc),isObject(args)?args:{});
   }
 
-  // ---- Simulation ----------------------------------------------------------------------
-  function readPath(obj,path){if(!path)return undefined;let v=obj;for(const k of String(path).split('.')){if(v==null)return undefined;v=v[k]}return v}
-  function fnv(s){let h=0x811c9dc5;for(const ch of String(s)){h^=ch.charCodeAt(0);h=Math.imul(h,0x01000193)>>>0}return h}
-
-  // Declarative handlers work in simulation and in saved scenarios; functions are for code callers.
-  // {kind:'stub'} passes through · {kind:'fixture', key, responses:{value: output}, otherwise?, merge?}
-  // An output is {payload?, channel?, port?} | [outputs] | {refuse: reason} | {absorb: true}.
-  function callHandler(spec,msg,ctx){
-    if(typeof spec==='function')return spec(clone(msg),ctx);
-    if(!isObject(spec))return {refuse:'handler is not callable'};
-    if(spec.kind==='stub')return {payload:msg.payload};
-    if(spec.kind==='fixture'){
-      const k=readPath(msg,spec.key);const hit=isObject(spec.responses)&&Object.prototype.hasOwnProperty.call(spec.responses,String(k))?spec.responses[String(k)]:spec.otherwise;
-      if(hit===undefined)return {refuse:`fixture has no response for ${spec.key}=${JSON.stringify(k)}`};
-      const out=clone(hit);
-      // merge:true lays the response over the incoming payload instead of replacing it.
-      if(spec.merge&&isObject(out)&&isObject(out.payload)&&isObject(msg.payload))out.payload={...clone(msg.payload),...out.payload};
-      return out;
-    }
-    return {refuse:`unknown handler kind ${spec.kind}`};
-  }
-
-  function createSimulation(doc,options={}){
-    const g=build(doc);
-    const zero=cycles(g).cycles.filter(c=>!c.timed);
-    if(zero.length)return refusal('ZERO_LATENCY_CYCLE','A message cycle must take time: give a wire latencyMs above 0 or pass through a buffer or hold',{cycles:zero});
-    const handlers=Object.assign({},options.handlers||{});
-    for(const n of g.nodes.values())if(n.signal.clock&&!(n.signal.clock.periodMs>0))return refusal('CLOCK_HAS_NO_PERIOD',`Clock ${n.label||n.id} needs config.signal.clock.periodMs above 0`,{node:n.id});
-    for(const n of g.nodes.values())if(n.symbolId==='clock'&&!n.signal.clock)return refusal('CLOCK_HAS_NO_PERIOD',`Clock ${n.label||n.id} needs config.signal.clock.periodMs above 0`,{node:n.id});
-    const restored=isObject(options.restore);
-    const s=restored?clone(options.restore):{time:0,seq:0,msgSeq:0,parkSeq:0,queue:[],messages:{},log:[],refusals:[],receipts:[],parked:{},effects:{},state:{},levels:{},inputs:{},levelVia:{},levelPrincipal:{},edges:[]};
-    // Effect ledger outlives the run when handed in: replay identity is durable, the engine is not.
-    if(isObject(options.effects))s.effects=clone(options.effects);
-
-    const nodeState=id=>s.state[id]||(s.state[id]={});
-    const log=(event,fields)=>{s.log.push({at:s.time,event,...fields})};
-    function newMessage(base,parent=null){
-      const id=`m${++s.msgSeq}`;
-      const m={id,root:parent?parent.root:id,parent:parent?parent.id:null,principal:base.principal??parent?.principal??null,channel:base.channel??parent?.channel??null,payload:clone(base.payload??parent?.payload??null),origin:parent?parent.origin:base.origin,at:s.time,status:'live',hops:parent?clone(parent.hops):[]};
-      s.messages[id]=m;return m;
-    }
-    function schedule(at,event){
-      const e={at,seq:++s.seq,...event};let lo=0,hi=s.queue.length;
-      while(lo<hi){const mid=(lo+hi)>>1;if(s.queue[mid].at<=at)lo=mid+1;else hi=mid}
-      s.queue.splice(lo,0,e);
-    }
-    function hop(m,node,event,extra={}){m.hops.push({at:s.time,node,event,...extra})}
-    function refuse(m,node,reason){m.status='refused';hop(m,node,'refused',{reason});s.refusals.push({at:s.time,messageId:m.id,root:m.root,node,reason});log('refused',{messageId:m.id,node,reason})}
-    function finish(m,node,status){m.status=status;hop(m,node,status);log(status,{messageId:m.id,node})}
-
-    function outgoing(nodeId,m,viaWire,port){
-      return g.out.get(nodeId).filter(a=>a.wireId!==viaWire&&(port==null||a.fromPort===port)&&(!m.channel||!a.accepts||a.accepts.includes(m.channel)));
-    }
-    // The wire a message last arrived by at a node: the side it turns from.
-    function arrivedBy(m,nodeId){for(let i=m.hops.length-1;i>=0;i--){const h=m.hops[i];if(h.node===nodeId&&h.event==='arrived')return h.wireId;if(h.node!==nodeId)break}return null}
-    function send(m,arc){
-      const copy=newMessage({},m);
-      const cross=crossingAt(g,arc.from,arrivedBy(m,arc.from),arc.canvasId);
-      if(cross){
-        for(const op of [cross.op,...(arc.operation!=='none'?[arc.operation]:[])]){
-          const d=aclDecide(cross.plane,copy.principal,op);
-          if(!d.ok){hop(copy,arc.from,'sent',{wireId:arc.wireId,to:arc.to});refuse(copy,arc.from,d.reason);return null}
-        }
-        hop(copy,arc.from,'crossed',{plane:cross.plane.id,op:cross.op,principal:copy.principal});
-      }
-      hop(copy,arc.from,'sent',{wireId:arc.wireId,to:arc.to});
-      log('sent',{messageId:copy.id,from:arc.from,to:arc.to,wireId:arc.wireId});
-      schedule(s.time+arc.latencyMs,{kind:'arrive',messageId:copy.id,node:arc.to,port:arc.toPort,wireId:arc.wireId});
-      return copy;
-    }
-    // Apply the junction policy to one message leaving a node.
-    function forward(node,m,viaWire,port=null){
-      const arcs=outgoing(node.id,m,viaWire,port);
-      if(!arcs.length){
-        // A sink delivers; a node with outgoing ends that all refuse the channel refuses, never drops.
-        if(outgoing(node.id,{channel:null},viaWire,port).length)return refuse(m,node.id,`no end accepts channel ${m.channel}`);
-        finish(m,node.id,'delivered');return;
-      }
-      const policy=node.flow.policy,st=nodeState(node.id);
-      let chosen=arcs;
-      if(policy==='distribute'){
-        if(node.flow.by==='channel'){chosen=arcs.filter(a=>a.accepts&&m.channel&&a.accepts.includes(m.channel));if(!chosen.length)return refuse(m,node.id,`no end declares channel ${m.channel}`);chosen=[chosen[0]]}
-        else if(node.flow.by==='key'){const k=readPath(m,node.flow.key);if(k===undefined)return refuse(m,node.id,`message has no key ${node.flow.key}`);chosen=[arcs[fnv(JSON.stringify(k))%arcs.length]]}
-        else{st.rr=(st.rr||0);chosen=[arcs[st.rr%arcs.length]];st.rr++}
-      }
-      if(policy==='select')return refuse(m,node.id,'select needs a handler (config.behavior.handler)');
-      if(node.principal)m.principal=node.principal; // a participant acts in its own name
-      m.status='forwarded';hop(m,node.id,'forwarded',{policy,declared:node.flow.declared,to:chosen.map(a=>a.to)});
-      for(const a of chosen)send(m,a);
-    }
-    function emitOutputs(node,m,viaWire,result){
-      const outs=Array.isArray(result)?result:[result];
-      if(!outs.length){finish(m,node.id,'absorbed');return}
-      m.status='handled';hop(m,node.id,'handled',{outputs:outs.length});
-      for(const o of outs){
-        if(!isObject(o))continue;
-        const child=newMessage({channel:o.channel??m.channel,payload:o.payload!==undefined?o.payload:m.payload},m);
-        forward(node,child,viaWire,o.port??null);
-      }
-    }
-    function runHandler(node,m,viaWire,name){
-      const spec=handlers[name];
-      if(spec===undefined){refuse(m,node.id,`no handler registered: ${name}`);return {refused:true}}
-      let result;
-      try{result=callHandler(spec,m,{node:node.id,time:s.time,state:nodeState(node.id)})}
-      catch(e){return {error:String(e?.message||e)}}
-      if(result==null||result.absorb){finish(m,node.id,'absorbed');return {absorbed:true}}
-      if(result.refuse){refuse(m,node.id,String(result.refuse));return {refused:true}}
-      return {result};
-    }
-
-    function arrive(ev){
-      const m=s.messages[ev.messageId],node=g.nodes.get(ev.node);if(!m||!node)return;
-      hop(m,node.id,'arrived',{port:ev.port,wireId:ev.wireId});
-      log('arrived',{messageId:m.id,node:node.id,port:ev.port,wireId:ev.wireId});
-      const st=nodeState(node.id),sym=node.symbolId,b=node.behavior;
-      const arc=ev.wireId?g.arcs.find(a=>a.wireId===ev.wireId&&a.to===node.id):null;
-      if(arc?.control){
-        const open=isObject(m.payload)&&'open' in m.payload?!!m.payload.open:true;
-        st.open=open;finish(m,node.id,'controlled');log('control',{node:node.id,open});return;
-      }
-      // An asserted signal is changed by an operation: a message may set or toggle it.
-      if(node.signal.mode==='asserted'&&isObject(m.payload)&&('set' in m.payload||m.payload.toggle)){
-        const v=m.payload.toggle?1-(s.levels[node.id]??0):Number(m.payload.set);
-        setLevel(node,v,'message');finish(m,node.id,'asserted');return;
-      }
-      if(sym==='refuse')return refuse(m,node.id,'REFUSE terminal');
-      if(sym==='observe'){finish(m,node.id,'observed');s.receipts.push({at:s.time,kind:'observation',node:node.id,messageId:m.id,root:m.root,channel:m.channel,payload:clone(m.payload)});return}
-      if(sym==='receipt')s.receipts.push({at:s.time,kind:'receipt',node:node.id,messageId:m.id,root:m.root,channel:m.channel,payload:clone(m.payload)});
-      if(sym==='hold')st.value=clone(m.payload);
-      if(sym==='switch'&&!st.open)return refuse(m,node.id,'switch is closed');
-      if(sym==='gate'&&!b.handler){
-        const controlled=g.in.get(node.id).some(a=>a.control);
-        if(!controlled)return refuse(m,node.id,'gate has no condition: wire its control point or name a handler');
-        if(!st.open)return refuse(m,node.id,'gate is closed: no control has opened it');
-      }
-      if(sym==='limit'){
-        const r=node.flow.rate;if(!r||!(r.count>0)||!(r.windowMs>0))return refuse(m,node.id,'limit has no rate (config.flow.rate {count, windowMs})');
-        st.window=(st.window||[]).filter(t=>t>s.time-r.windowMs);
-        if(st.window.length>=r.count)return refuse(m,node.id,`limit ${r.count} per ${r.windowMs}ms exceeded`);
-        st.window.push(s.time);
-      }
-      if(sym==='buffer'){
-        st.queue=st.queue||[];
-        if(node.flow.capacity!=null&&st.queue.length>=node.flow.capacity)return refuse(m,node.id,`buffer full (${node.flow.capacity})`);
-        st.queue.push({messageId:m.id,wireId:ev.wireId});m.status='buffered';hop(m,node.id,'buffered');
-        if(!st.releasing){st.releasing=true;schedule(s.time+(node.flow.releaseMs??DEFAULT_LATENCY_MS),{kind:'release',node:node.id})}
-        return;
-      }
-      if(node.flow.policy==='join'){
-        const incoming=[...new Set(g.in.get(node.id).filter(a=>!a.control).map(a=>a.wireId))];
-        st.join=st.join||{};(st.join[ev.wireId]=st.join[ev.wireId]||[]).push(m.id);
-        m.status='joined';hop(m,node.id,'waiting');
-        if(!incoming.every(w=>(st.join[w]||[]).length))return;
-        const parts={},taken=[];for(const w of incoming){const id=st.join[w].shift();parts[w]=clone(s.messages[id].payload);taken.push(id)}
-        const joined=newMessage({channel:m.channel,payload:{parts},origin:m.origin},m);joined.joined=taken;
-        log('joined',{node:node.id,messageId:joined.id,from:taken});
-        return continueAt(node,joined,null);
-      }
-      if(b.human){
-        const parkId=`p${++s.parkSeq}`;s.parked[parkId]={id:parkId,node:node.id,messageId:m.id,wireId:ev.wireId,at:s.time,prompt:b.human.prompt||null};
-        m.status='parked';hop(m,node.id,'parked',{parkId});log('parked',{node:node.id,messageId:m.id,parkId});return;
-      }
-      continueAt(node,m,ev.wireId);
-    }
-    // After intake: effect mediation, handler, then the flow policy.
-    function continueAt(node,m,viaWire){
-      const b=node.behavior;
-      if(b.effect){
-        const key=readPath(m,b.effect.key);
-        if(key===undefined||key===null||key==='')return refuse(m,node.id,`effect has no identity (${b.effect.key})`);
-        const ek=`${node.id}:${typeof key==='string'?key:JSON.stringify(key)}`,prior=s.effects[ek];
-        if(prior&&prior.status==='confirmed'){m.status='replayed';hop(m,node.id,'replayed',{effectKey:ek});log('effect-replayed',{node:node.id,messageId:m.id,effectKey:ek});return}
-        if(prior&&prior.status==='ambiguous')return refuse(m,node.id,`effect ${ek} is ambiguous: reconcile before retrying`);
-        s.effects[ek]={key:ek,node:node.id,status:'attempted',at:s.time,messageId:m.id};
-        const out=b.handler?runHandler(node,m,viaWire,b.handler):{result:{payload:m.payload}};
-        if(out.error){s.effects[ek].status='ambiguous';s.effects[ek].error=out.error;m.status='ambiguous';hop(m,node.id,'ambiguous',{effectKey:ek,error:out.error});log('effect-ambiguous',{node:node.id,messageId:m.id,effectKey:ek,error:out.error});return}
-        if(out.refused||out.absorbed){delete s.effects[ek];return}
-        Object.assign(s.effects[ek],{status:'confirmed',confirmedAt:s.time,result:clone(out.result)});
-        log('effect-confirmed',{node:node.id,messageId:m.id,effectKey:ek});
-        return emitOutputs(node,m,viaWire,out.result);
-      }
-      if(b.handler){
-        const out=runHandler(node,m,viaWire,b.handler);
-        if(out.error)return refuse(m,node.id,`handler ${b.handler} failed: ${out.error}`);
-        if(!out.result)return;
-        if(node.symbolId==='gate'&&!Array.isArray(out.result)&&out.result.pass===false)return refuse(m,node.id,out.result.reason||'gate refused');
-        return emitOutputs(node,m,viaWire,out.result);
-      }
-      if(node.signalMode==='passive')return finish(m,node.id,'absorbed');
-      forward(node,m,viaWire);
-    }
-    function release(ev){
-      const node=g.nodes.get(ev.node),st=nodeState(ev.node);const item=(st.queue||[]).shift();
-      if(item){const m=s.messages[item.messageId];hop(m,node.id,'released');log('released',{node:node.id,messageId:m.id});continueAt(node,m,item.wireId)}
-      if((st.queue||[]).length)schedule(s.time+(node.flow.releaseMs??DEFAULT_LATENCY_MS),{kind:'release',node:ev.node});else st.releasing=false;
-    }
-
-    // ---- Levels: state that changes over time, and the edges (+ rising, − falling) it makes.
-    const quantize=(node,v)=>{v=Math.max(0,Math.min(1,Number(v)||0));return node.signal.kind==='binary'?(v>=node.signal.threshold?1:0):v};
-    function setLevel(node,v,cause){
-      const old=s.levels[node.id]??0;v=quantize(node,v);
-      if(Math.abs(v-old)<=(node.signal.kind==='binary'?0:node.signal.epsilon))return false;
-      s.levels[node.id]=v;
-      const polarity=v>old?'+':'-',edge={at:s.time,node:node.id,from:old,to:v,polarity,cause};
-      s.edges.push(edge);log('edge',{node:node.id,from:old,to:v,polarity,cause});
-      if(node.signal.on&&(node.signal.on==='±'||node.signal.on===polarity)){
-        // An edge may start work: it leaves the node as a message, like an inject.
-        const m=newMessage({channel:node.signal.channel,payload:{node:node.id,polarity,from:old,to:v,at:s.time},origin:node.id,principal:node.principal});
-        hop(m,node.id,'edge',{polarity});log('edge-message',{messageId:m.id,node:node.id,polarity});continueAt(node,m,null);
-      }
-      if(node.signal.emits)for(const a of g.out.get(node.id)){
-        const principal=node.principal??s.levelPrincipal[node.id]??null;
-        const cross=crossingAt(g,node.id,s.levelVia[node.id]??null,a.canvasId);
-        if(cross){const d=aclDecide(cross.plane,principal,cross.op);if(!d.ok){s.refusals.push({at:s.time,level:true,node:node.id,wireId:a.wireId,reason:d.reason});log('refused',{node:node.id,wireId:a.wireId,reason:d.reason,level:true});continue}}
-        schedule(s.time+a.latencyMs,{kind:'level',node:a.to,wireId:a.wireId,value:v,principal});
-      }
-      return true;
-    }
-    const COMBINE={or:v=>Math.max(0,...v),max:v=>Math.max(0,...v),and:v=>v.length?Math.min(...v):0,min:v=>v.length?Math.min(...v):0,
-      not:v=>1-Math.max(0,...v),nand:v=>1-(v.length?Math.min(...v):0),nor:v=>1-Math.max(0,...v),buffer:v=>Math.max(0,...v),
-      xor:v=>v.filter(x=>x>=.5).length%2,mean:v=>v.length?v.reduce((a,b)=>a+b,0)/v.length:0,sum:v=>Math.min(1,v.reduce((a,b)=>a+b,0))};
-    function recompute(node){
-      const inputs=s.inputs[node.id]||{},arcs=g.in.get(node.id);
-      const data=arcs.filter(a=>!a.control).map(a=>inputs[a.wireId]??0),control=arcs.filter(a=>a.control).map(a=>inputs[a.wireId]??0);
-      const enabled=!control.length||Math.max(...control)>=node.signal.threshold;
-      return setLevel(node,enabled?COMBINE[node.signal.combine](data):0,'derived');
-    }
-    function levelArrive(ev){
-      const node=g.nodes.get(ev.node);if(!node)return;
-      (s.inputs[node.id]||(s.inputs[node.id]={}))[ev.wireId]=ev.value;
-      s.levelVia[node.id]=ev.wireId;s.levelPrincipal[node.id]=ev.principal;
-      if(node.signal.mode==='derived')recompute(node);
-    }
-    function waveAt(c,t){
-      if(t<c.phaseMs)return 0;
-      const u=(((t-c.phaseMs)/c.periodMs)%1+1)%1;
-      return c.wave==='square'?(u<c.duty?1:0):c.wave==='saw'?u:c.wave==='triangle'?(u<.5?2*u:2-2*u):.5-.5*Math.cos(2*Math.PI*u);
-    }
-    function nextClockTime(c,t){
-      if(t<c.phaseMs)return c.phaseMs;
-      if(c.wave!=='square')return t+(c.sampleMs||c.periodMs/16);
-      const k=Math.floor((t-c.phaseMs)/c.periodMs),start=c.phaseMs+k*c.periodMs,fall=start+c.duty*c.periodMs;
-      return t<fall&&fall>t?fall:start+c.periodMs;
-    }
-    function clockTick(ev){
-      const node=g.nodes.get(ev.node),c=node?.signal.clock;if(!c)return;
-      if(c.cycles&&s.time>=c.phaseMs+c.cycles*c.periodMs){setLevel(node,0,'clock');log('clock-stopped',{node:node.id});return}
-      setLevel(node,waveAt(c,s.time),'clock');
-      schedule(Math.max(s.time+1e-9,nextClockTime(c,s.time)),{kind:'clock',node:node.id});
-    }
-    function runAction(ev){
-      const a=ev.action||{};
-      if(a.set){const node=g.nodes.get(a.set.node);if(node)sim.set(a.set.node,a.set.value)}
-      else if(a.toggle){sim.set(a.toggle.node,1-(s.levels[a.toggle.node]??0))}
-    }
-    if(!restored){
-      // Power on: asserted levels drive out at time 0; clocks start their schedule.
-      for(const n of g.nodes.values()){
-        if(n.signal.clock)schedule(0,{kind:'clock',node:n.id});
-        else if(n.signal.mode==='asserted'&&n.signal.value>0)schedule(0,{kind:'action',powerOn:true,action:{set:{node:n.id,value:n.signal.value}}});
-      }
-    }
-
-    const sim={
-      inject(nodeId,{channel=null,payload=null,at=null,principal=null}={}){
-        if(!g.nodes.has(nodeId))return refusal('UNKNOWN_NODE',`No component ${nodeId}`);
-        const m=newMessage({channel,payload,origin:nodeId,principal});
-        hop(m,nodeId,'injected');log('injected',{messageId:m.id,node:nodeId,channel});
-        schedule(at==null?s.time:Math.max(s.time,Number(at)),{kind:'inject',messageId:m.id,node:nodeId});
-        return {ok:true,messageId:m.id};
-      },
-      step(n=1){
-        let done=0;
-        while(done<n&&s.queue.length){
-          const ev=s.queue.shift();s.time=Math.max(s.time,ev.at);done++;
-          if(ev.kind==='arrive')arrive(ev);
-          else if(ev.kind==='inject'){const m=s.messages[ev.messageId],node=g.nodes.get(ev.node);continueAt(node,m,null)}
-          else if(ev.kind==='release')release(ev);
-          else if(ev.kind==='level')levelArrive(ev);
-          else if(ev.kind==='clock')clockTick(ev);
-          else if(ev.kind==='action')runAction(ev);
-        }
-        return {ok:true,processed:done,time:s.time,pending:s.queue.length};
-      },
-      run({until=Infinity,maxEvents=10000}={}){
-        let done=0;
-        while(s.queue.length&&s.queue[0].at<=until&&done<maxEvents){sim.step(1);done++}
-        if(until!==Infinity&&Number.isFinite(until))s.time=Math.max(s.time,until);
-        return {ok:done<maxEvents||!s.queue.length,processed:done,time:s.time,pending:s.queue.length,parked:Object.keys(s.parked).length,...(done>=maxEvents&&s.queue.length?{code:'MAX_EVENTS',message:`stopped after ${maxEvents} events`}:{})};
-      },
-      // Time is the driver: advance the clock, or take the next instant with everything due in it.
-      advance(ms){const until=s.time+Math.max(0,Number(ms)||0);return sim.run({until})},
-      tick(){if(!s.queue.length)return {ok:true,processed:0,time:s.time,pending:0};const t=s.queue[0].at;let n=0;while(s.queue.length&&s.queue[0].at===t){sim.step(1);n++}return {ok:true,processed:n,time:s.time,pending:s.queue.length}},
-      set(nodeId,value){
-        const node=g.nodes.get(nodeId);if(!node)return refusal('UNKNOWN_NODE',`No component ${nodeId}`);
-        if(node.signal.mode!=='asserted')return refusal('DERIVED_SIGNAL',`${node.label||nodeId} is derived from its inputs; only an asserted signal is set`);
-        // An explicit set before power-on replaces the declared starting value; it is not undone by it.
-        s.queue=s.queue.filter(ev=>!(ev.powerOn&&ev.action?.set?.node===nodeId));
-        const changed=setLevel(node,value,'set');return {ok:true,node:nodeId,value:s.levels[nodeId]??0,changed};
-      },
-      // Schedule an operation at a time: {set:{node,value}} | {toggle:{node}} | {inject:{node,channel,payload,principal}}.
-      at(time,action={}){
-        const t=Math.max(s.time,Number(time)||0);
-        if(action.inject){const r=sim.inject(action.inject.node,{...action.inject,at:t});return r}
-        if(!(action.set||action.toggle))return refusal('BAD_ACTION','An action is {set}, {toggle} or {inject}');
-        const id=(action.set||action.toggle).node;if(!g.nodes.has(id))return refusal('UNKNOWN_NODE',`No component ${id}`);
-        if(g.nodes.get(id).signal.mode!=='asserted')return refusal('DERIVED_SIGNAL',`${id} is derived; only an asserted signal is set`);
-        schedule(t,{kind:'action',action:clone(action)});return {ok:true,at:t};
-      },
-      levels:()=>Object.fromEntries([...g.nodes.values()].map(n=>[n.id,{value:s.levels[n.id]??0,kind:n.signal.kind,mode:n.signal.mode}])),
-      edges({node=null,since=null}={}){return {ok:true,edges:s.edges.filter(e=>(!node||e.node===node)&&(since==null||e.at>=since)).map(clone)}},
-      parked:()=>Object.values(s.parked).map(clone),
-      resume(parkId,{decision='approve',payload,reason}={}){
-        const p=s.parked[parkId];if(!p)return refusal('UNKNOWN_PARK',`Nothing parked as ${parkId}`);
-        delete s.parked[parkId];const m=s.messages[p.messageId],node=g.nodes.get(p.node);
-        log('resumed',{node:node.id,messageId:m.id,parkId,decision});
-        if(decision!=='approve'){refuse(m,node.id,reason||`rejected at ${node.label||node.id}`);return {ok:true,decision}}
-        if(payload!==undefined)m.payload=isObject(m.payload)&&isObject(payload)?{...m.payload,...clone(payload)}:clone(payload);
-        hop(m,node.id,'resumed',{decision});
-        continueAt(node,m,p.wireId);return {ok:true,decision};
-      },
-      reconcile(effectKey,{confirmed,result=null}={}){
-        const e=s.effects[effectKey];if(!e||e.status!=='ambiguous')return refusal('NOT_AMBIGUOUS',`Effect ${effectKey} is not awaiting reconciliation`);
-        if(confirmed){Object.assign(e,{status:'confirmed',confirmedAt:s.time,result:clone(result),reconciled:true})}else delete s.effects[effectKey];
-        log('effect-reconciled',{effectKey,confirmed:!!confirmed});return {ok:true,effectKey,status:confirmed?'confirmed':'cleared'};
-      },
-      trace(messageId){const m=s.messages[messageId];if(!m)return refusal('UNKNOWN_MESSAGE',`No message ${messageId}`);return {ok:true,message:clone(m)}},
-      lineage(rootId){return {ok:true,root:rootId,messages:Object.values(s.messages).filter(m=>m.root===rootId).map(m=>({id:m.id,parent:m.parent,status:m.status,last:m.hops.at(-1)}))}},
-      taps(nodeId){return {ok:true,node:nodeId,arrivals:Object.values(s.messages).filter(m=>m.hops.some(h=>h.node===nodeId&&h.event==='arrived')).map(m=>({id:m.id,root:m.root,channel:m.channel,payload:clone(m.payload),status:m.status}))}},
-      effects:()=>clone(s.effects),
-      refusals:()=>clone(s.refusals),
-      receipts:()=>clone(s.receipts),
-      log:()=>clone(s.log),
-      state:()=>({time:s.time,pending:s.queue.length,parked:Object.keys(s.parked).length,messages:Object.keys(s.messages).length,refusals:s.refusals.length,effects:Object.keys(s.effects).length,edges:s.edges.length,high:Object.values(s.levels).filter(v=>v>0).length}),
-      // The full engine state as JSON; restore it with createSimulation(doc, {restore}).
-      snapshot:()=>clone(s),
-      setHandler(name,spec){handlers[name]=spec;return {ok:true,name}}
-    };
-    return {ok:true,sim};
-  }
-
-  // ---- Scenarios -----------------------------------------------------------------------
-  // {handlers, steps:[{inject:{node,channel,payload}} | {run:{until}} | {resume:{node, decision, payload}}
-  //   | {restart:true} | {reconcile:{effectKey, confirmed}}], expect:{taps:{node:n}, refusals:n, effects:{confirmed:n}, parked:n}}
-  function runScenario(doc,scenario,options={}){
-    const sc=isObject(scenario?.data)?scenario.data:scenario;
-    if(!isObject(sc)||!Array.isArray(sc.steps))return refusal('BAD_SCENARIO','A scenario needs steps[]');
-    const handlers={...(sc.handlers||{}),...(options.handlers||{})};
-    let made=createSimulation(doc,{handlers});if(!made.ok)return made;
-    let sim=made.sim;const notes=[];
-    for(const [i,step] of sc.steps.entries()){
-      if(step.inject){const r=sim.inject(step.inject.node,step.inject);if(!r.ok)return {...r,step:i}}
-      else if(step.resume){
-        const p=sim.parked().find(x=>!step.resume.node||x.node===step.resume.node);
-        if(!p)return refusal('NOTHING_PARKED',`step ${i}: nothing parked${step.resume.node?' at '+step.resume.node:''}`,{step:i,log:sim.log()});
-        sim.resume(p.id,step.resume);
-      }
-      else if(step.restart){
-        // Kill and restart the engine from its durable snapshot, as a process restart would.
-        made=createSimulation(doc,{handlers,restore:sim.snapshot()});if(!made.ok)return made;sim=made.sim;notes.push({step:i,restarted:true});
-      }
-      else if(step.reconcile)sim.reconcile(step.reconcile.effectKey,step.reconcile);
-      else if(step.set){const r=sim.set(step.set.node,step.set.value);if(!r.ok)return {...r,step:i}}
-      else if(step.at){const {time,...action}=step.at;const r=sim.at(time,action);if(!r.ok)return {...r,step:i}}
-      if(step.advance!=null)sim.advance(step.advance);
-      else if(step.tick!=null){for(let k=0;k<(Number(step.tick)||1);k++)sim.tick()}
-      else if(step.run||step.inject||step.resume||step.restart||step.reconcile||step.set)sim.run(step.run||{});
-    }
-    const checks=[],exp=sc.expect||{};
-    for(const [node,n] of Object.entries(exp.taps||{})){const actual=sim.taps(node).arrivals.length;checks.push({name:`taps ${node}`,expected:n,actual,pass:actual===n})}
-    if(exp.levelRefusals!=null){const actual=sim.refusals().filter(r=>r.level).length;checks.push({name:'level refusals',expected:exp.levelRefusals,actual,pass:actual===exp.levelRefusals})}
-    if(exp.refusals!=null){const actual=sim.refusals().filter(r=>!r.level).length;checks.push({name:'refusals',expected:exp.refusals,actual,pass:actual===exp.refusals})}
-    if(exp.parked!=null){const actual=sim.parked().length;checks.push({name:'parked',expected:exp.parked,actual,pass:actual===exp.parked})}
-    for(const [status,n] of Object.entries(exp.effects||{})){const actual=Object.values(sim.effects()).filter(e=>e.status===status).length;checks.push({name:`effects ${status}`,expected:n,actual,pass:actual===n})}
-    const levels=sim.levels();
-    for(const [node,v] of Object.entries(exp.levels||{})){const actual=levels[node]?.value;checks.push({name:`level ${node}`,expected:v,actual,pass:actual!=null&&Math.abs(actual-v)<1e-6})}
-    for(const [node,want] of Object.entries(exp.edges||{}))for(const [pol,n] of Object.entries(want)){const actual=sim.edges({node}).edges.filter(e=>e.polarity===pol).length;checks.push({name:`edges ${node} ${pol}`,expected:n,actual,pass:actual===n})}
-    for(const [event,n] of Object.entries(exp.events||{})){const actual=sim.log().filter(e=>e.event===event).length;checks.push({name:`events ${event}`,expected:n,actual,pass:actual===n})}
-    return {ok:checks.every(c=>c.pass),scenario:scenario?.id||sc.id||null,checks,state:sim.state(),refusals:sim.refusals(),receipts:sim.receipts(),notes};
-  }
-
-  // ---- One session, one dispatch: served identically by the browser API, HTTP and MCP -----
-  function scenariosOf(doc){return (doc?.references||[]).filter(r=>r.kind==='scenario')}
-  function createSession(){
-    let sim=null,startedAt=null,startedRevision=null;
-    const need=()=>sim?null:refusal('NO_SIMULATION','Start a simulation first (schematic.sim.start)');
-    const actions={
-      'graph.query':(doc,a)=>query(doc,a.verb,a.args||{}),
-      'sim.start':(doc,a)=>{
-        let handlers=isObject(a.handlers)?a.handlers:{};
-        if(a.scenarioId){const sc=scenariosOf(doc).find(r=>r.id===a.scenarioId);if(!sc)return refusal('UNKNOWN_SCENARIO',`No scenario ${a.scenarioId}`);handlers={...(sc.data?.handlers||{}),...handlers}}
-        const made=createSimulation(doc,{handlers});if(!made.ok)return made;
-        sim=made.sim;startedAt=new Date().toISOString();startedRevision=doc.revision??null;
-        return {ok:true,startedAt,revision:startedRevision,handlers:Object.keys(handlers),state:sim.state()};
-      },
-      'sim.stop':()=>{const was=!!sim;sim=null;return {ok:true,stopped:was}},
-      'sim.inject':(doc,a)=>need()||sim.inject(a.node,a),
-      'sim.set':(doc,a)=>need()||sim.set(a.node,a.value),
-      'sim.at':(doc,a)=>need()||sim.at(a.time,a),
-      'sim.advance':(doc,a)=>need()||sim.advance(a.ms),
-      'sim.tick':(doc,a)=>{const n=need();if(n)return n;let r;for(let k=0;k<(Number(a.n)||1);k++)r=sim.tick();return r},
-      'sim.step':(doc,a)=>need()||sim.step(Number(a.n)||1),
-      'sim.run':(doc,a)=>need()||sim.run({until:a.until==null?Infinity:Number(a.until),maxEvents:Number(a.maxEvents)||10000}),
-      'sim.resume':(doc,a)=>need()||sim.resume(a.parkId,a),
-      'sim.reconcile':(doc,a)=>need()||sim.reconcile(a.effectKey,a),
-      'sim.inspect':(doc,a)=>{
-        const n=need();if(n)return n;
-        const what=a.what||'state',stale=startedRevision!=null&&doc.revision!==startedRevision;
-        const views={state:()=>({ok:true,...sim.state(),stale,startedAt,revision:startedRevision}),parked:()=>({ok:true,parked:sim.parked()}),log:()=>({ok:true,log:sim.log()}),effects:()=>({ok:true,effects:sim.effects()}),refusals:()=>({ok:true,refusals:sim.refusals()}),receipts:()=>({ok:true,receipts:sim.receipts()}),trace:()=>sim.trace(a.id),levels:()=>({ok:true,time:sim.state().time,levels:sim.levels()}),edges:()=>sim.edges({node:a.id||null,since:a.since??null}),taps:()=>sim.taps(a.id),lineage:()=>sim.lineage(a.id),snapshot:()=>({ok:true,snapshot:sim.snapshot()})};
-        return views[what]?views[what]():refusal('UNKNOWN_VIEW',`Unknown view ${what}`,{views:Object.keys(views)});
-      },
-      'sim.scenario':(doc,a)=>{
-        const sc=a.scenario||scenariosOf(doc).find(r=>r.id===a.id);
-        if(!sc)return refusal('UNKNOWN_SCENARIO',`No scenario ${a.id}`,{scenarios:scenariosOf(doc).map(r=>r.id)});
-        return runScenario(doc,sc,{handlers:isObject(a.handlers)?a.handlers:{}});
-      },
-      'sim.scenarios':(doc)=>({ok:true,scenarios:scenariosOf(doc).map(r=>({id:r.id,label:r.label}))})
-    };
-    return {execute(name,doc,args={}){const fn=actions[String(name).replace(/^schematic\./,'')];if(!fn)return refusal('UNKNOWN_TOOL',`Unknown tool ${name}`);return fn(doc,isObject(args)?args:{})},names:Object.keys(actions).map(n=>'schematic.'+n)};
-  }
-  function tools(){
-    const obj=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
-    return [
-      {name:'schematic.graph.query',description:`Read-only graph query. verb: ${Object.keys(QUERIES).join(' | ')}. args e.g. {from,to} for paths/cut, {from,channel} for reach (channel is optional: it follows only Wires whose two bound ports share that channel, so it crosses a boundary Point only where its self declares the channel), {componentId} for boundary, {format: jgf|dot|graphml} for export.`,inputSchema:obj({verb:{type:'string',enum:Object.keys(QUERIES)},args:{type:'object'}},['verb'])},
-      {name:'schematic.sim.start',description:'Start a message simulation over the current document. handlers maps a handler name to {kind: stub | fixture}; scenarioId borrows a saved scenario\'s handlers. A handler a node names but nobody registered refuses its messages.',inputSchema:obj({handlers:{type:'object'},scenarioId:{type:'string'}})},
-      {name:'schematic.sim.stop',description:'Discard the running simulation.',inputSchema:obj({})},
-      {name:'schematic.sim.inject',description:'Emit a message from a component (it leaves by that component\'s outgoing wires). principal names who acts; a plane with an ACL checks it at its boundary.',inputSchema:obj({node:{type:'string'},channel:{type:'string'},payload:{},at:{type:'number'},principal:{type:'string'}},['node'])},
-      {name:'schematic.sim.set',description:'Assert a signal: set a lever, source or other asserted node to a level (binary 0|1, continuous 0..1). A derived signal is refused: it is computed from its inputs.',inputSchema:obj({node:{type:'string'},value:{type:'number',minimum:0,maximum:1}},['node','value'])},
-      {name:'schematic.sim.at',description:'Schedule an operation at a simulation time (ms): {set:{node,value}} | {toggle:{node}} | {inject:{node,channel,payload,principal}}.',inputSchema:obj({time:{type:'number'},set:{type:'object'},toggle:{type:'object'},inject:{type:'object'}},['time'])},
-      {name:'schematic.sim.advance',description:'Drive the clock: advance simulation time by ms, processing everything due (clocks, levels, messages).',inputSchema:obj({ms:{type:'number',minimum:0}},['ms'])},
-      {name:'schematic.sim.tick',description:'Take the next instant n times: process every event due at the next scheduled time.',inputSchema:obj({n:{type:'integer',minimum:1}})},
-      {name:'schematic.sim.step',description:'Process the next n events.',inputSchema:obj({n:{type:'integer',minimum:1}})},
-      {name:'schematic.sim.run',description:'Process events until the queue is empty, a time is reached, or maxEvents.',inputSchema:obj({until:{type:'number'},maxEvents:{type:'integer',minimum:1}})},
-      {name:'schematic.sim.resume',description:'Resume a message parked at a human step: decision approve | reject, optional payload merged in.',inputSchema:obj({parkId:{type:'string'},decision:{type:'string',enum:['approve','reject']},payload:{},reason:{type:'string'}},['parkId'])},
-      {name:'schematic.sim.reconcile',description:'Settle an ambiguous effect: confirmed true records it as done (it will not repeat), false clears it for retry.',inputSchema:obj({effectKey:{type:'string'},confirmed:{type:'boolean'},result:{}},['effectKey','confirmed'])},
-      {name:'schematic.sim.inspect',description:'Read simulation state. what: state | levels | edges | parked | log | effects | refusals | receipts | trace | taps | lineage | snapshot; id names the message (trace, lineage) or component (taps, edges).',inputSchema:obj({what:{type:'string'},id:{type:'string'}})},
-      {name:'schematic.sim.scenario',description:'Run a saved scenario (document.references kind scenario) or an inline one in a fresh engine and return its checks as evidence.',inputSchema:obj({id:{type:'string'},scenario:{type:'object'},handlers:{type:'object'}})},
-      {name:'schematic.sim.scenarios',description:'List the scenarios saved in the document.',inputSchema:obj({})}
-    ];
-  }
+  // ---- One runtime (contract 09 of the one-runtime plan): createSimulation, runScenario,
+  // createSession and tools delegate to SovSchematicSimSurface (src/07-state-surface.js, over
+  // the state-space engine) so callers and suites keep their names. The message engine and its
+  // helpers (callHandler, createSimulation, runScenario, createSession, tools, scenariosOf,
+  // readPath, fnv, the COMBINE table, waveAt, nextClockTime) lived here through contract 09 at
+  // 7b939e3; contract 10 deleted them. See docs/residuals/2026-09-26-one-runtime.md.
+  const createSimulation=(...a)=>surface().createSimulation(...a);
+  const runScenario=(...a)=>surface().runScenario(...a);
+  const createSession=(...a)=>surface().createSession(...a);
+  const tools=(...a)=>surface().tools(...a);
 
   return {POLICIES,DEFAULT_LATENCY_MS,COMBINES,signalConfig,activeConnection,canEmit,canReceive,accessAllows,build,query,queries:Object.keys(QUERIES),createSimulation,runScenario,createSession,tools,aclConfig,aclDecide,crossingAt};
 });
@@ -7379,8 +7723,36 @@ function renderObjectsPanel(){
 }
 
 // --- Appearance / rate -----------------------------------------------------
-function globalTimeScale(){diagram.meta=diagram.meta||{};const n=Number(diagram.meta.timeScale);return Math.max(.1,Math.min(8,Number.isFinite(n)?n:1))}
-function setGlobalTimeScale(value){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Math.max(.1,Math.min(8,Number(value)||1));setHistoryHint('Change global rate');render();scheduleHistoryCapture()}
+// The document's own rate (issue #40): absent reads as 1; an admitted value is used as written,
+// only capped at 8 for rendering - 0 stays 0 and means paused. setGlobalTimeScale runs the same
+// admission rule a file and the API use (SovSchematicData.admitTimeScale), so a refused value
+// changes nothing and is reported, never silently clamped into range.
+function globalTimeScale(){
+  diagram.meta=diagram.meta||{};
+  const admitted=SovSchematicData.admitTimeScale(diagram.meta.timeScale);
+  if(!admitted.ok||!admitted.present)return 1;
+  return Math.min(8,admitted.value);
+}
+function setGlobalTimeScale(value){
+  diagram.meta=diagram.meta||{};
+  const numeric=typeof value==='string'&&value.trim()!==''?Number(value):value;
+  const admitted=SovSchematicData.admitTimeScale(numeric);
+  if(!admitted.ok){statusEl.textContent=admitted.message;syncGlobalRateSelect();return admitted}
+  if(admitted.present)diagram.meta.timeScale=admitted.value;
+  setHistoryHint('Change global rate');render();scheduleHistoryCapture();syncGlobalRateSelect();
+  return admitted;
+}
+// The #globalRate select never shows a blank: when no option equals the document's own rate
+// (a value a document authored directly, outside the select's fixed list), one is added for it.
+function syncGlobalRateSelect(){
+  const select=document.getElementById('globalRate');if(!select)return;
+  const value=String(globalTimeScale());
+  select.value=value;
+  if(select.value!==value){
+    const option=document.createElement('option');option.value=value;option.textContent=`${value}×`;
+    select.appendChild(option);select.value=value;
+  }
+}
 function packetRateForWire(w,direction='forward'){
   const source=nodes.find(n=>n.id===(direction==='reverse'?w.b:w.a));return globalTimeScale()*entityEditorState(source).rate*entityEditorState(w).rate;
 }
@@ -7432,7 +7804,7 @@ function initializeEditorKernel(){
   const search=document.getElementById('quickSearchInput');search?.addEventListener('input',()=>updateQuickSearch(search.value));search?.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeQuickSearch()}else if(e.key==='Enter'){e.preventDefault();const n=quickSearchMatches[0];if(n){closeQuickSearch();focusComponent(n)}}});
   const appearance=document.getElementById('appearanceMode');appearance?.addEventListener('change',()=>{appearanceMode=appearance.value;applyAppearanceMode()});
   document.getElementById('globalRate')?.addEventListener('change',e=>setGlobalTimeScale(e.target.value));
-  if(document.getElementById('globalRate'))document.getElementById('globalRate').value=String(globalTimeScale());
+  syncGlobalRateSelect();
   matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener?.('change',()=>{if(appearanceMode==='system')applyAppearanceMode()});
 }
 /* END src/15-editor-kernel.js */
@@ -9156,7 +9528,8 @@ function routeCacheFromCandidate(candidate){
     core:clonePoints(candidate.core),
     score:candidate.score,
     signature:candidate.signature,
-    anchor:{x:candidate.anchor.x,y:candidate.anchor.y}
+    anchor:{x:candidate.anchor.x,y:candidate.anchor.y},
+    blocked:!!candidate.blocked
   };
 }
 function captureDragSnapshots(nodeId){
@@ -9225,6 +9598,113 @@ function scheduleDragSettle(mods=null){
 }
 
 
+// What a route keeps clear of: every visible card that is not a group and not a container holding
+// both ends, padded by the clearance 12, and the wire's own end cards padded 8. A card hosted on
+// the wire itself sits on the line and is not in the way. routePoints and the cached rebuild in
+// stableRouteForWire take this one set, so a rebuild is held to the rule a fresh route is.
+const ROUTE_CLEARANCE=12,ROUTE_END_CLEARANCE=8;
+function routeObstacleSet(sourceNode,targetNode,aSide,bSide,routedWire,wireId){
+  const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
+  const others=nodes
+    .filter(n=>n!==sourceNode && n!==targetNode && n.id!==activeNodeDrag && !isGroupComponent(n) && !isEffectivelyHidden(n) && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
+    .map(n=>rectForNode(n,ROUTE_CLEARANCE));
+  const ownA=endpointNeedsOuterObstacle(sourceNode,aSide,routedWire)?rectForNode(sourceNode,ROUTE_END_CLEARANCE):null;
+  const ownB=endpointNeedsOuterObstacle(targetNode,bSide,routedWire)?rectForNode(targetNode,ROUTE_END_CLEARANCE):null;
+  return {hostCanvasId,others,ownA,ownB,obstacles:[...others,...[ownA,ownB].filter(Boolean)]};
+}
+// An end's lead: the stub from the port P to the lead's end S, and on along the same line. That
+// stub is the one part of a route allowed inside its own card's padding.
+function axisDirection(P,S){
+  if(!P||!S)return null;
+  const dx=S.x-P.x,dy=S.y-P.y;
+  if(Math.abs(dx)>=.5&&Math.abs(dy)<.5)return {dx:Math.sign(dx),dy:0};
+  if(Math.abs(dy)>=.5&&Math.abs(dx)<.5)return {dx:0,dy:Math.sign(dy)};
+  return null;
+}
+function routeLeadRay(P,S,R){
+  const d=R?axisDirection(P,S):null;
+  return d?{S,R,...d}:null;
+}
+function onLeadRay(P,Q,lead){
+  const tol=.05;
+  if(lead.dx)return Math.abs(P.y-lead.S.y)<tol&&Math.abs(Q.y-lead.S.y)<tol&&(P.x-lead.S.x)*lead.dx>=-tol&&(Q.x-lead.S.x)*lead.dx>=-tol;
+  return Math.abs(P.x-lead.S.x)<tol&&Math.abs(Q.x-lead.S.x)<tol&&(P.y-lead.S.y)*lead.dy>=-tol&&(Q.y-lead.S.y)*lead.dy>=-tol;
+}
+function segmentClear(P,Q,obstacles,leads=[]){
+  for(const R of obstacles){
+    if(!segHitsRect(P,Q,R))continue;
+    if(leads.some(l=>l&&l.R===R&&onLeadRay(P,Q,l)))continue;
+    return false;
+  }
+  return true;
+}
+// A route enters no padded obstacle; only each end's lead may sit inside its own card's padding.
+function routeClear(points,obstacles,leads=[]){
+  const pts=normalizePoints(points);
+  for(let i=0;i<pts.length-1;i++)if(!segmentClear(pts[i],pts[i+1],obstacles,leads))return false;
+  return true;
+}
+// What one segment costs against the routes already drawn: the crossing, shared-track and crowding
+// terms of pathScore.
+function occupiedCost(P,Q,occupied,ends){
+  let c=0;
+  for(const seg of occupied){
+    if(segmentsCross(P,Q,seg.a,seg.b))c+=90;
+    c+=sharedLength(P,Q,seg.a,seg.b)*5;
+    if(ends&&seg.ends&&!seg.ends.some(e=>ends.includes(e))){if(onOneTrack(P,Q,seg.a,seg.b))c+=260;else if(runsBeside(P,Q,seg.a,seg.b))c+=70}
+  }
+  return c;
+}
+// Orthogonal connector routing (Wybrow, Marriott and Stuckey, GD 2009; libavoid): A* over the grid
+// of channel lines, from the source lead's end to the target lead's end, along grid edges that enter
+// no padded obstacle. Cost: length + 46 per bend + occupiedCost. Returns the grid points or null.
+const ROUTE_BEND_COST=46;
+function gridRoute(SA,SB,xs,ys,obstacles,leads,fence,occupied,ends,outA,inB){
+  const X=uniqueNumbers([...xs,SA.x,SB.x],.01),Y=uniqueNumbers([...ys,SA.y,SB.y],.01);
+  const ix=v=>{let k=0;for(let i=1;i<X.length;i++)if(Math.abs(X[i]-v)<Math.abs(X[k]-v))k=i;return k};
+  const iy=v=>{let k=0;for(let i=1;i<Y.length;i++)if(Math.abs(Y[i]-v)<Math.abs(Y[k]-v))k=i;return k};
+  const sx=ix(SA.x),sy=iy(SA.y),gx=ix(SB.x),gy=iy(SB.y),NY=Y.length;
+  const pt=(i,j)=>(i===sx&&j===sy)?SA:(i===gx&&j===gy)?SB:{x:X[i],y:Y[j]};
+  const inside=(i,j)=>!fence||(i===sx&&j===sy)||(i===gx&&j===gy)||routeInsideFence([null,{x:X[i],y:Y[j]},null],fence);
+  const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
+  const dirOf=v=>v?DIRS.findIndex(d=>d[0]===v.dx&&d[1]===v.dy):-1;
+  const start=dirOf(outA),finish=dirOf(inB);
+  const key=(i,j,d)=>((i*NY+j)*5)+d+1;
+  const heur=(i,j)=>Math.abs(X[i]-SB.x)+Math.abs(Y[j]-SB.y);
+  const gScore=new Map(),from=new Map(),edgeMemo=new Map(),heap=[];
+  const push=n=>{heap.push(n);let c=heap.length-1;while(c>0){const p=(c-1)>>1;if(heap[p].f<=heap[c].f)break;[heap[p],heap[c]]=[heap[c],heap[p]];c=p}};
+  const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let c=0;for(;;){const l=2*c+1,r=l+1;let m=c;if(l<heap.length&&heap[l].f<heap[m].f)m=l;if(r<heap.length&&heap[r].f<heap[m].f)m=r;if(m===c)break;[heap[m],heap[c]]=[heap[c],heap[m]];c=m}}return top};
+  const k0=key(sx,sy,start);gScore.set(k0,0);push({i:sx,j:sy,d:start,g:0,f:heur(sx,sy),k:k0});
+  let budget=60000;
+  while(heap.length&&budget-->0){
+    const cur=pop();
+    if(!cur.done&&cur.g>(gScore.get(cur.k)??Infinity))continue;
+    if(cur.i===gx&&cur.j===gy){
+      // Arrive heading into the target's lead, or pay for the bend there.
+      const total=cur.g+(finish>=0&&cur.d>=0&&cur.d!==finish?ROUTE_BEND_COST:0);
+      if(!cur.done){push({...cur,g:total,f:total,done:true});continue}
+      const out=[];let k=cur.k,node=cur;
+      while(node){out.push(pt(node.i,node.j));node=from.get(k);k=node?.k}
+      return out.reverse();
+    }
+    if(cur.done)continue;
+    for(let d=0;d<4;d++){
+      const ni=cur.i+DIRS[d][0],nj=cur.j+DIRS[d][1];
+      if(ni<0||nj<0||ni>=X.length||nj>=NY||!inside(ni,nj))continue;
+      const P=pt(cur.i,cur.j),Q=pt(ni,nj);
+      if(Math.abs(P.x-Q.x)>.01&&Math.abs(P.y-Q.y)>.01)continue;
+      const ek=Math.min(cur.i*NY+cur.j,ni*NY+nj)+':'+Math.max(cur.i*NY+cur.j,ni*NY+nj);
+      let edge=edgeMemo.get(ek);
+      if(edge===undefined){edge=segmentClear(P,Q,obstacles,leads)?segmentLength(P,Q)+occupiedCost(P,Q,occupied,ends):null;edgeMemo.set(ek,edge)}
+      if(edge===null)continue;
+      const g=cur.g+edge+(cur.d>=0&&cur.d!==d?ROUTE_BEND_COST:0),k=key(ni,nj,d);
+      if(g>=(gScore.get(k)??Infinity))continue;
+      gScore.set(k,g);from.set(k,cur);push({i:ni,j:nj,d,g,f:g+heur(ni,nj),k});
+    }
+  }
+  return null;
+}
+
 function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSeed=0,occupied=[],wireId=null){
   const sourceNode=nodes.find(n=>n.id===sourceId);
   const targetNode=nodes.find(n=>n.id===targetId);
@@ -9236,18 +9716,11 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   // A lead never leaves the fence: a card near the core's edge gets a shorter lead, not a detour.
   const inFence=P=>fence?{x:Math.max(fence.l+2,Math.min(fence.r-2,P.x)),y:Math.max(fence.t+2,Math.min(fence.b-2,P.y))}:P;
   const SA=sourceNode?inFence(routeLead(A,B,aSide,sourceNode,wireEndpointInward(routedWire,sourceNode))):A, SB=targetNode?inFence(routeLead(B,A,bSide,targetNode,wireEndpointInward(routedWire,targetNode))):B;
-  const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
   // A group is drawn behind everything and is never an obstacle (SECTION-MODEL.md "Groups").
-  const otherRects=nodes
-    .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && !isGroupComponent(n) && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
-    .map(n=>rectForNode(n,12));
-
   // Source and target are included after the outward lead. This prevents a path
   // from exiting one side and visually tunneling through either endpoint card.
-  const endpointRects=[];
-  if(endpointNeedsOuterObstacle(sourceNode,aSide,routedWire))endpointRects.push(rectForNode(sourceNode,8));
-  if(endpointNeedsOuterObstacle(targetNode,bSide,routedWire))endpointRects.push(rectForNode(targetNode,8));
-  const obstacles=[...otherRects,...endpointRects];
+  const {hostCanvasId,ownA,ownB,obstacles}=routeObstacleSet(sourceNode,targetNode,aSide,bSide,routedWire,wireId);
+  const leads=[routeLeadRay(A,SA,ownA),routeLeadRay(B,SB,ownB)].filter(Boolean);
 
   const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&!isGroupComponent(n)&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
   const xs=[SA.x,SB.x,(SA.x+SB.x)/2];
@@ -9286,7 +9759,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
 
   const valid=candidates
     .map(normalizePoints)
-    .filter(points=>pathValid(points,obstacles)&&routeInsideFence(points,fence))
+    .filter(points=>routeClear(points,obstacles,leads)&&routeInsideFence(points,fence))
     .map(points=>({
       points,
       score:pathScore(points,SA,SB,obstacles,occupied,ends),
@@ -9295,9 +9768,20 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
     }))
     .sort((a,b)=>a.score-b.score);
 
-  let chosen=valid[0]||null;
+  let chosen=valid[0]||null,blocked=false;
 
   if(!chosen){
+    // No simple shape clears: search the channel grid rather than take a route through a card.
+    const found=gridRoute(SA,SB,channelsX,channelsY,obstacles,leads,fence,occupied,ends,axisDirection(A,SA),axisDirection(SB,B));
+    if(found){
+      const points=normalizePoints(found);
+      chosen={points,score:pathScore(points,SA,SB,obstacles,occupied,ends),signature:routeSignature(points),anchor:routeAnchor(points)};
+    }
+  }
+
+  if(!chosen){
+    // The grid has no clear route either: the route is blocked, and drawn round the perimeter.
+    blocked=true;
     // Last resort: a clean perimeter route. Choose the cheapest of four sides; inside a
     // fence the perimeter is the fence's own inner edge, never the world outside it.
     const minL=fence?fence.l+8:Math.min(SA.x,SB.x,...allRects.map(r=>r.l))-36-Math.abs(lane);
@@ -9318,7 +9802,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
      }))
      .sort((a,b)=>a.score-b.score);
     // Prefer a perimeter that clears every body; only when none does is the cheapest taken.
-    chosen=fallback.find(f=>pathValid(f.points,obstacles))||fallback[0];
+    chosen=fallback.find(f=>routeClear(f.points,obstacles,leads))||fallback[0];
   }
 
   return {
@@ -9327,6 +9811,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
     score: chosen.score,
     signature: chosen.signature,
     anchor: chosen.anchor,
+    blocked,
     obstacles
   };
 }
@@ -9392,7 +9877,8 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
       core:candidate.core,
       score:candidate.score,
       signature:candidate.signature,
-      anchor:candidate.anchor
+      anchor:candidate.anchor,
+      blocked:candidate.blocked
     });
     return candidate.points;
   }
@@ -9409,30 +9895,27 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     const inner=cachedCore.slice(1,-1).map(q=>({x:q.x,y:q.y}));
     rebuilt=normalizePoints([A,SA,...inner,SB,B]);
 
-    // Cached topology may remain readable while endpoints move. We only throw
-    // it away if its interior route now collides with a component.
+    // Cached topology may remain readable while endpoints move. It is thrown away when its
+    // route enters any padded obstacle, the wire's own end cards included; only the leads
+    // may sit inside their own card's padding.
     const routeOnly=normalizePoints([SA,...inner,SB]);
-    const endpointRects=[];
-    const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && !isGroupComponent(n) && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
-    if(endpointNeedsOuterObstacle(sourceNode,w.aSide,w))endpointRects.push(rectForNode(sourceNode,8));
-    if(endpointNeedsOuterObstacle(targetNode,w.bSide,w))endpointRects.push(rectForNode(targetNode,8));
-    const obstacles=[...otherRects,...endpointRects];
+    const {ownA,ownB,obstacles}=routeObstacleSet(sourceNode,targetNode,w.aSide,w.bSide,w,w.id);
+    const leads=[routeLeadRay(A,SA,ownA),routeLeadRay(B,SB,ownB)].filter(Boolean);
 
-    if(!pathValid(routeOnly,obstacles)||!routeInsideFence(routeOnly,routeFence(w))) rebuilt=null;
+    if(!routeClear(routeOnly,obstacles,leads)||!routeInsideFence(routeOnly,routeFence(w))) rebuilt=null;
   }
 
   if(!rebuilt){
     routeCache.set(index,{
       points:candidate.points,core:candidate.core,score:candidate.score,
-      signature:candidate.signature,anchor:candidate.anchor
+      signature:candidate.signature,anchor:candidate.anchor,blocked:candidate.blocked
     });
     return candidate.points;
   }
 
   const SA=sourceNode?routeLead(A,B,w.aSide,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?routeLead(B,A,w.bSide,targetNode,wireEndpointInward(w,targetNode)):B;
   const rebuiltCore=normalizePoints([SA,...rebuilt.slice(2,-2),SB]);
-  const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && !isGroupComponent(n) && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
-  const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied,[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]);
+  const rebuiltScore=pathScore(rebuiltCore,SA,SB,routeObstacleSet(sourceNode,targetNode,w.aSide,w.bSide,w,w.id).others,occupied,[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]);
   const anchor=routeAnchor(rebuiltCore);
 
   const sameFamily = candidate.signature===cached.signature;
@@ -9446,7 +9929,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
   if(sameFamily || (clearlyBetter && movementPastRelease)){
     routeCache.set(index,{
       points:candidate.points,core:candidate.core,score:candidate.score,
-      signature:candidate.signature,anchor:candidate.anchor
+      signature:candidate.signature,anchor:candidate.anchor,blocked:candidate.blocked
     });
     return candidate.points;
   }
@@ -9455,10 +9938,15 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     ...cached,
     points:rebuilt,
     score:rebuiltScore,
-    anchor
+    anchor,
+    blocked:false
   });
   return rebuilt;
 }
+
+// Whether the wire at this index is drawn on the perimeter fallback because neither a simple shape
+// nor the grid search found a clear route (the wire group's data-route-blocked).
+function routeBlockedAt(index){return !!routeCache.get(index)?.blocked}
 
 // Segments a later route must keep clear of, tagged with the wire's two ends: wires that
 // share an end (a fan-out, a fan-in) may run together; any others may not run on one track.
@@ -10619,16 +11107,26 @@ function appendWirePacket(group,motionPath,pathLength,bodyColor,boundaryColor,di
     packet.appendChild(label);
   }
 
-  const duration=packetTravelSeconds(pathLength)/Math.max(.1,Number(rate)||1);
-
-  // Packet skin is identity, not field diffusion.
-  // It stays constant across the trip while the carrier/wire field may blend.
-  const motion=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
-  motion.setAttribute('path',motionPath);
-  motion.setAttribute('dur',`${duration}s`);
-  motion.setAttribute('repeatCount','indefinite');
-  motion.setAttribute('calcMode','linear');
-  packet.appendChild(motion);
+  // A resolved rate of exactly 0 (the document's own rate, issue #40) draws the packet at its
+  // start point and stops there: no animateMotion element, so `Number(rate)||1` - which would
+  // otherwise read 0 as falsy and silently pick 1 - never gets the chance to erase a pause. Any
+  // other rate, including a small positive one, keeps today's duration math and its .1 floor.
+  if(Number(rate)===0){
+    const startPoint=document.createElementNS('http://www.w3.org/2000/svg','path');
+    startPoint.setAttribute('d',motionPath);
+    const start=startPoint.getPointAtLength(0);
+    packet.setAttribute('transform',`translate(${start.x} ${start.y})`);
+  }else{
+    const duration=packetTravelSeconds(pathLength)/Math.max(.1,Number(rate)||1);
+    // Packet skin is identity, not field diffusion.
+    // It stays constant across the trip while the carrier/wire field may blend.
+    const motion=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
+    motion.setAttribute('path',motionPath);
+    motion.setAttribute('dur',`${duration}s`);
+    motion.setAttribute('repeatCount','indefinite');
+    motion.setAttribute('calcMode','linear');
+    packet.appendChild(motion);
+  }
   group.appendChild(packet);
   return packet;
 }
@@ -10825,6 +11323,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
     group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':'')+((epA.kind==='free'||epB.kind==='free')?' has-free-end':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
     if(busState?.fallback.has(w.id))group.dataset.busFallback='true';
+    if(routeBlockedAt(i))group.dataset.routeBlocked='true';
 
     const gradientId=`wire-gradient-${i}-${renderEpoch++}`;
     const gradient=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
@@ -11109,6 +11608,7 @@ function layoutMetrics(options={}){
   }
 
   // Routes.
+  const onWire=w=>nodes.filter(n=>(n.canvasId||'')===localCanvasId('wire',w.id)).map(n=>n.id);
   const routes=[];
   for(const g of workspace.querySelectorAll('.wire-group')){
     const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
@@ -11125,7 +11625,9 @@ function layoutMetrics(options={}){
     // A route may leave and meet its own end cards at their ports, but never run through them.
     const inner=pts.slice(Math.min(pts.length,4),Math.max(0,pts.length-4));
     for(const end of [w.a,w.b]){const n=end&&nodes.find(x=>x.id===end);if(!n||!is2D(n)||componentAcceptsChildren(n))continue;const R=body.get(n.id);if(R&&inner.some(p=>layoutInside(p,R,3))){add('route-through-node',[w.id,n.id],`runs through its own end ${n.config?.label||n.id}`);break}}
-    const exempt=new Set([w.a,w.b,canvasOwner,...ancestors(w.a),...ancestors(w.b)].filter(Boolean));
+    // A card hosted on this wire is drawn on the line itself (inline): the wire is its host, not
+    // a route through it.
+    const exempt=new Set([w.a,w.b,canvasOwner,...ancestors(w.a),...ancestors(w.b),...onWire(w)].filter(Boolean));
     for(const n of visible){
       if(exempt.has(n.id)||!is2D(n))continue;
       const R=body.get(n.id),inner=componentAcceptsChildren(n);
@@ -11137,6 +11639,28 @@ function layoutMetrics(options={}){
   for(const {w,pts} of routes)for(const n of visible){
     if(!componentAcceptsChildren(n))continue;const gl=nodeEl(n.id)?.querySelector(':scope > .glyph');if(!gl)continue;
     const G=layoutWorldBox(gl);if(G&&pts.some(p=>layoutInside(p,G,4))){add('route-through-node',[w.id,n.id],`crosses the symbol of ${n.config?.label||n.id}`)}
+  }
+  // Hugging: a middle segment (not the lead out of a port or into one) running along a card's
+  // edge, outside it but under 8 from it, for 16 or more: a reader cannot tell the wire from the
+  // card's outline. Hops are stripped first, and collinear corners merged, so a hop does not split
+  // a lead into a lead and a middle segment.
+  for(const g of workspace.querySelectorAll('.wire-group')){
+    const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
+    const m=layoutWorldMatrix(path);
+    const raw=layoutPathCorners(String(path.getAttribute('d')||'').replace(/A[^A-Z]*?(?=[MLHV])/g,'')).map(q=>m?new DOMPoint(q.x,q.y).matrixTransform(m):q);
+    const c=[];for(const q of raw){const p={x:Math.round(q.x*100)/100,y:Math.round(q.y*100)/100},l=c.at(-1);if(l&&Math.abs(l.x-p.x)<.5&&Math.abs(l.y-p.y)<.5)continue;
+      if(c.length>=2){const a=c.at(-2);if((Math.abs(a.x-l.x)<.5&&Math.abs(l.x-p.x)<.5)||(Math.abs(a.y-l.y)<.5&&Math.abs(l.y-p.y)<.5)){c[c.length-1]=p;continue}}c.push(p)}
+    let hugged=null;const inline=new Set(onWire(w));
+    for(let s=1;s+2<c.length&&!hugged;s++){
+      const P=c[s],Q=c[s+1],h=Math.abs(P.y-Q.y)<.5,v=Math.abs(P.x-Q.x)<.5;if(!h&&!v)continue;
+      for(const n of visible){
+        if(!is2D(n)||componentAcceptsChildren(n)||inline.has(n.id))continue;const R=body.get(n.id);if(!R)continue;
+        const along=h?overlap1D(P.x,Q.x,R.l,R.r):overlap1D(P.y,Q.y,R.t,R.b);if(along<16)continue;
+        const at=h?P.y:P.x,lo=h?R.t:R.l,hi=h?R.b:R.r,gap=at<=lo+.5?lo-at:at>=hi-.5?at-hi:-1;
+        if(gap>=-.5&&gap<8){hugged=n;break}
+      }
+    }
+    if(hugged)add('route-hugs-node',[w.id,hugged.id],`runs along the edge of ${hugged.config?.label||hugged.id}`);
   }
   for(let i=0;i<routes.length;i++)for(let j=i+1;j<routes.length;j++){
     const A=routes[i],B=routes[j],shared=[A.w.a,A.w.b].some(x=>x&&(x===B.w.a||x===B.w.b));
@@ -12526,7 +13050,9 @@ function captureWorkspace(){
       showFlow,
       colorEngine:SovSchematicData.clone(colorEngine),
       appearanceMode,
-      globalRate:globalTimeScale(),
+      // The document's own rate (meta.timeScale) wins over the view; a workspace carries only the
+      // view's own playback speed, never the document's rate (issue #40).
+      playbackSpeed:simClock.speed,
       layout:typeof activeLayoutId==='function'?activeLayoutId():null
     }
   };
@@ -12580,6 +13106,7 @@ function syncRuntimeAfterDocumentReplace(){
   selected=null;hideSelectionBar();
   persistenceFingerprint=semanticFingerprint();
   updateRevisionReadout();
+  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
   render();selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
 }
 function replaceRuntimeDocument(input){
@@ -12606,7 +13133,13 @@ function applyWorkspace(bundle){
   if(view.appearanceMode){appearanceMode=view.appearanceMode;applyAppearanceMode()}
   // The layout on screen is a viewer's choice, kept with the workspace, never in the file.
   if(view.layout&&typeof switchLayout==='function'&&view.layout!==activeLayoutId())switchLayout(view.layout);
-  if(view.globalRate!=null){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Number(view.globalRate)||1}
+  // The document's own rate (meta.timeScale) is never set from a workspace: an older package's
+  // view.globalRate is ignored outright (issue #40). Only the view's own playback speed moves.
+  if(typeof view.playbackSpeed==='number'&&Number.isFinite(view.playbackSpeed)&&view.playbackSpeed>0){
+    simClock.speed=view.playbackSpeed;
+    const sel=document.getElementById('simSpeed');if(sel)sel.value=String(simClock.speed);
+  }
+  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
   render();
   return captureWorkspace();
 }
@@ -13284,8 +13817,8 @@ if(typeof initializeEditorKernel==='function')initializeEditorKernel();
 <script data-beta-module="src/65-sim-control.js">
 /* BEGIN src/65-sim-control.js */
 'use strict';
-// 0.1 concern: the canvas control plane. One clock drives the graph engine
-// (src/07-graph-core.js) over the live document; this module only projects its state onto the
+// 0.1 concern: the canvas control plane. One clock drives the sim surface
+// (src/07-state-surface.js, over the state-space engine) over the live document; this module only projects its state onto the
 // canvas (levels, edges, waiting steps) and turns gestures into engine operations. It never
 // writes the document: a simulation reads a snapshot and restarts when the document changes.
 
@@ -13303,7 +13836,7 @@ function simHandlersFor(doc){
 }
 function simStart(){
   const doc=snapshotDocument(),{handlers,stubbed}=simHandlersFor(doc);
-  const made=SovSchematicGraph.createSimulation(doc,{handlers});
+  const made=SovSchematicSimSurface.createSimulation(doc,{handlers});
   simClock.fingerprint=semanticFingerprint();simClock.edgeMark=0;simClock.stubbed=stubbed;
   if(!made.ok){simClock.run=null;simClock.note=made.message;simPause();paintSim();updateSimReadout();return made}
   simClock.run=made.sim;simClock.note=stubbed.length?`stubbed: ${stubbed.join(', ')}`:'';
@@ -13628,7 +14161,10 @@ function pagePacks(){
 }
 function pageRuns(){return pageRunRegistry||(pageRunRegistry=SovSchematicStateSpace.createRunRegistry({packs:pagePacks(),document:()=>snapshotDocument()}))}
 // Graph queries and the message simulation read the live document; one session per page.
-const graphSession=SovSchematicGraph.createSession();
+// The simulation side of the session is the sim surface (src/07-state-surface.js, over the
+// state-space engine, contract 09 of the one-runtime plan); schematic.graph.query still reaches
+// src/07-graph-core.js's graph reading.
+const graphSession=SovSchematicSimSurface.createSession();
 function graphCall(name,args={}){return SovSchematicData.clone(graphSession.execute(name,snapshotDocument(),args))}
 function apiOperation(op,resource,resourceId,value,patch,query){return runtimeCrud({schema:SovSchematicData.OPERATION_SCHEMA,id:`browser-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,op,resource,resourceId,value,patch,query})}
 
@@ -13661,7 +14197,7 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
-  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()}},
   render:{
     svg:(options={})=>renderStandaloneSvg(options),
     png:(options={})=>renderStandalonePng(options)
@@ -13720,10 +14256,258 @@ const SovSchematicAPI={
     start:(args)=>pageRuns().start(args),step:(handle)=>pageRuns().step(handle),settle:(handle)=>pageRuns().settle(handle),
     trace:(handle)=>pageRuns().trace(handle),query:(handle,subject)=>pageRuns().query(handle,subject),replay:(trace)=>pageRuns().replay(trace)
   },
-  tools:()=>[...SovSchematicData.operationTools(),...SovSchematicGraph.tools()]
+  tools:()=>[...SovSchematicData.operationTools(),...SovSchematicSimSurface.tools()]
 };
 window.SovSchematicAPI=SovSchematicAPI;
 /* END src/85-api.js */
+</script>
+<script data-beta-module="src/87-live.js">
+/* BEGIN src/87-live.js */
+'use strict';
+// 0.1 concern: live link. Publishes a read-only snapshot of this editor session —
+// document revision, file identity, camera, appearance and the current selection —
+// to a local server so an agent can observe what the operator is looking at.
+//
+// Off unless asked for. Enable with ?live=1 (or ?live=http://host:port) on the URL,
+// or SovSchematicLive.start(). Nothing here mutates the document; the link is
+// observation only, and the editor keeps working when the server is absent.
+
+const LIVE_STORAGE_KEY='sov.live.endpoint';
+// Served from the server itself, the link is same-origin and needs no port named.
+// Opened from a file, there is no origin to infer, so fall back to the usual port.
+const LIVE_FALLBACK_ENDPOINT='http://127.0.0.1:8787';
+const LIVE_DEFAULT_ENDPOINT=(typeof location!=='undefined'&&/^https?:$/.test(location.protocol))
+  ?location.origin
+  :LIVE_FALLBACK_ENDPOINT;
+const LIVE_MIN_INTERVAL_MS=250;      // floor between pushes while the operator is active
+const LIVE_HEARTBEAT_MS=5000;        // idle push so a stale snapshot is detectable
+const LIVE_BACKOFF_MS=5000;          // wait after a failed push before trying again
+
+const liveLink={
+  enabled:false,
+  endpoint:LIVE_DEFAULT_ENDPOINT,
+  sessionId:`browser-${Math.random().toString(36).slice(2,10)}`,
+  timer:null,
+  heartbeat:null,
+  inFlight:false,
+  lastSignature:'',
+  lastPushedAt:null,
+  lastError:null,
+  failing:false
+};
+
+// ---------------------------------------------------------------------------
+// Selection description
+// ---------------------------------------------------------------------------
+
+function liveSelectionDescriptor(){
+  const setIds=[...(typeof selectedComponentIds!=='undefined'?selectedComponentIds:[])];
+  // `selected` keeps its last value through a deselect, so the selection bar being
+  // hidden — not the variable — is the editor's own answer to "is anything selected".
+  const current=selectionBar.hidden?null:(typeof selected==='string'?selected:null);
+  if(!current)return {kind:'none',ids:setIds,detail:null};
+
+  if(current.startsWith('wire:')){
+    const index=Number(current.slice(5));
+    const wire=wires[index];
+    if(!wire)return {kind:'none',ids:setIds,detail:null};
+    const cfg=connectionConfig(wire);
+    const end=(side)=>{
+      const ep=carrierEndpoint(wire,side);
+      if(!ep)return null;
+      if(ep.kind==='bound')return {bound:true,componentId:ep.node.id,pointId:ep.pointId,marker:wireEndpointMarker(wire,side)};
+      return {bound:false,x:Math.round(ep.pos.x),y:Math.round(ep.pos.y)};
+    };
+    return {kind:'wire',ids:[wire.id],detail:{
+      id:wire.id,
+      label:cfg.label||null,
+      direction:cfg.direction,
+      reciprocity:cfg.reciprocity,
+      forwardOperation:cfg.forwardOperation??null,
+      reverseOperation:cfg.reverseOperation??null,
+      canvasId:wireCanvas(wire).id,
+      a:end('a'),
+      b:end('b'),
+      record:SovSchematicData.clone(wire)
+    }};
+  }
+
+  if(current.startsWith('point:component:')){
+    const [,,componentId,pointId]=current.split(':');
+    const owner=nodes.find(n=>n.id===componentId);
+    if(!owner)return {kind:'none',ids:setIds,detail:null};
+    const point=Attachment.resolveSpec(owner,pointId);
+    const port=point?componentConfig(owner).ports[point.compatId]:null;
+    return {kind:'point',ids:[`${componentId}:${pointId}`],detail:{
+      componentId,
+      componentLabel:componentConfig(owner).label||symbolOf(owner.symbolId).name,
+      pointId:point?.id??pointId,
+      compatId:point?.compatId??null,
+      side:point?.side??null,
+      face:port?.face??null,
+      label:port?.label??null,
+      record:port?SovSchematicData.clone(port):null
+    }};
+  }
+
+  const node=nodes.find(n=>n.id===current);
+  if(!node)return {kind:'none',ids:setIds,detail:null};
+  const form=componentForm(node);
+  const cfg=componentConfig(node);
+  return {kind:'component',ids:setIds.length?setIds:[node.id],detail:{
+    id:node.id,
+    label:cfg.label||null,
+    symbolId:node.symbolId,
+    typeName:symbolOf(node.symbolId).name,
+    canvasId:componentCanvas(node).id,
+    scope:componentScopePath(node),
+    dimension:form.dimension,
+    interior:form.regions.interior.state,
+    attachmentDefaults:cfg.attachmentDefaults??null,
+    signalMode:cfg.signalMode??null,
+    pointIds:Object.keys(cfg.ports||{}),
+    record:SovSchematicData.clone(node)
+  }};
+}
+
+// ---------------------------------------------------------------------------
+// Snapshot
+// ---------------------------------------------------------------------------
+
+// The document body rides on the full snapshot in its own canonical form, the same
+// shape history and persistence already produce — not a second serializer.
+function liveDocumentSnapshot(){return historyDocument()}
+
+function liveSnapshot(){
+  const selection=liveSelectionDescriptor();
+  return {
+    schema:'soveraeign.schematic/live@0.1',
+    sessionId:liveLink.sessionId,
+    at:new Date().toISOString(),
+    file:{name:currentFileName,format:currentFileFormat,dirty:isFileDirty(),revision:diagram.revision},
+    counts:{components:nodes.length,wires:wires.length},
+    // The camera is a viewBox; zoom is how much of the base view it shows.
+    view:{appearance:appearanceMode,camera:{
+      x:Math.round(camera.x),y:Math.round(camera.y),w:Math.round(camera.w),h:Math.round(camera.h),
+      zoom:Number((BASE_VIEW.w/camera.w).toFixed(4))
+    }},
+    selection,
+    document:liveDocumentSnapshot()
+  };
+}
+
+// A push is worth making when the operator's selection or the document changed.
+// The document body is excluded from the signature: revision already covers it.
+function liveSignature(snapshot){
+  return JSON.stringify([snapshot.file.revision,snapshot.file.name,snapshot.selection.kind,snapshot.selection.ids,snapshot.view]);
+}
+
+// ---------------------------------------------------------------------------
+// Transport
+// ---------------------------------------------------------------------------
+
+async function livePush({force=false}={}){
+  if(!liveLink.enabled||liveLink.inFlight)return;
+  let snapshot;
+  try{snapshot=liveSnapshot()}catch(error){liveLink.lastError=String(error?.message||error);return}
+  const signature=liveSignature(snapshot);
+  if(!force&&signature===liveLink.lastSignature)return;
+  liveLink.inFlight=true;
+  try{
+    const response=await fetch(`${liveLink.endpoint}/api/v1/live`,{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify(snapshot)
+    });
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    liveLink.lastSignature=signature;
+    liveLink.lastPushedAt=snapshot.at;
+    liveLink.lastError=null;
+    liveLink.failing=false;
+  }catch(error){
+    liveLink.lastError=String(error?.message||error);
+    liveLink.failing=true;
+  }finally{
+    liveLink.inFlight=false;
+  }
+}
+
+// Coalesce a burst of edits into one push, never faster than LIVE_MIN_INTERVAL_MS,
+// and back off after a failure so a missing server costs one request per backoff.
+function liveNotifyChanged(){
+  if(!liveLink.enabled||liveLink.timer)return;
+  const delay=liveLink.failing?LIVE_BACKOFF_MS:LIVE_MIN_INTERVAL_MS;
+  liveLink.timer=setTimeout(()=>{liveLink.timer=null;livePush()},delay);
+}
+
+function liveStart(endpoint){
+  if(endpoint)liveLink.endpoint=String(endpoint).replace(/\/+$/,'');
+  liveLink.enabled=true;
+  try{localStorage.setItem(LIVE_STORAGE_KEY,liveLink.endpoint)}catch(_){ }
+  if(!liveLink.heartbeat)liveLink.heartbeat=setInterval(()=>livePush({force:true}),LIVE_HEARTBEAT_MS);
+  livePush({force:true});
+  return liveStatus();
+}
+
+function liveStop(){
+  liveLink.enabled=false;
+  if(liveLink.heartbeat){clearInterval(liveLink.heartbeat);liveLink.heartbeat=null}
+  if(liveLink.timer){clearTimeout(liveLink.timer);liveLink.timer=null}
+  try{localStorage.removeItem(LIVE_STORAGE_KEY)}catch(_){ }
+  return liveStatus();
+}
+
+function liveStatus(){
+  return {
+    enabled:liveLink.enabled,
+    endpoint:liveLink.endpoint,
+    sessionId:liveLink.sessionId,
+    lastPushedAt:liveLink.lastPushedAt,
+    lastError:liveLink.lastError
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Change hooks
+// ---------------------------------------------------------------------------
+
+// The live concern stays in this file: rather than scattering notification calls
+// through selection, UI and persistence, wrap the functions that mark the end of a
+// selection change or a revision change. Each wrapper is transparent — same
+// arguments, same return value — and installed only once, from the last module in
+// the build order.
+function liveWatch(name){
+  const original=globalThis[name];
+  if(typeof original!=='function')return;
+  globalThis[name]=function(...args){
+    const result=original.apply(this,args);
+    liveNotifyChanged();
+    return result;
+  };
+}
+['showComponentBar','showConnectionBar','showPortBar','hideSelectionBar','updateRevisionReadout'].forEach(liveWatch);
+
+const SovSchematicLive={
+  start:liveStart,
+  stop:liveStop,
+  status:liveStatus,
+  push:()=>livePush({force:true}),
+  snapshot:liveSnapshot
+};
+window.SovSchematicLive=SovSchematicLive;
+
+// Autostart: ?live=1 uses the default endpoint, ?live=<url> names one, and an
+// endpoint remembered from a previous session on this origin resumes the link.
+(function initializeLiveLink(){
+  let requested=null;
+  try{
+    const param=new URLSearchParams(location.search).get('live');
+    if(param!==null)requested=param===''||param==='1'||param==='true'?LIVE_DEFAULT_ENDPOINT:param;
+    else requested=localStorage.getItem(LIVE_STORAGE_KEY);
+  }catch(_){ }
+  if(requested)liveStart(requested);
+})();
+/* END src/87-live.js */
 </script>
 </body>
 </html>

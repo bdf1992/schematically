@@ -1,17 +1,20 @@
 # Module ownership — 0.1
 
 Two runtimes load side by side: the state-space runtime (`STATE-SPACE.md`: typed state records, packs,
-ticks, traces) and dev's graph runtime (`GRAPH-MODEL.md`: graph queries and the message simulation).
+ticks, traces, and the one message/level engine) and dev's graph runtime (`GRAPH-MODEL.md`: graph
+queries, access control and the signal model; its simulation API is served by the state-space runtime
+through `07-state-surface.js`, since contract 10 of the one-runtime plan, 2026-10-03).
 Both share `05-data-core.js` and `06-attachment-core.js`. The DOM-free cores load in this order in
 `index.source.html` and `mcp/server.mjs` (node tests require only the cores they use, in the same
 relative order): `03-canonical.js`,
 `03-notation-core.js`, `06-attachment-core.js`, `05-data-core.js`, `07-state-space.js`,
-`07-graph-core.js`, `08-layout-core.js`, `09-colour-core.js`.
+`07-state-surface.js` (page only, for now), `07-graph-core.js`, `08-layout-core.js`, `09-colour-core.js`.
 
 - `03-canonical.js` — state-space runtime. Canonical JSON encoding (RFC 8785 / JCS), synchronous pure-JS SHA-256, and the seeded draw used by merges and QA. Pure, no dependencies; loads first, after nothing.
 - `03-notation-core.js` — graph runtime (dev). Notations (`NOTATION-MODEL.md`): tokens, colour roles, glyphs with terminals (the logic gates' terminal points), signal shapes. Pure, no dependencies; loads after `03-canonical.js`, before `06-attachment-core.js` and `05-data-core.js`, whose `templatePorts` reads its gate terminal points (registered at load for the built-in notations).
 - `07-state-space.js` — state-space runtime. The contract layer (state record validator, the closed pattern registry `truth_table@1` / `merge@1`, definitions and the pack envelope, contracts and ports from a bound definition, `checkDocument`) and the runs (hash-chained ledger, replay key, two-phase ticks with merges, trace and replay, settle, the passive state query, run receipts and the run registry). Pure; no DOM and no pack data (packs are passed in; the built-ins are `data/core.logic.pack.json`); requires only `03-canonical.js` and `05-data-core.js`; loads after `05-data-core.js`, before `07-graph-core.js`.
-- `07-graph-core.js` — graph runtime (dev). Graph queries, signals and clocks, access control, and the discrete-event message simulation (DOM-free; shared with the server). Requires `05-data-core.js` (and `06-attachment-core.js` under node); loads after `07-state-space.js`, before `08-layout-core.js`. Nothing in it reads the state-space runtime.
+- `07-state-surface.js` — state-space runtime. Dev's simulation API over one state-space run: `createSimulation(doc, {handlers, effects, restore, packs, tickMs, seed})` with the sim object's methods in milliseconds (tick, step, advance, run, set, at, inject, resume, reconcile, setHandler, and the views levels, edges, taps, lineage, trace, log, refusals, receipts, effects, parked, state, snapshot), `runScenario`, `createSession` and `tools`, as `07-graph-core.js` at 7b939e3 had them. Every step is the engine's `step`, every input its `addInput`, `resume` or `reconcile`, and every view is read from the run's records and ledger; it changes nothing in the engine. Packs: `options.packs`, else `data/*.pack.json` under node, else the page's `sov-packs` tag. Requires `03-canonical.js`, `05-data-core.js` and `07-state-space.js`; loads after `07-state-space.js`, before `07-graph-core.js`. Since contract 10 of the one-runtime plan (2026-10-03), `07-graph-core.js`'s `createSimulation`, `runScenario`, `createSession` and `tools` are one-line delegations to this module (required at call time under node, so the two modules' mutual require does not run at load time); `tests/sim_surface_shim.js` is now a no-op for `tests/sim_parity_qa.py`, which runs dev's sim-facing suites on this engine with no exception.
+- `07-graph-core.js` — graph runtime (dev). Graph queries, signals and clocks, access control (DOM-free; shared with the server); `createSimulation`, `runScenario`, `createSession` and `tools` delegate to `07-state-surface.js`. The discrete-event message engine that used to live here was deleted at contract 10 of the one-runtime plan (2026-10-03; see `docs/residuals/2026-09-26-one-runtime.md`). Requires `05-data-core.js` (and `06-attachment-core.js` under node); loads after `07-state-space.js`, before `08-layout-core.js`.
 
 - `00-state.js` — runtime state and DOM references.
 - `05-data-core.js` — transport-neutral documents, packages, validation, CRUD, reachability, primitive template presets, and compact serialization (`compactDocument`).
@@ -32,6 +35,7 @@ relative order): `03-canonical.js`,
 - `75-persistence.js` — File lifecycle, `.sov`/`.sovpak`, shared standalone SVG serialization, recovery, rehydration. The headless SVG script delegates here through the browser API.
 - `80-bootstrap.js` — global controls/keyboard/startup.
 - `85-api.js` — browser API adapter.
+- `87-live.js` — live link: off unless asked (`?live=1`, `?live=<origin>`, or `SovSchematicLive.start()`), publishes a read-only snapshot (file identity, revision, camera, appearance, selection with the selected record, and the in-browser document) to `POST /api/v1/live` on selection and revision change, coalesced and backed off. Mutates nothing; loads last.
 
 File lifecycle belongs in `75-persistence.js`; no other concern should independently serialize, download, open, or replace schematic files.
 
@@ -41,3 +45,10 @@ The desktop shell lives under `desktop/` (a Tauri crate wrapping the same standa
 
 ### `src/06-attachment-core.js`
 Pure 0D attachment-point topology, dimensional cardinality, host-dimensional projection, and legacy Port/Wire endpoint compatibility mapping. No DOM or rendering authority.
+
+### `mcp/`
+- `mcp/surface.mjs` — the MCP/HTTP request-handling core (`MCP.md` "One surface, any runtime"): every tool, every `/api/v1` route, history, checkpoints, runs and the root description, as `createSurface({store, packs, render, readText, describe, editorHtml}) -> {handle(request)}`. Imports no `node:` module; reads the cores from `globalThis`.
+- `mcp/store-file.mjs` — `createFileStore(file)`: the durable `.sov` document on disk (mkdir, write `.tmp`, rename).
+- `mcp/store-memory.mjs` — `createMemoryStore(text)`: an in-memory document with a `writes` counter, for a test or a hosted entrypoint with nowhere durable to write. Imports nothing.
+- `mcp/server.mjs` — the Node entrypoint only: arguments, the cores and `guide.mjs` by file URL, `data/*.pack.json`, the spawn-based `render` function, a file store, and an `http.createServer` adapter over `surface.mjs`'s `handle`.
+- `mcp/guide.mjs` — the authoring guide text, one step at a time, from `readText` and the data core's symbol ids; no imports.

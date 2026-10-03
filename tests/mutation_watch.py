@@ -118,8 +118,8 @@ MUTANTS=[
     {
       'name':'interior-route-unfenced',
       'file':'src/40-routing.js',
-      'old':'.filter(points=>pathValid(points,obstacles)&&routeInsideFence(points,fence))',
-      'new':'.filter(points=>pathValid(points,obstacles))',
+      'old':'.filter(points=>routeClear(points,obstacles,leads)&&routeInsideFence(points,fence))',
+      'new':'.filter(points=>routeClear(points,obstacles,leads))',
       'test':'tests/layout_quality_qa.py'
     },
     {
@@ -130,9 +130,12 @@ MUTANTS=[
       'test':'tests/graph_core_qa.py'
     },
     {
+      # Contract 09 of the one-runtime plan: createSimulation now delegates to the sim surface,
+      # whose set() carries this rule (src/07-graph-core.js's own copy is the retired legacy
+      # engine, unreachable).
       'name':'derived-signal-can-be-set',
-      'file':'src/07-graph-core.js',
-      'old':"if(node.signal.mode!=='asserted')return refusal('DERIVED_SIGNAL',`${node.label||nodeId} is derived from its inputs; only an asserted signal is set`);",
+      'file':'src/07-state-surface.js',
+      'old':"if(!c.asserted)return refusal('DERIVED_SIGNAL',`${componentOf(nodeId)?.config?.label||nodeId} is derived from its inputs; only an asserted signal is set`);",
       'new':"",
       'test':'tests/graph_core_qa.py'
     },
@@ -207,10 +210,13 @@ MUTANTS=[
       'test':'tests/notation_qa.py'
     },
     {
+      # Contract 09 of the one-runtime plan: createSimulation now delegates to the sim surface
+      # over src/07-state-space.js, whose startRun carries this rule (src/07-graph-core.js's own
+      # copy is the retired legacy engine, unreachable).
       'name':'power-on-undoes-explicit-set',
-      'file':'src/07-graph-core.js',
-      'old':"s.queue=s.queue.filter(ev=>!(ev.powerOn&&ev.action?.set?.node===nodeId));",
-      'new':"",
+      'file':'src/07-state-space.js',
+      'old':"const sources=implied.sources.filter(x=>!seen.has(JSON.stringify([x.at,x.entity,x.point,x.channel])));",
+      'new':"const sources=implied.sources;",
       'test':'tests/notation_qa.py'
     },
     {

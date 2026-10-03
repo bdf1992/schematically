@@ -363,8 +363,46 @@
   // hold@1 (392): keeps the payload in device.state, then forwards.
   const holdPattern=flowPattern('hold',{initial:()=>({value:null}),
     intake(parameters,state,settings,message){state.value=copy(message.value.payload);return {pass:true}}});
+  // A service gate (gate@1, kind gate) whose handler answers {pass: false} refuses with its reason
+  // (src/07-graph-core.js:449 at 7b939e3); a switch does not judge a handler's answer.
+  gatePattern.judge=(parameters,result)=>parameters.kind==='gate'&&isObject(result)&&result.pass===false?{refuse:result.reason||'gate refused'}:null;
+  // --- Behaviours: what a card does after its flow pattern takes a message in, the graph core's
+  // continueAt (src/07-graph-core.js:422-454 at 7b939e3): park for a person, then effect mediation,
+  // then a handler, then the flow policy. A card reaches each through the one binding lookup from
+  // its config.behavior (behaviorBindingsOf below); none keeps device.state. The effects ledger and
+  // the parked messages are the run's own state.
+  // handler@1 (267-283, 353-372): a handler named by config.behavior.handler. A declarative one is
+  // evaluated here: {kind: stub} passes the payload through; {kind: fixture, key, responses,
+  // otherwise?, merge?} answers by the value at key. A function is the caller's and is called by the
+  // engine, once, its answer recorded in the ledger. An answer is {payload?, channel?, port?}, a
+  // list of them, {refuse: reason} or {absorb: true}.
+  const handlerPattern=flowPattern('handler',{stateful:false,behavior:true,
+    evaluate(spec,message){
+      if(!isObject(spec))return {refuse:'handler is not callable'};
+      if(spec.kind==='stub')return {payload:copy(message.payload)};
+      if(spec.kind==='fixture'){
+        const k=readPath(message,spec.key),has=isObject(spec.responses)&&Object.prototype.hasOwnProperty.call(spec.responses,String(k));
+        const hit=has?spec.responses[String(k)]:spec.otherwise;
+        if(hit===undefined)return {refuse:`fixture has no response for ${spec.key}=${JSON.stringify(k)}`};
+        const out=clone(hit);
+        // merge: true lays the response over the incoming payload instead of replacing it.
+        if(spec.merge&&isObject(out)&&isObject(out.payload)&&isObject(message.payload))out.payload={...copy(message.payload),...out.payload};
+        return out;
+      }
+      return {refuse:`unknown handler kind ${spec.kind}`};
+    }});
+  // effect@1 (292-295, 429-444): the effect key is the declared business key at the effect site,
+  // <card id>:<value at config.behavior.effect.key>, a string as it is and any other value as its JSON.
+  const effectPattern=flowPattern('effect',{stateful:false,behavior:true,
+    identity(settings,entity,message){
+      const v=readPath(message,settings.key);
+      if(v===undefined||v===null||v==='')return {refuse:`effect has no identity (${settings.key})`};
+      return {key:`${entity}:${typeof v==='string'?v:JSON.stringify(v)}`};
+    }});
+  // park@1 (422-425, 576-584): the message waits for a person as p-<message id> until a resume.
+  const parkPattern=flowPattern('park',{stateful:false,behavior:true,parkId:message=>`p-${message.id}`});
   const PATTERNS=[truthTable,merge,combinePattern].map(p=>Object.freeze(p));
-  const FLOW_PATTERNS=[routePattern,joinPattern,bufferPattern,limitPattern,gatePattern,terminalPattern,holdPattern].map(p=>Object.freeze(p));
+  const FLOW_PATTERNS=[routePattern,joinPattern,bufferPattern,limitPattern,gatePattern,terminalPattern,holdPattern,handlerPattern,effectPattern,parkPattern].map(p=>Object.freeze(p));
   const refOf=p=>`${p.id}@${p.version}`;
   // patterns() is the level registry (each a contract over ports); flowPatterns() the message one. pattern() finds either.
   function patterns(){return PATTERNS.slice()}
@@ -584,7 +622,11 @@
   const RUNTIME_VERSION='state-space@1';
   const TRACE_FORMAT='soveraeign.schematic/trace@0.1';
   const ZERO_HASH='0'.repeat(64);
-  const LEDGER_KINDS=['start','input','draw'];
+  // What a replay cannot recompute: the start, each input (an input given mid-run carries `after`,
+  // the tick processed before it was given), each stochastic draw, each function handler's answer
+  // (result), each resume and reconcile (with `after`), and an effects ledger handed in at start.
+  const LEDGER_KINDS=['start','input','draw','result','resume','reconcile','effects'];
+  const MID_RUN_KINDS=['input','resume','reconcile'];
   const REPLAY_KEY_FIELDS=['documentId','documentHash','definitions','runtimeVersion','traceFormat','inputs','seed','tickMs'];
   const INPUT_KEYS=['entity','point','channel','value','at'];
   const DEFAULT_MERGE=Object.freeze({combine:'last',order:Object.freeze({kind:'stochastic'})});
@@ -658,8 +700,21 @@
     const policy=isObject(c?.config?.flow)?c.config.flow.policy:undefined,candidates=[];
     if(typeof policy==='string'&&policy&&policy!=='fanout')candidates.push(`flow.${policy}@1`);
     for(const pack of packList(packs))if(isObject(pack?.bindings)&&typeof c?.symbolId==='string'&&Object.prototype.hasOwnProperty.call(pack.bindings,c.symbolId)){candidates.push(pack.bindings[c.symbolId]);break}
-    for(const ref of candidates){const def=resolveDefinition(ref,packs);if(def&&pattern(def.pattern)?.messages)return ref}
+    return lookupRef(candidates,packs,false);
+  }
+  // The first candidate the packs define as a flow pattern of the asked layer (a behaviour or not).
+  function lookupRef(candidates,packs,behavior){
+    for(const ref of candidates){const def=resolveDefinition(ref,packs),p=def?pattern(def.pattern):null;if(p?.messages&&!!p.behavior===behavior)return ref}
     return null;
+  }
+  // The same lookup for a card's behaviours: config.behavior.human names flow.park@1, .effect
+  // flow.effect@1 and .handler flow.handler@1, each when the packs define it; without them the card
+  // relays as before. Returns {human?, effect?, handler?} of id@version.
+  const BEHAVIORS=[['human','park'],['effect','effect'],['handler','handler']];
+  function behaviorBindingsOf(c,packs){
+    const b=isObject(c?.config?.behavior)?c.config.behavior:{},out={};
+    for(const [key,name] of BEHAVIORS)if(b[key]){const ref=lookupRef([`flow.${name}@1`],packs,true);if(ref)out[key]=ref}
+    return out;
   }
   // A card's flow settings, as the graph core's flowConfig reads them (src/07-graph-core.js:34-37 at
   // 7b939e3), times converted to ticks once: releaseMs (default the signal model's 10 ms) and the rate's
@@ -675,12 +730,14 @@
       spanTicks:rate&&Number(rate.spanMs)>0?ticks(Number(rate.spanMs)):0,handler:typeof b.handler==='string'&&b.handler?b.handler:null};
   }
   function impliedDevices(d,packs){
-    const g=typeof globalThis!=='undefined'?globalThis:{},N=g.SovSchematicNotation,out={definitions:{},bind:{},sources:[],clocks:[],flow:{},asserted:{},edges:{}};
+    const g=typeof globalThis!=='undefined'?globalThis:{},N=g.SovSchematicNotation,out={definitions:{},bind:{},sources:[],clocks:[],flow:{},behavior:{},asserted:{},edges:{}};
     let glyphs={};try{const r=N?N.resolve(d):null;glyphs=r?.ok?(r.notation?.glyphs||{}):{}}catch(_){glyphs={}}
     for(const c of d.components){
       const config=isObject(c.config)?c.config:{};
       const flow=flowBindingOf(c,packs);
       if(flow)out.flow[c.id]=flow;
+      const behavior=behaviorBindingsOf(c,packs);
+      if(Object.keys(behavior).length)out.behavior[c.id]=behavior;
       if(config.definition!==undefined&&config.definition!==null)continue;
       const glyph=glyphs[c.symbolId]||null;
       // A Point relays what reaches it (the engine's own 'point' role); every card has a signal,
@@ -864,6 +921,52 @@
     return out.sort((x,y)=>cmp(x.nodes[0],y.nodes[0]));
   }
   function inputRefusal(message){return {ok:false,code:'INPUT_INVALID',message}}
+  // A run's function handlers, kept beside the run and never in it (a run stays plain JSON); and the
+  // answers of functions already called in a tick that was then refused, so a retry does not call
+  // them again: a function is called once, when the run first reaches it.
+  const FUNCTIONS=new WeakMap(),HELD=new WeakMap();
+  // One input, checked against the normalized document: {ok, input} with the input as the ledger
+  // records it, or the refusal. startRun checks each of its inputs this way and addInput a mid-run one.
+  function checkInput(d,packs,raw,i){
+    if(!isObject(raw))return inputRefusal(`input ${i} must be an object`);
+    const extra=Object.keys(raw).filter(k=>!INPUT_KEYS.includes(k));
+    if(extra.length)return inputRefusal(`input ${i}: unknown key ${extra[0]}`);
+    const component=d.components.find(c=>c.id===raw.entity);
+    if(!component)return inputRefusal(`input ${i}: unknown entity ${JSON.stringify(raw.entity)}`);
+    let spec=null;try{spec=Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&typeof raw.point==='string'&&(s.id===raw.point||s.compatId===raw.point))||null}catch(_){spec=null}
+    if(!spec)return inputRefusal(`input ${i}: ${raw.entity} has no port ${JSON.stringify(raw.point)}`);
+    const channel=raw.channel===undefined?'main':raw.channel;
+    if(channel===MESSAGE){
+      // An inject: a message {channel, payload, principal} put in at a port; several may share a port and tick.
+      if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
+      const v=raw.value;
+      if(!isObject(v))return inputRefusal(`input ${i}: a message input's value must be an object {channel, payload, principal}`);
+      const extra=Object.keys(v).filter(k=>!['channel','payload','principal'].includes(k));
+      if(extra.length)return inputRefusal(`input ${i}: unknown key value.${extra[0]}`);
+      if(v.channel!==undefined&&v.channel!==null&&typeof v.channel!=='string')return inputRefusal(`input ${i}: value.channel must be a string or null`);
+      if(v.principal!==undefined&&v.principal!==null&&!nonEmpty(v.principal))return inputRefusal(`input ${i}: value.principal must be a non-empty string or null`);
+      try{Canonical.canonicalize(v.payload??null)}catch(_){return inputRefusal(`input ${i}: value.payload must be JSON`)}
+      // No floating point anywhere a run records, payloads included: every number is a safe integer.
+      const fraction=firstFraction(v.payload??null,`inputs[${i}].value.payload`);
+      if(fraction)return {ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`input ${i}: ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the number in integer units (e.g. 1.5 kg as 1500 g, 0.25 as 250 thousandths) and name the unit in the payload'};
+      return {ok:true,input:{entity:component.id,point:spec.id,channel,value:{channel:v.channel??null,payload:clone(v.payload??null),principal:v.principal??null},at:raw.at}};
+    }
+    const bound=component.config?.definition;
+    if(bound!==undefined&&bound!==null&&(resolveDefinition(bound,packs)?.parameters?.outputs||[]).includes(spec.id))return inputRefusal(`input ${i}: ${component.id}.${spec.id} is an output of ${bound}; a device's output is the device's`);
+    if(!specChannels(spec).includes(channel))return inputRefusal(`input ${i}: port ${raw.entity}.${spec.id} has no channel ${JSON.stringify(channel)}`);
+    const fraction=firstFraction(raw.value,`inputs[${i}].value`);
+    if(fraction)return {ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`input ${i}: ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the value in integer units (a level as a boolean on a binary channel)'};
+    if(typeof raw.value!=='boolean')return inputRefusal(`input ${i}: value must be a boolean (binary channels only)`);
+    if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
+    return {ok:true,input:{entity:component.id,point:spec.id,channel,value:raw.value,at:raw.at}};
+  }
+  // A value a caller hands the run (a resume payload, a reconcile result, an effects ledger): JSON
+  // whose numbers are all safe integers, or the refusal naming the path to the first that is not.
+  function fractionRefusal(value,path){
+    try{Canonical.canonicalize(value)}catch(_){return inputRefusal(`${path} must be JSON`)}
+    const fraction=firstFraction(value,path);
+    return fraction?{ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the number in integer units (e.g. 0.25 as 250 thousandths) and name the unit'}:null;
+  }
   // A run: startRun({doc, packs, inputs, seed, budget}). `walk: 'reverse'` reverses the order in
   // which the engine walks ports, devices and Wires within a phase; no outcome depends on it.
   function startRun(options){
@@ -890,42 +993,26 @@
     if(!Array.isArray(rawInputs))return inputRefusal('inputs must be an array');
     const inputs=[],seen=new Set();
     for(let i=0;i<rawInputs.length;i++){
-      const raw=rawInputs[i];
-      if(!isObject(raw))return inputRefusal(`input ${i} must be an object`);
-      const extra=Object.keys(raw).filter(k=>!INPUT_KEYS.includes(k));
-      if(extra.length)return inputRefusal(`input ${i}: unknown key ${extra[0]}`);
-      const component=d.components.find(c=>c.id===raw.entity);
-      if(!component)return inputRefusal(`input ${i}: unknown entity ${JSON.stringify(raw.entity)}`);
-      let spec=null;try{spec=Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&typeof raw.point==='string'&&(s.id===raw.point||s.compatId===raw.point))||null}catch(_){spec=null}
-      if(!spec)return inputRefusal(`input ${i}: ${raw.entity} has no port ${JSON.stringify(raw.point)}`);
-      const channel=raw.channel===undefined?'main':raw.channel;
-      if(channel===MESSAGE){
-        // An inject: a message {channel, payload, principal} put in at a port; several may share a port and tick.
-        if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
-        const v=raw.value;
-        if(!isObject(v))return inputRefusal(`input ${i}: a message input's value must be an object {channel, payload, principal}`);
-        const extra=Object.keys(v).filter(k=>!['channel','payload','principal'].includes(k));
-        if(extra.length)return inputRefusal(`input ${i}: unknown key value.${extra[0]}`);
-        if(v.channel!==undefined&&v.channel!==null&&typeof v.channel!=='string')return inputRefusal(`input ${i}: value.channel must be a string or null`);
-        if(v.principal!==undefined&&v.principal!==null&&!nonEmpty(v.principal))return inputRefusal(`input ${i}: value.principal must be a non-empty string or null`);
-        try{Canonical.canonicalize(v.payload??null)}catch(_){return inputRefusal(`input ${i}: value.payload must be JSON`)}
-        // No floating point anywhere a run records, payloads included: every number is a safe integer.
-        const fraction=firstFraction(v.payload??null,`inputs[${i}].value.payload`);
-        if(fraction)return {ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`input ${i}: ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the number in integer units (e.g. 1.5 kg as 1500 g, 0.25 as 250 thousandths) and name the unit in the payload'};
-        inputs.push({entity:component.id,point:spec.id,channel,value:{channel:v.channel??null,payload:clone(v.payload??null),principal:v.principal??null},at:raw.at});
-        continue;
-      }
-      const bound=component.config?.definition;
-      if(bound!==undefined&&bound!==null&&(resolveDefinition(bound,o.packs)?.parameters?.outputs||[]).includes(spec.id))return inputRefusal(`input ${i}: ${component.id}.${spec.id} is an output of ${bound}; a device's output is the device's`);
-      if(!specChannels(spec).includes(channel))return inputRefusal(`input ${i}: port ${raw.entity}.${spec.id} has no channel ${JSON.stringify(channel)}`);
-      const fraction=firstFraction(raw.value,`inputs[${i}].value`);
-      if(fraction)return {ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`input ${i}: ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the value in integer units (a level as a boolean on a binary channel)'};
-      if(typeof raw.value!=='boolean')return inputRefusal(`input ${i}: value must be a boolean (binary channels only)`);
-      if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
-      const input={entity:component.id,point:spec.id,channel,value:raw.value,at:raw.at};
+      const checked=checkInput(d,o.packs,rawInputs[i],i);
+      if(!checked.ok)return checked;
+      const input=checked.input;
+      if(input.channel===MESSAGE){inputs.push(input);continue}
       const key=JSON.stringify([input.at,input.entity,input.point,input.channel]);
       if(seen.has(key))return inputRefusal(`input ${i}: a second input at (${input.entity}, ${input.point}, ${input.channel}, ${input.at})`);
       seen.add(key);inputs.push(input);
+    }
+    // Handlers by name: a declarative one is plain JSON and is kept in the run; a function is kept
+    // beside the run (FUNCTIONS), never in it, and its answers go into the ledger.
+    if(o.handlers!==undefined&&!isObject(o.handlers))return inputRefusal('handlers must be an object of name to handler');
+    const declared={},functions={};
+    for(const [name,spec] of Object.entries(o.handlers||{})){
+      if(typeof spec==='function'){functions[name]=spec;continue}
+      try{declared[name]=JSON.parse(JSON.stringify(spec===undefined?null:spec))}catch(_){return inputRefusal(`handlers.${name} must be JSON or a function`)}
+    }
+    // An effects ledger handed in from an earlier run: what it confirmed is not sent again.
+    if(o.effects!==undefined){
+      if(!isObject(o.effects))return inputRefusal('effects must be an object of effect key to effect');
+      const bad=fractionRefusal(o.effects,'effects');if(bad)return bad;
     }
     // Message inputs at one port and tick are ordered by their canonical value, so the order is the caller's no more.
     const tie=x=>x.channel===MESSAGE?Canonical.canonicalize(x.value):'';
@@ -933,7 +1020,7 @@
     const implied=impliedDevices(d,o.packs);
     const bound=[...new Set(d.components.map(c=>c.config?.definition).filter(ref=>ref!==undefined&&ref!==null))];
     // Flow definitions a card reaches through the binding lookup are resolved definitions of the run too.
-    const flowRefs=[...new Set(Object.values(implied.flow))];
+    const flowRefs=[...new Set([...Object.values(implied.flow),...Object.values(implied.behavior).flatMap(b=>Object.values(b))])];
     const refs=[...new Set([...bound,...Object.keys(implied.definitions),...flowRefs])].sort();
     const definitions={};
     for(const ref of [...bound,...flowRefs]){const def=resolveDefinition(ref,o.packs);if(def.delay===undefined)def.delay=0;definitions[ref]=def}
@@ -948,6 +1035,14 @@
       shape.components[id].flow={ref,pattern:def.pattern,parameters:clone(def.parameters),control:at.control.slice(),
         settings:{...flowSettings(byId.get(id),tickMs),controlled:at.control.length>0,incoming:at.incoming.slice()}};
       if(pattern(def.pattern).timed)timed.add(id);
+    }
+    // Behaviours: park with its prompt, effect with its key path, handler with its name, read once here.
+    for(const [id,refs] of Object.entries(implied.behavior)){
+      const b=byId.get(id).config.behavior,c=byId.get(id).config,out={};
+      if(refs.human)out.park={ref:refs.human,prompt:isObject(b.human)&&typeof b.human.prompt==='string'?b.human.prompt:null,label:typeof c.label==='string'&&c.label?c.label:id};
+      if(refs.effect)out.effect={ref:refs.effect,key:isObject(b.effect)&&typeof b.effect.key==='string'?b.effect.key:null};
+      if(refs.handler)out.handler={ref:refs.handler,name:String(b.handler)};
+      shape.components[id].behavior=out;
     }
     for(const [id,a] of Object.entries(implied.asserted))shape.components[id].asserted=a;
     for(const [id,e] of Object.entries(implied.edges))shape.components[id].edge=e;
@@ -966,11 +1061,17 @@
       signal:{},lastRecord:{},levelPrincipal:{},queues:{},deviceState:{},sequence:0,ledger:[],records:[],replayDraws:null,
       clocks:Object.fromEntries(implied.clocks.map(c=>[portKey(c.entity,c.point,'main'),c])),
       blocked:shape.blocked,
+      // The run's effects ledger by effect key, the messages parked for a person by park id, and the
+      // declarative handlers by name: plain JSON, so a run copied or restored keeps them.
+      effects:o.effects!==undefined?clone(o.effects):{},parked:{},handlers:declared,replayResults:null,
       // A message input carries the ledger seq of its input entry: its message is m-<seq>.
-      pending:[...inputs.map((x,i)=>x.channel===MESSAGE?{kind:'input',...clone(x),seq:i+1}:{kind:'input',...x}),...sources.map(x=>({kind:'input',...x})),...implied.clocks.map(c=>clockEdge(c,tickMs,0,true,null)).filter(Boolean)]
+      pending:[...inputs.map((x,i)=>x.channel===MESSAGE?{kind:'input',...clone(x),seq:i+(o.effects!==undefined?2:1)}:{kind:'input',...x}),...sources.map(x=>({kind:'input',...x})),...implied.clocks.map(c=>clockEdge(c,tickMs,0,true,null)).filter(Boolean)]
         .sort((x,y)=>cmpList([x.at,x.entity,x.point,x.channel],[y.at,y.entity,y.point,y.channel]))
     };
+    if(Object.keys(functions).length)FUNCTIONS.set(run,functions);
     appendEntry(run,'start',{replayKey:clone(replayKey),budget});
+    // An effects ledger handed in is recorded right after start, so a replay starts from the same one.
+    if(o.effects!==undefined)appendEntry(run,'effects',{effects:clone(o.effects)});
     for(const input of inputs)appendEntry(run,'input',clone(input));
     return {ok:true,run};
   }
@@ -1212,24 +1313,146 @@
       }
       if(d.receipt)prev=messageRecord(run,ctx,{entity,point,observer:`rule:${flow.ref}`,rule:'receipt',inputs:[prev],message,principal,observable:'receipt'});
     }
+    // A card with config.behavior.human parks the message for a person (park@1): it waits as
+    // p-<message id> in the run's parked set until a resume names it (src/07-graph-core.js:422-425).
+    const park=component.behavior?.park;
+    if(park){
+      const parkId=behaviorPattern(run,park).parkId(message);
+      const id=messageRecord(run,ctx,{entity,point,observer:`rule:${park.ref}`,rule:park.ref,inputs:[prev],message,principal,hop:{event:'parked',parkId}});
+      const held={id:parkId,entity,point,messageId:message.id,message:copy(message),principal:principal??null,via:via??null,at:ctx.t,prompt:park.prompt,from:id};
+      put(run.parked,ctx.undoParked,parkId,held);ctx.fresh.push(held);
+      return;
+    }
     return continueAt(run,ctx,entity,point,message,principal,via,prev);
   }
-  // After intake (the graph core's continueAt): a flow card naming a handler refuses, since a run has
-  // no handler registry (the graph core's answer with no handlers registered); a passive card absorbs
-  // the message; otherwise it leaves by every carried leg of the component but `via` whose Wire
-  // accepts its channel, one child per leg (<id>.<n>, n in leg order), or by the legs the card's flow
-  // pattern chooses among those; with no such leg it is delivered, unless legs exist and all refuse
-  // its channel, when it is refused, never dropped. A leg that crosses a plane is checked under the
-  // message's principal, the crossing op then the Wire's own operation (src/07-graph-core.js send,
-  // 283-297): refused writes a hop refused record with the graph core's reason and that leg is not
-  // taken; admitted writes a crossed hop first.
+  // A behaviour's pattern, through the definition the card's binding names.
+  const behaviorPattern=(run,b)=>pattern(run.definitions[b.ref].pattern);
+  // After intake (the graph core's continueAt, src/07-graph-core.js:427-454 at 7b939e3): effect
+  // mediation, then the handler, then the flow policy. A flow card naming a handler with no handler
+  // behaviour bound (no core.flow pack defines flow.handler@1) refuses `no handler registered`; a
+  // passive card absorbs the message; otherwise forwardAt.
   function continueAt(run,ctx,entity,point,message,principal,via,from){
-    const component=run.components[entity]||{},flow=component.flow||null,p=flow?pattern(flow.pattern):null;
+    const component=run.components[entity]||{},flow=component.flow||null,b=component.behavior||{};
+    if(b.effect)return effectAt(run,ctx,entity,point,message,principal,via,from);
+    if(b.handler)return handlerAt(run,ctx,entity,point,message,principal,via,from);
     const observer=flow?`rule:${flow.ref}`:null;
     const end=(event,reason)=>{const id=messageRecord(run,ctx,{entity,point,observer:observer||'engine:message',rule:flow?flow.ref:event,inputs:[from],message,principal,hop:reason?{event,reason}:{event}});if(flow)stateCause(ctx,entity,id);return id};
     if(flow&&flow.settings.handler)return end('refused',`no handler registered: ${flow.settings.handler}`);
     if(component.passive)return end('absorbed');
-    const legs=(indexOf(run).legs.get(entity)||[]).filter(leg=>leg.wire!==via);
+    return forwardAt(run,ctx,entity,point,message,principal,via,from,null);
+  }
+  // A record about a message at a behaviour (observer and rule its definition), its id.
+  function behaviorRecord(run,ctx,entity,point,ref,message,principal,from,hop){
+    const id=messageRecord(run,ctx,{entity,point,observer:`rule:${ref}`,rule:ref,inputs:[from],message,principal,hop});
+    if(run.components[entity]?.flow)stateCause(ctx,entity,id);
+    return id;
+  }
+  // The handler's answer for this message (handler@1): {missing}, {error}, or {result}. A function's
+  // answer is read from the ledger in a replay (never called), else from an answer held from a
+  // refused tick, else the function is called; each is appended as a result entry. A declarative
+  // handler is evaluated. An answer that is not JSON or carries a fraction is a refusal.
+  function handlerAnswer(run,ctx,entity,message,principal,name){
+    const recordedKey=e=>e.body.tick===ctx.t&&e.body.entity===entity&&e.body.messageId===message.id;
+    const asResult=body=>body.error!==undefined?{error:body.error}:{result:body.result};
+    if(run.replayResults){
+      const i=run.replayResults.findIndex(recordedKey);
+      if(i>=0){const body=copy(run.replayResults[i].body);run.replayResults.splice(i,1);ctx.results.push(body);return asResult(body)}
+    }
+    const fn=FUNCTIONS.get(run)?.[name];
+    if(typeof fn==='function'){
+      if(run.replayResults){ctx.diverged={code:'REPLAY_DIVERGED',entry:null,message:`no result is recorded for handler ${name} at ${entity}, message ${message.id}, tick ${ctx.t}; a replay never calls a function`};return {error:'not recorded'}}
+      const key=`${ctx.t}\u0000${entity}\u0000${message.id}`,held=HELD.get(run);
+      let body=held&&held.has(key)?held.get(key):null;
+      if(!body){
+        body={tick:ctx.t,entity,messageId:message.id};
+        try{body.result=takeAnswer(name,fn(copy({...message,principal:principal??null}),{node:entity,tick:ctx.t,ms:ctx.t*run.tickMs}))}
+        catch(e){body.error=String(e?.message||e)}
+      }
+      ctx.results.push(body);ctx.called.set(key,body);
+      return asResult(body);
+    }
+    const spec=own(run.handlers||{},name)?run.handlers[name]:undefined;
+    if(spec===undefined)return {missing:true};
+    const p=pattern(run.definitions[run.components[entity].behavior.handler.ref].pattern);
+    return {result:takeAnswer(name,p.evaluate(spec,{...message,principal:principal??null}))};
+  }
+  function takeAnswer(name,answer){
+    let value;
+    try{value=JSON.parse(JSON.stringify(answer===undefined?null:answer))}catch(_){return {refuse:`handler ${name} answered with a value that is not JSON`}}
+    const fraction=firstFraction(value,'result');
+    return fraction?{refuse:`handler ${name} ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`}:value;
+  }
+  // Runs the card's handler (the graph core's runHandler, 363-372): {refused}, {absorbed}, {error}
+  // or {result}; a refusal or an absorb is recorded here, an error and a result by the caller.
+  function runHandler(run,ctx,entity,point,message,principal,from){
+    const h=run.components[entity].behavior.handler;
+    const a=handlerAnswer(run,ctx,entity,message,principal,h.name);
+    if(a.missing){behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'refused',reason:`no handler registered: ${h.name}`});return {refused:true}}
+    if(a.error!==undefined)return {error:a.error};
+    const r=a.result;
+    if(r==null||r.absorb){behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'absorbed'});return {absorbed:true}}
+    if(r.refuse){behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'refused',reason:String(r.refuse)});return {refused:true}}
+    return {result:r};
+  }
+  // handler@1 at a card with no effect: an error refuses `handler <name> failed: <error>`; a service
+  // gate judges {pass: false}; otherwise the outputs go on (emitOutputs).
+  function handlerAt(run,ctx,entity,point,message,principal,via,from){
+    const component=run.components[entity],h=component.behavior.handler;
+    const out=runHandler(run,ctx,entity,point,message,principal,from);
+    if(out.error!==undefined)return behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'refused',reason:`handler ${h.name} failed: ${out.error}`});
+    if(!out.result)return;
+    const flow=component.flow,judged=flow&&!Array.isArray(out.result)?pattern(flow.pattern).judge?.(flow.parameters,out.result):null;
+    if(judged)return behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'refused',reason:judged.refuse});
+    return emitOutputs(run,ctx,entity,point,message,principal,via,from,out.result,h.ref,null);
+  }
+  // The graph core's emitOutputs (353-361): a list fans out, one child per output, <id>.h<i>, with
+  // the output's channel and payload (else the message's), forwarded by the output's port when it
+  // names one; an empty list absorbs the message. `handled` carries the effect key at an effect site.
+  function emitOutputs(run,ctx,entity,point,message,principal,via,from,result,ref,effectKey){
+    const outs=Array.isArray(result)?result:[result];
+    if(!outs.length)return behaviorRecord(run,ctx,entity,point,ref,message,principal,from,{event:'absorbed'});
+    const handled=behaviorRecord(run,ctx,entity,point,ref,message,principal,from,{event:'handled',...(effectKey?{effectKey}:{})});
+    outs.forEach((o,i)=>{
+      if(!isObject(o))return;
+      const child={id:`${message.id}.h${i}`,root:message.root,parent:message.id,channel:o.channel!==undefined?o.channel:message.channel,payload:o.payload!==undefined?copy(o.payload):copy(message.payload),origin:message.origin};
+      forwardAt(run,ctx,entity,point,child,principal,via,handled,typeof o.port==='string'?o.port:null);
+    });
+  }
+  // effect@1 (429-444): the effect key from the message; a confirmed effect is not sent again (the
+  // message ends `replayed`); an ambiguous one refuses until reconciled; otherwise the attempt is
+  // entered in the run's effects ledger and the handler runs: an error leaves the effect ambiguous,
+  // a refusal or an absorb removes the attempt, a result confirms it and its outputs go on.
+  function effectAt(run,ctx,entity,point,message,principal,via,from){
+    const component=run.components[entity],e=component.behavior.effect,h=component.behavior.handler;
+    const id=behaviorPattern(run,e).identity(e,entity,{...message,principal:principal??null});
+    if(id.refuse)return behaviorRecord(run,ctx,entity,point,e.ref,message,principal,from,{event:'refused',reason:id.refuse});
+    const ek=id.key,prior=run.effects[ek];
+    if(prior&&prior.status==='confirmed')return behaviorRecord(run,ctx,entity,point,e.ref,message,principal,from,{event:'replayed',effectKey:ek});
+    if(prior&&prior.status==='ambiguous')return behaviorRecord(run,ctx,entity,point,e.ref,message,principal,from,{event:'refused',reason:`effect ${ek} is ambiguous: reconcile before retrying`});
+    const attempt={key:ek,node:entity,status:'attempted',at:ctx.t,messageId:message.id};
+    put(run.effects,ctx.undoEffects,ek,attempt);
+    const out=h?runHandler(run,ctx,entity,point,message,principal,from):{result:{payload:copy(message.payload)}};
+    if(out.error!==undefined){
+      put(run.effects,ctx.undoEffects,ek,{...attempt,status:'ambiguous',error:out.error});
+      return behaviorRecord(run,ctx,entity,point,e.ref,message,principal,from,{event:'ambiguous',effectKey:ek,reason:out.error});
+    }
+    if(out.refused||out.absorbed){drop(run.effects,ctx.undoEffects,ek);return}
+    put(run.effects,ctx.undoEffects,ek,{...attempt,status:'confirmed',confirmedAt:ctx.t,result:copy(out.result)});
+    return emitOutputs(run,ctx,entity,point,message,principal,via,from,out.result,e.ref,ek);
+  }
+  // The flow policy (the graph core's forward): the message leaves by every carried leg of the
+  // component but `via` (only those from `port` when an output names one) whose Wire accepts its
+  // channel, one child per leg (<id>.<n>, n in leg order), or by the legs the card's flow pattern
+  // chooses among those; with no such leg it is delivered, unless legs exist and all refuse its
+  // channel, when it is refused, never dropped. A leg that crosses a plane is checked under the
+  // message's principal, the crossing op then the Wire's own operation (src/07-graph-core.js send,
+  // 283-297): refused writes a hop refused record with the graph core's reason and that leg is not
+  // taken; admitted writes a crossed hop first.
+  function forwardAt(run,ctx,entity,point,message,principal,via,from,port){
+    const component=run.components[entity]||{},flow=component.flow||null,p=flow?pattern(flow.pattern):null;
+    const observer=flow?`rule:${flow.ref}`:null;
+    const end=(event,reason)=>{const id=messageRecord(run,ctx,{entity,point,observer:observer||'engine:message',rule:flow?flow.ref:event,inputs:[from],message,principal,hop:reason?{event,reason}:{event}});if(flow)stateCause(ctx,entity,id);return id};
+    const legs=(indexOf(run).legs.get(entity)||[]).filter(leg=>leg.wire!==via&&(port===null||leg.point===port));
     const open=legs.filter(leg=>!message.channel||!leg.accepts||leg.accepts.includes(message.channel));
     if(!open.length)return legs.length?end('refused',`no end accepts channel ${message.channel}`):end('delivered');
     let chosen=open.map((_,n)=>n);
@@ -1269,6 +1492,18 @@
     stateCause(ctx,entity,id);
     continueAt(run,ctx,entity,it.point,it.message,it.principal,it.via,id);
   }
+  // A resume taken up in the tick after it was given (the graph core's resume, 576-584): approve
+  // continues at the card (effect, handler, flow policy) with an object payload laid over an object
+  // message payload (any other payload replaces it); any other decision refuses the message with the
+  // reason given or `rejected at <label or id>`.
+  function resumeAt(run,ctx,item){
+    const park=run.components[item.entity].behavior.park,p=item.park;
+    if(item.decision!=='approve')return behaviorRecord(run,ctx,item.entity,item.point,park.ref,p.message,p.principal,p.from,{event:'refused',reason:item.reason?String(item.reason):`rejected at ${park.label}`});
+    const message=copy(p.message);
+    if(item.payload!==undefined)message.payload=isObject(message.payload)&&isObject(item.payload)?{...message.payload,...copy(item.payload)}:copy(item.payload);
+    const id=behaviorRecord(run,ctx,item.entity,item.point,park.ref,message,p.principal,p.from,{event:'resumed'});
+    continueAt(run,ctx,item.entity,item.point,message,p.principal,p.via,id);
+  }
   // An edge that starts work (src/07-graph-core.js:469-473 at 7b939e3): a level change on a card whose
   // config.signal.on matches its polarity starts a message on config.signal.channel, payload {node,
   // polarity, from, to, at} (at in ms; from and to 0/1 on a binary card, levels on a continuous one),
@@ -1287,7 +1522,10 @@
     const message={id,root:id,parent:null,channel:edge.channel,payload:{node:entity,polarity,from:scale(from),to:scale(to),at:ctx.t*run.tickMs},origin:entity};
     const principal=component.principal??null;
     const rid=messageRecord(run,ctx,{entity,point:edge.point,observer:'rule:edge',rule:'edge',inputs:[record],message,principal,hop:{event:'edge'}});
-    messageAt(run,ctx,entity,edge.point,message,principal,null,rid);
+    // An edge message goes on from the card's own continueAt, as the graph core's setLevel hands it
+    // (src/07-graph-core.js:469-473 at 7b939e3): a card never takes its own edge message through its
+    // own intake (control, asserted set or toggle, flow intake, park).
+    continueAt(run,ctx,entity,edge.point,message,principal,null,rid);
   }
   // Update phase on the message channel of one port: injects start their messages; arrivals are put in
   // merge order (the declared Paths first, the rest a draw recorded like any merge) and every one is
@@ -1295,8 +1533,9 @@
   // tick is the level channel's queue merge only.)
   function messagePort(run,ctx,g){
     ctx.delivery=0;
-    // A buffer's releases due now come first, then injects, then arrivals.
+    // A buffer's releases due now come first, then resumes in ledger order, then injects, then arrivals.
     for(let i=0;i<g.releases.length;i++){ctx.delivery++;releaseAt(run,ctx,g.entity)}
+    for(const item of g.resumes.slice().sort((x,y)=>x.seq-y.seq)){ctx.delivery++;resumeAt(run,ctx,item)}
     for(const input of g.injects.slice().sort((x,y)=>x.seq-y.seq)){
       ctx.delivery++;
       const id=`m-${input.seq}`,message={id,root:id,parent:null,channel:input.value.channel,payload:copy(input.value.payload),origin:g.entity};
@@ -1438,6 +1677,7 @@
   // tick, so a refused tick is undone in place (a key the tick added is removed again).
   const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
   function put(obj,undo,key,value){if(!undo.has(key))undo.set(key,own(obj,key)?[true,obj[key]]:[false]);obj[key]=value}
+  function drop(obj,undo,key){if(!undo.has(key))undo.set(key,own(obj,key)?[true,obj[key]]:[false]);delete obj[key]}
   function undo(obj,log){for(const [key,[had,value]] of log)if(had)obj[key]=value;else delete obj[key]}
   // A record never precedes its cause: the key-sorted records of one tick, reordered only as far as
   // needed so that every record comes after the records of this tick it names in provenance.inputs
@@ -1463,10 +1703,10 @@
       if(ctx.round>0){ctx.changed=new Set();ctx.evaluated=new Map()}
       const due=run.pending.filter(x=>x.at===t);run.pending=run.pending.filter(x=>x.at!==t);
       const groups=new Map();
-      const group=(entity,point,channel)=>{const key=portKey(entity,point,channel);if(!groups.has(key))groups.set(key,{entity,point,channel,input:null,output:null,arrivals:[],injects:[],releases:[]});return groups.get(key)};
+      const group=(entity,point,channel)=>{const key=portKey(entity,point,channel);if(!groups.has(key))groups.set(key,{entity,point,channel,input:null,output:null,arrivals:[],injects:[],releases:[],resumes:[]});return groups.get(key)};
       for(const item of due){
         const g=group(item.entity,item.point,item.channel);ctx.cost++;
-        if(item.channel===MESSAGE)(item.kind==='input'?g.injects:item.kind==='release'?g.releases:g.arrivals).push(item);
+        if(item.channel===MESSAGE)(item.kind==='input'?g.injects:item.kind==='release'?g.releases:item.kind==='resume'?g.resumes:g.arrivals).push(item);
         else if(item.kind==='input'||item.kind==='clock'||item.kind==='assert')g.input=item;else if(item.kind==='output')g.output=item;else g.arrivals.push(item);
         if(item.kind==='clock'){
           const source=run.clocks[portKey(item.entity,item.point,item.channel)];
@@ -1534,20 +1774,79 @@
     if(t===null)return {ok:true,tick:null,records:[]};
     const before={pending:run.pending,sequence:run.sequence};
     const ctx={t,round:0,delivery:0,delivered:new Set(),cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null,fresh:[],written:[],evaluated:new Map(),undoSignal:new Map(),undoLast:new Map(),undoPrincipal:new Map(),queueUndo:new Map(),
-      undoState:new Map(),stateTouched:new Map(),stateRecords:[],edges:[]};
+      undoState:new Map(),stateTouched:new Map(),stateRecords:[],edges:[],undoEffects:new Map(),undoParked:new Map(),results:[],called:new Map()};
     if(!isObject(run.deviceState))run.deviceState={};
+    if(!isObject(run.effects))run.effects={};
+    if(!isObject(run.parked))run.parked={};
+    const replayResults=run.replayResults?run.replayResults.slice():null;
     const result=processTick(run,t,ctx);
     const refused=!result.ok?result:run.spent+result.cost>run.budget?{ok:false,code:'BUDGET_SPENT',tick:t,left:null,message:`processing tick ${t} takes ${result.cost} events; ${run.budget-run.spent} of the budget ${run.budget} remain`}:null;
     if(refused){
       undo(run.signal,ctx.undoSignal);undo(run.lastRecord,ctx.undoLast);undo(run.levelPrincipal,ctx.undoPrincipal);undo(run.deviceState,ctx.undoState);Object.assign(run,before);
+      undo(run.effects,ctx.undoEffects);undo(run.parked,ctx.undoParked);if(replayResults)run.replayResults=replayResults;
       undoQueues(run,ctx.queueUndo);
+      // A function already called keeps its answer for the retry.
+      if(ctx.called.size){const held=HELD.get(run)||new Map();for(const [k,v] of ctx.called)held.set(k,v);HELD.set(run,held)}
       if(refused.code==='BUDGET_SPENT')refused.left=queuedCount(run);
       return refused;
     }
+    if(ctx.called.size&&HELD.has(run)){const held=HELD.get(run);for(const k of ctx.called.keys())held.delete(k)}
     for(const draw of result.draws)appendEntry(run,'draw',draw);
+    // Each function handler's answer, in the order the tick reached them.
+    for(const body of ctx.results)appendEntry(run,'result',body);
     for(const record of result.records)run.records.push(record);
     run.tick=t;run.spent+=result.cost;
     return {ok:true,tick:t,records:copy(result.records)};
+  }
+  // --- Mid-run ledger entries. Each is appended with `after`, the tick processed before it was
+  // given (null before any), and a replay applies it at that same point.
+  const runRefusal=run=>!isObject(run)||run.runtimeVersion!==RUNTIME_VERSION?{ok:false,code:'RUN_INVALID',message:`not a ${RUNTIME_VERSION} run`}:null;
+  const nextAt=run=>run.tick===null?0:run.tick+1;
+  // addInput(run, input): an input given mid-run, checked as startRun checks one, scheduled at
+  // max(input.at, the next tick); a message input's message is m-<seq> of its ledger entry.
+  function addInput(run,input){
+    const bad=runRefusal(run);if(bad)return bad;
+    const checked=checkInput(run.doc,null,input,run.ledger.length);
+    if(!checked.ok)return checked;
+    const x=checked.input,at=Math.max(x.at,nextAt(run));
+    if(x.channel!==MESSAGE){
+      const bound=run.components[x.entity]?.definition;
+      if(bound&&(run.definitions[bound]?.parameters?.outputs||[]).includes(x.point))return inputRefusal(`input ${run.ledger.length}: ${x.entity}.${x.point} is an output of ${bound}; a device's output is the device's`);
+      if(run.pending.some(p=>p.kind==='input'&&p.at===at&&p.entity===x.entity&&p.point===x.point&&p.channel===x.channel))return inputRefusal(`input ${run.ledger.length}: a second input at (${x.entity}, ${x.point}, ${x.channel}, ${at})`);
+    }
+    const seq=run.ledger.length;
+    appendEntry(run,'input',{...clone(x),after:run.tick});
+    run.pending.push(x.channel===MESSAGE?{kind:'input',...clone(x),at,seq}:{kind:'input',...x,at});
+    return {ok:true,seq,at};
+  }
+  // resume(run, parkId, {decision, payload, reason}): the person's answer to a parked message, taken
+  // up in the next tick (resumeAt). UNKNOWN_PARK when nothing is parked under that id.
+  function resume(run,parkId,options){
+    const bad=runRefusal(run);if(bad)return bad;
+    const o=isObject(options)?options:{},p=isObject(run.parked)?run.parked[parkId]:undefined;
+    if(!p)return {ok:false,code:'UNKNOWN_PARK',message:`Nothing parked as ${parkId}`};
+    const decision=o.decision===undefined?'approve':String(o.decision);
+    if(o.payload!==undefined){const f=fractionRefusal(o.payload,'payload');if(f)return f}
+    const body={after:run.tick,parkId,decision,...(o.payload!==undefined?{payload:clone(o.payload)}:{}),...(o.reason!==undefined&&o.reason!==null?{reason:String(o.reason)}:{})};
+    const seq=run.ledger.length;
+    appendEntry(run,'resume',body);
+    delete run.parked[parkId];
+    run.pending.push({kind:'resume',at:nextAt(run),entity:p.entity,point:p.point,channel:MESSAGE,seq,parkId,decision,park:copy(p),...(body.payload!==undefined?{payload:clone(body.payload)}:{}),...(body.reason!==undefined?{reason:body.reason}:{})});
+    return {ok:true,decision};
+  }
+  // reconcile(run, effectKey, {confirmed, result}): the answer to an ambiguous effect. Confirmed, the
+  // effect is confirmed with the result and is not sent again; not confirmed, it is cleared and the
+  // next attempt sends. NOT_AMBIGUOUS when the effect is not awaiting reconciliation.
+  function reconcile(run,effectKey,options){
+    const bad=runRefusal(run);if(bad)return bad;
+    const o=isObject(options)?options:{},e=isObject(run.effects)?run.effects[effectKey]:undefined;
+    if(!e||e.status!=='ambiguous')return {ok:false,code:'NOT_AMBIGUOUS',message:`Effect ${effectKey} is not awaiting reconciliation`};
+    const confirmed=!!o.confirmed,result=o.result===undefined?null:o.result;
+    if(confirmed){const f=fractionRefusal(result,'result');if(f)return f}
+    appendEntry(run,'reconcile',{after:run.tick,effectKey,confirmed,...(confirmed?{result:clone(result)}:{})});
+    if(confirmed)run.effects[effectKey]={...e,status:'confirmed',confirmedAt:run.tick,result:clone(result),reconciled:true};
+    else delete run.effects[effectKey];
+    return {ok:true,effectKey,status:confirmed?'confirmed':'cleared'};
   }
   function traceOf(run){
     return {format:TRACE_FORMAT,replayKey:copy(run.ledger[0].body.replayKey),documentRevision:run.doc.revision,budget:run.budget,through:run.tick,head:run.ledger[run.ledger.length-1].hash,ledger:copy(run.ledger),records:copy(run.records)};
@@ -1583,6 +1882,8 @@
         if(!bad&&e.seq!==i)bad=`seq must be ${i}`;
         if(!bad&&!LEDGER_KINDS.includes(e.kind))bad=`kind must be one of ${LEDGER_KINDS.join(', ')}`;
         if(!bad&&(i===0)!==(e.kind==='start'))bad=i===0?'the first entry must be start':'only the first entry is start';
+        if(!bad&&e.kind==='effects'&&i!==1)bad='an effects entry is only the entry right after start';
+        if(!bad&&['resume','reconcile'].includes(e.kind)&&!(isObject(e.body)&&own(e.body,'after')))bad=`a ${e.kind} entry carries after`;
         if(!bad&&e.prev!==running)bad='prev does not link to the entry before';
         let hash=null;
         if(!bad){try{hash=ledgerHash(e.seq,e.kind,e.body,e.prev)}catch(_){bad='body is not canonical JSON'}}
@@ -1606,20 +1907,39 @@
     const trace=o.trace,checked=validateTrace(trace);
     if(!checked.ok)return {ok:false,code:'TRACE_INVALID',entry:checked.entry,errors:checked.errors,message:checked.entry===null?checked.errors[0]:`the trace fails at ledger entry ${checked.entry}: ${checked.errors[0]}`};
     const key=trace.replayKey;
-    const started=startRun({doc:o.doc,packs:o.packs,inputs:key.inputs,seed:key.seed,budget:trace.budget,tickMs:key.tickMs});
+    // The declarative handlers are the caller's to give again (o.handlers); a function's answers are
+    // read from the trace's result entries and the function is never called.
+    const handed=trace.ledger.find(e=>e.kind==='effects');
+    const started=startRun({doc:o.doc,packs:o.packs,inputs:key.inputs,seed:key.seed,budget:trace.budget,tickMs:key.tickMs,handlers:o.handlers,...(handed?{effects:handed.body.effects}:{})});
     if(!started.ok)return started;
     const run=started.run,mine=run.ledger[0].body.replayKey;
     const fields=REPLAY_KEY_FIELDS.filter(field=>(mine[field]!==undefined||key[field]!==undefined)&&!same(mine[field],key[field]));
     if(fields.length)return {ok:false,code:'REPLAY_KEY_MISMATCH',fields,message:`the replay key differs in ${fields.join(', ')}`};
     run.replayDraws=trace.ledger.filter(e=>e.kind==='draw').map(e=>({seq:e.seq,body:e.body}));
+    run.replayResults=trace.ledger.filter(e=>e.kind==='result').map(e=>({seq:e.seq,body:e.body}));
+    // Mid-run entries (an input with `after`, a resume, a reconcile) are applied where they were
+    // given: after the tick they name, before the next one is processed.
+    const mid=trace.ledger.filter(e=>MID_RUN_KINDS.includes(e.kind)&&isObject(e.body)&&own(e.body,'after'));
+    let cursor=0;
+    const apply=()=>{
+      while(cursor<mid.length&&mid[cursor].body.after===run.tick){
+        const e=mid[cursor++],{after,...body}=e.body;
+        if(run.ledger.length!==e.seq)return {ok:false,code:'REPLAY_DIVERGED',entry:e.seq,message:`ledger entry ${e.seq} (${e.kind}) is applied at entry ${run.ledger.length} of the recomputed run`};
+        const r=e.kind==='input'?addInput(run,body):e.kind==='resume'?resume(run,body.parkId,body):reconcile(run,body.effectKey,body);
+        if(!r.ok)return {ok:false,code:'REPLAY_DIVERGED',entry:e.seq,message:`ledger entry ${e.seq} (${e.kind}) does not apply to the recomputed run: ${r.code} ${r.message}`};
+      }
+      return null;
+    };
+    let failed=apply();if(failed)return failed;
     // Exactly the ticks up to `through`.
     while(trace.through!==null){
       const next=nextTick(run);
       if(next===null||next>trace.through)break;
       const r=step(run);
       if(!r.ok){if(r.code==='BUDGET_SPENT')return {ok:false,code:'REPLAY_DIVERGED',tick:r.tick,message:`the trace processed tick ${r.tick}, which the recomputed run cannot within the budget ${trace.budget}`};return r}
+      failed=apply();if(failed)return failed;
     }
-    run.replayDraws=null;
+    run.replayDraws=null;run.replayResults=null;
     if(run.tick!==trace.through)return {ok:false,code:'REPLAY_DIVERGED',tick:run.tick,message:`the recomputed run ends at tick ${run.tick}, the trace at ${trace.through}`};
     const n=Math.max(run.ledger.length,trace.ledger.length);
     for(let i=0;i<n;i++)if(Canonical.canonicalize(run.ledger[i]??null)!==Canonical.canonicalize(trace.ledger[i]??null))return {ok:false,code:'REPLAY_DIVERGED',entry:i,message:`ledger entry ${i} differs from the recomputed run`};
@@ -1641,7 +1961,15 @@
     return Canonical.sha256Hex(Canonical.canonicalize({signal,queues:q,pending:p,...(dev!=='{}'?{device:dev}:{})}));
   }
   const trueKeys=signal=>Object.keys(signal).filter(k=>signal[k]===true).sort();
-  const deviceText=run=>Canonical.canonicalize(stripFrom(isObject(run.deviceState)?run.deviceState:{}));
+  // The run's effects ledger and parked messages determine the future too: hashed with the
+  // device state when the run holds any (a run without them hashes exactly as before).
+  const filled=o=>isObject(o)&&Object.keys(o).length>0;
+  const hasState=run=>filled(run.deviceState)||filled(run.effects)||filled(run.parked);
+  const deviceText=run=>{
+    const d=Canonical.canonicalize(stripFrom(isObject(run.deviceState)?run.deviceState:{}));
+    if(!filled(run.effects)&&!filled(run.parked))return d;
+    return Canonical.canonicalize({device:d,effects:filled(run.effects)?run.effects:{},parked:filled(run.parked)?stripFrom(run.parked):{}});
+  };
   function futureHash(run){return stateHash(run.tick,trueKeys(run.signal),Object.keys(run.queues).sort().map(k=>[k,run.queues[k].next,queueItems(run.queues[k])]),run.pending,deviceText(run))}
   // A cheap 32-bit code (FNV-1a) of a string, and of a pending or queue item's future-determining
   // part, cached per item (items are never changed once scheduled). Codes only decide when the full
@@ -1707,7 +2035,7 @@
       return entry.hash;
     };
     const visit=t=>{
-      dev=isObject(run.deviceState)&&Object.keys(run.deviceState).length?deviceText(run):'{}';
+      dev=hasState(run)?deviceText(run):'{}';
       const key=summary(t),list=seen.get(key),entry=snapshot(t);
       if(list){
         entry.hash=futureHash(run);
@@ -1844,5 +2172,5 @@
     };
   }
 
-  return {RECORD_FORMAT,PACK_FORMAT,RUNTIME_VERSION,TRACE_FORMAT,RUN_RECEIPT_FORMAT,RUN_OPERATIONS,BUDGET_LIMIT,validateRecord,patterns,flowPatterns,flowBindingOf,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument,startRun,step,settle,query,runReceipt,createRunRegistry,traceOf,replay,validateTrace,queueItems};
+  return {RECORD_FORMAT,PACK_FORMAT,RUNTIME_VERSION,TRACE_FORMAT,RUN_RECEIPT_FORMAT,RUN_OPERATIONS,BUDGET_LIMIT,validateRecord,patterns,flowPatterns,flowBindingOf,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument,startRun,addInput,resume,reconcile,behaviorBindingsOf,step,settle,query,runReceipt,createRunRegistry,traceOf,replay,validateTrace,queueItems};
 });

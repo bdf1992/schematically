@@ -23,10 +23,14 @@ STATIC=[
     'tests/state_space_message_qa.py',
     'tests/state_space_acl_qa.py',
     'tests/state_space_flow_qa.py',
+    'tests/state_space_effects_qa.py',
+    'tests/state_space_dev_parity_qa.py',
+    'tests/sim_parity_qa.py',
     'tests/state_space_perf_qa.py',
     'tests/file_load_wire_canvas_qa.py',
     'tests/desktop_shell_qa.py',
     'tests/revision_guard_qa.py',
+    'tests/mcp_surface_qa.py',
 ]
 BROWSER=[
     'tests/attachment_point_refactor_qa.py',
@@ -82,6 +86,7 @@ BROWSER=[
     'tests/notation_qa.py',
     'tests/work_engine_notation_qa.py',
     'tests/wire_crossing_qa.py',
+    'tests/route_clear_of_cards_qa.py',
     'tests/typography_qa.py',
     'tests/legend_qa.py',
     'tests/status_waits_on_qa.py',
@@ -90,6 +95,7 @@ BROWSER=[
     'tests/appearance_history_qa.py',
     'tests/appearance_color_scheme_qa.py',
     'tests/agent_api_mcp_golden_qa.py',
+    'tests/timescale_policy_qa.py',
     'tests/agent_apply_guide_qa.py',
     'tests/state_space_surfaces_qa.py',
     'tests/golden_rendered_text_qa.py',
@@ -102,6 +108,7 @@ BROWSER=[
     'tests/wire_label_clearance_qa.py',
     'tests/drag_lifecycle_stress_qa.py',
     'tests/performance_regression_qa.py',
+    'tests/live_link_qa.py',
 ]
 TAIL=[
     'tests/mutation_watch.py',
