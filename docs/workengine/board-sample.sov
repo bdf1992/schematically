@@ -2244,29 +2244,37 @@
     "source": "Workstation Work Engine gap map, 2026-09-27",
     "statuses": [
      {
+      "glyph": "✓",
       "id": "exists",
       "meaning": "Built and in use today.",
       "outline": "solid",
-      "title": "Exists"
+      "title": "Exists",
+      "tone": "safe"
      },
      {
+      "glyph": "◷",
       "id": "partial",
       "meaning": "Built in part; some of what it must do is still missing.",
       "outline": "solid",
-      "title": "Partial"
+      "title": "Partial",
+      "tone": "alert"
      },
      {
+      "glyph": "✕",
       "id": "missing",
       "meaning": "Needed by the work engine and not built yet.",
       "opacity": 0.55,
       "outline": "dashed",
-      "title": "Missing"
+      "title": "Missing",
+      "tone": "danger"
      },
      {
+      "glyph": "◷",
       "id": "proposed",
       "meaning": "Planned work that nobody has started.",
       "outline": "dashed",
-      "title": "Proposed"
+      "title": "Proposed",
+      "tone": "alert"
      }
     ],
     "version": 1

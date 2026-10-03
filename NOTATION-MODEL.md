@@ -233,16 +233,24 @@ The four work items share the sheet, so they read as one kind, and differ by the
 8 are those slots, and the legend names them.
 
 **Statuses.** The notation declares, in order, the values a document drawn in it may give
-`config.status`. Each is `{id, title, meaning, outline: solid | dashed, opacity}`: `outline` is
-how the card's border is drawn, and `opacity`, when present, is how strongly the card is drawn.
+`config.status`. Each is `{id, title, meaning, outline: solid | dashed, opacity, tone: safe |
+alert | danger, glyph}`: `outline` is how the card's border is drawn, `opacity`, when present, is
+how strongly the card is drawn, `tone` is the status colour its chip is filled with, and `glyph` is
+one character drawn before the title, so colour is never the only cue (WCAG 2.2 SC 1.4.1).
 A dashed outline marks a thing that is not built.
 
-| Id | Title | Outline | Opacity | Meaning |
-| --- | --- | --- | --- | --- |
-| `exists` | Exists | solid | | Built and in use today. |
-| `partial` | Partial | solid | | Built in part; some of what it must do is still missing. |
-| `missing` | Missing | dashed | 0.55 | Needed by the work engine and not built yet. |
-| `proposed` | Proposed | dashed | | Planned work that nobody has started. |
+| Id | Title | Outline | Opacity | Tone | Glyph | Meaning |
+| --- | --- | --- | --- | --- | --- | --- |
+| `exists` | Exists | solid | | safe | ✓ | Built and in use today. |
+| `partial` | Partial | solid | | alert | ◷ | Built in part; some of what it must do is still missing. |
+| `missing` | Missing | dashed | 0.55 | danger | ✕ | Needed by the work engine and not built yet. |
+| `proposed` | Proposed | dashed | | alert | ◷ | Planned work that nobody has started. |
+
+A status that declares a tone draws its chip as a solid pill filled with that status tone
+(`statusTone` in `src/00-state.js`: safe #24AB7E, alert #F0BB3B, danger #C4422C, the same in every
+palette), holding the glyph, a space and the title in #141414 or #FFFFFF, whichever has the higher
+contrast on the fill. A status that declares no tone draws its chip as before: an outline in the
+card's colour over a faint fill of it, holding the title alone.
 
 **A status on a card or a wire.** A Component or a Wire names one of these in `config.status`,
 and lists what it waits on in `config.waitsOn` (people, rules and decisions; DATA-FORMATS.md

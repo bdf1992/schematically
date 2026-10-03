@@ -136,7 +136,7 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .sim-edge{font:800 13px ui-sans-serif,system-ui,sans-serif;animation:sim-edge-fade .7s ease-out forwards}
 .sim-edge.rise{fill:var(--accent-out)}.sim-edge.fall{fill:var(--accent-in)}
 @keyframes sim-edge-fade{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-6px)}}
-.wire-group.level-high .wire{stroke:var(--accent-out)}
+.wire-group.level-high .wire{stroke:var(--wire-lit,var(--accent-out))}
 .sim-waiting-bg{fill:var(--panel);stroke:var(--accent-in);stroke-width:1.4}
 .sim-waiting-text{font:700 10px ui-sans-serif,system-ui,sans-serif;fill:var(--accent-in)}
 .sim-decide circle{fill:var(--canvas-tone);stroke:var(--canvas-muted);stroke-width:1}
