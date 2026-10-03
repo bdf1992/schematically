@@ -457,21 +457,26 @@ function statusTitle(status){return String(status?.title||status?.id||'')}
 function waitsOnList(list){return Array.isArray(list)?list.filter(w=>w&&typeof w==='object').map(w=>String(w.label||'').trim()||`${w.kind} ${w.id}`).join(', '):''}
 const CAPTION_STYLE='font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)';
 function statusInk(){const muted=(getComputedStyle(workspace).getPropertyValue('--muted')||'').trim();return ensureContrast(/^#[0-9a-f]{6}$/i.test(muted)?muted:'#6C6C65',canvasTone(),4.6)}
+// A status chip's ink on a solid tone: near-black or white, whichever has the higher WCAG contrast.
+function statusChipInk(tone){return contrastRatio(tone,'#141414')>=contrastRatio(tone,'#FFFFFF')?'#141414':'#FFFFFF'}
 // A card's status: a chip in its top-right corner, 6 in from both edges, holding the status title in
-// the caption role; a dashed outline and an opacity when the status declares them.
+// the caption role; a dashed outline and an opacity when the status declares them. A status that
+// declares a tone (safe, alert, danger) is a solid pill in that status tone, its glyph before the title.
 function appendComponentStatus(g,n){
   const st=declaredStatus(n);if(!st||componentForm(n).dimension!==2)return;
   // The caption role at its base size: the chip is part of the card and scales with it.
   const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
   const cfg=componentConfig(n),edge=g.style.getPropertyValue('--component-boundary-color').trim()||slotColor(cfg.colorSlot),fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
-  const title=statusTitle(st),ch=Math.round(px*1.5),cw=Math.ceil(title.length*px*.6+px),x=w/2-6-cw,y=-h/2+6;
+  const tone=['safe','alert','danger'].includes(st.tone)?statusTone(st.tone):null,glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'';
+  const title=statusTitle(st),text=glyph?`${glyph} ${title}`:title,ch=Math.round(px*1.5);
+  const cw=tone?Math.ceil(text.length*px*.6+px*1.4):Math.ceil(title.length*px*.6+px),x=w/2-6-cw,y=-h/2+6;
   const chip=document.createElementNS('http://www.w3.org/2000/svg','g');chip.setAttribute('class','status-chip');chip.dataset.status=st.id;
   const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
   r.setAttribute('x',String(x));r.setAttribute('y',String(y));r.setAttribute('width',String(cw));r.setAttribute('height',String(ch));r.setAttribute('rx',String(ch/2));
-  r.setAttribute('style',`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
+  r.setAttribute('style',tone?`fill:${tone};fill-opacity:1;stroke:none`:`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
   const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.dataset.role='caption';
   t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
-  t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${ensureContrast(edge,fill,4.6)};stroke:none;pointer-events:none`);t.textContent=title;chip.appendChild(t);
+  t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${tone?statusChipInk(tone):ensureContrast(edge,fill,4.6)};stroke:none;pointer-events:none`);t.textContent=text;chip.appendChild(t);
   g.appendChild(chip);
   if(st.outline==='dashed'){const body=g.querySelector(':scope > .body');if(body){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}}
   if(typeof st.opacity==='number'&&Number.isFinite(st.opacity))g.style.opacity=String((Number(g.style.opacity)||1)*Number(st.opacity));
