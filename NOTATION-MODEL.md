@@ -124,7 +124,9 @@ has no label.
 **A card's title and subtitle are one block**, laid out at the size they are drawn at (after
 the on-screen clamp, so the block is laid out again when the zoom changes):
 - the title wraps at word breaks to at most two lines within the card's text width
-  (`w - 12 - 2 × section inset`); a line still too long ends in an ellipsis
+  (`w - 12 - 2 × section inset`); a line still too long ends in an ellipsis. A line that is one
+  word, with no break to wrap at, may use the card's full inner width (`w - 8`, section inset
+  ignored) before it is cut
 - the subtitle is one line, cut the same way, and its top sits `space.textGap` (3) under the
   title's last line
 - the block's foot stays where a lone title sits, or sits lower, down to the inner edge, when
@@ -139,7 +141,9 @@ the on-screen clamp, so the block is laid out again when the zoom changes):
   engine and the renderer agree
 - at a screen scale of 0.25 or less, a title that still runs into its glyph is hidden
   (`data-lod="hidden"`)
-- a cut line keeps the full text in a `<title>` child and sets `data-truncated`; the status chip
+- a cut line sets `data-truncated`, and the full title (and subtitle) is the card's tooltip: a
+  `<title class="card-text-full">` on the card's group, never inside the drawn `<text>`, so a
+  text's contents are only what is drawn; the status chip
   does not move, and a waits-on caption follows the block's real foot
 - a title drawn outside its card (outside label mode, under the card) is not held to the card's
   width: it stays on one line, uncut, and only its subtitle's place follows `space.textGap`

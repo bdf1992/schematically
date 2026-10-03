@@ -107,14 +107,16 @@ function appendTerminalMarks(g,n){
 // title's last line. The block's foot stays where the title sat (or, below a glyph or the body, its
 // head does). Inside a card the block keeps clear of the glyph and inside the inner edge; when it
 // cannot, the least important line goes first: the subtitle is hidden (data-lod="hidden"), then the
-// title is cut to one line. A cut keeps the full text in a <title> child and sets data-truncated.
+// title is cut to one line. A cut line sets data-truncated, and the full text goes in a tooltip on
+// the card's group (a <title> child of the .node g), never inside the drawn <text>, so whatever
+// reads a text's contents reads only what is drawn. A line that is one word, with no break to wrap
+// at, may use the card's full inner width (w - 8, section inset ignored) before it is cut.
 // A title drawn outside its card (outside label mode) keeps one line at its own width, uncut, and
 // only its subtitle's place follows space.textGap.
 const SVG_NS='http://www.w3.org/2000/svg';
-function setFittedText(el,lines,x,step,full){
+function setFittedText(el,lines,x,step){
   el.textContent='';
   lines.forEach((line,i)=>{const span=document.createElementNS(SVG_NS,'tspan');span.setAttribute('x',x);span.setAttribute('dy',i?String(step):'0');span.textContent=line;el.appendChild(span)});
-  if(lines.length>1||lines[0]!==full){const title=document.createElementNS(SVG_NS,'title');title.textContent=full;el.appendChild(title)}
 }
 function fitComponentLabels(g,n){
   if(componentForm(n).dimension!==2)return;
@@ -131,8 +133,8 @@ function fitComponentLabels(g,n){
   const outside=t.classList.contains('outside-label'),inCard=!outside&&componentBackdropMode(n)!=='none';
   delete t.dataset.truncated;
   if(u){delete u.dataset.truncated;delete u.dataset.lod;u.style.visibility=''}
-  const fits=(el,s)=>{el.textContent=s;return el.getComputedTextLength()<=max};
-  const cut=(el,s)=>{if(outside||fits(el,s))return s;let c=s;while(c.length>1){c=c.slice(0,-1).trimEnd();if(fits(el,c+'…'))return c+'…'}return '…'};
+  const wide=size.w-8,fits=(el,s,limit=max)=>{el.textContent=s;return el.getComputedTextLength()<=limit};
+  const cut=(el,s)=>{const limit=/\s/.test(s.trim())?max:Math.max(max,wide);if(outside||fits(el,s,limit))return s;let c=s;while(c.length>1){c=c.slice(0,-1).trimEnd();if(fits(el,c+'…',limit))return c+'…'}return '…'};
   const wrap=limit=>{
     if(outside)return [full];
     const lines=[];let cur='';
@@ -151,10 +153,10 @@ function fitComponentLabels(g,n){
   const em=parseFloat(getComputedStyle(t).fontSize)||10;
   const subLine=u&&subFull?cut(u,subFull):null;
   const place=(lines,showSub)=>{
-    setFittedText(t,lines,x,em*1.15,full);t.setAttribute('y','0');
+    setFittedText(t,lines,x,em*1.15);t.setAttribute('y','0');
     const bt=t.getBBox();let top=bt.y,bottom=bt.y+bt.height;
     if(u){
-      setFittedText(u,[subLine??''],x,0,subFull);u.setAttribute('y','0');
+      setFittedText(u,[subLine??''],x,0);u.setAttribute('y','0');
       // A hidden subtitle keeps its place under the title; only a shown one adds to the block.
       const bu=u.getBBox();u.setAttribute('y',String(bottom+gap-bu.y));if(showSub&&subLine!=null)bottom=bottom+gap+bu.height;
     }
@@ -179,6 +181,11 @@ function fitComponentLabels(g,n){
   // Wrapping onto two lines is not a cut; only an ellipsis is.
   if(r.lines.some(l=>l.endsWith('…')))t.dataset.truncated='true';
   if(u&&r.showSub&&subLine!==subFull)u.dataset.truncated='true';
+  // Whatever is cut or hidden is read in full from the card's tooltip.
+  g.querySelector(':scope > title.card-text-full')?.remove();
+  if(t.dataset.truncated||t.dataset.lod||(u&&(u.dataset.truncated||u.dataset.lod))){
+    const tip=document.createElementNS(SVG_NS,'title');tip.setAttribute('class','card-text-full');
+    tip.textContent=subFull?`${full}\n${subFull}`:full;g.insertBefore(tip,g.firstChild);  }
 }
 // The zoom changes the size labels are drawn at, so each card's text block is laid out again on
 // the next frame after it changes, and a waits-on caption follows the block's new foot.

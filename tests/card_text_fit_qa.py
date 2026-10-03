@@ -7,11 +7,14 @@
   the visible subtitle box are apart by space.textGap or more and both sit inside the card body;
   where both cannot fit, the subtitle is hidden and says so (data-lod="hidden").
 - A title that needs three lines draws two, the second ending in an ellipsis, with
-  data-truncated="true" and the full title in its <title>; config.label is unchanged.
+  data-truncated="true" and the full title in the card's tooltip; config.label is unchanged.
 - A title drawn outside its card is one line, uncut, and its subtitle sits textGap under it.
 - At screen scale 0.25 or less a title that runs into its glyph is hidden (data-lod="hidden").
 - A lone title that needs two lines on a 112 x 84 card is drawn whole on two lines in a picture
   (screen scale 1): the glyph shrinks for it (glyphBox, keeping aspect, never below 60%).
+- The full-text tooltip is a <title> on the card's group, never inside the drawn <text>.
+- A one-word title ('Witness' on a default observe card) drawn 15% wider than here, or wider
+  than the text width but within the full inner width (w - 8), is drawn whole.
 """
 from __future__ import annotations
 import sys
@@ -64,7 +67,8 @@ TWO_CARDS = r"""(title)=>{const A=window.SovSchematicAPI;
 READ_TWO = r"""()=>{const read=(id,sel)=>{const g=nodesG.querySelector(`.node[data-id="${id}"]`),t=g.querySelector(sel),u=g.querySelector(':scope > text.component-subtitle');
     const b=t.getBBox(),bu=u?u.getBBox():null;
     return {lines:[...t.querySelectorAll(':scope > tspan')].map(s=>s.textContent),own:[...t.childNodes].filter(c=>c.nodeType===3).map(c=>c.textContent).join(''),
-      truncated:t.dataset.truncated||null,title:t.querySelector(':scope > title')?.textContent??null,label:nodes.find(x=>x.id===id).config.label,
+      truncated:t.dataset.truncated||null,title:g.querySelector(':scope > title.card-text-full')?.textContent??null,label:nodes.find(x=>x.id===id).config.label,
+      textContent:t.textContent,innerTitle:t.querySelectorAll('title').length,
       box:{l:b.x,r:b.x+b.width,t:b.y,b:b.y+b.height},sub:bu?{t:bu.y,b:bu.y+bu.height}:null}};
   return {long:read('long',':scope > text.component-label'),out:read('out',':scope > text.outside-label')}}"""
 # A small card (112 x 84) with a lone title that needs two lines, drawn as a picture draws it (screen
@@ -74,6 +78,24 @@ READ_SMALL = r"""()=>{workspace.style.setProperty('--zoom','1');render();
   const read=id=>{const g=nodesG.querySelector(`.node[data-id="${id}"]`),t=g.querySelector(':scope > text.component-label'),b=t.getBBox(),n=nodes.find(x=>x.id===id);
     return {lines:[...t.querySelectorAll(':scope > tspan')].map(s=>s.textContent),truncated:t.dataset.truncated||null,glyph:componentInlineGraphicBox(n),top:b.y,em:parseFloat(getComputedStyle(t).fontSize)}};
   return {small:read('small'),short:read('short')}}"""
+
+# A single word ('Witness', 7 letters) on a default-size observe card, as tests/beta20_ports_history_qa.py
+# makes it, drawn with a font wider than this host's: letter-spacing widens the word to a target
+# width. 'wider15' is 15% wider than here; 'between' puts it between the text width (w - 12) and the
+# full inner width (w - 8), where only the one-word rule keeps it whole, so the check bites on any host.
+WORD_CARD = "()=>window.SovSchematicAPI.create('component',{symbolId:'observe',x:360,y:280,config:{label:'Witness'}}).result.id"
+WORD_WIDTHS = {'wider15': 1.15, 'between': None}
+WORD_AT = r"""([id,factor])=>{const g0=()=>nodesG.querySelector(`.node[data-id="${id}"]`),n=nodes.find(x=>x.id===id),size=componentSize(n);
+  let style=document.getElementById('word-width-probe');if(!style){style=document.createElement('style');style.id='word-width-probe';document.head.appendChild(style)}
+  style.textContent='';render();
+  const t0=g0().querySelector('text.component-label'),probe=t0.cloneNode(false);probe.textContent='Witness';g0().appendChild(probe);
+  const natural=probe.getComputedTextLength(),base=parseFloat(getComputedStyle(probe).letterSpacing)||0;probe.remove();
+  const target=factor?natural*factor:((size.w-12)+(size.w-8))/2;
+  style.textContent=`.node[data-id="${id}"] text.component-label{letter-spacing:${base+(target-natural)/7}px !important}`;render();
+  const t=g0().querySelector('text.component-label'),p2=t.cloneNode(false);p2.textContent='Witness';g0().appendChild(p2);const drawnWidth=p2.getComputedTextLength();p2.remove();
+  const texts=[...g0().querySelectorAll('text')].map(x=>x.textContent);
+  style.textContent='';render();
+  return {natural,target,drawnWidth,max:size.w-12,wide:size.w-8,size,texts,truncated:t.dataset.truncated||null}}"""
 
 inside = lambda a, R, tol=0.5: a['l'] >= R['l'] - tol and a['r'] <= R['r'] + tol and a['t'] >= R['t'] - tol and a['b'] <= R['b'] + tol
 
@@ -108,6 +130,12 @@ with sync_playwright() as p:
     page.wait_for_timeout(200)
     two = page.evaluate(READ_TWO)
     small = page.evaluate(READ_SMALL)
+    word = {}
+    page.evaluate('newSchematic()')
+    wid = page.evaluate(WORD_CARD)
+    page.wait_for_timeout(100)
+    for name, factor in WORD_WIDTHS.items():
+        word[name] = page.evaluate(WORD_AT, [wid, factor])
     browser.close()
 
 for name, r in docs.items():
@@ -149,7 +177,10 @@ print(f"outside title: lines {out['lines']}, own text {out['own']!r}, box {out['
 assert len(lng['lines']) == 2, ('a three-line title draws two lines', lng['lines'])
 assert lng['lines'][1].endswith('…'), ('the second line ends in an ellipsis', lng['lines'])
 assert lng['truncated'] == 'true', ('a cut title sets data-truncated', lng['truncated'])
-assert lng['title'] == LONG_TITLE, ('the full title stays in <title>', lng['title'])
+assert lng['title'] == LONG_TITLE, ('the full title stays in the card\'s <title> tooltip', lng['title'])
+# The tooltip sits on the card's group, never in the drawn text: a reader of the text's contents
+# sees only what is drawn.
+assert lng['innerTitle'] == 0 and lng['textContent'] == ''.join(lng['lines']), ('textContent of a cut title holds only the drawn text', lng['textContent'], lng['lines'])
 assert lng['label'] == LONG_TITLE, ('config.label is never changed', lng['label'])
 # A title drawn outside its card is one line, at its own width, uncut.
 out_lines = out['lines'] or [out['own']]
@@ -169,4 +200,10 @@ close = lambda box, wh: abs(box['w'] - wh[0]) < 0.01 and abs(box['h'] - wh[1]) <
 assert close(sh['glyph'], TODAY_ONE), ('a one-line title keeps today\'s glyph', sh['glyph'])
 assert 0.6 * TODAY_TWO[1] - 1e-6 <= sm['glyph']['h'] < TODAY_TWO[1], ('the glyph shrinks, never below 60%', sm['glyph'])
 assert abs(sm['glyph']['w'] / sm['glyph']['h'] - TODAY_TWO[0] / TODAY_TWO[1]) < 1e-6, ('the glyph keeps its aspect', sm['glyph'])
+# A one-word title may use the card's full inner width before it is cut; its text holds only the word.
+for name, w in word.items():
+    print(f"one word '{name}': natural {w['natural']:.1f}, drawn {w['drawnWidth']:.1f} (target {w['target']:.1f}), text width {w['max']}, inner width {w['wide']}, texts {w['texts']}")
+    assert abs(w['drawnWidth'] - w['target']) < 0.5, (name, 'the probe widened the word to its target', w)
+    assert w['texts'].count('Witness') == 1 and w['truncated'] is None and not any('…' in s for s in w['texts']), (name, 'a single word within the inner width is drawn whole', w['texts'])
+assert word['between']['max'] < word['between']['drawnWidth'] <= word['between']['wide'], ('the bite case sits between text and inner width', word['between'])
 print('PASS card text fit QA')
