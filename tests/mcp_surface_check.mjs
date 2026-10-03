@@ -17,6 +17,7 @@ await import(pathToFileURL(path.join(ROOT,'src/04-signal-model.js')).href);
 await import(pathToFileURL(path.join(ROOT,'src/06-attachment-core.js')).href);
 await import(pathToFileURL(path.join(ROOT,'src/05-data-core.js')).href);
 await import(pathToFileURL(path.join(ROOT,'src/07-state-space.js')).href);
+await import(pathToFileURL(path.join(ROOT,'src/07-state-surface.js')).href);
 await import(pathToFileURL(path.join(ROOT,'src/07-graph-core.js')).href);
 await import(pathToFileURL(path.join(ROOT,'src/08-layout-core.js')).href);
 
