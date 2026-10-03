@@ -133,11 +133,11 @@ def main() -> None:
     r = json.loads(proc.stdout)
     dev = r['dev']
 
-    # The pack: twelve definitions, eight bindings by symbol id, seven flow patterns beside the level ones.
+    # The pack: fifteen definitions, eight bindings by symbol id, ten flow patterns beside the level ones.
     assert r['pack']['ok'] and r['pack']['errors'] == [], r['pack']
-    assert [d.split(' ')[0] for d in r['pack']['definitions']] == [f'flow.{x}@1' for x in ('fanout', 'distribute', 'select', 'join', 'buffer', 'limit', 'switch', 'gate', 'observe', 'receipt', 'refuse', 'hold')], r['pack']
+    assert [d.split(' ')[0] for d in r['pack']['definitions']] == [f'flow.{x}@1' for x in ('fanout', 'distribute', 'select', 'join', 'buffer', 'limit', 'switch', 'gate', 'observe', 'receipt', 'refuse', 'hold', 'handler', 'effect', 'park')], r['pack']
     assert r['pack']['bindings'] == {s: f'flow.{s}@1' for s in ('buffer', 'gate', 'hold', 'limit', 'observe', 'receipt', 'refuse', 'switch')}, r['pack']
-    assert r['flowPatterns'] == ['route@1', 'join@1', 'buffer@1', 'limit@1', 'gate@1', 'terminal@1', 'hold@1'], r['flowPatterns']
+    assert r['flowPatterns'] == ['route@1', 'join@1', 'buffer@1', 'limit@1', 'gate@1', 'terminal@1', 'hold@1', 'handler@1', 'effect@1', 'park@1'], r['flowPatterns']
     assert r['levelPatterns'] == ['truth_table@1', 'merge@1', 'combine@1'], r['levelPatterns']
     assert r['lookup'] == ['flow.gate@1', 'flow.join@1', 'flow.distribute@1', None, None, None], r['lookup']
     assert r['bindFlow'] == 'DEFINITION_NOT_BINDABLE', r['bindFlow']

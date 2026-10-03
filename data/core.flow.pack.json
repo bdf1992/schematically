@@ -138,6 +138,36 @@
       "projection": {
         "label": "HOLD"
       }
+    },
+    {
+      "id": "flow.handler",
+      "version": 1,
+      "pattern": "handler@1",
+      "delay": 0,
+      "parameters": {},
+      "projection": {
+        "label": "HANDLER"
+      }
+    },
+    {
+      "id": "flow.effect",
+      "version": 1,
+      "pattern": "effect@1",
+      "delay": 0,
+      "parameters": {},
+      "projection": {
+        "label": "EFFECT"
+      }
+    },
+    {
+      "id": "flow.park",
+      "version": 1,
+      "pattern": "park@1",
+      "delay": 0,
+      "parameters": {},
+      "projection": {
+        "label": "PARK"
+      }
     }
   ],
   "bindings": {
