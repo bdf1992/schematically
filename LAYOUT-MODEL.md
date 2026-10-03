@@ -361,7 +361,8 @@ A wire never runs through a card or along its edge.
   already drawn. This is orthogonal connector routing over a visibility grid (Wybrow, Marriott
   and Stuckey, GD 2009; libavoid; the yFiles EdgeRouter).
 - **Blocked.** Only when the grid has no clear route is the old perimeter route drawn, and the
-  route is recorded as blocked (`routeBlockedAt(index)`).
+  route is recorded as blocked (`routeBlockedAt(index)`); its wire group carries
+  `data-route-blocked="true"`.
 - **The cached route** a drag keeps is held to the same rule: a rebuilt route that enters any
   padded obstacle, its own end cards included and leads excepted, is dropped for a fresh one.
 
