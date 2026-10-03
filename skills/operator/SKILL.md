@@ -36,6 +36,7 @@ Primary operations:
 - `graph.query(verb, args)` / `graph.verbs()` — read-only: junctions, reach, paths, cycles, order, cut, boundary, untyped, blocked, acl, signals, export
 - `sim.set(node, value)` / `at(time, {set|toggle|inject})` / `advance(ms)` / `tick(n)` — time is the driver: clocks, asserted levels and scheduled operations; `time`, `ms` and every other time argument are milliseconds, carried over the engine's own ticks at the declared `tickMs` (default 1 ms per tick)
 - `sim.start({handlers, scenarioId})` / `inject(node, {channel, payload, principal})` / `step(n)` / `run({until})` / `resume(parkId, {decision})` / `reconcile(effectKey, {confirmed})` / `inspect(what, id)` / `scenario(id)` / `scenarios()` / `stop()` — `step(n)` counts engine ticks, not milliseconds; `until` in `run` is ms, like `advance`
+- `sim.travel()` / `sim.spectrum({fromMs, toMs, stepMs, harmonics, nodes})` — pure reads of the run: each wire's travel time (its declared delay in ticks as the run resolved it, and that in ms), and each node's level spectrum over an elapsed window (mean, energy, harmonics of the node's period with amplitude and phase, rest, Parseval check); `STATE-SPACE.md`, "Reading a run: travel and spectrum"
 
 Resources in 0.1: `component`, `wire`, `reference`. Ports and Wire Parts remain owned nested records.
 
@@ -54,6 +55,7 @@ Additional server tools:
 - `schematic.graph.query` — read-only graph queries (`GRAPH-MODEL.md` §5)
 - `schematic.sim.set` / `at` / `advance` / `tick` — assert a level, schedule an operation, drive time; time arguments are milliseconds, carried over the engine's own ticks at the declared `tickMs` (default 1 ms per tick)
 - `schematic.sim.start` / `inject` / `step` / `run` / `resume` / `reconcile` / `inspect` / `scenario` / `scenarios` / `stop` — the message simulation (`GRAPH-MODEL.md` §6, now served over the state-space engine by `src/07-state-surface.js`, `STATE-SPACE.md`). It reads the document and never mutates it; a node naming a handler nobody registered refuses its messages; `step` counts ticks, where `run`'s `until` is ms like `advance`.
+- `schematic.sim.travel` / `schematic.sim.spectrum` (`{fromMs, toMs, stepMs, harmonics, nodes}`) — read the running simulation without changing it: wire travel times from declared delays, and per-node level spectra and energy over a window that has already elapsed; a window that is not a whole number of the node's period gives `harmonics: null` with a `reason`.
 
 HTTP mirrors these: `GET|POST /api/v1/graph/<verb>`, `POST /api/v1/sim/<action>`, `GET /api/v1/sim/inspect?what=…&id=…`.
 

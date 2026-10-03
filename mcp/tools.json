@@ -38,6 +38,8 @@
     "schematic.sim.resume",
     "schematic.sim.reconcile",
     "schematic.sim.inspect",
+    "schematic.sim.travel",
+    "schematic.sim.spectrum",
     "schematic.sim.scenario",
     "schematic.sim.scenarios",
     "schematic.render",

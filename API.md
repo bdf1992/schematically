@@ -121,3 +121,19 @@ carries no packs".
 The editor fills defaults into a document it opens and advances its revision, so a document opened in the browser
 hashes differently from the same file loaded by `node` or the server: a trace recorded against the file does not
 replay against the opened document (`REPLAY_KEY_MISMATCH`, `documentHash`).
+
+## Simulation reads: travel and spectrum
+
+```js
+SovSchematicAPI.sim.travel()                       // {ok, tickMs, wires: [{id, a, b, forward, reverse, delayTicks, travelMs}]}
+SovSchematicAPI.sim.spectrum({fromMs, toMs, stepMs, harmonics, nodes})   // harmonics default 8, nodes default every node with a level
+```
+
+Both read the simulation `sim.start` began (`NO_SIMULATION` before it) through the same session as the other `sim.*`
+verbs, `schematic.sim.travel` and `schematic.sim.spectrum` over MCP and `POST /api/v1/sim/travel|spectrum` over HTTP,
+and give the same JSON on all three. Neither changes the run. `travel` lists every wire in run order with its declared
+delay as the run resolved it at start, `delayTicks` (`config.delay` in ticks, else `latencyMs` converted, rounding half
+up, never under one tick above 0 ms) and `travelMs = delayTicks * tickMs`; a zero-delay wire reports 0. `spectrum` samples
+each node's level every `stepMs` over `[fromMs, toMs)` and gives `{node, periodMs, samples, mean, energy, harmonics:
+[{n, amplitude, phase}], rest, parsevalError, reason}`; the model and refusals (`WINDOW_NOT_ELAPSED`, `WINDOW_STEP`,
+`WINDOW_TOO_LONG`, `UNKNOWN_NODE`) are in `STATE-SPACE.md`, "Reading a run: travel and spectrum".
