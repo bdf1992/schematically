@@ -133,7 +133,7 @@ def main() -> None:
     r = json.loads(proc.stdout)
     dev = r['dev']
 
-    # The pack: twelve definitions, eight bindings by symbol id, seven flow patterns beside the level ones.
+    # The pack: fifteen definitions, eight bindings by symbol id, ten flow patterns beside the level ones.
     assert r['pack']['ok'] and r['pack']['errors'] == [], r['pack']
     assert [d.split(' ')[0] for d in r['pack']['definitions']] == [f'flow.{x}@1' for x in ('fanout', 'distribute', 'select', 'join', 'buffer', 'limit', 'switch', 'gate', 'observe', 'receipt', 'refuse', 'hold', 'handler', 'effect', 'park')], r['pack']
     assert r['pack']['bindings'] == {s: f'flow.{s}@1' for s in ('buffer', 'gate', 'hold', 'limit', 'observe', 'receipt', 'refuse', 'switch')}, r['pack']
