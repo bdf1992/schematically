@@ -621,7 +621,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       <button class="btn" id="viewBtn" title="View" aria-expanded="false">View</button>
       <div class="editor-menu view-menu" id="viewMenu" hidden>
         <label class="menu-field"><span>Appearance</span><select id="appearanceMode"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-        <label class="menu-field"><span>Global rate</span><select id="globalRate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        <label class="menu-field"><span>Global rate</span><select id="globalRate"><option value="0">Paused</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
         <div class="file-menu-separator"></div>
         <button class="file-menu-item" id="viewObjectsBtn" type="button"><span>Objects</span></button>
         <button class="file-menu-item" id="viewFocusBtn" type="button"><span>Focus selection</span><kbd>Enter</kbd></button>
@@ -2050,6 +2050,17 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!isObject(config)||config.delay===undefined||(clearable&&config.delay===null))return;
     if(!(Number.isInteger(config.delay)&&config.delay>=0))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 0, not ${JSON.stringify(config.delay)}`);
   }
+  // ---- meta.timeScale (issue #40, "The document's rate beats the view's") ---------------------
+  // The document's own rate: absent means unset (the view defaults it to 1); a finite number >= 0
+  // is admitted as written, 0 meaning paused. Anything else - negative, NaN, Infinity, null, a
+  // string, a boolean - is refused with TIME_SCALE_INVALID. One rule for the file (validateDocument,
+  // below), the HTTP/MCP surface (PUT /api/v1/document already answers 400 from validateDocument's
+  // errors) and the view (src/15-editor-kernel.js setGlobalTimeScale runs this same function).
+  function admitTimeScale(value){
+    if(value===undefined)return {ok:true,present:false};
+    if(typeof value==='number'&&Number.isFinite(value)&&value>=0)return {ok:true,present:true,value};
+    return {ok:false,code:'TIME_SCALE_INVALID',message:`TIME_SCALE_INVALID: meta.timeScale must be a finite number >= 0, not ${JSON.stringify(value)}`};
+  }
   // ---- Status and waits-on (NOTATION-MODEL.md "Statuses") -------------------------------------
   // A Component's or Wire's `config.status` names an entry of its document's notation's
   // `statuses` list; there is no built-in list, so a notation that declares none admits none.
@@ -2984,6 +2995,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null;if(N&&input.notation!=null){const r=N.resolve(input);if(!r.ok)errors.push(`notation: ${r.message} (${r.code})`)}}
     if(input.narration!=null&&!Array.isArray(input.narration))errors.push('narration must be an array of {at, say}');
     for(const [i,line] of (Array.isArray(input.narration)?input.narration:[]).entries())if(!isObject(line)||typeof line.say!=='string')errors.push(`narration[${i}] needs a say`);
+    // meta.timeScale: one admission rule for the file, the API and the view (issue #40).
+    if(isObject(input.meta)){const ts=admitTimeScale(input.meta.timeScale);if(!ts.ok)errors.push(ts.message)}
     // A section's regions sit between its lines: n lines bound exactly n-1 bands. Never repaired.
     for(const c of input.components||[]){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)errors.push(`component ${c.id||'?'} section: bands must be one fewer than lines (${s.lines.length} lines, ${s.bands.length} bands)`)}
     for(const wire of input.wires||[]){
@@ -3040,7 +3053,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {admitTimeScale,statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
 /* END src/05-data-core.js */
 </script>
@@ -7378,8 +7391,36 @@ function renderObjectsPanel(){
 }
 
 // --- Appearance / rate -----------------------------------------------------
-function globalTimeScale(){diagram.meta=diagram.meta||{};const n=Number(diagram.meta.timeScale);return Math.max(.1,Math.min(8,Number.isFinite(n)?n:1))}
-function setGlobalTimeScale(value){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Math.max(.1,Math.min(8,Number(value)||1));setHistoryHint('Change global rate');render();scheduleHistoryCapture()}
+// The document's own rate (issue #40): absent reads as 1; an admitted value is used as written,
+// only capped at 8 for rendering - 0 stays 0 and means paused. setGlobalTimeScale runs the same
+// admission rule a file and the API use (SovSchematicData.admitTimeScale), so a refused value
+// changes nothing and is reported, never silently clamped into range.
+function globalTimeScale(){
+  diagram.meta=diagram.meta||{};
+  const admitted=SovSchematicData.admitTimeScale(diagram.meta.timeScale);
+  if(!admitted.ok||!admitted.present)return 1;
+  return Math.min(8,admitted.value);
+}
+function setGlobalTimeScale(value){
+  diagram.meta=diagram.meta||{};
+  const numeric=typeof value==='string'&&value.trim()!==''?Number(value):value;
+  const admitted=SovSchematicData.admitTimeScale(numeric);
+  if(!admitted.ok){statusEl.textContent=admitted.message;syncGlobalRateSelect();return admitted}
+  if(admitted.present)diagram.meta.timeScale=admitted.value;
+  setHistoryHint('Change global rate');render();scheduleHistoryCapture();syncGlobalRateSelect();
+  return admitted;
+}
+// The #globalRate select never shows a blank: when no option equals the document's own rate
+// (a value a document authored directly, outside the select's fixed list), one is added for it.
+function syncGlobalRateSelect(){
+  const select=document.getElementById('globalRate');if(!select)return;
+  const value=String(globalTimeScale());
+  select.value=value;
+  if(select.value!==value){
+    const option=document.createElement('option');option.value=value;option.textContent=`${value}×`;
+    select.appendChild(option);select.value=value;
+  }
+}
 function packetRateForWire(w,direction='forward'){
   const source=nodes.find(n=>n.id===(direction==='reverse'?w.b:w.a));return globalTimeScale()*entityEditorState(source).rate*entityEditorState(w).rate;
 }
@@ -7431,7 +7472,7 @@ function initializeEditorKernel(){
   const search=document.getElementById('quickSearchInput');search?.addEventListener('input',()=>updateQuickSearch(search.value));search?.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeQuickSearch()}else if(e.key==='Enter'){e.preventDefault();const n=quickSearchMatches[0];if(n){closeQuickSearch();focusComponent(n)}}});
   const appearance=document.getElementById('appearanceMode');appearance?.addEventListener('change',()=>{appearanceMode=appearance.value;applyAppearanceMode()});
   document.getElementById('globalRate')?.addEventListener('change',e=>setGlobalTimeScale(e.target.value));
-  if(document.getElementById('globalRate'))document.getElementById('globalRate').value=String(globalTimeScale());
+  syncGlobalRateSelect();
   matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener?.('change',()=>{if(appearanceMode==='system')applyAppearanceMode()});
 }
 /* END src/15-editor-kernel.js */
@@ -10555,16 +10596,26 @@ function appendWirePacket(group,motionPath,pathLength,bodyColor,boundaryColor,di
     packet.appendChild(label);
   }
 
-  const duration=packetTravelSeconds(pathLength)/Math.max(.1,Number(rate)||1);
-
-  // Packet skin is identity, not field diffusion.
-  // It stays constant across the trip while the carrier/wire field may blend.
-  const motion=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
-  motion.setAttribute('path',motionPath);
-  motion.setAttribute('dur',`${duration}s`);
-  motion.setAttribute('repeatCount','indefinite');
-  motion.setAttribute('calcMode','linear');
-  packet.appendChild(motion);
+  // A resolved rate of exactly 0 (the document's own rate, issue #40) draws the packet at its
+  // start point and stops there: no animateMotion element, so `Number(rate)||1` - which would
+  // otherwise read 0 as falsy and silently pick 1 - never gets the chance to erase a pause. Any
+  // other rate, including a small positive one, keeps today's duration math and its .1 floor.
+  if(Number(rate)===0){
+    const startPoint=document.createElementNS('http://www.w3.org/2000/svg','path');
+    startPoint.setAttribute('d',motionPath);
+    const start=startPoint.getPointAtLength(0);
+    packet.setAttribute('transform',`translate(${start.x} ${start.y})`);
+  }else{
+    const duration=packetTravelSeconds(pathLength)/Math.max(.1,Number(rate)||1);
+    // Packet skin is identity, not field diffusion.
+    // It stays constant across the trip while the carrier/wire field may blend.
+    const motion=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
+    motion.setAttribute('path',motionPath);
+    motion.setAttribute('dur',`${duration}s`);
+    motion.setAttribute('repeatCount','indefinite');
+    motion.setAttribute('calcMode','linear');
+    packet.appendChild(motion);
+  }
   group.appendChild(packet);
   return packet;
 }
@@ -12462,7 +12513,9 @@ function captureWorkspace(){
       showFlow,
       colorEngine:SovSchematicData.clone(colorEngine),
       appearanceMode,
-      globalRate:globalTimeScale(),
+      // The document's own rate (meta.timeScale) wins over the view; a workspace carries only the
+      // view's own playback speed, never the document's rate (issue #40).
+      playbackSpeed:simClock.speed,
       layout:typeof activeLayoutId==='function'?activeLayoutId():null
     }
   };
@@ -12516,6 +12569,7 @@ function syncRuntimeAfterDocumentReplace(){
   selected=null;hideSelectionBar();
   persistenceFingerprint=semanticFingerprint();
   updateRevisionReadout();
+  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
   render();selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
 }
 function replaceRuntimeDocument(input){
@@ -12542,7 +12596,13 @@ function applyWorkspace(bundle){
   if(view.appearanceMode){appearanceMode=view.appearanceMode;applyAppearanceMode()}
   // The layout on screen is a viewer's choice, kept with the workspace, never in the file.
   if(view.layout&&typeof switchLayout==='function'&&view.layout!==activeLayoutId())switchLayout(view.layout);
-  if(view.globalRate!=null){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Number(view.globalRate)||1}
+  // The document's own rate (meta.timeScale) is never set from a workspace: an older package's
+  // view.globalRate is ignored outright (issue #40). Only the view's own playback speed moves.
+  if(typeof view.playbackSpeed==='number'&&Number.isFinite(view.playbackSpeed)&&view.playbackSpeed>0){
+    simClock.speed=view.playbackSpeed;
+    const sel=document.getElementById('simSpeed');if(sel)sel.value=String(simClock.speed);
+  }
+  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
   render();
   return captureWorkspace();
 }
@@ -13597,7 +13657,7 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
-  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()}},
   render:{
     svg:(options={})=>renderStandaloneSvg(options),
     png:(options={})=>renderStandalonePng(options)

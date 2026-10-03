@@ -40,7 +40,9 @@ function captureWorkspace(){
       showFlow,
       colorEngine:SovSchematicData.clone(colorEngine),
       appearanceMode,
-      globalRate:globalTimeScale(),
+      // The document's own rate (meta.timeScale) wins over the view; a workspace carries only the
+      // view's own playback speed, never the document's rate (issue #40).
+      playbackSpeed:simClock.speed,
       layout:typeof activeLayoutId==='function'?activeLayoutId():null
     }
   };
@@ -94,6 +96,7 @@ function syncRuntimeAfterDocumentReplace(){
   selected=null;hideSelectionBar();
   persistenceFingerprint=semanticFingerprint();
   updateRevisionReadout();
+  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
   render();selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
 }
 function replaceRuntimeDocument(input){
@@ -120,7 +123,13 @@ function applyWorkspace(bundle){
   if(view.appearanceMode){appearanceMode=view.appearanceMode;applyAppearanceMode()}
   // The layout on screen is a viewer's choice, kept with the workspace, never in the file.
   if(view.layout&&typeof switchLayout==='function'&&view.layout!==activeLayoutId())switchLayout(view.layout);
-  if(view.globalRate!=null){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Number(view.globalRate)||1}
+  // The document's own rate (meta.timeScale) is never set from a workspace: an older package's
+  // view.globalRate is ignored outright (issue #40). Only the view's own playback speed moves.
+  if(typeof view.playbackSpeed==='number'&&Number.isFinite(view.playbackSpeed)&&view.playbackSpeed>0){
+    simClock.speed=view.playbackSpeed;
+    const sel=document.getElementById('simSpeed');if(sel)sel.value=String(simClock.speed);
+  }
+  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
   render();
   return captureWorkspace();
 }
