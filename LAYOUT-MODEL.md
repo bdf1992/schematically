@@ -205,6 +205,7 @@ Reported in counts and findings, with no weight in the score:
 | Kind | Measures |
 | --- | --- |
 | route-hugs-node | a route segment other than its first and last running parallel to an edge of a 2D card (not a container, not a group), outside it and under 8 from that edge, for an overlap of 16 or more |
+| group-overlap | two shown groups on one canvas whose regions (`groupRect`) overlap by more than 1; the detail names each card both groups list |
 
 A card hosted on a wire (drawn inline on the line) is not counted by route-through-node or
 route-hugs-node against its own host wire.
@@ -292,6 +293,31 @@ Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLA
   - each node is pulled level with its predecessors, for straight chains
 - A container is laid out inside first and fitted to its contents, then placed as one
   node of its parent.
+- A group on the canvas (SECTION-MODEL.md "Groups (reading only)") is placed the same way,
+  as one block. Its members in scope on that canvas are laid out by these same steps over the
+  wires among them only. The block's box is the members' extent padded 24 on the left, right
+  and bottom and 24 + 28 on top, which is the region `groupRect` draws, so placed blocks never
+  overlap. Ungrouped cards stay single nodes. A group with no member in scope is left out. A
+  canvas with no group runs exactly the steps above, so a document with no groups lays out as
+  it did before blocks.
+- Blocks are ordered over the groups first, then within each group, as the clustered layered
+  drawing does: Graphviz dot clusters (Gansner, Koutsofios, North and Vo 1993: a cluster stays
+  contiguous in every rank), ELK Layered hierarchy handling `SEPARATE_CHILDREN` (each cluster
+  laid out on its own, then placed as one node), and Forster, "Applying crossing reduction
+  strategies to layered compound graphs" (GD 2002: barycentre over clusters, then within). The
+  canvas pass runs its barycentre sweeps over blocks and ungrouped cards, with a wire between
+  two groups, or between a member and an ungrouped card, as one edge between their nodes. Each
+  block is then laid out again with each layer starting in the order of the mean height of the
+  cards its members are wired to outside the block (a member with no such wire keeps its place,
+  ties keep document order), and the canvas is placed again with the new block boxes.
+  `docs/workengine/build_map.py` `order_by_barycentre` did the same by hand.
+- Wires between groups route through the column and row gaps the blocks leave. Those gaps
+  follow the rules below, so the wires crossing a gap between blocks widen it as they widen a
+  gap between cards. The router is unchanged and treats cards, not groups, as obstacles.
+- A card listed by two groups (`GROUP_MEMBER_TWICE`, reported by `validateDocument`) is placed
+  in the block of the first group in document order that lists it, the one `groupFindings`
+  names. The later group's region then reaches into that block and `group-overlap` counts the
+  pair. `layered` does not refuse.
 - A column gap widens to fit the widest wire label that crosses it, or that has an end on
   either side of it: `characters × the notation's caption size × 0.6 + 2 × labelMargin`
   (`labelMargin`, an `apply` option, default 16). A row gap in a column widens the same way

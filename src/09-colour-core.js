@@ -87,5 +87,39 @@
     return {ok:!failures.length,background,floor,cvdFloor,contrasts,minContrast:Math.min(...contrasts),closest,minDistance,failures};
   }
 
-  return {WCAG,CVD_FLOOR,VISIONS,REFERENCES,SOURCES,parse,hex,luminance,contrast,over,largeText,textFloor,oklab,simulate,simulateHex,distance,auditPalette};
+  // OKLCH to sRGB hex (Ottosson 2020): each channel clamped to 0..1, rounded, upper-case. The same
+  // arithmetic as the palette study's oklch_to_hex (sketchbook ep-root-20261002, palette-tasting/system.py).
+  function oklchHex(L,C,h){
+    const rad=h*(Math.PI/180),a=C*Math.cos(rad),b=C*Math.sin(rad);
+    const l_=L+.3963377774*a+.2158037573*b,m_=L-.1055613458*a-.0638541728*b,s_=L-.0894841775*a-1.2914855480*b;
+    const l=l_**3,m=m_**3,s=s_**3;
+    const rgb=[4.0767416621*l-3.3077115913*m+.2309699292*s,-1.2684380046*l+2.6097574011*m-.3413193965*s,-.0041960863*l-.7034186147*m+1.7076147010*s];
+    const enc=x=>{x=clamp(x,0,1);x=x<=.0031308?12.92*x:1.055*Math.pow(x,1/2.4)-.055;return Math.round(x*255)};
+    return ('#'+rgb.map(x=>enc(x).toString(16).padStart(2,'0')).join('')).toUpperCase();
+  }
+  // Its inverse: [L, C, h] of a hex colour, h in degrees 0..360.
+  function hexOklch(c){
+    const [L,a,b]=oklab(c),h=Math.atan2(b,a)*180/Math.PI;
+    return [L,Math.hypot(a,b),(h+360)%360];
+  }
+  // Five tones of one colour, k = -2..2: lightness L + k*step, chroma easing by 18% a step from the base.
+  function toneRamp(L,C,h,step){return [-2,-1,0,1,2].map(k=>oklchHex(L+k*step,C*(1-.18*Math.abs(k)),h))}
+  // A palette system: three roles one hue ratio apart at one lightness and chroma, and three status
+  // tones set apart by lightness, each a five-tone ramp. The editor's hue slots 6-11 take the ramps'
+  // middle tones: primary, secondary, tertiary, safe, alert, danger.
+  const PALETTE_SYSTEMS=Object.freeze({
+    'system-default':Object.freeze({base:115,ratio:75,role:{L:.65,C:.12},step:.08,
+      status:{safe:{L:.66,C:.13,h:165},alert:{L:.82,C:.15,h:85},danger:{L:.56,C:.17,h:32}},
+      source:'control/sketchbooks/ep-root-20261002/palette-tasting/best2.json'})
+  });
+  const SYSTEM_NAMES=Object.freeze(['primary','secondary','tertiary','safe','alert','danger']);
+  function paletteSystem(spec){
+    const roles=[spec.base,spec.base+spec.ratio,spec.base+2*spec.ratio].map(h=>((h%360)+360)%360);
+    const status=['safe','alert','danger'].map(k=>spec.status[k]);
+    const hues=[...roles,...status.map(s=>s.h)];
+    const ramps=[...roles.map(h=>toneRamp(spec.role.L,spec.role.C,h,spec.step)),...status.map(s=>toneRamp(s.L,s.C,s.h,spec.step))];
+    return {names:[...SYSTEM_NAMES],hues,ramps,slots:ramps.map(r=>r[2])};
+  }
+
+  return {WCAG,CVD_FLOOR,VISIONS,REFERENCES,SOURCES,PALETTE_SYSTEMS,parse,hex,luminance,contrast,over,largeText,textFloor,oklab,simulate,simulateHex,distance,auditPalette,oklchHex,hexOklch,toneRamp,paletteSystem};
 });

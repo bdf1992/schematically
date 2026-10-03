@@ -74,7 +74,7 @@ function paintSim(){
   if(typeof legendState!=='undefined'&&legendState.open)renderLegendPanel();
   simLayer.replaceChildren();
   workspace.classList.toggle('sim-live',!!simClock.run);
-  for(const gEl of workspace.querySelectorAll('.wire-group.level-high'))gEl.classList.remove('level-high');
+  for(const gEl of workspace.querySelectorAll('.wire-group.level-high')){gEl.classList.remove('level-high');gEl.style.removeProperty('--wire-lit')}
   const run=simClock.run;if(!run)return;
   const levels=run.levels();
   const wired=new Set(wires.flatMap(w=>[w.a,w.b]));
@@ -102,8 +102,10 @@ function paintSim(){
     const title=simEl('title',{});title.textContent=`Send a message from ${componentConfig(n).label||n.id}`;send.appendChild(title);
     send.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();simSend(n.id)});simLayer.appendChild(send);
   }
-  // A wire is lit while its source end is high.
-  for(const w of wires){const v=levels[w.a]?.value??0;if(v<=0)continue;const gEl=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"]`);if(gEl){gEl.classList.add('level-high');gEl.style.setProperty('--level',String(v))}}
+  // A wire is lit while its source end is high. A source in a role or status slot (6-11) lights it in
+  // that slot's own tone (litTone); any other source keeps the output accent.
+  for(const w of wires){const v=levels[w.a]?.value??0;if(v<=0)continue;const gEl=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"]`);if(gEl){gEl.classList.add('level-high');gEl.style.setProperty('--level',String(v));
+    const src=nodes.find(n=>n.id===w.a),slot=src?Number(componentConfig(src).colorSlot):NaN;if(Number.isInteger(slot)&&slot>=6){const tone=litTone(slot,surfaceAppearance());if(tone)gEl.style.setProperty('--wire-lit',tone)}}}
   // New edges flash + or − beside their node.
   const edges=run.edges().edges;
   for(const e of edges.slice(simClock.edgeMark)){

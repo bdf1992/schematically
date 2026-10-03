@@ -143,7 +143,7 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .sim-edge{font:800 13px ui-sans-serif,system-ui,sans-serif;animation:sim-edge-fade .7s ease-out forwards}
 .sim-edge.rise{fill:var(--accent-out)}.sim-edge.fall{fill:var(--accent-in)}
 @keyframes sim-edge-fade{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-6px)}}
-.wire-group.level-high .wire{stroke:var(--accent-out)}
+.wire-group.level-high .wire{stroke:var(--wire-lit,var(--accent-out))}
 .sim-waiting-bg{fill:var(--panel);stroke:var(--accent-in);stroke-width:1.4}
 .sim-waiting-text{font:700 10px ui-sans-serif,system-ui,sans-serif;fill:var(--accent-in)}
 .sim-decide circle{fill:var(--canvas-tone);stroke:var(--canvas-muted);stroke-width:1}
@@ -653,6 +653,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       <label class="palette-row"><span>Palette</span>
         <select id="colorPaletteInput">
           <option value="okabe-ito">Okabe–Ito · colour-blind safe</option>
+          <option value="system-default">System default · roles and status tones</option>
           <option value="spectrum">Spectrum</option>
           <option value="cool">Cool</option>
           <option value="warm">Warm</option>
@@ -6389,6 +6390,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       }
       return null;
     }
+    // A group on the canvas is placed as one block (SECTION-MODEL.md "Never an obstacle"): its
+    // members are laid out by arrange() over the wires among them, exactly as a container's
+    // interior is, and the block, padded as groupRect pads a region, is then one node of the
+    // canvas. This is the clustered layered drawing: Graphviz dot clusters (Gansner, Koutsofios,
+    // North and Vo 1993), ELK Layered SEPARATE_CHILDREN, and Forster (GD 2002) for the order:
+    // barycentre over the blocks first, then within each block. A canvas with no group runs
+    // arrange() once over its cards, as before groups were placed.
+    const GROUP_PAD=24,GROUP_TITLE_BAND=28; // groupRect's padding (src/05-data-core.js)
     function layoutCanvas(canvas){
       const members=inScope(canvas),boxes=new Map();
       for(const c of members){
@@ -6396,7 +6405,49 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         if(isContainer(c)&&inScope(interiorOf(c.id)).length){const inner=layoutCanvas(interiorOf(c.id)),top=topRoom(c);boxes.set(c.id,{w:Math.max(160,inner.w+pad*2),h:Math.max(120,inner.h+pad*2+top),inner,top})}
         else boxes.set(c.id,{...size(c),inner:null});
       }
-      const ids=members.map(c=>c.id),succ=new Map(ids.map(i=>[i,new Set()])),pred=new Map(ids.map(i=>[i,new Set()]));
+      const R=id=>rep(id,canvas);
+      // Each member in scope belongs to the first group in document order that lists it (the
+      // lister groupFindings names); a later group listing it again draws its region into that
+      // block. A group with no member of its own here is left out.
+      const here=new Set(members.map(c=>c.id)),blockOf=new Map();
+      for(const g of doc.components){
+        if(!grouping(g)||!Array.isArray(g.config?.members))continue;
+        for(const m of g.config.members)if(here.has(m)&&!blockOf.has(m))blockOf.set(m,g.id);
+      }
+      if(!blockOf.size)return arrange(members.map(c=>c.id),boxes,R,canvas,null);
+      const blocks=new Map();
+      for(const c of members)if(blockOf.has(c.id)){const k=blockOf.get(c.id);if(!blocks.has(k))blocks.set(k,[]);blocks.get(k).push(c.id)}
+      // A block's box is its members' extent padded as the region is drawn.
+      const layoutBlock=(ids,startKey)=>{
+        const res=arrange(ids,boxes,R,canvas,startKey);let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
+        for(const u of ids){const B=boxes.get(u),x=res.x.get(u),y=res.y.get(u);l=Math.min(l,x-B.w/2);r=Math.max(r,x+B.w/2);t=Math.min(t,y-B.h/2);b=Math.max(b,y+B.h/2)}
+        return {w:r-l+2*GROUP_PAD,h:b-t+2*GROUP_PAD+GROUP_TITLE_BAND,inner:null,block:{res,l,t}};
+      };
+      // The canvas: blocks and ungrouped cards, in the order their first card comes.
+      const top=[];for(const c of members){const u=blockOf.get(c.id)||c.id;if(!top.includes(u))top.push(u)}
+      const R2=id=>{const u=R(id);return u&&blockOf.has(u)?blockOf.get(u):u};
+      const placeCanvas=made=>{const tb=new Map();for(const u of top)tb.set(u,made.has(u)?made.get(u):boxes.get(u));return arrange(top,tb,R2,canvas,null)};
+      const made=new Map();for(const [k,ids] of blocks)made.set(k,layoutBlock(ids,null));
+      const first=placeCanvas(made);
+      // Within each block: each layer starts in the order of the mean height of the cards its
+      // members are wired to outside the block, then the canvas is placed again.
+      const atY=new Map();
+      for(const u of first.ids){const b=first.boxes.get(u);if(!b.block){atY.set(u,first.y.get(u));continue}
+        for(const m of b.block.res.ids)atY.set(m,first.y.get(u)-b.h/2+GROUP_PAD+GROUP_TITLE_BAND+b.block.res.y.get(m)-b.block.t)}
+      for(const [k,ids] of blocks){
+        const sum=new Map();
+        for(const w of doc.wires){const a=R(w.a),b=R(w.b);if(!a||!b||a===b)continue;
+          for(const [m,o] of [[a,b],[b,a]])if(blockOf.get(m)===k&&blockOf.get(o)!==k&&atY.has(o)){const s=sum.get(m)||[0,0];s[0]+=atY.get(o);s[1]++;sum.set(m,s)}}
+        made.set(k,layoutBlock(ids,new Map([...sum].map(([m,[s,n]])=>[m,s/n]))));
+      }
+      return placeCanvas(made);
+    }
+    // The layered steps over one set of nodes: ids in document order, their boxes, and R mapping
+    // a wire end to the node it lands on (a wire whose ends land outside ids is not drawn here).
+    // startKey, when given, sets each layer's starting order before the barycentre sweeps: keyed
+    // nodes sorted by key among their own places, the rest kept where they are.
+    function arrange(ids,boxes,R,canvas,startKey){
+      const succ=new Map(ids.map(i=>[i,new Set()])),pred=new Map(ids.map(i=>[i,new Set()]));
       // How far below q's centre u's centre sits when the wire between them runs straight:
       // the difference of the two terminals' offsets from their cards' centres.
       const portDy=(q,u)=>{
@@ -6406,7 +6457,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         return off(q,qp)-off(u,up);
       };
       for(const w of doc.wires){
-        let a=rep(w.a,canvas),b=rep(w.b,canvas);if(!a||!b||a===b||!succ.has(a)||!succ.has(b))continue;
+        let a=R(w.a),b=R(w.b);if(!a||!b||a===b||!succ.has(a)||!succ.has(b))continue;
         if(w.config?.direction==='reverse')[a,b]=[b,a];
         succ.get(a).add(b);pred.get(b).add(a);
       }
@@ -6418,6 +6469,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const layer=new Map();for(const u of order.reverse()){layer.set(u,Math.max(0,...[...pred.get(u)].map(p=>layer.get(p)+1).filter(Number.isFinite)))}
       const layers=[];for(const u of ids){const l=layer.get(u)||0;(layers[l]=layers[l]||[]).push(u)}
       for(let i=0;i<layers.length;i++)if(!layers[i])layers[i]=[];
+      if(startKey)for(const L of layers){
+        const slots=L.map((u,i)=>startKey.has(u)?i:-1).filter(i=>i>=0),keyed=slots.map(i=>L[i]).sort((a,b)=>startKey.get(a)-startKey.get(b));
+        slots.forEach((i,k)=>{L[i]=keyed[k]});
+      }
       // Barycentre sweeps.
       const pos=new Map();const index=()=>layers.forEach(L=>L.forEach((u,i)=>pos.set(u,i)));index();
       for(let sweep=0;sweep<4;sweep++){
@@ -6431,7 +6486,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const labelGap=new Map(),rowNeed=new Map();
       for(const w of doc.wires){
         const text=String(w.config?.label||'');if(!text||labelOnBus(w))continue;
-        let a=rep(w.a,canvas),b=rep(w.b,canvas);if(!a||!b||a===b||!layer.has(a)||!layer.has(b))continue;
+        let a=R(w.a),b=R(w.b);if(!a||!b||a===b||!layer.has(a)||!layer.has(b))continue;
         const la=layer.get(a),lb=layer.get(b);
         if(la===lb){const key=a<b?`${a}|${b}`:`${b}|${a}`;rowNeed.set(key,Math.max(rowNeed.get(key)||0,lineHeight+2*labelMargin));continue}
         const lo=Math.min(la,lb),hi=Math.max(la,lb),need=labelEstimate(text);
@@ -6446,7 +6501,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       }
       // A gap wide enough for its wires: each wire beyond two that crosses it needs a channel.
       const crossing=new Map();
-      for(const u of ids)for(const v of succ.get(u)){const la=layer.get(u),lb=layer.get(v);for(let l=Math.min(la,lb);l<Math.max(la,lb);l++)crossing.set(l,(crossing.get(l)||0)+doc.wires.filter(w=>(rep(w.a,canvas)===u&&rep(w.b,canvas)===v)||(rep(w.b,canvas)===u&&rep(w.a,canvas)===v)).length)}
+      for(const u of ids)for(const v of succ.get(u)){const la=layer.get(u),lb=layer.get(v);for(let l=Math.min(la,lb);l<Math.max(la,lb);l++)crossing.set(l,(crossing.get(l)||0)+doc.wires.filter(w=>(R(w.a)===u&&R(w.b)===v)||(R(w.b)===u&&R(w.a)===v)).length)}
       const x=new Map(),y=new Map();let cx=0;
       layers.forEach((L,l)=>{const w=Math.max(0,...L.map(u=>boxes.get(u).w));for(const u of L)x.set(u,cx+w/2);cx+=w+Math.max(gapX+Math.max(0,(crossing.get(l)||0)-2)*22,labelGap.get(l)||0)});
       for(const L of layers){
@@ -6482,6 +6537,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     function write(res,originX,originY){
       for(const u of res.ids){
         const c=byId.get(u),b=res.boxes.get(u),X=originX+res.x.get(u),Y=originY+res.y.get(u);
+        // A group's block: each member at the block's place plus its offset inside the block.
+        if(b.block){write(b.block.res,X-b.w/2+GROUP_PAD-b.block.l,Y-b.h/2+GROUP_PAD+GROUP_TITLE_BAND-b.block.t);continue}
         if(c.editor?.pinned||c.editor?.locked){frozen.push(u);continue}
         const g=geometry(doc,r.id,u)||entityGeometry(c);
         // Hosted children ride along with their host.
@@ -6491,15 +6548,16 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       }
     }
     const res=layoutCanvas(scopeCanvas);
+    const cards=res=>res.ids.flatMap(u=>{const b=res.boxes.get(u);return b.block?cards(b.block.res):[u]});
     if(scope){const g=geometry(doc,r.id,scope)||entityGeometry(byId.get(scope)),top=topRoom(byId.get(scope));const w=Math.max(160,res.w+pad*2),h=Math.max(120,res.h+pad*2+top);setGeometry(doc,r.id,scope,{w,h});write(res,g.x-w/2+pad,g.y-h/2+pad+top)}
     else{
       // Keep the diagram where it was: the new layout starts at the old top-left.
-      const placed=res.ids.map(u=>geometry(doc,r.id,u)).filter(Boolean);
+      const placed=cards(res).map(u=>geometry(doc,r.id,u)).filter(Boolean);
       const ox=placed.length?Math.min(...placed.map(g=>g.x-g.w/2)):80,oy=placed.length?Math.min(...placed.map(g=>g.y-g.h/2)):80;
       write(res,ox,oy);
     }
     straighten(doc,r.id,frozen);
-    return {ok:true,view:r.id,engine:'layered',placed:res.ids.length,frozen,labelMargin};
+    return {ok:true,view:r.id,engine:'layered',placed:cards(res).length,frozen,labelMargin};
   }
 
   // Straight wires where the layout left a free choice: a boundary Point slides along its edge to
@@ -6665,7 +6723,41 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return {ok:!failures.length,background,floor,cvdFloor,contrasts,minContrast:Math.min(...contrasts),closest,minDistance,failures};
   }
 
-  return {WCAG,CVD_FLOOR,VISIONS,REFERENCES,SOURCES,parse,hex,luminance,contrast,over,largeText,textFloor,oklab,simulate,simulateHex,distance,auditPalette};
+  // OKLCH to sRGB hex (Ottosson 2020): each channel clamped to 0..1, rounded, upper-case. The same
+  // arithmetic as the palette study's oklch_to_hex (sketchbook ep-root-20261002, palette-tasting/system.py).
+  function oklchHex(L,C,h){
+    const rad=h*(Math.PI/180),a=C*Math.cos(rad),b=C*Math.sin(rad);
+    const l_=L+.3963377774*a+.2158037573*b,m_=L-.1055613458*a-.0638541728*b,s_=L-.0894841775*a-1.2914855480*b;
+    const l=l_**3,m=m_**3,s=s_**3;
+    const rgb=[4.0767416621*l-3.3077115913*m+.2309699292*s,-1.2684380046*l+2.6097574011*m-.3413193965*s,-.0041960863*l-.7034186147*m+1.7076147010*s];
+    const enc=x=>{x=clamp(x,0,1);x=x<=.0031308?12.92*x:1.055*Math.pow(x,1/2.4)-.055;return Math.round(x*255)};
+    return ('#'+rgb.map(x=>enc(x).toString(16).padStart(2,'0')).join('')).toUpperCase();
+  }
+  // Its inverse: [L, C, h] of a hex colour, h in degrees 0..360.
+  function hexOklch(c){
+    const [L,a,b]=oklab(c),h=Math.atan2(b,a)*180/Math.PI;
+    return [L,Math.hypot(a,b),(h+360)%360];
+  }
+  // Five tones of one colour, k = -2..2: lightness L + k*step, chroma easing by 18% a step from the base.
+  function toneRamp(L,C,h,step){return [-2,-1,0,1,2].map(k=>oklchHex(L+k*step,C*(1-.18*Math.abs(k)),h))}
+  // A palette system: three roles one hue ratio apart at one lightness and chroma, and three status
+  // tones set apart by lightness, each a five-tone ramp. The editor's hue slots 6-11 take the ramps'
+  // middle tones: primary, secondary, tertiary, safe, alert, danger.
+  const PALETTE_SYSTEMS=Object.freeze({
+    'system-default':Object.freeze({base:115,ratio:75,role:{L:.65,C:.12},step:.08,
+      status:{safe:{L:.66,C:.13,h:165},alert:{L:.82,C:.15,h:85},danger:{L:.56,C:.17,h:32}},
+      source:'control/sketchbooks/ep-root-20261002/palette-tasting/best2.json'})
+  });
+  const SYSTEM_NAMES=Object.freeze(['primary','secondary','tertiary','safe','alert','danger']);
+  function paletteSystem(spec){
+    const roles=[spec.base,spec.base+spec.ratio,spec.base+2*spec.ratio].map(h=>((h%360)+360)%360);
+    const status=['safe','alert','danger'].map(k=>spec.status[k]);
+    const hues=[...roles,...status.map(s=>s.h)];
+    const ramps=[...roles.map(h=>toneRamp(spec.role.L,spec.role.C,h,spec.step)),...status.map(s=>toneRamp(s.L,s.C,s.h,spec.step))];
+    return {names:[...SYSTEM_NAMES],hues,ramps,slots:ramps.map(r=>r[2])};
+  }
+
+  return {WCAG,CVD_FLOOR,VISIONS,REFERENCES,SOURCES,PALETTE_SYSTEMS,parse,hex,luminance,contrast,over,largeText,textFloor,oklab,simulate,simulateHex,distance,auditPalette,oklchHex,hexOklch,toneRamp,paletteSystem};
 });
 /* END src/09-colour-core.js */
 </script>
@@ -6832,8 +6924,12 @@ const DARK_SURFACE_MONO_BRIGHT=['#FFFFFF','#F0F0EB','#E1E1DB','#D2D2CC','#C3C3BD
 // contrast floor and the closest pair stays CVD_FLOOR apart under protan, deutan and tritan
 // simulation. The other colour rows are hue families: legible, not colour-blind distinct;
 // scripts/contrast_audit.py measures and says so.
+// 'system-default' is generated, not authored: SovSchematicColour.PALETTE_SYSTEMS (09-colour-core.js)
+// gives three roles and three status tones from a base hue, a ratio and a step, and slots 6-11 take
+// the middle tone of each ramp, the same six in both appearances, realised through themeColor.
 const BASE_PALETTES={
   'okabe-ito':['#F85401','#F4C768','#98E2BD','#0092E4','#2E69A0','#7B3962'],
+  'system-default':SovSchematicColour.paletteSystem(SovSchematicColour.PALETTE_SYSTEMS['system-default']).slots,
   spectrum:['#D34E4E','#D99032','#79A948','#3EA7A0','#507CCB','#8A5BC0'],
   cool:['#3C7EA6','#3AA2A0','#54A58B','#6589BF','#6D67B1','#8A69A7'],
   warm:['#C34B48','#D36F3E','#D7983D','#B77A4C','#A85E65','#91546F'],
@@ -6841,6 +6937,7 @@ const BASE_PALETTES={
 };
 const DARK_SURFACE_PALETTES={
   'okabe-ito':['#D07807','#FBAC31','#039843','#36BEFE','#5671AC','#FF1782'],
+  'system-default':SovSchematicColour.paletteSystem(SovSchematicColour.PALETTE_SYSTEMS['system-default']).slots,
   spectrum:['#FF7A7D','#E8AA58','#9AC86C','#62C9C1','#82A9F2','#B88CE5'],
   cool:['#74B8E2','#69D0CB','#82C9AE','#91AFE8','#A19BE1','#B58FC8'],
   warm:['#F37C78','#ED966A','#E8B660','#D6A071','#CE858E','#C77F9E'],
@@ -6956,6 +7053,35 @@ function normalizeSlot(v,fallback=0){
   return Number.isInteger(n)?Math.max(0,Math.min(11,n)):fallback;
 }
 function slotColor(slot){return activePalette()[normalizeSlot(slot)]}
+// A declared palette system (09-colour-core.js PALETTE_SYSTEMS), generated once per name.
+const paletteSystemCache=new Map();
+function declaredPaletteSystem(name){
+  const spec=SovSchematicColour.PALETTE_SYSTEMS[name];if(!spec)return null;
+  if(!paletteSystemCache.has(name))paletteSystemCache.set(name,SovSchematicColour.paletteSystem(spec));
+  return paletteSystemCache.get(name);
+}
+// The meaning colours stay fixed in every palette: a status tone is the base tone of safe, alert or
+// danger in the active palette when that palette is a declared system, else in system-default.
+function statusTone(name){
+  const sys=declaredPaletteSystem(colorEngine.palette)||declaredPaletteSystem('system-default');
+  const i=sys.names.indexOf(name);
+  return i>=3?sys.ramps[i][2]:null;
+}
+// A lit wire's tone for a source in hue slot 6-11: one step lighter on dark (+1), one step darker on
+// light (-1), on that slot's ramp. A declared system has its ramps; any other palette builds one from
+// the slot's authored colour for that appearance, with the system step 0.08.
+function litTone(slot,appearance=surfaceAppearance()){
+  const n=Number(slot);if(!Number.isInteger(n)||n<6||n>11)return null;
+  const dark=appearance==='dark',index=dark?3:1,sys=declaredPaletteSystem(colorEngine.palette);
+  if(sys)return sys.ramps[n-6][index];
+  const row=colorEngine.palette==='mono'
+    ? (dark?DARK_SURFACE_MONO_BRIGHT:LIGHT_SURFACE_MONO_DEEP)
+    : colorEngine.palette==='custom'
+      ? colorEngine.custom
+      : (dark?(DARK_SURFACE_PALETTES[colorEngine.palette]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[colorEngine.palette]||BASE_PALETTES['okabe-ito']));
+  const [L,C,h]=SovSchematicColour.hexOklch(row[n-6]);
+  return SovSchematicColour.toneRamp(L,C,h,.08)[index];
+}
 function nearestSlot(hex){
   const c=hexRgb(hex);let best=0,bestD=Infinity;
   activePalette().forEach((h,i)=>{
@@ -11011,21 +11137,26 @@ function statusTitle(status){return String(status?.title||status?.id||'')}
 function waitsOnList(list){return Array.isArray(list)?list.filter(w=>w&&typeof w==='object').map(w=>String(w.label||'').trim()||`${w.kind} ${w.id}`).join(', '):''}
 const CAPTION_STYLE='font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)';
 function statusInk(){const muted=(getComputedStyle(workspace).getPropertyValue('--muted')||'').trim();return ensureContrast(/^#[0-9a-f]{6}$/i.test(muted)?muted:'#6C6C65',canvasTone(),4.6)}
+// A status chip's ink on a solid tone: near-black or white, whichever has the higher WCAG contrast.
+function statusChipInk(tone){return contrastRatio(tone,'#141414')>=contrastRatio(tone,'#FFFFFF')?'#141414':'#FFFFFF'}
 // A card's status: a chip in its top-right corner, 6 in from both edges, holding the status title in
-// the caption role; a dashed outline and an opacity when the status declares them.
+// the caption role; a dashed outline and an opacity when the status declares them. A status that
+// declares a tone (safe, alert, danger) is a solid pill in that status tone, its glyph before the title.
 function appendComponentStatus(g,n){
   const st=declaredStatus(n);if(!st||componentForm(n).dimension!==2)return;
   // The caption role at its base size: the chip is part of the card and scales with it.
   const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
   const cfg=componentConfig(n),edge=g.style.getPropertyValue('--component-boundary-color').trim()||slotColor(cfg.colorSlot),fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
-  const title=statusTitle(st),ch=Math.round(px*1.5),cw=Math.ceil(title.length*px*.6+px),x=w/2-6-cw,y=-h/2+6;
+  const tone=['safe','alert','danger'].includes(st.tone)?statusTone(st.tone):null,glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'';
+  const title=statusTitle(st),text=glyph?`${glyph} ${title}`:title,ch=Math.round(px*1.5);
+  const cw=tone?Math.ceil(text.length*px*.6+px*1.4):Math.ceil(title.length*px*.6+px),x=w/2-6-cw,y=-h/2+6;
   const chip=document.createElementNS('http://www.w3.org/2000/svg','g');chip.setAttribute('class','status-chip');chip.dataset.status=st.id;
   const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
   r.setAttribute('x',String(x));r.setAttribute('y',String(y));r.setAttribute('width',String(cw));r.setAttribute('height',String(ch));r.setAttribute('rx',String(ch/2));
-  r.setAttribute('style',`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
+  r.setAttribute('style',tone?`fill:${tone};fill-opacity:1;stroke:none`:`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
   const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.dataset.role='caption';
   t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
-  t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${ensureContrast(edge,fill,4.6)};stroke:none;pointer-events:none`);t.textContent=title;chip.appendChild(t);
+  t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${tone?statusChipInk(tone):ensureContrast(edge,fill,4.6)};stroke:none;pointer-events:none`);t.textContent=text;chip.appendChild(t);
   g.appendChild(chip);
   if(st.outline==='dashed'){const body=g.querySelector(':scope > .body');if(body){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}}
   if(typeof st.opacity==='number'&&Number.isFinite(st.opacity))g.style.opacity=String((Number(g.style.opacity)||1)*Number(st.opacity));
@@ -11824,6 +11955,15 @@ function layoutMetrics(options={}){
     if(!is2D(a)||!is2D(b)||(a.canvasId||'')!==(b.canvasId||''))continue;
     if(layoutOverlap(body.get(a.id),body.get(b.id),1))add('node-overlap',[a.id,b.id],'bodies overlap');
   }
+  // Group regions on one canvas that overlap read as one region: reported, with no weight in the
+  // score (it is not in LAYOUT_RUBRIC), naming each card both groups list.
+  {const groups=shown.filter(isGroupComponent);
+   for(let i=0;i<groups.length;i++)for(let j=i+1;j<groups.length;j++){
+     const a=groups[i],b=groups[j],A=body.get(a.id),B=body.get(b.id);
+     if((a.canvasId||'')!==(b.canvasId||'')||!A||!B||!layoutOverlap(A,B,1))continue;
+     const listed=new Set(Array.isArray(a.config?.members)?a.config.members:[]),both=(Array.isArray(b.config?.members)?b.config.members:[]).filter(id=>listed.has(id));
+     add('group-overlap',[a.id,b.id],`regions of ${a.config?.label||a.id} and ${b.config?.label||b.id} overlap${both.map(id=>`; both list ${id}`).join('')}`);
+   }}
   // Wrapping: a route that runs outside everything drawn in its canvas, round the picture
   // instead of through it (review, 06).
   for(const w of wires){
@@ -13546,7 +13686,7 @@ function renderStandaloneSvgNow(opts={}){
   clone.querySelector('#paletteDropLayer')?.replaceChildren();
   // A running clock's overlay is a moment, not the document.
   clone.querySelector('#simLayer')?.replaceChildren();
-  clone.querySelectorAll('.level-high').forEach(x => x.classList.remove('level-high'));
+  clone.querySelectorAll('.level-high').forEach(x => { x.classList.remove('level-high'); x.style.removeProperty('--wire-lit'); });
   clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
   clone.querySelectorAll('.port-hit,.wire-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
   // A still picture cannot show travel: a packet frozen mid-wire reads as a junction.
@@ -14024,7 +14164,7 @@ function paintSim(){
   if(typeof legendState!=='undefined'&&legendState.open)renderLegendPanel();
   simLayer.replaceChildren();
   workspace.classList.toggle('sim-live',!!simClock.run);
-  for(const gEl of workspace.querySelectorAll('.wire-group.level-high'))gEl.classList.remove('level-high');
+  for(const gEl of workspace.querySelectorAll('.wire-group.level-high')){gEl.classList.remove('level-high');gEl.style.removeProperty('--wire-lit')}
   const run=simClock.run;if(!run)return;
   const levels=run.levels();
   const wired=new Set(wires.flatMap(w=>[w.a,w.b]));
@@ -14052,8 +14192,10 @@ function paintSim(){
     const title=simEl('title',{});title.textContent=`Send a message from ${componentConfig(n).label||n.id}`;send.appendChild(title);
     send.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();simSend(n.id)});simLayer.appendChild(send);
   }
-  // A wire is lit while its source end is high.
-  for(const w of wires){const v=levels[w.a]?.value??0;if(v<=0)continue;const gEl=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"]`);if(gEl){gEl.classList.add('level-high');gEl.style.setProperty('--level',String(v))}}
+  // A wire is lit while its source end is high. A source in a role or status slot (6-11) lights it in
+  // that slot's own tone (litTone); any other source keeps the output accent.
+  for(const w of wires){const v=levels[w.a]?.value??0;if(v<=0)continue;const gEl=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"]`);if(gEl){gEl.classList.add('level-high');gEl.style.setProperty('--level',String(v));
+    const src=nodes.find(n=>n.id===w.a),slot=src?Number(componentConfig(src).colorSlot):NaN;if(Number.isInteger(slot)&&slot>=6){const tone=litTone(slot,surfaceAppearance());if(tone)gEl.style.setProperty('--wire-lit',tone)}}}
   // New edges flash + or − beside their node.
   const edges=run.edges().edges;
   for(const e of edges.slice(simClock.edgeMark)){

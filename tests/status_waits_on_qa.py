@@ -28,6 +28,7 @@ EXAMPLE = ROOT / 'examples/work-engine/status.sov'
 NOTATION_EXAMPLE = ROOT / 'examples/work-engine/notation.sov'
 CODES = ['STATUS_UNKNOWN', 'STATUS_UNDECLARED', 'WAITS_ON_INVALID']
 TITLES = {'web-booth': 'Partial', 'recording': 'Partial', 'case': 'Exists', 'anchor': 'Missing', 'continuity-to-sqlite': 'Proposed'}
+GLYPH = {'Exists': '✓', 'Partial': '◷', 'Missing': '✕', 'Proposed': '◷'}
 WAITS = 'Waits on Bdo, rule R-29, decision D1'
 
 NODE = r'''
@@ -183,7 +184,7 @@ def browser_part() -> None:
             card = cards[cid]
             assert len(card['chips']) == 1, (cid, card['chips'])
             chip = card['chips'][0]
-            assert chip['text'] == title, (cid, chip)
+            assert chip['text'] == f'{GLYPH[title]} {title}', (cid, chip)
             # Inside the card's top-right corner.
             B, C = card['body'], chip['rect']
             assert C['l'] > B['l'] and C['r'] < B['r'] and C['t'] > B['t'] and C['b'] < (B['t'] + B['b']) / 2, (cid, C, B)
@@ -206,7 +207,7 @@ def browser_part() -> None:
 
         svg = page.evaluate('()=>SovSchematicAPI.render.svg({})')
         for title in sorted(set(TITLES.values())):
-            assert f'>{title}<' in svg, f'render.svg lost the chip title {title}'
+            assert f'{GLYPH[title]} {title}<' in svg, f'render.svg lost the chip title {title}'
         assert WAITS in svg and 'status-chip' in svg, 'render.svg lost the waits-on text or the chips'
         assert not errors, errors
         browser.close()
