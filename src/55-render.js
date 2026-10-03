@@ -684,16 +684,26 @@ function appendWirePacket(group,motionPath,pathLength,bodyColor,boundaryColor,di
     packet.appendChild(label);
   }
 
-  const duration=packetTravelSeconds(pathLength)/Math.max(.1,Number(rate)||1);
-
-  // Packet skin is identity, not field diffusion.
-  // It stays constant across the trip while the carrier/wire field may blend.
-  const motion=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
-  motion.setAttribute('path',motionPath);
-  motion.setAttribute('dur',`${duration}s`);
-  motion.setAttribute('repeatCount','indefinite');
-  motion.setAttribute('calcMode','linear');
-  packet.appendChild(motion);
+  // A resolved rate of exactly 0 (the document's own rate, issue #40) draws the packet at its
+  // start point and stops there: no animateMotion element, so `Number(rate)||1` - which would
+  // otherwise read 0 as falsy and silently pick 1 - never gets the chance to erase a pause. Any
+  // other rate, including a small positive one, keeps today's duration math and its .1 floor.
+  if(Number(rate)===0){
+    const startPoint=document.createElementNS('http://www.w3.org/2000/svg','path');
+    startPoint.setAttribute('d',motionPath);
+    const start=startPoint.getPointAtLength(0);
+    packet.setAttribute('transform',`translate(${start.x} ${start.y})`);
+  }else{
+    const duration=packetTravelSeconds(pathLength)/Math.max(.1,Number(rate)||1);
+    // Packet skin is identity, not field diffusion.
+    // It stays constant across the trip while the carrier/wire field may blend.
+    const motion=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
+    motion.setAttribute('path',motionPath);
+    motion.setAttribute('dur',`${duration}s`);
+    motion.setAttribute('repeatCount','indefinite');
+    motion.setAttribute('calcMode','linear');
+    packet.appendChild(motion);
+  }
   group.appendChild(packet);
   return packet;
 }
@@ -890,6 +900,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
     group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':'')+((epA.kind==='free'||epB.kind==='free')?' has-free-end':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
     if(busState?.fallback.has(w.id))group.dataset.busFallback='true';
+    if(routeBlockedAt(i))group.dataset.routeBlocked='true';
 
     const gradientId=`wire-gradient-${i}-${renderEpoch++}`;
     const gradient=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');

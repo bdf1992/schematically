@@ -42,6 +42,22 @@ $refs for new ids); check with schematic.markers and schematic.render; run with 
   // current document, packs read from data/*.pack.json (file-name order) at start.
   const runs=State.createRunRegistry({packs:packs||[],document:()=>Data.clone(documentState)});
   let historyUndo=[],historyRedo=[];
+  // Live link (read-only): the browser editor pushes a snapshot of what its operator
+  // is looking at. It is observation, never authority - nothing here touches the
+  // document, and a snapshot is only ever served back with its own age attached.
+  const LIVE_STALE_AFTER_MS=15_000;
+  let liveSnapshot=null,liveReceivedAt=null;
+  function liveState(){
+    if(!liveSnapshot)return {connected:false,reason:'no editor session has pushed a snapshot',ageMs:null,receivedAt:null,stale:null,snapshot:null};
+    const ageMs=Date.now()-liveReceivedAt;
+    return {connected:ageMs<=LIVE_STALE_AFTER_MS,ageMs,receivedAt:new Date(liveReceivedAt).toISOString(),stale:ageMs>LIVE_STALE_AFTER_MS,snapshot:liveSnapshot};
+  }
+  function liveSelectionState(){
+    const state=liveState();
+    if(!state.snapshot)return state;
+    const {document:_document,...rest}=state.snapshot;
+    return {...state,snapshot:rest};
+  }
   const cloneDoc=()=>Data.makeDocument(Data.clone(documentState));
   function recordHistory(snapshot){historyUndo.push(snapshot);if(historyUndo.length>120)historyUndo.shift();historyRedo=[]}
   function pushHistory(){recordHistory(cloneDoc())}
@@ -109,6 +125,8 @@ $refs for new ids); check with schematic.markers and schematic.render; run with 
     return {ok:true,value:format==='png'?{format,png:r.png,score:r.metrics.score,counts:r.metrics.counts}:{format,svg:r.svg,score:r.metrics.score,counts:r.metrics.counts},mutates:false,image:format==='png'?r.png:null};
   }
   function executeTool(name,args={}){
+    if(name==='schematic.live.get')return {ok:true,value:liveState(),mutates:false};
+    if(name==='schematic.live.selection')return {ok:true,value:liveSelectionState(),mutates:false};
     const ran=runTool(name,args);
     if(ran)return {ok:ran.ok,value:ran,mutates:false};
     const authored=executeAuthorTool(name,args);if(authored)return authored;
@@ -152,7 +170,7 @@ $refs for new ids); check with schematic.markers and schematic.render; run with 
     if(typeof method==='string'&&method.startsWith('notifications/'))return {status:202,headers:{'access-control-allow-origin':'*'},body:''};
     if(method==='ping')return jsonResponse(200,rpcResult(id,{}),{'mcp-protocol-version':MCP_VERSION});
     if(method==='server/discover')return jsonResponse(200,rpcResult(id,{protocolVersion:MCP_VERSION,serverInfo:SERVER_INFO,capabilities:{tools:{listChanged:false}},instructions:INSTRUCTIONS}),{'mcp-protocol-version':MCP_VERSION});
-    if(method==='tools/list'){const extra=[{name:'schematic.markers',description:'List validation markers for the current document, derived from schematic.document validation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}}];return jsonResponse(200,rpcResult(id,{tools:[...AUTHOR_TOOLS,...Data.operationTools(),...extra,...RUN_TOOLS,...Graph.tools(),...RENDER_TOOLS,Layout.tool()]}),{'mcp-protocol-version':MCP_VERSION});}
+    if(method==='tools/list'){const extra=[{name:'schematic.markers',description:'List validation markers for the current document, derived from schematic.document validation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.undo',description:'Undo the most recent server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.history.redo',description:'Redo the most recently undone server mutation.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.list',description:'List persisted checkpoints.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.checkpoint.create',description:'Create a named checkpoint inside the .sov document.',inputSchema:{type:'object',properties:{name:{type:'string'}},additionalProperties:false}},{name:'schematic.checkpoint.restore',description:'Restore a checkpoint by id.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false}},{name:'schematic.live.selection',description:'What the live browser editor currently has selected, with the selected record and no document body. Returns connected:false when no editor is pushing.',inputSchema:{type:'object',properties:{},additionalProperties:false}},{name:'schematic.live.get',description:'The full live editor snapshot: file identity, revision, camera, appearance, selection, and the in-browser document. Reflects unsaved editor state, not the server file.',inputSchema:{type:'object',properties:{},additionalProperties:false}}];return jsonResponse(200,rpcResult(id,{tools:[...AUTHOR_TOOLS,...Data.operationTools(),...extra,...RUN_TOOLS,...Graph.tools(),...RENDER_TOOLS,Layout.tool()]}),{'mcp-protocol-version':MCP_VERSION});}
     if(method==='tools/call'){
       const name=rpc.params?.name,args=rpc.params?.arguments||{};
       const result=await executeTool(name,args);if(result.mutates)saveDocument();
@@ -164,6 +182,15 @@ $refs for new ids); check with schematic.markers and schematic.render; run with 
   async function handleApi(request){
     const parts=request.path.split('/').filter(Boolean),query=request.query||{};
     if(request.path==='/api/v1/formats'&&request.method==='GET')return jsonResponse(200,{document:Data.DOCUMENT_SCHEMA,package:Data.PACKAGE_SCHEMA,workspace:Data.WORKSPACE_SCHEMA,operation:Data.OPERATION_SCHEMA,receipt:Data.RECEIPT_SCHEMA,resources:Object.keys(Data.RESOURCE_KEYS)});
+    if(request.path==='/api/v1/live'){
+      if(request.method==='GET')return jsonResponse(200,query.selection==='1'?liveSelectionState():liveState());
+      if(request.method==='POST'){
+        let body;try{body=parseBody(request.body)}catch(e){return jsonResponse(400,{ok:false,error:`the request body is not JSON: ${String(e?.message||e)}`})}
+        if(body?.schema!=='soveraeign.schematic/live@0.1')return jsonResponse(400,{ok:false,error:'expected schema soveraeign.schematic/live@0.1'});
+        liveSnapshot=body;liveReceivedAt=Date.now();
+        return jsonResponse(202,{ok:true,receivedAt:new Date(liveReceivedAt).toISOString()});
+      }
+    }
     if(request.path==='/api/v1/document'){
       if(request.method==='GET')return jsonResponse(200,Data.clone(documentState));
       if(request.method==='PUT'){
@@ -225,9 +252,14 @@ $refs for new ids); check with schematic.markers and schematic.render; run with 
   async function handle(request){
     if(request.method==='OPTIONS')return {status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','access-control-allow-headers':'content-type,mcp-protocol-version,mcp-method,mcp-name'},body:''};
     try{
+      if((request.path==='/editor'||request.path==='/index.html')&&request.method==='GET'){
+        const html=editorHtml?editorHtml():null;
+        if(html==null)return jsonResponse(404,{error:'no build at index.html; run python build.py'});
+        return {status:200,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','access-control-allow-origin':'*'},body:html};
+      }
       if(request.path==='/mcp'&&request.method==='POST')return await handleMcp(request);
       if(request.path.startsWith('/api/v1/'))return await handleApi(request);
-      return jsonResponse(200,{name:'soveraeign-schematic',version:'0.1.24',document:describe(),mcp:'/mcp',api:'/api/v1'});
+      return jsonResponse(200,{name:'soveraeign-schematic',version:'0.1.24',document:describe(),mcp:'/mcp',api:'/api/v1',editor:'/editor'});
     }catch(error){return jsonResponse(500,{error:String(error.message||error)})}
   }
   return {handle};

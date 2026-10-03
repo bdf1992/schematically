@@ -399,7 +399,7 @@
               "good": {
                 "payload": {
                   "verdict": "pass",
-                  "score": 0.93
+                  "score": 930
                 }
               },
               "bad": {
@@ -460,7 +460,7 @@
               "good": {
                 "payload": {
                   "verdict": "pass",
-                  "score": 0.93
+                  "score": 930
                 }
               },
               "bad": {
@@ -537,7 +537,7 @@
               "good": {
                 "payload": {
                   "verdict": "pass",
-                  "score": 0.93
+                  "score": 930
                 }
               },
               "bad": {
@@ -619,7 +619,7 @@
               "good": {
                 "payload": {
                   "verdict": "pass",
-                  "score": 0.93
+                  "score": 930
                 }
               },
               "bad": {
@@ -678,7 +678,7 @@
               "good": {
                 "payload": {
                   "verdict": "pass",
-                  "score": 0.93
+                  "score": 930
                 }
               },
               "bad": {

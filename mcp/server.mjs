@@ -30,6 +30,12 @@ const PORT=Number(arg('--port',8787));
 const FILE=path.resolve(arg('--file',path.join(HERE,'../data/schematic.sov')));
 const HOST=arg('--host','127.0.0.1');
 const readRepoText=relative=>fs.readFileSync(path.join(HERE,'..',relative),'utf8');
+// The editor is served from this origin so the live link is a same-origin request;
+// opened from file:// the browser has an opaque origin and the push never lands.
+const INDEX_FILE=path.join(HERE,'../index.html');
+function editorHtml(){
+  try{return fs.readFileSync(INDEX_FILE,'utf8')}catch(_){return null}
+}
 
 // Runs read packs from data/*.pack.json (file-name order) at start.
 const PACK_DIR=path.join(HERE,'../data');
@@ -55,7 +61,8 @@ const surface=createSurface({
   packs:packsJson,
   render,
   readText:readRepoText,
-  describe:()=>FILE
+  describe:()=>FILE,
+  editorHtml
 });
 
 function readBody(req){
@@ -81,4 +88,7 @@ const server=http.createServer(async(req,res)=>{
   res.writeHead(response.status,response.headers||{});
   res.end(response.body==null?'':response.body);
 });
-server.listen(PORT,HOST,()=>console.log(`Soveraeign Schematic API + MCP http://${HOST}:${PORT} · ${FILE}`));
+server.listen(PORT,HOST,()=>{
+  console.log(`Soveraeign Schematic API + MCP http://${HOST}:${PORT} · ${FILE}`);
+  console.log(`Editor http://${HOST}:${PORT}/editor?live=1`);
+});

@@ -33,6 +33,7 @@ relative order): `03-canonical.js`,
 - `75-persistence.js` — File lifecycle, `.sov`/`.sovpak`, shared standalone SVG serialization, recovery, rehydration. The headless SVG script delegates here through the browser API.
 - `80-bootstrap.js` — global controls/keyboard/startup.
 - `85-api.js` — browser API adapter.
+- `87-live.js` — live link: off unless asked (`?live=1`, `?live=<origin>`, or `SovSchematicLive.start()`), publishes a read-only snapshot (file identity, revision, camera, appearance, selection with the selected record, and the in-browser document) to `POST /api/v1/live` on selection and revision change, coalesced and backed off. Mutates nothing; loads last.
 
 File lifecycle belongs in `75-persistence.js`; no other concern should independently serialize, download, open, or replace schematic files.
 

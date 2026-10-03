@@ -621,7 +621,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       <button class="btn" id="viewBtn" title="View" aria-expanded="false">View</button>
       <div class="editor-menu view-menu" id="viewMenu" hidden>
         <label class="menu-field"><span>Appearance</span><select id="appearanceMode"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-        <label class="menu-field"><span>Global rate</span><select id="globalRate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        <label class="menu-field"><span>Global rate</span><select id="globalRate"><option value="0">Paused</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
         <div class="file-menu-separator"></div>
         <button class="file-menu-item" id="viewObjectsBtn" type="button"><span>Objects</span></button>
         <button class="file-menu-item" id="viewFocusBtn" type="button"><span>Focus selection</span><kbd>Enter</kbd></button>
@@ -2050,6 +2050,17 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!isObject(config)||config.delay===undefined||(clearable&&config.delay===null))return;
     if(!(Number.isInteger(config.delay)&&config.delay>=0))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 0, not ${JSON.stringify(config.delay)}`);
   }
+  // ---- meta.timeScale (issue #40, "The document's rate beats the view's") ---------------------
+  // The document's own rate: absent means unset (the view defaults it to 1); a finite number >= 0
+  // is admitted as written, 0 meaning paused. Anything else - negative, NaN, Infinity, null, a
+  // string, a boolean - is refused with TIME_SCALE_INVALID. One rule for the file (validateDocument,
+  // below), the HTTP/MCP surface (PUT /api/v1/document already answers 400 from validateDocument's
+  // errors) and the view (src/15-editor-kernel.js setGlobalTimeScale runs this same function).
+  function admitTimeScale(value){
+    if(value===undefined)return {ok:true,present:false};
+    if(typeof value==='number'&&Number.isFinite(value)&&value>=0)return {ok:true,present:true,value};
+    return {ok:false,code:'TIME_SCALE_INVALID',message:`TIME_SCALE_INVALID: meta.timeScale must be a finite number >= 0, not ${JSON.stringify(value)}`};
+  }
   // ---- Status and waits-on (NOTATION-MODEL.md "Statuses") -------------------------------------
   // A Component's or Wire's `config.status` names an entry of its document's notation's
   // `statuses` list; there is no built-in list, so a notation that declares none admits none.
@@ -2984,6 +2995,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null;if(N&&input.notation!=null){const r=N.resolve(input);if(!r.ok)errors.push(`notation: ${r.message} (${r.code})`)}}
     if(input.narration!=null&&!Array.isArray(input.narration))errors.push('narration must be an array of {at, say}');
     for(const [i,line] of (Array.isArray(input.narration)?input.narration:[]).entries())if(!isObject(line)||typeof line.say!=='string')errors.push(`narration[${i}] needs a say`);
+    // meta.timeScale: one admission rule for the file, the API and the view (issue #40).
+    if(isObject(input.meta)){const ts=admitTimeScale(input.meta.timeScale);if(!ts.ok)errors.push(ts.message)}
     // A section's regions sit between its lines: n lines bound exactly n-1 bands. Never repaired.
     for(const c of input.components||[]){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)errors.push(`component ${c.id||'?'} section: bands must be one fewer than lines (${s.lines.length} lines, ${s.bands.length} bands)`)}
     for(const wire of input.wires||[]){
@@ -3040,7 +3053,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {admitTimeScale,statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
 /* END src/05-data-core.js */
 </script>
@@ -4570,7 +4583,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const message={id,root:id,parent:null,channel:edge.channel,payload:{node:entity,polarity,from:scale(from),to:scale(to),at:ctx.t*run.tickMs},origin:entity};
     const principal=component.principal??null;
     const rid=messageRecord(run,ctx,{entity,point:edge.point,observer:'rule:edge',rule:'edge',inputs:[record],message,principal,hop:{event:'edge'}});
-    messageAt(run,ctx,entity,edge.point,message,principal,null,rid);
+    // An edge message goes on from the card's own continueAt, as the graph core's setLevel hands it
+    // (src/07-graph-core.js:469-473 at 7b939e3): a card never takes its own edge message through its
+    // own intake (control, asserted set or toggle, flow intake, park).
+    continueAt(run,ctx,entity,edge.point,message,principal,null,rid);
   }
   // Update phase on the message channel of one port: injects start their messages; arrivals are put in
   // merge order (the declared Paths first, the rest a draw recorded like any merge) and every one is
@@ -8131,8 +8147,36 @@ function renderObjectsPanel(){
 }
 
 // --- Appearance / rate -----------------------------------------------------
-function globalTimeScale(){diagram.meta=diagram.meta||{};const n=Number(diagram.meta.timeScale);return Math.max(.1,Math.min(8,Number.isFinite(n)?n:1))}
-function setGlobalTimeScale(value){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Math.max(.1,Math.min(8,Number(value)||1));setHistoryHint('Change global rate');render();scheduleHistoryCapture()}
+// The document's own rate (issue #40): absent reads as 1; an admitted value is used as written,
+// only capped at 8 for rendering - 0 stays 0 and means paused. setGlobalTimeScale runs the same
+// admission rule a file and the API use (SovSchematicData.admitTimeScale), so a refused value
+// changes nothing and is reported, never silently clamped into range.
+function globalTimeScale(){
+  diagram.meta=diagram.meta||{};
+  const admitted=SovSchematicData.admitTimeScale(diagram.meta.timeScale);
+  if(!admitted.ok||!admitted.present)return 1;
+  return Math.min(8,admitted.value);
+}
+function setGlobalTimeScale(value){
+  diagram.meta=diagram.meta||{};
+  const numeric=typeof value==='string'&&value.trim()!==''?Number(value):value;
+  const admitted=SovSchematicData.admitTimeScale(numeric);
+  if(!admitted.ok){statusEl.textContent=admitted.message;syncGlobalRateSelect();return admitted}
+  if(admitted.present)diagram.meta.timeScale=admitted.value;
+  setHistoryHint('Change global rate');render();scheduleHistoryCapture();syncGlobalRateSelect();
+  return admitted;
+}
+// The #globalRate select never shows a blank: when no option equals the document's own rate
+// (a value a document authored directly, outside the select's fixed list), one is added for it.
+function syncGlobalRateSelect(){
+  const select=document.getElementById('globalRate');if(!select)return;
+  const value=String(globalTimeScale());
+  select.value=value;
+  if(select.value!==value){
+    const option=document.createElement('option');option.value=value;option.textContent=`${value}×`;
+    select.appendChild(option);select.value=value;
+  }
+}
 function packetRateForWire(w,direction='forward'){
   const source=nodes.find(n=>n.id===(direction==='reverse'?w.b:w.a));return globalTimeScale()*entityEditorState(source).rate*entityEditorState(w).rate;
 }
@@ -8184,7 +8228,7 @@ function initializeEditorKernel(){
   const search=document.getElementById('quickSearchInput');search?.addEventListener('input',()=>updateQuickSearch(search.value));search?.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeQuickSearch()}else if(e.key==='Enter'){e.preventDefault();const n=quickSearchMatches[0];if(n){closeQuickSearch();focusComponent(n)}}});
   const appearance=document.getElementById('appearanceMode');appearance?.addEventListener('change',()=>{appearanceMode=appearance.value;applyAppearanceMode()});
   document.getElementById('globalRate')?.addEventListener('change',e=>setGlobalTimeScale(e.target.value));
-  if(document.getElementById('globalRate'))document.getElementById('globalRate').value=String(globalTimeScale());
+  syncGlobalRateSelect();
   matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener?.('change',()=>{if(appearanceMode==='system')applyAppearanceMode()});
 }
 /* END src/15-editor-kernel.js */
@@ -9908,7 +9952,8 @@ function routeCacheFromCandidate(candidate){
     core:clonePoints(candidate.core),
     score:candidate.score,
     signature:candidate.signature,
-    anchor:{x:candidate.anchor.x,y:candidate.anchor.y}
+    anchor:{x:candidate.anchor.x,y:candidate.anchor.y},
+    blocked:!!candidate.blocked
   };
 }
 function captureDragSnapshots(nodeId){
@@ -9977,6 +10022,113 @@ function scheduleDragSettle(mods=null){
 }
 
 
+// What a route keeps clear of: every visible card that is not a group and not a container holding
+// both ends, padded by the clearance 12, and the wire's own end cards padded 8. A card hosted on
+// the wire itself sits on the line and is not in the way. routePoints and the cached rebuild in
+// stableRouteForWire take this one set, so a rebuild is held to the rule a fresh route is.
+const ROUTE_CLEARANCE=12,ROUTE_END_CLEARANCE=8;
+function routeObstacleSet(sourceNode,targetNode,aSide,bSide,routedWire,wireId){
+  const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
+  const others=nodes
+    .filter(n=>n!==sourceNode && n!==targetNode && n.id!==activeNodeDrag && !isGroupComponent(n) && !isEffectivelyHidden(n) && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
+    .map(n=>rectForNode(n,ROUTE_CLEARANCE));
+  const ownA=endpointNeedsOuterObstacle(sourceNode,aSide,routedWire)?rectForNode(sourceNode,ROUTE_END_CLEARANCE):null;
+  const ownB=endpointNeedsOuterObstacle(targetNode,bSide,routedWire)?rectForNode(targetNode,ROUTE_END_CLEARANCE):null;
+  return {hostCanvasId,others,ownA,ownB,obstacles:[...others,...[ownA,ownB].filter(Boolean)]};
+}
+// An end's lead: the stub from the port P to the lead's end S, and on along the same line. That
+// stub is the one part of a route allowed inside its own card's padding.
+function axisDirection(P,S){
+  if(!P||!S)return null;
+  const dx=S.x-P.x,dy=S.y-P.y;
+  if(Math.abs(dx)>=.5&&Math.abs(dy)<.5)return {dx:Math.sign(dx),dy:0};
+  if(Math.abs(dy)>=.5&&Math.abs(dx)<.5)return {dx:0,dy:Math.sign(dy)};
+  return null;
+}
+function routeLeadRay(P,S,R){
+  const d=R?axisDirection(P,S):null;
+  return d?{S,R,...d}:null;
+}
+function onLeadRay(P,Q,lead){
+  const tol=.05;
+  if(lead.dx)return Math.abs(P.y-lead.S.y)<tol&&Math.abs(Q.y-lead.S.y)<tol&&(P.x-lead.S.x)*lead.dx>=-tol&&(Q.x-lead.S.x)*lead.dx>=-tol;
+  return Math.abs(P.x-lead.S.x)<tol&&Math.abs(Q.x-lead.S.x)<tol&&(P.y-lead.S.y)*lead.dy>=-tol&&(Q.y-lead.S.y)*lead.dy>=-tol;
+}
+function segmentClear(P,Q,obstacles,leads=[]){
+  for(const R of obstacles){
+    if(!segHitsRect(P,Q,R))continue;
+    if(leads.some(l=>l&&l.R===R&&onLeadRay(P,Q,l)))continue;
+    return false;
+  }
+  return true;
+}
+// A route enters no padded obstacle; only each end's lead may sit inside its own card's padding.
+function routeClear(points,obstacles,leads=[]){
+  const pts=normalizePoints(points);
+  for(let i=0;i<pts.length-1;i++)if(!segmentClear(pts[i],pts[i+1],obstacles,leads))return false;
+  return true;
+}
+// What one segment costs against the routes already drawn: the crossing, shared-track and crowding
+// terms of pathScore.
+function occupiedCost(P,Q,occupied,ends){
+  let c=0;
+  for(const seg of occupied){
+    if(segmentsCross(P,Q,seg.a,seg.b))c+=90;
+    c+=sharedLength(P,Q,seg.a,seg.b)*5;
+    if(ends&&seg.ends&&!seg.ends.some(e=>ends.includes(e))){if(onOneTrack(P,Q,seg.a,seg.b))c+=260;else if(runsBeside(P,Q,seg.a,seg.b))c+=70}
+  }
+  return c;
+}
+// Orthogonal connector routing (Wybrow, Marriott and Stuckey, GD 2009; libavoid): A* over the grid
+// of channel lines, from the source lead's end to the target lead's end, along grid edges that enter
+// no padded obstacle. Cost: length + 46 per bend + occupiedCost. Returns the grid points or null.
+const ROUTE_BEND_COST=46;
+function gridRoute(SA,SB,xs,ys,obstacles,leads,fence,occupied,ends,outA,inB){
+  const X=uniqueNumbers([...xs,SA.x,SB.x],.01),Y=uniqueNumbers([...ys,SA.y,SB.y],.01);
+  const ix=v=>{let k=0;for(let i=1;i<X.length;i++)if(Math.abs(X[i]-v)<Math.abs(X[k]-v))k=i;return k};
+  const iy=v=>{let k=0;for(let i=1;i<Y.length;i++)if(Math.abs(Y[i]-v)<Math.abs(Y[k]-v))k=i;return k};
+  const sx=ix(SA.x),sy=iy(SA.y),gx=ix(SB.x),gy=iy(SB.y),NY=Y.length;
+  const pt=(i,j)=>(i===sx&&j===sy)?SA:(i===gx&&j===gy)?SB:{x:X[i],y:Y[j]};
+  const inside=(i,j)=>!fence||(i===sx&&j===sy)||(i===gx&&j===gy)||routeInsideFence([null,{x:X[i],y:Y[j]},null],fence);
+  const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
+  const dirOf=v=>v?DIRS.findIndex(d=>d[0]===v.dx&&d[1]===v.dy):-1;
+  const start=dirOf(outA),finish=dirOf(inB);
+  const key=(i,j,d)=>((i*NY+j)*5)+d+1;
+  const heur=(i,j)=>Math.abs(X[i]-SB.x)+Math.abs(Y[j]-SB.y);
+  const gScore=new Map(),from=new Map(),edgeMemo=new Map(),heap=[];
+  const push=n=>{heap.push(n);let c=heap.length-1;while(c>0){const p=(c-1)>>1;if(heap[p].f<=heap[c].f)break;[heap[p],heap[c]]=[heap[c],heap[p]];c=p}};
+  const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let c=0;for(;;){const l=2*c+1,r=l+1;let m=c;if(l<heap.length&&heap[l].f<heap[m].f)m=l;if(r<heap.length&&heap[r].f<heap[m].f)m=r;if(m===c)break;[heap[m],heap[c]]=[heap[c],heap[m]];c=m}}return top};
+  const k0=key(sx,sy,start);gScore.set(k0,0);push({i:sx,j:sy,d:start,g:0,f:heur(sx,sy),k:k0});
+  let budget=60000;
+  while(heap.length&&budget-->0){
+    const cur=pop();
+    if(!cur.done&&cur.g>(gScore.get(cur.k)??Infinity))continue;
+    if(cur.i===gx&&cur.j===gy){
+      // Arrive heading into the target's lead, or pay for the bend there.
+      const total=cur.g+(finish>=0&&cur.d>=0&&cur.d!==finish?ROUTE_BEND_COST:0);
+      if(!cur.done){push({...cur,g:total,f:total,done:true});continue}
+      const out=[];let k=cur.k,node=cur;
+      while(node){out.push(pt(node.i,node.j));node=from.get(k);k=node?.k}
+      return out.reverse();
+    }
+    if(cur.done)continue;
+    for(let d=0;d<4;d++){
+      const ni=cur.i+DIRS[d][0],nj=cur.j+DIRS[d][1];
+      if(ni<0||nj<0||ni>=X.length||nj>=NY||!inside(ni,nj))continue;
+      const P=pt(cur.i,cur.j),Q=pt(ni,nj);
+      if(Math.abs(P.x-Q.x)>.01&&Math.abs(P.y-Q.y)>.01)continue;
+      const ek=Math.min(cur.i*NY+cur.j,ni*NY+nj)+':'+Math.max(cur.i*NY+cur.j,ni*NY+nj);
+      let edge=edgeMemo.get(ek);
+      if(edge===undefined){edge=segmentClear(P,Q,obstacles,leads)?segmentLength(P,Q)+occupiedCost(P,Q,occupied,ends):null;edgeMemo.set(ek,edge)}
+      if(edge===null)continue;
+      const g=cur.g+edge+(cur.d>=0&&cur.d!==d?ROUTE_BEND_COST:0),k=key(ni,nj,d);
+      if(g>=(gScore.get(k)??Infinity))continue;
+      gScore.set(k,g);from.set(k,cur);push({i:ni,j:nj,d,g,f:g+heur(ni,nj),k});
+    }
+  }
+  return null;
+}
+
 function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSeed=0,occupied=[],wireId=null){
   const sourceNode=nodes.find(n=>n.id===sourceId);
   const targetNode=nodes.find(n=>n.id===targetId);
@@ -9988,18 +10140,11 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   // A lead never leaves the fence: a card near the core's edge gets a shorter lead, not a detour.
   const inFence=P=>fence?{x:Math.max(fence.l+2,Math.min(fence.r-2,P.x)),y:Math.max(fence.t+2,Math.min(fence.b-2,P.y))}:P;
   const SA=sourceNode?inFence(routeLead(A,B,aSide,sourceNode,wireEndpointInward(routedWire,sourceNode))):A, SB=targetNode?inFence(routeLead(B,A,bSide,targetNode,wireEndpointInward(routedWire,targetNode))):B;
-  const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
   // A group is drawn behind everything and is never an obstacle (SECTION-MODEL.md "Groups").
-  const otherRects=nodes
-    .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && !isGroupComponent(n) && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
-    .map(n=>rectForNode(n,12));
-
   // Source and target are included after the outward lead. This prevents a path
   // from exiting one side and visually tunneling through either endpoint card.
-  const endpointRects=[];
-  if(endpointNeedsOuterObstacle(sourceNode,aSide,routedWire))endpointRects.push(rectForNode(sourceNode,8));
-  if(endpointNeedsOuterObstacle(targetNode,bSide,routedWire))endpointRects.push(rectForNode(targetNode,8));
-  const obstacles=[...otherRects,...endpointRects];
+  const {hostCanvasId,ownA,ownB,obstacles}=routeObstacleSet(sourceNode,targetNode,aSide,bSide,routedWire,wireId);
+  const leads=[routeLeadRay(A,SA,ownA),routeLeadRay(B,SB,ownB)].filter(Boolean);
 
   const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&!isGroupComponent(n)&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
   const xs=[SA.x,SB.x,(SA.x+SB.x)/2];
@@ -10038,7 +10183,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
 
   const valid=candidates
     .map(normalizePoints)
-    .filter(points=>pathValid(points,obstacles)&&routeInsideFence(points,fence))
+    .filter(points=>routeClear(points,obstacles,leads)&&routeInsideFence(points,fence))
     .map(points=>({
       points,
       score:pathScore(points,SA,SB,obstacles,occupied,ends),
@@ -10047,9 +10192,20 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
     }))
     .sort((a,b)=>a.score-b.score);
 
-  let chosen=valid[0]||null;
+  let chosen=valid[0]||null,blocked=false;
 
   if(!chosen){
+    // No simple shape clears: search the channel grid rather than take a route through a card.
+    const found=gridRoute(SA,SB,channelsX,channelsY,obstacles,leads,fence,occupied,ends,axisDirection(A,SA),axisDirection(SB,B));
+    if(found){
+      const points=normalizePoints(found);
+      chosen={points,score:pathScore(points,SA,SB,obstacles,occupied,ends),signature:routeSignature(points),anchor:routeAnchor(points)};
+    }
+  }
+
+  if(!chosen){
+    // The grid has no clear route either: the route is blocked, and drawn round the perimeter.
+    blocked=true;
     // Last resort: a clean perimeter route. Choose the cheapest of four sides; inside a
     // fence the perimeter is the fence's own inner edge, never the world outside it.
     const minL=fence?fence.l+8:Math.min(SA.x,SB.x,...allRects.map(r=>r.l))-36-Math.abs(lane);
@@ -10070,7 +10226,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
      }))
      .sort((a,b)=>a.score-b.score);
     // Prefer a perimeter that clears every body; only when none does is the cheapest taken.
-    chosen=fallback.find(f=>pathValid(f.points,obstacles))||fallback[0];
+    chosen=fallback.find(f=>routeClear(f.points,obstacles,leads))||fallback[0];
   }
 
   return {
@@ -10079,6 +10235,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
     score: chosen.score,
     signature: chosen.signature,
     anchor: chosen.anchor,
+    blocked,
     obstacles
   };
 }
@@ -10144,7 +10301,8 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
       core:candidate.core,
       score:candidate.score,
       signature:candidate.signature,
-      anchor:candidate.anchor
+      anchor:candidate.anchor,
+      blocked:candidate.blocked
     });
     return candidate.points;
   }
@@ -10161,30 +10319,27 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     const inner=cachedCore.slice(1,-1).map(q=>({x:q.x,y:q.y}));
     rebuilt=normalizePoints([A,SA,...inner,SB,B]);
 
-    // Cached topology may remain readable while endpoints move. We only throw
-    // it away if its interior route now collides with a component.
+    // Cached topology may remain readable while endpoints move. It is thrown away when its
+    // route enters any padded obstacle, the wire's own end cards included; only the leads
+    // may sit inside their own card's padding.
     const routeOnly=normalizePoints([SA,...inner,SB]);
-    const endpointRects=[];
-    const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && !isGroupComponent(n) && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
-    if(endpointNeedsOuterObstacle(sourceNode,w.aSide,w))endpointRects.push(rectForNode(sourceNode,8));
-    if(endpointNeedsOuterObstacle(targetNode,w.bSide,w))endpointRects.push(rectForNode(targetNode,8));
-    const obstacles=[...otherRects,...endpointRects];
+    const {ownA,ownB,obstacles}=routeObstacleSet(sourceNode,targetNode,w.aSide,w.bSide,w,w.id);
+    const leads=[routeLeadRay(A,SA,ownA),routeLeadRay(B,SB,ownB)].filter(Boolean);
 
-    if(!pathValid(routeOnly,obstacles)||!routeInsideFence(routeOnly,routeFence(w))) rebuilt=null;
+    if(!routeClear(routeOnly,obstacles,leads)||!routeInsideFence(routeOnly,routeFence(w))) rebuilt=null;
   }
 
   if(!rebuilt){
     routeCache.set(index,{
       points:candidate.points,core:candidate.core,score:candidate.score,
-      signature:candidate.signature,anchor:candidate.anchor
+      signature:candidate.signature,anchor:candidate.anchor,blocked:candidate.blocked
     });
     return candidate.points;
   }
 
   const SA=sourceNode?routeLead(A,B,w.aSide,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?routeLead(B,A,w.bSide,targetNode,wireEndpointInward(w,targetNode)):B;
   const rebuiltCore=normalizePoints([SA,...rebuilt.slice(2,-2),SB]);
-  const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && !isGroupComponent(n) && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
-  const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied,[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]);
+  const rebuiltScore=pathScore(rebuiltCore,SA,SB,routeObstacleSet(sourceNode,targetNode,w.aSide,w.bSide,w,w.id).others,occupied,[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]);
   const anchor=routeAnchor(rebuiltCore);
 
   const sameFamily = candidate.signature===cached.signature;
@@ -10198,7 +10353,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
   if(sameFamily || (clearlyBetter && movementPastRelease)){
     routeCache.set(index,{
       points:candidate.points,core:candidate.core,score:candidate.score,
-      signature:candidate.signature,anchor:candidate.anchor
+      signature:candidate.signature,anchor:candidate.anchor,blocked:candidate.blocked
     });
     return candidate.points;
   }
@@ -10207,10 +10362,15 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     ...cached,
     points:rebuilt,
     score:rebuiltScore,
-    anchor
+    anchor,
+    blocked:false
   });
   return rebuilt;
 }
+
+// Whether the wire at this index is drawn on the perimeter fallback because neither a simple shape
+// nor the grid search found a clear route (the wire group's data-route-blocked).
+function routeBlockedAt(index){return !!routeCache.get(index)?.blocked}
 
 // Segments a later route must keep clear of, tagged with the wire's two ends: wires that
 // share an end (a fan-out, a fan-in) may run together; any others may not run on one track.
@@ -11308,16 +11468,26 @@ function appendWirePacket(group,motionPath,pathLength,bodyColor,boundaryColor,di
     packet.appendChild(label);
   }
 
-  const duration=packetTravelSeconds(pathLength)/Math.max(.1,Number(rate)||1);
-
-  // Packet skin is identity, not field diffusion.
-  // It stays constant across the trip while the carrier/wire field may blend.
-  const motion=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
-  motion.setAttribute('path',motionPath);
-  motion.setAttribute('dur',`${duration}s`);
-  motion.setAttribute('repeatCount','indefinite');
-  motion.setAttribute('calcMode','linear');
-  packet.appendChild(motion);
+  // A resolved rate of exactly 0 (the document's own rate, issue #40) draws the packet at its
+  // start point and stops there: no animateMotion element, so `Number(rate)||1` - which would
+  // otherwise read 0 as falsy and silently pick 1 - never gets the chance to erase a pause. Any
+  // other rate, including a small positive one, keeps today's duration math and its .1 floor.
+  if(Number(rate)===0){
+    const startPoint=document.createElementNS('http://www.w3.org/2000/svg','path');
+    startPoint.setAttribute('d',motionPath);
+    const start=startPoint.getPointAtLength(0);
+    packet.setAttribute('transform',`translate(${start.x} ${start.y})`);
+  }else{
+    const duration=packetTravelSeconds(pathLength)/Math.max(.1,Number(rate)||1);
+    // Packet skin is identity, not field diffusion.
+    // It stays constant across the trip while the carrier/wire field may blend.
+    const motion=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
+    motion.setAttribute('path',motionPath);
+    motion.setAttribute('dur',`${duration}s`);
+    motion.setAttribute('repeatCount','indefinite');
+    motion.setAttribute('calcMode','linear');
+    packet.appendChild(motion);
+  }
   group.appendChild(packet);
   return packet;
 }
@@ -11514,6 +11684,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
     group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':'')+((epA.kind==='free'||epB.kind==='free')?' has-free-end':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
     if(busState?.fallback.has(w.id))group.dataset.busFallback='true';
+    if(routeBlockedAt(i))group.dataset.routeBlocked='true';
 
     const gradientId=`wire-gradient-${i}-${renderEpoch++}`;
     const gradient=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
@@ -11798,6 +11969,7 @@ function layoutMetrics(options={}){
   }
 
   // Routes.
+  const onWire=w=>nodes.filter(n=>(n.canvasId||'')===localCanvasId('wire',w.id)).map(n=>n.id);
   const routes=[];
   for(const g of workspace.querySelectorAll('.wire-group')){
     const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
@@ -11814,7 +11986,9 @@ function layoutMetrics(options={}){
     // A route may leave and meet its own end cards at their ports, but never run through them.
     const inner=pts.slice(Math.min(pts.length,4),Math.max(0,pts.length-4));
     for(const end of [w.a,w.b]){const n=end&&nodes.find(x=>x.id===end);if(!n||!is2D(n)||componentAcceptsChildren(n))continue;const R=body.get(n.id);if(R&&inner.some(p=>layoutInside(p,R,3))){add('route-through-node',[w.id,n.id],`runs through its own end ${n.config?.label||n.id}`);break}}
-    const exempt=new Set([w.a,w.b,canvasOwner,...ancestors(w.a),...ancestors(w.b)].filter(Boolean));
+    // A card hosted on this wire is drawn on the line itself (inline): the wire is its host, not
+    // a route through it.
+    const exempt=new Set([w.a,w.b,canvasOwner,...ancestors(w.a),...ancestors(w.b),...onWire(w)].filter(Boolean));
     for(const n of visible){
       if(exempt.has(n.id)||!is2D(n))continue;
       const R=body.get(n.id),inner=componentAcceptsChildren(n);
@@ -11826,6 +12000,28 @@ function layoutMetrics(options={}){
   for(const {w,pts} of routes)for(const n of visible){
     if(!componentAcceptsChildren(n))continue;const gl=nodeEl(n.id)?.querySelector(':scope > .glyph');if(!gl)continue;
     const G=layoutWorldBox(gl);if(G&&pts.some(p=>layoutInside(p,G,4))){add('route-through-node',[w.id,n.id],`crosses the symbol of ${n.config?.label||n.id}`)}
+  }
+  // Hugging: a middle segment (not the lead out of a port or into one) running along a card's
+  // edge, outside it but under 8 from it, for 16 or more: a reader cannot tell the wire from the
+  // card's outline. Hops are stripped first, and collinear corners merged, so a hop does not split
+  // a lead into a lead and a middle segment.
+  for(const g of workspace.querySelectorAll('.wire-group')){
+    const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
+    const m=layoutWorldMatrix(path);
+    const raw=layoutPathCorners(String(path.getAttribute('d')||'').replace(/A[^A-Z]*?(?=[MLHV])/g,'')).map(q=>m?new DOMPoint(q.x,q.y).matrixTransform(m):q);
+    const c=[];for(const q of raw){const p={x:Math.round(q.x*100)/100,y:Math.round(q.y*100)/100},l=c.at(-1);if(l&&Math.abs(l.x-p.x)<.5&&Math.abs(l.y-p.y)<.5)continue;
+      if(c.length>=2){const a=c.at(-2);if((Math.abs(a.x-l.x)<.5&&Math.abs(l.x-p.x)<.5)||(Math.abs(a.y-l.y)<.5&&Math.abs(l.y-p.y)<.5)){c[c.length-1]=p;continue}}c.push(p)}
+    let hugged=null;const inline=new Set(onWire(w));
+    for(let s=1;s+2<c.length&&!hugged;s++){
+      const P=c[s],Q=c[s+1],h=Math.abs(P.y-Q.y)<.5,v=Math.abs(P.x-Q.x)<.5;if(!h&&!v)continue;
+      for(const n of visible){
+        if(!is2D(n)||componentAcceptsChildren(n)||inline.has(n.id))continue;const R=body.get(n.id);if(!R)continue;
+        const along=h?overlap1D(P.x,Q.x,R.l,R.r):overlap1D(P.y,Q.y,R.t,R.b);if(along<16)continue;
+        const at=h?P.y:P.x,lo=h?R.t:R.l,hi=h?R.b:R.r,gap=at<=lo+.5?lo-at:at>=hi-.5?at-hi:-1;
+        if(gap>=-.5&&gap<8){hugged=n;break}
+      }
+    }
+    if(hugged)add('route-hugs-node',[w.id,hugged.id],`runs along the edge of ${hugged.config?.label||hugged.id}`);
   }
   for(let i=0;i<routes.length;i++)for(let j=i+1;j<routes.length;j++){
     const A=routes[i],B=routes[j],shared=[A.w.a,A.w.b].some(x=>x&&(x===B.w.a||x===B.w.b));
@@ -13215,7 +13411,9 @@ function captureWorkspace(){
       showFlow,
       colorEngine:SovSchematicData.clone(colorEngine),
       appearanceMode,
-      globalRate:globalTimeScale(),
+      // The document's own rate (meta.timeScale) wins over the view; a workspace carries only the
+      // view's own playback speed, never the document's rate (issue #40).
+      playbackSpeed:simClock.speed,
       layout:typeof activeLayoutId==='function'?activeLayoutId():null
     }
   };
@@ -13269,6 +13467,7 @@ function syncRuntimeAfterDocumentReplace(){
   selected=null;hideSelectionBar();
   persistenceFingerprint=semanticFingerprint();
   updateRevisionReadout();
+  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
   render();selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
 }
 function replaceRuntimeDocument(input){
@@ -13295,7 +13494,13 @@ function applyWorkspace(bundle){
   if(view.appearanceMode){appearanceMode=view.appearanceMode;applyAppearanceMode()}
   // The layout on screen is a viewer's choice, kept with the workspace, never in the file.
   if(view.layout&&typeof switchLayout==='function'&&view.layout!==activeLayoutId())switchLayout(view.layout);
-  if(view.globalRate!=null){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Number(view.globalRate)||1}
+  // The document's own rate (meta.timeScale) is never set from a workspace: an older package's
+  // view.globalRate is ignored outright (issue #40). Only the view's own playback speed moves.
+  if(typeof view.playbackSpeed==='number'&&Number.isFinite(view.playbackSpeed)&&view.playbackSpeed>0){
+    simClock.speed=view.playbackSpeed;
+    const sel=document.getElementById('simSpeed');if(sel)sel.value=String(simClock.speed);
+  }
+  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
   render();
   return captureWorkspace();
 }
@@ -14350,7 +14555,7 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
-  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()}},
   render:{
     svg:(options={})=>renderStandaloneSvg(options),
     png:(options={})=>renderStandalonePng(options)
@@ -14413,6 +14618,254 @@ const SovSchematicAPI={
 };
 window.SovSchematicAPI=SovSchematicAPI;
 /* END src/85-api.js */
+</script>
+<script data-beta-module="src/87-live.js">
+/* BEGIN src/87-live.js */
+'use strict';
+// 0.1 concern: live link. Publishes a read-only snapshot of this editor session —
+// document revision, file identity, camera, appearance and the current selection —
+// to a local server so an agent can observe what the operator is looking at.
+//
+// Off unless asked for. Enable with ?live=1 (or ?live=http://host:port) on the URL,
+// or SovSchematicLive.start(). Nothing here mutates the document; the link is
+// observation only, and the editor keeps working when the server is absent.
+
+const LIVE_STORAGE_KEY='sov.live.endpoint';
+// Served from the server itself, the link is same-origin and needs no port named.
+// Opened from a file, there is no origin to infer, so fall back to the usual port.
+const LIVE_FALLBACK_ENDPOINT='http://127.0.0.1:8787';
+const LIVE_DEFAULT_ENDPOINT=(typeof location!=='undefined'&&/^https?:$/.test(location.protocol))
+  ?location.origin
+  :LIVE_FALLBACK_ENDPOINT;
+const LIVE_MIN_INTERVAL_MS=250;      // floor between pushes while the operator is active
+const LIVE_HEARTBEAT_MS=5000;        // idle push so a stale snapshot is detectable
+const LIVE_BACKOFF_MS=5000;          // wait after a failed push before trying again
+
+const liveLink={
+  enabled:false,
+  endpoint:LIVE_DEFAULT_ENDPOINT,
+  sessionId:`browser-${Math.random().toString(36).slice(2,10)}`,
+  timer:null,
+  heartbeat:null,
+  inFlight:false,
+  lastSignature:'',
+  lastPushedAt:null,
+  lastError:null,
+  failing:false
+};
+
+// ---------------------------------------------------------------------------
+// Selection description
+// ---------------------------------------------------------------------------
+
+function liveSelectionDescriptor(){
+  const setIds=[...(typeof selectedComponentIds!=='undefined'?selectedComponentIds:[])];
+  // `selected` keeps its last value through a deselect, so the selection bar being
+  // hidden — not the variable — is the editor's own answer to "is anything selected".
+  const current=selectionBar.hidden?null:(typeof selected==='string'?selected:null);
+  if(!current)return {kind:'none',ids:setIds,detail:null};
+
+  if(current.startsWith('wire:')){
+    const index=Number(current.slice(5));
+    const wire=wires[index];
+    if(!wire)return {kind:'none',ids:setIds,detail:null};
+    const cfg=connectionConfig(wire);
+    const end=(side)=>{
+      const ep=carrierEndpoint(wire,side);
+      if(!ep)return null;
+      if(ep.kind==='bound')return {bound:true,componentId:ep.node.id,pointId:ep.pointId,marker:wireEndpointMarker(wire,side)};
+      return {bound:false,x:Math.round(ep.pos.x),y:Math.round(ep.pos.y)};
+    };
+    return {kind:'wire',ids:[wire.id],detail:{
+      id:wire.id,
+      label:cfg.label||null,
+      direction:cfg.direction,
+      reciprocity:cfg.reciprocity,
+      forwardOperation:cfg.forwardOperation??null,
+      reverseOperation:cfg.reverseOperation??null,
+      canvasId:wireCanvas(wire).id,
+      a:end('a'),
+      b:end('b'),
+      record:SovSchematicData.clone(wire)
+    }};
+  }
+
+  if(current.startsWith('point:component:')){
+    const [,,componentId,pointId]=current.split(':');
+    const owner=nodes.find(n=>n.id===componentId);
+    if(!owner)return {kind:'none',ids:setIds,detail:null};
+    const point=Attachment.resolveSpec(owner,pointId);
+    const port=point?componentConfig(owner).ports[point.compatId]:null;
+    return {kind:'point',ids:[`${componentId}:${pointId}`],detail:{
+      componentId,
+      componentLabel:componentConfig(owner).label||symbolOf(owner.symbolId).name,
+      pointId:point?.id??pointId,
+      compatId:point?.compatId??null,
+      side:point?.side??null,
+      face:port?.face??null,
+      label:port?.label??null,
+      record:port?SovSchematicData.clone(port):null
+    }};
+  }
+
+  const node=nodes.find(n=>n.id===current);
+  if(!node)return {kind:'none',ids:setIds,detail:null};
+  const form=componentForm(node);
+  const cfg=componentConfig(node);
+  return {kind:'component',ids:setIds.length?setIds:[node.id],detail:{
+    id:node.id,
+    label:cfg.label||null,
+    symbolId:node.symbolId,
+    typeName:symbolOf(node.symbolId).name,
+    canvasId:componentCanvas(node).id,
+    scope:componentScopePath(node),
+    dimension:form.dimension,
+    interior:form.regions.interior.state,
+    attachmentDefaults:cfg.attachmentDefaults??null,
+    signalMode:cfg.signalMode??null,
+    pointIds:Object.keys(cfg.ports||{}),
+    record:SovSchematicData.clone(node)
+  }};
+}
+
+// ---------------------------------------------------------------------------
+// Snapshot
+// ---------------------------------------------------------------------------
+
+// The document body rides on the full snapshot in its own canonical form, the same
+// shape history and persistence already produce — not a second serializer.
+function liveDocumentSnapshot(){return historyDocument()}
+
+function liveSnapshot(){
+  const selection=liveSelectionDescriptor();
+  return {
+    schema:'soveraeign.schematic/live@0.1',
+    sessionId:liveLink.sessionId,
+    at:new Date().toISOString(),
+    file:{name:currentFileName,format:currentFileFormat,dirty:isFileDirty(),revision:diagram.revision},
+    counts:{components:nodes.length,wires:wires.length},
+    // The camera is a viewBox; zoom is how much of the base view it shows.
+    view:{appearance:appearanceMode,camera:{
+      x:Math.round(camera.x),y:Math.round(camera.y),w:Math.round(camera.w),h:Math.round(camera.h),
+      zoom:Number((BASE_VIEW.w/camera.w).toFixed(4))
+    }},
+    selection,
+    document:liveDocumentSnapshot()
+  };
+}
+
+// A push is worth making when the operator's selection or the document changed.
+// The document body is excluded from the signature: revision already covers it.
+function liveSignature(snapshot){
+  return JSON.stringify([snapshot.file.revision,snapshot.file.name,snapshot.selection.kind,snapshot.selection.ids,snapshot.view]);
+}
+
+// ---------------------------------------------------------------------------
+// Transport
+// ---------------------------------------------------------------------------
+
+async function livePush({force=false}={}){
+  if(!liveLink.enabled||liveLink.inFlight)return;
+  let snapshot;
+  try{snapshot=liveSnapshot()}catch(error){liveLink.lastError=String(error?.message||error);return}
+  const signature=liveSignature(snapshot);
+  if(!force&&signature===liveLink.lastSignature)return;
+  liveLink.inFlight=true;
+  try{
+    const response=await fetch(`${liveLink.endpoint}/api/v1/live`,{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify(snapshot)
+    });
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    liveLink.lastSignature=signature;
+    liveLink.lastPushedAt=snapshot.at;
+    liveLink.lastError=null;
+    liveLink.failing=false;
+  }catch(error){
+    liveLink.lastError=String(error?.message||error);
+    liveLink.failing=true;
+  }finally{
+    liveLink.inFlight=false;
+  }
+}
+
+// Coalesce a burst of edits into one push, never faster than LIVE_MIN_INTERVAL_MS,
+// and back off after a failure so a missing server costs one request per backoff.
+function liveNotifyChanged(){
+  if(!liveLink.enabled||liveLink.timer)return;
+  const delay=liveLink.failing?LIVE_BACKOFF_MS:LIVE_MIN_INTERVAL_MS;
+  liveLink.timer=setTimeout(()=>{liveLink.timer=null;livePush()},delay);
+}
+
+function liveStart(endpoint){
+  if(endpoint)liveLink.endpoint=String(endpoint).replace(/\/+$/,'');
+  liveLink.enabled=true;
+  try{localStorage.setItem(LIVE_STORAGE_KEY,liveLink.endpoint)}catch(_){ }
+  if(!liveLink.heartbeat)liveLink.heartbeat=setInterval(()=>livePush({force:true}),LIVE_HEARTBEAT_MS);
+  livePush({force:true});
+  return liveStatus();
+}
+
+function liveStop(){
+  liveLink.enabled=false;
+  if(liveLink.heartbeat){clearInterval(liveLink.heartbeat);liveLink.heartbeat=null}
+  if(liveLink.timer){clearTimeout(liveLink.timer);liveLink.timer=null}
+  try{localStorage.removeItem(LIVE_STORAGE_KEY)}catch(_){ }
+  return liveStatus();
+}
+
+function liveStatus(){
+  return {
+    enabled:liveLink.enabled,
+    endpoint:liveLink.endpoint,
+    sessionId:liveLink.sessionId,
+    lastPushedAt:liveLink.lastPushedAt,
+    lastError:liveLink.lastError
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Change hooks
+// ---------------------------------------------------------------------------
+
+// The live concern stays in this file: rather than scattering notification calls
+// through selection, UI and persistence, wrap the functions that mark the end of a
+// selection change or a revision change. Each wrapper is transparent — same
+// arguments, same return value — and installed only once, from the last module in
+// the build order.
+function liveWatch(name){
+  const original=globalThis[name];
+  if(typeof original!=='function')return;
+  globalThis[name]=function(...args){
+    const result=original.apply(this,args);
+    liveNotifyChanged();
+    return result;
+  };
+}
+['showComponentBar','showConnectionBar','showPortBar','hideSelectionBar','updateRevisionReadout'].forEach(liveWatch);
+
+const SovSchematicLive={
+  start:liveStart,
+  stop:liveStop,
+  status:liveStatus,
+  push:()=>livePush({force:true}),
+  snapshot:liveSnapshot
+};
+window.SovSchematicLive=SovSchematicLive;
+
+// Autostart: ?live=1 uses the default endpoint, ?live=<url> names one, and an
+// endpoint remembered from a previous session on this origin resumes the link.
+(function initializeLiveLink(){
+  let requested=null;
+  try{
+    const param=new URLSearchParams(location.search).get('live');
+    if(param!==null)requested=param===''||param==='1'||param==='true'?LIVE_DEFAULT_ENDPOINT:param;
+    else requested=localStorage.getItem(LIVE_STORAGE_KEY);
+  }catch(_){ }
+  if(requested)liveStart(requested);
+})();
+/* END src/87-live.js */
 </script>
 </body>
 </html>
