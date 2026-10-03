@@ -159,8 +159,12 @@ const DARK_SURFACE_MONO_BRIGHT=['#FFFFFF','#F0F0EB','#E1E1DB','#D2D2CC','#C3C3BD
 // contrast floor and the closest pair stays CVD_FLOOR apart under protan, deutan and tritan
 // simulation. The other colour rows are hue families: legible, not colour-blind distinct;
 // scripts/contrast_audit.py measures and says so.
+// 'system-default' is generated, not authored: SovSchematicColour.PALETTE_SYSTEMS (09-colour-core.js)
+// gives three roles and three status tones from a base hue, a ratio and a step, and slots 6-11 take
+// the middle tone of each ramp, the same six in both appearances, realised through themeColor.
 const BASE_PALETTES={
   'okabe-ito':['#F85401','#F4C768','#98E2BD','#0092E4','#2E69A0','#7B3962'],
+  'system-default':SovSchematicColour.paletteSystem(SovSchematicColour.PALETTE_SYSTEMS['system-default']).slots,
   spectrum:['#D34E4E','#D99032','#79A948','#3EA7A0','#507CCB','#8A5BC0'],
   cool:['#3C7EA6','#3AA2A0','#54A58B','#6589BF','#6D67B1','#8A69A7'],
   warm:['#C34B48','#D36F3E','#D7983D','#B77A4C','#A85E65','#91546F'],
@@ -168,6 +172,7 @@ const BASE_PALETTES={
 };
 const DARK_SURFACE_PALETTES={
   'okabe-ito':['#D07807','#FBAC31','#039843','#36BEFE','#5671AC','#FF1782'],
+  'system-default':SovSchematicColour.paletteSystem(SovSchematicColour.PALETTE_SYSTEMS['system-default']).slots,
   spectrum:['#FF7A7D','#E8AA58','#9AC86C','#62C9C1','#82A9F2','#B88CE5'],
   cool:['#74B8E2','#69D0CB','#82C9AE','#91AFE8','#A19BE1','#B58FC8'],
   warm:['#F37C78','#ED966A','#E8B660','#D6A071','#CE858E','#C77F9E'],
@@ -283,6 +288,35 @@ function normalizeSlot(v,fallback=0){
   return Number.isInteger(n)?Math.max(0,Math.min(11,n)):fallback;
 }
 function slotColor(slot){return activePalette()[normalizeSlot(slot)]}
+// A declared palette system (09-colour-core.js PALETTE_SYSTEMS), generated once per name.
+const paletteSystemCache=new Map();
+function declaredPaletteSystem(name){
+  const spec=SovSchematicColour.PALETTE_SYSTEMS[name];if(!spec)return null;
+  if(!paletteSystemCache.has(name))paletteSystemCache.set(name,SovSchematicColour.paletteSystem(spec));
+  return paletteSystemCache.get(name);
+}
+// The meaning colours stay fixed in every palette: a status tone is the base tone of safe, alert or
+// danger in the active palette when that palette is a declared system, else in system-default.
+function statusTone(name){
+  const sys=declaredPaletteSystem(colorEngine.palette)||declaredPaletteSystem('system-default');
+  const i=sys.names.indexOf(name);
+  return i>=3?sys.ramps[i][2]:null;
+}
+// A lit wire's tone for a source in hue slot 6-11: one step lighter on dark (+1), one step darker on
+// light (-1), on that slot's ramp. A declared system has its ramps; any other palette builds one from
+// the slot's authored colour for that appearance, with the system step 0.08.
+function litTone(slot,appearance=surfaceAppearance()){
+  const n=Number(slot);if(!Number.isInteger(n)||n<6||n>11)return null;
+  const dark=appearance==='dark',index=dark?3:1,sys=declaredPaletteSystem(colorEngine.palette);
+  if(sys)return sys.ramps[n-6][index];
+  const row=colorEngine.palette==='mono'
+    ? (dark?DARK_SURFACE_MONO_BRIGHT:LIGHT_SURFACE_MONO_DEEP)
+    : colorEngine.palette==='custom'
+      ? colorEngine.custom
+      : (dark?(DARK_SURFACE_PALETTES[colorEngine.palette]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[colorEngine.palette]||BASE_PALETTES['okabe-ito']));
+  const [L,C,h]=SovSchematicColour.hexOklch(row[n-6]);
+  return SovSchematicColour.toneRamp(L,C,h,.08)[index];
+}
 function nearestSlot(hex){
   const c=hexRgb(hex);let best=0,bestD=Infinity;
   activePalette().forEach((h,i)=>{

@@ -90,6 +90,7 @@ BROWSER=[
     'tests/typography_qa.py',
     'tests/legend_qa.py',
     'tests/status_waits_on_qa.py',
+    'tests/palette_system_qa.py',
     'tests/loop_svg_qa.py',
     'tests/menu_dismissal_qa.py',
     'tests/appearance_history_qa.py',
