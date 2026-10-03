@@ -127,6 +127,9 @@ the on-screen clamp, so the block is laid out again when the zoom changes):
   (`w - 12 - 2 × section inset`); a line still too long ends in an ellipsis. A line that is one
   word, with no break to wrap at, may use the card's full inner width (`w - 8`, section inset
   ignored) before it is cut
+- a title inside its card that would still be cut may shrink below the 12 px screen floor, down
+  to 10 px on screen, before an ellipsis is used; only a size that keeps it whole is taken, and
+  the text carries `data-shrunk="true"`. Every other label keeps the 12 px floor
 - the subtitle is one line, cut the same way, and its top sits `space.textGap` (3) under the
   title's last line
 - the block's foot stays where a lone title sits, or sits lower, down to the inner edge, when

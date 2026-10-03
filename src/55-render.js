@@ -143,15 +143,21 @@ function fitComponentLabels(g,n){
     const kept=lines.length>limit?[...lines.slice(0,limit-1),lines.slice(limit-1).join(' ')]:lines;
     return kept.map(l=>cut(t,l));
   };
-  // Where the title sat on its own: the block's foot (growing up) or head (growing down).
-  t.textContent=full;t.setAttribute('y',String(y0));
-  const b0=t.getBBox(),innerTop=-size.h/2+inset+2,innerBottom=size.h/2-inset-2;
-  const head=b0.y;let foot=inCard&&!down?Math.min(b0.y+b0.height,innerBottom):b0.y+b0.height;
+  const innerTop=-size.h/2+inset+2,innerBottom=size.h/2-inset-2;
   const graphic=componentConfig(n).presentation?.graphic;
   let topLimit=innerTop;
   if(graphic?.kind&&graphic.kind!=='none'){const box=componentInlineGraphicBox(n);if(!down)topLimit=Math.max(topLimit,box.y+box.h+2)}
-  const em=parseFloat(getComputedStyle(t).fontSize)||10;
   const subLine=u&&subFull?cut(u,subFull):null;
+  const ok=r=>!inCard||(r.top>=topLimit-.01&&r.bottom<=innerBottom+.01);
+  const isCut=r=>r.lines.some(l=>l.endsWith('…'));
+  // The whole layout at the title's current font size: wrap, place, then the least important line
+  // goes first (the subtitle, then the title's second line).
+  const layout=()=>{
+  // Where the title sat on its own: the block's foot (growing up) or head (growing down).
+  t.textContent=full;t.setAttribute('y',String(y0));
+  const b0=t.getBBox();
+  const head=b0.y;let foot=inCard&&!down?Math.min(b0.y+b0.height,innerBottom):b0.y+b0.height;
+  const em=parseFloat(getComputedStyle(t).fontSize)||10;
   const place=(lines,showSub)=>{
     setFittedText(t,lines,x,em*1.15);t.setAttribute('y','0');
     const bt=t.getBBox();let top=bt.y,bottom=bt.y+bt.height;
@@ -165,7 +171,6 @@ function fitComponentLabels(g,n){
     if(u)u.setAttribute('y',String((Number(u.getAttribute('y'))||0)+shift));
     return {top:top+shift,bottom:bottom+shift,lines,showSub};
   };
-  const ok=r=>!inCard||(r.top>=topLimit-.01&&r.bottom<=innerBottom+.01);
   // A block that does not fit at the lone title's foot may sit lower, down to the inner edge.
   const fit=(lines,showSub)=>{const base=foot;let r=place(lines,showSub);
     if(!ok(r)&&inCard&&!down&&base<innerBottom){foot=innerBottom;r=place(lines,showSub);foot=base}
@@ -173,10 +178,21 @@ function fitComponentLabels(g,n){
   let r=fit(wrap(2),!!subLine);
   if(!ok(r)&&r.showSub)r=fit(r.lines,false);
   if(!ok(r)&&r.lines.length>1)r=fit(wrap(1),false);
+  return r};
+  const screen=parseFloat(typeof workspace!=='undefined'&&workspace?workspace.style.getPropertyValue('--zoom'):'')||1;
+  t.style.fontSize='';delete t.dataset.shrunk;
+  let r=layout();
+  // A title inside its card that would be cut may shrink below the 12 px screen floor, down to
+  // 10 px on screen, before an ellipsis is used; it is marked data-shrunk. Only a size that keeps
+  // the title whole is taken; otherwise it stays at its clamped size and is cut.
+  if(inCard&&isCut(r)&&screen>.25){
+    const px0=(parseFloat(getComputedStyle(t).fontSize)||10)*screen;let whole=null;
+    for(let px=Math.floor(px0*2)/2-.5;px>=10-1e-9;px-=.5){t.style.fontSize=`${px/screen}px`;const r2=layout();if(!isCut(r2)){whole=r2;break}}
+    if(whole){r=whole;t.dataset.shrunk='true'}else{t.style.fontSize='';r=layout()}
+  }
   if(u&&(!r.showSub)){u.style.visibility='hidden';u.dataset.lod='hidden'}
   // Zoomed far out (screen scale 0.25 or less), a title that still runs into its glyph is hidden.
   delete t.dataset.lod;t.style.visibility='';
-  const screen=parseFloat(typeof workspace!=='undefined'&&workspace?workspace.style.getPropertyValue('--zoom'):'');
   if(inCard&&graphic?.kind&&graphic.kind!=='none'&&screen<=.25&&r.top<topLimit-.01){t.style.visibility='hidden';t.dataset.lod='hidden'}
   // Wrapping onto two lines is not a cut; only an ellipsis is.
   if(r.lines.some(l=>l.endsWith('…')))t.dataset.truncated='true';
@@ -185,7 +201,8 @@ function fitComponentLabels(g,n){
   g.querySelector(':scope > title.card-text-full')?.remove();
   if(t.dataset.truncated||t.dataset.lod||(u&&(u.dataset.truncated||u.dataset.lod))){
     const tip=document.createElementNS(SVG_NS,'title');tip.setAttribute('class','card-text-full');
-    tip.textContent=subFull?`${full}\n${subFull}`:full;g.insertBefore(tip,g.firstChild);  }
+    tip.textContent=subFull?`${full}\n${subFull}`:full;g.insertBefore(tip,g.firstChild);
+  }
 }
 // The zoom changes the size labels are drawn at, so each card's text block is laid out again on
 // the next frame after it changes, and a waits-on caption follows the block's new foot.

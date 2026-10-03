@@ -14,6 +14,15 @@ HTML = (ROOT / 'index.html').read_text()
 BASE = {'.node text.component-label': 10, '.node .outside-label': 9, '.node .dimensional-point-label': 10,
         '.connection-label': 9}
 LOW, HIGH = 12, 16
+# A card title that would otherwise be cut may shrink to 10 px on screen; it says so (data-shrunk).
+SHRUNK_LOW = 10
+
+
+def floor_ok(sel, m, expected):
+    """A data-shrunk card title reads between SHRUNK_LOW and its clamped size; every other label at it."""
+    if sel == '.node text.component-label' and m['shrunk']:
+        return SHRUNK_LOW - 0.05 <= m['screen'] <= expected + 0.05
+    return abs(m['screen'] - expected) < 0.05
 ZOOMS = [0.25, 0.5, 1, 2, 4, 8]
 
 SETUP = """()=>{const A=window.SovSchematicAPI;
@@ -29,7 +38,7 @@ MEASURE = """(selectors)=>{const z=currentZoom(),scale=Math.hypot(workspace.getS
   for(const sel of selectors){
     const els=[...document.querySelectorAll(sel)];
     out.labels[sel]=els.map(el=>({world:parseFloat(getComputedStyle(el).fontSize),screen:parseFloat(getComputedStyle(el).fontSize)*scale,
-      box:el.getBoundingClientRect().height}));
+      box:el.getBoundingClientRect().height,shrunk:el.dataset?.shrunk==='true'}));
   }
   const stroke=document.querySelector('.dimensional-point-body, .dimensional-path-body');
   out.strokeVectorEffect=stroke?getComputedStyle(stroke).vectorEffect:null;
@@ -57,7 +66,7 @@ with sync_playwright() as p:
         found = at_one['labels'][sel]
         assert found, f'no label rendered for {sel}'
         for m in found:
-            assert abs(m['screen'] - min(HIGH,max(LOW,base*at_one['scale']))) < 0.05, (sel, 'zoom 1', m, base)
+            assert floor_ok(sel, m, min(HIGH,max(LOW,base*at_one['scale']))), (sel, 'zoom 1', m, base)
 
     # Across the sweep every label reads between LOW and HIGH screen pixels while strokes
     # keep their non-scaling rule.
@@ -70,8 +79,8 @@ with sync_playwright() as p:
         for sel, base in BASE.items():
             for m in r['labels'][sel]:
                 expected = min(HIGH, max(LOW, base * r['scale']))
-                assert abs(m['screen'] - expected) < 0.05, (sel, 'zoom', actual, m, expected)
-                assert LOW - 0.05 <= m['screen'] <= HIGH + 0.05, (sel, actual, m)
+                assert floor_ok(sel, m, expected), (sel, 'zoom', actual, m, expected)
+                assert (SHRUNK_LOW if m['shrunk'] and sel == '.node text.component-label' else LOW) - 0.05 <= m['screen'] <= HIGH + 0.05, (sel, actual, m)
 
     # CSS follows actual screen scale, not the nominal camera readout.
     css_zoom = page.evaluate("()=>parseFloat(workspace.style.getPropertyValue('--zoom'))")

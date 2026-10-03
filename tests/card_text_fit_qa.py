@@ -20,6 +20,9 @@
   examples/09. The target is the same on every host, and stands in for fonts wider than this
   host's (DejaVu on Linux runs about 10% wider), so a glyph that keeps full height because the
   width table misjudges a wider font fails here.
+- The editor at camera zoom 1 on a 1600 x 1000 viewport cuts no title in examples 04, 09 and 10:
+  a title that would be cut shrinks below the 12 px screen floor, to 10 px at least, and carries
+  data-shrunk="true"; every other title keeps the floor.
 """
 from __future__ import annotations
 import os
@@ -135,6 +138,19 @@ WIDE_EXPORT = r"""(factor)=>{""" + TABLE_JS + r"""
   for(const t of doc.querySelectorAll('text.component-label[data-truncated="true"]'))cut.push([t.closest('[data-id]')?.getAttribute('data-id')||'?',t.textContent]);
   return {widened:rules.length,cut}}"""
 
+# The editor at camera zoom 1 on a 1600 x 1000 viewport (screen scale below 1, so the 12 px floor
+# draws titles larger than the picture does): no title in 04, 09 or 10 is cut. A title that needs it
+# shrinks, down to 10 px on screen, and carries data-shrunk.
+EDITOR_EXAMPLES = ['04-boundary-port.sov', '09-print-ai-proof-run.sov', '10-clocked-signals.sov']
+ZOOM_ONE = "()=>{const cx=camera.x+camera.w/2,cy=camera.y+camera.h/2;camera={x:cx-BASE_VIEW.w/2,y:cy-BASE_VIEW.h/2,w:BASE_VIEW.w,h:BASE_VIEW.h};applyCamera();return currentZoom()}"
+READ_EDITOR = r"""()=>{const screen=parseFloat(workspace.style.getPropertyValue('--zoom')),out={zoom:currentZoom(),screen,cut:[],shrunk:[],floor:[]};
+  for(const t of nodesG.querySelectorAll('.node > text.component-label')){
+    const id=t.closest('.node').dataset.id,px=+(parseFloat(getComputedStyle(t).fontSize)*screen).toFixed(2),text=[...t.querySelectorAll('tspan')].map(s=>s.textContent);
+    if(t.dataset.truncated==='true')out.cut.push([id,text]);
+    if(t.dataset.shrunk==='true')out.shrunk.push([id,t.dataset.full,px]);
+    else if(px<12-0.05)out.floor.push([id,px])}
+  return out}"""
+
 inside = lambda a, R, tol=0.5: a['l'] >= R['l'] - tol and a['r'] <= R['r'] + tol and a['t'] >= R['t'] - tol and a['b'] <= R['b'] + tol
 
 missing = [doc.relative_to(ROOT).as_posix() for doc in DOCS if not doc.exists()]
@@ -182,6 +198,13 @@ with sync_playwright() as p:
         page.evaluate('()=>fitDiagram()')
         page.wait_for_timeout(150)
         wide_cuts[doc.name] = page.evaluate(WIDE_EXPORT, WIDER)
+    editor = {}
+    for name in EDITOR_EXAMPLES:
+        doc = ROOT / 'examples' / name
+        page.evaluate('([t,n])=>window.SovSchematicAPI.file.open(t,n)', [doc.read_text(encoding='utf-8'), doc.name])
+        page.evaluate(ZOOM_ONE)
+        page.wait_for_timeout(200)  # the block is laid out again on the next frame after a zoom
+        editor[name] = page.evaluate(READ_EDITOR)
     browser.close()
 
 for name, r in docs.items():
@@ -258,4 +281,12 @@ unexpected = [(name, cid, text) for name, r in wide_cuts.items() for cid, text i
 print(f"titles at {WIDER:.2f}x the width table's estimate: {widened} widened across {len(wide_cuts)} examples; cut {[(n, c, t) for n, r in wide_cuts.items() for c, t in r['cut']]}")
 assert widened > 0 or WIDER <= 1.0, 'no title was widened'
 assert not unexpected, (f'with titles at {WIDER:.2f}x the width table, the export cuts example titles', unexpected)
+# The editor at camera zoom 1: nothing cut in 04, 09 and 10; a shrunk title stays at 10 px or more on
+# screen, and a title that is not marked shrunk keeps the 12 px floor.
+for name, e in editor.items():
+    print(f"editor zoom {e['zoom']:.3f} (screen {e['screen']:.3f}) {name}: cut {e['cut']}, shrunk {e['shrunk']}")
+    assert abs(e['zoom'] - 1) < 1e-6, (name, 'camera zoom 1', e['zoom'])
+    assert not e['cut'], (name, 'the editor at zoom 1 cuts example titles', e['cut'])
+    assert all(px >= 10 - 0.05 for _, _, px in e['shrunk']), (name, 'a shrunk title reads at 10 px or more', e['shrunk'])
+    assert not e['floor'], (name, 'a title below 12 px is marked data-shrunk', e['floor'])
 print('PASS card text fit QA')
