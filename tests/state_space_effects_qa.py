@@ -7,9 +7,9 @@ given; an effects ledger handed to a new run is an effects entry. Each case is a
 tests/graph_core_qa.py (lines 25-49), run in ticks and checked against the graph core on the same
 document, and every run replays byte for byte.
 
-Example 09's evaluate fixture answers a score of 0.93. A run records no floating point, so the
-scenarios here state it in integer units (930 thousandths), as PAYLOAD_FRACTION's next operation
-says; the unconverted fixture is refused at the handler, and that is checked too.
+Example 09's evaluate fixture states its score as 930 thousandths. A run records no floating
+point, so the example states it in integer units, as PAYLOAD_FRACTION's next operation says; a
+fixture with the score set back to 0.93 is refused at the handler, and that is checked too.
 """
 from __future__ import annotations
 import json
@@ -93,8 +93,8 @@ out.scenarios={};
 for(const sc of scenarios){const r=runScenario(print,sc);out.scenarios[sc.id]={ok:r.ok,checks:r.checks,notes:r.notes,refusals:r.refusals,replay:replays(r.run,print,r.handlers),
   mid:r.run.ledger.filter(e=>['input','resume','reconcile'].includes(e.kind)&&'after' in e.body).map(e=>e.kind)}}
 out.changed=changed;
-// The fixture as authored (score 0.93) is refused at the handler: a run records no floating point.
-{const sc=scenario('s-approve');const run=S.startRun({doc:print,packs,handlers:sc.data.handlers}).run;inject(run,'case',{caseId:'48219',proof:'good'},'proof');quiet(run);
+// A fixture whose score is set back to 0.93 is refused at the handler: a run records no floating point.
+{const sc=scenario('s-approve');const fractional=JSON.parse(JSON.stringify(sc.data.handlers));fractional.evaluate.responses.good.payload.score=0.93;const run=S.startRun({doc:print,packs,handlers:fractional}).run;inject(run,'case',{caseId:'48219',proof:'good'},'proof');quiet(run);
  out.fraction={refused:refusals(run),customer:taps(run,'customer')}}
 
 // Without effect identity a retry messages the customer twice (graph_core_qa.py:28-29).
@@ -178,8 +178,8 @@ def main() -> None:
     assert r['scenarios']['s-retry']['mid'] == ['input', 'resume', 'input', 'resume'], r['scenarios']['s-retry']['mid']
     assert r['scenarios']['s-reject']['refusals'] == ['rejected at Human review'],r['scenarios']['s-reject']
     assert r['scenarios']['s-eval-fails']['refusals'] == ['eval: proof below threshold'], r['scenarios']['s-eval-fails']
-    # The one fraction in the fixtures, stated in thousandths; as authored it is refused at evaluate.
-    assert {path.split('.', 1)[1] for path, _ in r['changed']} == {'handlers.evaluate.responses.good.payload.score'} and {v for _, v in r['changed']} == {0.93}, r['changed']
+    # Example 09 states its score in thousandths (930), so no fixture carries a fraction; a copy set back to 0.93 is refused at evaluate.
+    assert r['changed'] == [], ('no fraction left in any scenario fixture', r['changed'])
     assert r['fraction'] == {'refused': ['handler evaluate result.payload.score is 0.93, not a safe integer; a run records no floating point'], 'customer': 0}, r['fraction']
 
     # Without effect identity, s-retry reaches the customer twice.

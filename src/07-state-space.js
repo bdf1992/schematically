@@ -1522,7 +1522,10 @@
     const message={id,root:id,parent:null,channel:edge.channel,payload:{node:entity,polarity,from:scale(from),to:scale(to),at:ctx.t*run.tickMs},origin:entity};
     const principal=component.principal??null;
     const rid=messageRecord(run,ctx,{entity,point:edge.point,observer:'rule:edge',rule:'edge',inputs:[record],message,principal,hop:{event:'edge'}});
-    messageAt(run,ctx,entity,edge.point,message,principal,null,rid);
+    // An edge message goes on from the card's own continueAt, as the graph core's setLevel hands it
+    // (src/07-graph-core.js:469-473 at 7b939e3): a card never takes its own edge message through its
+    // own intake (control, asserted set or toggle, flow intake, park).
+    continueAt(run,ctx,entity,edge.point,message,principal,null,rid);
   }
   // Update phase on the message channel of one port: injects start their messages; arrivals are put in
   // merge order (the declared Paths first, the rest a draw recorded like any merge) and every one is

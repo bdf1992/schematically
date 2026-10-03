@@ -24,6 +24,7 @@ STATIC=[
     'tests/state_space_acl_qa.py',
     'tests/state_space_flow_qa.py',
     'tests/state_space_effects_qa.py',
+    'tests/state_space_dev_parity_qa.py',
     'tests/state_space_perf_qa.py',
     'tests/file_load_wire_canvas_qa.py',
     'tests/desktop_shell_qa.py',
