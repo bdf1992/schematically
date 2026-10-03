@@ -1,6 +1,6 @@
 # State Space · design
 
-**Status: design, settled for slices 1–3.** Nothing here is implemented. Slice 4 (the instrument) has one open question. Each slice becomes an issue; this document is the reference for the concern, like `FORM-MODEL.md`, and changes with it.
+**Status: slices 1–3 run.** The one-runtime plan (`control/sketchbooks/ep-root-20260926/plans/unify-runtime.md`) finished at contract 10 (2026-10-03): `src/07-graph-core.js`'s `createSimulation`, `runScenario`, `createSession` and `tools` delegate to `src/07-state-surface.js`, which runs every dev document on this engine; the old message engine is deleted. Slice 4 (the instrument) has one open question. Each slice becomes an issue; this document is the reference for the concern, like `FORM-MODEL.md`, and changes with it.
 
 Sources: *State Planes for Governed Graph Systems* (2026-09-25); Issue #6 (logic machine); `docs/vision/DATA-DRIVEN-SCHEMATIC-LANGUAGE.md` ("Logic/runtime proof"); the current `src/25-signal.js`; and a review pass (2026-09-25) comparing the design with DEVS and VHDL/SystemC scheduling, Temporal-style replay, W3C PROV, OpenTelemetry and CloudEvents, digital-twin specifications, GUM/VIM metrology, directed graph Laplacians and idempotent effects, plus a red-team pass. The review's accepted suggestions are folded into the text below.
 
@@ -495,7 +495,7 @@ A document references definitions by `id@version` and records which packs it use
 
 ### What `signalMode` becomes
 
-`source` / `relay` / `passive` keep their meaning. The current "active" set in `computeSignalState()` is the **settled state** of a run in which every source is high and every relay passes: the fixpoint the fixed six passes approximate. When the runtime lands, the editor's idle picture is that settled state, computed by the fold, and `25-signal.js` becomes a projection of it instead of its own computation.
+`source` / `relay` / `passive` keep their meaning. The current "active" set in `computeSignalState()` is the **settled state** of a run in which every source is high and every relay passes: the fixpoint the fixed six passes approximate. The runtime landed at contract 10 of the one-runtime plan (2026-10-03): the editor's idle picture is that settled state, computed by the fold, and `25-signal.js` is a projection of it instead of its own computation.
 
 ## Files
 

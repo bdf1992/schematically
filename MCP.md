@@ -49,11 +49,13 @@ Tools:
   `observable`), `schematic.run.replay` (`trace`)
 - `schematic.markers`
 
-Graph and simulation (`GRAPH-MODEL.md`, read-only over the document):
+Graph and simulation (`GRAPH-MODEL.md`, read-only over the document; the `sim.*` tools run over the
+state-space engine through `src/07-state-surface.js`, `STATE-SPACE.md`, since contract 10 of the
+one-runtime plan, 2026-10-03):
 
 - `schematic.graph.query` — `{verb, args}`: junctions, reach, paths, cycles, order, cut, boundary, untyped, blocked, acl, signals, export (jgf | dot | graphml)
-- `schematic.sim.set` / `at` / `advance` / `tick` — levels and time (asserted set, scheduled operations, the clock)
-- `schematic.sim.start` / `stop` / `inject` / `step` / `run` / `resume` / `reconcile` / `inspect` / `scenario` / `scenarios`
+- `schematic.sim.set` / `at` / `advance` / `tick` — levels and time (asserted set, scheduled operations, the clock); `at`'s time and `advance`'s ms are milliseconds, carried over the engine's own ticks at the declared `tickMs` (default 1 ms per tick)
+- `schematic.sim.start` / `stop` / `inject` / `step` / `run` / `resume` / `reconcile` / `inspect` / `scenario` / `scenarios` — `step` counts ticks, not milliseconds; `run`'s `until` is ms, like `advance`
 
 HTTP: `GET|POST /api/v1/graph/<verb>`, `POST /api/v1/sim/<action>`, `GET /api/v1/sim/inspect?what=…&id=…`.
 
