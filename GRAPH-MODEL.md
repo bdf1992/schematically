@@ -146,6 +146,15 @@ in formats that don't.
 
 ## 6. Messages: simulation first, then live
 
+**One runtime (contract 10 of the one-runtime plan, 2026-10-03).** The design below is
+history: how the first message engine worked, built directly in `src/07-graph-core.js`.
+That engine is deleted. `createSimulation`, `runScenario`, `createSession` and `tools`
+now delegate to `SovSchematicSimSurface` (`src/07-state-surface.js`), which runs every
+document — simulated or live — on the state-space engine (`src/07-state-space.js`,
+`STATE-SPACE.md`). The verbs and shapes below still describe the running behaviour; read
+`STATE-SPACE.md`'s *Execution* and *Surfaces* sections for how the one engine now carries
+it, and `docs/residuals/2026-09-26-one-runtime.md` for where each piece moved.
+
 ### The engine
 
 One discrete-event engine serves both modes.
@@ -302,6 +311,12 @@ Settled details:
   The run returns each check with its expected and actual values.
 
 ## Signals, time and the clock (built 2026-09-25)
+
+**One runtime (contract 10 of the one-runtime plan, 2026-10-03).** This section
+describes the behaviour as it was built directly in `src/07-graph-core.js`; that code is
+deleted. The same behaviour now runs on the state-space engine, served through
+`src/07-state-surface.js`: see `STATE-SPACE.md`'s *Execution* section and
+`docs/residuals/2026-09-26-one-runtime.md`.
 
 Messages are events. **Levels** are state. Both run on one engine and one clock.
 
