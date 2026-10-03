@@ -121,6 +121,35 @@ has no label.
 | **caption** | wire labels, point labels, channel tags | `type.caption` |
 | **narration** | the subtitle track (below) | `type.narration` |
 
+**A card's title and subtitle are one block**, laid out at the size they are drawn at (after
+the on-screen clamp, so the block is laid out again when the zoom changes):
+- the title wraps at word breaks to at most two lines within the card's text width
+  (`w - 12 - 2 × section inset`); a line still too long ends in an ellipsis. A line that is one
+  word, with no break to wrap at, may use the card's full inner width (`w - 8`, section inset
+  ignored) before it is cut
+- the subtitle is one line, cut the same way, and its top sits `space.textGap` (3) under the
+  title's last line
+- the block's foot stays where a lone title sits, or sits lower, down to the inner edge, when
+  that is what makes it fit; under a container's glyph or below the body the block grows down
+  from there instead
+- inside a card the block stays below the glyph (its foot plus 2) and inside the inner edge;
+  when it cannot, the least important line goes first: the subtitle is hidden
+  (`data-lod="hidden"`), then the title is cut to one line
+- a lone title (no subtitle) that needs a second line gets room for both under the glyph: the
+  glyph shrinks for it (`glyphBox`), keeping its aspect and never below 60% of its size;
+  whether the title needs the line is judged from a per-character width table, so the layout
+  engine and the renderer agree
+- at a screen scale of 0.25 or less, a title that still runs into its glyph is hidden
+  (`data-lod="hidden"`)
+- a cut line sets `data-truncated`, and the full title (and subtitle) is the card's tooltip: a
+  `<title class="card-text-full">` on the card's group, never inside the drawn `<text>`, so a
+  text's contents are only what is drawn; the status chip
+  does not move, and a waits-on caption follows the block's real foot
+- a title drawn outside its card (outside label mode, under the card) is not held to the card's
+  width: it stays on one line, uncut, and only its subtitle's place follows `space.textGap`
+- the SVG export (`scripts/export_svg.py`) draws through the same code, so it wraps and cuts the
+  same way
+
 **Body text is a small, safe Markdown:**
 - `**bold**`, `*italic*` and `` `code` ``
 - line breaks
@@ -182,6 +211,7 @@ contrast (`scripts/contrast_audit.py`).
 | Symbols generated from the notation; pins, leads, terminal points | `src/10-model.js` (`installNotationSymbols`, `symbolOf`), `src/30-canvas.js`, `src/05-data-core.js` (`templatePorts`: a gate's terminals are its template ports) | `tests/notation_qa.py`, `tests/boundary_attachment_qa.py`, `tests/ports_panel_qa.py` |
 | Radius offset from inside; elevation shadows; recess and raised bevels | `src/55-render.js` | `tests/notation_qa.py`, `tests/sections_qa.py` |
 | Type roles, sentence case, subtitle, Markdown body | `src/55-render.js`, `styles/app.css` | `tests/typography_qa.py` |
+| Title and subtitle as one block inside the card | `src/55-render.js` (`fitComponentLabels`), `space.textGap` in `src/03-notation-core.js` | `tests/card_text_fit_qa.py` |
 | Narration track | `src/66-narration.js`; pictures in `src/75-persistence.js` | `tests/typography_qa.py` |
 | Legend | `src/67-legend.js` | `tests/legend_qa.py`, `tests/server_render_qa.py` |
 | Crossings drawn as hops | `src/55-render.js`, `src/40-routing.js` | `tests/wire_crossing_qa.py` |

@@ -15,7 +15,8 @@
       radius:{core:6,card:10},
       // World units. Selected and highlighted states multiply these, never replace them.
       stroke:{structure:1.5,section:1.25,flow:2.25,symbol:2.6},
-      space:{labelClear:10,bevel:3.5,pin:14},
+      // textGap: the gap between stacked text lines on a card (a title's last line and its subtitle).
+      space:{labelClear:10,bevel:3.5,pin:14,textGap:3},
       // Text roles (NOTATION-MODEL.md §4). `size` is the base at zoom 1; on screen every role is
       // clamped to `screen` (a subtitle keeps its own lower floor, so it stays under its title).
       type:{screen:{min:12,max:16},title:{size:10,weight:600},subtitle:{size:8.5,weight:400,min:8},body:{size:9,weight:400},caption:{size:9,weight:600},narration:{size:15,weight:500}},
@@ -151,9 +152,20 @@
     const ts=drawnSize(type,'title'),ss=drawnSize(type,'subtitle'),avail=Math.max(1,size.w-12);
     const lines=Math.max(1,Math.min(2,Math.ceil(String(title||'').length*ts*.6/avail)));
     const foot=8+lines*ts*1.15+(subtitle?ss*1.3:0);
-    const many=g?.points==='terminals',w=Math.min(size.w*.72,108),h=Math.max(24,Math.min(size.h*(many?.7:.55),70,size.h-2*foot));
+    const many=g?.points==='terminals';let w=Math.min(size.w*.72,108),h=Math.max(24,Math.min(size.h*(many?.7:.55),70,size.h-2*foot));
+    // A lone title that needs a second line gets room for both under the glyph: a two-line block
+    // (a line step of 1.15 and a line box of 1.45 title sizes) and 2 above and below it. The glyph
+    // shrinks to make that room, keeping its aspect, never below 60% of its size; else unchanged.
+    // Whether it needs a second line is judged from per-character advance widths, so the layout
+    // engine (no fonts in Node) and the renderer agree; past 85% of the text width counts, a margin
+    // for fonts up to 15% wider than the table (DejaVu on Linux runs about 10% wider).
+    if(lines===2&&!subtitle&&titleWidth(title)*ts>avail*.85){const room=size.h-2*(2.6*ts+4);if(room<h){const k=Math.max(.6,room/h);w*=k;h*=k}}
     return {w,h,scale:Math.min(w/96,h/64)};
   }
+  // A title's advance width in ems at the title weight (600), from a sans-serif width table in the
+  // manner of a PDF core font's AFM metrics: close enough to tell one line from two.
+  const ADVANCE=[['iljI.,:;!|\'·',.3],['frt ()[]-',.38],['sJ"',.55],['mwMW',.88],['ABCDGHKNOQRUVXY&',.72],['EFLPSTZ',.64]];
+  function titleWidth(title){let em=0;for(const c of String(title||'')){const hit=ADVANCE.find(([cs])=>cs.includes(c));em+=hit?hit[1]:c>='A'&&c<='Z'?.68:.59}return em*.94}
   function glyphAxis(g){
     if(!g)return null;
     if(g.points==='terminals'){const ys=(g.terminals||[]).filter(t=>t.toward==='left'||t.toward==='right').map(t=>t.at[1]);return ys.length?(Math.min(...ys)+Math.max(...ys))/2:null}
