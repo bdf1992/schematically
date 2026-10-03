@@ -357,7 +357,7 @@ COMPACT_HASHES = {
     'examples/06-read-write-evidence.sov': 'a7421e628c6768a88486f8563357a4dbd1999942d03a0e0247123c1c600f8974',
     'examples/07-plane-with-points.sov': '2f1b0581d0023af090348c99f3068ef1f321b4bd81a38cb4387218ff05efd7cf',
     'examples/08-gated-service.sov': 'ed2e6c8878e672fb67c175b6c75d726fe5195879a6ede7a68cc09aaee28fc4a1',
-    'examples/09-print-ai-proof-run.sov': '1df300a574a517cc0650283cfe3b9dada19c52ef9ec2898560ffb4a28d1516b8',
+    'examples/09-print-ai-proof-run.sov': '87f3588bf3a0ca0fc9822c5e602129e8e19778b79f132034fd9a234ca953c377',  # schematically-tests-graph-core-qa-py-passes-on-the-sta, ruling 1: score in thousandths (930)
     'examples/09-proposed-service-review.sov': '24814d24173f6be4a4260f48986ee259b05b64ec896289511d27152d31f70296',
     'examples/09-typed-captions.sov': 'b6f660620d668d7d17c96320c00a2cd00e4b139536585f2ca08faf7bf02486fe',
     'examples/10-clocked-signals.sov': 'a9a88907e855171c205d6fb221f96334eaf5b510e310585205c5b576e8646919',

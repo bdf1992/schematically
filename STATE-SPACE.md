@@ -234,7 +234,7 @@ After its pattern takes a message in, a card's **behaviours** run in the graph c
 Two signal behaviours the graph core runs for every card come with them:
 
 - **Levels set by messages.** A message reaching a card whose signal is asserted (a lever, a clock, or `config.signal.mode` asserted, by the signal model) with `set` or `toggle` in its payload ends `asserted` (rule `asserted`) and sets the card's level on its out ports in the next delta round of the tick: `set` is quantized at the card's threshold, `toggle` inverts the current level.
-- **Edges that start work.** When a card's level on its first out port changes and its `config.signal.on` (`+`, `-` or `±`) matches the polarity, a message `e-<card>-<tick>` starts on `config.signal.channel` (default `edge`) with payload `{node, polarity, from, to, at}` (`at` in ms; `from` and `to` 0 or 1 on a binary card), origin the card and principal the card's own (`edge`, rule `edge`), and goes on from that card. Edges noted in a delta round start their messages at the end of that round, card by card.
+- **Edges that start work.** When a card's level on its first out port changes and its `config.signal.on` (`+`, `-` or `±`) matches the polarity, a message `e-<card>-<tick>` starts on `config.signal.channel` (default `edge`) with payload `{node, polarity, from, to, at}` (`at` in ms; `from` and `to` 0 or 1 on a binary card), origin the card and principal the card's own (`edge`, rule `edge`), and goes on from that card: the edge message goes to the card's `continueAt` (effect, handler, then the flow policy), as the graph core's `setLevel` hands it (`src/07-graph-core.js:469-473` at `7b939e3`), never through the card's own intake (control, asserted set or toggle, flow intake, park), so a limit card that raises an edge does not rate-limit its own message. Edges noted in a delta round start their messages at the end of that round, card by card.
 
 Within a round, level ports are updated in the walk's order and message ports always in port order, so no outcome depends on the walk. `tests/state_space_flow_qa.py` runs each flow case of `tests/graph_core_qa.py` in ticks against the graph core on the same document.
 
@@ -580,6 +580,12 @@ Each slice ends with its QA suite inside `python scripts/qa.py`.
 3. **Fields.** `consensus` and `advection` as declared operators with the ε check; signal colour moved onto `presentation.signal-color`; `25-signal.js` reduced to projection.
 4. **Instrument.** Observer registry with class, limits and read/write sets; observation account; perturbation ledger; instrument coordinates (quality, source and receipt time, GUM certainty) and the `estimated` kind; sensor, structural and drift residuals; controllability; `schematic.state.observe` with the OpenTelemetry adapter first; PROV-JSON export; intent logging and reconciliation for effects that reach outside; generative steps as recorded effects with attempts and their recorded inputs; the `rate` pattern with declared conditioning keys; evidence carried across revisions by identity.
 5. **Later, only when earned.** Latches, clocks and edges (`transition`); the `compose` pattern with per-attempt retries and scored forecasts; possibility sets and ensembles; sensor placement from the uncertainty map; an OPC UA / DTDL adapter if an industrial pack earns it; inertial delay as a DELAY parameter; interposing hosted Components after the carrier/Component record merge.
+
+## Intended differences from the graph core
+
+`src/07-graph-core.js` at `7b939e3` is the parity reference; `tests/state_space_dev_parity_qa.py` runs its example checks on this engine. Where the two differ on purpose, the difference is listed here.
+
+- **Same-tick level arrivals at an undeclared Point.** When level arrivals reach a Point that declares no merge in the same tick, as in `tests/graph_core_qa.py:163` (`planeDoc(acl,0)`: the `svc:ops` lever's 0 and the anonymous lever's 1 at the Vault door), this engine settles them by the recorded seeded draw (Settled item 15), where the graph core applies them first in, first out. The door's level here is the value of the Path last in the drawn order; a level refusal at the door is made exactly when that value is the anonymous lever's, and replay reproduces the drawn result byte for byte.
 
 ## Non-goals
 
