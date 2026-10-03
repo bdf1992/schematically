@@ -144,7 +144,7 @@ function fitComponentLabels(g,n){
   // Where the title sat on its own: the block's foot (growing up) or head (growing down).
   t.textContent=full;t.setAttribute('y',String(y0));
   const b0=t.getBBox(),innerTop=-size.h/2+inset+2,innerBottom=size.h/2-inset-2;
-  const foot=inCard&&!down?Math.min(b0.y+b0.height,innerBottom):b0.y+b0.height,head=b0.y;
+  const head=b0.y;let foot=inCard&&!down?Math.min(b0.y+b0.height,innerBottom):b0.y+b0.height;
   const graphic=componentConfig(n).presentation?.graphic;
   let topLimit=innerTop;
   if(graphic?.kind&&graphic.kind!=='none'){const box=componentInlineGraphicBox(n);if(!down)topLimit=Math.max(topLimit,box.y+box.h+2)}
@@ -164,10 +164,18 @@ function fitComponentLabels(g,n){
     return {top:top+shift,bottom:bottom+shift,lines,showSub};
   };
   const ok=r=>!inCard||(r.top>=topLimit-.01&&r.bottom<=innerBottom+.01);
-  let r=place(wrap(2),!!subLine);
-  if(!ok(r)&&r.showSub)r=place(r.lines,false);
-  if(!ok(r)&&r.lines.length>1)r=place(wrap(1),false);
+  // A block that does not fit at the lone title's foot may sit lower, down to the inner edge.
+  const fit=(lines,showSub)=>{const base=foot;let r=place(lines,showSub);
+    if(!ok(r)&&inCard&&!down&&base<innerBottom){foot=innerBottom;r=place(lines,showSub);foot=base}
+    return r};
+  let r=fit(wrap(2),!!subLine);
+  if(!ok(r)&&r.showSub)r=fit(r.lines,false);
+  if(!ok(r)&&r.lines.length>1)r=fit(wrap(1),false);
   if(u&&(!r.showSub)){u.style.visibility='hidden';u.dataset.lod='hidden'}
+  // Zoomed far out (screen scale 0.25 or less), a title that still runs into its glyph is hidden.
+  delete t.dataset.lod;t.style.visibility='';
+  const screen=parseFloat(typeof workspace!=='undefined'&&workspace?workspace.style.getPropertyValue('--zoom'):'');
+  if(inCard&&graphic?.kind&&graphic.kind!=='none'&&screen<=.25&&r.top<topLimit-.01){t.style.visibility='hidden';t.dataset.lod='hidden'}
   // Wrapping onto two lines is not a cut; only an ellipsis is.
   if(r.lines.some(l=>l.endsWith('…')))t.dataset.truncated='true';
   if(u&&r.showSub&&subLine!==subFull)u.dataset.truncated='true';

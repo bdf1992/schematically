@@ -127,11 +127,18 @@ the on-screen clamp, so the block is laid out again when the zoom changes):
   (`w - 12 - 2 × section inset`); a line still too long ends in an ellipsis
 - the subtitle is one line, cut the same way, and its top sits `space.textGap` (3) under the
   title's last line
-- the block's foot stays where a lone title sits; under a container's glyph or below the body
-  the block grows down from there instead
+- the block's foot stays where a lone title sits, or sits lower, down to the inner edge, when
+  that is what makes it fit; under a container's glyph or below the body the block grows down
+  from there instead
 - inside a card the block stays below the glyph (its foot plus 2) and inside the inner edge;
   when it cannot, the least important line goes first: the subtitle is hidden
   (`data-lod="hidden"`), then the title is cut to one line
+- a lone title (no subtitle) that needs a second line gets room for both under the glyph: the
+  glyph shrinks for it (`glyphBox`), keeping its aspect and never below 60% of its size;
+  whether the title needs the line is judged from a per-character width table, so the layout
+  engine and the renderer agree
+- at a screen scale of 0.25 or less, a title that still runs into its glyph is hidden
+  (`data-lod="hidden"`)
 - a cut line keeps the full text in a `<title>` child and sets `data-truncated`; the status chip
   does not move, and a waits-on caption follows the block's real foot
 - a title drawn outside its card (outside label mode, under the card) is not held to the card's
