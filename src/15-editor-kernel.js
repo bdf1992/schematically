@@ -219,8 +219,36 @@ function renderObjectsPanel(){
 }
 
 // --- Appearance / rate -----------------------------------------------------
-function globalTimeScale(){diagram.meta=diagram.meta||{};const n=Number(diagram.meta.timeScale);return Math.max(.1,Math.min(8,Number.isFinite(n)?n:1))}
-function setGlobalTimeScale(value){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Math.max(.1,Math.min(8,Number(value)||1));setHistoryHint('Change global rate');render();scheduleHistoryCapture()}
+// The document's own rate (issue #40): absent reads as 1; an admitted value is used as written,
+// only capped at 8 for rendering - 0 stays 0 and means paused. setGlobalTimeScale runs the same
+// admission rule a file and the API use (SovSchematicData.admitTimeScale), so a refused value
+// changes nothing and is reported, never silently clamped into range.
+function globalTimeScale(){
+  diagram.meta=diagram.meta||{};
+  const admitted=SovSchematicData.admitTimeScale(diagram.meta.timeScale);
+  if(!admitted.ok||!admitted.present)return 1;
+  return Math.min(8,admitted.value);
+}
+function setGlobalTimeScale(value){
+  diagram.meta=diagram.meta||{};
+  const numeric=typeof value==='string'&&value.trim()!==''?Number(value):value;
+  const admitted=SovSchematicData.admitTimeScale(numeric);
+  if(!admitted.ok){statusEl.textContent=admitted.message;syncGlobalRateSelect();return admitted}
+  if(admitted.present)diagram.meta.timeScale=admitted.value;
+  setHistoryHint('Change global rate');render();scheduleHistoryCapture();syncGlobalRateSelect();
+  return admitted;
+}
+// The #globalRate select never shows a blank: when no option equals the document's own rate
+// (a value a document authored directly, outside the select's fixed list), one is added for it.
+function syncGlobalRateSelect(){
+  const select=document.getElementById('globalRate');if(!select)return;
+  const value=String(globalTimeScale());
+  select.value=value;
+  if(select.value!==value){
+    const option=document.createElement('option');option.value=value;option.textContent=`${value}×`;
+    select.appendChild(option);select.value=value;
+  }
+}
 function packetRateForWire(w,direction='forward'){
   const source=nodes.find(n=>n.id===(direction==='reverse'?w.b:w.a));return globalTimeScale()*entityEditorState(source).rate*entityEditorState(w).rate;
 }
@@ -272,6 +300,6 @@ function initializeEditorKernel(){
   const search=document.getElementById('quickSearchInput');search?.addEventListener('input',()=>updateQuickSearch(search.value));search?.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeQuickSearch()}else if(e.key==='Enter'){e.preventDefault();const n=quickSearchMatches[0];if(n){closeQuickSearch();focusComponent(n)}}});
   const appearance=document.getElementById('appearanceMode');appearance?.addEventListener('change',()=>{appearanceMode=appearance.value;applyAppearanceMode()});
   document.getElementById('globalRate')?.addEventListener('change',e=>setGlobalTimeScale(e.target.value));
-  if(document.getElementById('globalRate'))document.getElementById('globalRate').value=String(globalTimeScale());
+  syncGlobalRateSelect();
   matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener?.('change',()=>{if(appearanceMode==='system')applyAppearanceMode()});
 }
