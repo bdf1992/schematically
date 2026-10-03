@@ -219,6 +219,15 @@ function layoutMetrics(options={}){
     if(!is2D(a)||!is2D(b)||(a.canvasId||'')!==(b.canvasId||''))continue;
     if(layoutOverlap(body.get(a.id),body.get(b.id),1))add('node-overlap',[a.id,b.id],'bodies overlap');
   }
+  // Group regions on one canvas that overlap read as one region: reported, with no weight in the
+  // score (it is not in LAYOUT_RUBRIC), naming each card both groups list.
+  {const groups=shown.filter(isGroupComponent);
+   for(let i=0;i<groups.length;i++)for(let j=i+1;j<groups.length;j++){
+     const a=groups[i],b=groups[j],A=body.get(a.id),B=body.get(b.id);
+     if((a.canvasId||'')!==(b.canvasId||'')||!A||!B||!layoutOverlap(A,B,1))continue;
+     const listed=new Set(Array.isArray(a.config?.members)?a.config.members:[]),both=(Array.isArray(b.config?.members)?b.config.members:[]).filter(id=>listed.has(id));
+     add('group-overlap',[a.id,b.id],`regions of ${a.config?.label||a.id} and ${b.config?.label||b.id} overlap${both.map(id=>`; both list ${id}`).join('')}`);
+   }}
   // Wrapping: a route that runs outside everything drawn in its canvas, round the picture
   // instead of through it (review, 06).
   for(const w of wires){
