@@ -1075,7 +1075,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
   // Wires on buses are laid out first, lanes and all, so every auto route keeps clear of them.
   const busState=typeof busRoutesForRender==='function'?busRoutesForRender():null;
   if(busState)for(const [id,pts] of busState.routes){const w=wires.find(x=>x.id===id);if(w)occupied.push(...routeSegments(pts,w))}
-  wires.forEach((w,i)=>{
+  // The bus routes found above stand for the whole pass: each wire reads them, none asks again.
+  const routeEvery=fn=>busState&&typeof withBusRoutes==='function'?withBusRoutes(busState,fn):fn();
+  routeEvery(()=>wires.forEach((w,i)=>{
     if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
     const snapshot=dragging&&(w.a===activeNodeDrag||w.b===activeNodeDrag)?dragRouteSnapshots.get(i):null;
@@ -1084,7 +1086,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const points=snapshot?clonePoints(snapshot.points):stableRouteForWire(i,w,A,B,occupied);
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
     if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
-  });
+  }));
   // Jogs out and close parallels spread a track apart (src/40-routing.js nudgeRoutes); bus lanes and taps stay fixed.
   const trackCramped=nudgeRoutes(routes,busState?[...busState.routes].flatMap(([id,pts])=>routeSegments(pts,wires.find(x=>x.id===id))):[]);
   for(const [i,r] of routes)r.segs=routeSegments(r.points,wires[i]);

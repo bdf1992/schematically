@@ -178,7 +178,12 @@ function busRoutesForRender(){
   return busRouteState;
 }
 // The drawn route of a bus-routed wire, or null when it cannot be built (the router takes over).
-function busRouteFor(w){const st=busRoutesForRender(),pts=st.routes.get(w.id);return pts?clonePoints(pts):null}
+// busRoutesForRender reads both ends of every bus wire to build its key, so asking it once per wire
+// costs wires x wires end readings. A pass that routes every wire with the document standing still
+// (renderWires) asks once and holds the answer: while a state is held, busRouteFor reads it.
+let busRoutesHeld=null;
+function withBusRoutes(state,fn){const before=busRoutesHeld;busRoutesHeld=state;try{return fn()}finally{busRoutesHeld=before}}
+function busRouteFor(w){const st=busRoutesHeld||busRoutesForRender(),pts=st.routes.get(w.id);return pts?clonePoints(pts):null}
 
 // ---- What the renderer asks ---------------------------------------------------------------------
 // Two wires that cross inside the band of a bus they both ride draw no hop there.

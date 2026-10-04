@@ -10987,7 +10987,12 @@ function busRoutesForRender(){
   return busRouteState;
 }
 // The drawn route of a bus-routed wire, or null when it cannot be built (the router takes over).
-function busRouteFor(w){const st=busRoutesForRender(),pts=st.routes.get(w.id);return pts?clonePoints(pts):null}
+// busRoutesForRender reads both ends of every bus wire to build its key, so asking it once per wire
+// costs wires x wires end readings. A pass that routes every wire with the document standing still
+// (renderWires) asks once and holds the answer: while a state is held, busRouteFor reads it.
+let busRoutesHeld=null;
+function withBusRoutes(state,fn){const before=busRoutesHeld;busRoutesHeld=state;try{return fn()}finally{busRoutesHeld=before}}
+function busRouteFor(w){const st=busRoutesHeld||busRoutesForRender(),pts=st.routes.get(w.id);return pts?clonePoints(pts):null}
 
 // ---- What the renderer asks ---------------------------------------------------------------------
 // Two wires that cross inside the band of a bus they both ride draw no hop there.
@@ -12218,7 +12223,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
   // Wires on buses are laid out first, lanes and all, so every auto route keeps clear of them.
   const busState=typeof busRoutesForRender==='function'?busRoutesForRender():null;
   if(busState)for(const [id,pts] of busState.routes){const w=wires.find(x=>x.id===id);if(w)occupied.push(...routeSegments(pts,w))}
-  wires.forEach((w,i)=>{
+  // The bus routes found above stand for the whole pass: each wire reads them, none asks again.
+  const routeEvery=fn=>busState&&typeof withBusRoutes==='function'?withBusRoutes(busState,fn):fn();
+  routeEvery(()=>wires.forEach((w,i)=>{
     if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
     const snapshot=dragging&&(w.a===activeNodeDrag||w.b===activeNodeDrag)?dragRouteSnapshots.get(i):null;
@@ -12227,7 +12234,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const points=snapshot?clonePoints(snapshot.points):stableRouteForWire(i,w,A,B,occupied);
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
     if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
-  });
+  }));
   // Jogs out and close parallels spread a track apart (src/40-routing.js nudgeRoutes); bus lanes and taps stay fixed.
   const trackCramped=nudgeRoutes(routes,busState?[...busState.routes].flatMap(([id,pts])=>routeSegments(pts,wires.find(x=>x.id===id))):[]);
   for(const [i,r] of routes)r.segs=routeSegments(r.points,wires[i]);
@@ -12455,6 +12462,36 @@ function layoutSegmentsCross(a,b,c,d){
   const d1=o(c,d,a),d2=o(c,d,b),d3=o(a,b,c),d4=o(a,b,d);
   return ((d1>0&&d2<0)||(d1<0&&d2>0))&&((d3>0&&d4<0)||(d3<0&&d4>0));
 }
+// The crossing count asks, for a sample segment of one route, whether any sample segment of another
+// route crosses it. Two segments cross only where their boxes meet, so a route's segments are put
+// in the cells of a grid once, and a segment is tested against the ones in the cells it touches:
+// layoutSegmentsCross, on every pair that could pass it. A route with a point that is not finite, or a
+// segment over many cells, has no index and is scanned whole.
+const LAYOUT_CROSS_CELL=32;
+function layoutCrossIndex(pts){
+  let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
+  for(const p of pts){if(!Number.isFinite(p.x)||!Number.isFinite(p.y))return null;l=Math.min(l,p.x);r=Math.max(r,p.x);t=Math.min(t,p.y);b=Math.max(b,p.y)}
+  if(!(Math.max(-l,r,-t,b)<32768*LAYOUT_CROSS_CELL))return null; // a cell key holds 16 bits each way
+  const cells=new Map();
+  for(let i=1;i<pts.length;i++){
+    const P=pts[i-1],Q=pts[i];
+    const x0=Math.floor(Math.min(P.x,Q.x)/LAYOUT_CROSS_CELL),x1=Math.floor(Math.max(P.x,Q.x)/LAYOUT_CROSS_CELL),y0=Math.floor(Math.min(P.y,Q.y)/LAYOUT_CROSS_CELL),y1=Math.floor(Math.max(P.y,Q.y)/LAYOUT_CROSS_CELL);
+    if(x1-x0>8||y1-y0>8)return null;
+    for(let cx=x0;cx<=x1;cx++)for(let cy=y0;cy<=y1;cy++){const key=cx*65536+cy,list=cells.get(key);if(list)list.push(i);else cells.set(key,[i])}
+  }
+  return {cells,l,r,t,b};
+}
+// Whether P-Q, a segment of an indexed route, crosses any segment of the indexed route pts.
+function layoutCrossesIndexed(P,Q,pts,index){
+  const lx=Math.min(P.x,Q.x),hx=Math.max(P.x,Q.x),ly=Math.min(P.y,Q.y),hy=Math.max(P.y,Q.y);
+  if(lx>index.r||hx<index.l||ly>index.b||hy<index.t)return false;
+  const x0=Math.floor(lx/LAYOUT_CROSS_CELL),x1=Math.floor(hx/LAYOUT_CROSS_CELL),y0=Math.floor(ly/LAYOUT_CROSS_CELL),y1=Math.floor(hy/LAYOUT_CROSS_CELL);
+  for(let cx=x0;cx<=x1;cx++)for(let cy=y0;cy<=y1;cy++){
+    const list=index.cells.get(cx*65536+cy);if(!list)continue;
+    for(const i of list)if(layoutSegmentsCross(P,Q,pts[i-1],pts[i]))return true;
+  }
+  return false;
+}
 
 // Corner points of an orthogonal path written as M/L/H/V commands.
 function layoutPathCorners(d){
@@ -12556,7 +12593,8 @@ function layoutMetrics(options={}){
   const routes=[];
   for(const g of workspace.querySelectorAll('.wire-group')){
     const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
-    routes.push({w,pts:layoutSamplePath(path),corners:layoutPathCorners(path.getAttribute('d'))});
+    const pts=layoutSamplePath(path);
+    routes.push({w,pts,index:layoutCrossIndex(pts),corners:layoutPathCorners(path.getAttribute('d'))});
   }
   // A jog is a short step between two bends: two lines that should have been one.
   for(const {w,corners} of routes){
@@ -12609,7 +12647,11 @@ function layoutMetrics(options={}){
   for(let i=0;i<routes.length;i++)for(let j=i+1;j<routes.length;j++){
     const A=routes[i],B=routes[j],shared=[A.w.a,A.w.b].some(x=>x&&(x===B.w.a||x===B.w.b));
     let crossed=0;
-    for(let s=1;s<A.pts.length&&crossed<4;s++)for(let t=1;t<B.pts.length;t++)if(layoutSegmentsCross(A.pts[s-1],A.pts[s],B.pts[t-1],B.pts[t])){crossed++;break}
+    if(A.index&&B.index){
+      if(A.index.l<=B.index.r&&A.index.r>=B.index.l&&A.index.t<=B.index.b&&A.index.b>=B.index.t)
+        for(let s=1;s<A.pts.length&&crossed<4;s++)if(layoutCrossesIndexed(A.pts[s-1],A.pts[s],B.pts,B.index))crossed++;
+    }
+    else for(let s=1;s<A.pts.length&&crossed<4;s++)for(let t=1;t<B.pts.length;t++)if(layoutSegmentsCross(A.pts[s-1],A.pts[s],B.pts[t-1],B.pts[t])){crossed++;break}
     if(crossed&&!(shared&&crossed===1))add('crossing',[A.w.id,B.w.id],`${crossed} crossing${crossed>1?'s':''}`);
   }
   // A directed wire long enough to carry a mark must say which way it runs.
