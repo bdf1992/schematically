@@ -523,6 +523,62 @@ A wire never runs through a card or along its edge.
 Tests: `tests/route_clear_of_cards_qa.py` (the Miro parity frames 4 and 5, a 4 x 4 grid with
 12 wires, a row of three, and a pocket only the search clears).
 
+## As built: track gap (2026-10-04)
+
+Two wires that run side by side stand a track apart, so each can be followed by eye.
+
+- **The rule.** `TRACK_GAP` = 10 world units (`src/40-routing.js`), the step `routePoints` already
+  uses for a wire's private lane. It is wider than a bus's lane pitch (6, clamped 4 to 16) because
+  bus lanes are drawn inside a band and auto-routed wires are not. Two auto-routed wires whose
+  parallel middle segments overlap for 24 or more are at least `TRACK_GAP` apart when they share no
+  end. When they share an end (a fan-out or a fan-in) they are either on one line (under 0.5 apart:
+  one trunk, which the junction dot marks where they part) or at least `TRACK_GAP` apart, never
+  between.
+- **What never moves.** End leads (a port's stub to its first bend), pinned and guided routes, bus
+  routes (lanes and taps), routes frozen by a drag and carriers with two free ends. They are fixed
+  segments the others keep the rule against. A move may lengthen or shorten a lead along its own
+  line, never below 4 (or what it was), never across.
+- **Jogs.** A jog is a middle segment shorter than 10 joining two parallel legs. The leg that is not
+  an end lead moves onto the other leg's line (the shorter leg first when neither is a lead), and
+  the jog is gone. The move is kept only when the route enters no padded obstacle it was not
+  already in (the rule of "Routes clear of cards"), stays in its interior's fence, makes no new
+  crossing and leaves no new pair breaking the rule. When both legs are end leads (two ports under
+  10 out of line) the jog stays. Jogs go before nudging.
+- **Nudging** (`nudgeRoutes(routes, fixed, obstacles)`, called once in `renderWires` after every
+  route is drawn and before hops; this is the nudging phase of orthogonal connector routing:
+  Wybrow, Marriott and Stuckey, GD 2009; libavoid's nudging and centring; ELK's
+  `OrthogonalRoutingGenerator` slots). Segments that break the rule are grouped by channel. Within
+  a channel, wires on one line that share an end are one slot and move together; a slot holding a
+  fixed segment is an anchor. The free slots are ordered by where their wires come from and go to
+  at the two ends of the channel (metro-line ordering: an arm leaving inside another segment's
+  span puts its segment on the side the arm goes, so it adds no crossing), then spread `TRACK_GAP`
+  apart, centred where they were, kept a gap from the anchors. Each route stays connected: the
+  neighbouring segments stretch. A spread is kept only when the routes enter no new padded
+  obstacle, keep every segment's direction, make no new crossing, and the channel breaks the rule
+  less than before; otherwise the spread is shifted, then narrowed a unit at a time down to 2.
+- **Cramped.** When a channel has no room for its group, it is spread as far as the room allows.
+  The wires still closer than `TRACK_GAP` carry `data-track-cramped="true"` on their wire group.
+- **Off switch.** `window.ROUTE_NUDGE=false` turns jogs and nudging off, for tests only.
+- **The audit** counts `route-close-parallel`: two wires, not both inside one bus band, with middle
+  segments 0.5 to under `TRACK_GAP` apart overlapping 24 or more, end leads left out, shared end or
+  not. It has no weight in `LAYOUT_RUBRIC`. `route-overlap` and `route-jog` keep their definitions.
+
+Measured (static metrics after `fitDiagram`), before then after: before is `window.ROUTE_NUDGE=false`,
+which draws dev e509171's routes, so `route-close-parallel` can be counted on them too:
+
+| Document | route-overlap | route-close-parallel | route-jog | crossing |
+| --- | --- | --- | --- | --- |
+| `tests/fixtures/mixed-waves.sov` (the H3 case) | 0, 0 | 0, 0 | 1, 0 | 1, 1 |
+| `tests/fixtures/task-lifecycle.sov` | 0, 0 | 2, 0 | 0, 0 | 0, 0 |
+| `tests/fixtures/work-engine-sample.sov` | 0, 0 | 0, 0 | 0, 0 | 0, 0 |
+| `docs/workengine/map.sov` | 23, 23 | 0, 0 | 2, 2 | 185, 185 |
+
+On the H3 case w5's 8 px jog under the saw trunk is gone and w5 shares w3's trunk from saw:out to
+x 368. On the order-only map (`check_map.py --routing`) crossing goes 208 to 207 and route-overlap
+21 to 18.
+
+Tests: `tests/track_gap_qa.py`.
+
 ## As built: presentation (2026-09-25)
 
 **Colour carries meaning, not decoration.** There are two accents:

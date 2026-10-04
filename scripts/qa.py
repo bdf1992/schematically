@@ -32,8 +32,10 @@ STATIC=[
     'tests/desktop_shell_qa.py',
     'tests/revision_guard_qa.py',
     'tests/mcp_surface_qa.py',
+    'tests/release_path_qa.py',
 ]
 BROWSER=[
+    'tests/desktop_launch_page_qa.py',
     'tests/attachment_point_refactor_qa.py',
     'tests/configurable_attachment_defaults_qa.py',
     'tests/primitive_forms_qa.py',
@@ -92,6 +94,7 @@ BROWSER=[
     'tests/work_engine_notation_qa.py',
     'tests/wire_crossing_qa.py',
     'tests/route_clear_of_cards_qa.py',
+    'tests/track_gap_qa.py',
     'tests/typography_qa.py',
     'tests/legend_qa.py',
     'tests/status_waits_on_qa.py',

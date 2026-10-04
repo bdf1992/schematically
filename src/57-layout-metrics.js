@@ -245,6 +245,31 @@ function layoutMetrics(options={}){
    for(let i=0;i<segs.length;i++)for(let j=i+1;j<segs.length;j++){const x=segs[i],y=segs[j];if(x.w===y.w||x.ends.some(e=>y.ends.includes(e)))continue;
      const key=[x.w.id,y.w.id].sort().join('|');if(seen.has(key))continue;
      if(onOneTrack(x.a,x.b,y.a,y.b,8)){seen.add(key);add('route-overlap',[x.w.id,y.w.id],'two wires run on one track')}}}
+  // Close parallels: two wires whose middle segments run 0.5 to under TRACK_GAP apart for 24 or
+  // more, end leads left out, shared end or not; a pair inside one bus band is a bus's own lanes.
+  // Reported, with no weight in the score (it is not in LAYOUT_RUBRIC).
+  {const gap=typeof TRACK_GAP==='number'?TRACK_GAP:10,segs=[];
+   for(const g of wiresG.querySelectorAll('.wire-group')){
+     const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
+     const m=layoutWorldMatrix(path),c=[];
+     for(const q0 of layoutPathCorners(String(path.getAttribute('d')||'').replace(/A[^A-Z]*?(?=[MLHV])/g,''))){
+       const q=m?new DOMPoint(q0.x,q0.y).matrixTransform(m):q0,p={x:Math.round(q.x*100)/100,y:Math.round(q.y*100)/100},l=c.at(-1);
+       if(l&&Math.abs(l.x-p.x)<.5&&Math.abs(l.y-p.y)<.5)continue;
+       if(c.length>=2){const a=c.at(-2);if((Math.abs(a.x-l.x)<.5&&Math.abs(l.x-p.x)<.5)||(Math.abs(a.y-l.y)<.5&&Math.abs(l.y-p.y)<.5)){c[c.length-1]=p;continue}}
+       c.push(p);
+     }
+     for(let s=1;s+2<c.length;s++){const P=c[s],Q=c[s+1],h=Math.abs(P.y-Q.y)<.5,v=Math.abs(P.x-Q.x)<.5;if(h===v)continue;segs.push({w,h,at:h?P.y:P.x,lo:h?Math.min(P.x,Q.x):Math.min(P.y,Q.y),hi:h?Math.max(P.x,Q.x):Math.max(P.y,Q.y)})}
+   }
+   const seen=new Set();
+   for(let i=0;i<segs.length;i++)for(let j=i+1;j<segs.length;j++){
+     const x=segs[i],y=segs[j];if(x.w===y.w||x.h!==y.h)continue;
+     const key=[x.w.id,y.w.id].sort().join('|');if(seen.has(key))continue;
+     const d=Math.abs(x.at-y.at),lo=Math.max(x.lo,y.lo),hi=Math.min(x.hi,y.hi);
+     if(d<.5||d>=gap||hi-lo<24)continue;
+     const mid=x.h?{x:(lo+hi)/2,y:(x.at+y.at)/2}:{x:(x.at+y.at)/2,y:(lo+hi)/2};
+     if(typeof busBandHolds==='function'&&busBandHolds(x.w,y.w,mid))continue;
+     seen.add(key);add('route-close-parallel',[x.w.id,y.w.id],`${d.toFixed(1)}px apart for ${Math.round(hi-lo)}px`);
+   }}
   // Empty container: its children and inner wires fill under a fifth of its interior (review, 03, 04, 07).
   for(const n of visible){
     if(!is2D(n)||!componentAcceptsChildren(n))continue;
