@@ -167,9 +167,14 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 /* Labels are SVG text in world units while strokes are non-scaling, so text would grow and
    shrink with the camera. `--zoom` is the actual screen scale of #workspace; every label's
    essential text stays at 12 to 16 screen pixels, expressed back in world units.
-   Small endpoint tags retain their separate 8 to 14 pixel hierarchy. */
+   Small endpoint tags retain their separate 8 to 14 pixel hierarchy.
+   `--scale` is the document scale (tokens.scale, set by applyNotationTokens). The --stroke-* and
+   --type-* tokens arrive already multiplied by it; a literal size on a class drawn in a picture is
+   multiplied here. The upper bound of each clamp scales, so a scaled label is not capped; the
+   lower bound is screen pixels and does not. Editor feedback (ghosts, previews, drop targets,
+   guides, halos, tethers, handles, selection and hover states) is not drawing and keeps its size. */
 #workspace{--zoom:1}
-.node text{font-size:calc(clamp(12px,var(--type-title-size,10px) * var(--zoom,1),16px) / var(--zoom,1));fill:var(--component-text-color,var(--component-boundary-color,var(--component-color,#171715)));font-weight:var(--type-title-weight,600);letter-spacing:.015em;pointer-events:none;user-select:none}
+.node text{font-size:calc(clamp(12px,var(--type-title-size,10px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));fill:var(--component-text-color,var(--component-boundary-color,var(--component-color,#171715)));font-weight:var(--type-title-weight,600);letter-spacing:.015em;pointer-events:none;user-select:none}
 .node .glyph{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .component-lead{stroke:var(--component-interior-ink,var(--component-color,#171715));stroke-linecap:round;fill:none;pointer-events:none}
 .node.backdrop-none .component-lead{stroke:var(--canvas-ink)}
@@ -181,11 +186,11 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 /* The interior guide is an editing aid: shown while the container is selected or a card is being dragged, never in a picture. */
 .node.is-container:not(.selected)>.container-guide{opacity:0}#workspace.dragging-node .node.is-container>.container-guide{opacity:.22}
 .node.is-container>.body{stroke-width:var(--stroke-structure-container,1.8px)}
-.node .internal-text{font-size:calc(clamp(12px,var(--type-body-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-body-weight,400)}.node .internal-text .md-strong{font-weight:700}.node .internal-text .md-em{font-style:italic}.node .internal-text .md-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.node .component-subtitle{font-size:calc(clamp(8px,var(--type-subtitle-size,8.5px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-subtitle-weight,400);letter-spacing:0}
-.node .outside-label{font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)}
+.node .internal-text{font-size:calc(clamp(12px,var(--type-body-size,9px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-body-weight,400)}.node .internal-text .md-strong{font-weight:700}.node .internal-text .md-em{font-style:italic}.node .internal-text .md-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.node .component-subtitle{font-size:calc(clamp(8px,var(--type-subtitle-size,8.5px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-subtitle-weight,400);letter-spacing:0}
+.node .outside-label{font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-caption-weight,600)}
 .port-hit{fill:transparent;stroke:none;cursor:pointer;pointer-events:all;touch-action:none}
-.port{fill:var(--panel);stroke:var(--port-color,var(--component-color,var(--canvas-ink)));stroke-width:2;cursor:pointer;opacity:0;transition:opacity .1s,transform .1s;pointer-events:none;transform-box:fill-box;transform-origin:center}
+.port{fill:var(--panel);stroke:var(--port-color,var(--component-color,var(--canvas-ink)));stroke-width:calc(2px * var(--scale,1));cursor:pointer;opacity:0;transition:opacity .1s,transform .1s;pointer-events:none;transform-box:fill-box;transform-origin:center}
 .node:hover .port,.node.wiring-source .port,.node.selected .port{opacity:1}
 /* Unused points are affordances, not structure: hidden at rest, offered while a wire is drawn. */
 #workspace.wiring .port{opacity:.45}
@@ -199,7 +204,7 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .wire-group.dormant{opacity:.46}
 .wire-group.dormant .wire-voltage{opacity:.16}
 .wire{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:var(--stroke-flow,2.25);stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:pointer;transition:stroke-width .1s,opacity .1s}
-.wire-voltage{fill:none;stroke:var(--voltage-ink,var(--wire-ink,var(--canvas-ink)));stroke-width:8;stroke-linecap:round;stroke-linejoin:round;opacity:.10;pointer-events:none}
+.wire-voltage{fill:none;stroke:var(--voltage-ink,var(--wire-ink,var(--canvas-ink)));stroke-width:calc(8px * var(--scale,1));stroke-linecap:round;stroke-linejoin:round;opacity:.10;pointer-events:none}
 .wire-hit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
 .wire.selected{stroke-width:4}
 .wire-group:hover .wire{stroke-width:3.3}
@@ -212,9 +217,9 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 #workspace.dragging-node .wire-packet{display:none!important}
 .wire-packet-tag{font-size:7px;font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:2px;letter-spacing:.03em}
 .wire-packet-operation{font-size:6.5px;font-weight:900;fill:var(--packet-op-ink,var(--canvas-ink));pointer-events:none;dominant-baseline:middle}
-.endpoint-channel-tag,.port-label-text{font-size:calc(clamp(8px,var(--type-caption-size,9px) * var(--zoom,1),14px) / var(--zoom,1));font-weight:var(--type-caption-weight,600);fill:var(--canvas-muted);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:3px;letter-spacing:.03em;pointer-events:none}
+.endpoint-channel-tag,.port-label-text{font-size:calc(clamp(8px,var(--type-caption-size,9px) * var(--zoom,1),calc(14px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-caption-weight,600);fill:var(--canvas-muted);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:calc(3px * var(--scale,1));letter-spacing:.03em;pointer-events:none}
 .endpoint-channel-tag{font-size:8px}
-.flow-chevron{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;opacity:0}
+.flow-chevron{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:calc(2.4px * var(--scale,1));stroke-linecap:round;stroke-linejoin:round;pointer-events:none;opacity:0}
 #workspace.show-flow .flow-chevron{opacity:1}
 .ghost-flow-chevron{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;opacity:.24;stroke-dasharray:3 3}
 .ghost-route-preview{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;opacity:.10;stroke-dasharray:5 7}
@@ -319,7 +324,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .form-settings>summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;padding:7px 9px;background:var(--panel);font-size:11px}
 .form-settings>summary::-webkit-details-marker{display:none}
 .form-settings>.settings-grid{padding:8px}
-.component-frame-inner{fill:none;stroke:var(--component-boundary-color);stroke-width:2;pointer-events:none;opacity:.9}
+.component-frame-inner{fill:none;stroke:var(--component-boundary-color);stroke-width:calc(2px * var(--scale,1));pointer-events:none;opacity:.9}
 .node.form-shell .component-frame-inner{stroke-dasharray:5 3}
 .settings-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:8px;font-size:10px}
 .settings-head span{font-size:9px;color:var(--muted);text-align:right}
@@ -381,7 +386,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .transform-handle-halo{fill:transparent;stroke:none;pointer-events:all}
 #workspace.transforming-node .wire-packet{display:none!important}
 .port[data-face="internal"]{stroke-dasharray:2 2}
-.port[data-face="both"]{stroke-width:3.2}
+.port[data-face="both"]{stroke-width:calc(3.2px * var(--scale,1))}
 .component-visual-panel textarea{height:72px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .component-visual-panel .visual-check{flex-direction:row;align-items:center;margin-top:14px}
 .visual-wide{margin-top:7px}
@@ -417,7 +422,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .node.blank text{font-style:italic}
 .node.blank.selected .body{stroke-dasharray:5 4}
 
-.connection-label{font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600);fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}.reciprocity-mark{font-size:calc(clamp(12px,9px * var(--zoom,1),16px) / var(--zoom,1));font-weight:600;font-style:italic;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}
+.connection-label{font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-caption-weight,600);fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:calc(4px * var(--scale,1));pointer-events:none}.reciprocity-mark{font-size:calc(clamp(12px,9px * var(--scale,1) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:600;font-style:italic;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:calc(4px * var(--scale,1));pointer-events:none}
 
 @media(max-width:900px){
   .app{grid-template-columns:210px minmax(0,1fr);}
@@ -526,9 +531,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .node.backdrop-none .component-label,.node.backdrop-none .outside-label,.node.backdrop-none .internal-text{fill:var(--canvas-ink)}
 
 /* Earned dimensional Forms */
-.dimensional-point-body{fill:var(--panel);stroke:var(--component-boundary-color,#555);stroke-width:2;vector-effect:non-scaling-stroke}
+.dimensional-point-body{fill:var(--panel);stroke:var(--component-boundary-color,#555);stroke-width:calc(2px * var(--scale,1));vector-effect:non-scaling-stroke}
 .node .dimensional-point-body.port{opacity:1}
-.node .dimensional-point-body.carries{fill:var(--component-boundary-color,var(--canvas-ink));stroke-width:1.5}
+.node .dimensional-point-body.carries{fill:var(--component-boundary-color,var(--canvas-ink));stroke-width:calc(1.5px * var(--scale,1))}
 .dimensional-point-label{font-size:8px;fill:var(--ink)}
 .dimensional-path-body{stroke:var(--component-boundary-color,#555);stroke-linecap:round;vector-effect:non-scaling-stroke}
 
@@ -547,7 +552,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .node.dragging .point-grip{cursor:grabbing}
 .node[data-dimension="0"]:hover .port-hit,.node[data-dimension="0"].selected .port-hit{stroke:var(--component-boundary-color,var(--canvas-ink));stroke-width:1;stroke-dasharray:2 3;opacity:.55}
 .node[data-dimension="0"] .port-hit:hover{opacity:1;stroke-dasharray:none}
-.node[data-dimension="0"].nested-child .dimensional-point-body{stroke-width:2.4}
+.node[data-dimension="0"].nested-child .dimensional-point-body{stroke-width:calc(2.4px * var(--scale,1))}
 .settle-host-ghost.path-host rect,.settle-host-ghost.edge-host rect{fill:color-mix(in srgb,var(--canvas-tone) 76%,#6f8fb7 24%);stroke:#6f8fb7}
 .settle-host-ghost.path-host .settle-wire-axis,.settle-host-ghost.edge-host .settle-wire-axis{stroke:#6f8fb7;stroke-width:2;stroke-dasharray:5 3;vector-effect:non-scaling-stroke}
 
@@ -1246,6 +1251,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   const SCHEMATIC={
     id:'schematic',name:'Schematic',version:1,
     tokens:{
+      // The document scale (NOTATION-MODEL.md §3): one number, from 0.5 to 4, that resolve() applies
+      // once to every stroke weight, every text role's size and own min, space.pin and
+      // type.screen.max. The values below are the scale 1 values and stay unscaled here.
+      scale:1,
       // Offset from inside: the core keeps radius.core, each line outward adds its band.
       radius:{core:6,card:10},
       // World units. Selected and highlighted states multiply these, never replace them.
@@ -1332,7 +1341,28 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!cur)return {ok:false,code:'UNKNOWN_NOTATION',message:`No notation "${id}"`,next_operation:`use one of: ${Object.keys(table).join(', ')}`};
     while(cur&&!seen.has(cur.id)){chain.unshift(cur);seen.add(cur.id);cur=cur.extends?table[cur.extends]:null}
     let flat={};for(const n of chain)flat=merge(flat,n);
+    const scaled=applyScale(flat.tokens);if(!scaled.ok)return scaled;
     flat.id=id;registerPoints(flat);return {ok:true,notation:flat};
+  }
+  // The document scale, applied once to the flattened tokens (a fresh object: merge copies), so
+  // every reader of tokens(doc) and resolve(doc).notation.tokens draws scaled with no multiplication
+  // of its own. Scaled: stroke.*, each text role's size and its own min, space.pin, type.screen.max.
+  // Not scaled: type.screen.min (screen pixels), radius, the other space tokens, elevation.
+  // A scale that is not a number from 0.5 to 4 is refused, never clamped.
+  const SCALE_MIN=.5,SCALE_MAX=4;
+  function applyScale(t){
+    if(!isObject(t)||t.scale===undefined)return {ok:true};
+    const s=t.scale;
+    if(typeof s!=='number'||!Number.isFinite(s)||s<SCALE_MIN||s>SCALE_MAX)return {ok:false,code:'SCALE_INVALID',message:`tokens.scale is ${JSON.stringify(s)}; it must be a number from ${SCALE_MIN} to ${SCALE_MAX}`,next_operation:`set tokens.scale to a number from ${SCALE_MIN} to ${SCALE_MAX}, or remove it to draw at 1`};
+    const by=v=>typeof v==='number'?+(v*s).toFixed(4):v;
+    if(isObject(t.stroke))for(const k of Object.keys(t.stroke))t.stroke[k]=by(t.stroke[k]);
+    if(isObject(t.type))for(const [role,r] of Object.entries(t.type)){
+      if(!isObject(r))continue;
+      if(role==='screen'){if(r.max!==undefined)r.max=by(r.max);continue}
+      if(r.size!==undefined)r.size=by(r.size);if(r.min!==undefined)r.min=by(r.min);
+    }
+    if(isObject(t.space)&&t.space.pin!==undefined)t.space.pin=by(t.space.pin);
+    return {ok:true};
   }
   // Glyphs whose terminals are the card's attachment points (`points: 'terminals'`), by symbol
   // id, filled whenever a notation is resolved. The attachment core reads it, so a gate's two
@@ -10466,8 +10496,13 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
        anchor:routeAnchor(points)
      }))
      .sort((a,b)=>a.score-b.score);
-    // Prefer a perimeter that clears every body; only when none does is the cheapest taken.
-    chosen=fallback.find(f=>routeClear(f.points,obstacles,leads))||fallback[0];
+    // Prefer a perimeter that clears every body; when none does, the cheapest that still leaves and
+    // arrives along each port's lead (it never doubles back over a port), and only then the cheapest.
+    const alongLeads=f=>{
+      const p=normalizePoints([A,SA,...f.points.slice(1,-1),SB,B]),same=(u,v)=>!u||(!!v&&u.dx===v.dx&&u.dy===v.dy);
+      return p.length<2||(same(sourceNode&&axisDirection(A,SA),axisDirection(p[0],p[1]))&&same(targetNode&&axisDirection(SB,B),axisDirection(p.at(-2),p.at(-1))));
+    };
+    chosen=fallback.find(f=>routeClear(f.points,obstacles,leads))||fallback.find(alongLeads)||fallback[0];
   }
 
   return {
@@ -10501,6 +10536,29 @@ function routeLead(P,Q,portId,node,inward){
     for(let s=2;s<=d;s+=2){const x=P.x+nx*s,y=P.y+ny*s;if(x>R.l&&x<R.r&&y>R.t&&y<R.b){d=Math.max(4,s/2);break}}
   }
   return {x:P.x+nx*d,y:P.y+ny*d};
+}
+// How a declared route joins an end's lead (LAYOUT-MODEL.md "As built: port side"). N is the
+// route's point next to the end, P the port, S the lead's end. Returned: the corners between N and
+// S, in that order, so the route reaches S from outside the stretch between S and the port and the
+// segment touching the port runs along the port's normal. Tried in order: the corner asked for, the
+// other corner, then round the end's own card on its nearer and its farther side; the first that
+// also keeps out of the card's padding is taken. node is the end's card when its body is an
+// obstacle to this wire, else null (the corner asked for is returned). Points closer than eps to
+// one axis line count as aligned and need no corner. Pinned and guided routes (src/58-layouts.js)
+// and bus taps (src/41-buses.js) build their ends with this.
+function leadJoin(N,P,S,node,first=null,eps=.5){
+  const aligned=Math.abs(N.x-S.x)<=eps||Math.abs(N.y-S.y)<=eps,asked=aligned||!first?[]:[first];
+  const d=axisDirection(P,S);
+  if(!d||!node||componentForm(node).dimension!==2||componentHostedOnWire(node))return asked;
+  const R=componentBounds(node,Math.min(ROUTE_END_CLEARANCE,Math.abs(S.x-P.x)+Math.abs(S.y-P.y))),W=componentBounds(node,ROUTE_CLEARANCE),lead={S,R,...d};
+  const nearer=(p,q,at)=>Math.abs(p-at)<=Math.abs(q-at)?[p,q]:[q,p];
+  const options=[asked,...(aligned?[]:[[{x:S.x,y:N.y}],[{x:N.x,y:S.y}]]),
+    ...(d.dx?nearer(W.t,W.b,N.y).map(y=>[{x:N.x,y},{x:S.x,y}]):nearer(W.l,W.r,N.x).map(x=>[{x,y:N.y},{x,y:S.y}]))];
+  const path=mid=>{const out=[{x:N.x,y:N.y}];for(const q of [...mid,S]){const p=out.at(-1);out.push(Math.abs(p.x-q.x)<=eps?{x:p.x,y:q.y}:Math.abs(p.y-q.y)<=eps?{x:q.x,y:p.y}:q)}return normalizePoints(out)};
+  // The point before S is off the lead's line, or on it beyond S: never between S and the port or behind the port.
+  const reaches=mid=>{const pts=path(mid);if(pts.length<2)return true;const M=pts.at(-2),E=pts.at(-1);return Math.abs((M.x-E.x)*d.dy)+Math.abs((M.y-E.y)*d.dx)>=.5||(M.x-E.x)*d.dx+(M.y-E.y)*d.dy>=0};
+  const clear=mid=>{const pts=path(mid);for(let i=0;i<pts.length-1;i++)if(!segmentClear(pts[i],pts[i+1],[R],[lead]))return false;return true};
+  return options.find(o=>reaches(o)&&clear(o))||options.find(reaches)||asked;
 }
 function routeFence(wire){
   const surface=wire?.canvasId||'';
@@ -10994,14 +11052,18 @@ function busPlan(w,A,B,spec){
   const on=busProject(first,SA),off=busProject(last,SB);
   legs.forEach((l,i)=>{l.sIn=i===0?on.s:meets[i-1].sTo;l.sOut=i===legs.length-1?off.s:meets[i].sFrom});
   return {w,A,B,SA,SB,legs,meets,
+    // Each end's card, when its body is an obstacle to this wire: a tap goes round it (leadJoin).
+    cardA:a&&endpointNeedsOuterObstacle(a,w.aSide,w)?a:null,cardB:b&&endpointNeedsOuterObstacle(b,w.bSide,w)?b:null,
     horizA:Math.abs(SA.x-A.x)>=Math.abs(SA.y-A.y),horizB:Math.abs(SB.x-B.x)>=Math.abs(SB.y-B.y)};
 }
 // The drawn route for a plan, given the wire's lane offset on each of its buses.
 function busPlanPoints(plan,offsets){
   const o=i=>offsets.get(plan.legs[i].id)||0,L=plan.legs,n=L.length;
-  // Tap on: one L from the end of the lead to the lane, its first leg continuing the lead.
+  // Tap on: one L from the end of the lead to the lane, its first leg continuing the lead. A lane
+  // behind the port is reached round the end's own card (leadJoin, src/40-routing.js), so the wire
+  // leaves along the port's normal and never doubles back over the port.
   const T=busAt(L[0].line,L[0].sIn,o(0));
-  const out=[plan.A,plan.SA,plan.horizA?{x:T.x,y:plan.SA.y}:{x:plan.SA.x,y:T.y}];
+  const out=[plan.A,plan.SA,...leadJoin(T,plan.A,plan.SA,plan.cardA,plan.horizA?{x:T.x,y:plan.SA.y}:{x:plan.SA.x,y:T.y},.01).reverse()];
   for(let i=0;i<n;i++){
     out.push(...busRide(L[i].line,L[i].sIn,L[i].sOut,o(i)));
     if(i<n-1){
@@ -11012,7 +11074,7 @@ function busPlanPoints(plan,offsets){
   }
   // Tap off: the mirror of tap on.
   const U=busAt(L[n-1].line,L[n-1].sOut,o(n-1));
-  out.push(plan.horizB?{x:U.x,y:plan.SB.y}:{x:plan.SB.x,y:U.y},plan.SB,plan.B);
+  out.push(...leadJoin(U,plan.B,plan.SB,plan.cardB,plan.horizB?{x:U.x,y:plan.SB.y}:{x:plan.SB.x,y:U.y},.01),plan.SB,plan.B);
   // Two consecutive points off one axis (a parallel hand-over) get a corner between them.
   const ortho=[out[0]];
   for(let i=1;i<out.length;i++){const p=ortho.at(-1),q=out[i];if(Math.abs(p.x-q.x)>.01&&Math.abs(p.y-q.y)>.01)ortho.push({x:q.x,y:p.y});ortho.push(q)}
@@ -11371,13 +11433,13 @@ function appendTerminalMarks(g,n){
     const compat=point.compatId;
     if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
     const flow=activePortChannel(point.config||{}).flow||'duplex',side=physicalPortSide(n,point.id),P=componentPortLocalPosition(n,point.id);
-    const vertical=side==='left'||side==='right',len=12,th=3.2;
+    const vertical=side==='left'||side==='right',len=TERMINAL_MARK.len*markScale,th=TERMINAL_MARK.th*markScale;
     const parts=flow==='duplex'?[['in',-len/2,len/2],['out',0,len/2]]:[[flow==='control'?'control':flow==='in'?'in':'out',-len/2,len]];
     for(const [cls,off,span] of parts){
       const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('class','terminal-mark '+cls);
       if(vertical){r.setAttribute('x',String(P.x-th/2));r.setAttribute('y',String(P.y+off));r.setAttribute('width',String(th));r.setAttribute('height',String(span))}
       else{r.setAttribute('x',String(P.x+off));r.setAttribute('y',String(P.y-th/2));r.setAttribute('width',String(span));r.setAttribute('height',String(th))}
-      r.setAttribute('rx','1.2');g.appendChild(r);
+      r.setAttribute('rx',String(1.2*markScale));g.appendChild(r);
     }
   }
 }
@@ -11671,7 +11733,7 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     {const pos=componentPlacement(n).kind==='edge'?SovSchematicData.pointSectionPosition(diagram,n.id,'out'):null;
      if(pos&&pos.through!=null){const host=nodes.find(h=>h.id===pos.owner),s=SovSchematicData.componentSection(host),T=s.bands[pos.through]?.thickness||8;
        const cap=document.createElementNS('http://www.w3.org/2000/svg','rect');cap.setAttribute('class','through-mark');cap.setAttribute('x','-4.5');cap.setAttribute('y',String(-T/2-3));cap.setAttribute('width','9');cap.setAttribute('height',String(T+6));cap.setAttribute('rx','4.5');g.appendChild(cap)}}
-    point.setAttribute('class','dimensional-point-body port attachment-point'+(ends?' carries':'')+(ends>=3?' junction':''));point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(ends?(ends>=3?4.5:4):Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
+    point.setAttribute('class','dimensional-point-body port attachment-point'+(ends?' carries':'')+(ends>=3?' junction':''));point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(ends?(ends>=3?CARRYING_POINT_RADIUS.junction:CARRYING_POINT_RADIUS.end)*markScale:Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
     const display=String(cfg.label||'').trim()||componentTypeCaption(n,s);
     if(display){
       // A hosted Point inherits its host's angle; its label stays upright and below the point in world space.
@@ -11750,12 +11812,19 @@ function renderJunctionDots(){
     let join=at(paths[0],0);const reach=Math.min(...paths.map(p=>p.L));
     for(let d=0;d<=reach;d+=2){const pts=paths.map(p=>at(p,d));if(pts.some(q=>Math.hypot(q.x-pts[0].x,q.y-pts[0].y)>1.2))break;join=pts[0]}
     const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('class','junction-dot');dot.dataset.port=key;
-    dot.setAttribute('cx',String(join.x));dot.setAttribute('cy',String(join.y));dot.setAttribute('r','3.6');layer.appendChild(dot);
+    dot.setAttribute('cx',String(join.x));dot.setAttribute('cy',String(join.y));dot.setAttribute('r',String(JUNCTION_DOT_RADIUS*markScale));layer.appendChild(dot);
   }
 }
 // The notation's stroke tokens, as the CSS custom properties the stylesheet draws with.
+// The tokens arrive already multiplied by the document scale (SovSchematicNotation.resolve); --scale
+// carries the number itself to the stylesheet's literal sizes, and markScale to the marks drawn here
+// (PORT_RADIUS, TERMINAL_MARK, JUNCTION_DOT_RADIUS, CARRYING_POINT_RADIUS, WIRE_HOP_RADIUS, the chevron).
+let markScale=1;
 function applyNotationTokens(){
   const T=SovSchematicNotation.tokens(diagram);
+  markScale=Number(T.scale)||1;
+  workspace.style.setProperty('--scale',String(markScale));
+  if(T.type?.screen?.max!=null)workspace.style.setProperty('--type-screen-max',`${T.type.screen.max}px`);
   for(const [k,v] of Object.entries(T.stroke))workspace.style.setProperty(`--stroke-${k}`,`${v}px`);
   // Derived weights are computed here, not with calc(): a computed calc() is not a length a reader can parse.
   workspace.style.setProperty('--stroke-structure-container',`${+(T.stroke.structure*1.2).toFixed(2)}px`);
@@ -11886,7 +11955,7 @@ function declaredStatus(record){
 function statusTitle(status){return String(status?.title||status?.id||'')}
 // 'Bdo, rule R-29, decision D1': each entry's label, or else its kind and id.
 function waitsOnList(list){return Array.isArray(list)?list.filter(w=>w&&typeof w==='object').map(w=>String(w.label||'').trim()||`${w.kind} ${w.id}`).join(', '):''}
-const CAPTION_STYLE=`font-size:calc(clamp(${LABEL_FLOORS.general}px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)`;
+const CAPTION_STYLE=`font-size:calc(clamp(${LABEL_FLOORS.general}px,var(--type-caption-size,9px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-caption-weight,600)`;
 // A label's ink is its role colour moved (darker in light, lighter in dark) only as far as TEXT_FLOOR
 // against the colour actually behind it: the ground a card stands on, a region's fill, or the canvas.
 const TEXT_FLOOR=4.6;
@@ -12002,7 +12071,7 @@ function render(){
       hit.setAttribute('class','port-hit attachment-point-hit');hit.dataset.point=pointId;hit.dataset.side=point.compatId;hit.dataset.canvasIds=portExposedCanvasIds(n,pointId).join(' ');hit.setAttribute('cx',localX);hit.setAttribute('cy',localY);hit.setAttribute('r','16');
       let vis=null;const selfPoint=componentForm(n).dimension===0&&pointId==='self';
       if(selfPoint){vis=g.querySelector('.dimensional-point-body');if(vis){vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}}
-      else{vis=document.createElementNS('http://www.w3.org/2000/svg','circle');vis.setAttribute('class','port attachment-point');vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.setAttribute('cx',localX);vis.setAttribute('cy',localY);vis.setAttribute('r','5');vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}
+      else{vis=document.createElementNS('http://www.w3.org/2000/svg','circle');vis.setAttribute('class','port attachment-point');vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.setAttribute('cx',localX);vis.setAttribute('cy',localY);vis.setAttribute('r',String(PORT_RADIUS*markScale));vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}
       {const pos=componentForm(n).dimension===2?SovSchematicData.pointSectionPosition(diagram,n.id,point.compatId):null;
        if(pos&&pos.through!=null){const s=SovSchematicData.componentSection(n),T=s.bands[pos.through]?.thickness||8,side=point.side,vertical=side==='left'||side==='right';
          const cap=document.createElementNS('http://www.w3.org/2000/svg','rect');cap.setAttribute('class','through-mark');
@@ -12091,7 +12160,7 @@ function stableArrowPoint(path,targetD,minD,maxD){
 function appendChevronAt(group,q,reverse=false,className='flow-chevron'){
   const c=document.createElementNS('http://www.w3.org/2000/svg','path');
   c.setAttribute('class',className);
-  c.setAttribute('d','M -7 -5 L 0 0 L -7 5');
+  c.setAttribute('d',`M ${-7*markScale} ${-5*markScale} L 0 0 L ${-7*markScale} ${5*markScale}`);
   c.setAttribute('transform',`translate(${q.x} ${q.y}) rotate(${q.angle+(reverse?180:0)})`);
   group.appendChild(c);
 }
@@ -12232,9 +12301,14 @@ function renderPacketsForWire(group,cfg,points,signal,pathLength,w){
 // A route drawn with a hop at each crossing it makes over an earlier wire: a half circle that
 // lifts it over the other line, so a crossing never reads as a junction (NOTATION-MODEL.md).
 const WIRE_HOP_RADIUS=6.5;
+// The marks drawn on cards and wires, at scale 1; each is multiplied by markScale where it is drawn.
+// PORT_RADIUS: the visible port circle. TERMINAL_MARK: the bar where a wire meets a card.
+// JUNCTION_DOT_RADIUS: the dot where wires sharing a point part. CARRYING_POINT_RADIUS: the body of a
+// Point that carries wires (one or two ends; three or more is a junction).
+const PORT_RADIUS=5,TERMINAL_MARK=Object.freeze({len:12,th:3.2}),JUNCTION_DOT_RADIUS=3.6,CARRYING_POINT_RADIUS=Object.freeze({end:4,junction:4.5});
 function pathWithHops(points,hops){
   const pts=normalizePoints(points);if(!hops?.length||pts.length<2)return pathD(pts);
-  const r=WIRE_HOP_RADIUS;let d=`M ${pts[0].x} ${pts[0].y}`;
+  const r=WIRE_HOP_RADIUS*markScale;let d=`M ${pts[0].x} ${pts[0].y}`;
   for(let i=1;i<pts.length;i++){
     const a=pts[i-1],b=pts[i],h=a.y===b.y,dir=h?Math.sign(b.x-a.x):Math.sign(b.y-a.y);
     const along=c=>h?(c.x-a.x)*dir:(c.y-a.y)*dir,len=h?Math.abs(b.x-a.x):Math.abs(b.y-a.y);
@@ -12649,6 +12723,17 @@ function layoutPathCorners(d){
   }
   return out;
 }
+// A drawn route's corners in world space: hops stripped, repeated and collinear corners merged.
+function layoutRouteCorners(path){
+  const m=layoutWorldMatrix(path),c=[];
+  for(const q0 of layoutPathCorners(String(path.getAttribute('d')||'').replace(/A[^A-Z]*?(?=[MLHV])/g,''))){
+    const q=m?new DOMPoint(q0.x,q0.y).matrixTransform(m):q0,p={x:Math.round(q.x*100)/100,y:Math.round(q.y*100)/100},l=c.at(-1);
+    if(l&&Math.abs(l.x-p.x)<.5&&Math.abs(l.y-p.y)<.5)continue;
+    if(c.length>=2){const a=c.at(-2);if((Math.abs(a.x-l.x)<.5&&Math.abs(l.x-p.x)<.5)||(Math.abs(a.y-l.y)<.5&&Math.abs(l.y-p.y)<.5)){c[c.length-1]=p;continue}}
+    c.push(p);
+  }
+  return c;
+}
 function layoutMetrics(options={}){
   const staticView=options.static!==false; // an export or a screenshot freezes animation
   const findings=[],add=(kind,ids,detail)=>findings.push({kind,ids,detail});
@@ -12892,6 +12977,35 @@ function layoutMetrics(options={}){
      if(typeof busBandHolds==='function'&&busBandHolds(x.w,y.w,mid))continue;
      seen.add(key);add('route-close-parallel',[x.w.id,y.w.id],`${d.toFixed(1)}px apart for ${Math.round(hi-lo)}px`);
    }}
+  // Ports: a wire meets a 2D card's port along the port's outward normal, from a point at least 4
+  // outside the card on the side the port faces (port-wrong-side), and the port it ends on shows a
+  // mark, the point's circle or a terminal mark at opacity .5 or more, within 3 of the route's end
+  // (port-undrawn). A wire on the card's own interior meets the boundary from inside and is held
+  // only to port-undrawn. Reported, with no weight in the score (neither is in LAYOUT_RUBRIC).
+  for(const g of workspace.querySelectorAll('.wire-group')){
+    const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
+    const c=layoutRouteCorners(path);if(c.length<2)continue;
+    for(const end of ['a','b']){
+      const ep=carrierEndpoint(w,end),n=ep?.kind==='bound'?ep.node:null;if(!n||!is2D(n)||isGroupComponent(n)||isEffectivelyHidden(n))continue;
+      const side=end==='a'?w.aSide:w.bSide,P=end==='a'?c[0]:c.at(-1),Q=end==='a'?c[1]:c.at(-2),name=n.config?.label||n.id;
+      const inward=wireEndpointInward(w,n);
+      if(!inward){
+        const u=stubPos(P,side,1,n,inward),nx=u.x-P.x,ny=u.y-P.y,dx=Q.x-P.x,dy=Q.y-P.y;
+        const facing=physicalPortSide(n,side);
+        if(Math.abs(dx*ny-dy*nx)>.5||dx*nx+dy*ny<=0)add('port-wrong-side',[w.id,n.id],`meets the ${facing} port ${side} of ${name} from another side`);
+        else if(!componentHostedOnWire(n)){
+          const R=body.get(n.id),out=facing==='left'?R.l-Q.x:facing==='top'?R.t-Q.y:facing==='bottom'?Q.y-R.b:Q.x-R.r;
+          if(out<4-.01)add('port-wrong-side',[w.id,n.id],`turns ${Math.max(0,out).toFixed(1)}px outside the ${facing} port ${side} of ${name}, under 4`);
+        }
+      }
+      const el=nodeEl(n.id);let drawn=false;
+      for(const m of el?.querySelectorAll(':scope > .port.attachment-point,:scope > .terminal-mark')||[]){
+        if(layoutEffectiveOpacity(m)<.5)continue;const B=layoutWorldBox(m);if(!B)continue;
+        if(Math.hypot(Math.max(B.l-P.x,P.x-B.r,0),Math.max(B.t-P.y,P.y-B.b,0))<=3){drawn=true;break}
+      }
+      if(!drawn)add('port-undrawn',[w.id,n.id],`the port ${side} of ${name} it ends on is not drawn`);
+    }
+  }
   // Empty container: its children and inner wires fill under a fifth of its interior (review, 03, 04, 07).
   for(const n of visible){
     if(!is2D(n)||!componentAcceptsChildren(n))continue;
@@ -12985,7 +13099,12 @@ function routeThroughSpec(A,B,w,spec){
   const inner=(spec.mode==='pinned'?spec.points:spec.via)||[];if(!inner.length)return null;
   const a=nodes.find(n=>n.id===w.a),b=nodes.find(n=>n.id===w.b);
   const SA=a?routeLead(A,inner[0],w.aSide,a,wireEndpointInward(w,a)):A,SB=b?routeLead(B,inner.at(-1),w.bSide,b,wireEndpointInward(w,b)):B;
-  const seq=[A,SA,...inner.map(p=>({x:p.x,y:p.y})),SB,B],out=[seq[0]];
+  // The router adds each end's lead when the declared points do not give it: the route joins the
+  // lead from outside it (leadJoin, src/40-routing.js), so it never doubles back over a port.
+  const pts=inner.map(p=>({x:Number(p.x),y:Number(p.y)})),first=pts[0],last=pts.at(-1);
+  const joinA=a?leadJoin(first,A,SA,endpointNeedsOuterObstacle(a,w.aSide,w)?a:null,{x:first.x,y:SA.y}).reverse():[];
+  const joinB=b?leadJoin(last,B,SB,endpointNeedsOuterObstacle(b,w.bSide,w)?b:null,{x:SB.x,y:last.y}):[];
+  const seq=[A,SA,...joinA,...pts,...joinB,SB,B],out=[seq[0]];
   for(let i=1;i<seq.length;i++){const P=out.at(-1),Q=seq[i];if(Math.abs(P.x-Q.x)>.5&&Math.abs(P.y-Q.y)>.5)out.push({x:Q.x,y:P.y});out.push(Q)}
   return normalizePoints(out);
 }
@@ -14539,18 +14658,20 @@ function restoreRecovery(){
 // (render.svg / render.png), scripts/export_svg.py and the server's render service. Computed
 // styles are inlined so the file renders outside the editor; the viewBox fits the diagram; the
 // live clock's overlay and, unless asked for, animated packets are left out.
-// A picture (export, PNG, audit) draws labels at their base size whatever the editor's zoom:
-// the on-screen clamp (app.css, issue #15) keeps the canvas readable, but a fitted picture of a
-// small diagram would otherwise carry labels at a third of their size.
+// A picture (export, snapshot, PNG, audit) draws every label at its base size times the document
+// scale, whatever the editor's zoom. The on-screen clamp (app.css, issue #15) is a reading aid for
+// the live editor only: it holds labels at 12 screen px while strokes and marks follow the camera,
+// so a file drawn through it would carry labels several times their size against the same strokes.
 function withPictureLabels(fn){
   const prev=workspace.style.getPropertyValue('--zoom');if(prev===''||Number(prev)===1)return fn();
   workspace.style.setProperty('--zoom','1');render();
   try{return fn()}finally{workspace.style.setProperty('--zoom',prev);render()}
 }
 function renderStandaloneSvg(opts={}){return withPictureLabels(()=>renderStandaloneSvgNow(opts))}
-// The snapshot (file.svg, File > Export SVG): the canvas exactly as on screen, labels where the
-// reader sees them. render.svg makes a picture instead, with labels at their base size.
-function snapshotSvg(opts={}){return renderStandaloneSvgNow(opts)}
+// The snapshot (file.svg, File > Export SVG): the same picture render.svg makes, labels at base
+// size times scale at any camera zoom. It keeps its own name because its callers are the File menu
+// and file.svg; the camera's zoom no longer reaches the file.
+function snapshotSvg(opts={}){return withPictureLabels(()=>renderStandaloneSvgNow(opts))}
 function renderStandaloneSvgNow(opts={}){
   if (typeof cancelWireDrag === 'function') cancelWireDrag();
   const live = workspace;
