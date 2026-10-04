@@ -82,7 +82,7 @@ Wire ends may be free: create with `aAttachment: {kind:'free',x,y}` (and/or `bAt
 
 ```js
 SovSchematicAPI.layout.harness({between: ['groupA', 'groupB'], pitch: 6, view})   // or harness(['groupA', 'groupB'], {pitch, view})
-SovSchematicAPI.layout.bus({id, points: [{x, y}, ...], pitch, label, order})       // or bus(id, {points, ...})
+SovSchematicAPI.layout.bus({id, points: [{x, y}, ...], pitch, lanes, label, order}) // or bus(id, {points, ...}); lanes: 'port' gives wires sharing their a end one lane (default: a lane per wire)
 SovSchematicAPI.layout.bus({id, remove: true})
 SovSchematicAPI.layout.buses({view})                                                // read-only
 SovSchematicAPI.layout.route(wireId, {mode: 'bus', buses: [busId, ...]})

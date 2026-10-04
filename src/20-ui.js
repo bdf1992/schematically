@@ -113,24 +113,53 @@ function renderPalettePreview(){
     palettePreview.appendChild(s);
   });
 
-  customPaletteEditor.hidden=colorEngine.palette!=='custom';
+  customPaletteEditor.hidden=effectivePaletteName()!=='custom';
 
 }
+// The swatches list the row that draws: the document's six while it declares {custom}, else the
+// view's. An edit writes where the row lives - the document's edit is an undoable document change.
 function renderCustomPaletteEditor(){
   customPaletteSwatches.replaceChildren();
-  colorEngine.custom.forEach((c,i)=>{
+  effectiveCustomRow().forEach((c,i)=>{
     const input=document.createElement('input');
     input.type='color';input.value=c;input.title=`Custom slot ${i+1}`;
     input.addEventListener('input',()=>{
-      colorEngine.custom[i]=input.value;
+      const declared=documentPalette();
+      if(declared!==null&&typeof declared!=='string'){
+        diagram.meta.palette.custom[i]=input.value;
+        setHistoryHint('Change document palette');scheduleHistoryCapture();
+      }else colorEngine.custom[i]=input.value;
       refreshPaletteDerivedColors();renderPalettePreview();render();restoreSelectedSurface();
     });
     customPaletteSwatches.appendChild(input);
   });
 }
+// The document's own palette (meta.palette). null or undefined removes it, so the view's palette
+// draws again; any other value goes through the one admission rule a file and the API use
+// (SovSchematicData.admitPalette), so a refused value changes nothing and is reported.
+function setDocumentPalette(value){
+  diagram.meta=diagram.meta||{};
+  let admitted;
+  if(value===null||value===undefined){delete diagram.meta.palette;admitted={ok:true,present:false}}
+  else{
+    admitted=SovSchematicData.admitPalette(value);
+    if(!admitted.ok){statusEl.textContent=admitted.message;colorPaletteInput.value=effectivePaletteName();return admitted}
+    diagram.meta.palette=admitted.value;
+  }
+  setHistoryHint('Change document palette');applyColorEngine();scheduleHistoryCapture();
+  return admitted;
+}
+// The one route for the picker and view.setColour: a pick writes the document while the document
+// declares a palette, the view otherwise. Picking 'custom' on a document starts from the row drawn.
+function pickPalette(name){
+  if(documentPalette()!==null)return setDocumentPalette(name==='custom'?{custom:[...effectiveCustomRow()]}:name);
+  colorEngine.palette=name;applyColorEngine();
+  return null;
+}
 function applyColorEngine(){
   colorThemeInput.value=colorEngine.theme;
-  colorPaletteInput.value=colorEngine.palette;
+  colorPaletteInput.value=effectivePaletteName();
+  paletteSettings.dataset.paletteSource=documentPalette()!==null?'document':'view';
   diffuseSignalsInput.checked=colorEngine.diffuse;
   document.documentElement.style.setProperty('--canvas-tone',canvasTone());
   refreshPaletteDerivedColors();
