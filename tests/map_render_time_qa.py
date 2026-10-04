@@ -37,6 +37,26 @@ suites that night, so there the budgets leave about 1.4 times, not 3. What the f
 
 A budget that fails here means one of those came back, or a new cost of that size arrived: measure
 (the Chromium profiler through a CDP session shows it in one run) before raising a number.
+
+A card drag is timed after those. With snap off, the most wired card (rec-surface-registration, 13
+wire ends; tests/drag_redraw_parity_qa.py press_most_wired) is pressed and moved down 20 px a step
+for five steps; one step is the app's pointermove handler and one frame pass, in one evaluate. Then
+the card is released and renderWires() is timed five times. Measured on this host on 2026-10-04:
+
+    drag step                        measured   594 ms   budget  1800 ms   (three times, up to the next 50)
+    drag step / renderWires()        measured   0.76     under   1.55      (twice, up to the next 0.05)
+    wire groups created per step     measured  13 to 16  under   40        (half of the map's 80)
+
+The step is the middle of three sessions' medians of five (591, 594, 595), beside a renderWires() of
+777 ms. Before the change a step was 1155 ms and created all 80 groups. What holds it down, in
+src/55-render.js: the wire pass of a move (renderWiresForDrag) computes the signal state once per
+move and not once per frame (533 ms a frame on the map), and keeps every wire group whose inputs did
+not change. What is left in a step is mostly busRoutesForRender, 394 ms: it orders the bus lanes again
+on every move, because its answer depends on where every card is. A step that creates half of the
+groups or more means the keyed pass stopped keeping them. With renderWiresForDrag made to call a
+plain renderWires() a step measured 1702 ms, a ratio of 2.18, and created 80 groups. The signal
+state computed once per frame and nothing else lost would be a ratio near 1.5, which the 1.55 line
+does not catch; the group count does not see it either.
 """
 from __future__ import annotations
 import statistics
@@ -47,17 +67,26 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 from playwright.sync_api import sync_playwright  # noqa: E402
 from browser_runtime import chromium_launch_kwargs  # noqa: E402
+from drag_redraw_parity_qa import DRAG_STEP, press_most_wired  # noqa: E402
 
 MAP = ROOT / 'docs' / 'workengine' / 'map.sov'
 RUNS = 5
 RENDER_BUDGET_MS = 3000
 METRICS_BUDGET_MS = 7350
 FIT_BUDGET_MS = 300  # measured 92 ms on this host on 2026-10-04, times three, up to the next 50
+DRAG_STEP_BUDGET_MS = 1800  # measured 594 ms on this host on 2026-10-04, times three, up to the next 50
+DRAG_STEP_RATIO = 1.55  # measured 0.76 (594 ms beside a 777 ms renderWires()), times two, up to the next 0.05
+# A step created 13 to 16 of the map's 80 wire groups; every step must create fewer than half of them.
 
 TIME_RENDER = "()=>{const s=performance.now();render();return performance.now()-s}"
 TIME_METRICS = "()=>{const s=performance.now();SovSchematicAPI.layout.metrics({static:true});return performance.now()-s}"
 TIME_FIT = "()=>{const s=performance.now();fitDiagram();return performance.now()-s}"
 BOUNDS = "()=>{const b=diagramBounds();return b?[b.l,b.r,b.t,b.b]:null}"
+TIME_WIRES = "()=>{const s=performance.now();renderWires();return performance.now()-s}"
+GROUPS = "()=>workspace.querySelectorAll('.wire-group').length"
+# Every wire group in the document is marked before a step; the ones without the mark after it are new.
+MARK_GROUPS = "()=>{for(const g of workspace.querySelectorAll('.wire-group'))g.stoodBeforeStep=true}"
+NEW_GROUPS = "()=>[...workspace.querySelectorAll('.wire-group')].filter(g=>!g.stoodBeforeStep).length"
 
 # The picture as drawn: every wire path's d and every connection label's place.
 PICTURE = r"""()=>({
@@ -100,6 +129,19 @@ def main() -> None:
         fits = timed(page, TIME_FIT, FIT_BUDGET_MS)
         bounds_first = page.evaluate(BOUNDS)
         bounds_second = page.evaluate(BOUNDS)
+
+        # A card drag: the most wired card is pressed and moved down 20 px a step.
+        page.evaluate('()=>{canvasSnapEnabled=false}')
+        group_count = page.evaluate(GROUPS)
+        card, (x, y) = press_most_wired(page)
+        steps, created = [], []
+        for k in range(1, RUNS + 1):
+            page.evaluate(MARK_GROUPS)
+            steps.append(page.evaluate(DRAG_STEP, [x, y + 20 * k]))
+            created.append(page.evaluate(NEW_GROUPS))
+        page.mouse.up()
+        page.wait_for_timeout(300)
+        wire_passes = [page.evaluate(TIME_WIRES) for _ in range(RUNS)]
         browser.close()
 
     render_ms, metrics_ms, fit_ms = statistics.median(renders), statistics.median(metrics), statistics.median(fits)
@@ -108,6 +150,11 @@ def main() -> None:
     print(f"layout.metrics({{static: true}}) median of {len(metrics)}: {metrics_ms:.0f} ms (budget {METRICS_BUDGET_MS}); runs {[round(r) for r in metrics]}")
     print(f"fitDiagram() median of {len(fits)}: {fit_ms:.0f} ms (budget {FIT_BUDGET_MS}); runs {[round(r) for r in fits]}")
     print(f"diagramBounds() l, r, t, b: {bounds_first}")
+    step_ms, wires_ms = statistics.median(steps), statistics.median(wire_passes)
+    ratio = step_ms / wires_ms
+    print(f"drag step of {card} median of {len(steps)}: {step_ms:.0f} ms (budget {DRAG_STEP_BUDGET_MS}); runs {[round(r) for r in steps]}")
+    print(f"drag step / renderWires(): {ratio:.2f} (under {DRAG_STEP_RATIO}); renderWires() median of {len(wire_passes)}: {wires_ms:.0f} ms")
+    print(f"wire groups created per drag step: {created} of {group_count} (each under {group_count / 2:.0f})")
 
     assert not errors, ('the page logs no errors', errors)
     assert len(first['wires']) >= 80 and all(d for _, d in first['wires']), ('every wire of the map is drawn', len(first['wires']))
@@ -120,6 +167,9 @@ def main() -> None:
     assert metrics_ms < METRICS_BUDGET_MS, ('layout.metrics({static: true}) on the map is over its budget', round(metrics_ms), METRICS_BUDGET_MS)
     assert bounds_first and len(bounds_first) == 4 and bounds_first == bounds_second, ('two diagramBounds() calls in a row return the same four numbers', bounds_first, bounds_second)
     assert fit_ms < FIT_BUDGET_MS, ('fitDiagram() on the map is over its budget', round(fit_ms), FIT_BUDGET_MS)
+    assert step_ms < DRAG_STEP_BUDGET_MS, ('a drag step on the map is over its budget', round(step_ms), DRAG_STEP_BUDGET_MS)
+    assert ratio < DRAG_STEP_RATIO, ('a drag step on the map costs too much beside one renderWires()', round(ratio, 2), DRAG_STEP_RATIO)
+    assert all(n < group_count / 2 for n in created), ('every drag step creates fewer than half of the wire groups', created, group_count)
     print('PASS map render time QA')
 
 
