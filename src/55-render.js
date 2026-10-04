@@ -417,6 +417,8 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     // A thicker body stands taller: its shadow falls further.
     {const E=SovSchematicNotation.elevation(T,componentElevation(n),surfaceAppearance()),th=Math.max(0,Number(form.body.thickness)||0);
      if(E){const dy=E.dy+Math.min(4,th*.08),blur=E.blur+Math.min(3,th*.06);body.style.filter=`drop-shadow(0 ${+dy.toFixed(2)}px ${+blur.toFixed(2)}px rgba(${surfaceAppearance()==='dark'?'0,0,0':'40,36,28'},${E.opacity}))`;body.dataset.elevation=String(componentElevation(n))}}
+    // An intake plane is an open region: its outline is dashed 6 4 in the muted ink.
+    if(cfg.intake===true&&String(n.symbolId||'')==='plane'){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4';body.style.stroke='var(--muted)'}
     g.appendChild(body);
     // A section's lines inside the outline: each line an inset boundary, each region filled as
     // what it is (solid material, or space). The outline is line L0. Corners are concentric.
@@ -515,8 +517,8 @@ function groupLayer(){
 }
 function placeGroupRegion(g,n){
   const R=SovSchematicData.groupRect(diagram,n.id,componentSize);if(!R)return;
-  const rect=g.querySelector(':scope > .group-region'),title=g.querySelector(':scope > .group-title');
-  if(rect){rect.setAttribute('x',String(R.l));rect.setAttribute('y',String(R.t));rect.setAttribute('width',String(Math.max(1,R.w)));rect.setAttribute('height',String(Math.max(1,R.h)))}
+  const title=g.querySelector(':scope > .group-title');
+  for(const rect of g.querySelectorAll(':scope > .group-region,:scope > .group-outline')){rect.setAttribute('x',String(R.l));rect.setAttribute('y',String(R.t));rect.setAttribute('width',String(Math.max(1,R.w)));rect.setAttribute('height',String(Math.max(1,R.h)))}
   if(title){title.setAttribute('x',String(R.l+12));title.setAttribute('y',String(R.t+19))}
   const badge=g.querySelector(':scope > .marker-badge');if(badge)badge.setAttribute('transform',`translate(${R.r} ${R.t})`);
 }
@@ -524,9 +526,38 @@ function placeGroupRegion(g,n){
 function refreshGroupRegions(){
   for(const g of workspace.querySelectorAll('.node.group')){const n=nodes.find(x=>x.id===g.dataset.id);if(n)placeGroupRegion(g,n)}
 }
+// The inset a group region carries: an inner shadow, offset 1 down and blurred 3 (a CSS blur radius,
+// so a Gaussian deviation of 1.5), at the level-1 elevation opacity of the appearance. A region
+// with no fill of its own has nothing to cast from, so it is drawn with a near-clear fill that the
+// filter lifts to a full mask and then drops; a filled region keeps its fill under the shadow.
+const REGION_INSET_FILLED='region-inset',REGION_INSET_BARE='region-inset-bare';
+function regionInsetDefs(T){
+  const NS='http://www.w3.org/2000/svg',E=SovSchematicNotation.elevation(T,1,surfaceAppearance()),opacity=E?E.opacity:0;
+  const color=surfaceAppearance()==='dark'?'#000000':'#28241C';
+  const defs=document.createElementNS(NS,'defs');
+  const make=(id,keepSource)=>{
+    const f=document.createElementNS(NS,'filter');f.setAttribute('id',id);f.setAttribute('x','0');f.setAttribute('y','0');f.setAttribute('width','1');f.setAttribute('height','1');
+    const add=(tag,attrs,parent=f)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);parent.appendChild(e);return e};
+    // The mask: the region's alpha lifted to 1 wherever it is above a hair, then inverted.
+    const lift=add('feComponentTransfer',{in:'SourceAlpha',result:'mask'});add('feFuncA',{type:'linear',slope:'1000',intercept:'0'},lift);
+    const inv=add('feComponentTransfer',{in:'mask',result:'outside'});add('feFuncA',{type:'table',tableValues:'1 0'},inv);
+    add('feOffset',{in:'outside',dx:'0',dy:'1',result:'shifted'});
+    add('feGaussianBlur',{in:'shifted',stdDeviation:'1.5',result:'soft'});
+    add('feFlood',{'flood-color':color,'flood-opacity':String(opacity),result:'ink'});
+    add('feComposite',{in:'ink',in2:'soft',operator:'in',result:'shadow'});
+    add('feComposite',{in:'shadow',in2:'mask',operator:'in',result:'inset'});
+    const merge=add('feMerge',{});
+    if(keepSource)add('feMergeNode',{in:'SourceGraphic'},merge);
+    add('feMergeNode',{in:'inset'},merge);
+    defs.appendChild(f);
+  };
+  make(REGION_INSET_FILLED,true);make(REGION_INSET_BARE,false);
+  return defs;
+}
 function renderGroups(markers=markersById()){
   const layer=groupLayer();layer.replaceChildren();
   const T=SovSchematicNotation.tokens(diagram);
+  layer.appendChild(regionInsetDefs(T));
   for(const n of nodes){
     if(!isGroupComponent(n)||isEffectivelyHidden(n))continue;
     const cfg=n.config||{},surface=n.canvasId||GLOBAL_CANVAS_ID,editor=entityEditorState(n);
@@ -538,8 +569,17 @@ function renderGroups(markers=markersById()){
     const slot=Number.isInteger(cfg.colorSlot)&&cfg.colorSlot>0?cfg.colorSlot:null;
     const regionFill=slot!=null?componentSurfaceFill(slotColor(slot),.9):null;
     rect.style.fill=regionFill??'none';rect.style.fillOpacity='1';
-    rect.style.stroke='var(--muted)';rect.style.strokeWidth='var(--stroke-structure)';rect.style.pointerEvents='none';
+    // A group is reading only: no outline, a soft inset (an inner shadow, an SVG filter so a picture
+    // carries it). An intake group is an open region: a dashed outline in the muted ink.
+    rect.style.pointerEvents='none';rect.style.stroke='none';rect.style.strokeWidth='0';
+    if(slot==null){rect.style.fill='#000000';rect.style.fillOpacity='0.004'}
+    rect.style.filter=`url(#${slot!=null?REGION_INSET_FILLED:REGION_INSET_BARE})`;
     g.appendChild(rect);
+    if(cfg.intake===true){
+      const edge=document.createElementNS('http://www.w3.org/2000/svg','rect');edge.setAttribute('class','group-outline');edge.setAttribute('rx',String(T.radius?.card??10));
+      edge.style.fill='none';edge.style.stroke='var(--muted)';edge.style.strokeWidth='var(--stroke-structure)';edge.style.strokeDasharray='6 4';edge.setAttribute('stroke-dasharray','6 4');edge.style.pointerEvents='none';
+      g.appendChild(edge);
+    }
     const label=String(cfg.label||'').trim();
     if(label){const title=document.createElementNS('http://www.w3.org/2000/svg','text');title.setAttribute('class','group-title');title.dataset.role='title';
       // The muted ink, darkened (or lightened) only as far as text needs to read on the region: 4.5:1, as card text.
@@ -662,7 +702,8 @@ function render(){
     if(isEffectivelyHidden(n)||isGroupComponent(n))return; // groups are drawn by renderGroups, behind
     const s=symbolOf(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
     {const form=componentForm(n),backdrop=componentBackdropMode(n);g.setAttribute('class','node'+(unplacedIds.has(n.id)?' unplaced':'')+(n.symbolId==='blank'?' blank':'')+(selectedComponentIds.has(n.id)?' selected':'')+(componentAcceptsChildren(n)?' is-container':'')+(form.frame.mode==='shell'?' form-shell':'')+(form.frame.mode==='frame'?' form-frame':'')+(n.parentId?' nested-child':'')+(componentHostedOnWire(n)?' wire-hosted':'')+(backdrop==='none'?' backdrop-none':'')+(editor.pinned?' is-pinned':'')+(editor.locked?' is-locked':''));}
-    g.style.opacity=String(editor.opacity);
+    // An unplaced card keeps its fade (.42): the inline opacity would otherwise cover the class's.
+    g.style.opacity=String(unplacedIds.has(n.id)?editor.opacity*.42:editor.opacity);
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}

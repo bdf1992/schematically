@@ -221,6 +221,28 @@ function layoutMetrics(options={}){
     const inset=typeof componentSectionInset==='function'?componentSectionInset(owner):0,C=componentBounds(owner,-inset),B=body.get(n.id);
     if(B&&(B.l<C.l-.5||B.r>C.r+.5||B.t<C.t-.5||B.b>C.b+.5))add('node-overlap',[n.id,owner.id],`crosses ${inset?'the skin':'the boundary'} of ${owner.config?.label||owner.id}`);
   }
+  // Region inset: a child keeps space.regionInset from its container's core edge, and space.regionTitle
+  // below the top edge when the container draws a label or a glyph at its head. Reported, with no
+  // weight in the score (it is not in LAYOUT_RUBRIC). A group's members are measured against its
+  // region, which groupRect pads by the same two tokens; a group with no placed member has none.
+  {const space=SovSchematicNotation.tokens(diagram).space||{},pad=Number.isFinite(space.regionInset)?space.regionInset:24,band=Number.isFinite(space.regionTitle)?space.regionTitle:28;
+   const check=(n,owner,C,head)=>{
+     const B=body.get(n.id);if(!B)return;
+     const sides=[['left',B.l-C.l,pad],['right',C.r-B.r,pad],['top',B.t-C.t,head?band:pad],['bottom',C.b-B.b,pad]].filter(([,gap,need])=>gap<need-.5);
+     if(sides.length)add('region-inset',[n.id,owner.id],`${n.config?.label||n.id} comes within ${sides.map(([s,gap,need])=>`${Math.max(0,gap).toFixed(1)}px of the ${s} of ${owner.config?.label||owner.id} (needs ${need})`).join(' and ')}`);
+   };
+   for(const n of visible){
+     const owner=String(n.canvasId||'').startsWith('canvas:component:')?nodes.find(x=>x.id===String(n.canvasId).slice(17)):null;
+     if(!owner||!is2D(n)||n.placement?.kind==='edge'||isGroupComponent(owner))continue;
+     const inset=typeof componentSectionInset==='function'?componentSectionInset(owner):0,C=componentBounds(owner,-inset);
+     const head=texts.some(t=>t.owner===owner.id&&/component-label/.test(t.cls))||!!nodeEl(owner.id)?.querySelector(':scope > .glyph');
+     check(n,owner,C,head);
+   }
+   for(const g of shown.filter(isGroupComponent)){
+     const members=Array.isArray(g.config?.members)?g.config.members:[],R=body.get(g.id);
+     if(!R||!members.some(id=>visible.some(v=>v.id===id)))continue;
+     for(const id of members){const m=visible.find(v=>v.id===id);if(m&&is2D(m))check(m,g,{l:R.l,r:R.r,t:R.t,b:R.b},true)}
+   }}
   // Points drawn on top of each other read as one.
   {const pts=visible.filter(n=>componentForm(n).dimension===0);
    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++)if(Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y)<12)add('node-overlap',[pts[i].id,pts[j].id],'points drawn on top of each other')}

@@ -116,7 +116,7 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .wire-section.line{stroke:var(--canvas-ink)}.wire-section.band-solid{stroke:var(--section-wire-solid)}.wire-section.band-space{stroke:var(--canvas-tone)}
 .wire-group.sectioned .wire{stroke:transparent}.wire-group.sectioned .wire-voltage{display:none}
 /* Unplaced in the layout on screen: shown where the default has it, until arranged or moved. */
-.node.unplaced{opacity:.42}.node.unplaced .body{stroke-dasharray:6 4}
+.node.unplaced{opacity:.42}
 #layoutSelect{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 6px;max-width:15em}
 .access-entries{display:grid;gap:6px;margin:6px 0}
 .access-entry{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(0,1fr)) auto;gap:4px;align-items:center}
@@ -1250,7 +1250,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       // World units. Selected and highlighted states multiply these, never replace them.
       stroke:{structure:1.5,section:1.25,flow:2.25,symbol:2.6},
       // textGap: the gap between stacked text lines on a card (a title's last line and its subtitle).
-      space:{labelClear:10,bevel:3.5,pin:14,textGap:3},
+      // regionInset: the gap a region keeps between its edge and its children; regionTitle: the band
+      // above them for the title or glyph at its head (groupRect pads by both; the layout keeps them).
+      space:{labelClear:10,bevel:3.5,pin:14,textGap:3,regionInset:24,regionTitle:28},
       // Text roles (NOTATION-MODEL.md §4). `size` is the base at zoom 1; on screen every role is
       // clamped to `screen` (a subtitle keeps its own lower floor, so it stays under its title).
       type:{screen:{min:12,max:16},title:{size:10,weight:600},subtitle:{size:8.5,weight:400,min:8},body:{size:9,weight:400},caption:{size:9,weight:600},narration:{size:15,weight:500}},
@@ -2162,6 +2164,17 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return out;
   }
   function assertBadges(config,clearable=false){const p=badgeProblems(config,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Intake (SECTION-MODEL.md "Groups": Borders) ----------------------------------------------
+  // A group or a plane may carry `config.intake: true`: an open region, drawn with a dashed outline.
+  //   INTAKE_INVALID   intake is not a boolean, or sits on a Component that is neither a group nor a plane
+  function intakeProblems(component,clearable=false){
+    const out=[],config=component?.config;if(!isObject(config)||config.intake===undefined||(clearable&&config.intake===null))return out;
+    const symbol=normalizeSymbolId(component.symbolId||component.type);
+    if(typeof config.intake!=='boolean')out.push(`INTAKE_INVALID: config.intake must be true or false, not ${JSON.stringify(config.intake)}`);
+    else if(symbol!=='group'&&symbol!=='plane')out.push(`INTAKE_INVALID: config.intake belongs to a group or a plane, not a ${symbol}`);
+    return out;
+  }
+  function assertIntake(component,clearable=false){const p=intakeProblems(component,clearable);if(p.length)throw new Error(p[0])}
   // Copies an authored status and waitsOn onto a record being made.
   function adoptStatusAndWaitsOn(config,value){
     if(value?.status!==undefined&&value.status!==null)config.status=value.status;
@@ -2171,7 +2184,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // An update's null removes the key.
   function clearStatusAndWaitsOn(candidate,patch){
     if(!isObject(candidate?.config)||!isObject(patch?.config))return;
-    for(const key of ['status','waitsOn','badges'])if(patch.config[key]===null)delete candidate.config[key];
+    for(const key of ['status','waitsOn','badges','intake'])if(patch.config[key]===null)delete candidate.config[key];
   }
   // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
   // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
@@ -2185,7 +2198,12 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   //   GROUP_PORTS           a group carries config.attachmentPoints or attachmentDefaults 'standard'
   //   GROUP_HOST            a Component placed on a group (placement.hostId) or in its interior
   // Loading reports them (validateDocument); create and update refuse an edit that adds one.
-  const GROUP_PAD=24,GROUP_TITLE_BAND=28;
+  // The inset and the title band come from the document's resolved notation (space.regionInset,
+  // space.regionTitle); the schematic notation declares 24 and 28.
+  function regionSpace(doc){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,space=N?.tokens?.(doc||{})?.space||{};
+    return {pad:Number.isFinite(space.regionInset)?space.regionInset:24,band:Number.isFinite(space.regionTitle)?space.regionTitle:28};
+  }
   function isGroup(component){return !!component&&normalizeSymbolId(component.symbolId||component.type)==='group'}
   function groupMembers(component){const m=component?.config?.members;return Array.isArray(m)?m:[]}
   function groupFindings(doc){
@@ -2227,7 +2245,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(added)throw new Error(`${added.code}: ${added.text}`);
   }
   // The region a group is drawn as: the union of its members' rectangles (each centred on its
-  // x, y and sized by sizeOf(component)) padded GROUP_PAD on every side and GROUP_TITLE_BAND more
+  // x, y and sized by sizeOf(component)) padded regionInset on every side and regionTitle more
   // on top for the title. A group with no placed member is its own x, y and presentation.size.
   // Returned centred, like a Component: {x, y, w, h} plus its edges {l, r, t, b}.
   function groupRect(doc,groupId,sizeOf){
@@ -2244,7 +2262,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const s=normalizePresentationSize(g.config?.presentation?.size||TEMPLATE_PRESETS.group.presentation.size),x=num(g.x,0),y=num(g.y,0);
       return {x,y,w:s.w,h:s.h,l:x-s.w/2,r:x+s.w/2,t:y-s.h/2,b:y+s.h/2};
     }
-    l-=GROUP_PAD;r+=GROUP_PAD;t-=GROUP_PAD+GROUP_TITLE_BAND;b+=GROUP_PAD;
+    const {pad,band}=regionSpace(doc);
+    l-=pad;r+=pad;t-=pad+band;b+=pad;
     return {x:(l+r)/2,y:(t+b)/2,w:r-l,h:b-t,l,r,t,b};
   }
   // `config.definition` is null (unbound) or an `id@version` string, anywhere it is written
@@ -2574,6 +2593,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(value.config?.members!==undefined)config.members=clone(value.config.members);
     assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
     assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges);
+    if(value.config?.intake!==undefined&&value.config.intake!==null){config.intake=clone(value.config.intake);assertIntake(component)}
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -2873,6 +2893,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       assertWiresSurviveEdit(doc,current,candidate);
       normalizeComponentSize(candidate);
       assertGroupRules(doc,doc.components.map((c,i)=>i===index?candidate:c));
+      if(patch?.config?.intake!==undefined||nextSymbol!==undefined)assertIntake(candidate,patch?.config?.intake===null);
     }else if(resource==='wire'){
       if(isObject(patch?.config))assertPathDelay(patch.config,true);
       if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
@@ -3079,6 +3100,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // Status and waits-on: reported, never repaired (the codes are listed at statusProblems).
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of statusProblems(input,item?.config))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
+    for(const item of input.components||[])for(const p of intakeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -6457,7 +6479,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // North and Vo 1993), ELK Layered SEPARATE_CHILDREN, and Forster (GD 2002) for the order:
     // barycentre over the blocks first, then within each block. A canvas with no group runs
     // arrange() once over its cards, as before groups were placed.
-    const GROUP_PAD=24,GROUP_TITLE_BAND=28; // groupRect's padding (src/05-data-core.js)
+    // groupRect's padding: the notation's space.regionInset and space.regionTitle (src/05-data-core.js)
+    const GROUP_PAD=Number.isFinite(notation?.tokens?.space?.regionInset)?notation.tokens.space.regionInset:24,GROUP_TITLE_BAND=Number.isFinite(notation?.tokens?.space?.regionTitle)?notation.tokens.space.regionTitle:28;
     function layoutCanvas(canvas,second=null){
       const members=inScope(canvas),boxes=new Map();
       for(const c of members){
@@ -11592,6 +11615,8 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     // A thicker body stands taller: its shadow falls further.
     {const E=SovSchematicNotation.elevation(T,componentElevation(n),surfaceAppearance()),th=Math.max(0,Number(form.body.thickness)||0);
      if(E){const dy=E.dy+Math.min(4,th*.08),blur=E.blur+Math.min(3,th*.06);body.style.filter=`drop-shadow(0 ${+dy.toFixed(2)}px ${+blur.toFixed(2)}px rgba(${surfaceAppearance()==='dark'?'0,0,0':'40,36,28'},${E.opacity}))`;body.dataset.elevation=String(componentElevation(n))}}
+    // An intake plane is an open region: its outline is dashed 6 4 in the muted ink.
+    if(cfg.intake===true&&String(n.symbolId||'')==='plane'){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4';body.style.stroke='var(--muted)'}
     g.appendChild(body);
     // A section's lines inside the outline: each line an inset boundary, each region filled as
     // what it is (solid material, or space). The outline is line L0. Corners are concentric.
@@ -11690,8 +11715,8 @@ function groupLayer(){
 }
 function placeGroupRegion(g,n){
   const R=SovSchematicData.groupRect(diagram,n.id,componentSize);if(!R)return;
-  const rect=g.querySelector(':scope > .group-region'),title=g.querySelector(':scope > .group-title');
-  if(rect){rect.setAttribute('x',String(R.l));rect.setAttribute('y',String(R.t));rect.setAttribute('width',String(Math.max(1,R.w)));rect.setAttribute('height',String(Math.max(1,R.h)))}
+  const title=g.querySelector(':scope > .group-title');
+  for(const rect of g.querySelectorAll(':scope > .group-region,:scope > .group-outline')){rect.setAttribute('x',String(R.l));rect.setAttribute('y',String(R.t));rect.setAttribute('width',String(Math.max(1,R.w)));rect.setAttribute('height',String(Math.max(1,R.h)))}
   if(title){title.setAttribute('x',String(R.l+12));title.setAttribute('y',String(R.t+19))}
   const badge=g.querySelector(':scope > .marker-badge');if(badge)badge.setAttribute('transform',`translate(${R.r} ${R.t})`);
 }
@@ -11699,9 +11724,38 @@ function placeGroupRegion(g,n){
 function refreshGroupRegions(){
   for(const g of workspace.querySelectorAll('.node.group')){const n=nodes.find(x=>x.id===g.dataset.id);if(n)placeGroupRegion(g,n)}
 }
+// The inset a group region carries: an inner shadow, offset 1 down and blurred 3 (a CSS blur radius,
+// so a Gaussian deviation of 1.5), at the level-1 elevation opacity of the appearance. A region
+// with no fill of its own has nothing to cast from, so it is drawn with a near-clear fill that the
+// filter lifts to a full mask and then drops; a filled region keeps its fill under the shadow.
+const REGION_INSET_FILLED='region-inset',REGION_INSET_BARE='region-inset-bare';
+function regionInsetDefs(T){
+  const NS='http://www.w3.org/2000/svg',E=SovSchematicNotation.elevation(T,1,surfaceAppearance()),opacity=E?E.opacity:0;
+  const color=surfaceAppearance()==='dark'?'#000000':'#28241C';
+  const defs=document.createElementNS(NS,'defs');
+  const make=(id,keepSource)=>{
+    const f=document.createElementNS(NS,'filter');f.setAttribute('id',id);f.setAttribute('x','0');f.setAttribute('y','0');f.setAttribute('width','1');f.setAttribute('height','1');
+    const add=(tag,attrs,parent=f)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);parent.appendChild(e);return e};
+    // The mask: the region's alpha lifted to 1 wherever it is above a hair, then inverted.
+    const lift=add('feComponentTransfer',{in:'SourceAlpha',result:'mask'});add('feFuncA',{type:'linear',slope:'1000',intercept:'0'},lift);
+    const inv=add('feComponentTransfer',{in:'mask',result:'outside'});add('feFuncA',{type:'table',tableValues:'1 0'},inv);
+    add('feOffset',{in:'outside',dx:'0',dy:'1',result:'shifted'});
+    add('feGaussianBlur',{in:'shifted',stdDeviation:'1.5',result:'soft'});
+    add('feFlood',{'flood-color':color,'flood-opacity':String(opacity),result:'ink'});
+    add('feComposite',{in:'ink',in2:'soft',operator:'in',result:'shadow'});
+    add('feComposite',{in:'shadow',in2:'mask',operator:'in',result:'inset'});
+    const merge=add('feMerge',{});
+    if(keepSource)add('feMergeNode',{in:'SourceGraphic'},merge);
+    add('feMergeNode',{in:'inset'},merge);
+    defs.appendChild(f);
+  };
+  make(REGION_INSET_FILLED,true);make(REGION_INSET_BARE,false);
+  return defs;
+}
 function renderGroups(markers=markersById()){
   const layer=groupLayer();layer.replaceChildren();
   const T=SovSchematicNotation.tokens(diagram);
+  layer.appendChild(regionInsetDefs(T));
   for(const n of nodes){
     if(!isGroupComponent(n)||isEffectivelyHidden(n))continue;
     const cfg=n.config||{},surface=n.canvasId||GLOBAL_CANVAS_ID,editor=entityEditorState(n);
@@ -11713,8 +11767,17 @@ function renderGroups(markers=markersById()){
     const slot=Number.isInteger(cfg.colorSlot)&&cfg.colorSlot>0?cfg.colorSlot:null;
     const regionFill=slot!=null?componentSurfaceFill(slotColor(slot),.9):null;
     rect.style.fill=regionFill??'none';rect.style.fillOpacity='1';
-    rect.style.stroke='var(--muted)';rect.style.strokeWidth='var(--stroke-structure)';rect.style.pointerEvents='none';
+    // A group is reading only: no outline, a soft inset (an inner shadow, an SVG filter so a picture
+    // carries it). An intake group is an open region: a dashed outline in the muted ink.
+    rect.style.pointerEvents='none';rect.style.stroke='none';rect.style.strokeWidth='0';
+    if(slot==null){rect.style.fill='#000000';rect.style.fillOpacity='0.004'}
+    rect.style.filter=`url(#${slot!=null?REGION_INSET_FILLED:REGION_INSET_BARE})`;
     g.appendChild(rect);
+    if(cfg.intake===true){
+      const edge=document.createElementNS('http://www.w3.org/2000/svg','rect');edge.setAttribute('class','group-outline');edge.setAttribute('rx',String(T.radius?.card??10));
+      edge.style.fill='none';edge.style.stroke='var(--muted)';edge.style.strokeWidth='var(--stroke-structure)';edge.style.strokeDasharray='6 4';edge.setAttribute('stroke-dasharray','6 4');edge.style.pointerEvents='none';
+      g.appendChild(edge);
+    }
     const label=String(cfg.label||'').trim();
     if(label){const title=document.createElementNS('http://www.w3.org/2000/svg','text');title.setAttribute('class','group-title');title.dataset.role='title';
       // The muted ink, darkened (or lightened) only as far as text needs to read on the region: 4.5:1, as card text.
@@ -11837,7 +11900,8 @@ function render(){
     if(isEffectivelyHidden(n)||isGroupComponent(n))return; // groups are drawn by renderGroups, behind
     const s=symbolOf(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
     {const form=componentForm(n),backdrop=componentBackdropMode(n);g.setAttribute('class','node'+(unplacedIds.has(n.id)?' unplaced':'')+(n.symbolId==='blank'?' blank':'')+(selectedComponentIds.has(n.id)?' selected':'')+(componentAcceptsChildren(n)?' is-container':'')+(form.frame.mode==='shell'?' form-shell':'')+(form.frame.mode==='frame'?' form-frame':'')+(n.parentId?' nested-child':'')+(componentHostedOnWire(n)?' wire-hosted':'')+(backdrop==='none'?' backdrop-none':'')+(editor.pinned?' is-pinned':'')+(editor.locked?' is-locked':''));}
-    g.style.opacity=String(editor.opacity);
+    // An unplaced card keeps its fade (.42): the inline opacity would otherwise cover the class's.
+    g.style.opacity=String(unplacedIds.has(n.id)?editor.opacity*.42:editor.opacity);
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
@@ -12670,6 +12734,28 @@ function layoutMetrics(options={}){
     const inset=typeof componentSectionInset==='function'?componentSectionInset(owner):0,C=componentBounds(owner,-inset),B=body.get(n.id);
     if(B&&(B.l<C.l-.5||B.r>C.r+.5||B.t<C.t-.5||B.b>C.b+.5))add('node-overlap',[n.id,owner.id],`crosses ${inset?'the skin':'the boundary'} of ${owner.config?.label||owner.id}`);
   }
+  // Region inset: a child keeps space.regionInset from its container's core edge, and space.regionTitle
+  // below the top edge when the container draws a label or a glyph at its head. Reported, with no
+  // weight in the score (it is not in LAYOUT_RUBRIC). A group's members are measured against its
+  // region, which groupRect pads by the same two tokens; a group with no placed member has none.
+  {const space=SovSchematicNotation.tokens(diagram).space||{},pad=Number.isFinite(space.regionInset)?space.regionInset:24,band=Number.isFinite(space.regionTitle)?space.regionTitle:28;
+   const check=(n,owner,C,head)=>{
+     const B=body.get(n.id);if(!B)return;
+     const sides=[['left',B.l-C.l,pad],['right',C.r-B.r,pad],['top',B.t-C.t,head?band:pad],['bottom',C.b-B.b,pad]].filter(([,gap,need])=>gap<need-.5);
+     if(sides.length)add('region-inset',[n.id,owner.id],`${n.config?.label||n.id} comes within ${sides.map(([s,gap,need])=>`${Math.max(0,gap).toFixed(1)}px of the ${s} of ${owner.config?.label||owner.id} (needs ${need})`).join(' and ')}`);
+   };
+   for(const n of visible){
+     const owner=String(n.canvasId||'').startsWith('canvas:component:')?nodes.find(x=>x.id===String(n.canvasId).slice(17)):null;
+     if(!owner||!is2D(n)||n.placement?.kind==='edge'||isGroupComponent(owner))continue;
+     const inset=typeof componentSectionInset==='function'?componentSectionInset(owner):0,C=componentBounds(owner,-inset);
+     const head=texts.some(t=>t.owner===owner.id&&/component-label/.test(t.cls))||!!nodeEl(owner.id)?.querySelector(':scope > .glyph');
+     check(n,owner,C,head);
+   }
+   for(const g of shown.filter(isGroupComponent)){
+     const members=Array.isArray(g.config?.members)?g.config.members:[],R=body.get(g.id);
+     if(!R||!members.some(id=>visible.some(v=>v.id===id)))continue;
+     for(const id of members){const m=visible.find(v=>v.id===id);if(m&&is2D(m))check(m,g,{l:R.l,r:R.r,t:R.t,b:R.b},true)}
+   }}
   // Points drawn on top of each other read as one.
   {const pts=visible.filter(n=>componentForm(n).dimension===0);
    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++)if(Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y)<12)add('node-overlap',[pts[i].id,pts[j].id],'points drawn on top of each other')}

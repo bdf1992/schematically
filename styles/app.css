@@ -109,7 +109,7 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .wire-section.line{stroke:var(--canvas-ink)}.wire-section.band-solid{stroke:var(--section-wire-solid)}.wire-section.band-space{stroke:var(--canvas-tone)}
 .wire-group.sectioned .wire{stroke:transparent}.wire-group.sectioned .wire-voltage{display:none}
 /* Unplaced in the layout on screen: shown where the default has it, until arranged or moved. */
-.node.unplaced{opacity:.42}.node.unplaced .body{stroke-dasharray:6 4}
+.node.unplaced{opacity:.42}
 #layoutSelect{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 6px;max-width:15em}
 .access-entries{display:grid;gap:6px;margin:6px 0}
 .access-entry{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(0,1fr)) auto;gap:4px;align-items:center}
