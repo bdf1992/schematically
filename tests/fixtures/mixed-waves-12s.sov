@@ -1,0 +1,227 @@
+{
+  "components": [
+    {
+      "config": {
+        "label": "Sine \u00b7 4s",
+        "signal": {
+          "clock": {
+            "periodMs": 4000,
+            "sampleMs": 100,
+            "wave": "sine"
+          }
+        }
+      },
+      "id": "sine",
+      "symbolId": "clock",
+      "x": 150,
+      "y": 140
+    },
+    {
+      "config": {
+        "label": "Triangle \u00b7 1.5s",
+        "signal": {
+          "clock": {
+            "periodMs": 1500,
+            "sampleMs": 50,
+            "wave": "triangle"
+          }
+        }
+      },
+      "id": "tri",
+      "symbolId": "clock",
+      "x": 150,
+      "y": 300
+    },
+    {
+      "config": {
+        "label": "Saw \u00b7 2.4s",
+        "signal": {
+          "clock": {
+            "periodMs": 2400,
+            "sampleMs": 50,
+            "wave": "saw"
+          }
+        }
+      },
+      "id": "saw",
+      "symbolId": "clock",
+      "x": 150,
+      "y": 460
+    },
+    {
+      "config": {
+        "label": "Clock \u00b7 0.6s",
+        "signal": {
+          "clock": {
+            "duty": 0.3,
+            "periodMs": 600
+          }
+        }
+      },
+      "id": "tick",
+      "symbolId": "clock",
+      "x": 150,
+      "y": 620
+    },
+    {
+      "config": {
+        "label": "Mix (max)",
+        "signal": {
+          "combine": "max",
+          "kind": "continuous",
+          "mode": "derived"
+        }
+      },
+      "id": "mix",
+      "symbolId": "hold",
+      "x": 450,
+      "y": 300
+    },
+    {
+      "config": {
+        "label": "Low (min)",
+        "signal": {
+          "combine": "min",
+          "kind": "continuous",
+          "mode": "derived"
+        }
+      },
+      "id": "low",
+      "symbolId": "hold",
+      "x": 450,
+      "y": 540
+    },
+    {
+      "config": {
+        "label": "Over 0.8",
+        "signal": {
+          "channel": "job",
+          "kind": "binary",
+          "mode": "derived",
+          "on": "+",
+          "threshold": 0.8
+        }
+      },
+      "id": "alarm",
+      "symbolId": "limit",
+      "x": 720,
+      "y": 300
+    },
+    {
+      "config": {
+        "label": "Tick AND low",
+        "signal": {
+          "combine": "and",
+          "mode": "derived"
+        }
+      },
+      "id": "gate",
+      "symbolId": "gate",
+      "x": 720,
+      "y": 540
+    },
+    {
+      "config": {
+        "label": "Job",
+        "signalMode": "passive"
+      },
+      "id": "job",
+      "symbolId": "act",
+      "x": 980,
+      "y": 300
+    },
+    {
+      "config": {
+        "label": "Lamp",
+        "signal": {
+          "emits": false,
+          "mode": "derived"
+        },
+        "signalMode": "passive"
+      },
+      "id": "lamp",
+      "symbolId": "observe",
+      "x": 980,
+      "y": 540
+    }
+  ],
+  "id": "wave-energy-mixed-12s",
+  "meta": {
+    "title": "Wave tasting \u00b7 four waves, max, min, threshold, AND, saw 2.4 s so 12 s loops"
+  },
+  "references": [],
+  "revision": 0,
+  "schema": "soveraeign.schematic/document@0.1",
+  "wires": [
+    {
+      "a": "sine",
+      "aSide": "out",
+      "b": "mix",
+      "bSide": "in",
+      "id": "w1"
+    },
+    {
+      "a": "tri",
+      "aSide": "out",
+      "b": "mix",
+      "bSide": "in",
+      "id": "w2"
+    },
+    {
+      "a": "saw",
+      "aSide": "out",
+      "b": "mix",
+      "bSide": "in",
+      "id": "w3"
+    },
+    {
+      "a": "tri",
+      "aSide": "out",
+      "b": "low",
+      "bSide": "in",
+      "id": "w4"
+    },
+    {
+      "a": "saw",
+      "aSide": "out",
+      "b": "low",
+      "bSide": "in",
+      "id": "w5"
+    },
+    {
+      "a": "mix",
+      "aSide": "out",
+      "b": "alarm",
+      "bSide": "in",
+      "id": "w6"
+    },
+    {
+      "a": "alarm",
+      "aSide": "out",
+      "b": "job",
+      "bSide": "in",
+      "id": "w7"
+    },
+    {
+      "a": "low",
+      "aSide": "out",
+      "b": "gate",
+      "bSide": "in",
+      "id": "w8"
+    },
+    {
+      "a": "tick",
+      "aSide": "out",
+      "b": "gate",
+      "bSide": "in",
+      "id": "w9"
+    },
+    {
+      "a": "gate",
+      "aSide": "out",
+      "b": "lamp",
+      "bSide": "in",
+      "id": "w10"
+    }
+  ]
+}

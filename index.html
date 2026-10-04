@@ -11,6 +11,8 @@
   --line:#d8d8d1; --grid:#EAE8E0; --hover:#f4f4f0; --canvas-tone:#F6F5F0; --canvas-ink:#42423E; --canvas-muted:#73736D; --canvas-halo:#F6F5F0;
   /* Two accents carry meaning, never decoration: amber is out and rising (+), blue is in and falling (−). */
   --accent-out:#C0661F; --accent-in:#2F6FB3; --card-shadow:rgba(40,36,28,.10); --section-wire-solid:#D6D1C4;
+  /* The wave view's one ink (src/68-wave-view.js): quiet, between the canvas and the wires. */
+  --wave-ink:#5F7389;
   --canvas-grid-size:24px;
 }
 *{box-sizing:border-box}
@@ -156,6 +158,11 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .sim-send:hover circle{fill:var(--accent-out)}.sim-send:hover text{fill:var(--panel)}
 /* While the clock runs, levels are the truth on the canvas; the legacy packet animation stands down. */
 #workspace.sim-live .wire-packet{display:none!important}
+/* The wave view (src/68-wave-view.js): a faint wave under the wires while a run is live. One ink; no pointer events. */
+#waveLayer{pointer-events:none}
+.wave-string{fill:none;stroke:var(--wave-ink);stroke-width:1px;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round;opacity:.45}
+.wave-dot{fill:var(--wave-ink);stroke:none;opacity:.45}
+.wave-lane{fill:none;stroke:var(--wave-ink);vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
 .node.selected .body{stroke-width:var(--stroke-structure-selected,2.85px)}
 /* Labels are SVG text in world units while strokes are non-scaling, so text would grow and
    shrink with the camera. `--zoom` is the actual screen scale of #workspace; every label's
@@ -492,6 +499,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   color-scheme:dark;
   --bg:#111315;--panel:#1C1F21;--ink:#EEEFEA;--muted:#A8AAA4;--line:#3B3F42;--hover:#292D30;--grid:#2B2E31;--canvas-tone:#17191B;--canvas-ink:#E7E8E3;--canvas-muted:#AEB0AA;--canvas-halo:#17191B;
   --accent-out:#E9A15A;--accent-in:#74A9E3;--card-shadow:rgba(0,0,0,.35);--section-wire-solid:#4A4D50;
+  --wave-ink:#A3B6CB;
 }
 :root[data-appearance="dark"] #workspace{background-color:var(--canvas-tone);box-shadow:inset 0 0 0 1px #303438}
 :root[data-appearance="dark"] .port{fill:var(--panel)}
@@ -727,7 +735,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 
 <main class="workspace-wrap">
   <svg id="workspace" viewBox="0 0 1200 760" preserveAspectRatio="xMidYMid meet" tabindex="0" aria-label="Schematic canvas">
-    <g id="wires"></g>
+    <g id="waveLayer" aria-hidden="true"></g><g id="wires"></g>
     <g id="ghostLayer" aria-hidden="true"></g>
     <g id="paletteDropLayer" aria-hidden="true"></g>
     <g id="nodes"></g>
@@ -2132,6 +2140,28 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return out;
   }
   function assertStatusAndWaitsOn(doc,config,clearable=false){const p=statusProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Badges (DATA-FORMATS.md "Badges") ------------------------------------------------------
+  // A Component's `config.badges` lists at most 4 chips `{label, colorSlot?}`: a label of 1 to 24
+  // characters after trimming and a palette slot 0 to 11 (absent means 0). Presentation only.
+  //   BADGE_INVALID   badges is not that list (the message names the index and the field)
+  const BADGE_KEYS=['label','colorSlot'],BADGE_MAX=4,BADGE_LABEL_MAX=24;
+  function badgeProblems(config,clearable=false){
+    const out=[];if(!isObject(config))return out;
+    const list=config.badges;if(list===undefined||(clearable&&list===null))return out;
+    if(!Array.isArray(list)){out.push(`BADGE_INVALID: config.badges must be an array, not ${JSON.stringify(list)}`);return out}
+    if(list.length>BADGE_MAX)out.push(`BADGE_INVALID: config.badges holds ${list.length} entries; at most ${BADGE_MAX}`);
+    list.forEach((b,i)=>{
+      const at=`config.badges[${i}]`;
+      if(!isObject(b)){out.push(`BADGE_INVALID: ${at} must be an object`);return}
+      const extra=Object.keys(b).find(k=>!BADGE_KEYS.includes(k));
+      if(typeof b.label!=='string'||!b.label.trim())out.push(`BADGE_INVALID: ${at}.label must be a non-empty string`);
+      else if(b.label.trim().length>BADGE_LABEL_MAX)out.push(`BADGE_INVALID: ${at}.label must be at most ${BADGE_LABEL_MAX} characters, not ${b.label.trim().length}`);
+      else if(b.colorSlot!==undefined&&!(Number.isInteger(b.colorSlot)&&b.colorSlot>=0&&b.colorSlot<=11))out.push(`BADGE_INVALID: ${at}.colorSlot must be an integer 0 to 11, not ${JSON.stringify(b.colorSlot)}`);
+      else if(extra)out.push(`BADGE_INVALID: ${at}.${extra} is not a field of a badge (label, colorSlot)`);
+    });
+    return out;
+  }
+  function assertBadges(config,clearable=false){const p=badgeProblems(config,clearable);if(p.length)throw new Error(p[0])}
   // Copies an authored status and waitsOn onto a record being made.
   function adoptStatusAndWaitsOn(config,value){
     if(value?.status!==undefined&&value.status!==null)config.status=value.status;
@@ -2141,7 +2171,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // An update's null removes the key.
   function clearStatusAndWaitsOn(candidate,patch){
     if(!isObject(candidate?.config)||!isObject(patch?.config))return;
-    for(const key of ['status','waitsOn'])if(patch.config[key]===null)delete candidate.config[key];
+    for(const key of ['status','waitsOn','badges'])if(patch.config[key]===null)delete candidate.config[key];
   }
   // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
   // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
@@ -2543,6 +2573,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // A group's members, as written; create checks them (assertGroupRules).
     if(value.config?.members!==undefined)config.members=clone(value.config.members);
     assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
+    assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -2817,6 +2848,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(binding&&resource!=='component')throw new Error('DEFINITION_INVALID: only a component binds a definition');
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource!=='reference')assertStatusAndWaitsOn(doc,patch?.config,true);
+    if(resource==='component')assertBadges(patch?.config,true);
     if(resource==='component'){
       assertDefinitionPatch(patch,binding);
       if(!binding)assertDefinitionPortsKept(current,patch,null);
@@ -3046,6 +3078,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const f of groupFindings(input))errors.push(`component ${f.id??'?'}: ${f.code}: ${f.text}`);
     // Status and waits-on: reported, never repaired (the codes are listed at statusProblems).
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of statusProblems(input,item?.config))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
+    for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -3064,7 +3097,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(/^duplicate (?:component|wire|reference) id:/.test(message))return 'identity';
     if(/missing endpoint component:/.test(message))return 'wire-endpoint';
     if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
-    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID):/.test(message))return 'status';
+    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID|BADGE_INVALID):/.test(message))return 'status';
     return 'boundary-legality';
   }
   // Straight from validateDocument's own findings; no legality is re-derived here.
@@ -11179,6 +11212,10 @@ function selectWire(i,{focus=true}={}){
 'use strict';
 // 0.1 Beta concern: Sanitized Component SVG projection and Wire/packet SVG rendering.
 
+// Both are screen pixels: general is the floor of every canvas label, shrunkTitle the floor of a
+// card title marked data-shrunk.
+const LABEL_FLOORS=Object.freeze({general:12,shrunkTitle:10});
+
 function renderMoveTether(group,from,to){
   if(!from||!to) return;
   if(Math.hypot(to.x-from.x,to.y-from.y)<1) return;
@@ -11365,7 +11402,7 @@ function fitComponentLabels(g,n){
   // the title whole is taken; otherwise it stays at its clamped size and is cut.
   if(inCard&&isCut(r)&&screen>.25){
     const px0=(parseFloat(getComputedStyle(t).fontSize)||10)*screen;let whole=null;
-    for(let px=Math.floor(px0*2)/2-.5;px>=10-1e-9;px-=.5){t.style.fontSize=`${px/screen}px`;const r2=layout();if(!isCut(r2)){whole=r2;break}}
+    for(let px=Math.floor(px0*2)/2-.5;px>=LABEL_FLOORS.shrunkTitle-1e-9;px-=.5){t.style.fontSize=`${px/screen}px`;const r2=layout();if(!isCut(r2)){whole=r2;break}}
     if(whole){r=whole;t.dataset.shrunk='true'}else{t.style.fontSize='';r=layout()}
   }
   if(u&&(!r.showSub)){u.style.visibility='hidden';u.dataset.lod='hidden'}
@@ -11736,7 +11773,7 @@ function declaredStatus(record){
 function statusTitle(status){return String(status?.title||status?.id||'')}
 // 'Bdo, rule R-29, decision D1': each entry's label, or else its kind and id.
 function waitsOnList(list){return Array.isArray(list)?list.filter(w=>w&&typeof w==='object').map(w=>String(w.label||'').trim()||`${w.kind} ${w.id}`).join(', '):''}
-const CAPTION_STYLE='font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)';
+const CAPTION_STYLE=`font-size:calc(clamp(${LABEL_FLOORS.general}px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)`;
 // A label's ink is its role colour moved (darker in light, lighter in dark) only as far as TEXT_FLOOR
 // against the colour actually behind it: the ground a card stands on, a region's fill, or the canvas.
 const TEXT_FLOOR=4.6;
@@ -11748,7 +11785,7 @@ function statusFade(n){const st=declaredStatus(n),o=st?.opacity;return typeof o=
 function applyStatusFade(g,n){
   const fade=statusFade(n);if(fade>=1||componentForm(n).dimension!==2)return;
   for(const el of g.children){
-    if(el.localName==='text'||el.classList.contains('status-chip'))continue;
+    if(el.localName==='text'||el.classList.contains('status-chip')||el.classList.contains('card-badge'))continue;
     el.style.opacity=String((parseFloat(getComputedStyle(el).opacity)||1)*fade);
   }
 }
@@ -11777,6 +11814,42 @@ function appendComponentStatus(g,n){
   g.appendChild(chip);
   if(st.outline==='dashed'){const body=g.querySelector(':scope > .body');if(body){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}}
 }
+// A card's badges (DATA-FORMATS.md "Badges"): the status chip's shape without a status's meaning, in a
+// row from the card's top-left corner. A badge that would come within 4 of the status chip or within 6
+// of the card's right edge is not drawn; the last chip drawn then reads +N and lists the rest.
+function appendComponentBadges(g,n){
+  const list=Array.isArray(n?.config?.badges)?n.config.badges.filter(b=>b&&typeof b.label==='string'&&b.label.trim()):[];
+  if(!list.length||componentForm(n).dimension!==2)return;
+  const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
+  const ch=Math.round(px*1.5),y=-h/2+6,fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
+  const widthOf=text=>Math.ceil(text.length*px*.6+px);
+  // The right limit: the card's right edge less 6, or 4 short of the status chip's left edge.
+  let limit=w/2-6;
+  const st=declaredStatus(n);
+  if(st){
+    const tone=['safe','alert','danger'].includes(st.tone),glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'',title=statusTitle(st);
+    limit=Math.min(limit,w/2-6-(tone?Math.ceil((glyph?`${glyph} ${title}`:title).length*px*.6+px*1.4):widthOf(title))-4);
+  }
+  const labels=list.map(b=>b.label.trim());
+  const place=(count,more)=>{const xs=[];let x=-w/2+6;for(let i=0;i<count;i++){const cw=widthOf(i===count-1&&more?`+${labels.length-count+1}`:labels[i]);if(x+cw>limit)return null;xs.push([x,cw]);x+=cw+4}return xs};
+  let shown=labels.length,more=false,spots=place(shown,false);
+  if(!spots){more=true;for(shown=labels.length-1;shown>=1;shown--){spots=place(shown,true);if(spots)break}}
+  if(!spots)return;
+  const svgNS='http://www.w3.org/2000/svg';
+  spots.forEach(([x,cw],i)=>{
+    const isMore=more&&i===shown-1,badge=list[i],edge=slotColor(badge.colorSlot??0),chipFill=mixHex([edge,fill],[.16,.84]);
+    const text=isMore?`+${labels.length-shown+1}`:labels[i];
+    const chip=document.createElementNS(svgNS,'g');chip.setAttribute('class','card-badge');chip.dataset.badgeIndex=String(i);
+    if(isMore){chip.dataset.badgeMore='true';const t=document.createElementNS(svgNS,'title');t.textContent=labels.slice(shown-1).join(', ');chip.appendChild(t)}
+    const r=document.createElementNS(svgNS,'rect');
+    r.setAttribute('x',String(x));r.setAttribute('y',String(y));r.setAttribute('width',String(cw));r.setAttribute('height',String(ch));r.setAttribute('rx',String(ch/2));
+    r.setAttribute('style',`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
+    const t=document.createElementNS(svgNS,'text');t.dataset.role='caption';
+    t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
+    t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${ensureContrast(edge,chipFill,TEXT_FLOOR)};stroke:none;pointer-events:none`);t.textContent=text;chip.appendChild(t);
+    g.appendChild(chip);
+  });
+}
 // What a card waits on, under it and below any outside label: 'Waits on Bdo, rule R-29'.
 function appendComponentWaitsOn(g,n){
   const list=waitsOnList(n?.config?.waitsOn);if(!list)return;
@@ -11804,7 +11877,7 @@ function render(){
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
-    renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);
+    renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);appendComponentBadges(g,n);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
@@ -12080,18 +12153,31 @@ function clearWireVisualFocus(){
 const wireLabelPaths=new Map();
 function placeWireLabels(){
   const matrix=workspace.getScreenCTM();if(!matrix)return;
-  const inverse=matrix.inverse(),clearance=6;
+  // LAYOUT-MODEL.md "Wire labels": the clearance round a label and the step it slides by, in screen pixels.
+  const inverse=matrix.inverse(),clearance=6,step=12;
   const screen=p=>new DOMPoint(p.x,p.y).matrixTransform(matrix);
+  const shown=new Map();
   const visible=el=>{
-    for(let cur=el;cur&&cur!==workspace;cur=cur.parentElement){
-      const style=getComputedStyle(cur);
-      if(style.display==='none'||style.visibility==='hidden'||Number(style.opacity)===0)return false;
-    }
-    return true;
+    if(!el||el===workspace)return true;
+    if(shown.has(el))return shown.get(el);
+    const style=getComputedStyle(el);
+    const ok=style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0&&visible(el.parentElement);
+    shown.set(el,ok);return ok;
   };
   const rect=el=>{const r=el.getBoundingClientRect();return {l:r.left,r:r.right,t:r.top,b:r.bottom}};
   const intersects=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
-  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.group-title,.component-label,.outside-label,.internal-text')].filter(visible).map(rect);
+  // What a label must stay clear of: card bodies, status chips, marker badges and every other text
+  // (titles, subtitles, port and bus labels, group titles, end tags). Wire labels join as they are placed.
+  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.status-chip,.marker-badge,#groupLayer text,#nodes text,#wires text')]
+    .filter(el=>!el.classList.contains('connection-label')&&!el.closest('.wire-packet')&&visible(el)).map(rect).filter(box=>box.r>box.l||box.b>box.t);
+  // A card drawn on a wire has no body shape; its bounds are the body the layout metrics measure.
+  for(const el of workspace.querySelectorAll('.node.wire-hosted:not(.is-container)')){
+    const n=nodes.find(x=>x.id===el.dataset.id);if(!n||componentForm(n).dimension!==2||!visible(el))continue;
+    const R=componentBounds(n),a=screen({x:R.l,y:R.t}),b=screen({x:R.r,y:R.b});
+    obstacles.push({l:Math.min(a.x,b.x),r:Math.max(a.x,b.x),t:Math.min(a.y,b.y),b:Math.max(a.y,b.y)});
+  }
+  // A container is no obstacle, but its border is: a label lies wholly inside it or wholly outside.
+  const frames=[...workspace.querySelectorAll('.node.is-container>.body')].filter(visible).map(rect);
   const entries=[...wireLabelPaths].filter(([path])=>path.isConnected&&visible(path)).map(([path,points])=>({path,points:points.map(screen)}));
   // A slab intersection also handles diagonal carrier segments without sampling.
   const crosses=(box,a,b)=>{
@@ -12120,21 +12206,63 @@ function placeWireLabels(){
     const total=path.getTotalLength(),before=screen(path.getPointAtLength(Math.max(0,total/2-.1))),after=screen(path.getPointAtLength(Math.min(total,total/2+.1)));
     beside(midpoint,before,after);
     for(let i=1;i<points.length;i++)beside({x:(points[i-1].x+points[i].x)/2,y:(points[i-1].y+points[i].y)/2},points[i-1],points[i]);
-    let chosen=null,distance=Infinity;
-    for(const candidate of candidates){
-      candidate.r=candidate.l+width;candidate.b=candidate.t+height;
-      const padded={l:candidate.l-clearance,r:candidate.r+clearance,t:candidate.t-clearance,b:candidate.b+clearance};
-      if(obstacles.some(box=>intersects(padded,box)))continue;
-      if(entries.some(other=>other!==entry&&other.points.slice(1).some((p,i)=>crosses(padded,other.points[i],p))))continue;
-      const d=Math.hypot(candidate.l+width/2-midpoint.x,candidate.t+height/2-midpoint.y);
-      if(d<distance-1e-6){chosen=candidate;distance=d}
+    // Slid along the wire: on every straight run with room for the label and its clearance, a place
+    // every step on both sides, outward from the run's middle.
+    const slid=[],runs=[points[0]];
+    for(let i=1;i<points.length;i++){
+      const p=points[i],l=runs.at(-1),a=runs.at(-2);
+      if(a&&((Math.abs(a.y-l.y)<.01&&Math.abs(l.y-p.y)<.01)||(Math.abs(a.x-l.x)<.01&&Math.abs(l.x-p.x)<.01)))runs[runs.length-1]=p;else runs.push(p);
+    }
+    for(let i=1;i<runs.length;i++){
+      const a=runs[i-1],b=runs[i],h=Math.abs(a.y-b.y)<.01,v=Math.abs(a.x-b.x)<.01;if(h===v)continue;
+      const room=(h?Math.abs(b.x-a.x):Math.abs(b.y-a.y))-(h?width:height)-2*clearance;if(room<0)continue;
+      const mid=h?(a.x+b.x)/2:(a.y+b.y)/2;
+      for(let k=0;k*step<=room/2+1e-6;k++)for(const side of k?[-1,1]:[1]){
+        const c=mid+side*k*step;
+        if(h)slid.push({l:c-width/2,t:a.y-clearance-height},{l:c-width/2,t:a.y+clearance});
+        else slid.push({l:a.x-clearance-width,t:c-height/2},{l:a.x+clearance,t:c-height/2});
+      }
+    }
+    // Only what lies within reach of this wire can meet a label beside it.
+    const reach=Math.max(width,height)+3*clearance,xs=points.map(p=>p.x),ys=points.map(p=>p.y);
+    const zone={l:Math.min(...xs)-reach,r:Math.max(...xs)+reach,t:Math.min(...ys)-reach,b:Math.max(...ys)+reach};
+    const solid=obstacles.filter(box=>intersects(zone,box)),borders=frames.filter(box=>intersects(zone,box)),lines=[];
+    for(const other of entries){
+      if(other===entry)continue;
+      for(let i=1;i<other.points.length;i++){
+        const a=other.points[i-1],b=other.points[i];
+        if(Math.max(a.x,b.x)>=zone.l&&Math.min(a.x,b.x)<=zone.r&&Math.max(a.y,b.y)>=zone.t&&Math.min(a.y,b.y)<=zone.b)lines.push([a,b]);
+      }
+    }
+    // How many things a label at this place, padded by pad, would meet; counted no further than the limit.
+    const overlaps=(place,pad,limit)=>{
+      const box={l:place.l-pad,r:place.l+width+pad,t:place.t-pad,b:place.t+height+pad};
+      let n=0;
+      for(const o of solid)if(intersects(box,o)&&++n>=limit)return n;
+      for(const o of borders)if(intersects(box,o)&&!(box.l>o.l&&box.r<o.r&&box.t>o.t&&box.b<o.b)&&++n>=limit)return n;
+      for(const [a,b] of lines)if(crosses(box,a,b)&&++n>=limit)return n;
+      return n;
+    };
+    // Today's places first, then the slid ones; in each, nearest the wire's midpoint first. The first
+    // place clear with the clearance wins; else the first clear with no padding (of those, the one
+    // meeting least with the clearance); else the place of least true overlap, and the label says so.
+    const near=list=>list.map((place,i)=>({place,i,d:Math.round(Math.hypot(place.l+width/2-midpoint.x,place.t+height/2-midpoint.y)*1e4)})).sort((p,q)=>p.d-q.d||p.i-q.i).map(x=>x.place);
+    let chosen=null,bare=Infinity,padded=Infinity;
+    for(const place of [...near(candidates),...near(slid)]){
+      const n=overlaps(place,0,bare+1);if(n>bare)continue;
+      const m=overlaps(place,clearance,n<bare?Infinity:padded);
+      if(n<bare||m<padded){chosen=place;bare=n;padded=m;if(!m)break}
     }
     if(chosen){
-      const position=new DOMPoint(chosen.l-offset.x,chosen.t-offset.y).matrixTransform(inverse);
-      label.setAttribute('x',String(position.x));label.setAttribute('y',String(position.y));
-    }
-    // A crowded path retains its existing label position. Later labels still
-    // avoid that occupied space, and the finite candidate list bounds the work.
+      // A label already at its place is left alone, so placing twice never drifts.
+      if(Math.abs(chosen.l-bounds.l)>.01||Math.abs(chosen.t-bounds.t)>.01){
+        const position=new DOMPoint(chosen.l-offset.x,chosen.t-offset.y).matrixTransform(inverse);
+        label.setAttribute('x',String(position.x));label.setAttribute('y',String(position.y));
+      }
+    }else bare=overlaps({l:bounds.l,t:bounds.t},0,Infinity); // a wire with no straight run keeps its place
+    // Crowded: the label truly overlaps a card, a border, other text or a wire at the place it has.
+    if(bare>0)label.dataset.labelCrowded='true';else delete label.dataset.labelCrowded;
+    // Later labels keep clear of this one; the finite candidate list bounds the work.
     obstacles.push(rect(label));
   }
 }
@@ -13973,6 +14101,8 @@ function captureWorkspace(){
       // The document's own rate (meta.timeScale) wins over the view; a workspace carries only the
       // view's own playback speed, never the document's rate (issue #40).
       playbackSpeed:simClock.speed,
+      // The wave view's style (src/68-wave-view.js) is the view's alone: never in the document.
+      waveStyle:typeof waveStyle==='function'?waveStyle():'off',
       layout:typeof activeLayoutId==='function'?activeLayoutId():null
     }
   };
@@ -14059,6 +14189,8 @@ function applyWorkspace(bundle){
     simClock.speed=view.playbackSpeed;
     const sel=document.getElementById('simSpeed');if(sel)sel.value=String(simClock.speed);
   }
+  // A workspace without view.waveStyle, or with a value that is not one of the four, gives off.
+  if(typeof waveStyleFromView==='function')waveStyleFromView(view);
   if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
   render();
   return captureWorkspace();
@@ -14334,6 +14466,8 @@ function renderStandaloneSvgNow(opts={}){
   clone.querySelector('#paletteDropLayer')?.replaceChildren();
   // A running clock's overlay is a moment, not the document.
   clone.querySelector('#simLayer')?.replaceChildren();
+  // The wave view's layer is a moment too, and it is the view's: the picture carries no trace of it.
+  clone.querySelector('#waveLayer')?.remove();
   clone.querySelectorAll('.level-high').forEach(x => { x.classList.remove('level-high'); x.style.removeProperty('--wire-lit'); });
   clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
   clone.querySelectorAll('.port-hit,.wire-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
@@ -14814,6 +14948,8 @@ function paintSim(){
   if(typeof narrationState!=='undefined'&&narrationState.index!=null)showNarration(narrationState.index,{manual:narrationState.manual});
   if(typeof legendState!=='undefined'&&legendState.open)renderLegendPanel();
   simLayer.replaceChildren();
+  // The wave view (src/68-wave-view.js, loaded after this file) repaints its own layer on every paint.
+  if(typeof paintWaves==='function')paintWaves();
   workspace.classList.toggle('sim-live',!!simClock.run);
   for(const gEl of workspace.querySelectorAll('.wire-group.level-high')){gEl.classList.remove('level-high');gEl.style.removeProperty('--wire-lit')}
   const run=simClock.run;if(!run)return;
@@ -15035,6 +15171,202 @@ function appendLegendBlock(svg,{x,y,w,ink,muted,dark}){
 }
 /* END src/67-legend.js */
 </script>
+<script data-beta-module="src/68-wave-view.js">
+/* BEGIN src/68-wave-view.js */
+'use strict';
+// 0.1 concern: the wave view. Draws the run's spectra along wires: a faint travelling wave under
+// each wire whose source varies. It reads the run (simClock.run.spectrum and its time), the routes
+// renderWires drew last (drawnRoutePoints) and the camera, and writes only the children of
+// #waveLayer; it writes neither the document nor the run, and changes nothing in the wires layer.
+//
+// The setting, waveStyle, is the view's: off (the default), string, dots or lanes. A workspace
+// carries it (src/75-persistence.js); a document never does.
+//
+// What a wire shows comes from sim.spectrum alone. A wire's source is its a end. Per source the
+// surface is read once to learn the node's period P (a one-step window; the period is the run's
+// and does not change), and then once per completed period: fromMs (k - 1) * P, toMs k * P,
+// k = floor(T / P), stepMs 50, harmonics 6. No transform and no level history is computed here.
+// The signal is the source's own, delayed by distance over speed (a lossless line, one speed for
+// the canvas): a mark at arc length s shows u(T - 1000 * s / 120).
+//
+// Geometry is the wave studies' (control/sketchbooks, wave-curves, wave-loops, wave-energy): the
+// guide is the drawn route with every corner rounded by an arc of radius 16, capped at half of each
+// adjacent leg; displacement is along the guide's normal and eases to 0 at both ends with zero
+// slope. A parallel curve has no cusp while its offset stays below the local radius, so the swing
+// is held under half the smallest corner radius on the wire, and the lanes' ribbon under 0.9 of it.
+// Drawing is a pure function of run time, routes, zoom and the kept spectra.
+
+const WAVE_STYLES=['off','string','dots','lanes'];
+const WAVE_LOOK={
+  radius:16,swingPx:4,speed:120,stationStep:2,easeFloor:14,easeSwings:6,
+  dotRadiusPx:.75,dotGapPx:3.2,
+  lane:{gapPx:3,ribbonPx:9,minBandPx:1.6,spreadPx:40,swingFrac:.8,minShare:.02,most:3,sideProbe:14,widthBase:.5,widthShare:.8,alphaBase:.22,alphaShare:.63,radiusShare:.9},
+  spectrum:{stepMs:50,harmonics:6,peakSamples:64,flat:1e-6}
+};
+const waveView={style:'off',run:null,kept:new Map(),watching:false};
+
+function waveStyle(){return waveView.style}
+function setWaveStyle(name){
+  if(!WAVE_STYLES.includes(name))return {ok:false,code:'WAVE_STYLE_UNKNOWN',message:`Unknown wave style ${String(name)}; one of ${WAVE_STYLES.join(', ')}`,allowed:[...WAVE_STYLES]};
+  waveView.style=name;paintSim();
+  return {ok:true,waveStyle:waveView.style};
+}
+// A workspace's view: the key missing, or holding anything but the four values, gives off.
+function waveStyleFromView(view){waveView.style=WAVE_STYLES.includes(view?.waveStyle)?view.waveStyle:'off';return waveView.style}
+
+const waveClamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const waveSmooth=u=>{u=waveClamp(u,0,1);return u*u*(3-2*u)};
+function waveEl(tag,cls,wireId,attrs){
+  const e=document.createElementNS('http://www.w3.org/2000/svg',tag);e.setAttribute('class',cls);e.setAttribute('data-wire-id',wireId);
+  for(const k in attrs)e.setAttribute(k,String(attrs[k]));
+  return e;
+}
+// Screen px per world unit, as the editor's own label scale measures it (syncLabelScale).
+function waveZoom(){const m=workspace.getScreenCTM(),k=m?Math.hypot(m.a,m.b):1;return k>0?k:1}
+
+// ---- the signal: one source's harmonics, kept until its next period completes ----------------
+function waveRaw(harmonics,P,t){let y=0;const w=2*Math.PI/P;for(const h of harmonics)y+=h.amplitude*Math.cos(h.n*w*t+h.phase);return y}
+function waveSignal(run,id,T){
+  if(waveView.run!==run){waveView.run=run;waveView.kept=new Map()}
+  const S=WAVE_LOOK.spectrum;let row=waveView.kept.get(id);
+  if(!row){
+    if(T<S.stepMs)return null;
+    const probe=run.spectrum({fromMs:0,toMs:S.stepMs,stepMs:S.stepMs,harmonics:0,nodes:[id]});
+    row={periodMs:probe.ok?(probe.nodes[0]?.periodMs??null):null,k:0,signal:null};
+    waveView.kept.set(id,row);
+  }
+  const P=row.periodMs;if(!(P>0))return null;
+  const k=Math.floor(T/P);if(k<1)return null;
+  if(row.k!==k){
+    row.k=k;row.signal=null;
+    const read=run.spectrum({fromMs:(k-1)*P,toMs:k*P,stepMs:S.stepMs,harmonics:S.harmonics,nodes:[id]});
+    const node=read.ok?read.nodes[0]:null;
+    if(node&&Array.isArray(node.harmonics)){
+      const harmonics=node.harmonics.map(h=>({n:h.n,amplitude:h.amplitude,phase:h.phase}));
+      let peak=0;for(let j=0;j<S.peakSamples;j++)peak=Math.max(peak,Math.abs(waveRaw(harmonics,P,j*P/S.peakSamples)));
+      if(peak>=S.flat)row.signal={P,harmonics,peak,energy:node.energy};
+    }
+  }
+  return row.signal;
+}
+// u(t): the rebuilt signal over its largest value at 64 evenly spaced times in one period. Between
+// those times a sum of harmonics can pass that value, so u is held to -1..1 and the swing to its cap.
+function waveU(signal,t){return waveClamp(waveRaw(signal.harmonics,signal.P,t)/signal.peak,-1,1)}
+
+// ---- the guide: the drawn route with rounded corners, by arc length from the a end -----------
+function waveGuide(points){
+  const pts=[];
+  for(const p of points||[]){const z=pts[pts.length-1];if(!z||Math.hypot(p.x-z.x,p.y-z.y)>.01)pts.push({x:p.x,y:p.y})}
+  for(let i=pts.length-2;i>=1;i--){
+    const a=pts[i-1],b=pts[i],c=pts[i+1],la=Math.hypot(b.x-a.x,b.y-a.y),lc=Math.hypot(c.x-b.x,c.y-b.y);
+    const cross=((b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x))/(la*lc),dot=(b.x-a.x)*(c.x-b.x)+(b.y-a.y)*(c.y-b.y);
+    if(Math.abs(cross)<1e-6&&dot>0)pts.splice(i,1);
+  }
+  const n=pts.length;if(n<2)return null;
+  const legs=[];
+  for(let i=0;i<n-1;i++){const dx=pts[i+1].x-pts[i].x,dy=pts[i+1].y-pts[i].y,len=Math.hypot(dx,dy);legs.push({len,ux:dx/len,uy:dy/len,head:0,tail:0})}
+  const arcs=new Array(n);let rmin=Infinity;
+  for(let i=1;i<n-1;i++){
+    const g=legs[i-1],h=legs[i],th=Math.acos(waveClamp(g.ux*h.ux+g.uy*h.uy,-1,1));
+    if(th<1e-3||th>Math.PI-1e-3)continue;
+    const tn=Math.tan(th/2),tl=Math.min(WAVE_LOOK.radius*tn,.5*g.len,.5*h.len),r=tl/tn;
+    if(!(r>1e-6))continue;
+    rmin=Math.min(rmin,r);g.tail=tl;h.head=tl;
+    const side=Math.sign(g.ux*h.uy-g.uy*h.ux),ax=pts[i].x-g.ux*tl,ay=pts[i].y-g.uy*tl,cx=ax-g.uy*side*r,cy=ay+g.ux*side*r;
+    arcs[i]={arc:true,cx,cy,r,a0:Math.atan2(ay-cy,ax-cx),dth:side*th,len:r*th};
+  }
+  const segs=[];let L=0;
+  for(let i=0;i<n-1;i++){
+    const g=legs[i],len=g.len-g.head-g.tail;
+    if(len>1e-9){segs.push({arc:false,x:pts[i].x+g.ux*g.head,y:pts[i].y+g.uy*g.head,ux:g.ux,uy:g.uy,len,s0:L});L+=len}
+    if(arcs[i+1]){arcs[i+1].s0=L;segs.push(arcs[i+1]);L+=arcs[i+1].len}
+  }
+  if(!segs.length||!(L>0))return null;
+  let cursor=0;
+  // The point at arc length s and the unit normal there (the tangent turned a quarter turn).
+  const at=s=>{
+    s=waveClamp(s,0,L);if(s<segs[cursor].s0)cursor=0;
+    while(cursor<segs.length-1&&s>segs[cursor].s0+segs[cursor].len)cursor++;
+    const g=segs[cursor],d=s-g.s0;
+    if(!g.arc)return {x:g.x+g.ux*d,y:g.y+g.uy*d,nx:-g.uy,ny:g.ux};
+    const an=g.a0+g.dth*(d/g.len),sg=Math.sign(g.dth),co=Math.cos(an),si=Math.sin(an);
+    return {x:g.cx+g.r*co,y:g.cy+g.r*si,nx:-co*sg,ny:-si*sg};
+  };
+  return {L,rmin,at,first:pts[0],last:pts[n-1]};
+}
+function waveStations(L,step){const out=[];for(let s=0;s<L;s+=step)out.push(s);out.push(L);return out}
+
+// ---- the three styles ---------------------------------------------------------------------------
+// string and dots share one displacement: swing * envelope(s) * u(T - 1000 s / speed).
+function waveDisplacement(guide,signal,T,k){
+  const A=Math.min(WAVE_LOOK.swingPx/k,guide.rmin/2),W=Math.max(WAVE_LOOK.easeFloor,WAVE_LOOK.easeSwings*A),v=WAVE_LOOK.speed/1000;
+  return s=>A*waveSmooth(Math.min(s,guide.L-s)/W)*waveU(signal,T-s/v);
+}
+function waveString(layer,wire,guide,signal,T,k){
+  const y=waveDisplacement(guide,signal,T,k);let d='';
+  for(const s of waveStations(guide.L,WAVE_LOOK.stationStep)){const p=guide.at(s),o=y(s);d+=(d?' L':'M')+(p.x+p.nx*o).toFixed(2)+' '+(p.y+p.ny*o).toFixed(2)}
+  layer.appendChild(waveEl('path','wave-string',wire.id,{d}));
+}
+// Dots stay at fixed arc length and move only across the wire, as the medium does in a transverse wave.
+function waveDots(layer,wire,guide,signal,T,k){
+  const y=waveDisplacement(guide,signal,T,k),gap=WAVE_LOOK.dotGapPx/k,r=(WAVE_LOOK.dotRadiusPx/k).toFixed(3),count=Math.floor(guide.L/gap),off=(guide.L-count*gap)/2;
+  for(let i=0;i<=count;i++){const s=off+i*gap,p=guide.at(s),o=y(s);layer.appendChild(waveEl('circle','wave-dot',wire.id,{cx:(p.x+p.nx*o).toFixed(2),cy:(p.y+p.ny*o).toFixed(2),r}))}
+}
+// Which side of the wire the lanes go: the side with more room from the cards around the middle.
+function waveLaneSide(guide,cards){
+  let best=null;
+  for(const sg of [1,-1]){
+    let room=1e9;
+    for(const f of [.35,.5,.65]){
+      const p=guide.at(guide.L*f),qx=p.x+p.nx*WAVE_LOOK.lane.sideProbe*sg,qy=p.y+p.ny*WAVE_LOOK.lane.sideProbe*sg;
+      for(const c of cards)room=Math.min(room,Math.hypot(Math.max(0,Math.abs(qx-c.x)-c.w/2),Math.max(0,Math.abs(qy-c.y)-c.h/2)));
+    }
+    if(!best||room>best.room+1e-6)best={sg,room};
+  }
+  return best.sg;
+}
+// One lane per harmonic holding at least 2% of the source's energy, the three largest at most.
+function waveLanes(layer,wire,guide,signal,T,k,cards){
+  const Lk=WAVE_LOOK.lane;
+  const picked=signal.harmonics.map(h=>({...h,share:signal.energy>0?h.amplitude*h.amplitude/2/signal.energy:0})).filter(h=>h.share>=Lk.minShare).sort((a,b)=>b.share-a.share||a.n-b.n).slice(0,Lk.most);
+  if(!picked.length)return;
+  const raw=picked.map(h=>Math.max(Lk.minBandPx,h.share*Lk.ribbonPx)),total=raw.reduce((a,b)=>a+b,0),bands=raw.map(b=>b*Math.min(1,Lk.ribbonPx/total)/k);
+  const outer=Lk.gapPx/k+bands.reduce((a,b)=>a+b,0),fit=Math.min(1,Lk.radiusShare*guide.rmin/outer),side=waveLaneSide(guide,cards),spread=Lk.spreadPx/k,v=WAVE_LOOK.speed/1000,w=2*Math.PI/signal.P;
+  const stations=waveStations(guide.L,WAVE_LOOK.stationStep);let near=Lk.gapPx/k;
+  picked.forEach((h,i)=>{
+    const centre=near+bands[i]/2,swing=Lk.swingFrac*bands[i]/2;near+=bands[i];let d='';
+    for(const s of stations){
+      const p=guide.at(s),o=side*fit*waveSmooth(Math.min(s,guide.L-s)/spread)*(centre+swing*Math.cos(h.n*w*(T-s/v)+h.phase));
+      d+=(d?' L':'M')+(p.x+p.nx*o).toFixed(2)+' '+(p.y+p.ny*o).toFixed(2);
+    }
+    const share=Math.min(1,h.share);
+    layer.appendChild(waveEl('path','wave-lane',wire.id,{d,'data-harmonic':h.n,style:`stroke-width:${(Lk.widthBase+Lk.widthShare*share).toFixed(3)}px;opacity:${(Lk.alphaBase+Lk.alphaShare*share).toFixed(3)}`}));
+  });
+}
+
+// Repaint the wave layer. paintSim calls this on every paint, with or without a run.
+function paintWaves(){
+  const layer=document.getElementById('waveLayer');if(!layer)return;
+  // The render puts its group layer before the wires at run time; the waves stay directly under the wires.
+  const over=document.getElementById('wires');if(over&&layer.nextElementSibling!==over)over.before(layer);
+  layer.replaceChildren();
+  const run=simClock.run;
+  if(!run){waveView.run=null;waveView.kept=new Map();return}
+  if(waveView.style==='off')return;
+  // A zoom changes the screen sizes the marks are cut to; the layer follows the camera too.
+  if(!waveView.watching&&typeof MutationObserver==='function'){waveView.watching=true;new MutationObserver(()=>paintWaves()).observe(workspace,{attributes:true,attributeFilter:['viewBox']})}
+  const T=run.state().time,k=waveZoom(),draw=waveView.style==='string'?waveString:waveView.style==='dots'?waveDots:waveLanes;
+  // The cards' boxes, measured once a paint: the lanes pick the side of a wire with more room from them.
+  const cards=waveView.style==='lanes'?nodes.map(c=>{const z=componentSize(c);return {x:c.x,y:c.y,w:z.w,h:z.h}}):null;
+  wires.forEach((wire,i)=>{
+    const points=drawnRoutePoints.get(i);if(!points||!wire.a)return;
+    const signal=waveSignal(run,wire.a,T);if(!signal)return;
+    const guide=waveGuide(points);if(!guide)return;
+    draw(layer,wire,guide,signal,T,k,cards);
+  });
+}
+/* END src/68-wave-view.js */
+</script>
 <script data-beta-module="src/85-api.js">
 /* BEGIN src/85-api.js */
 'use strict';
@@ -15129,7 +15461,9 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
-  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:effectivePaletteName(),palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom'],source:documentPalette()!==null?'document':'view',viewPalette:colorEngine.palette}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;const picked=palette?pickPalette(palette):null;if(!palette||picked?.ok===false)applyColorEngine();return picked?.ok===false?picked:{theme:colorEngine.theme,palette:effectivePaletteName()}},documentPalette:()=>SovSchematicData.clone(documentPalette()),setDocumentPalette:(value)=>{const admitted=setDocumentPalette(value);return admitted.ok===false?admitted:SovSchematicData.clone(documentPalette())},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()}},
+  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:effectivePaletteName(),palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom'],source:documentPalette()!==null?'document':'view',viewPalette:colorEngine.palette}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;const picked=palette?pickPalette(palette):null;if(!palette||picked?.ok===false)applyColorEngine();return picked?.ok===false?picked:{theme:colorEngine.theme,palette:effectivePaletteName()}},documentPalette:()=>SovSchematicData.clone(documentPalette()),setDocumentPalette:(value)=>{const admitted=setDocumentPalette(value);return admitted.ok===false?admitted:SovSchematicData.clone(documentPalette())},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()},
+    // The wave view (src/68-wave-view.js): off, string, dots or lanes; the view's own, never the document's.
+    waveStyle:()=>waveStyle(),setWaveStyle:(name)=>setWaveStyle(name)},
   render:{
     svg:(options={})=>renderStandaloneSvg(options),
     png:(options={})=>renderStandalonePng(options)

@@ -583,6 +583,58 @@ x 368. On the order-only map (`check_map.py --routing`) crossing goes 208 to 207
 
 Tests: `tests/track_gap_qa.py`.
 
+## As built: wire labels (2026-10-04)
+
+A wire's label sits beside its wire, clear of everything else drawn, or says that it could not.
+The method is line-feature label placement by candidate positions slid along the line, nearest
+the preferred position first (Christensen, Marks and Shieber, "An Empirical Study of Algorithms
+for Point-Feature Label Placement", 1995; map renderers place road names the same way).
+
+- **Where.** `placeWireLabels` (`src/55-render.js`) runs after every wire is drawn and again on
+  every zoom, pan and resize. It moves labels only: no route changes and no label is hidden or cut.
+- **Screen units.** A label holds a screen size (12 to 16 px), so its size in world units changes
+  with the zoom. The clearance (6) and the slide step (12) are screen pixels too.
+- **Candidates, in order.** First the wire's midpoint and the midpoint of each segment, on both
+  sides of the line, nearest the wire's midpoint first. Then, on every straight run at least as
+  long as the label plus twice the clearance, a place every 12 px on both sides, outward from the
+  run's middle and never past its ends less the clearance, nearest the wire's midpoint first.
+- **What a label meets.** A card body (a card drawn on a wire counts by its bounds), a container
+  border (a label lies wholly inside a container or wholly outside), a status chip or marker
+  badge, other text (titles, subtitles, port labels, group titles, bus labels, end tags, labels
+  already placed) and another wire's segment.
+- **Three tiers.** The label takes the first place, in the order above, whose box padded by the
+  clearance meets nothing. With no such place, a place whose box with no padding meets nothing
+  (of those, the one that meets least when padded, the earliest on a tie). With none of those,
+  the place of least overlap with no padding.
+- **Crowded.** `data-label-crowded="true"` is on a label whose final place truly overlaps
+  something in the list above, with no padding. A label that only misses the clearance does not
+  carry it. A label already at its place is not rewritten, so placing twice gives the same
+  coordinates.
+- **Two drawings.** The picture (`renderStandaloneSvg`) and static metrics draw labels at their
+  base size; the fitted view on screen holds the 12 px floor, so on a wide document its labels are
+  several times larger in world units and more of them are crowded. The mark describes the
+  drawing it is read in.
+- **What it cannot do.** A label longer than every straight run of its wire has only the midpoint
+  places, and a wire shorter than its label between two close cards has no clear place.
+
+Measured at 1600 x 1000 after `fitDiagram`, before then after. A label collision is a
+text-collision finding of static metrics that names the label's wire and quotes its text; the
+marks in the picture are read in the same drawing (`withPictureLabels`):
+
+| Document | Labels | Label collisions | Crowded in the picture | Crowded in the fitted view (zoom) |
+| --- | --- | --- | --- | --- |
+| `tests/fixtures/task-lifecycle.sov` | 9 | 1, 1 | not marked, 1 | not marked, 2 (0.28) |
+| `tests/fixtures/work-engine-sample.sov` | 13 | 1, 0 | not marked, 0 | not marked, 5 (0.32) |
+| 12 act cards and 14 labelled wires laid out by `layered` | 14 | 0, 0 | not marked, 0 | not marked, 6 (0.44) |
+| `docs/workengine/map.sov` | 1 | 0, 0 | not marked, 0 | not marked, 0 (0.24) |
+
+Known residual: on task-lifecycle 'push, through the broker' (w5) still overlaps Commits and is
+marked crowded. Its wire, from Commits to GitHub's border, is 130 world units and the label is 137
+wide at base size, so no label move clears it; it needs a wider gap. Held by task
+`schematically-a-wire-label-has-room-on-its-wire`.
+
+Tests: `tests/wire_label_placement_qa.py`, `tests/wire_label_clearance_qa.py`.
+
 ## As built: presentation (2026-09-25)
 
 **Colour carries meaning, not decoration.** There are two accents:
