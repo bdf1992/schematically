@@ -66,6 +66,24 @@ Returns `{id, severity, message, rule}` for every current `document.get()`/CRUD 
 
 `window.SovSchematicAPI` additionally exposes `history.list/undo/redo`, `checkpoints.list/create/restore`, semantic selection clipboard helpers, and view appearance/global-rate accessors. MCP exposes history undo/redo and checkpoint list/create/restore for its file-backed document.
 
+### Wave view
+
+```js
+SovSchematicAPI.view.waveStyle()            // 'off' | 'string' | 'dots' | 'lanes'
+SovSchematicAPI.view.setWaveStyle('string') // {ok: true, waveStyle: 'string'}
+```
+
+While a run is live (`clock.*`), the wave view draws each varying source's signal as a faint wave travelling along its wires, from the wire's `a` end, at 120 world units per second. The signal is the run's own spectrum (`sim.spectrum`, six harmonics over the node's last completed period); a source with no period, such as a lever, draws nothing. The four values:
+
+- `off` (the default): nothing is drawn.
+- `string`: one 1 px line per wire, displaced across the wire by at most 4 screen px.
+- `dots`: 1.5 px dots 3.2 screen px apart, fixed along the wire and displaced across it by the same amount.
+- `lanes`: beside the wire, one line per harmonic holding at least 2% of the source's energy (the three largest at most), each wider and more opaque the larger its share.
+
+`setWaveStyle(name)` sets the value, repaints and returns `{ok: true, waveStyle}`. Any other name returns `{ok: false, code: 'WAVE_STYLE_UNKNOWN', message, allowed: ['off', 'string', 'dots', 'lanes']}` and changes nothing.
+
+The setting is the view's. A workspace carries it as `view.waveStyle` (a workspace without the key, or with an unknown value, gives `off`); it is never written to the document, its revision or its fingerprint. Every mark is a child of `#waveLayer`, under the wires, and carries `data-wire-id`; the wires layer is the same for every value, and an exported SVG (`render.svg`, `file.svg`) carries no wave.
+
 
 ### Access axis
 Port Connections may carry `access: none | read | write | read-write`. Wire config may carry `forwardOperation` / `reverseOperation: none | read | write`. Direction, access, and authority are independent.

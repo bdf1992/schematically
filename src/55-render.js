@@ -954,18 +954,31 @@ function clearWireVisualFocus(){
 const wireLabelPaths=new Map();
 function placeWireLabels(){
   const matrix=workspace.getScreenCTM();if(!matrix)return;
-  const inverse=matrix.inverse(),clearance=6;
+  // LAYOUT-MODEL.md "Wire labels": the clearance round a label and the step it slides by, in screen pixels.
+  const inverse=matrix.inverse(),clearance=6,step=12;
   const screen=p=>new DOMPoint(p.x,p.y).matrixTransform(matrix);
+  const shown=new Map();
   const visible=el=>{
-    for(let cur=el;cur&&cur!==workspace;cur=cur.parentElement){
-      const style=getComputedStyle(cur);
-      if(style.display==='none'||style.visibility==='hidden'||Number(style.opacity)===0)return false;
-    }
-    return true;
+    if(!el||el===workspace)return true;
+    if(shown.has(el))return shown.get(el);
+    const style=getComputedStyle(el);
+    const ok=style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0&&visible(el.parentElement);
+    shown.set(el,ok);return ok;
   };
   const rect=el=>{const r=el.getBoundingClientRect();return {l:r.left,r:r.right,t:r.top,b:r.bottom}};
   const intersects=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
-  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.group-title,.component-label,.outside-label,.internal-text')].filter(visible).map(rect);
+  // What a label must stay clear of: card bodies, status chips, marker badges and every other text
+  // (titles, subtitles, port and bus labels, group titles, end tags). Wire labels join as they are placed.
+  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.status-chip,.marker-badge,#groupLayer text,#nodes text,#wires text')]
+    .filter(el=>!el.classList.contains('connection-label')&&!el.closest('.wire-packet')&&visible(el)).map(rect).filter(box=>box.r>box.l||box.b>box.t);
+  // A card drawn on a wire has no body shape; its bounds are the body the layout metrics measure.
+  for(const el of workspace.querySelectorAll('.node.wire-hosted:not(.is-container)')){
+    const n=nodes.find(x=>x.id===el.dataset.id);if(!n||componentForm(n).dimension!==2||!visible(el))continue;
+    const R=componentBounds(n),a=screen({x:R.l,y:R.t}),b=screen({x:R.r,y:R.b});
+    obstacles.push({l:Math.min(a.x,b.x),r:Math.max(a.x,b.x),t:Math.min(a.y,b.y),b:Math.max(a.y,b.y)});
+  }
+  // A container is no obstacle, but its border is: a label lies wholly inside it or wholly outside.
+  const frames=[...workspace.querySelectorAll('.node.is-container>.body')].filter(visible).map(rect);
   const entries=[...wireLabelPaths].filter(([path])=>path.isConnected&&visible(path)).map(([path,points])=>({path,points:points.map(screen)}));
   // A slab intersection also handles diagonal carrier segments without sampling.
   const crosses=(box,a,b)=>{
@@ -994,21 +1007,63 @@ function placeWireLabels(){
     const total=path.getTotalLength(),before=screen(path.getPointAtLength(Math.max(0,total/2-.1))),after=screen(path.getPointAtLength(Math.min(total,total/2+.1)));
     beside(midpoint,before,after);
     for(let i=1;i<points.length;i++)beside({x:(points[i-1].x+points[i].x)/2,y:(points[i-1].y+points[i].y)/2},points[i-1],points[i]);
-    let chosen=null,distance=Infinity;
-    for(const candidate of candidates){
-      candidate.r=candidate.l+width;candidate.b=candidate.t+height;
-      const padded={l:candidate.l-clearance,r:candidate.r+clearance,t:candidate.t-clearance,b:candidate.b+clearance};
-      if(obstacles.some(box=>intersects(padded,box)))continue;
-      if(entries.some(other=>other!==entry&&other.points.slice(1).some((p,i)=>crosses(padded,other.points[i],p))))continue;
-      const d=Math.hypot(candidate.l+width/2-midpoint.x,candidate.t+height/2-midpoint.y);
-      if(d<distance-1e-6){chosen=candidate;distance=d}
+    // Slid along the wire: on every straight run with room for the label and its clearance, a place
+    // every step on both sides, outward from the run's middle.
+    const slid=[],runs=[points[0]];
+    for(let i=1;i<points.length;i++){
+      const p=points[i],l=runs.at(-1),a=runs.at(-2);
+      if(a&&((Math.abs(a.y-l.y)<.01&&Math.abs(l.y-p.y)<.01)||(Math.abs(a.x-l.x)<.01&&Math.abs(l.x-p.x)<.01)))runs[runs.length-1]=p;else runs.push(p);
+    }
+    for(let i=1;i<runs.length;i++){
+      const a=runs[i-1],b=runs[i],h=Math.abs(a.y-b.y)<.01,v=Math.abs(a.x-b.x)<.01;if(h===v)continue;
+      const room=(h?Math.abs(b.x-a.x):Math.abs(b.y-a.y))-(h?width:height)-2*clearance;if(room<0)continue;
+      const mid=h?(a.x+b.x)/2:(a.y+b.y)/2;
+      for(let k=0;k*step<=room/2+1e-6;k++)for(const side of k?[-1,1]:[1]){
+        const c=mid+side*k*step;
+        if(h)slid.push({l:c-width/2,t:a.y-clearance-height},{l:c-width/2,t:a.y+clearance});
+        else slid.push({l:a.x-clearance-width,t:c-height/2},{l:a.x+clearance,t:c-height/2});
+      }
+    }
+    // Only what lies within reach of this wire can meet a label beside it.
+    const reach=Math.max(width,height)+3*clearance,xs=points.map(p=>p.x),ys=points.map(p=>p.y);
+    const zone={l:Math.min(...xs)-reach,r:Math.max(...xs)+reach,t:Math.min(...ys)-reach,b:Math.max(...ys)+reach};
+    const solid=obstacles.filter(box=>intersects(zone,box)),borders=frames.filter(box=>intersects(zone,box)),lines=[];
+    for(const other of entries){
+      if(other===entry)continue;
+      for(let i=1;i<other.points.length;i++){
+        const a=other.points[i-1],b=other.points[i];
+        if(Math.max(a.x,b.x)>=zone.l&&Math.min(a.x,b.x)<=zone.r&&Math.max(a.y,b.y)>=zone.t&&Math.min(a.y,b.y)<=zone.b)lines.push([a,b]);
+      }
+    }
+    // How many things a label at this place, padded by pad, would meet; counted no further than the limit.
+    const overlaps=(place,pad,limit)=>{
+      const box={l:place.l-pad,r:place.l+width+pad,t:place.t-pad,b:place.t+height+pad};
+      let n=0;
+      for(const o of solid)if(intersects(box,o)&&++n>=limit)return n;
+      for(const o of borders)if(intersects(box,o)&&!(box.l>o.l&&box.r<o.r&&box.t>o.t&&box.b<o.b)&&++n>=limit)return n;
+      for(const [a,b] of lines)if(crosses(box,a,b)&&++n>=limit)return n;
+      return n;
+    };
+    // Today's places first, then the slid ones; in each, nearest the wire's midpoint first. The first
+    // place clear with the clearance wins; else the first clear with no padding (of those, the one
+    // meeting least with the clearance); else the place of least true overlap, and the label says so.
+    const near=list=>list.map((place,i)=>({place,i,d:Math.round(Math.hypot(place.l+width/2-midpoint.x,place.t+height/2-midpoint.y)*1e4)})).sort((p,q)=>p.d-q.d||p.i-q.i).map(x=>x.place);
+    let chosen=null,bare=Infinity,padded=Infinity;
+    for(const place of [...near(candidates),...near(slid)]){
+      const n=overlaps(place,0,bare+1);if(n>bare)continue;
+      const m=overlaps(place,clearance,n<bare?Infinity:padded);
+      if(n<bare||m<padded){chosen=place;bare=n;padded=m;if(!m)break}
     }
     if(chosen){
-      const position=new DOMPoint(chosen.l-offset.x,chosen.t-offset.y).matrixTransform(inverse);
-      label.setAttribute('x',String(position.x));label.setAttribute('y',String(position.y));
-    }
-    // A crowded path retains its existing label position. Later labels still
-    // avoid that occupied space, and the finite candidate list bounds the work.
+      // A label already at its place is left alone, so placing twice never drifts.
+      if(Math.abs(chosen.l-bounds.l)>.01||Math.abs(chosen.t-bounds.t)>.01){
+        const position=new DOMPoint(chosen.l-offset.x,chosen.t-offset.y).matrixTransform(inverse);
+        label.setAttribute('x',String(position.x));label.setAttribute('y',String(position.y));
+      }
+    }else bare=overlaps({l:bounds.l,t:bounds.t},0,Infinity); // a wire with no straight run keeps its place
+    // Crowded: the label truly overlaps a card, a border, other text or a wire at the place it has.
+    if(bare>0)label.dataset.labelCrowded='true';else delete label.dataset.labelCrowded;
+    // Later labels keep clear of this one; the finite candidate list bounds the work.
     obstacles.push(rect(label));
   }
 }
