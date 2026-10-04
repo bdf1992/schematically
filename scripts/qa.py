@@ -105,6 +105,7 @@ BROWSER=[
     'tests/legend_qa.py',
     'tests/status_waits_on_qa.py',
     'tests/card_badges_qa.py',
+    'tests/card_shapes_qa.py',
     'tests/palette_system_qa.py',
     'tests/status_chip_qa.py',
     'tests/lit_wire_role_qa.py',

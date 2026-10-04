@@ -86,6 +86,30 @@ function appendComponentLeads(g,n){
     lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
   }
 }
+// A shaped card's ports stay on its bounding sides. Where the drawn outline is set back from the
+// side (a parallelogram's slanted sides, a cylinder's curves away from the centre), a wired port is
+// joined to the outline by a short lead, straight in from the port.
+function appendShapeLeads(g,n){
+  const geo=componentShapeGeometry(n);if(geo.shape==='rect')return;
+  for(const point of componentAttachmentPoints(n)){
+    const compat=point.compatId;
+    if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
+    const side=physicalPortSide(n,point.id),P=componentPortLocalPosition(n,point.id),E=geo.edge(side,P);
+    if(Math.hypot(E.x-P.x,E.y-P.y)<.5)continue;
+    const lead=document.createElementNS('http://www.w3.org/2000/svg','path');lead.setAttribute('class','component-lead shape-lead');lead.dataset.point=point.id;
+    lead.setAttribute('d',`M${P.x} ${P.y}L${+E.x.toFixed(2)} ${+E.y.toFixed(2)}`);g.appendChild(lead);
+  }
+}
+// A solid shaped body's bevel: the outline's lit half (left and top) and shaded half (right and bottom), inset.
+function appendShapeBevel(g,geo){
+  const d=SovSchematicNotation.tokens(diagram).space.bevel,w=geo.w-d*2,h=geo.h-d*2;if(w<12||h<12)return;
+  const x0=-w/2,y0=-h/2,x1=w/2,y1=h/2;let light,shade;
+  if(geo.shape==='parallelogram'){const s=geo.skew;light=`M${x0} ${y1}L${x0+s} ${y0}L${x1} ${y0}`;shade=`M${x1} ${y0}L${x1-s} ${y1}L${x0} ${y1}`}
+  else{const ry=geo.cap/2;light=`M${x0} ${y1-ry}V${y0+ry}A${x1} ${ry} 0 0 1 ${x1} ${y0+ry}`;shade=`M${x1} ${y0+ry}V${y1-ry}A${x1} ${ry} 0 0 1 ${x0} ${y1-ry}`}
+  for(const [cls,path] of [['light',light],['shade',shade]]){
+    const e=document.createElementNS('http://www.w3.org/2000/svg','path');e.setAttribute('class',`section-bevel raised ${cls}`);e.setAttribute('d',path);g.appendChild(e);
+  }
+}
 // Where a wire meets a card, a short bar on the edge in the point's own colour: amber where
 // work leaves, blue where it arrives, both halves for a two-way point, muted for control.
 function appendTerminalMarks(g,n){
@@ -130,7 +154,8 @@ function fitComponentLabels(g,n){
   if(t.dataset.full==null)t.dataset.full=t.textContent;
   if(u&&u.dataset.full==null)u.dataset.full=u.textContent;
   const full=t.dataset.full,subFull=u?u.dataset.full:'';if(!full)return;
-  const size=componentSize(n),inset=componentSectionInset(n),max=size.w-12-inset*2,x=t.getAttribute('x')||'0';
+  // The text keeps to the card's inner rectangle: the whole card, or what a declared shape leaves of it.
+  const full2D=componentSize(n),I=componentInnerRect(n),size={w:I.r-I.l,h:full2D.h},inset=componentSectionInset(n),max=size.w-12-inset*2,x=t.getAttribute('x')||'0';
   const gap=Number(SovSchematicNotation.tokens(diagram).space?.textGap)||3,down=t.dataset.grow==='down';
   const y0=t.dataset.y0!=null?Number(t.dataset.y0):Number(t.getAttribute('y'))||0;
   // A title drawn outside its card (under it) is not held to the card's width: it stays one line.
@@ -147,7 +172,7 @@ function fitComponentLabels(g,n){
     const kept=lines.length>limit?[...lines.slice(0,limit-1),lines.slice(limit-1).join(' ')]:lines;
     return kept.map(l=>cut(t,l));
   };
-  const innerTop=-size.h/2+inset+2,innerBottom=size.h/2-inset-2;
+  const innerTop=I.t+inset+2,innerBottom=I.b-inset-2;
   const graphic=componentConfig(n).presentation?.graphic;
   let topLimit=innerTop;
   if(graphic?.kind&&graphic.kind!=='none'){const box=componentInlineGraphicBox(n);if(!down)topLimit=Math.max(topLimit,box.y+box.h+2)}
@@ -250,12 +275,12 @@ function appendComponentText(g,n,cfg,s){
     if(labelMode==='outside')t.style.fill=roleInk(componentBackdropMode(n)==='none'?'--canvas-ink':'--muted','#6C6C65',componentFillGround(n));
     if(componentHostedOnWire(n)&&componentBackdropMode(n)==='none'){
       const box=componentInlineGraphicBox(n);t.setAttribute('x','0');t.setAttribute('y',String(box.y+box.h+11));
-    }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
+    }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(componentInnerRect(n).b-10,24)))}
     else if(labelMode==='outside'){t.setAttribute('x','0');t.setAttribute('y',String(size.h/2+18))}
     // Inside the innermost line: a label never straddles a section's own boundary.
     // A container's name heads it, under its glyph; a card's sits at its foot.
     else if(componentAcceptsChildren(n)&&((p.graphic?.kind&&p.graphic.kind!=='none')||nodes.some(c=>c.parentId===n.id))){const box=componentInlineGraphicBox(n),glyph=p.graphic?.kind&&p.graphic.kind!=='none';t.setAttribute('x','0');t.setAttribute('y',String(glyph?box.y+box.h+12:box.y+10))}
-    else {const inset=componentSectionInset(n),sec=componentForm(n).section?SovSchematicData.componentSection(n):null,bevel=sec&&(sec.core?.fill||'solid')==='solid';t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-(bevel?15:inset?11:8)-inset))}
+    else {const inset=componentSectionInset(n),sec=componentForm(n).section?SovSchematicData.componentSection(n):null,bevel=sec&&(sec.core?.fill||'solid')==='solid';t.setAttribute('x','0');t.setAttribute('y',String(componentInnerRect(n).b-(bevel?15:inset?11:8)-inset))}
     t.textContent=label;g.appendChild(t);
     // Where the title sits before any subtitle, and which way its block grows from there: up from
     // the foot of a card, down under a container's glyph, below the body, or under a wire's glyph.
@@ -413,13 +438,19 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     // Depth is elevation, a soft shadow by nesting level (NOTATION-MODEL.md §3), never a second outline.
     const section=SovSchematicData.componentSection(n),T=SovSchematicNotation.tokens(diagram);
     const sectioned=!!(section&&section.lines.length>=2),total=sectioned?section.bands.reduce((a,b)=>a+b.thickness,0):0;
-    const body=document.createElementNS('http://www.w3.org/2000/svg','rect');body.setAttribute('class','body');body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(SovSchematicNotation.cornerRadius(T,{total,inset:0,w:size.w,h:size.h,sectioned})));
+    // The body is a rectangle, or the path of the card's declared shape (a cylinder, a parallelogram).
+    const geo=componentShapeGeometry(n),shaped=geo.shape!=='rect';
+    const body=document.createElementNS('http://www.w3.org/2000/svg',shaped?'path':'rect');body.setAttribute('class','body');
+    if(shaped){body.setAttribute('d',geo.d);body.setAttribute('stroke-linejoin','round');g.dataset.shape=geo.shape}
+    else{body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(SovSchematicNotation.cornerRadius(T,{total,inset:0,w:size.w,h:size.h,sectioned})))}
     // A thicker body stands taller: its shadow falls further.
     {const E=SovSchematicNotation.elevation(T,componentElevation(n),surfaceAppearance()),th=Math.max(0,Number(form.body.thickness)||0);
      if(E){const dy=E.dy+Math.min(4,th*.08),blur=E.blur+Math.min(3,th*.06);body.style.filter=`drop-shadow(0 ${+dy.toFixed(2)}px ${+blur.toFixed(2)}px rgba(${surfaceAppearance()==='dark'?'0,0,0':'40,36,28'},${E.opacity}))`;body.dataset.elevation=String(componentElevation(n))}}
     // An intake plane is an open region: its outline is dashed 6 4 in the muted ink.
     if(cfg.intake===true&&String(n.symbolId||'')==='plane'){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4';body.style.stroke='var(--muted)'}
     g.appendChild(body);
+    // A cylinder's top cap: the near half of its rim, a second line in the outline colour.
+    if(geo.rim){const rim=document.createElementNS('http://www.w3.org/2000/svg','path');rim.setAttribute('class','body-rim');rim.setAttribute('d',geo.rim);rim.setAttribute('fill','none');g.appendChild(rim)}
     // A section's lines inside the outline: each line an inset boundary, each region filled as
     // what it is (solid material, or space). The outline is line L0. Corners are concentric.
     if(sectioned){
@@ -436,7 +467,7 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
       body.classList.add(`fill-${section.bands[0]?.fill||'solid'}`);
     }else if(form.section&&section){body.classList.add(`fill-${section.core?.fill||'solid'}`)}
     // A solid core is bevelled, lit from the top left, so a disk reads as a body, not a blank card.
-    if(form.section&&section&&(section.core?.fill||'solid')==='solid'&&!componentAcceptsChildren(n))appendSolidBevel(g,size,section);
+    if(form.section&&section&&(section.core?.fill||'solid')==='solid'&&!componentAcceptsChildren(n)){if(shaped)appendShapeBevel(g,geo);else appendSolidBevel(g,size,section)}
     if(section&&section.lines.length>=2){}else if(form.frame.mode!=='none'||backdrop==='frame'){
       const inset=Math.max(4,Math.min(Math.min(size.w,size.h)/3,form.frame.thickness||12));const frameDepth=Math.min(14,Math.max(0,form.frame.depth*.16));
       if(frameDepth>0)appendBevel(g,size.w-inset*2,size.h-inset*2,SovSchematicNotation.cornerRadius(SovSchematicNotation.tokens(diagram),{total:inset,inset,w:size.w-inset*2,h:size.h-inset*2,sectioned:true}),'recess');
@@ -632,7 +663,8 @@ function appendComponentStatus(g,n){
   const fade=statusFade(n),seen=fade<1?mixHex([fill,componentFillGround(n)],[fade,1-fade]):fill,chipFill=mixHex([edge,seen],[.16,.84]);
   const tone=['safe','alert','danger'].includes(st.tone)?statusTone(st.tone):null,glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'';
   const title=statusTitle(st),text=glyph?`${glyph} ${title}`:title,ch=Math.round(px*1.5);
-  const cw=tone?Math.ceil(text.length*px*.6+px*1.4):Math.ceil(title.length*px*.6+px),x=w/2-6-cw,y=-h/2+6;
+  // The corner is the inner rectangle's: the card's own, or inside what a declared shape cuts away.
+  const I=componentInnerRect(n),cw=tone?Math.ceil(text.length*px*.6+px*1.4):Math.ceil(title.length*px*.6+px),x=I.r-6-cw,y=I.t+6;
   const chip=document.createElementNS('http://www.w3.org/2000/svg','g');chip.setAttribute('class','status-chip');chip.dataset.status=st.id;
   const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
   r.setAttribute('x',String(x));r.setAttribute('y',String(y));r.setAttribute('width',String(cw));r.setAttribute('height',String(ch));r.setAttribute('rx',String(ch/2));
@@ -641,7 +673,7 @@ function appendComponentStatus(g,n){
   t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
   t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${tone?statusChipInk(tone):ensureContrast(edge,chipFill,TEXT_FLOOR)};stroke:none;pointer-events:none`);t.textContent=text;chip.appendChild(t);
   g.appendChild(chip);
-  if(st.outline==='dashed'){const body=g.querySelector(':scope > .body');if(body){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}}
+  if(st.outline==='dashed')for(const body of g.querySelectorAll(':scope > .body,:scope > .body-rim')){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}
 }
 // A card's badges (DATA-FORMATS.md "Badges"): the status chip's shape without a status's meaning, in a
 // row from the card's top-left corner. A badge that would come within 4 of the status chip or within 6
@@ -650,17 +682,17 @@ function appendComponentBadges(g,n){
   const list=Array.isArray(n?.config?.badges)?n.config.badges.filter(b=>b&&typeof b.label==='string'&&b.label.trim()):[];
   if(!list.length||componentForm(n).dimension!==2)return;
   const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
-  const ch=Math.round(px*1.5),y=-h/2+6,fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
+  const I=componentInnerRect(n),ch=Math.round(px*1.5),y=I.t+6,fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
   const widthOf=text=>Math.ceil(text.length*px*.6+px);
   // The right limit: the card's right edge less 6, or 4 short of the status chip's left edge.
-  let limit=w/2-6;
+  let limit=I.r-6;
   const st=declaredStatus(n);
   if(st){
     const tone=['safe','alert','danger'].includes(st.tone),glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'',title=statusTitle(st);
-    limit=Math.min(limit,w/2-6-(tone?Math.ceil((glyph?`${glyph} ${title}`:title).length*px*.6+px*1.4):widthOf(title))-4);
+    limit=Math.min(limit,I.r-6-(tone?Math.ceil((glyph?`${glyph} ${title}`:title).length*px*.6+px*1.4):widthOf(title))-4);
   }
   const labels=list.map(b=>b.label.trim());
-  const place=(count,more)=>{const xs=[];let x=-w/2+6;for(let i=0;i<count;i++){const cw=widthOf(i===count-1&&more?`+${labels.length-count+1}`:labels[i]);if(x+cw>limit)return null;xs.push([x,cw]);x+=cw+4}return xs};
+  const place=(count,more)=>{const xs=[];let x=I.l+6;for(let i=0;i<count;i++){const cw=widthOf(i===count-1&&more?`+${labels.length-count+1}`:labels[i]);if(x+cw>limit)return null;xs.push([x,cw]);x+=cw+4}return xs};
   let shown=labels.length,more=false,spots=place(shown,false);
   if(!spots){more=true;for(shown=labels.length-1;shown>=1;shown--){spots=place(shown,true);if(spots)break}}
   if(!spots)return;
@@ -736,7 +768,7 @@ function render(){
         portLabel.setAttribute('x',localX+offsets.dx);portLabel.setAttribute('y',localY+offsets.dy);portLabel.setAttribute('text-anchor',offsets.anchor);portLabel.textContent=pcfg.label;g.appendChild(portLabel);
       }
     }
-    appendComponentLeads(g,n);appendTerminalMarks(g,n);
+    appendComponentLeads(g,n);appendShapeLeads(g,n);appendTerminalMarks(g,n);
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); appendComponentWaitsOn(g,n); applyStatusFade(g,n);
   });
   renderGroups(markers);
