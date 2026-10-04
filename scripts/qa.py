@@ -34,6 +34,7 @@ STATIC=[
     'tests/mcp_surface_qa.py',
 ]
 BROWSER=[
+    'tests/desktop_launch_page_qa.py',
     'tests/attachment_point_refactor_qa.py',
     'tests/configurable_attachment_defaults_qa.py',
     'tests/primitive_forms_qa.py',
