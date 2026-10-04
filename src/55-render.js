@@ -246,6 +246,8 @@ function appendComponentText(g,n,cfg,s){
   if(labelMode!=='none'&&label){
     const t=document.createElementNS('http://www.w3.org/2000/svg','text');
     t.setAttribute('text-anchor','middle');t.setAttribute('class',labelMode==='outside'?'outside-label':'component-label');
+    // An outside label stands on the ground, not on the card: the muted ink, as far as that ground needs.
+    if(labelMode==='outside')t.style.fill=roleInk(componentBackdropMode(n)==='none'?'--canvas-ink':'--muted','#6C6C65',componentFillGround(n));
     if(componentHostedOnWire(n)&&componentBackdropMode(n)==='none'){
       const box=componentInlineGraphicBox(n);t.setAttribute('x','0');t.setAttribute('y',String(box.y+box.h+11));
     }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
@@ -377,7 +379,10 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   g.style.setProperty('--component-interior-fill',materialFill);
   // Text on the card is its colour darkened (or lightened) until it reads: WCAG's 4.5:1 for text,
   // where the outline and glyph only need 3:1.
-  g.style.setProperty('--component-text-color',ensureContrast(boundaryColor,materialFill,4.6));
+  // A faded (status opacity) body shows the fill over what is behind the card, so the ink is judged
+  // on that blend; the text itself is drawn opaque.
+  const fade=statusFade(n),seenFill=fade<1?mixHex([materialFill,ground],[fade,1-fade]):materialFill;
+  g.style.setProperty('--component-text-color',ensureContrast(boundaryColor,seenFill,TEXT_FLOOR));
   const backdrop=componentBackdropMode(n);g.dataset.backdrop=backdrop;
   if(form.dimension===0){
     const pointCfg=componentAttachmentPoint(n,'self')?.config,point=document.createElementNS('http://www.w3.org/2000/svg','circle');
@@ -558,7 +563,21 @@ function statusTitle(status){return String(status?.title||status?.id||'')}
 // 'Bdo, rule R-29, decision D1': each entry's label, or else its kind and id.
 function waitsOnList(list){return Array.isArray(list)?list.filter(w=>w&&typeof w==='object').map(w=>String(w.label||'').trim()||`${w.kind} ${w.id}`).join(', '):''}
 const CAPTION_STYLE=`font-size:calc(clamp(${LABEL_FLOORS.general}px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)`;
-function statusInk(){const muted=(getComputedStyle(workspace).getPropertyValue('--muted')||'').trim();return ensureContrast(/^#[0-9a-f]{6}$/i.test(muted)?muted:'#6C6C65',canvasTone(),4.6)}
+// A label's ink is its role colour moved (darker in light, lighter in dark) only as far as TEXT_FLOOR
+// against the colour actually behind it: the ground a card stands on, a region's fill, or the canvas.
+const TEXT_FLOOR=4.6;
+function roleInk(name,fallback,ground){const v=(getComputedStyle(workspace).getPropertyValue(name)||'').trim();return ensureContrast(/^#[0-9a-f]{6}$/i.test(v)?v:fallback,ground,TEXT_FLOOR)}
+function statusInk(ground=canvasTone()){return roleInk('--muted','#6C6C65',ground)}
+// The opacity a card's status declares (1 when none): drawn on the card's body, glyph, leads, ports
+// and marks, never on its text.
+function statusFade(n){const st=declaredStatus(n),o=st?.opacity;return typeof o==='number'&&Number.isFinite(o)&&o>=0&&o<1?o:1}
+function applyStatusFade(g,n){
+  const fade=statusFade(n);if(fade>=1||componentForm(n).dimension!==2)return;
+  for(const el of g.children){
+    if(el.localName==='text'||el.classList.contains('status-chip'))continue;
+    el.style.opacity=String((parseFloat(getComputedStyle(el).opacity)||1)*fade);
+  }
+}
 // A status chip's ink on a solid tone: near-black or white, whichever has the higher WCAG contrast.
 function statusChipInk(tone){return contrastRatio(tone,'#141414')>=contrastRatio(tone,'#FFFFFF')?'#141414':'#FFFFFF'}
 // A card's status: a chip in its top-right corner, 6 in from both edges, holding the status title in
@@ -569,6 +588,8 @@ function appendComponentStatus(g,n){
   // The caption role at its base size: the chip is part of the card and scales with it.
   const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
   const cfg=componentConfig(n),edge=g.style.getPropertyValue('--component-boundary-color').trim()||slotColor(cfg.colorSlot),fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
+  // The chip's own fill is its edge colour at .16 over the card fill, itself faded over the ground.
+  const fade=statusFade(n),seen=fade<1?mixHex([fill,componentFillGround(n)],[fade,1-fade]):fill,chipFill=mixHex([edge,seen],[.16,.84]);
   const tone=['safe','alert','danger'].includes(st.tone)?statusTone(st.tone):null,glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'';
   const title=statusTitle(st),text=glyph?`${glyph} ${title}`:title,ch=Math.round(px*1.5);
   const cw=tone?Math.ceil(text.length*px*.6+px*1.4):Math.ceil(title.length*px*.6+px),x=w/2-6-cw,y=-h/2+6;
@@ -578,10 +599,9 @@ function appendComponentStatus(g,n){
   r.setAttribute('style',tone?`fill:${tone};fill-opacity:1;stroke:none`:`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
   const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.dataset.role='caption';
   t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
-  t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${tone?statusChipInk(tone):ensureContrast(edge,fill,4.6)};stroke:none;pointer-events:none`);t.textContent=text;chip.appendChild(t);
+  t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${tone?statusChipInk(tone):ensureContrast(edge,chipFill,TEXT_FLOOR)};stroke:none;pointer-events:none`);t.textContent=text;chip.appendChild(t);
   g.appendChild(chip);
   if(st.outline==='dashed'){const body=g.querySelector(':scope > .body');if(body){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}}
-  if(typeof st.opacity==='number'&&Number.isFinite(st.opacity))g.style.opacity=String((Number(g.style.opacity)||1)*Number(st.opacity));
 }
 // What a card waits on, under it and below any outside label: 'Waits on Bdo, rule R-29'.
 function appendComponentWaitsOn(g,n){
@@ -590,7 +610,7 @@ function appendComponentWaitsOn(g,n){
   for(const el of g.querySelectorAll(':scope > text.outside-label,:scope > text.component-subtitle')){if(el.dataset.lod==='hidden')continue;try{const b=el.getBBox();if(b.height)y=Math.max(y,b.y+b.height+14)}catch(_){}}
   const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('class','waits-on');t.dataset.role='caption';
   t.setAttribute('x','0');t.setAttribute('y',String(y));t.setAttribute('text-anchor','middle');
-  t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk()};stroke:none;pointer-events:none`);t.textContent='Waits on '+list;g.appendChild(t);
+  t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk(componentFillGround(n))};stroke:none;pointer-events:none`);t.textContent='Waits on '+list;g.appendChild(t);
 }
 function render(){
   applyNotationTokens();
@@ -640,7 +660,7 @@ function render(){
       }
     }
     appendComponentLeads(g,n);appendTerminalMarks(g,n);
-    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); appendComponentWaitsOn(g,n);
+    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); appendComponentWaitsOn(g,n); applyStatusFade(g,n);
   });
   renderGroups(markers);
   // Buses (src/41-buses.js): bands in the group layer, after the group regions, behind every wire.
