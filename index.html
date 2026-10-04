@@ -1250,7 +1250,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       // World units. Selected and highlighted states multiply these, never replace them.
       stroke:{structure:1.5,section:1.25,flow:2.25,symbol:2.6},
       // textGap: the gap between stacked text lines on a card (a title's last line and its subtitle).
-      space:{labelClear:10,bevel:3.5,pin:14,textGap:3},
+      // regionInset: the gap a region keeps between its edge and its children; regionTitle: the band
+      // above them for the title or glyph at its head (groupRect pads by both; the layout keeps them).
+      space:{labelClear:10,bevel:3.5,pin:14,textGap:3,regionInset:24,regionTitle:28},
       // Text roles (NOTATION-MODEL.md §4). `size` is the base at zoom 1; on screen every role is
       // clamped to `screen` (a subtitle keeps its own lower floor, so it stays under its title).
       type:{screen:{min:12,max:16},title:{size:10,weight:600},subtitle:{size:8.5,weight:400,min:8},body:{size:9,weight:400},caption:{size:9,weight:600},narration:{size:15,weight:500}},
@@ -2196,7 +2198,12 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   //   GROUP_PORTS           a group carries config.attachmentPoints or attachmentDefaults 'standard'
   //   GROUP_HOST            a Component placed on a group (placement.hostId) or in its interior
   // Loading reports them (validateDocument); create and update refuse an edit that adds one.
-  const GROUP_PAD=24,GROUP_TITLE_BAND=28;
+  // The inset and the title band come from the document's resolved notation (space.regionInset,
+  // space.regionTitle); the schematic notation declares 24 and 28.
+  function regionSpace(doc){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,space=N?.tokens?.(doc||{})?.space||{};
+    return {pad:Number.isFinite(space.regionInset)?space.regionInset:24,band:Number.isFinite(space.regionTitle)?space.regionTitle:28};
+  }
   function isGroup(component){return !!component&&normalizeSymbolId(component.symbolId||component.type)==='group'}
   function groupMembers(component){const m=component?.config?.members;return Array.isArray(m)?m:[]}
   function groupFindings(doc){
@@ -2238,7 +2245,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(added)throw new Error(`${added.code}: ${added.text}`);
   }
   // The region a group is drawn as: the union of its members' rectangles (each centred on its
-  // x, y and sized by sizeOf(component)) padded GROUP_PAD on every side and GROUP_TITLE_BAND more
+  // x, y and sized by sizeOf(component)) padded regionInset on every side and regionTitle more
   // on top for the title. A group with no placed member is its own x, y and presentation.size.
   // Returned centred, like a Component: {x, y, w, h} plus its edges {l, r, t, b}.
   function groupRect(doc,groupId,sizeOf){
@@ -2255,7 +2262,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const s=normalizePresentationSize(g.config?.presentation?.size||TEMPLATE_PRESETS.group.presentation.size),x=num(g.x,0),y=num(g.y,0);
       return {x,y,w:s.w,h:s.h,l:x-s.w/2,r:x+s.w/2,t:y-s.h/2,b:y+s.h/2};
     }
-    l-=GROUP_PAD;r+=GROUP_PAD;t-=GROUP_PAD+GROUP_TITLE_BAND;b+=GROUP_PAD;
+    const {pad,band}=regionSpace(doc);
+    l-=pad;r+=pad;t-=pad+band;b+=pad;
     return {x:(l+r)/2,y:(t+b)/2,w:r-l,h:b-t,l,r,t,b};
   }
   // `config.definition` is null (unbound) or an `id@version` string, anywhere it is written
@@ -6471,7 +6479,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // North and Vo 1993), ELK Layered SEPARATE_CHILDREN, and Forster (GD 2002) for the order:
     // barycentre over the blocks first, then within each block. A canvas with no group runs
     // arrange() once over its cards, as before groups were placed.
-    const GROUP_PAD=24,GROUP_TITLE_BAND=28; // groupRect's padding (src/05-data-core.js)
+    // groupRect's padding: the notation's space.regionInset and space.regionTitle (src/05-data-core.js)
+    const GROUP_PAD=Number.isFinite(notation?.tokens?.space?.regionInset)?notation.tokens.space.regionInset:24,GROUP_TITLE_BAND=Number.isFinite(notation?.tokens?.space?.regionTitle)?notation.tokens.space.regionTitle:28;
     function layoutCanvas(canvas,second=null){
       const members=inScope(canvas),boxes=new Map();
       for(const c of members){
@@ -12682,6 +12691,28 @@ function layoutMetrics(options={}){
     const inset=typeof componentSectionInset==='function'?componentSectionInset(owner):0,C=componentBounds(owner,-inset),B=body.get(n.id);
     if(B&&(B.l<C.l-.5||B.r>C.r+.5||B.t<C.t-.5||B.b>C.b+.5))add('node-overlap',[n.id,owner.id],`crosses ${inset?'the skin':'the boundary'} of ${owner.config?.label||owner.id}`);
   }
+  // Region inset: a child keeps space.regionInset from its container's core edge, and space.regionTitle
+  // below the top edge when the container draws a label or a glyph at its head. Reported, with no
+  // weight in the score (it is not in LAYOUT_RUBRIC). A group's members are measured against its
+  // region, which groupRect pads by the same two tokens; a group with no placed member has none.
+  {const space=SovSchematicNotation.tokens(diagram).space||{},pad=Number.isFinite(space.regionInset)?space.regionInset:24,band=Number.isFinite(space.regionTitle)?space.regionTitle:28;
+   const check=(n,owner,C,head)=>{
+     const B=body.get(n.id);if(!B)return;
+     const sides=[['left',B.l-C.l,pad],['right',C.r-B.r,pad],['top',B.t-C.t,head?band:pad],['bottom',C.b-B.b,pad]].filter(([,gap,need])=>gap<need-.5);
+     if(sides.length)add('region-inset',[n.id,owner.id],`${n.config?.label||n.id} comes within ${sides.map(([s,gap,need])=>`${Math.max(0,gap).toFixed(1)}px of the ${s} of ${owner.config?.label||owner.id} (needs ${need})`).join(' and ')}`);
+   };
+   for(const n of visible){
+     const owner=String(n.canvasId||'').startsWith('canvas:component:')?nodes.find(x=>x.id===String(n.canvasId).slice(17)):null;
+     if(!owner||!is2D(n)||n.placement?.kind==='edge'||isGroupComponent(owner))continue;
+     const inset=typeof componentSectionInset==='function'?componentSectionInset(owner):0,C=componentBounds(owner,-inset);
+     const head=texts.some(t=>t.owner===owner.id&&/component-label/.test(t.cls))||!!nodeEl(owner.id)?.querySelector(':scope > .glyph');
+     check(n,owner,C,head);
+   }
+   for(const g of shown.filter(isGroupComponent)){
+     const members=Array.isArray(g.config?.members)?g.config.members:[],R=body.get(g.id);
+     if(!R||!members.some(id=>visible.some(v=>v.id===id)))continue;
+     for(const id of members){const m=visible.find(v=>v.id===id);if(m&&is2D(m))check(m,g,{l:R.l,r:R.r,t:R.t,b:R.b},true)}
+   }}
   // Points drawn on top of each other read as one.
   {const pts=visible.filter(n=>componentForm(n).dimension===0);
    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++)if(Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y)<12)add('node-overlap',[pts[i].id,pts[j].id],'points drawn on top of each other')}

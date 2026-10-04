@@ -206,6 +206,7 @@ Reported in counts and findings, with no weight in the score:
 | --- | --- |
 | route-hugs-node | a route segment other than its first and last running parallel to an edge of a 2D card (not a container, not a group), outside it and under 8 from that edge, for an overlap of 16 or more |
 | group-overlap | two shown groups on one canvas whose regions (`groupRect`) overlap by more than 1; the detail names each card both groups list |
+| region-inset | a 2D child of a container (on its interior, placement not edge) whose body comes closer than `space.regionInset` (24) to the container's core edge (inside its section inset), or whose top comes closer than `space.regionTitle` (28) to the core's top edge when the container draws a label or a glyph at its head; the detail names the child, the container and the shortfall. A group's members are measured against its region. The layered layout pads a container's interior by 44 and its head room is at least 18, so a container it arranges keeps both; the renderer never grows a region to fit its children |
 
 A card hosted on a wire (drawn inline on the line) is not counted by route-through-node or
 route-hugs-node against its own host wire.
