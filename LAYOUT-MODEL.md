@@ -318,6 +318,55 @@ Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLA
   in the block of the first group in document order that lists it, the one `groupFindings`
   names. The later group's region then reaches into that block and `group-overlap` counts the
   pair. `layered` does not refuse.
+- **Rows for a wide grouped canvas.** After the second canvas placement, a canvas that has at
+  least one group block and is placed more than 2.5 times wider than tall is placed again in
+  rows. Any other canvas keeps the placement above, and a canvas with no group never reaches
+  this step. The rule is shelf packing, next-fit, as ELK packs disconnected components into rows
+  (`SimpleRowGraphPlacer`, steered by its `aspectRatio` option) and Graphviz `pack` does in array
+  mode (`packmode="array"`):
+  - the items are the canvas's top-level nodes (group blocks and ungrouped cards) in the order
+    the canvas pass placed them, by x (layer), then by y;
+  - each row fills left to right; a new row starts when the next item would pass the row width;
+    items are top-aligned in their row, and rows stack top to bottom;
+  - the gap between items and between rows is `G = max(200, 48 + 6n + 16(L - 1))`, `n` the most
+    wires between any two groups of the canvas and `L` the distinct labels among the wires between
+    groups: room for a harness's trunks (24 margin each side, 6 a lane, 16 between trunks);
+  - the candidate row widths are `W_k = max(widest item, sqrt(A) × (1 + 0.05k))` for `k` 0 to 20,
+    `A` the sum over items of `(w + G)(h + G)`; the packing kept is the one whose width / height
+    is nearest 1.0, ties to the smaller `k`. The target is square, not ELK's default 1.6: on the
+    booth-record fixture only packings near square halved the long horizontal runs (a prototype
+    of this rule, 2026-10-03, aspect: runs 0.73: 55, 0.96: 69, 1.14: 72, 1.34: 87, 1.99: 105).
+  - Street room: on a packed canvas each group block is laid out again, both block passes, with
+    `G` between its rows instead of 56, so a harness street fits under or over a row
+    (`STREET_DROP` 36 + its lanes + `STREET_ROOM` 12). Blocks on a canvas that is not packed keep 56.
+- **Bundles between groups.** At the end of a top-level `layered` (no `scope`) on a canvas holding
+  two or more groups, packed or not, the wires between each pair of groups are offered to the
+  harness (see "As built: buses" > "Harness"). Pairs are unordered (the harness carries both
+  directions on one trunk per label); each pair with 2 or more wires between its members is taken
+  in order of wire count descending, then group ids ascending. A pair is skipped when any of its
+  wires is pinned, guided, or rides a bus whose `between` is not this pair (`ROUTED_ELSEWHERE`).
+  Otherwise the view's buses and routes are kept aside, `harness(doc, view, {between: [a, b]})`
+  runs exactly as the harness op runs it, and its result stays only when:
+  1. it returns ok (otherwise the reason is the harness's refusal code);
+  2. no bus it made meets a third group's region (the bus points' bounding box against
+     `groupRect`; `THIRD_GROUP`);
+  3. on vertical trunks, every wire it routed flows from the left group to the right one, the
+     sending end being `a`, or `b` when `config.direction` is `reverse` (`AGAINST_FLOW`: a lead
+     sent right to left leaves its out port on the right and turns back through its own card).
+  Otherwise the buses and routes kept aside are put back.
+- **Receipt.** `apply` returns `bundles: [{between: [a, b], wires, kept, reason?}]` when bundling
+  ran and `packed: {rows, aspect}` (width / height, 2 places) when packing ran; a document with
+  fewer than two groups gets no `bundles`. `scripts/layout_sov.mjs` prints, after its `ok` line,
+  `bundled <kept> of <n> group pairs` and one line per pair, `<a>,<b>: <n> wires <kept|reason>`.
+- Measured on `tests/fixtures/booth-record-graphify.sov` (113 cards, 9 groups, 262 wires;
+  `tests/group_rows_qa.py`): at dev a902dca the group regions span 17554 × 2342, aspect 7.50,
+  with 154 horizontal runs of 1000 px or more drawn by cross-group wires. Packed: 3 rows, 6840 ×
+  7128, aspect 0.96, 0 region pairs overlapping, 3 of 13 pairs bundled carrying 35 of 116
+  cross-group wires (7 refused as `THIRD_GROUP`, 2 as `AGAINST_FLOW`), 73 long runs (70 wire runs
+  and 3 buses), no bus route through a card. The seeded fixture of `tests/layered_groups_qa.py`
+  (region aspect 5.19 at a902dca) packs too: 55 crossings against 79 laid out group-blind.
+  `docs/workengine/map.sov` (aspect 0.47) and `examples/work-engine/groups.sov` (2.01) are not
+  packed; their pairs are bundled.
 - A column gap widens to fit the widest wire label that crosses it, or that has an end on
   either side of it: `characters × the notation's caption size × 0.6 + 2 × labelMargin`
   (`labelMargin`, an `apply` option, default 16). A row gap in a column widens the same way
@@ -472,6 +521,9 @@ Between two groups (SECTION-MODEL.md "Groups"), using their regions from `Data.g
   sends and receives from naming two streets alike). An id another harness already holds takes `-2`.
 - Each wire gets `{mode: 'bus', buses: [sending street?, trunk, receiving street?]}`. Running the
   harness again for the same pair replaces its buses.
+- `layered` runs the harness itself, between each pair of groups on the top-level canvas, after
+  laying it out, and keeps a pair's buses only on the three conditions in "What `layered` does"
+  (Bundles between groups). `tests/group_rows_qa.py` measures it on the booth-record fixture.
 
 ### Refusals
 

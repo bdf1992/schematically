@@ -59,7 +59,7 @@ const fail = (result) => {
   console.log(`  ${result.code}: ${result.message}`);
   process.exit(1);
 };
-let placed = null, usedLabelMargin = null;
+let placed = null, usedLabelMargin = null, bundles = null;
 if (arrange) {
   const applyArgs = {engine: 'layered', view};
   if (labelMargin != null && Number.isFinite(labelMargin)) applyArgs.labelMargin = labelMargin;
@@ -67,6 +67,7 @@ if (arrange) {
   if (!result.ok) fail(result);
   placed = result.placed;
   usedLabelMargin = result.labelMargin;
+  bundles = result.bundles || null;
 }
 const receipts = [];
 for (const between of harnesses) {
@@ -83,6 +84,11 @@ const asRead = !arrange && payload && typeof payload === 'object' && payload.sch
 const written = asRead ? {...payload, layout: doc.layout} : Data.compactDocument(doc);
 fs.writeFileSync(target, JSON.stringify(written, null, 1) + '\n');
 console.log(`ok ${file}${placed != null ? ` (${placed} placed) labelMargin ${usedLabelMargin}` : ''}`);
+// Layered bundles the wires between grouped pairs on harness buses; its receipt, pair by pair.
+if (bundles) {
+  console.log(`  bundled ${bundles.filter(b => b.kept).length} of ${bundles.length} group pairs`);
+  for (const b of bundles) console.log(`    ${b.between.join(',')}: ${b.wires} wires ${b.kept ? 'kept' : b.reason}`);
+}
 for (const r of receipts) {
   console.log(`  harness ${r.between.join(',')}: ${r.orientation} gap ${r.gap.have} (needs ${r.gap.need}); ${r.wires.length} wires`);
   for (const b of r.buses) console.log(`    ${b.kind} ${b.id}: ${b.lanes} lane${b.lanes === 1 ? '' : 's'}${b.label ? ` "${b.label}"` : ''}`);
