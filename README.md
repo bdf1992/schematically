@@ -21,7 +21,7 @@ Semantic undo/redo with gesture compression; named checkpoints persisted in the 
 
 ## Files and formats
 
-One desktop-style **File** menu: New, Open, Save, Save As, Export SVG, Export Package, Restore Recovery. Editable documents are `.sov`; portable packages are `.sovpak`; browser recovery is deliberately separate from file save. Where the File System Access API exists, Save writes back to the file handle; otherwise it falls back to a download.
+One desktop-style **File** menu: New, Open, Save, Save As, Export SVG, Export Package, Restore Recovery. Editable documents are `.sov`; portable packages are `.sovpak`; browser recovery is deliberately separate from file save. Export SVG writes the picture, not the screen: labels are drawn at their base size times the document scale whatever the camera zoom, so the same document exports the same file zoomed in or out. Where the File System Access API exists, Save writes back to the file handle; otherwise it falls back to a download.
 
 - `.sov` → `soveraeign.schematic/document@0.1`
 - `.sovpak` → `soveraeign.schematic/package@0.1`

@@ -11,12 +11,18 @@
   const SCHEMATIC={
     id:'schematic',name:'Schematic',version:1,
     tokens:{
+      // The document scale (NOTATION-MODEL.md §3): one number, from 0.5 to 4, that resolve() applies
+      // once to every stroke weight, every text role's size and own min, space.pin and
+      // type.screen.max. The values below are the scale 1 values and stay unscaled here.
+      scale:1,
       // Offset from inside: the core keeps radius.core, each line outward adds its band.
       radius:{core:6,card:10},
       // World units. Selected and highlighted states multiply these, never replace them.
       stroke:{structure:1.5,section:1.25,flow:2.25,symbol:2.6},
       // textGap: the gap between stacked text lines on a card (a title's last line and its subtitle).
-      space:{labelClear:10,bevel:3.5,pin:14,textGap:3},
+      // regionInset: the gap a region keeps between its edge and its children; regionTitle: the band
+      // above them for the title or glyph at its head (groupRect pads by both; the layout keeps them).
+      space:{labelClear:10,bevel:3.5,pin:14,textGap:3,regionInset:24,regionTitle:28},
       // Text roles (NOTATION-MODEL.md §4). `size` is the base at zoom 1; on screen every role is
       // clamped to `screen` (a subtitle keeps its own lower floor, so it stays under its title).
       type:{screen:{min:12,max:16},title:{size:10,weight:600},subtitle:{size:8.5,weight:400,min:8},body:{size:9,weight:400},caption:{size:9,weight:600},narration:{size:15,weight:500}},
@@ -95,7 +101,28 @@
     if(!cur)return {ok:false,code:'UNKNOWN_NOTATION',message:`No notation "${id}"`,next_operation:`use one of: ${Object.keys(table).join(', ')}`};
     while(cur&&!seen.has(cur.id)){chain.unshift(cur);seen.add(cur.id);cur=cur.extends?table[cur.extends]:null}
     let flat={};for(const n of chain)flat=merge(flat,n);
+    const scaled=applyScale(flat.tokens);if(!scaled.ok)return scaled;
     flat.id=id;registerPoints(flat);return {ok:true,notation:flat};
+  }
+  // The document scale, applied once to the flattened tokens (a fresh object: merge copies), so
+  // every reader of tokens(doc) and resolve(doc).notation.tokens draws scaled with no multiplication
+  // of its own. Scaled: stroke.*, each text role's size and its own min, space.pin, type.screen.max.
+  // Not scaled: type.screen.min (screen pixels), radius, the other space tokens, elevation.
+  // A scale that is not a number from 0.5 to 4 is refused, never clamped.
+  const SCALE_MIN=.5,SCALE_MAX=4;
+  function applyScale(t){
+    if(!isObject(t)||t.scale===undefined)return {ok:true};
+    const s=t.scale;
+    if(typeof s!=='number'||!Number.isFinite(s)||s<SCALE_MIN||s>SCALE_MAX)return {ok:false,code:'SCALE_INVALID',message:`tokens.scale is ${JSON.stringify(s)}; it must be a number from ${SCALE_MIN} to ${SCALE_MAX}`,next_operation:`set tokens.scale to a number from ${SCALE_MIN} to ${SCALE_MAX}, or remove it to draw at 1`};
+    const by=v=>typeof v==='number'?+(v*s).toFixed(4):v;
+    if(isObject(t.stroke))for(const k of Object.keys(t.stroke))t.stroke[k]=by(t.stroke[k]);
+    if(isObject(t.type))for(const [role,r] of Object.entries(t.type)){
+      if(!isObject(r))continue;
+      if(role==='screen'){if(r.max!==undefined)r.max=by(r.max);continue}
+      if(r.size!==undefined)r.size=by(r.size);if(r.min!==undefined)r.min=by(r.min);
+    }
+    if(isObject(t.space)&&t.space.pin!==undefined)t.space.pin=by(t.space.pin);
+    return {ok:true};
   }
   // Glyphs whose terminals are the card's attachment points (`points: 'terminals'`), by symbol
   // id, filled whenever a notation is resolved. The attachment core reads it, so a gate's two

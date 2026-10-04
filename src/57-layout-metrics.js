@@ -49,6 +49,17 @@ function layoutPathCorners(d){
   }
   return out;
 }
+// A drawn route's corners in world space: hops stripped, repeated and collinear corners merged.
+function layoutRouteCorners(path){
+  const m=layoutWorldMatrix(path),c=[];
+  for(const q0 of layoutPathCorners(String(path.getAttribute('d')||'').replace(/A[^A-Z]*?(?=[MLHV])/g,''))){
+    const q=m?new DOMPoint(q0.x,q0.y).matrixTransform(m):q0,p={x:Math.round(q.x*100)/100,y:Math.round(q.y*100)/100},l=c.at(-1);
+    if(l&&Math.abs(l.x-p.x)<.5&&Math.abs(l.y-p.y)<.5)continue;
+    if(c.length>=2){const a=c.at(-2);if((Math.abs(a.x-l.x)<.5&&Math.abs(l.x-p.x)<.5)||(Math.abs(a.y-l.y)<.5&&Math.abs(l.y-p.y)<.5)){c[c.length-1]=p;continue}}
+    c.push(p);
+  }
+  return c;
+}
 function layoutMetrics(options={}){
   const staticView=options.static!==false; // an export or a screenshot freezes animation
   const findings=[],add=(kind,ids,detail)=>findings.push({kind,ids,detail});
@@ -210,6 +221,28 @@ function layoutMetrics(options={}){
     const inset=typeof componentSectionInset==='function'?componentSectionInset(owner):0,C=componentBounds(owner,-inset),B=body.get(n.id);
     if(B&&(B.l<C.l-.5||B.r>C.r+.5||B.t<C.t-.5||B.b>C.b+.5))add('node-overlap',[n.id,owner.id],`crosses ${inset?'the skin':'the boundary'} of ${owner.config?.label||owner.id}`);
   }
+  // Region inset: a child keeps space.regionInset from its container's core edge, and space.regionTitle
+  // below the top edge when the container draws a label or a glyph at its head. Reported, with no
+  // weight in the score (it is not in LAYOUT_RUBRIC). A group's members are measured against its
+  // region, which groupRect pads by the same two tokens; a group with no placed member has none.
+  {const space=SovSchematicNotation.tokens(diagram).space||{},pad=Number.isFinite(space.regionInset)?space.regionInset:24,band=Number.isFinite(space.regionTitle)?space.regionTitle:28;
+   const check=(n,owner,C,head)=>{
+     const B=body.get(n.id);if(!B)return;
+     const sides=[['left',B.l-C.l,pad],['right',C.r-B.r,pad],['top',B.t-C.t,head?band:pad],['bottom',C.b-B.b,pad]].filter(([,gap,need])=>gap<need-.5);
+     if(sides.length)add('region-inset',[n.id,owner.id],`${n.config?.label||n.id} comes within ${sides.map(([s,gap,need])=>`${Math.max(0,gap).toFixed(1)}px of the ${s} of ${owner.config?.label||owner.id} (needs ${need})`).join(' and ')}`);
+   };
+   for(const n of visible){
+     const owner=String(n.canvasId||'').startsWith('canvas:component:')?nodes.find(x=>x.id===String(n.canvasId).slice(17)):null;
+     if(!owner||!is2D(n)||n.placement?.kind==='edge'||isGroupComponent(owner))continue;
+     const inset=typeof componentSectionInset==='function'?componentSectionInset(owner):0,C=componentBounds(owner,-inset);
+     const head=texts.some(t=>t.owner===owner.id&&/component-label/.test(t.cls))||!!nodeEl(owner.id)?.querySelector(':scope > .glyph');
+     check(n,owner,C,head);
+   }
+   for(const g of shown.filter(isGroupComponent)){
+     const members=Array.isArray(g.config?.members)?g.config.members:[],R=body.get(g.id);
+     if(!R||!members.some(id=>visible.some(v=>v.id===id)))continue;
+     for(const id of members){const m=visible.find(v=>v.id===id);if(m&&is2D(m))check(m,g,{l:R.l,r:R.r,t:R.t,b:R.b},true)}
+   }}
   // Points drawn on top of each other read as one.
   {const pts=visible.filter(n=>componentForm(n).dimension===0);
    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++)if(Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y)<12)add('node-overlap',[pts[i].id,pts[j].id],'points drawn on top of each other')}
@@ -270,6 +303,35 @@ function layoutMetrics(options={}){
      if(typeof busBandHolds==='function'&&busBandHolds(x.w,y.w,mid))continue;
      seen.add(key);add('route-close-parallel',[x.w.id,y.w.id],`${d.toFixed(1)}px apart for ${Math.round(hi-lo)}px`);
    }}
+  // Ports: a wire meets a 2D card's port along the port's outward normal, from a point at least 4
+  // outside the card on the side the port faces (port-wrong-side), and the port it ends on shows a
+  // mark, the point's circle or a terminal mark at opacity .5 or more, within 3 of the route's end
+  // (port-undrawn). A wire on the card's own interior meets the boundary from inside and is held
+  // only to port-undrawn. Reported, with no weight in the score (neither is in LAYOUT_RUBRIC).
+  for(const g of workspace.querySelectorAll('.wire-group')){
+    const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
+    const c=layoutRouteCorners(path);if(c.length<2)continue;
+    for(const end of ['a','b']){
+      const ep=carrierEndpoint(w,end),n=ep?.kind==='bound'?ep.node:null;if(!n||!is2D(n)||isGroupComponent(n)||isEffectivelyHidden(n))continue;
+      const side=end==='a'?w.aSide:w.bSide,P=end==='a'?c[0]:c.at(-1),Q=end==='a'?c[1]:c.at(-2),name=n.config?.label||n.id;
+      const inward=wireEndpointInward(w,n);
+      if(!inward){
+        const u=stubPos(P,side,1,n,inward),nx=u.x-P.x,ny=u.y-P.y,dx=Q.x-P.x,dy=Q.y-P.y;
+        const facing=physicalPortSide(n,side);
+        if(Math.abs(dx*ny-dy*nx)>.5||dx*nx+dy*ny<=0)add('port-wrong-side',[w.id,n.id],`meets the ${facing} port ${side} of ${name} from another side`);
+        else if(!componentHostedOnWire(n)){
+          const R=body.get(n.id),out=facing==='left'?R.l-Q.x:facing==='top'?R.t-Q.y:facing==='bottom'?Q.y-R.b:Q.x-R.r;
+          if(out<4-.01)add('port-wrong-side',[w.id,n.id],`turns ${Math.max(0,out).toFixed(1)}px outside the ${facing} port ${side} of ${name}, under 4`);
+        }
+      }
+      const el=nodeEl(n.id);let drawn=false;
+      for(const m of el?.querySelectorAll(':scope > .port.attachment-point,:scope > .terminal-mark')||[]){
+        if(layoutEffectiveOpacity(m)<.5)continue;const B=layoutWorldBox(m);if(!B)continue;
+        if(Math.hypot(Math.max(B.l-P.x,P.x-B.r,0),Math.max(B.t-P.y,P.y-B.b,0))<=3){drawn=true;break}
+      }
+      if(!drawn)add('port-undrawn',[w.id,n.id],`the port ${side} of ${name} it ends on is not drawn`);
+    }
+  }
   // Empty container: its children and inner wires fill under a fifth of its interior (review, 03, 04, 07).
   for(const n of visible){
     if(!is2D(n)||!componentAcceptsChildren(n))continue;

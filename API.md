@@ -34,7 +34,7 @@ SovSchematicAPI.file.open(payload, name)
 
 `file.package()` returns the same `soveraeign.schematic/package@0.1` payload used by File → Export Package.
 
-`file.svg()` returns standalone SVG with computed theme styles, embedded graphics and content bounds. File → Export SVG and `scripts/export_svg.py` use this same persistence implementation.
+`file.svg()` returns standalone SVG with computed theme styles, embedded graphics and content bounds. File → Export SVG and `scripts/export_svg.py` use this same persistence implementation. Every label is drawn at its base size times the document scale (`tokens.scale`, NOTATION-MODEL.md §3) at any camera zoom, as `render.svg()` draws it: the editor's 12 px screen floor is a reading aid for the live canvas and is not in the file.
 
 Component presentation sizes share one admission policy across file loading, browser CRUD, HTTP and MCP: missing width/height default to 112/84, finite numeric values normalize to minima 80/64, and admitted larger sizes have no editor-only ceiling. Plane presets remain 320/220 and a Point retains its fixed footprint. Resize gestures additionally preserve the space required by hosted children.
 

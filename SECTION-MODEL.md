@@ -199,8 +199,11 @@ Deleting a Component removes its id from every group's `members` in the same ope
 
 **Geometry.** A group has no geometry of its own while it has members.
 `groupRect(doc, groupId, sizeOf)` is the union of the members' rectangles (each centred
-on its `x, y`, sized by `sizeOf(component)`), padded 24 on each side and 28 more on top
-for the title band. It is returned centred like a Component, `{x, y, w, h}`, with its
+on its `x, y`, sized by `sizeOf(component)`), padded `space.regionInset` (24) on each side and `space.regionTitle` (28) more on top
+for the title band; both are tokens of the document's resolved notation (the schematic
+notation declares 24 and 28, `src/03-notation-core.js`). A child that comes closer than
+`regionInset` to its region's edge, or closer than `regionTitle` below its head, is
+reported as `region-inset` (LAYOUT-MODEL.md); the renderer never grows a region to fit. It is returned centred like a Component, `{x, y, w, h}`, with its
 edges `{l, r, t, b}`. A group with no members is its own `x, y` and `presentation.size`.
 
 **Drawing** (`src/55-render.js`). On each canvas, groups are drawn before every other
@@ -210,8 +213,8 @@ directly after the host, before the wires drawn there and the host's children. A
 `<g class="node group" data-id="<id>">` holding:
 
 - `<rect class="group-region">`: the `groupRect` above with the editor's
-  `componentSize`, corner radius `radius.card`, the structure stroke width in the muted ink
-  colour, and `pointer-events: none`. It is filled with the group's colour slot at 10
+  `componentSize`, corner radius `radius.card`, no stroke, the inset filter (see Borders), and
+  `pointer-events: none`. It is filled with the group's colour slot at 10
   percent opacity when `config.colorSlot` names a slot other than 0. Slot 0 is the colour
   every record is given, so it reads as unset and the region has no fill.
 - `<text class="group-title">`: `config.label` in the title text role, 12 in from the
@@ -219,7 +222,25 @@ directly after the host, before the wires drawn there and the host's children. A
   needs to reach 4.5:1 on the region, the same rule card text follows.
 
 Nothing in a group carries the class `body`. The region follows its members while they
-are dragged.
+are dragged. A group or plane with `config.intake: true` also holds a
+`<rect class="group-outline">` (a group) or draws a dashed body (a plane); see Borders.
+
+**Borders.** What a region's edge is says what the region is, and a picture draws each in one way:
+
+- *No outline, with a soft inset* is grouping only. A group draws no stroke; its region carries an
+  inner shadow (the SVG filter `region-inset`, or `region-inset-bare` when the region has no fill
+  of its own), offset 1 down and blurred 3 (a Gaussian deviation of 1.5) at the level-1 elevation
+  opacity of the appearance. The filter is part of the picture, so an export carries it.
+- *Solid* is a boundary that refuses: a plane, a container and a gate card draw a solid outline.
+- *Dashed* is open or provisional, and means nothing else. A group or plane with
+  `config.intake: true` is an open region and draws its outline dashed `6 4` in the muted ink at the
+  structure stroke width. A card whose status declares `outline: dashed` (a missing or proposed
+  status) keeps its dashed outline. An unplaced card (`.node.unplaced`) is faded to opacity .42 and
+  is not dashed.
+
+`config.intake` is a boolean on a group or a plane. Any other value, or intake on any other kind of
+Component, is refused on create and update and reported on load with `INTAKE_INVALID`
+(`intakeProblems`, `src/05-data-core.js`). QA: `tests/region_border_qa.py`.
 
 **Never an obstacle.** Routing (`src/40-routing.js`) leaves groups out of the obstacles
 a route avoids. The layout metrics (`src/57-layout-metrics.js`) leave them out of
