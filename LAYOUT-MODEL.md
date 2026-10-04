@@ -745,6 +745,11 @@ key only when it is exactly `'port'`. The layered layout writes it on every chan
 harness writes it only when asked (`lanes: 'port'`, below), so by default harness trunks and streets
 keep one lane per wire.
 
+A bus's label and band count in a drawing's bounds (`diagramBounds`, `src/30-canvas.js`), the way card
+text and wire labels do, so the label that sits beyond the bus's start is never cut by the edge of the
+fitted view. The picture (`render.svg`, `scripts/export_svg.py`) reads the same bounds, so it draws
+every bus label whole at its padding.
+
 ### Ops
 
 `schematic.layout` (`src/08-layout-core.js`), the Browser API `layout.*` (`src/85-api.js`, through

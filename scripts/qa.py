@@ -75,6 +75,7 @@ BROWSER=[
     'tests/blank_document_dirty_qa.py',
     'tests/svg_export_qa.py',
     'tests/export_picture_fit_qa.py',
+    'tests/picture_bounds_bus_labels_qa.py',
     'tests/layout_quality_qa.py',
     'tests/layout_review_qa.py',
     'tests/contrast_qa.py',
