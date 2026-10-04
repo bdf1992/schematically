@@ -12,7 +12,7 @@ Node part (the real src files, no browser):
 Browser part (index.html in Chromium):
   - file.open of the example raises no page error;
   - each card with a status has one .status-chip whose text is the status title, inside the card;
-  - Anchor and the proposed card have a dashed .body; Anchor's node has opacity 0.55;
+  - Anchor and the proposed card have a dashed .body; Anchor's .body has opacity 0.55 and its node, text included, is opaque;
   - the proposed card's .waits-on reads 'Waits on Bdo, rule R-29, decision D1';
   - the Wire's caption contains Partial;
   - view.legend().entries holds the status entries Exists, Partial, Missing, Proposed in that order;
@@ -154,7 +154,7 @@ BROWSER = '''()=>{
     const chips=[...g.querySelectorAll(':scope > .status-chip')],body=g.querySelector(':scope > .body'),waits=g.querySelector(':scope > .waits-on');
     cards[g.dataset.id]={chips:chips.map(c=>({text:c.textContent,status:c.dataset.status,box:box(c),rect:box(c.querySelector('rect'))})),
       body:body?box(body):null,dash:body?getComputedStyle(body).strokeDasharray:null,dashAttr:body?.getAttribute('stroke-dasharray')||null,
-      opacity:getComputedStyle(g).opacity,waits:waits?waits.textContent:null,waitsBox:waits?box(waits):null};
+      opacity:getComputedStyle(g).opacity,bodyOpacity:body?getComputedStyle(body).opacity:null,waits:waits?waits.textContent:null,waitsBox:waits?box(waits):null};
   }
   const wire=document.querySelector('.wire-group[data-wire-id="w1"]');
   return {cards,caption:wire?.querySelector('.connection-label')?.textContent||null,wireDash:wire?getComputedStyle(wire.querySelector('path.wire')).strokeDasharray:null,
@@ -193,7 +193,9 @@ def browser_part() -> None:
             assert cards[cid]['dashAttr'] == '6 4' and cards[cid]['dash'].replace('px', '').replace(',', ' ').split() == ['6', '4'], (cid, cards[cid]['dash'], cards[cid]['dashAttr'])
         for cid in ('case', 'recording', 'web-booth'):
             assert cards[cid]['dash'] in ('none', None, '') and cards[cid]['dashAttr'] is None, (cid, cards[cid]['dash'])
-        assert abs(float(cards['anchor']['opacity']) - 0.55) < 1e-6, cards['anchor']['opacity']
+        assert abs(float(cards['anchor']['bodyOpacity']) - 0.55) < 1e-6, cards['anchor']['bodyOpacity']
+        assert abs(float(cards['anchor']['opacity']) - 1) < 1e-6, cards['anchor']['opacity']
+        assert abs(float(cards['case']['bodyOpacity']) - 1) < 1e-6, cards['case']['bodyOpacity']
         assert abs(float(cards['case']['opacity']) - 1) < 1e-6, cards['case']['opacity']
         assert cards['continuity-to-sqlite']['waits'] == WAITS, cards['continuity-to-sqlite']['waits']
         W, B = cards['continuity-to-sqlite']['waitsBox'], cards['continuity-to-sqlite']['body']

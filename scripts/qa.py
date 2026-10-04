@@ -35,6 +35,7 @@ STATIC=[
     'tests/release_path_qa.py',
 ]
 BROWSER=[
+    'tests/desktop_launch_page_qa.py',
     'tests/attachment_point_refactor_qa.py',
     'tests/configurable_attachment_defaults_qa.py',
     'tests/primitive_forms_qa.py',
@@ -42,6 +43,7 @@ BROWSER=[
     'tests/retype_qa.py',
     'tests/label_zoom_qa.py',
     'tests/card_text_fit_qa.py',
+    'tests/label_contrast_floor_qa.py',
     'tests/palette_point_settle_qa.py',
     'tests/settings_panel_placement_qa.py',
     'tests/document_compaction_qa.py',
