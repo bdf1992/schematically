@@ -122,6 +122,7 @@ BROWSER=[
     'tests/swarm_review_qa.py',
     'tests/authoring_review_qa.py',
     'tests/wire_label_clearance_qa.py',
+    'tests/wire_label_placement_qa.py',
     'tests/drag_lifecycle_stress_qa.py',
     'tests/performance_regression_qa.py',
     'tests/live_link_qa.py',
