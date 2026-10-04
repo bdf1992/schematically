@@ -213,6 +213,28 @@ reports each finding as `component <id>: <CODE>: ...` or `wire <id>: <CODE>: ...
 `status`). The schema (`formats/schematic.document.schema.json`) declares both keys on
 `components[].config` and `wires[].config`.
 
+### A Wire's kind (2026-10-04, `NOTATION-MODEL.md` "Kinds")
+
+A Wire may say what kind of line it is. The key is optional and absent is not written.
+
+- **`config.kind`** (Wires only): a string, the `id` of a wire kind in the `kinds` list of the
+  document's resolved notation (`SovSchematicNotation.kindsOf(notation, 'wire')`). The entry declares
+  the dash, weight and arrowhead the Wire is drawn in. There is no built-in wire kind: a kind in a
+  document whose notation declares no wire kinds is `KIND_UNDECLARED`; a value the notation does not
+  declare, or a value that is not a string, is `KIND_UNKNOWN`, and the message lists the declared ids.
+  A Component takes no `config.kind`: a region's kind is what it is (a group, a plane, a container,
+  a gate, an intake region).
+
+```json
+{"label": "approves", "kind": "control"}
+```
+
+It is validated the way a status is: a `create` or `update` with a bad kind is refused with the code
+and the document is unchanged, an `update` with `kind: null` removes the key, and loading reports
+`wire <id>: <CODE>: ...`. An entry of the notation's own `kinds` that breaks a rule is reported on
+load as `notation: KIND_INVALID: ...`. All three codes carry the marker rule `status`. The schema
+declares the key on `wires[].config`.
+
 
 ## Badges (2026-10-04, `NOTATION-MODEL.md` "Statuses")
 

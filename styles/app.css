@@ -201,6 +201,9 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .wire-hit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
 .wire.selected{stroke-width:4}
 .wire-group:hover .wire{stroke-width:3.3}
+/* A heavy wire kind: its group's --stroke-flow is twice the token, and selected and hover multiply it by what 4 and 3.3 are to 2.25. */
+.wire-group[data-weight="heavy"] .wire.selected{stroke-width:calc(var(--stroke-flow,4.5px) * 1.7778)}
+.wire-group[data-weight="heavy"]:hover .wire{stroke-width:calc(var(--stroke-flow,4.5px) * 1.4667)}
 .wire-packet{
   display:none;
   pointer-events:none;

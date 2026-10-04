@@ -163,6 +163,10 @@
               "waitsOn": {
                 "$ref": "#/$defs/waitsOn",
                 "description": "What the Wire waits on: people, rules and decisions, each {kind, id, label?}. Drawn in the Wire's caption after the status the notation's statuses list declares; anything else is WAITS_ON_INVALID."
+              },
+              "kind": {
+                "type": "string",
+                "description": "The Wire's kind: the id of a wire kind in the kinds list of the document's notation (notation.kinds, applies wire), which declares the dash, weight and arrowhead the Wire is drawn in. There is no built-in wire kind; a notation that declares none admits none (KIND_UNDECLARED), and an id it does not declare is KIND_UNKNOWN. A Component takes no kind. See NOTATION-MODEL.md 'Kinds'."
               }
             }
           }

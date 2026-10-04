@@ -238,6 +238,11 @@ are dragged. A group or plane with `config.intake: true` also holds a
   status) keeps its dashed outline. An unplaced card (`.node.unplaced`) is faded to opacity .42 and
   is not dashed.
 
+These are declared, not written into the renderer: the `schematic` notation's `kinds` list holds five
+region kinds, `group` (dash `none`), `plane`, `container` and `gate` (`solid`) and `intake` (`dashed`,
+open), and the renderer reads the dash of a region's border from them by id (`regionDash` in
+`src/55-render.js`; NOTATION-MODEL.md "Kinds"). A wire kind is declared in the same list.
+
 `config.intake` is a boolean on a group or a plane. Any other value, or intake on any other kind of
 Component, is refused on create and update and reported on load with `INTAKE_INVALID`
 (`intakeProblems`, `src/05-data-core.js`). QA: `tests/region_border_qa.py`.
