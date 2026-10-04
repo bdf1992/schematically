@@ -6360,8 +6360,12 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   function layered(doc,viewId,{scope=null,gapX=80,gapY:gapY0=56,pad=44,labelMargin=16}={}){
     const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
     const scopeCanvas=scope?interiorOf(scope):Data.GLOBAL_CANVAS_ID;
-    let packed=null; // set when the canvas laid out here is packed in rows
+    // packed: set when the canvas laid out here is packed in rows; grid: the top-level packed
+    // canvas's rows of item ids in packing order and the gaps used, for channel routing.
+    let packed=null,grid=null;
     if(scope&&!doc.components.some(c=>c.id===scope))return refusal('UNKNOWN_NODE',`No component ${scope}`);
+    // Buses an earlier layout of this canvas made would narrow label gaps and reach bundling.
+    if(!scope)dropStaleBuses(doc,r);
     const byId=new Map(doc.components.map(c=>[c.id,c])),frozen=[];
     const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,resolvedNotation=N?N.resolve(doc):null,notation=resolvedNotation?.ok?resolvedNotation.notation:null;
     // One label width estimate, used for both the column gap a label crosses and the row gap a
@@ -6399,7 +6403,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // barycentre over the blocks first, then within each block. A canvas with no group runs
     // arrange() once over its cards, as before groups were placed.
     const GROUP_PAD=24,GROUP_TITLE_BAND=28; // groupRect's padding (src/05-data-core.js)
-    function layoutCanvas(canvas){
+    function layoutCanvas(canvas,second=null){
       const members=inScope(canvas),boxes=new Map();
       for(const c of members){
         // Arranging fits a container to what it holds, with room on top for its own symbol.
@@ -6428,8 +6432,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const top=[];for(const c of members){const u=blockOf.get(c.id)||c.id;if(!top.includes(u))top.push(u)}
       const R2=id=>{const u=R(id);return u&&blockOf.has(u)?blockOf.get(u):u};
       const placeCanvas=made=>{const tb=new Map();for(const u of top)tb.set(u,made.has(u)?made.get(u):boxes.get(u));return arrange(top,tb,R2,canvas,null)};
+      // rowGap is one gap for every block, or a function of the block's group.
       const passes=rowGap=>{
-        const made=new Map();for(const [k,ids] of blocks)made.set(k,layoutBlock(ids,null,rowGap));
+        const gapOf=k=>typeof rowGap==='function'?rowGap(k):rowGap;
+        const made=new Map();for(const [k,ids] of blocks)made.set(k,layoutBlock(ids,null,gapOf(k)));
         const first=placeCanvas(made);
         // Within each block: each layer starts in the order of the mean height of the cards its
         // members are wired to outside the block, then the canvas is placed again.
@@ -6440,7 +6446,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
           const sum=new Map();
           for(const w of doc.wires){const a=R(w.a),b=R(w.b);if(!a||!b||a===b)continue;
             for(const [m,o] of [[a,b],[b,a]])if(blockOf.get(m)===k&&blockOf.get(o)!==k&&atY.has(o)){const s=sum.get(m)||[0,0];s[0]+=atY.get(o);s[1]++;sum.set(m,s)}}
-          made.set(k,layoutBlock(ids,new Map([...sum].map(([m,[s,n]])=>[m,s/n])),rowGap));
+          made.set(k,layoutBlock(ids,new Map([...sum].map(([m,[s,n]])=>[m,s/n])),gapOf(k)));
         }
         return placeCanvas(made);
       };
@@ -6457,17 +6463,20 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       for(const w of doc.wires){const a=R(w.a),b=R(w.b),ga=a&&blockOf.get(a),gb=b&&blockOf.get(b);if(!ga||!gb||ga===gb)continue;
         const key=ga<gb?`${ga}|${gb}`:`${gb}|${ga}`;pairCount.set(key,(pairCount.get(key)||0)+1);labels.add(String(w.config?.label||''))}
       const most=Math.max(0,...pairCount.values()),G=Math.max(200,48+BUS_PITCH*most+BUS_TRUNK_GAP*(Math.max(1,labels.size)-1));
-      const res=passes(G),tb=res.boxes;
+      // A second pass (channel routing, below) sets the grid gap GG and each block's row gap from
+      // what the first pass's channels and streets carried; a block it does not name keeps G.
+      const GG=second?second.G:G;
+      const res=passes(second?k=>second.blockGap.get(k)??G:G),tb=res.boxes;
       const items=[...res.ids].sort((a,b)=>res.x.get(a)-res.x.get(b)||res.y.get(a)-res.y.get(b));
-      const area=items.reduce((s,u)=>s+(tb.get(u).w+G)*(tb.get(u).h+G),0),widest=Math.max(...items.map(u=>tb.get(u).w));
+      const area=items.reduce((s,u)=>s+(tb.get(u).w+GG)*(tb.get(u).h+GG),0),widest=Math.max(...items.map(u=>tb.get(u).w));
       const pack=W=>{
-        const x=new Map(),y=new Map();let cx=0,cy=0,rowH=0,rows=1;
-        for(const u of items){const b=tb.get(u);if(cx>0&&cx+b.w>W){cx=0;cy+=rowH+G;rowH=0;rows++}x.set(u,cx+b.w/2);y.set(u,cy+b.h/2);cx+=b.w+G;rowH=Math.max(rowH,b.h)}
-        return {w:Math.max(...items.map(u=>x.get(u)+tb.get(u).w/2)),h:cy+rowH,x,y,rows};
+        const x=new Map(),y=new Map(),grid=[[]];let cx=0,cy=0,rowH=0,rows=1;
+        for(const u of items){const b=tb.get(u);if(cx>0&&cx+b.w>W){cx=0;cy+=rowH+GG;rowH=0;rows++;grid.push([])}x.set(u,cx+b.w/2);y.set(u,cy+b.h/2);cx+=b.w+GG;rowH=Math.max(rowH,b.h);grid.at(-1).push(u)}
+        return {w:Math.max(...items.map(u=>x.get(u)+tb.get(u).w/2)),h:cy+rowH,x,y,rows,grid};
       };
       let best=null;
       for(let k=0;k<=20;k++){const p=pack(Math.max(widest,Math.sqrt(area)*(1+.05*k)));if(!best||Math.abs(p.w/p.h-1)<Math.abs(best.w/best.h-1))best=p}
-      if(canvas===scopeCanvas)packed={rows:best.rows,aspect:Math.round(best.w/best.h*100)/100};
+      if(canvas===scopeCanvas){packed={rows:best.rows,aspect:Math.round(best.w/best.h*100)/100};if(!scope)grid={rows:best.grid,G:GG,blockG:G}}
       return {...res,w:best.w,h:best.h,x:best.x,y:best.y};
     }
     // The layered steps over one set of nodes: ids in document order, their boxes, and R mapping
@@ -6576,18 +6585,36 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         if(b.inner)write(b.inner,X-b.w/2+pad,Y-b.h/2+pad+b.top);
       }
     }
-    const res=layoutCanvas(scopeCanvas);
     const cards=res=>res.ids.flatMap(u=>{const b=res.boxes.get(u);return b.block?cards(b.block.res):[u]});
-    if(scope){const g=geometry(doc,r.id,scope)||entityGeometry(byId.get(scope)),top=topRoom(byId.get(scope));const w=Math.max(160,res.w+pad*2),h=Math.max(120,res.h+pad*2+top);setGeometry(doc,r.id,scope,{w,h});write(res,g.x-w/2+pad,g.y-h/2+pad+top)}
-    else{
-      // Keep the diagram where it was: the new layout starts at the old top-left.
-      const placed=cards(res).map(u=>geometry(doc,r.id,u)).filter(Boolean);
-      const ox=placed.length?Math.min(...placed.map(g=>g.x-g.w/2)):80,oy=placed.length?Math.min(...placed.map(g=>g.y-g.h/2)):80;
-      write(res,ox,oy);
+    // The top-left card corner of a laid-out canvas in its own coordinates, reached through group
+    // blocks with the offsets write() uses; (0, 0) on a canvas with no group.
+    const corner=res=>{let x=Infinity,y=Infinity;
+      for(const u of res.ids){const b=res.boxes.get(u),X=res.x.get(u),Y=res.y.get(u);
+        if(b.block){const c=corner(b.block.res);x=Math.min(x,X-b.w/2+GROUP_PAD-b.block.l+c.x);y=Math.min(y,Y-b.h/2+GROUP_PAD+GROUP_TITLE_BAND-b.block.t+c.y)}
+        else{x=Math.min(x,X-b.w/2);y=Math.min(y,Y-b.h/2)}}
+      return {x:Number.isFinite(x)?x:0,y:Number.isFinite(y)?y:0}};
+    let res=layoutCanvas(scopeCanvas),ox=80,oy=80;
+    // Keep the diagram where it was: the new layout's top-left card corner lands on the old one.
+    if(!scope){const placed=cards(res).map(u=>geometry(doc,r.id,u)).filter(Boolean);if(placed.length){ox=Math.min(...placed.map(g=>g.x-g.w/2));oy=Math.min(...placed.map(g=>g.y-g.h/2))}}
+    const place=()=>{
+      if(scope){const g=geometry(doc,r.id,scope)||entityGeometry(byId.get(scope)),top=topRoom(byId.get(scope));const w=Math.max(160,res.w+pad*2),h=Math.max(120,res.h+pad*2+top);setGeometry(doc,r.id,scope,{w,h});write(res,g.x-w/2+pad,g.y-h/2+pad+top)}
+      else{const c=corner(res);write(res,ox-c.x,oy-c.y)}
+      straighten(doc,r.id,frozen);
+    };
+    place();
+    // A packed top-level canvas routes its cross-item wires on channel buses, in two passes: the
+    // second lays the canvas out again with the gaps the first pass's channels and streets need.
+    let channels=null;
+    if(!scope&&grid){
+      const first=channelRoutes(doc,r,grid);
+      if(first){
+        frozen.length=0;res=layoutCanvas(scopeCanvas,{G:Math.max(grid.blockG,first.needG),blockGap:first.blockGap});place();
+        const second=channelRoutes(doc,r,grid);
+        if(second)channels={buses:second.buses,streets:second.streets,wires:second.wires,skipped:second.skipped,gap:second.G};
+      }
     }
-    straighten(doc,r.id,frozen);
-    const bundles=scope?null:bundleGroups(doc,r);
-    return {ok:true,view:r.id,engine:'layered',placed:cards(res).length,frozen,labelMargin,...(bundles?{bundles}:{}),...(packed?{packed}:{})};
+    const bundles=scope||grid?null:bundleGroups(doc,r);
+    return {ok:true,view:r.id,engine:'layered',placed:cards(res).length,frozen,labelMargin,...(bundles?{bundles}:{}),...(channels?{channels}:{}),...(packed?{packed}:{})};
   }
   // Bundling after a layout of the top-level canvas: the wires between each pair of groups ride
   // one harness (trunks in the gap between them, streets in their row gaps), run exactly as the
@@ -6631,6 +6658,116 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       else entry.kept=true;
     }
     return out;
+  }
+
+  // Buses an earlier layout of the top-level canvas made go before it is laid out again: every
+  // channel bus, and every bus between two groups of the canvas (a harness). A wire routed on one
+  // returns to auto. A bus made by hand (no between, an id not starting channel-) is kept.
+  function dropStaleBuses(doc,r){
+    const G0=Data.GLOBAL_CANVAS_ID,gid=new Set(doc.components.filter(c=>grouping(c)&&(c.canvasId||G0)===G0).map(c=>c.id));
+    if(gid.size<2)return;
+    const stale=new Set(Object.keys(r.v.buses).filter(id=>{const bt=r.v.buses[id]?.between;return id.startsWith('channel-')||(Array.isArray(bt)&&bt.length===2&&bt.every(x=>gid.has(String(x))))}));
+    for(const id of stale)delete r.v.buses[id];
+    for(const [wid,rt] of Object.entries(r.v.routes))if(rt?.mode==='bus'&&Array.isArray(rt.buses)&&rt.buses.some(id=>stale.has(id)))delete r.v.routes[wid];
+  }
+
+  // Channel buses over a packed grid (LAYOUT-MODEL.md "What layered does", Channels): VLSI
+  // global routing over a channel intersection graph (Sherwani, Algorithms for VLSI Physical
+  // Design Automation, ch. 6; channel routing after Hashimoto and Stevens 1971), drawn with the
+  // ordinary bus records, as yFiles' ChannelEdgeRouter routes in the channels between groups. A
+  // horizontal bus runs in each row gap of the grid, a vertical bus in each gap between two items
+  // of a row and beside its ends; a wire between two items leaves its sender's item by the gap on
+  // its right, enters its receiver's by the gap on its left, and changes rows over the gaps
+  // nearest the entry. A member with another member of its group between it and that gap reaches
+  // it along a street in its block's row gap, placed as the harness places one. Returns what the
+  // gaps carried, for the second pass to size them; null when the grid has no item.
+  function channelRoutes(doc,r,grid){
+    const G0=Data.GLOBAL_CANVAS_ID,G=grid.G,P=BUS_PITCH;
+    dropStaleBuses(doc,r);
+    const groups=doc.components.filter(c=>grouping(c)&&(c.canvasId||G0)===G0&&Array.isArray(c.config?.members));
+    const of=new Map();for(const g of groups)for(const m of g.config.members)if(!of.has(String(m)))of.set(String(m),g.id);
+    // Items: a group's region as the harness reads it, or a card's box.
+    const placedDoc=r.isDefault?doc:{...doc,components:doc.components.map(c=>{const g=!hosted(c)&&!grouping(c)?geometry(doc,r.id,c.id):null;return g&&g.w?{...c,x:g.x,y:g.y,config:{...(c.config||{}),presentation:{...(c.config?.presentation||{}),size:{w:g.w,h:g.h}}}}:c})};
+    const rect=new Map(groups.map(g=>[g.id,Data.groupRect(placedDoc,g.id,size)]));
+    const box=id=>{const g=geometry(doc,r.id,id);return g&&g.w!=null?{l:g.x-g.w/2,r:g.x+g.w/2,t:g.y-g.h/2,b:g.y+g.h/2,x:g.x}:null};
+    const rows=grid.rows.map(row=>row.map(u=>({u,R:rect.get(u)||box(u)})).filter(it=>it.R).sort((a,b)=>a.R.l-b.R.l)).filter(row=>row.length);
+    if(!rows.length)return null;
+    // The channels: Hy[k] the row gap above grid row k (and below the last), Vx[k][j] the gap left
+    // of item j of row k (and right of the last).
+    const n=rows.length,band=rows.map(row=>({t:Math.min(...row.map(i=>i.R.t)),b:Math.max(...row.map(i=>i.R.b))}));
+    const Hy=[band[0].t-G/2];for(let k=1;k<n;k++)Hy.push((band[k-1].b+band[k].t)/2);Hy.push(band[n-1].b+G/2);
+    const Vx=rows.map(row=>{const xs=[row[0].R.l-G/2];for(let j=1;j<row.length;j++)xs.push((row[j-1].R.r+row[j].R.l)/2);xs.push(row.at(-1).R.r+G/2);return xs});
+    const where=new Map();rows.forEach((row,k)=>row.forEach((it,j)=>where.set(it.u,{k,j})));
+    const itemOf=id=>of.get(String(id))||(where.has(id)?id:null);
+    const used=new Map(),Hid=k=>`channel-row-${k}`,Vid=(k,j)=>`channel-gap-${k}-${j}`;
+    const useH=(k,...xs)=>{const id=Hid(k);if(!used.has(id))used.set(id,{kind:'h',k,lo:Infinity,hi:-Infinity});const e=used.get(id);for(const x of xs){e.lo=Math.min(e.lo,x);e.hi=Math.max(e.hi,x)}return id};
+    const useV=(k,j)=>{const id=Vid(k,j);if(!used.has(id))used.set(id,{kind:'v',k,j});return id};
+    // The gap of row k nearest x; a tie goes to the lower j.
+    const nearest=(k,x)=>{let best=0;Vx[k].forEach((v,j)=>{if(Math.abs(v-x)<Math.abs(Vx[k][best]-x))best=j});return best};
+    const chain=(A,B)=>{
+      const ex={k:A.k,j:A.j+1},en={k:B.k,j:B.j},xe=Vx[ex.k][ex.j],xn=Vx[en.k][en.j];
+      if(ex.k===en.k&&ex.j===en.j)return [useV(ex.k,ex.j)];
+      const out=[useV(ex.k,ex.j)];
+      if(A.k===B.k)out.push(useH(A.k+1,xe,xn));
+      else if(B.k>A.k){let x=xe;
+        for(let m=A.k+1;m<B.k;m++){const j=nearest(m,xn),vx=Vx[m][j];out.push(useH(m,x,vx));out.push(useV(m,j));x=vx}
+        out.push(useH(B.k,x,xn))}
+      else{let x=xe;
+        for(let m=A.k-1;m>B.k;m--){const j=nearest(m,xn),vx=Vx[m][j];out.push(useH(m+1,x,vx));out.push(useV(m,j));x=vx}
+        out.push(useH(B.k+1,x,xn))}
+      out.push(useV(en.k,en.j));return out;
+    };
+    // Streets: a group's member rows, direct test and street geometry as harness() has them.
+    const layCache=new Map();
+    const lay=gid=>{if(layCache.has(gid))return layCache.get(gid);
+      const g=groups.find(x=>x.id===gid);
+      const items=(g?.config?.members||[]).map(String).map(id=>{const c=doc.components.find(x=>x.id===id);if(!c||hosted(c)||grouping(c)||of.get(id)!==gid)return null;const b=box(id);return b?{id,...b}:null}).filter(Boolean).sort((a,b)=>a.t-b.t||a.l-b.l||(a.id<b.id?-1:1));
+      const rws=[];for(const it of items){const row=rws.at(-1);if(row&&it.t<row.b){row.items.push(it);row.b=Math.max(row.b,it.b)}else rws.push({t:it.t,b:it.b,items:[it]})}
+      const out={items:new Map(items.map(it=>[it.id,it])),rows:rws};layCache.set(gid,out);return out};
+    const direct=(gid,id,right)=>{const L=lay(gid),m=L.items.get(id);if(!m)return true;return ![...L.items.values()].some(o=>o.id!==id&&o.t<m.b&&o.b>m.t&&(right?o.l>=m.r:o.r<=m.l))};
+    const rowOf=(gid,id)=>lay(gid).rows.findIndex(row=>row.items.some(it=>it.id===id));
+    const streets=new Map();
+    const street=(gid,id,kind,x)=>{const ri=rowOf(gid,id),sid=`channel-street-${gid}-${ri}${kind==='recv'?'-above':''}`;
+      if(!streets.has(sid))streets.set(sid,{gid,ri,kind,x,cards:[],wires:0});const s=streets.get(sid);s.cards.push(lay(gid).items.get(id).x);s.wires++;return sid};
+    const plans=[];let skipped=0;
+    for(const w of doc.wires){
+      const rt=r.v.routes[w.id];if(rt&&rt.mode!=='auto')continue;
+      const [s,t]=w.config?.direction==='reverse'?[w.b,w.a]:[w.a,w.b];
+      const ia=itemOf(s),ib=itemOf(t);if(!ia||!ib||ia===ib)continue;
+      const A=where.get(ia),B=where.get(ib);if(!A||!B){skipped++;continue}
+      const mid=chain(A,B),xe=Vx[A.k][A.j+1],xn=Vx[B.k][B.j];
+      const send=of.get(String(s))&&!direct(ia,s,true)?street(ia,s,'send',xe):null;
+      const recv=of.get(String(t))&&!direct(ib,t,false)?street(ib,t,'recv',xn):null;
+      plans.push({w,seq:[send,...mid,recv].filter(Boolean)});
+    }
+    const lanes=new Map();for(const p of plans)for(const id of new Set(p.seq))lanes.set(id,(lanes.get(id)||0)+1);
+    const made=new Map();
+    for(const [id,e] of used){
+      if(e.kind==='h')made.set(id,[{x:e.lo,y:Hy[e.k]},{x:e.hi,y:Hy[e.k]}]);
+      else made.set(id,[{x:Vx[e.k][e.j],y:Hy[e.k]},{x:Vx[e.k][e.j],y:Hy[e.k+1]}]);
+    }
+    for(const [id,s] of streets){
+      const row=lay(s.gid).rows[s.ri],span=(s.wires-1)*P;
+      const y=s.kind==='send'?row.b+STREET_DROP+span/2:row.t-STREET_DROP-span/2;
+      const far=s.kind==='send'?Math.min(...s.cards):Math.max(...s.cards);
+      made.set(id,[{x:far,y},{x:s.x,y}]);
+    }
+    // A wire rides its chain only when every consecutive pair of its buses meets; a bus is written
+    // only when some route names it.
+    const routed=plans.filter(p=>{for(let i=1;i<p.seq.length;i++)if(!busMeet(made.get(p.seq[i-1]),made.get(p.seq[i])))return false;return true});
+    skipped+=plans.length-routed.length;
+    const named=new Set(routed.flatMap(p=>p.seq));
+    for(const [id,pts] of [...made].filter(([id])=>named.has(id)).sort((a,b)=>a[0]<b[0]?-1:1))r.v.buses[id]={points:pts,pitch:P};
+    for(const p of routed)r.v.routes[p.w.id]={mode:'bus',buses:p.seq};
+    // What the gaps need: a channel BUS_MARGIN clear each side of its lanes; a block's row gap its
+    // send street under a row and its receive street over the next, STREET_DROP from the cards.
+    const widest=Math.max(0,...[...lanes].filter(([id])=>!id.startsWith('channel-street-')).map(([,k])=>k));
+    const need=new Map();
+    for(const st of streets.values()){const L=lay(st.gid),i=st.kind==='send'?st.ri:st.ri-1;if(i<0||i>=L.rows.length-1)continue;
+      const key=st.gid+'|'+i,e=need.get(key)||{gid:st.gid,s:0,r:0};if(st.kind==='send')e.s=st.wires;else e.r=st.wires;need.set(key,e)}
+    const blockGap=new Map();
+    for(const e of need.values()){const gap=(e.s?STREET_DROP+(e.s-1)*P+4:0)+(e.r?STREET_DROP+(e.r-1)*P+4:0)+STREET_ROOM;blockGap.set(e.gid,Math.max(blockGap.get(e.gid)||grid.blockG,gap))}
+    return {buses:named.size,streets:[...streets.keys()].filter(id=>named.has(id)).length,wires:routed.length,skipped,G,needG:2*BUS_MARGIN+widest*P,blockGap};
   }
 
   // Straight wires where the layout left a free choice: a boundary Point slides along its edge to

@@ -339,8 +339,63 @@ Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLA
   - Street room: on a packed canvas each group block is laid out again, both block passes, with
     `G` between its rows instead of 56, so a harness street fits under or over a row
     (`STREET_DROP` 36 + its lanes + `STREET_ROOM` 12). Blocks on a canvas that is not packed keep 56.
+  - The packing of the top-level canvas keeps its grid: the item ids of each row in packing order
+    and the gap `G` it used, for the channels below.
+- **Origin.** A top-level layout keeps the diagram where it was: the new layout's top-left card
+  corner lands on the old one. The canvas is written at the old corner less the laid-out canvas's
+  own top-left card corner, found through group blocks with the offsets the blocks are written at
+  (24 right, 24 + 28 down of a block's corner). A canvas with no group has its corner at (0, 0), so
+  its layout is unchanged; laying a grouped document out again no longer moves every card by
+  (24, 52). A `scope` layout is written inside its container as before.
+- **Stale buses.** Before a top-level `layered` lays out a canvas holding two or more groups, it
+  deletes every bus of the view whose id starts with `channel-` or whose `between` names two groups
+  of that canvas, and every route with mode `bus` that names one of them (those wires return to
+  auto). A bus made by hand (no `between`, an id not starting `channel-`) is kept. So an earlier
+  layout's buses neither narrow label gaps nor reach bundling, and a grouped document laid out
+  twice comes out the same.
+- **Channels for a packed canvas.** When the top-level canvas was packed in rows, the wires between
+  its items ride channel buses, and the pair bundling below does not run (neither does the
+  harness). This is VLSI global routing over a channel intersection graph (Sherwani, *Algorithms
+  for VLSI Physical Design Automation*, chapter 6; channel routing, Hashimoto and Stevens 1971),
+  drawn with the ordinary bus records, as yFiles' `ChannelEdgeRouter` routes in the channels
+  between groups:
+  - items are the grid's ids; an item's rect is its group's region (`Data.groupRect`) or its card's
+    box; each row's items are sorted by left edge. Row band `k` runs from its least item top to its
+    greatest item bottom;
+  - channel lines: `Hy[0]` = band 0 top − G/2, `Hy[k]` = midway between band `k−1` bottom and band
+    `k` top, `Hy[n]` = last band bottom + G/2; in row `k`, `Vx[k][0]` = first item's left − G/2,
+    `Vx[k][j]` = midway between item `j−1`'s right and item `j`'s left, `Vx[k][m]` = last item's
+    right + G/2;
+  - buses, pitch 6, no `between`, no label, written only when a route names them:
+    `channel-row-<k>` horizontal at `Hy[k]` from the least to the greatest x of the gap buses its
+    routes join it from or leave it to; `channel-gap-<k>-<j>` vertical at `Vx[k][j]` from `Hy[k]`
+    to `Hy[k+1]`;
+  - wires: every wire with its two ends on different items (an end's item is the first group in
+    document order listing it, else the card itself when it is an item) whose route is absent or
+    auto. The sender is `a`, or `b` when `config.direction` is `reverse`. It leaves by the gap right
+    of its item (row `ka`, gap `ja + 1`) and enters by the gap left of the receiver's (row `kb`, gap
+    `jb`). One gap when they are the same; in one row, exit, `channel-row-<ka+1>`, entry; down the
+    grid, exit, `channel-row-<ka+1>`, then for each row in between the gap nearest the entry's x
+    (ties to the lower `j`) and the row line below it, entry; up the grid the same with the row
+    line above;
+  - streets: a member with another member of its group between it and its gap inside its row band
+    (the harness's direct test, toward the right for a sender and the left for a receiver) reaches
+    the gap along `channel-street-<group>-<row>` under its member row (sending) or
+    `channel-street-<group>-<row>-above` over it (receiving), placed as a harness street is
+    (first or last lane 36 from the cards), running from the farthest card centre that uses it to
+    the gap;
+  - each wire gets `{mode: 'bus', buses: [send street?, chain..., receive street?]}` when every
+    consecutive pair of its buses meets; otherwise it is left to the router and counted skipped.
+  - Two passes. The first lays out and routes with the packing's gaps. Then the grid gap becomes
+    `max(G, 2 × 24 + 6 × the most routes naming one channel-row or channel-gap bus)`, and each
+    group's row gap the largest, over its member-row gaps, of `STREET_ROOM` 12 plus
+    `36 + 6(s − 1) + 4` for `s` wires on the send street under the row and `36 + 6(r − 1) + 4` for
+    `r` wires on the receive street over the next (each term only when not 0), never less than `G`.
+    The canvas is laid out again with those gaps (items, rows and the area estimate spaced by the
+    new grid gap) and routed again; the second pass is kept. On booth-record the first pass needs
+    570 (one gap carries 87 wires); at the packing's 200, 34 bus routes ran through cards.
 - **Bundles between groups.** At the end of a top-level `layered` (no `scope`) on a canvas holding
-  two or more groups, packed or not, the wires between each pair of groups are offered to the
+  two or more groups that was not packed, the wires between each pair of groups are offered to the
   harness (see "As built: buses" > "Harness"). Pairs are unordered (the harness carries both
   directions on one trunk per label); each pair with 2 or more wires between its members is taken
   in order of wire count descending, then group ids ascending. A pair is skipped when any of its
@@ -355,18 +410,25 @@ Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLA
      sent right to left leaves its out port on the right and turns back through its own card).
   Otherwise the buses and routes kept aside are put back.
 - **Receipt.** `apply` returns `bundles: [{between: [a, b], wires, kept, reason?}]` when bundling
-  ran and `packed: {rows, aspect}` (width / height, 2 places) when packing ran; a document with
-  fewer than two groups gets no `bundles`. `scripts/layout_sov.mjs` prints, after its `ok` line,
-  `bundled <kept> of <n> group pairs` and one line per pair, `<a>,<b>: <n> wires <kept|reason>`.
+  ran, `channels: {buses, streets, wires, skipped, gap}` when channel routing ran (`gap` the grid
+  gap of the second pass; there is then no `bundles`), and `packed: {rows, aspect}` (width /
+  height, 2 places) when packing ran; a document with fewer than two groups gets no `bundles`.
+  `scripts/layout_sov.mjs` prints, after its `ok` line, `bundled <kept> of <n> group pairs` and
+  one line per pair, `<a>,<b>: <n> wires <kept|reason>`; or, when channels ran,
+  `channels: <wires> wires on <buses> buses (<streets> streets), gap <gap>`, with
+  `, <skipped> skipped` when any was.
 - Measured on `tests/fixtures/booth-record-graphify.sov` (113 cards, 9 groups, 262 wires;
-  `tests/group_rows_qa.py`): at dev a902dca the group regions span 17554 × 2342, aspect 7.50,
-  with 154 horizontal runs of 1000 px or more drawn by cross-group wires. Packed: 3 rows, 6840 ×
-  7128, aspect 0.96, 0 region pairs overlapping, 3 of 13 pairs bundled carrying 35 of 116
-  cross-group wires (7 refused as `THIRD_GROUP`, 2 as `AGAINST_FLOW`), 73 long runs (70 wire runs
-  and 3 buses), no bus route through a card. The seeded fixture of `tests/layered_groups_qa.py`
-  (region aspect 5.19 at a902dca) packs too: 55 crossings against 79 laid out group-blind.
+  `tests/group_rows_qa.py`, `tests/channel_buses_qa.py`): at dev a902dca the group regions span
+  17554 × 2342, aspect 7.50, with 154 horizontal runs of 1000 px or more drawn by cross-group
+  wires. At dev 3f3aa75 (packed, pairs bundled): 3 rows, 6840 × 7128, aspect 0.96, 3 of 13 pairs
+  bundled carrying 35 of 116 cross-group wires (7 refused as `THIRD_GROUP`, 2 as `AGAINST_FLOW`),
+  73 long runs (70 wire runs and 3 buses). With channels (2026-10-03): 2 rows, 10544 × 9572,
+  aspect 1.10, 0 region pairs overlapping, 116 of 116 cross-group wires on 47 channel buses (36
+  streets) at gap 570, 29 long runs (26 buses and 3 tap legs, none off buses), no bus route
+  through a card, no bus band over a card. The seeded fixture of `tests/layered_groups_qa.py`
+  (region aspect 5.19 at a902dca) packs too: 40 crossings against 79 laid out group-blind.
   `docs/workengine/map.sov` (aspect 0.47) and `examples/work-engine/groups.sov` (2.01) are not
-  packed; their pairs are bundled.
+  packed; their pairs are bundled. All four lay out the same when laid out again.
 - A column gap widens to fit the widest wire label that crosses it, or that has an end on
   either side of it: `characters × the notation's caption size × 0.6 + 2 × labelMargin`
   (`labelMargin`, an `apply` option, default 16). A row gap in a column widens the same way
@@ -524,6 +586,9 @@ Between two groups (SECTION-MODEL.md "Groups"), using their regions from `Data.g
 - `layered` runs the harness itself, between each pair of groups on the top-level canvas, after
   laying it out, and keeps a pair's buses only on the three conditions in "What `layered` does"
   (Bundles between groups). `tests/group_rows_qa.py` measures it on the booth-record fixture.
+- A packed canvas uses channel buses instead ("What `layered` does", Channels for a packed
+  canvas): `channel-row-*`, `channel-gap-*` and `channel-street-*` records with no `between`,
+  drawn as any bus is. `tests/channel_buses_qa.py` measures them on the booth-record fixture.
 
 ### Refusals
 
