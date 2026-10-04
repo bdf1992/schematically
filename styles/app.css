@@ -166,9 +166,9 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 /* The interior guide is an editing aid: shown while the container is selected or a card is being dragged, never in a picture. */
 .node.is-container:not(.selected)>.container-guide{opacity:0}#workspace.dragging-node .node.is-container>.container-guide{opacity:.22}
 .node.is-container>.body{stroke-width:var(--stroke-structure-container,1.8px)}
-.node .internal-text{font-size:calc(clamp(12px,var(--type-body-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-body-weight,400);opacity:.86}.node .internal-text .md-strong{font-weight:700}.node .internal-text .md-em{font-style:italic}.node .internal-text .md-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.node .component-subtitle{font-size:calc(clamp(8px,var(--type-subtitle-size,8.5px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-subtitle-weight,400);letter-spacing:0;opacity:.72}
-.node .outside-label{font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600);opacity:.8}
+.node .internal-text{font-size:calc(clamp(12px,var(--type-body-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-body-weight,400)}.node .internal-text .md-strong{font-weight:700}.node .internal-text .md-em{font-style:italic}.node .internal-text .md-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.node .component-subtitle{font-size:calc(clamp(8px,var(--type-subtitle-size,8.5px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-subtitle-weight,400);letter-spacing:0}
+.node .outside-label{font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)}
 .port-hit{fill:transparent;stroke:none;cursor:pointer;pointer-events:all;touch-action:none}
 .port{fill:var(--panel);stroke:var(--port-color,var(--component-color,var(--canvas-ink)));stroke-width:2;cursor:pointer;opacity:0;transition:opacity .1s,transform .1s;pointer-events:none;transform-box:fill-box;transform-origin:center}
 .node:hover .port,.node.wiring-source .port,.node.selected .port{opacity:1}
