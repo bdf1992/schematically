@@ -1,5 +1,7 @@
 from pathlib import Path
+import html
 import json
+import os
 import re
 ROOT=Path(__file__).resolve().parent
 source=(ROOT/'index.source.html').read_text(encoding='utf-8')
@@ -22,5 +24,13 @@ source=source.replace(PACKS_TAG,f'<script type="application/json" id="sov-packs"
 (ROOT/'index.html').write_text(source,encoding='utf-8',newline='\n')
 dist_dir=ROOT/'desktop/dist'
 dist_dir.mkdir(parents=True,exist_ok=True)
-(dist_dir/'index.html').write_text(source,encoding='utf-8',newline='\n')
+# A release build names its revision ('<tag> <commit>') in the desktop copy only; index.html stays
+# byte-identical for every build, so the committed file never carries it.
+dist_source=source
+revision=os.environ.get('SOV_BUILD_REVISION')
+if revision:
+    meta=f'<meta name="sov-revision" content="{html.escape(revision,quote=True)}">'
+    assert dist_source.count('</head>')==1,'index.source.html must hold </head> exactly once'
+    dist_source=dist_source.replace('</head>',f'{meta}\n</head>')
+(dist_dir/'index.html').write_text(dist_source,encoding='utf-8',newline='\n')
 print(ROOT/'index.html')

@@ -108,16 +108,20 @@
   // tones set apart by lightness, each a five-tone ramp. The editor's hue slots 6-11 take the ramps'
   // middle tones: primary, secondary, tertiary, safe, alert, danger.
   const PALETTE_SYSTEMS=Object.freeze({
-    'system-default':Object.freeze({base:115,ratio:75,role:{L:.65,C:.12},step:.08,
-      status:{safe:{L:.66,C:.13,h:165},alert:{L:.82,C:.15,h:85},danger:{L:.56,C:.17,h:32}},
-      source:'control/sketchbooks/ep-root-20261002/palette-tasting/best2.json'})
+    'system-default':Object.freeze({base:239,ratio:117,step:.09,
+      role:{L:.49,C:.11},status:{safe:{L:.69,C:.13,h:175},alert:{L:.67,C:.13,h:76},danger:{L:.40,C:.13,h:22}},
+      dark:{role:{L:.63,C:.14},status:{safe:{L:.78,C:.14,h:175},alert:{L:.77,C:.13,h:76},danger:{L:.65,C:.19,h:22}}},
+      source:'control/sketchbooks/ep-root-20261002/palette-tasting/best5.json'})
   });
   const SYSTEM_NAMES=Object.freeze(['primary','secondary','tertiary','safe','alert','danger']);
-  function paletteSystem(spec){
+  // A system may carry its own dark row (spec.dark: role and status lightness and chroma for dark
+  // surfaces, same hues); paletteSystem(spec,'dark') generates it, as okabe-ito has a dark row.
+  function paletteSystem(spec,appearance='light'){
+    const row=appearance==='dark'&&spec.dark?spec.dark:spec;
     const roles=[spec.base,spec.base+spec.ratio,spec.base+2*spec.ratio].map(h=>((h%360)+360)%360);
-    const status=['safe','alert','danger'].map(k=>spec.status[k]);
+    const status=['safe','alert','danger'].map(k=>row.status[k]);
     const hues=[...roles,...status.map(s=>s.h)];
-    const ramps=[...roles.map(h=>toneRamp(spec.role.L,spec.role.C,h,spec.step)),...status.map(s=>toneRamp(s.L,s.C,s.h,spec.step))];
+    const ramps=[...roles.map(h=>toneRamp(row.role.L,row.role.C,h,spec.step)),...status.map(s=>toneRamp(s.L,s.C,s.h,spec.step))];
     return {names:[...SYSTEM_NAMES],hues,ramps,slots:ramps.map(r=>r[2])};
   }
 

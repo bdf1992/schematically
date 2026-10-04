@@ -1,18 +1,20 @@
 """Palette system QA (src/09-colour-core.js PALETTE_SYSTEMS, paletteSystem; src/00-state.js 'system-default').
 
-The palette 'system-default' is generated from a base hue (115), a ratio (75 degrees between the
-three roles), one role lightness and chroma, a step (0.08 of OKLCH lightness between tones) and three
-status tones (safe, alert, danger) set apart by lightness. Each of the six colours is a five-tone ramp.
+The palette 'system-default' is generated from a base hue (239), a ratio (117 degrees between the
+three roles), a step (0.09 of OKLCH lightness between tones) and three status hues, with a light row
+and a dark row: each row has its own role lightness and chroma and its own status lightness and
+chroma (spec.dark), as okabe-ito has a dark row. Each of the six colours is a five-tone ramp.
 
-Node part: paletteSystem(PALETTE_SYSTEMS['system-default']) gives the palette study's 30 ramp hexes
-exactly (written below as literals).
+Node part: paletteSystem(spec) and paletteSystem(spec, 'dark') give the palette study's 60 ramp hexes
+exactly (best5.json, written below as literals).
 Python part: a port of the study's scorer (score.py measure, search2.py's four separations): sRGB to
 linear, Vienot, Brettel and Mollon 1999 deutan and protan matrices with each output clamped at 0,
-OKLab distance times 100, the minimum over normal, deutan and protan vision. The four separations
-hold their floors and equal the values the study recorded, so the port is faithful.
-Browser part: the editor lists 'system-default'; realised in light and dark under every theme it
-holds every contrast floor, and in dark every colour slot holds 3:1 on a card. The repo's own audit
-(Machado 2009, which adds tritan) is printed, not asserted.
+OKLab distance times 100, the minimum over normal, deutan and protan vision. On each row the four
+separations hold their floors and equal the values the study recorded, so the port is faithful.
+Browser part: the editor lists 'system-default'; light uses the light row and dark the dark row;
+realised under every theme each passes the repo's own audit (Machado 2009 normal, protan, deutan,
+tritan; every contrast floor) with no failure, and in dark every colour slot holds 3:1 on a card.
+Status tones are the middle tones of the row of the current appearance, the same in every palette.
 """
 from __future__ import annotations
 import json, math, subprocess, sys
@@ -21,29 +23,36 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 
-# The palette study's recorded system, sketchbook ep-root-20261002, palette-tasting/best2.json
-# (control/sketchbooks/ep-root-20261002/palette-tasting/best2.json in the workstation root).
+# Sketchbook ep-root-20261002, palette-tasting/best5.json (control/sketchbooks/... in the workstation root).
 NAMES = ['primary', 'secondary', 'tertiary', 'safe', 'alert', 'danger']
-BEST2_RAMPS = [
-    ['#5F6630', '#767E34', '#8D9738', '#A6AF65', '#BFC78E'],
-    ['#1A6E6A', '#008984', '#00A69F', '#50BCB5', '#84D1CC'],
-    ['#4B5F8C', '#5B76B2', '#6B8DD8', '#89A7E6', '#A9C1F4'],
-    ['#2C7257', '#2A8E6A', '#24AB7E', '#62C09A', '#90D6B7'],
-    ['#AD8D48', '#CEA444', '#F0BB3B', '#FFD87A', '#FFF4AD'],
-    ['#772C1F', '#9D3726', '#C4422C', '#D36854', '#E08A79'],
+# The palette study's recorded system: a light row and a dark row (best5.json).
+RAMPS_LIGHT = [
+    ['#003450', '#004D73', '#016797', '#4281AA', '#6C9CBC'],
+    ['#4B1F31', '#6C3049', '#904362', '#A5637C', '#B98397'],
+    ['#313400', '#484C00', '#616600', '#7B803D', '#959A67'],
+    ['#237563', '#1C957D', '#01B597', '#63CEB3', '#98E7D1'],
+    ['#7B5923', '#9E7124', '#C28923', '#D8A85F', '#EDC790'],
+    ['#380207', '#5B1016', '#7F1F26', '#934544', '#A66664'],
 ]
-BEST2_SLOTS = ['#8D9738', '#00A69F', '#6B8DD8', '#24AB7E', '#F0BB3B', '#C4422C']
-# best2.json: status_sep, role_tone_sep, role_status_sep, ramp_sep.
-BEST2_RECORDED = {'status': 12.38, 'role_tone': 6.04, 'role_status': 5.37, 'tones': 6.34}
+RAMPS_DARK = [
+    ['#185B81', '#1576AA', '#0A93D4', '#58AEE5', '#8AC9F5'],
+    ['#7C3E57', '#A24F71', '#C9618C', '#DD85A7', '#F0A9C3'],
+    ['#565A15', '#707510', '#8A9102', '#A5AC52', '#C1C883'],
+    ['#3A927D', '#36B297', '#28D4B2', '#79EDD0', '#B0FFEE'],
+    ['#9A7641', '#BE8F46', '#E3A849', '#F9C87F', '#FFE8B0'],
+    ['#93393B', '#BF4649', '#EC5258', '#FE7E7D', '#FFA7A4'],
+]
+SLOTS = {'light': ['#016797', '#904362', '#616600', '#01B597', '#C28923', '#7F1F26'], 'dark': ['#0A93D4', '#C9618C', '#8A9102', '#28D4B2', '#E3A849', '#EC5258']}
+RECORDED = {'light': {'status': 13.84, 'role_tone': 6.2, 'role_status': 9.44, 'tones': 7.58}, 'dark': {'status': 12.41, 'role_tone': 7.73, 'role_status': 5.21, 'tones': 6.46}}
+TONES = {w: SLOTS[w][3:] for w in SLOTS}
 FLOORS = {'status': 12, 'role_tone': 6, 'role_status': 5, 'tones': 6}
 
 NODE = r"""
 const C=require('./src/09-colour-core.js');
 const spec=C.PALETTE_SYSTEMS['system-default'];
-const p=C.paletteSystem(spec);
-process.stdout.write(JSON.stringify({spec,system:p,
-  hexOklch:C.hexOklch('#8D9738'),roundTrip:C.oklchHex(...C.hexOklch('#00A69F')),
-  ramp:C.toneRamp(.65,.12,115,.08)}));
+process.stdout.write(JSON.stringify({spec,system:{light:C.paletteSystem(spec),dark:C.paletteSystem(spec,'dark')},
+  hexOklch:C.hexOklch('#016797'),roundTrip:C.oklchHex(...C.hexOklch('#904362')),
+  ramp:C.toneRamp(.49,.11,239,.09)}));
 """
 
 
@@ -52,16 +61,17 @@ def node_part() -> dict:
     assert proc.returncode == 0, proc.stdout + proc.stderr
     out = json.loads(proc.stdout)
     system = out['system']
-    assert system['names'] == NAMES, system['names']
-    assert system['hues'] == [115, 190, 265, 165, 85, 32], system['hues']
-    assert system['ramps'] == BEST2_RAMPS, ('generated ramps differ from best2.json', system['ramps'])
-    assert system['slots'] == BEST2_SLOTS, system['slots']
-    assert out['ramp'] == BEST2_RAMPS[0], out['ramp']
-    assert out['roundTrip'] == '#00A69F', out['roundTrip']
+    for row, ramps in (('light', RAMPS_LIGHT), ('dark', RAMPS_DARK)):
+        assert system[row]['names'] == NAMES, system[row]['names']
+        assert system[row]['hues'] == [239, 356, 113, 175, 76, 22], (row, system[row]['hues'])
+        assert system[row]['ramps'] == ramps, ('generated ramps differ from best5.json', row, system[row]['ramps'])
+        assert system[row]['slots'] == SLOTS[row], (row, system[row]['slots'])
+    assert out['ramp'] == RAMPS_LIGHT[0], out['ramp']
+    assert out['roundTrip'] == '#904362', out['roundTrip']
     L, C, h = out['hexOklch']
-    assert abs(L - .65) < .005 and abs(C - .12) < .005 and abs(h - 115) < .5, out['hexOklch']
-    assert 'best2.json' in out['spec']['source'], out['spec']
-    print('node part: paletteSystem gives best2.json\'s 30 ramp hexes;', ' '.join(system['slots']))
+    assert abs(L - .49) < .005 and abs(C - .11) < .005 and abs(h - 239) < .5, out['hexOklch']
+    assert 'best5.json' in out['spec']['source'], out['spec']
+    print('node part: paletteSystem gives best5.json\'s light and dark rows, 60 ramp hexes;', 'light', ' '.join(SLOTS['light']), 'dark', ' '.join(SLOTS['dark']))
     return system
 
 
@@ -115,12 +125,14 @@ def separations(ramps: list[list[str]]) -> dict:
 
 
 def score_part(system: dict) -> dict:
-    sep = separations(system['ramps'])
-    print('separations (OKLab x100, worst of normal, deutan, protan):', {k: round(v, 2) for k, v in sep.items()})
-    for k, v in sep.items():
-        assert v >= FLOORS[k], (k, v, FLOORS[k])
-        assert abs(v - BEST2_RECORDED[k]) <= .01, ('the ported scorer differs from the study', k, v, BEST2_RECORDED[k])
-    return sep
+    out = {}
+    for row in ('light', 'dark'):
+        sep = out[row] = separations(system[row]['ramps'])
+        print(row, 'separations (OKLab x100, worst of normal, deutan, protan):', {k: round(v, 2) for k, v in sep.items()})
+        for k, v in sep.items():
+            assert v >= FLOORS[k], (row, k, v, FLOORS[k])
+            assert abs(v - RECORDED[row][k]) <= .01, ('the ported scorer differs from the study', row, k, v, RECORDED[row][k])
+    return out
 
 
 BROWSER = r"""()=>{
@@ -132,7 +144,8 @@ BROWSER = r"""()=>{
       if(appearance==='dark')out.onCard.push({theme,min:Math.min(...activePalette().slice(6).map(c=>SovSchematicColour.contrast(c,DARK_CARD_SURFACE)))});
     }}
   out.rows={light:BASE_PALETTES['system-default'],dark:DARK_SURFACE_PALETTES['system-default']};
-  for(const palette of ['okabe-ito','system-default','spectrum','mono','custom']){A.view.setColour({theme:'pastel',palette});out.tones[palette]=['safe','alert','danger'].map(statusTone)}
+  for(const appearance of ['light','dark']){A.view.setAppearance(appearance);out.tones[appearance]={};
+    for(const palette of ['okabe-ito','system-default','spectrum','mono','custom']){A.view.setColour({theme:'pastel',palette});out.tones[appearance][palette]=['safe','alert','danger'].map(statusTone)}}
   A.view.setAppearance('light');A.view.setColour({theme:'pastel',palette:'okabe-ito'});
   return out;
 }"""
@@ -154,13 +167,13 @@ def browser_part() -> list:
     assert not errors, errors
     assert 'system-default' in r['palettes'] and r['palettes'][0] == 'okabe-ito', r['palettes']
     assert options[:2] == ['okabe-ito', 'system-default'], options
-    assert r['rows'] == {'light': BEST2_SLOTS, 'dark': BEST2_SLOTS}, r['rows']
-    for palette, tones in r['tones'].items():
-        assert tones == ['#24AB7E', '#F0BB3B', '#C4422C'], (palette, tones)
+    assert r['rows'] == SLOTS, r['rows']
+    for appearance, by_palette in r['tones'].items():
+        for palette, tones in by_palette.items():
+            assert tones == TONES[appearance], (appearance, palette, tones)
     for a in r['audits']:
         assert a['palette'] == 'system-default', a['palette']
-        bad = [f for f in a['failures'] if f['kind'] == 'contrast']
-        assert not bad, (a['appearance'], a['theme'], bad)
+        assert not a['failures'], (a['appearance'], a['theme'], a['failures'])
     assert all(c['min'] >= 3 for c in r['onCard']), ('dark colour slots on a card', r['onCard'])
     realised = []
     for a in r['audits']:
@@ -173,7 +186,7 @@ def browser_part() -> list:
             print(f'  {v:<7} closest {dist:.3f} {pair[0]} {pair[1]}')
         print(f"  distinct failures: {[(f['vision'], f['distance']) for f in distinct] or 'none'}")
         realised.append({'appearance': a['appearance'], 'closest': pairs, 'distinct': distinct})
-    print('browser part: listed, both rows the six generated slots, status tones fixed in five palettes, no contrast failure in 6 realisations, dark on-card minimum',
+    print('browser part: listed, both rows the six generated slots, each appearance its own row, status tones fixed in five palettes per appearance, no audit failure in 6 realisations, dark on-card minimum',
           round(min(c['min'] for c in r['onCard']), 2))
     return realised
 

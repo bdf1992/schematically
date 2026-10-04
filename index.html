@@ -6954,16 +6954,20 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // tones set apart by lightness, each a five-tone ramp. The editor's hue slots 6-11 take the ramps'
   // middle tones: primary, secondary, tertiary, safe, alert, danger.
   const PALETTE_SYSTEMS=Object.freeze({
-    'system-default':Object.freeze({base:115,ratio:75,role:{L:.65,C:.12},step:.08,
-      status:{safe:{L:.66,C:.13,h:165},alert:{L:.82,C:.15,h:85},danger:{L:.56,C:.17,h:32}},
-      source:'control/sketchbooks/ep-root-20261002/palette-tasting/best2.json'})
+    'system-default':Object.freeze({base:239,ratio:117,step:.09,
+      role:{L:.49,C:.11},status:{safe:{L:.69,C:.13,h:175},alert:{L:.67,C:.13,h:76},danger:{L:.40,C:.13,h:22}},
+      dark:{role:{L:.63,C:.14},status:{safe:{L:.78,C:.14,h:175},alert:{L:.77,C:.13,h:76},danger:{L:.65,C:.19,h:22}}},
+      source:'control/sketchbooks/ep-root-20261002/palette-tasting/best5.json'})
   });
   const SYSTEM_NAMES=Object.freeze(['primary','secondary','tertiary','safe','alert','danger']);
-  function paletteSystem(spec){
+  // A system may carry its own dark row (spec.dark: role and status lightness and chroma for dark
+  // surfaces, same hues); paletteSystem(spec,'dark') generates it, as okabe-ito has a dark row.
+  function paletteSystem(spec,appearance='light'){
+    const row=appearance==='dark'&&spec.dark?spec.dark:spec;
     const roles=[spec.base,spec.base+spec.ratio,spec.base+2*spec.ratio].map(h=>((h%360)+360)%360);
-    const status=['safe','alert','danger'].map(k=>spec.status[k]);
+    const status=['safe','alert','danger'].map(k=>row.status[k]);
     const hues=[...roles,...status.map(s=>s.h)];
-    const ramps=[...roles.map(h=>toneRamp(spec.role.L,spec.role.C,h,spec.step)),...status.map(s=>toneRamp(s.L,s.C,s.h,spec.step))];
+    const ramps=[...roles.map(h=>toneRamp(row.role.L,row.role.C,h,spec.step)),...status.map(s=>toneRamp(s.L,s.C,s.h,spec.step))];
     return {names:[...SYSTEM_NAMES],hues,ramps,slots:ramps.map(r=>r[2])};
   }
 
@@ -7129,14 +7133,16 @@ const LIGHT_SURFACE_MONO=['#202020','#353535','#4B4B4B','#616161','#747474','#87
 const LIGHT_SURFACE_MONO_DEEP=['#0D0D0D','#171717','#222222','#2E2E2E','#3A3A3A','#464646'];
 const DARK_SURFACE_MONO=['#F2F2EE','#DDDDD8','#C8C8C2','#B3B3AD','#9E9E98','#898984'];
 const DARK_SURFACE_MONO_BRIGHT=['#FFFFFF','#F0F0EB','#E1E1DB','#D2D2CC','#C3C3BD','#B4B4AE'];
-// 'okabe-ito' is the default: Okabe & Ito's colour-universal hues (09-colour-core.js REFERENCES),
+// 'okabe-ito' is Okabe & Ito's colour-universal hues (09-colour-core.js REFERENCES),
 // re-tuned by search so that, after each theme's realisation (themeColor), every slot keeps its
 // contrast floor and the closest pair stays CVD_FLOOR apart under protan, deutan and tritan
 // simulation. The other colour rows are hue families: legible, not colour-blind distinct;
 // scripts/contrast_audit.py measures and says so.
 // 'system-default' is generated, not authored: SovSchematicColour.PALETTE_SYSTEMS (09-colour-core.js)
 // gives three roles and three status tones from a base hue, a ratio and a step, and slots 6-11 take
-// the middle tone of each ramp, the same six in both appearances, realised through themeColor.
+// the middle tone of each ramp; a system with a dark row (spec.dark) gives DARK_SURFACE_PALETTES its own six.
+// It is the default: its values were searched on the realised slots (best5.json) and pass
+// scripts/contrast_audit.py in every theme x appearance.
 const BASE_PALETTES={
   'okabe-ito':['#F85401','#F4C768','#98E2BD','#0092E4','#2E69A0','#7B3962'],
   'system-default':SovSchematicColour.paletteSystem(SovSchematicColour.PALETTE_SYSTEMS['system-default']).slots,
@@ -7147,7 +7153,7 @@ const BASE_PALETTES={
 };
 const DARK_SURFACE_PALETTES={
   'okabe-ito':['#D07807','#FBAC31','#039843','#36BEFE','#5671AC','#FF1782'],
-  'system-default':SovSchematicColour.paletteSystem(SovSchematicColour.PALETTE_SYSTEMS['system-default']).slots,
+  'system-default':SovSchematicColour.paletteSystem(SovSchematicColour.PALETTE_SYSTEMS['system-default'],'dark').slots,
   spectrum:['#FF7A7D','#E8AA58','#9AC86C','#62C9C1','#82A9F2','#B88CE5'],
   cool:['#74B8E2','#69D0CB','#82C9AE','#91AFE8','#A19BE1','#B58FC8'],
   warm:['#F37C78','#ED966A','#E8B660','#D6A071','#CE858E','#C77F9E'],
@@ -7157,7 +7163,7 @@ const DEFAULT_CUSTOM_PALETTE=['#C84E64','#DB8750','#B7A647','#58A27C','#4E86BE',
 
 const colorEngine={
   theme:'pastel',
-  palette:'okabe-ito',
+  palette:'system-default',
   custom:[...DEFAULT_CUSTOM_PALETTE],
   diffuse:true
 };
@@ -7265,13 +7271,15 @@ function normalizeSlot(v,fallback=0){
 function slotColor(slot){return activePalette()[normalizeSlot(slot)]}
 // A declared palette system (09-colour-core.js PALETTE_SYSTEMS), generated once per name.
 const paletteSystemCache=new Map();
-function declaredPaletteSystem(name){
+function declaredPaletteSystem(name,appearance=surfaceAppearance()){
   const spec=SovSchematicColour.PALETTE_SYSTEMS[name];if(!spec)return null;
-  if(!paletteSystemCache.has(name))paletteSystemCache.set(name,SovSchematicColour.paletteSystem(spec));
-  return paletteSystemCache.get(name);
+  const key=name+'|'+appearance;
+  if(!paletteSystemCache.has(key))paletteSystemCache.set(key,SovSchematicColour.paletteSystem(spec,appearance));
+  return paletteSystemCache.get(key);
 }
 // The meaning colours stay fixed in every palette: a status tone is the base tone of safe, alert or
-// danger in the active palette when that palette is a declared system, else in system-default.
+// danger in the active palette when that palette is a declared system, else in system-default, on the
+// row of the current appearance.
 function statusTone(name){
   const sys=declaredPaletteSystem(colorEngine.palette)||declaredPaletteSystem('system-default');
   const i=sys.names.indexOf(name);
@@ -7282,7 +7290,7 @@ function statusTone(name){
 // the slot's authored colour for that appearance, with the system step 0.08.
 function litTone(slot,appearance=surfaceAppearance()){
   const n=Number(slot);if(!Number.isInteger(n)||n<6||n>11)return null;
-  const dark=appearance==='dark',index=dark?3:1,sys=declaredPaletteSystem(colorEngine.palette);
+  const dark=appearance==='dark',index=dark?3:1,sys=declaredPaletteSystem(colorEngine.palette,appearance);
   if(sys)return sys.ramps[n-6][index];
   const row=colorEngine.palette==='mono'
     ? (dark?DARK_SURFACE_MONO_BRIGHT:LIGHT_SURFACE_MONO_DEEP)
@@ -10404,6 +10412,220 @@ function onOneTrack(A,B,C,D,gap=14){
   const lo1=Math.min(p,q),hi1=Math.max(p,q),lo2=Math.min(r,s),hi2=Math.max(r,s);
   return Math.max(lo1,lo2)-Math.min(hi1,hi2)<gap;
 }
+
+// ---- Track gap (LAYOUT-MODEL.md "As built: track gap") -------------------------------------------
+// Two auto-routed wires whose parallel interior segments overlap for TRACK_STRETCH or more stand at
+// least TRACK_GAP apart; wires sharing an end may instead share one line exactly (a trunk, which the
+// junction dot marks where it parts). TRACK_GAP is the step of a wire's private lane in routePoints.
+// After every route is drawn, jogs (a step under TRACK_JOG between two parallel legs) are taken out,
+// then the segments that share a channel are ordered and spread (the nudging phase of orthogonal
+// connector routing: Wybrow, Marriott and Stuckey, GD 2009; libavoid's nudging and centring; ELK's
+// slot assignment). End leads, pinned and guided routes, bus routes and free/free carriers never
+// move: they are fixed segments the others keep the rule against.
+const TRACK_GAP=10,TRACK_STRETCH=24,TRACK_JOG=10;
+// What one wire's route keeps clear of, the rule routePoints uses, plus the fence of an interior.
+function routeObstaclesForWire(w){
+  const sourceNode=w.a?nodes.find(n=>n.id===w.a)||null:null,targetNode=w.b?nodes.find(n=>n.id===w.b)||null:null;
+  return {...routeObstacleSet(sourceNode,targetNode,w.aSide,w.bSide,w,w.id),fence:routeFence(w)};
+}
+function trackEnds(w){return w?[w.a?`${w.a}:${w.aSide}`:null,w.b?`${w.b}:${w.bSide}`:null].filter(Boolean):[]}
+function trackSeg(P,Q){
+  const h=Math.abs(P.y-Q.y)<.01,v=Math.abs(P.x-Q.x)<.01;if(h===v)return null;
+  return h?{axis:'h',c:P.y,lo:Math.min(P.x,Q.x),hi:Math.max(P.x,Q.x)}:{axis:'v',c:P.x,lo:Math.min(P.y,Q.y),hi:Math.max(P.y,Q.y)};
+}
+// An item is one drawn route; its segments are interior (movable), lead (an end's stub) or fixed.
+function trackItemSegs(it){
+  const p=it.pts,n=p.length,out=[];
+  for(let k=0;k<n-1;k++){const s=trackSeg(p[k],p[k+1]);if(!s)continue;s.item=it;s.k=k;s.kind=!it.movable?'fixed':(k===0||k===n-2)?'lead':'interior';s.ends=it.ends;out.push(s)}
+  return out;
+}
+// How badly a pair breaks the rule: 0 when it keeps it, else TRACK_GAP less the distance.
+function trackPairCost(s,t){
+  if(s.axis!==t.axis||(s.item&&s.item===t.item))return 0;
+  if(s.kind!=='interior'&&t.kind!=='interior')return 0;
+  if(Math.min(s.hi,t.hi)-Math.max(s.lo,t.lo)<TRACK_STRETCH)return 0;
+  const d=Math.abs(s.c-t.c);if(d>=TRACK_GAP)return 0;
+  if(d<.5)return s.ends.some(e=>t.ends.includes(e))?0:TRACK_GAP;
+  return TRACK_GAP-d;
+}
+// Takes out jogs, then orders and spreads the segments that share a channel, changing the points of
+// the movable routes in place. fixed: further segments ({a, b, ends}) that never move (bus lanes and
+// taps). obstacles(wire): what that wire's route keeps clear of. Returns the route keys still closer
+// than TRACK_GAP to a neighbour because the channel has no room.
+function nudgeRoutes(routes,fixed=[],obstacles=routeObstaclesForWire){
+  const cramped=new Set();
+  if(typeof window!=='undefined'&&window.ROUTE_NUDGE===false)return cramped;
+  const items=[];
+  for(const [key,r] of routes){
+    const w=wires[key];if(!w||!r?.points||r.points.length<2)continue;
+    const spec=typeof activeRouteSpec==='function'?activeRouteSpec(w.id):null;
+    const freeFree=carrierEndpoint(w,'a')?.kind==='free'&&carrierEndpoint(w,'b')?.kind==='free';
+    const movable=!r.snapshot&&!spec&&!freeFree;
+    items.push({key,w,r,idx:items.length,movable,ends:trackEnds(w),pts:normalizePoints(r.points)});
+  }
+  const movers=items.filter(it=>it.movable&&it.pts.length>=4);
+  if(!movers.length)return cramped;
+  const fixedSegs=[];
+  for(const f of fixed){const s=f&&f.a&&f.b?trackSeg(f.a,f.b):null;if(!s)continue;s.item=null;s.k=-1;s.kind='fixed';s.ends=Array.isArray(f.ends)?f.ends:[];fixedSegs.push(s)}
+  const segOf=new Map(items.map(it=>[it,trackItemSegs(it)]));
+  let all=null;const allSegs=()=>all||(all=[...fixedSegs,...[...segOf.values()].flat()]);
+  const refresh=list=>{for(const it of list)segOf.set(it,trackItemSegs(it));all=null};
+  // The rule's cost touching the given items, each pair once.
+  const badness=W=>{
+    const set=new Set(W),A=allSegs();let sum=0;
+    for(const it of W)for(const s of segOf.get(it))for(const t of A){
+      if(t.axis!==s.axis||Math.abs(t.c-s.c)>=TRACK_GAP||t.item===it)continue;
+      if(t.item&&set.has(t.item)&&t.item.idx<it.idx)continue;
+      sum+=trackPairCost(s,t);
+    }
+    return sum;
+  };
+  const rulePartners=it=>{const out=new Set();for(const s of segOf.get(it))for(const t of allSegs())if(t.item!==it&&trackPairCost(s,t)>0)out.add(t.item?t.item.idx:-1);return out};
+  // Crossings the given items make with every other route: wires sharing an end may cross once.
+  const crossings=W=>{
+    const set=new Set(W);let sum=0;
+    for(const it of W)for(const o of items){
+      if(o===it||(set.has(o)&&o.idx<it.idx))continue;
+      let c=0;
+      for(let i=1;i<it.pts.length;i++)for(let j=1;j<o.pts.length;j++)if(segmentsCross(it.pts[i-1],it.pts[i],o.pts[j-1],o.pts[j]))c++;
+      sum+=it.ends.some(e=>o.ends.includes(e))?Math.max(0,c-1):c;
+    }
+    return sum;
+  };
+  const obsCache=new Map(),obsOf=it=>{if(!obsCache.has(it))obsCache.set(it,obstacles(it.w));return obsCache.get(it)};
+  // Segments of a route that enter a padded obstacle: the core against every obstacle (leads
+  // excepted on their own ray), each lead against the cards that are not its own.
+  const blockedKeys=(it,pts)=>{
+    const o=obsOf(it),n=pts.length,out=new Set(),key=(P,Q)=>`${P.x},${P.y},${Q.x},${Q.y}`;
+    const leads=[routeLeadRay(pts[0],pts[1],o.ownA),routeLeadRay(pts[n-1],pts[n-2],o.ownB)].filter(Boolean);
+    for(let k=0;k<n-1;k++){
+      const P=pts[k],Q=pts[k+1];if(P.x===Q.x&&P.y===Q.y)continue;
+      const lead=k===0||k===n-2;
+      if(lead?o.others.some(R=>segHitsRect(P,Q,R)):!segmentClear(P,Q,o.obstacles,leads))out.add(key(P,Q));
+    }
+    return out;
+  };
+  // A move keeps every segment's direction, every lead at least as long as 4 (or as it was), enters
+  // no padded obstacle it was not already in, and stays inside an interior's fence.
+  const shapeHolds=(it,before)=>{
+    const after=it.pts,n=after.length;
+    for(let k=0;k<n-1;k++){
+      const d0={x:before[k+1].x-before[k].x,y:before[k+1].y-before[k].y},d1={x:after[k+1].x-after[k].x,y:after[k+1].y-after[k].y};
+      if(d0.x*d1.x<0||d0.y*d1.y<0)return false;
+      if(k===0||k===n-2){const L0=Math.abs(d0.x)+Math.abs(d0.y),L1=Math.abs(d1.x)+Math.abs(d1.y);if(L1<Math.min(4,L0)-.01)return false}
+    }
+    const was=blockedKeys(it,normalizePoints(before));
+    for(const k of blockedKeys(it,normalizePoints(after)))if(!was.has(k))return false;
+    const fence=obsOf(it).fence;
+    return !fence||!routeInsideFence(before,fence)||routeInsideFence(after,fence);
+  };
+  // Try a change to some routes; keep it only when accept(before, after) holds, the routes make no
+  // new crossing and every shape holds.
+  const attempt=(W,apply,accept)=>{
+    const saved=W.map(it=>it.pts.map(p=>({x:p.x,y:p.y})));
+    const before={bad:badness(W),cross:crossings(W),partners:W.map(rulePartners)};
+    apply();refresh(W);
+    const ok=W.every((it,i)=>shapeHolds(it,saved[i]))&&(()=>{const after={bad:badness(W),cross:crossings(W),partners:W.map(rulePartners)};return after.cross<=before.cross&&accept(before,after)})();
+    if(!ok){W.forEach((it,i)=>{it.pts=saved[i]});refresh(W)}
+    return ok;
+  };
+  const setLine=(pts,k,axis,c)=>{if(axis==='h'){pts[k].y=c;pts[k+1].y=c}else{pts[k].x=c;pts[k+1].x=c}};
+
+  // Jogs: the leg that is not an end lead moves onto the other leg's line, when that leaves no new
+  // pair breaking the rule.
+  for(const it of movers){
+    for(let guard=0;guard<it.pts.length;guard++){
+      const p=it.pts,n=p.length;let done=false;
+      for(let k=1;k<=n-3&&!done;k++){
+        const len=segmentLength(p[k],p[k+1]);if(!(len>.01&&len<TRACK_JOG))continue;
+        const legAxis=segmentAxis(p[k],p[k+1])==='v'?'h':'v',coord=q=>legAxis==='h'?q.y:q.x;
+        const options=[];
+        if(k+1<=n-3)options.push({move:k+1,to:coord(p[k]),len:segmentLength(p[k+1],p[k+2])});
+        if(k-1>=1)options.push({move:k-1,to:coord(p[k+1]),len:segmentLength(p[k-1],p[k])});
+        options.sort((x,y)=>x.len-y.len);
+        for(const o of options){
+          if(attempt([it],()=>setLine(it.pts,o.move,legAxis,o.to),(b,a)=>a.bad<=b.bad&&[...a.partners[0]].every(x=>b.partners[0].has(x)))){it.pts=normalizePoints(it.pts);refresh([it]);done=true;break}
+        }
+      }
+      if(!done)break;
+    }
+  }
+
+  // Nudging: channel by channel, order the segments and spread them TRACK_GAP apart.
+  const failed=new Set();
+  for(let pass=0;pass<3;pass++){
+    const A=allSegs(),parent=new Map(),find=s=>{while(parent.get(s)!==s){parent.set(s,parent.get(parent.get(s)));s=parent.get(s)}return s};
+    for(const axis of ['h','v']){
+      const L=A.filter(s=>s.axis===axis).sort((p,q)=>p.c-q.c);
+      for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length&&L[j].c-L[i].c<TRACK_GAP;j++){
+        if(trackPairCost(L[i],L[j])<=0)continue;
+        for(const s of [L[i],L[j]])if(!parent.has(s))parent.set(s,s);
+        const a=find(L[i]),b=find(L[j]);if(a!==b)parent.set(a,b);
+      }
+    }
+    const groups=new Map();for(const s of parent.keys()){const r=find(s);if(!groups.has(r))groups.set(r,[]);groups.get(r).push(s)}
+    let changed=false;
+    for(const members of groups.values()){
+      const sig=members.map(s=>`${s.item?s.item.key:'f'}:${s.k}:${s.c}`).sort().join('|');
+      if(failed.has(sig))continue;
+      const axis=members[0].axis;
+      // Slots: wires on one line that share an end are one trunk and move together.
+      members.sort((p,q)=>p.c-q.c);
+      const slots=[];
+      for(const s of members){const last=slots.at(-1);if(last&&Math.abs(s.c-last.c)<.5&&last.members.some(t=>t.ends.some(e=>s.ends.includes(e)))){last.members.push(s);continue}slots.push({c:s.c,members:[s]})}
+      for(const sl of slots){sl.fixed=sl.members.some(s=>s.kind!=='interior');if(sl.fixed)sl.c=sl.members.find(s=>s.kind!=='interior').c}
+      // Metro-line order: an arm leaving a segment inside the other's span wants its segment on the
+      // side the arm goes, so the arm never crosses the other segment.
+      const arms=s=>{
+        if(!s.item)return [];const p=s.item.pts,out=[];
+        for(const [at,next] of [[s.k,s.k-1],[s.k+1,s.k+2]]){if(next<0||next>=p.length)continue;const d=axis==='h'?Math.sign(p[next].x-p[at].x):Math.sign(p[next].y-p[at].y);const e=axis==='h'?p[at].x:p[at].y;if(d)out.push({e,d})}
+        return out;
+      };
+      const vote=(s,t)=>{let v=0;for(const a of arms(s))if(a.e>t.lo+.01&&a.e<t.hi-.01)v+=a.d;for(const a of arms(t))if(a.e>s.lo+.01&&a.e<s.hi-.01)v-=a.d;return v};
+      const slotVote=(x,y)=>{let v=0;for(const s of x.members)for(const t of y.members)v+=vote(s,t);return v};
+      const free=slots.filter(sl=>!sl.fixed),anchors=slots.filter(sl=>sl.fixed).sort((p,q)=>p.c-q.c);
+      if(!free.length)continue;
+      for(const sl of free){sl.score=free.reduce((a,o)=>o===sl?a:a+slotVote(sl,o),0);sl.region=anchors.filter(F=>{const v=slotVote(sl,F);return v>0||(v===0&&sl.c>=F.c)}).length}
+      free.sort((p,q)=>p.region-q.region||p.score-q.score||p.c-q.c||(p.members[0].item.idx-q.members[0].item.idx));
+      const W=[...new Set(free.flatMap(sl=>sl.members.map(s=>s.item)))];
+      // Each run of free slots between two anchors is spread g apart, centred where it is, kept a
+      // gap from the anchors; with no room it is spread evenly between them.
+      const place=(g,shift)=>{
+        const out=new Map();
+        for(let r=0;r<=anchors.length;r++){
+          const R=free.filter(sl=>sl.region===r);if(!R.length)continue;
+          const lo=r>0?anchors[r-1].c:-Infinity,hi=r<anchors.length?anchors[r].c:Infinity,m=R.length;
+          let step=g,start=R.reduce((a,sl)=>a+sl.c,0)/m-(m-1)/2*g+shift;
+          if(isFinite(lo)&&isFinite(hi)&&hi-lo<(m+1)*g){step=(hi-lo)/(m+1);start=lo+step}
+          else{if(isFinite(lo))start=Math.max(start,lo+g);if(isFinite(hi))start=Math.min(start,hi-g-(m-1)*g)}
+          R.forEach((sl,i)=>out.set(sl,Math.round((start+i*step)*100)/100));
+        }
+        return out;
+      };
+      const tries=[[TRACK_GAP,0],[TRACK_GAP,TRACK_GAP/2],[TRACK_GAP,-TRACK_GAP/2],[TRACK_GAP,TRACK_GAP],[TRACK_GAP,-TRACK_GAP],[TRACK_GAP,2*TRACK_GAP],[TRACK_GAP,-2*TRACK_GAP]];
+      for(let g=TRACK_GAP-1;g>=2;g--)tries.push([g,0]);
+      let moved=false;
+      for(const [g,shift] of tries){
+        const at=place(g,shift);
+        if(attempt(W,()=>{for(const [sl,c] of at)for(const s of sl.members)setLine(s.item.pts,s.k,axis,c)},(b,a)=>a.bad<b.bad-.01)){moved=true;break}
+      }
+      if(moved)changed=true;else failed.add(sig);
+    }
+    for(const it of movers)it.pts=normalizePoints(it.pts);
+    refresh(movers);
+    if(!changed)break;
+  }
+
+  for(const it of movers)it.r.points=it.pts;
+  for(const axis of ['h','v']){
+    const L=allSegs().filter(s=>s.axis===axis).sort((p,q)=>p.c-q.c);
+    for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length&&L[j].c-L[i].c<TRACK_GAP;j++){
+      if(trackPairCost(L[i],L[j])<=0)continue;
+      for(const s of [L[i],L[j]])if(s.kind==='interior')cramped.add(s.item.key);
+    }
+  }
+  return cramped;
+}
 function terminalPointId(nodeId,id){
   const node=nodes.find(n=>n.id===nodeId);
   return node?(Attachment.pointId(node,id)||String(id??'')):String(id??'');
@@ -11766,6 +11988,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
     if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
   });
+  // Jogs out and close parallels spread a track apart (src/40-routing.js nudgeRoutes); bus lanes and taps stay fixed.
+  const trackCramped=nudgeRoutes(routes,busState?[...busState.routes].flatMap(([id,pts])=>routeSegments(pts,wires.find(x=>x.id===id))):[]);
+  for(const [i,r] of routes)r.segs=routeSegments(r.points,wires[i]);
   const hops=new Map(),order=[...routes.keys()];arrowKeepClear=[];
   for(let x=0;x<order.length;x++)for(let y=x+1;y<order.length;y++){
     const P=routes.get(order[x]),Q=routes.get(order[y]);
@@ -11801,6 +12026,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':'')+((epA.kind==='free'||epB.kind==='free')?' has-free-end':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
     if(busState?.fallback.has(w.id))group.dataset.busFallback='true';
     if(routeBlockedAt(i))group.dataset.routeBlocked='true';
+    if(trackCramped.has(i))group.dataset.trackCramped='true';
 
     const gradientId=`wire-gradient-${i}-${renderEpoch++}`;
     const gradient=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
@@ -12195,6 +12421,31 @@ function layoutMetrics(options={}){
    for(let i=0;i<segs.length;i++)for(let j=i+1;j<segs.length;j++){const x=segs[i],y=segs[j];if(x.w===y.w||x.ends.some(e=>y.ends.includes(e)))continue;
      const key=[x.w.id,y.w.id].sort().join('|');if(seen.has(key))continue;
      if(onOneTrack(x.a,x.b,y.a,y.b,8)){seen.add(key);add('route-overlap',[x.w.id,y.w.id],'two wires run on one track')}}}
+  // Close parallels: two wires whose middle segments run 0.5 to under TRACK_GAP apart for 24 or
+  // more, end leads left out, shared end or not; a pair inside one bus band is a bus's own lanes.
+  // Reported, with no weight in the score (it is not in LAYOUT_RUBRIC).
+  {const gap=typeof TRACK_GAP==='number'?TRACK_GAP:10,segs=[];
+   for(const g of wiresG.querySelectorAll('.wire-group')){
+     const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
+     const m=layoutWorldMatrix(path),c=[];
+     for(const q0 of layoutPathCorners(String(path.getAttribute('d')||'').replace(/A[^A-Z]*?(?=[MLHV])/g,''))){
+       const q=m?new DOMPoint(q0.x,q0.y).matrixTransform(m):q0,p={x:Math.round(q.x*100)/100,y:Math.round(q.y*100)/100},l=c.at(-1);
+       if(l&&Math.abs(l.x-p.x)<.5&&Math.abs(l.y-p.y)<.5)continue;
+       if(c.length>=2){const a=c.at(-2);if((Math.abs(a.x-l.x)<.5&&Math.abs(l.x-p.x)<.5)||(Math.abs(a.y-l.y)<.5&&Math.abs(l.y-p.y)<.5)){c[c.length-1]=p;continue}}
+       c.push(p);
+     }
+     for(let s=1;s+2<c.length;s++){const P=c[s],Q=c[s+1],h=Math.abs(P.y-Q.y)<.5,v=Math.abs(P.x-Q.x)<.5;if(h===v)continue;segs.push({w,h,at:h?P.y:P.x,lo:h?Math.min(P.x,Q.x):Math.min(P.y,Q.y),hi:h?Math.max(P.x,Q.x):Math.max(P.y,Q.y)})}
+   }
+   const seen=new Set();
+   for(let i=0;i<segs.length;i++)for(let j=i+1;j<segs.length;j++){
+     const x=segs[i],y=segs[j];if(x.w===y.w||x.h!==y.h)continue;
+     const key=[x.w.id,y.w.id].sort().join('|');if(seen.has(key))continue;
+     const d=Math.abs(x.at-y.at),lo=Math.max(x.lo,y.lo),hi=Math.min(x.hi,y.hi);
+     if(d<.5||d>=gap||hi-lo<24)continue;
+     const mid=x.h?{x:(lo+hi)/2,y:(x.at+y.at)/2}:{x:(x.at+y.at)/2,y:(lo+hi)/2};
+     if(typeof busBandHolds==='function'&&busBandHolds(x.w,y.w,mid))continue;
+     seen.add(key);add('route-close-parallel',[x.w.id,y.w.id],`${d.toFixed(1)}px apart for ${Math.round(hi-lo)}px`);
+   }}
   // Empty container: its children and inner wires fill under a fifth of its interior (review, 03, 04, 07).
   for(const n of visible){
     if(!is2D(n)||!componentAcceptsChildren(n))continue;
@@ -14001,7 +14252,10 @@ async function openDesktopLaunchDocument(){
     if(opened)await report({name:opened.name||'',components:0,wires:0,ok:false,error:String(error?.message||error)});
   }
 }
-openDesktopLaunchDocument();
+// src/65-sim-control.js and later files load after this one, and opening a document reaches them
+// (simClock), so the launch open waits until every script has run.
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',openDesktopLaunchDocument,{once:true});
+else openDesktopLaunchDocument();
 
 if(fileBtn)fileBtn.addEventListener('click',event=>{event.stopPropagation();setFileMenu(fileMenu.hidden)});
 if(fileMenu)fileMenu.addEventListener('click',event=>event.stopPropagation());
@@ -14656,6 +14910,13 @@ const graphSession=SovSchematicSimSurface.createSession();
 function graphCall(name,args={}){return SovSchematicData.clone(graphSession.execute(name,snapshotDocument(),args))}
 function apiOperation(op,resource,resourceId,value,patch,query){return runtimeCrud({schema:SovSchematicData.OPERATION_SCHEMA,id:`browser-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,op,resource,resourceId,value,patch,query})}
 
+// The release build stamps <meta name="sov-revision" content="<tag> <commit>">; a local build has none.
+function buildRevision(){
+  if(typeof document==='undefined'||!document.querySelector)return null;
+  const meta=document.querySelector('meta[name="sov-revision"]');
+  return meta?meta.getAttribute('content'):null;
+}
+
 const SovSchematicAPI={
   version:'0.1',
   formats:()=>({document:SovSchematicData.DOCUMENT_SCHEMA,workspace:SovSchematicData.WORKSPACE_SCHEMA,package:SovSchematicData.PACKAGE_SCHEMA,operation:SovSchematicData.OPERATION_SCHEMA,receipt:SovSchematicData.RECEIPT_SCHEMA}),
@@ -14666,7 +14927,7 @@ const SovSchematicAPI={
     restoreRecovery:()=>restoreRecovery()
   },
   file:{
-    info:()=>({name:currentFileName,format:currentFileFormat,dirty:isFileDirty(),revision:diagram.revision}),
+    info:()=>({name:currentFileName,format:currentFileFormat,dirty:isFileDirty(),revision:diagram.revision,build:buildRevision()}),
     document:()=>snapshotDocument(),
     package:()=>snapshotPackage(),
     svg:(options={})=>snapshotSvg(options),

@@ -280,8 +280,8 @@ A dashed outline marks a thing that is not built.
 | `proposed` | Proposed | dashed | | alert | ◷ | Planned work that nobody has started. |
 
 A status that declares a tone draws its chip as a solid pill filled with that status tone
-(`statusTone` in `src/00-state.js`: safe #24AB7E, alert #F0BB3B, danger #C4422C, the same in every
-palette), holding the glyph, a space and the title in #141414 or #FFFFFF, whichever has the higher
+(`statusTone` in `src/00-state.js`: safe #01B597, alert #C28923, danger #7F1F26 in light and safe #28D4B2,
+alert #E3A849, danger #EC5258 in dark, the same in every palette), holding the glyph, a space and the title in #141414 or #FFFFFF, whichever has the higher
 contrast on the fill. A status that declares no tone draws its chip as before: an outline in the
 card's colour over a faint fill of it, holding the title alone.
 

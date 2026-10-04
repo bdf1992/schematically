@@ -54,6 +54,13 @@ const graphSession=SovSchematicSimSurface.createSession();
 function graphCall(name,args={}){return SovSchematicData.clone(graphSession.execute(name,snapshotDocument(),args))}
 function apiOperation(op,resource,resourceId,value,patch,query){return runtimeCrud({schema:SovSchematicData.OPERATION_SCHEMA,id:`browser-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,op,resource,resourceId,value,patch,query})}
 
+// The release build stamps <meta name="sov-revision" content="<tag> <commit>">; a local build has none.
+function buildRevision(){
+  if(typeof document==='undefined'||!document.querySelector)return null;
+  const meta=document.querySelector('meta[name="sov-revision"]');
+  return meta?meta.getAttribute('content'):null;
+}
+
 const SovSchematicAPI={
   version:'0.1',
   formats:()=>({document:SovSchematicData.DOCUMENT_SCHEMA,workspace:SovSchematicData.WORKSPACE_SCHEMA,package:SovSchematicData.PACKAGE_SCHEMA,operation:SovSchematicData.OPERATION_SCHEMA,receipt:SovSchematicData.RECEIPT_SCHEMA}),
@@ -64,7 +71,7 @@ const SovSchematicAPI={
     restoreRecovery:()=>restoreRecovery()
   },
   file:{
-    info:()=>({name:currentFileName,format:currentFileFormat,dirty:isFileDirty(),revision:diagram.revision}),
+    info:()=>({name:currentFileName,format:currentFileFormat,dirty:isFileDirty(),revision:diagram.revision,build:buildRevision()}),
     document:()=>snapshotDocument(),
     package:()=>snapshotPackage(),
     svg:(options={})=>snapshotSvg(options),
