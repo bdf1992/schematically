@@ -243,6 +243,29 @@ chip drawn then reads `+N`, N the badges without a chip of their own, and its `<
 labels.
 
 
+## Card shape (2026-10-04, `SECTION-MODEL.md` "Card shapes")
+
+A card may be drawn as a cylinder (a store) or a parallelogram (input and output), after the ISO 5807
+flowchart symbols.
+
+- **`config.presentation.shape`**: `rect`, `cylinder` or `parallelogram`. Absent means `rect`, and
+  `rect` is admitted on any Component. `cylinder` and `parallelogram` belong to a 2D Component that is
+  not a group and has a closed interior. Any other value, or either shape on any other Component, is
+  `SHAPE_INVALID` (`config.presentation.shape must be one of rect, cylinder, parallelogram, not "disk"`).
+  `disk` names a section preset (`SECTION-MODEL.md` "Presets"), never a shape.
+
+```json
+{"label": "Store", "presentation": {"shape": "cylinder"}}
+```
+
+A `create` or `update` of a Component carrying a bad `shape` is refused with the code and the document
+is unchanged; an `update` with `shape: null` removes the key. Loading keeps the stored value and
+`validateDocument` reports `component <id>: SHAPE_INVALID: ...`; a card whose shape is not admitted is
+drawn as a rectangle. The shape is presentation: it changes no port position, no route, no layout
+metric and nothing the runtime reads. The schema declares the key on `components[].config.presentation`.
+The selection panel's Boundary row shows it. QA: `tests/card_shapes_qa.py`.
+
+
 ## State space contracts (slice 1a, `STATE-SPACE.md`)
 
 The contract layer of the state space. Its code is `src/07-state-space.js`; validation is hand-written there, and the

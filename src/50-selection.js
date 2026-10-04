@@ -26,7 +26,8 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
   iOutside.textContent=n.boundary.outside.type;
   {const host=componentHostDescriptor(n);iParent.textContent=host?.ownerKind==='wire'?`Wire · ${host.label||host.ownerId}`:componentDisplayName(parentComponent(n));}
   iScope.textContent=componentScopePath(n);
-  iBoundary.textContent=n.boundary.shape;
+  // The card's declared shape (config.presentation.shape); absent is rect.
+  iBoundary.textContent=componentConfig(n).presentation.shape||'rect';
   iFamily.textContent=s.family;iSignalMode.textContent=componentSignalLabel(componentConfig(n).signalMode);iClass.textContent=s.diagram_class;iMeaning.textContent=s.meaning;
   iVerbs.innerHTML=s.verbs.map(v=>`<span class="pill">${v}</span>`).join('');
   iProps.innerHTML=s.properties.map(v=>`<span class="pill">${v}</span>`).join('');
