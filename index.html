@@ -12160,7 +12160,7 @@ function stableArrowPoint(path,targetD,minD,maxD){
     if(!fallback || bend<fallback.bend) fallback={q,bend};
     if(bend<=8) return q;
   }
-  return fallback?.q||pointAngleAtDistance(path,targetD,3);
+  return fallback?.q||null;
 }
 function appendChevronAt(group,q,reverse=false,className='flow-chevron'){
   const c=document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -12214,23 +12214,23 @@ function arrowPosesForPath(path,duplex=false){
   const legs=arrowLegs(path),poses=[];
   // A short wire puts its one mark at the middle of its longest leg.
   if(L<72&&legs.length){const g=legs.reduce((a,b)=>(b.e-b.s)>(a.e-a.s)?b:a);distances[0]=(g.s+g.e)/2}
-  const half=duplex?ARROW_DUPLEX_GAP/2:0;
+  const gap=duplex?ARROW_DUPLEX_GAP:0;
   for(const t of distances){
     const g=legs.find(l=>t>=l.s&&t<=l.e);if(!g)continue;
-    const lo=g.s+ARROW_BEND_CLEAR+half,hi=g.e-ARROW_BEND_CLEAR-half;if(lo>hi)continue;
-    // Slide along the leg, nearest first, until the mark clears every hop and junction.
-    for(let off=0;off<=g.e-g.s;off+=2)for(const sgn of off?[1,-1]:[1]){
-      const d=t+off*sgn;if(d<lo||d>hi)continue;
-      const at=duplex?[d-half,d+half]:[d],qs=at.map(a=>pointAngleAtDistance(path,a,3));
-      if(qs.some(q=>arrowKeepClear.some(c=>Math.hypot(c.x-q.x,c.y-q.y)<ARROW_CROSSING_CLEAR)))continue;
-      qs.forEach((q,i)=>poses.push({q,reverse:i===1}));off=Infinity;break;
-    }
+    const lo=g.s+ARROW_BEND_CLEAR,hi=g.e-ARROW_BEND_CLEAR-gap;if(lo>hi)continue;
+    // Slide along the leg to clear every hop and junction; a leg with no clear place is skipped.
+    const q=stableArrowPoint(path,t-gap/2,lo,hi);if(!q)continue;
+    if(!duplex){poses.push({q,reverse:false});continue}
+    const r=pointAngleAtDistance(path,q.d+gap,3);
+    if(arrowKeepClear.some(c=>Math.hypot(c.x-r.x,c.y-r.y)<ARROW_CROSSING_CLEAR))continue;
+    poses.push({q,reverse:false},{q:r,reverse:true});
   }
   // A wire whose legs are all too short or crowded still says which way it runs.
   if(!poses.length&&L>=20){
     const margin=Math.min(L/2,Math.min(46,Math.max(26,L*.16)));
-    poses.push({q:stableArrowPoint(path,L/2,margin,L-margin),reverse:false});
-    if(duplex)poses.push({q:stableArrowPoint(path,Math.min(L-margin,L/2+ARROW_DUPLEX_GAP),margin,L-margin),reverse:true});
+    const at=d=>stableArrowPoint(path,d,margin,L-margin)||pointAngleAtDistance(path,d,3);
+    poses.push({q:at(L/2),reverse:false});
+    if(duplex)poses.push({q:at(Math.min(L-margin,L/2+ARROW_DUPLEX_GAP)),reverse:true});
   }
   return poses;
 }
