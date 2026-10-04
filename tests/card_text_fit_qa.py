@@ -148,7 +148,7 @@ READ_EDITOR = r"""()=>{const screen=parseFloat(workspace.style.getPropertyValue(
     const id=t.closest('.node').dataset.id,px=+(parseFloat(getComputedStyle(t).fontSize)*screen).toFixed(2),text=[...t.querySelectorAll('tspan')].map(s=>s.textContent);
     if(t.dataset.truncated==='true')out.cut.push([id,text]);
     if(t.dataset.shrunk==='true')out.shrunk.push([id,t.dataset.full,px]);
-    else if(px<12-0.05)out.floor.push([id,px])}
+    else if(px<LABEL_FLOORS.general-0.05)out.floor.push([id,px])}
   return out}"""
 
 inside = lambda a, R, tol=0.5: a['l'] >= R['l'] - tol and a['r'] <= R['r'] + tol and a['t'] >= R['t'] - tol and a['b'] <= R['b'] + tol
@@ -165,6 +165,7 @@ with sync_playwright() as p:
     page.on('console', lambda msg: errors.append(msg.text) if msg.type == 'error' else None)
     page.set_content((ROOT / 'index.html').read_text(encoding='utf-8'), wait_until='load')
     page.wait_for_timeout(250)
+    floors = page.evaluate('()=>LABEL_FLOORS')
 
     docs = {}
     for doc in DOCS:
@@ -259,7 +260,7 @@ assert out['sub'] and out['sub']['t'] - out['box']['b'] >= gap - 0.01, ('the out
 # A lone title needing two lines on a 112 x 84 card gets them whole; the glyph shrinks for it, not for a short title.
 sm, sh = small['small'], small['short']
 print(f"small card: lines {sm['lines']}, truncated {sm['truncated']}, glyph {sm['glyph']}, title top {sm['top']:.1f}; short title glyph {sh['glyph']}")
-assert sm['em'] == 12, ('the picture draws the title at 12 px', sm['em'])
+assert sm['em'] == floors['general'],('the picture draws the title at 12 px', sm['em'])
 assert sm['lines'] == ['Clock AND', 'enable'] and sm['truncated'] is None, ('a lone two-line title is drawn whole', sm['lines'], sm['truncated'])
 assert sm['top'] >= sm['glyph']['y'] + sm['glyph']['h'] + 2 - 0.01, ('the two lines sit below the glyph', sm['top'], sm['glyph'])
 # Today's glyph boxes on dev 2a366e0's glyphBox for a 112 x 84 card at title size 12: a two-line
@@ -287,6 +288,6 @@ for name, e in editor.items():
     print(f"editor zoom {e['zoom']:.3f} (screen {e['screen']:.3f}) {name}: cut {e['cut']}, shrunk {e['shrunk']}")
     assert abs(e['zoom'] - 1) < 1e-6, (name, 'camera zoom 1', e['zoom'])
     assert not e['cut'], (name, 'the editor at zoom 1 cuts example titles', e['cut'])
-    assert all(px >= 10 - 0.05 for _, _, px in e['shrunk']), (name, 'a shrunk title reads at 10 px or more', e['shrunk'])
+    assert all(px >= floors['shrunkTitle'] - 0.05 for _, _, px in e['shrunk']), (name, 'a shrunk title reads at 10 px or more', e['shrunk'])
     assert not e['floor'], (name, 'a title below 12 px is marked data-shrunk', e['floor'])
 print('PASS card text fit QA')
