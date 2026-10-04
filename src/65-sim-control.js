@@ -73,6 +73,8 @@ function paintSim(){
   if(typeof narrationState!=='undefined'&&narrationState.index!=null)showNarration(narrationState.index,{manual:narrationState.manual});
   if(typeof legendState!=='undefined'&&legendState.open)renderLegendPanel();
   simLayer.replaceChildren();
+  // The wave view (src/68-wave-view.js, loaded after this file) repaints its own layer on every paint.
+  if(typeof paintWaves==='function')paintWaves();
   workspace.classList.toggle('sim-live',!!simClock.run);
   for(const gEl of workspace.querySelectorAll('.wire-group.level-high')){gEl.classList.remove('level-high');gEl.style.removeProperty('--wire-lit')}
   const run=simClock.run;if(!run)return;
