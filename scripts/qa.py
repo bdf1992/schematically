@@ -81,6 +81,7 @@ BROWSER=[
     'tests/group_region_qa.py',
     'tests/region_fill_qa.py',
     'tests/sim_control_qa.py',
+    'tests/wave_view_qa.py',
     'tests/server_render_qa.py',
     'tests/access_panel_qa.py',
     'tests/layouts_qa.py',

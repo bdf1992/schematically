@@ -45,6 +45,8 @@ function captureWorkspace(){
       // The document's own rate (meta.timeScale) wins over the view; a workspace carries only the
       // view's own playback speed, never the document's rate (issue #40).
       playbackSpeed:simClock.speed,
+      // The wave view's style (src/68-wave-view.js) is the view's alone: never in the document.
+      waveStyle:typeof waveStyle==='function'?waveStyle():'off',
       layout:typeof activeLayoutId==='function'?activeLayoutId():null
     }
   };
@@ -131,6 +133,8 @@ function applyWorkspace(bundle){
     simClock.speed=view.playbackSpeed;
     const sel=document.getElementById('simSpeed');if(sel)sel.value=String(simClock.speed);
   }
+  // A workspace without view.waveStyle, or with a value that is not one of the four, gives off.
+  if(typeof waveStyleFromView==='function')waveStyleFromView(view);
   if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
   render();
   return captureWorkspace();
@@ -406,6 +410,8 @@ function renderStandaloneSvgNow(opts={}){
   clone.querySelector('#paletteDropLayer')?.replaceChildren();
   // A running clock's overlay is a moment, not the document.
   clone.querySelector('#simLayer')?.replaceChildren();
+  // The wave view's layer is a moment too, and it is the view's: the picture carries no trace of it.
+  clone.querySelector('#waveLayer')?.remove();
   clone.querySelectorAll('.level-high').forEach(x => { x.classList.remove('level-high'); x.style.removeProperty('--wire-lit'); });
   clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
   clone.querySelectorAll('.port-hit,.wire-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
