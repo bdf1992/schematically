@@ -43,18 +43,24 @@ wire ends; tests/drag_redraw_parity_qa.py press_most_wired) is pressed and moved
 for five steps; one step is the app's pointermove handler and one frame pass, in one evaluate. Then
 the card is released and renderWires() is timed five times. Measured on this host on 2026-10-04:
 
-    drag step                        measured   594 ms   budget  1800 ms   (three times, up to the next 50)
-    drag step / renderWires()        measured   0.76     under   1.55      (twice, up to the next 0.05)
+    drag step                        measured   319 ms   budget  1000 ms   (three times, up to the next 50)
+    drag step / renderWires()        measured   0.40     under   1.55      (the line set at 0.76: twice, up to the next 0.05)
     wire groups created per step     measured  13 to 16  under   40        (half of the map's 80)
 
-The step is the middle of three sessions' medians of five (591, 594, 595), beside a renderWires() of
-777 ms. Before the change a step was 1155 ms and created all 80 groups. What holds it down, in
-src/55-render.js: the wire pass of a move (renderWiresForDrag) computes the signal state once per
-move and not once per frame (533 ms a frame on the map), and keeps every wire group whose inputs did
-not change. What is left in a step is mostly busRoutesForRender, 394 ms: it orders the bus lanes again
-on every move, because its answer depends on where every card is. A step that creates half of the
-groups or more means the keyed pass stopped keeping them. With renderWiresForDrag made to call a
-plain renderWires() a step measured 1702 ms, a ratio of 2.18, and created 80 groups. The signal
+The step is the middle of three sessions' medians of five (314, 319, 611; the 611 session ran while
+the host was busy, its render() at 1291 ms), beside a renderWires() of 800 ms. Before the lanes were
+held a step was 594 ms (591, 594, 595, beside a renderWires() of 777 ms, a ratio of 0.76), and before
+the keyed pass 1155 ms with all 80 groups created. What holds it down: in src/55-render.js the wire
+pass of a move (renderWiresForDrag) computes the signal state once per move and not once per frame
+(533 ms a frame on the map), and keeps every wire group whose inputs did not change; in
+src/41-buses.js the lane order of every bus is held from the press and ordered again only when the
+pointer rests or the move ends (tests/bus_lane_hold_qa.py), which took busRoutesForRender from about
+415 ms a step to about 140. What is left in a step: the key of busRoutesForRender (about 58 ms: both
+ends of every bus wire and every card's place), the plans of the 79 bus wires (about 76 ms, nearly all
+of it routeLead), the keyed wire pass (about 170 ms) and the pointermove handler (about 27 ms). A step
+that creates half of the groups or more means the keyed pass stopped keeping them. With
+renderWiresForDrag made to call a plain renderWires(), and the lanes not yet held, a step measured
+1702 ms, a ratio of 2.18, and created 80 groups. The signal
 state computed once per frame and nothing else lost would be a ratio near 1.5, which the 1.55 line
 does not catch; the group count does not see it either.
 """
@@ -74,7 +80,7 @@ RUNS = 5
 RENDER_BUDGET_MS = 3000
 METRICS_BUDGET_MS = 7350
 FIT_BUDGET_MS = 300  # measured 92 ms on this host on 2026-10-04, times three, up to the next 50
-DRAG_STEP_BUDGET_MS = 1800  # measured 594 ms on this host on 2026-10-04, times three, up to the next 50
+DRAG_STEP_BUDGET_MS = 1000  # measured 319 ms on this host on 2026-10-04 with the bus lanes held, times three, up to the next 50
 DRAG_STEP_RATIO = 1.55  # measured 0.76 (594 ms beside a 777 ms renderWires()), times two, up to the next 0.05
 # A step created 13 to 16 of the map's 80 wire groups; every step must create fewer than half of them.
 
