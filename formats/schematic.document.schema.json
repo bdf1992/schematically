@@ -25,7 +25,43 @@
     },
     "meta": {
       "type": "object",
-      "description": "Document metadata. Beta.24 may include timeScale and persisted checkpoints."
+      "description": "Document metadata. Beta.24 may include timeScale and persisted checkpoints. palette is the document's own palette: a palette name or {custom: [six #RRGGBB hexes]}; it wins over the view's palette when the document opens.",
+      "properties": {
+        "palette": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "okabe-ito",
+                "system-default",
+                "spectrum",
+                "cool",
+                "warm",
+                "earth",
+                "mono"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "custom"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "custom": {
+                  "type": "array",
+                  "minItems": 6,
+                  "maxItems": 6,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
     },
     "canvas": {
       "type": "object"

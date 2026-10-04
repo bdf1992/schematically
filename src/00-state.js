@@ -267,19 +267,39 @@ function activeMonoPalette(){
   const base=surfaceAppearance()==='dark'?DARK_SURFACE_MONO:LIGHT_SURFACE_MONO;
   return base.map(c=>themeColor(c));
 }
+// The document's own palette (meta.palette) wins over the view's while the document declares one.
+// documentPalette() is the admitted value - a palette name or {custom:[six hexes]} - or null when the
+// document declares none (or holds a refused value, which draws nothing of its own). Every palette
+// read goes through effectivePaletteName() and effectiveCustomRow(); colorEngine stays the view's own
+// palette and is never written from the document.
+function documentPalette(){
+  const declared=diagram.meta?.palette;
+  if(declared===undefined)return null;
+  const admitted=SovSchematicData.admitPalette(declared);
+  return admitted.ok&&admitted.present?admitted.value:null;
+}
+function effectivePaletteName(){
+  const declared=documentPalette();
+  if(declared===null)return colorEngine.palette;
+  return typeof declared==='string'?declared:'custom';
+}
+function effectiveCustomRow(){
+  const declared=documentPalette();
+  return declared!==null&&typeof declared!=='string'?declared.custom:colorEngine.custom;
+}
 function activeColorPalette(){
-  const dark=surfaceAppearance()==='dark';
-  const base=colorEngine.palette==='mono'
+  const dark=surfaceAppearance()==='dark',name=effectivePaletteName();
+  const base=name==='mono'
     ? (dark?DARK_SURFACE_MONO_BRIGHT:LIGHT_SURFACE_MONO_DEEP)
-    : colorEngine.palette==='custom'
-      ? colorEngine.custom
-      : (dark?(DARK_SURFACE_PALETTES[colorEngine.palette]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[colorEngine.palette]||BASE_PALETTES['okabe-ito']));
+    : name==='custom'
+      ? effectiveCustomRow()
+      : (dark?(DARK_SURFACE_PALETTES[name]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[name]||BASE_PALETTES['okabe-ito']));
   return base.map(c=>themeColor(c));
 }
 let activePaletteCacheKey=null;
 let activePaletteCacheValue=null;
 function activePalette(){
-  const key=[surfaceAppearance(),colorEngine.theme,colorEngine.palette,...colorEngine.custom].join('|');
+  const key=[surfaceAppearance(),colorEngine.theme,effectivePaletteName(),...effectiveCustomRow()].join('|');
   if(activePaletteCacheKey===key&&activePaletteCacheValue)return activePaletteCacheValue;
   activePaletteCacheKey=key;
   activePaletteCacheValue=Object.freeze([...activeMonoPalette(),...activeColorPalette()]);
@@ -302,7 +322,7 @@ function declaredPaletteSystem(name,appearance=surfaceAppearance()){
 // danger in the active palette when that palette is a declared system, else in system-default, on the
 // row of the current appearance.
 function statusTone(name){
-  const sys=declaredPaletteSystem(colorEngine.palette)||declaredPaletteSystem('system-default');
+  const sys=declaredPaletteSystem(effectivePaletteName())||declaredPaletteSystem('system-default');
   const i=sys.names.indexOf(name);
   return i>=3?sys.ramps[i][2]:null;
 }
@@ -311,13 +331,13 @@ function statusTone(name){
 // the slot's authored colour for that appearance, with the system step 0.08.
 function litTone(slot,appearance=surfaceAppearance()){
   const n=Number(slot);if(!Number.isInteger(n)||n<6||n>11)return null;
-  const dark=appearance==='dark',index=dark?3:1,sys=declaredPaletteSystem(colorEngine.palette,appearance);
+  const dark=appearance==='dark',index=dark?3:1,name=effectivePaletteName(),sys=declaredPaletteSystem(name,appearance);
   if(sys)return sys.ramps[n-6][index];
-  const row=colorEngine.palette==='mono'
+  const row=name==='mono'
     ? (dark?DARK_SURFACE_MONO_BRIGHT:LIGHT_SURFACE_MONO_DEEP)
-    : colorEngine.palette==='custom'
-      ? colorEngine.custom
-      : (dark?(DARK_SURFACE_PALETTES[colorEngine.palette]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[colorEngine.palette]||BASE_PALETTES['okabe-ito']));
+    : name==='custom'
+      ? effectiveCustomRow()
+      : (dark?(DARK_SURFACE_PALETTES[name]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[name]||BASE_PALETTES['okabe-ito']));
   const [L,C,h]=SovSchematicColour.hexOklch(row[n-6]);
   return SovSchematicColour.toneRamp(L,C,h,.08)[index];
 }

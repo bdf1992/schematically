@@ -38,6 +38,8 @@ function captureWorkspace(){
       camera:{...camera},
       grid:{visible:canvasGridVisible,snap:canvasSnapEnabled,size:canvasGridSize},
       showFlow,
+      // The document's own palette (meta.palette) wins over the view; a workspace carries only the
+      // view's own palette and custom row, never the document's palette.
       colorEngine:SovSchematicData.clone(colorEngine),
       appearanceMode,
       // The document's own rate (meta.timeScale) wins over the view; a workspace carries only the
@@ -96,7 +98,7 @@ function syncRuntimeAfterDocumentReplace(){
   selected=null;hideSelectionBar();
   persistenceFingerprint=semanticFingerprint();
   updateRevisionReadout();
-  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
+  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();if(typeof applyColorEngine==='function')applyColorEngine();
   render();selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
 }
 function replaceRuntimeDocument(input){
