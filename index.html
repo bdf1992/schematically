@@ -14256,7 +14256,10 @@ async function openDesktopLaunchDocument(){
     if(opened)await report({name:opened.name||'',components:0,wires:0,ok:false,error:String(error?.message||error)});
   }
 }
-openDesktopLaunchDocument();
+// src/65-sim-control.js and later files load after this one, and opening a document reaches them
+// (simClock), so the launch open waits until every script has run.
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',openDesktopLaunchDocument,{once:true});
+else openDesktopLaunchDocument();
 
 if(fileBtn)fileBtn.addEventListener('click',event=>{event.stopPropagation();setFileMenu(fileMenu.hidden)});
 if(fileMenu)fileMenu.addEventListener('click',event=>event.stopPropagation());
