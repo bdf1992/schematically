@@ -1161,14 +1161,85 @@ function placeWireLabels(){
     obstacles.push(rect(label));
   }
 }
-function renderWires(signalState=computeSignalState(),markers=markersById()){
+// The signal state reads configuration, wires and placement, never x or y: one value stands from the
+// press of a move until a host is applied or anything else redraws the wires.
+let dragSignalState=null;
+function dropDragSignalState(){dragSignalState=null}
+// The wire pass of a move (pointer or keyboard): the held signal state, and the groups whose inputs
+// did not change are kept (renderWires, reuse).
+function renderWiresForDrag(){
+  if(!dragSignalState)dragSignalState=computeSignalState();
+  renderWires(dragSignalState,markersById(),true);
+}
+// What the last wire pass drew: wire id -> its group, the key of everything that group was drawn
+// from, and where it stands. A reuse pass replaces only the groups whose key differs.
+const wireGroupDrawn=new Map();
+// A wire's colours under one signal state, found once per state object.
+const wireSignalHeld=new WeakMap();
+function wireSignalFor(w,signalState){
+  let held=wireSignalHeld.get(signalState);if(!held){held=new Map();wireSignalHeld.set(signalState,held)}
+  let entry=held.get(w);if(!entry){const signal=wireSignalColors(w,signalState);entry={signal,text:JSON.stringify(signal)};held.set(w,entry)}
+  return entry;
+}
+// The node a wire on a Component's interior surface is lifted behind, when that node is drawn.
+function wireLiftHost(w){
+  const surface=w.canvasId||GLOBAL_CANVAS_ID;
+  const hostId=surface.startsWith('canvas:component:')?surface.slice('canvas:component:'.length):null;
+  return hostId?nodesG.querySelector(`:scope > .node[data-id="${hostId}"]`):null;
+}
+// The host's groups sit directly after it, behind its wires: the first wire goes after them.
+function wireLiftAnchor(el){let at=el;while(at.nextElementSibling?.classList.contains('group'))at=at.nextElementSibling;return at}
+// Whether the groups in the document are the ones recorded, each where a pass from nothing would put
+// it: the same wires at the same indexes, in order in the wire layer or behind the same host.
+function wireGroupsStand(routes){
+  if(wireGroupDrawn.size!==routes.size)return false;
+  let last=null,lifted=0;const anchors=new Map();
+  for(const i of routes.keys()){
+    const w=wires[i],drawn=wireGroupDrawn.get(w.id);
+    if(!drawn||drawn.index!==i||!drawn.group.isConnected)return false;
+    const hostEl=wireLiftHost(w);
+    if(hostEl){
+      if((anchors.get(hostEl)||wireLiftAnchor(hostEl)).nextElementSibling!==drawn.group)return false;
+      anchors.set(hostEl,drawn.group);lifted++;
+    }else{
+      if((last?last.nextElementSibling:wiresG.firstElementChild)!==drawn.group)return false;
+      last=drawn.group;
+    }
+  }
+  if(last?last.nextElementSibling:wiresG.firstElementChild)return false;
+  return nodesG.querySelectorAll(':scope > .wire-group').length===lifted;
+}
+// Everything one wire's group is drawn from, as one string. Two passes with the same key draw the
+// same group, so the one in the document is kept. The wire's own config and form are in it whole
+// (label, direction, status, kind, section). What a kind or a status resolves to comes from the
+// notation, which changes only when the document is replaced; that goes through render(), and a
+// pass with reuse false draws every group and records it again.
+function wireDrawKey(i,w,d,points,epA,epB,snapshot,busFallback,cramped,editor,signalText,wireMarkers){
+  const at=q=>`${q.x},${q.y}`;
+  // Direction marks keep clear of every crossing and junction near the path (stableArrowPoint); a
+  // mark may sit on a hop's arc, which stands off the route by the hop's radius.
+  const reach=ARROW_CROSSING_CLEAR+WIRE_HOP_RADIUS*markScale+1;
+  let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
+  for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}
+  l-=reach;r+=reach;t-=reach;b+=reach;
+  const clear=arrowKeepClear.filter(c=>c.x>=l&&c.x<=r&&c.y>=t&&c.y<=b).map(at).join(' ');
+  return [i,w.id,d,points.map(at).join(' '),at(epA.pos),epA.kind,at(epB.pos),epB.kind,
+    snapshot?`${at(snapshot.aPos)} ${at(snapshot.bPos)}`:'',activeNodeDrag||'',busFallback?1:0,routeBlockedAt(i)?1:0,cramped?1:0,
+    selected===`wire:${i}`?1:0,editor.locked?1:0,editor.opacity,markScale,signalText,
+    JSON.stringify(w.config||null),JSON.stringify(w.form||null),
+    (wireMarkers||[]).map(m=>m.message).join('\u0001'),clear].join('\u0002');
+}
+function renderWires(signalState=computeSignalState(),markers=markersById(),reuse=false){
   const previousLabels=new Map([...wireLabelPaths.keys()].map(path=>{
     const label=path.parentElement?.querySelector('.connection-label');
     return [path.parentElement?.dataset.wireId,label?{text:label.textContent,d:path.getAttribute('d'),x:label.getAttribute('x'),y:label.getAttribute('y')}:null];
   }));
   wireLabelPaths.clear();
-  wiresG.innerHTML='';
-  nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
+  const emptyWireGroups=()=>{
+    wiresG.innerHTML='';
+    nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
+  };
+  if(!reuse)emptyWireGroups();
   refreshGroupRegions();
   clearEndpointFocus();
   const occupied=[];
@@ -1218,6 +1289,18 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
      for(let d=0;d<=reach;d+=2){const q=list.map(p=>at(p,d));if(q.some(v=>Math.hypot(v.x-q[0].x,v.y-q[0].y)>1.2))break;join=q[0]}
      arrowKeepClear.push(join)}}
 
+  // Every route, hop and cache write above is the full pass's. A reuse pass keeps the groups in the
+  // document when they are the recorded ones in their places; otherwise it draws from nothing.
+  const keyed=reuse&&wireGroupsStand(routes);
+  if(reuse&&!keyed)emptyWireGroups();
+  if(!keyed)wireGroupDrawn.clear();
+  // The cards hosted on a wire take their pose from its drawn path.
+  const poseHosted=(w,base)=>{const L=base.getTotalLength();for(const hosted of nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&n.id!==activeNodeDrag)){
+    const placement=componentPlacement(hosted),len=Math.max(1,Math.min(L-1,L*placement.t)),q=base.getPointAtLength(len),angle=pathTangentAngleAtLength(base,len);
+    hosted.x=q.x;hosted.y=q.y;wireHostPoseCache.set(hosted.id,{x:q.x,y:q.y,angle,wireId:w.id,t:placement.t});
+    const el=nodesG.querySelector(`.node[data-id="${hosted.id}"]`);if(el)el.setAttribute('transform',`translate(${hosted.x} ${hosted.y}) rotate(${angle})`)
+  }};
+
   wires.forEach((w,i)=>{
     const editor=entityEditorState(w);const cfg=connectionConfig(w);if(editor.hidden||!carrierIsRenderable(w))return;
     const epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b'),a=epA.node,b=epB.node;
@@ -1227,7 +1310,21 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const d=SovSchematicData.normalizeSection(w.form?.section,1)?.lines?.length>=2?pathD(points):pathWithHops(points,hops.get(i));
     const wireMarkers=markers.get(w.id);
 
-    const signal=wireSignalColors(w,signalState);
+    const held=wireSignalFor(w,signalState),signal=held.signal;
+    const key=wireDrawKey(i,w,d,points,epA,epB,snapshot,busState?.fallback.has(w.id),trackCramped.has(i),editor,held.text,wireMarkers);
+    const old=keyed?wireGroupDrawn.get(w.id):null;
+    if(old&&old.key===key){
+      // Kept: what a rebuild would drop (hover and drop-target classes, a lit level, a stale
+      // selection or crowding mark) is dropped here, at the same point of the pass.
+      if(old.group.getAttribute('class')!==old.cls)old.group.setAttribute('class',old.cls);
+      if(old.group.style.cssText!==old.css)old.group.style.cssText=old.css;
+      if(old.base.getAttribute('class')!==old.baseCls)old.base.setAttribute('class',old.baseCls);
+      if(old.label)delete old.label.dataset.labelCrowded;
+      wireLabelPaths.set(old.base,clonePoints(points));
+      poseHosted(w,old.base);
+      if(selected===`wire:${i}`) focusWireVisual(i);
+      return;
+    }
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
     group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':'')+((epA.kind==='free'||epB.kind==='free')?' has-free-end':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
     if(busState?.fallback.has(w.id))group.dataset.busFallback='true';
@@ -1279,11 +1376,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
       const top=Math.min(...points.map(p=>p.y)),right=Math.max(...points.map(p=>p.x));
       appendMarkerBadge(group,wireMarkers,right,top);
     }
-    {const L=base.getTotalLength();for(const hosted of nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&n.id!==activeNodeDrag)){
-      const placement=componentPlacement(hosted),len=Math.max(1,Math.min(L-1,L*placement.t)),q=base.getPointAtLength(len),angle=pathTangentAngleAtLength(base,len);
-      hosted.x=q.x;hosted.y=q.y;wireHostPoseCache.set(hosted.id,{x:q.x,y:q.y,angle,wireId:w.id,t:placement.t});
-      const el=nodesG.querySelector(`.node[data-id="${hosted.id}"]`);if(el)el.setAttribute('transform',`translate(${hosted.x} ${hosted.y}) rotate(${angle})`)
-    }}
+    poseHosted(w,base);
 
     // Discrete packets are real instances, not repeated dash patterns.
     // Path length may alter motion duration but cannot manufacture particles.
@@ -1297,8 +1390,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const hostId=surface.startsWith('canvas:component:')?surface.slice('canvas:component:'.length):null;
     const hostEl=hostId?nodesG.querySelector(`:scope > .node[data-id="${hostId}"]`):null;
     // The host's groups sit directly after it, behind its wires: the first wire goes after them.
-    const firstAnchor=el=>{let at=el;while(at.nextElementSibling?.classList.contains('group'))at=at.nextElementSibling;return at};
-    if(hostEl){(hostAnchors.get(hostId)||firstAnchor(hostEl)).after(group);hostAnchors.set(hostId,group)}
+    // A group whose inputs changed takes the place of the one it replaces.
+    if(old)old.group.replaceWith(group);
+    else if(hostEl){(hostAnchors.get(hostId)||wireLiftAnchor(hostEl)).after(group);hostAnchors.set(hostId,group)}
     else wiresG.appendChild(group);
 
     // Marks have no independent positional truth. Every arrow is regenerated
@@ -1372,7 +1466,10 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     hit.addEventListener('pointerdown',e=>{e.stopPropagation();selectWire(i);focusWireVisual(i)});
     group.addEventListener('pointerenter',()=>focusWireVisual(i));
     group.addEventListener('pointerleave',()=>{if(selected!==`wire:${i}`)clearWireVisualFocus()});
+    wireGroupDrawn.set(w.id,{group,base,key,index:i,hostId:hostEl?hostId:null,cls:group.getAttribute('class'),css:group.style.cssText,baseCls:base.getAttribute('class'),label:group.querySelector('.connection-label')});
     if(selected===`wire:${i}`) focusWireVisual(i);
   });
   placeWireLabels();
+  // Any pass that is not a move's own ends the held signal state: what it stood for may have changed.
+  if(!reuse)dropDragSignalState();
 }

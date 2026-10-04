@@ -260,7 +260,7 @@ function settleDraggedRoutes(){
       occupied.push(...routeSegments(points,w));
     }
   }));
-  renderWires();
+  renderWiresForDrag();
   wires.forEach((w,i)=>{
     if(!(w.a===activeNodeDrag || w.b===activeNodeDrag)) return;
     const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
