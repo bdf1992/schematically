@@ -233,6 +233,8 @@
     const bus={points:pts,pitch:busPitch(a.pitch)};
     if(a.label!=null&&String(a.label).trim())bus.label=String(a.label);
     if(Array.isArray(a.between)&&a.between.length===2)bus.between=a.between.map(String);
+    // lanes: 'port' gives the wires that share their a end one lane; left out, a lane per wire.
+    if(a.lanes==='port')bus.lanes='port';
     if(a.order!=null){
       if(!Array.isArray(a.order))return refusal('BAD_ORDER','order is a list of wire ids');
       const unknown=a.order.find(w=>!doc.wires.some(x=>x.id===String(w)));if(unknown!=null)return refusal('UNKNOWN_WIRE',`No wire ${unknown}`);
@@ -655,7 +657,10 @@
   // its right, enters its receiver's by the gap on its left, and changes rows over the gaps
   // nearest the entry. A member with another member of its group between it and that gap reaches
   // it along a street in its block's row gap, placed as the harness places one. Returns what the
-  // gaps carried, for the second pass to size them; null when the grid has no item.
+  // gaps carried, for the second pass to size them; null when the grid has no item. Every bus made
+  // here carries lanes: 'port', so the wires leaving one port share a lane (a hyperedge slot in
+  // ELK's layered orthogonal routing, after Sander GD 2003; one track per net in channel routing),
+  // and the gaps are sized by lanes in place of wires.
   function channelRoutes(doc,r,grid){
     const G0=Data.GLOBAL_CANVAS_ID,G=grid.G,P=BUS_PITCH;
     dropStaleBuses(doc,r);
@@ -715,14 +720,16 @@
       const recv=of.get(String(t))&&!direct(ib,t,false)?street(ib,t,'recv',xn):null;
       plans.push({w,seq:[send,...mid,recv].filter(Boolean)});
     }
-    const lanes=new Map();for(const p of plans)for(const id of new Set(p.seq))lanes.set(id,(lanes.get(id)||0)+1);
+    // A bus's lane count: the distinct a ends among the plans naming it; a wire with no a end counts alone.
+    const ends=new Map();for(const p of plans)for(const id of new Set(p.seq)){if(!ends.has(id))ends.set(id,new Set());ends.get(id).add(p.w.a?p.w.a+':'+p.w.aSide:'wire:'+p.w.id)}
+    const lanes=new Map([...ends].map(([id,e])=>[id,e.size]));
     const made=new Map();
     for(const [id,e] of used){
       if(e.kind==='h')made.set(id,[{x:e.lo,y:Hy[e.k]},{x:e.hi,y:Hy[e.k]}]);
       else made.set(id,[{x:Vx[e.k][e.j],y:Hy[e.k]},{x:Vx[e.k][e.j],y:Hy[e.k+1]}]);
     }
     for(const [id,s] of streets){
-      const row=lay(s.gid).rows[s.ri],span=(s.wires-1)*P;
+      const row=lay(s.gid).rows[s.ri],span=((lanes.get(id)||1)-1)*P;
       const y=s.kind==='send'?row.b+STREET_DROP+span/2:row.t-STREET_DROP-span/2;
       const far=s.kind==='send'?Math.min(...s.cards):Math.max(...s.cards);
       made.set(id,[{x:far,y},{x:s.x,y}]);
@@ -732,14 +739,14 @@
     const routed=plans.filter(p=>{for(let i=1;i<p.seq.length;i++)if(!busMeet(made.get(p.seq[i-1]),made.get(p.seq[i])))return false;return true});
     skipped+=plans.length-routed.length;
     const named=new Set(routed.flatMap(p=>p.seq));
-    for(const [id,pts] of [...made].filter(([id])=>named.has(id)).sort((a,b)=>a[0]<b[0]?-1:1))r.v.buses[id]={points:pts,pitch:P};
+    for(const [id,pts] of [...made].filter(([id])=>named.has(id)).sort((a,b)=>a[0]<b[0]?-1:1))r.v.buses[id]={points:pts,pitch:P,lanes:'port'};
     for(const p of routed)r.v.routes[p.w.id]={mode:'bus',buses:p.seq};
     // What the gaps need: a channel BUS_MARGIN clear each side of its lanes; a block's row gap its
     // send street under a row and its receive street over the next, STREET_DROP from the cards.
     const widest=Math.max(0,...[...lanes].filter(([id])=>!id.startsWith('channel-street-')).map(([,k])=>k));
     const need=new Map();
-    for(const st of streets.values()){const L=lay(st.gid),i=st.kind==='send'?st.ri:st.ri-1;if(i<0||i>=L.rows.length-1)continue;
-      const key=st.gid+'|'+i,e=need.get(key)||{gid:st.gid,s:0,r:0};if(st.kind==='send')e.s=st.wires;else e.r=st.wires;need.set(key,e)}
+    for(const [sid,st] of streets){const L=lay(st.gid),i=st.kind==='send'?st.ri:st.ri-1;if(i<0||i>=L.rows.length-1)continue;
+      const key=st.gid+'|'+i,e=need.get(key)||{gid:st.gid,s:0,r:0},k=lanes.get(sid)||1;if(st.kind==='send')e.s=k;else e.r=k;need.set(key,e)}
     const blockGap=new Map();
     for(const e of need.values()){const gap=(e.s?STREET_DROP+(e.s-1)*P+4:0)+(e.r?STREET_DROP+(e.r-1)*P+4:0)+STREET_ROOM;blockGap.set(e.gid,Math.max(blockGap.get(e.gid)||grid.blockG,gap))}
     return {buses:named.size,streets:[...streets.keys()].filter(id=>named.has(id)).length,wires:routed.length,skipped,G,needG:2*BUS_MARGIN+widest*P,blockGap};

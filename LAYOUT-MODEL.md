@@ -366,7 +366,7 @@ Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLA
     `k` top, `Hy[n]` = last band bottom + G/2; in row `k`, `Vx[k][0]` = first item's left − G/2,
     `Vx[k][j]` = midway between item `j−1`'s right and item `j`'s left, `Vx[k][m]` = last item's
     right + G/2;
-  - buses, pitch 6, no `between`, no label, written only when a route names them:
+  - buses, pitch 6, `lanes: 'port'`, no `between`, no label, written only when a route names them:
     `channel-row-<k>` horizontal at `Hy[k]` from the least to the greatest x of the gap buses its
     routes join it from or leave it to; `channel-gap-<k>-<j>` vertical at `Vx[k][j]` from `Hy[k]`
     to `Hy[k+1]`;
@@ -386,14 +386,25 @@ Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLA
     the gap;
   - each wire gets `{mode: 'bus', buses: [send street?, chain..., receive street?]}` when every
     consecutive pair of its buses meets; otherwise it is left to the router and counted skipped.
+  - lanes: every channel bus carries `lanes: 'port'` ("As built: buses", Record), so the wires
+    that leave one port share a lane on it. A bus's lane count is the number of distinct a ends
+    (`a` and `aSide`) among the wires planned on it; a wire with no a end counts alone. This is the
+    hyperedge slot of ELK's layered orthogonal routing (`OrthogonalRoutingGenerator`, after Sander,
+    *Layout of directed hypergraphs with orthogonal hyperedges*, GD 2003: edges sharing a source
+    port take one slot) and the track of VLSI channel routing (one track per net, a multi-terminal
+    net's trunk one segment with branches). Wires that share only their b end keep separate lanes;
   - Two passes. The first lays out and routes with the packing's gaps. Then the grid gap becomes
-    `max(G, 2 × 24 + 6 × the most routes naming one channel-row or channel-gap bus)`, and each
+    `max(G, 2 × 24 + 6 × the greatest lane count of one channel-row or channel-gap bus)`, and each
     group's row gap the largest, over its member-row gaps, of `STREET_ROOM` 12 plus
-    `36 + 6(s − 1) + 4` for `s` wires on the send street under the row and `36 + 6(r − 1) + 4` for
-    `r` wires on the receive street over the next (each term only when not 0), never less than `G`.
-    The canvas is laid out again with those gaps (items, rows and the area estimate spaced by the
-    new grid gap) and routed again; the second pass is kept. On booth-record the first pass needs
-    570 (one gap carries 87 wires); at the packing's 200, 34 bus routes ran through cards.
+    `36 + 6(s − 1) + 4` for `s` lanes on the send street under the row and `36 + 6(r − 1) + 4` for
+    `r` lanes on the receive street over the next (each term only when not 0), never less than `G`.
+    A street's span is `6 × (its lane count − 1)`. The canvas is laid out again with those gaps
+    (items, rows and the area estimate spaced by the new grid gap) and routed again; the second
+    pass is kept. On booth-record, with one lane per wire, the first pass needed 570 (one gap
+    carries 87 wires); at the packing's 200, 34 bus routes ran through cards. With lanes by port
+    the first pass needs no more than the packing's 200, so the gap stays 200; in the result those
+    87 wires take 11 lanes, the widest bus has 14 lanes (86 wires), and no bus route runs through
+    a card.
 - **Bundles between groups.** At the end of a top-level `layered` (no `scope`) on a canvas holding
   two or more groups that was not packed, the wires between each pair of groups are offered to the
   harness (see "As built: buses" > "Harness"). Pairs are unordered (the harness carries both
@@ -425,7 +436,13 @@ Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLA
   73 long runs (70 wire runs and 3 buses). With channels (2026-10-03): 2 rows, 10544 × 9572,
   aspect 1.10, 0 region pairs overlapping, 116 of 116 cross-group wires on 47 channel buses (36
   streets) at gap 570, 29 long runs (26 buses and 3 tap legs, none off buses), no bus route
-  through a card, no bus band over a card. The seeded fixture of `tests/layered_groups_qa.py`
+  through a card, no bus band over a card. With lanes by port (2026-10-04,
+  `tests/bus_lane_sharing_qa.py`): 3 rows, 6840 × 7128, aspect 0.96, area 0.48 of the 2026-10-03
+  one, 0 region pairs overlapping, 116 of 116 cross-group wires on 50 channel buses (38 streets)
+  at gap 200, 23 long runs (22 buses and 1 tap leg, none off buses), no bus route through a card,
+  no bus band over a card; `channel-gap-0-1` carries its 87 wires on 11 lanes (87 before),
+  `channel-row-1` 86 wires on 14, and the street `channel-street-g0-3` 76 wires on 1. The
+  extent and the 3 rows are those of 3f3aa75; the packing made 2 rows at gap 570. The seeded fixture of `tests/layered_groups_qa.py`
   (region aspect 5.19 at a902dca) packs too: 40 crossings against 79 laid out group-blind.
   `docs/workengine/map.sov` (aspect 0.47) and `examples/work-engine/groups.sov` (2.01) are not
   packed; their pairs are bundled. All four lay out the same when laid out again.
@@ -542,6 +559,10 @@ Two wires that run side by side stand a track apart, so each can be followed by 
 - **Cramped.** When a channel has no room for its group, it is spread as far as the room allows.
   The wires still closer than `TRACK_GAP` carry `data-track-cramped="true"` on their wire group.
 - **Off switch.** `window.ROUTE_NUDGE=false` turns jogs and nudging off, for tests only.
+- **While a card is dragged.** A drag snapshot is the route as drawn (after jogs and nudging): it is
+  taken from the last render (`drawnRoutePoints`, set in `renderWires`) at the press, and again after
+  each settle, so a wire does not jump at the press or at the release. A frozen route is a fixed
+  segment for `nudgeRoutes`. Tests: `tests/track_gap_drag_qa.py`.
 - **The audit** counts `route-close-parallel`: two wires, not both inside one bus band, with middle
   segments 0.5 to under `TRACK_GAP` apart overlapping 24 or more, end leads left out, shared end or
   not. It has no weight in `LAYOUT_RUBRIC`. `route-overlap` and `route-jog` keep their definitions.
@@ -648,6 +669,7 @@ between them). Routing stays presentation: a bus is a layout record, never a Wir
 document.layout.views[<layoutId>].buses[<busId>] = {
   points: [{x, y}, ...],    2 or more; every step horizontal or vertical
   pitch:  4..16 (6),        distance between lanes
+  lanes?: 'port',           wires that share their a end share a lane; left out, a lane per wire
   label?, between?: [groupA, groupB], order?: [wireId, ...]
 }
 document.layout.views[<layoutId>].routes[<wireId>] = {mode: 'bus', buses: [busId, ...]}
@@ -657,6 +679,12 @@ document.layout.views[<layoutId>].routes[<wireId>] = {mode: 'bus', buses: [busId
 naming a wire that is gone, and drops a route that names a bus that is gone (the wire returns to
 `auto`). A new layout copied from another copies its buses with its routes.
 
+`lanes` says what a lane of the bus holds. With `lanes: 'port'`, the wires on the bus that share
+their a end (the same card `a` and the same `aSide`) take one lane, and a wire with no a end takes a
+lane of its own. Without the key (the default) every wire has its own lane. The `bus` op stores the
+key only when it is exactly `'port'`. The layered layout writes it on every channel bus; the
+harness writes none, so harness trunks and streets keep one lane per wire.
+
 ### Ops
 
 `schematic.layout` (`src/08-layout-core.js`), the Browser API `layout.*` (`src/85-api.js`, through
@@ -664,7 +692,7 @@ naming a wire that is gone, and drops a route that names a bus that is gone (the
 
 | Op | Does |
 | --- | --- |
-| `bus {id, points, pitch?, label?, order?}` | sets one bus |
+| `bus {id, points, pitch?, lanes?, label?, order?}` | sets one bus |
 | `bus {id, remove: true}` | removes it; every wire that named it returns to `auto` and is listed in the receipt |
 | `buses {view?}` | read-only: every bus with the wires that name it |
 | `route {wireId, mode: 'bus', buses}` | puts a wire on buses, in the order it rides them |
@@ -713,7 +741,11 @@ A refusal changes nothing.
 
 ### Drawing (`src/41-buses.js`, `src/55-render.js`)
 
-- **Lanes**: on a bus with n wires, lane offset = (index − (n − 1) / 2) × pitch, perpendicular to each segment.
+- **Lanes**: on a bus with n lanes, lane offset = (index − (n − 1) / 2) × pitch, perpendicular to each
+  segment. A lane holds one wire; on a bus with `lanes: 'port'` it holds every wire on the bus that
+  shares one a end (`busLaneKey`), so those wires are drawn on one line from where they join the bus
+  until each taps off, and `renderWires` draws its junction dot where wires sharing an end part. The
+  lanes are the distinct lane keys in the order the wires start in (below).
 - **Tap on**: the end of the source lead (the router's `routeLead`) is projected onto the first bus's
   centreline, clamped to its extent and offset by the wire's lane, and joined by one orthogonal L whose
   first leg continues the lead. The wire rides each bus on its lane and turns once where two buses meet,
@@ -722,13 +754,15 @@ A refusal changes nothing.
   wires start in the order they leave the bus (ties by where they join, then wire id); that order and its
   reverse are both measured and the one with fewer crossing pairs is kept; then up to 8 passes of adjacent
   swaps keep a swap only when the crossing pairs among that bus's wires strictly drop (the greedy form of
-  the slot ordering in ELK's `OrthogonalRoutingGenerator`). Two wires sharing no end that run on one track
-  count as a crossing pair.
+  the slot ordering in ELK's `OrthogonalRoutingGenerator`). The reverse and each swap exchange lanes: every
+  wire in the two lanes is routed again. Two wires sharing no end that run on one track count as a
+  crossing pair.
 - Bus routes go into `occupied` before any auto route, so auto routes keep clear of them. A pinned or
   guided route still wins; a bus route that cannot be built falls back to the router, and its wire group
   carries `data-bus-fallback`.
-- Each bus is a band in `#groupLayer` after the group regions: width n × pitch + 8, rounded ends, the
-  muted ink at about 6%, its edge in the structure stroke at low opacity (`.bus-band`, `data-bus-id`;
+- Each bus is a band in `#groupLayer` after the group regions: width lane count × pitch + 8, rounded
+  ends, the muted ink at about 6%, its edge in the structure stroke at low opacity (`.bus-band`,
+  `data-bus-id`, `data-lanes` the lane count;
   light and dark in `styles/app.css`). A labelled bus draws its label once (`.bus-label`) beyond its
   start, reading along it.
 - Two wires on one bus draw no hop where they cross inside that bus's band; every other hop is unchanged.

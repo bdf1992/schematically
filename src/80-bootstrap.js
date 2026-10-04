@@ -43,7 +43,7 @@ colorThemeInput.addEventListener('change',()=>{
   colorEngine.theme=colorThemeInput.value;applyColorEngine();
 });
 colorPaletteInput.addEventListener('change',()=>{
-  colorEngine.palette=colorPaletteInput.value;applyColorEngine();
+  pickPalette(colorPaletteInput.value);
 });
 diffuseSignalsInput.addEventListener('change',()=>{
   colorEngine.diffuse=diffuseSignalsInput.checked;render();restoreSelectedSurface();
