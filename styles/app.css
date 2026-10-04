@@ -171,6 +171,7 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .node .glyph{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .component-lead{stroke:var(--component-interior-ink,var(--component-color,#171715));stroke-linecap:round;fill:none;pointer-events:none}
 .node.backdrop-none .component-lead{stroke:var(--canvas-ink)}
+.node .component-lead.shape-lead,.node .body-rim{stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:var(--stroke-structure,1.5);stroke-linecap:round;fill:none;pointer-events:none}
 .node .custom-graphic{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .custom-graphic [fill="currentColor"]{fill:currentColor}
 .node .custom-graphic [stroke="currentColor"]{stroke:currentColor}

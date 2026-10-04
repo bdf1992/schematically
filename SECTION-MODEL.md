@@ -296,6 +296,35 @@ Joins between strips (a T or Y junction of pipes) are **open** and not specified
 - A 1-line open Section draws exactly as today's Wire. Its `weight` is today's
   `body.thickness`.
 
+### Card shapes
+
+A card whose outline is one line may declare the shape that line is drawn in:
+`config.presentation.shape` is `rect` (the default, also when absent), `cylinder` or `parallelogram`
+(`DATA-FORMATS.md` "Card shape"; `shapeProblems` in `src/05-data-core.js` refuses anything else with
+`SHAPE_INVALID`). The shape belongs to a 2D Component that is not a group and has a closed interior.
+A sectioned Form (two or more lines) keeps the rectangle, as does a card with no backdrop.
+
+The body keeps class `body` and is a `<path>` for the two shapes (`componentShapeGeometry`,
+`src/30-canvas.js`), in the card's frame, w x h its bounding rectangle:
+
+- **cylinder**: the bounding rectangle with its top and bottom replaced by the two halves of an
+  ellipse `cap = min(0.18 h, 18)` tall and w wide. The near half of the top ellipse is drawn as a
+  second line in the outline colour (`<path class="body-rim">`). The inner rectangle is w wide, from
+  `cap` below the top to `cap / 2` above the bottom.
+- **parallelogram**: skew `s = min(0.2 w, 0.25 h, 24)`; the top edge runs from `-w/2 + s` to `w/2`,
+  the bottom edge from `-w/2` to `w/2 - s`. The inner rectangle is `w - 2 s` wide and h tall.
+
+Fill, outline, a status's dashed outline and fade, the elevation shadow and a solid core's bevel
+follow the rectangle's rules. The title, the glyph, the status chip and the badges keep to the inner
+rectangle. A glyph whose terminals are its points keeps the card's own size, because its ports
+follow its scale.
+
+Ports stay on the bounding sides, and routing and every layout metric keep the bounding rectangle
+(`componentBounds`, `componentPortLocalPosition`). Where the drawn outline is set back from the
+bounding side (a parallelogram's slanted sides, a cylinder's curves away from the centre), a wired
+port draws a lead straight in from the port to the outline: `<path class="component-lead shape-lead"
+data-point="<id>">`, in the outline colour at the structure stroke width. QA: `tests/card_shapes_qa.py`.
+
 ## Migration from the current Form
 
 `normalizeComponentForm` (`src/05-data-core.js`) and `componentForm` (`src/10-model.js`)

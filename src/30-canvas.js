@@ -595,6 +595,56 @@ function componentBounds(n,pad=0){
   const {w,h}=componentSize(n);
   return {l:n.x-w/2-pad,r:n.x+w/2+pad,t:n.y-h/2-pad,b:n.y+h/2+pad};
 }
+// The shape a card's body is drawn in (SECTION-MODEL.md "Card shapes"): its declared
+// config.presentation.shape, on a 2D card with a body, a closed interior and a one-line outline;
+// 'rect' for everything else. Ports, routing and every layout metric keep componentBounds.
+function componentShape(n){
+  if(componentForm(n).dimension!==2||isGroupComponent(n)||componentAcceptsChildren(n)||componentBackdropMode(n)==='none')return 'rect';
+  const shape=SovSchematicData.cardShape(n);if(shape==='rect')return shape;
+  const section=SovSchematicData.componentSection(n);
+  return section&&section.lines.length>=2?'rect':shape;
+}
+// The drawn outline in the card's local frame: its path `d`, the inner rectangle that text, the
+// glyph and chips keep to, and `edge(side,P)`, the outline point straight in from a point P on the
+// bounding side (P itself where the outline is the bounding side).
+//   cylinder: the bounding rectangle with its top and bottom replaced by the two halves of an
+//     ellipse `cap` = min(0.18 h, 18) tall; `rim` is the near half of the top ellipse. The inner
+//     rectangle starts below the cap and ends where the bottom curve leaves the sides.
+//   parallelogram: skew s = min(0.2 w, 0.25 h, 24); the top edge runs from -w/2 + s to w/2, the
+//     bottom from -w/2 to w/2 - s. The inner rectangle is w - 2 s wide.
+function componentShapeGeometry(n){
+  const {w,h}=componentSize(n),shape=componentShape(n),hw=w/2,hh=h/2;
+  if(shape==='parallelogram'){
+    const s=Math.min(w*.2,h*.25,24);
+    return {shape,w,h,skew:s,inner:{l:-hw+s,r:hw-s,t:-hh,b:hh},
+      d:`M${-hw+s} ${-hh}L${hw} ${-hh}L${hw-s} ${hh}L${-hw} ${hh}Z`,
+      edge(side,P){
+        if(side==='left')return {x:-hw+s*(hh-P.y)/h,y:P.y};
+        if(side==='right')return {x:hw-s*(P.y+hh)/h,y:P.y};
+        if(side==='top')return P.x>=-hw+s?{x:P.x,y:-hh}:{x:P.x,y:hh-(P.x+hw)*h/s};
+        if(side==='bottom')return P.x<=hw-s?{x:P.x,y:hh}:{x:P.x,y:(hw-P.x)*h/s-hh};
+        return {x:P.x,y:P.y};
+      }};
+  }
+  if(shape==='cylinder'){
+    const cap=Math.min(h*.18,18),ry=cap/2,yt=-hh+ry,yb=hh-ry;
+    const half=v=>Math.sqrt(Math.max(0,1-v*v));
+    return {shape,w,h,cap,inner:{l:-hw,r:hw,t:-hh+cap,b:yb},
+      d:`M${-hw} ${yt}A${hw} ${ry} 0 0 1 ${hw} ${yt}V${yb}A${hw} ${ry} 0 0 1 ${-hw} ${yb}Z`,
+      rim:`M${-hw} ${yt}A${hw} ${ry} 0 0 0 ${hw} ${yt}`,
+      edge(side,P){
+        if(side==='top')return {x:P.x,y:yt-ry*half(P.x/hw)};
+        if(side==='bottom')return {x:P.x,y:yb+ry*half(P.x/hw)};
+        if(side==='left'||side==='right'){
+          const k=P.y<yt?(yt-P.y)/ry:P.y>yb?(P.y-yb)/ry:0,x=hw*half(k);
+          return {x:side==='left'?-x:x,y:P.y};
+        }
+        return {x:P.x,y:P.y};
+      }};
+  }
+  return {shape:'rect',w,h,inner:{l:-hw,r:hw,t:-hh,b:hh},d:null,edge(side,P){return {x:P.x,y:P.y}}};
+}
+function componentInnerRect(n){return componentShapeGeometry(n).inner}
 function pointInsideComponent(x,y,n,pad=0){
   const R=componentBounds(n,pad);
   return x>R.l&&x<R.r&&y>R.t&&y<R.b;
@@ -672,12 +722,18 @@ function componentInlineGraphicBox(node){
     return {x:-w/2,y:-size.h/2+componentSectionInset(node)+10,w,h};
   }
   // A glyph whose terminals are its points needs room between them: it takes more of the card.
-  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),size,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type}),x=-w/2;
+  // On a shaped card the glyph is sized to the inner rectangle (a cylinder: the band clear of the
+  // cap on both sides of the centre line), so it stays inside it. A glyph whose terminals are its
+  // points keeps the card's own size: its ports follow its scale, and the layout engine reads that
+  // scale from the same card size.
+  const shape=componentShapeGeometry(node),room=shape.shape==='rect'||componentGlyph(node)?.points==='terminals'?size
+    :{w:shape.inner.r-shape.inner.l,h:shape.shape==='cylinder'?size.h-2*shape.cap:size.h};
+  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),room,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type}),x=-w/2;
   if(componentHostedOnWire(node)){
     const axis=componentInlineTerminalY(node);
     return {x,y:axis==null?-h/2:-(axis/64)*h,w,h};
   }
-  let y=-Math.min(size.h*.34,38),hh=h;
+  let y=-Math.min(room.h*.34,38),hh=h;
   {
     // A card's symbol axis is its centre line: side points sit at mid-height for every
     // symbol, so cards aligned by centre are joined by straight wires.

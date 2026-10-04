@@ -108,6 +108,7 @@ BROWSER=[
     'tests/legend_qa.py',
     'tests/status_waits_on_qa.py',
     'tests/card_badges_qa.py',
+    'tests/card_shapes_qa.py',
     'tests/palette_system_qa.py',
     'tests/status_chip_qa.py',
     'tests/lit_wire_role_qa.py',
@@ -131,6 +132,7 @@ BROWSER=[
     'tests/wire_label_placement_qa.py',
     'tests/drag_lifecycle_stress_qa.py',
     'tests/performance_regression_qa.py',
+    'tests/map_render_time_qa.py',
     'tests/live_link_qa.py',
 ]
 TAIL=[

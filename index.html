@@ -178,6 +178,7 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .node .glyph{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .component-lead{stroke:var(--component-interior-ink,var(--component-color,#171715));stroke-linecap:round;fill:none;pointer-events:none}
 .node.backdrop-none .component-lead{stroke:var(--canvas-ink)}
+.node .component-lead.shape-lead,.node .body-rim{stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:var(--stroke-structure,1.5);stroke-linecap:round;fill:none;pointer-events:none}
 .node .custom-graphic{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .custom-graphic [fill="currentColor"]{fill:currentColor}
 .node .custom-graphic [stroke="currentColor"]{stroke:currentColor}
@@ -2205,6 +2206,31 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return out;
   }
   function assertIntake(component,clearable=false){const p=intakeProblems(component,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Card shape (SECTION-MODEL.md "Card shapes") ----------------------------------------------
+  // A 2D Component that is not a group and has a closed interior may declare
+  // `config.presentation.shape`: 'rect' (the default, also when absent), 'cylinder' or
+  // 'parallelogram'. 'rect' is admitted on any Component, since it is what absent means.
+  //   SHAPE_INVALID   shape is not one of the three, or a cylinder or parallelogram sits on a
+  //                   Component that is not 2D, is a group, or has an open interior
+  const CARD_SHAPES=['rect','cylinder','parallelogram'];
+  function shapeProblems(component,clearable=false){
+    const out=[],presentation=component?.config?.presentation;if(!isObject(presentation))return out;
+    const shape=presentation.shape;if(shape===undefined||(clearable&&shape===null))return out;
+    if(!CARD_SHAPES.includes(shape)){out.push(`SHAPE_INVALID: config.presentation.shape must be one of ${CARD_SHAPES.join(', ')}, not ${JSON.stringify(shape)}`);return out}
+    if(shape==='rect')return out;
+    const symbol=normalizeSymbolId(component.symbolId||component.type);
+    const form=normalizeComponentForm(isObject(component.form)?component.form:(templatePreset(symbol)?.form||{dimension:2}),component.canvas);
+    if(symbol==='group')out.push(`SHAPE_INVALID: config.presentation.shape ${shape} belongs to a card, not a group`);
+    else if(form.dimension!==2)out.push(`SHAPE_INVALID: config.presentation.shape ${shape} belongs to a 2D Component, not a ${form.dimension}D one`);
+    else if(form.regions.interior.state==='open')out.push(`SHAPE_INVALID: config.presentation.shape ${shape} belongs to a card with a closed interior, not a container`);
+    return out;
+  }
+  function assertShape(component,clearable=false){const p=shapeProblems(component,clearable);if(p.length)throw new Error(p[0])}
+  // The shape a card is drawn in: its declared shape where that shape may be drawn, else 'rect'.
+  function cardShape(component){
+    const shape=component?.config?.presentation?.shape;
+    return (shape==='cylinder'||shape==='parallelogram')&&!shapeProblems(component).length?shape:'rect';
+  }
   // Copies an authored status and waitsOn onto a record being made.
   function adoptStatusAndWaitsOn(config,value){
     if(value?.status!==undefined&&value.status!==null)config.status=value.status;
@@ -2215,6 +2241,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   function clearStatusAndWaitsOn(candidate,patch){
     if(!isObject(candidate?.config)||!isObject(patch?.config))return;
     for(const key of ['status','waitsOn','badges','intake'])if(patch.config[key]===null)delete candidate.config[key];
+    if(isObject(patch.config.presentation)&&patch.config.presentation.shape===null&&isObject(candidate.config.presentation))delete candidate.config.presentation.shape;
   }
   // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
   // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
@@ -2624,6 +2651,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
     assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges);
     if(value.config?.intake!==undefined&&value.config.intake!==null){config.intake=clone(value.config.intake);assertIntake(component)}
+    if(isObject(config.presentation)&&config.presentation.shape===null)delete config.presentation.shape;
+    assertShape(component);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -2924,6 +2953,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       normalizeComponentSize(candidate);
       assertGroupRules(doc,doc.components.map((c,i)=>i===index?candidate:c));
       if(patch?.config?.intake!==undefined||nextSymbol!==undefined)assertIntake(candidate,patch?.config?.intake===null);
+      if(patch?.config?.presentation?.shape!==undefined||nextSymbol!==undefined||patch?.form!==undefined)assertShape(candidate,patch?.config?.presentation?.shape===null);
     }else if(resource==='wire'){
       if(isObject(patch?.config))assertPathDelay(patch.config,true);
       if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
@@ -3131,6 +3161,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of statusProblems(input,item?.config))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of intakeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
+    for(const item of input.components||[])for(const p of shapeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -3171,7 +3202,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
 /* END src/05-data-core.js */
 </script>
@@ -7580,7 +7611,6 @@ function ensureComponentStructure(n){
   if(!n.boundary){
     n.boundary={
       kind:'boundary',
-      shape:'blank',
       inside:{type:n.symbolId==='blank'?null:n.symbolId},
       outside:{type:'canvas'}
     };
@@ -7589,7 +7619,7 @@ function ensureComponentStructure(n){
   if(!n.boundary.outside)n.boundary.outside={type:'canvas'};
   if(!('type' in n.boundary.inside))n.boundary.inside.type=n.symbolId==='blank'?null:n.symbolId;
   if(!n.boundary.outside.type)n.boundary.outside.type='canvas';
-  if(!n.boundary.shape)n.boundary.shape='blank';
+  // A card's shape is config.presentation.shape (SECTION-MODEL.md "Card shapes"); the boundary holds none.
 
   const insideType=n.boundary.inside.type;
   n.type=insideType;
@@ -9622,6 +9652,56 @@ function componentBounds(n,pad=0){
   const {w,h}=componentSize(n);
   return {l:n.x-w/2-pad,r:n.x+w/2+pad,t:n.y-h/2-pad,b:n.y+h/2+pad};
 }
+// The shape a card's body is drawn in (SECTION-MODEL.md "Card shapes"): its declared
+// config.presentation.shape, on a 2D card with a body, a closed interior and a one-line outline;
+// 'rect' for everything else. Ports, routing and every layout metric keep componentBounds.
+function componentShape(n){
+  if(componentForm(n).dimension!==2||isGroupComponent(n)||componentAcceptsChildren(n)||componentBackdropMode(n)==='none')return 'rect';
+  const shape=SovSchematicData.cardShape(n);if(shape==='rect')return shape;
+  const section=SovSchematicData.componentSection(n);
+  return section&&section.lines.length>=2?'rect':shape;
+}
+// The drawn outline in the card's local frame: its path `d`, the inner rectangle that text, the
+// glyph and chips keep to, and `edge(side,P)`, the outline point straight in from a point P on the
+// bounding side (P itself where the outline is the bounding side).
+//   cylinder: the bounding rectangle with its top and bottom replaced by the two halves of an
+//     ellipse `cap` = min(0.18 h, 18) tall; `rim` is the near half of the top ellipse. The inner
+//     rectangle starts below the cap and ends where the bottom curve leaves the sides.
+//   parallelogram: skew s = min(0.2 w, 0.25 h, 24); the top edge runs from -w/2 + s to w/2, the
+//     bottom from -w/2 to w/2 - s. The inner rectangle is w - 2 s wide.
+function componentShapeGeometry(n){
+  const {w,h}=componentSize(n),shape=componentShape(n),hw=w/2,hh=h/2;
+  if(shape==='parallelogram'){
+    const s=Math.min(w*.2,h*.25,24);
+    return {shape,w,h,skew:s,inner:{l:-hw+s,r:hw-s,t:-hh,b:hh},
+      d:`M${-hw+s} ${-hh}L${hw} ${-hh}L${hw-s} ${hh}L${-hw} ${hh}Z`,
+      edge(side,P){
+        if(side==='left')return {x:-hw+s*(hh-P.y)/h,y:P.y};
+        if(side==='right')return {x:hw-s*(P.y+hh)/h,y:P.y};
+        if(side==='top')return P.x>=-hw+s?{x:P.x,y:-hh}:{x:P.x,y:hh-(P.x+hw)*h/s};
+        if(side==='bottom')return P.x<=hw-s?{x:P.x,y:hh}:{x:P.x,y:(hw-P.x)*h/s-hh};
+        return {x:P.x,y:P.y};
+      }};
+  }
+  if(shape==='cylinder'){
+    const cap=Math.min(h*.18,18),ry=cap/2,yt=-hh+ry,yb=hh-ry;
+    const half=v=>Math.sqrt(Math.max(0,1-v*v));
+    return {shape,w,h,cap,inner:{l:-hw,r:hw,t:-hh+cap,b:yb},
+      d:`M${-hw} ${yt}A${hw} ${ry} 0 0 1 ${hw} ${yt}V${yb}A${hw} ${ry} 0 0 1 ${-hw} ${yb}Z`,
+      rim:`M${-hw} ${yt}A${hw} ${ry} 0 0 0 ${hw} ${yt}`,
+      edge(side,P){
+        if(side==='top')return {x:P.x,y:yt-ry*half(P.x/hw)};
+        if(side==='bottom')return {x:P.x,y:yb+ry*half(P.x/hw)};
+        if(side==='left'||side==='right'){
+          const k=P.y<yt?(yt-P.y)/ry:P.y>yb?(P.y-yb)/ry:0,x=hw*half(k);
+          return {x:side==='left'?-x:x,y:P.y};
+        }
+        return {x:P.x,y:P.y};
+      }};
+  }
+  return {shape:'rect',w,h,inner:{l:-hw,r:hw,t:-hh,b:hh},d:null,edge(side,P){return {x:P.x,y:P.y}}};
+}
+function componentInnerRect(n){return componentShapeGeometry(n).inner}
 function pointInsideComponent(x,y,n,pad=0){
   const R=componentBounds(n,pad);
   return x>R.l&&x<R.r&&y>R.t&&y<R.b;
@@ -9699,12 +9779,18 @@ function componentInlineGraphicBox(node){
     return {x:-w/2,y:-size.h/2+componentSectionInset(node)+10,w,h};
   }
   // A glyph whose terminals are its points needs room between them: it takes more of the card.
-  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),size,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type}),x=-w/2;
+  // On a shaped card the glyph is sized to the inner rectangle (a cylinder: the band clear of the
+  // cap on both sides of the centre line), so it stays inside it. A glyph whose terminals are its
+  // points keeps the card's own size: its ports follow its scale, and the layout engine reads that
+  // scale from the same card size.
+  const shape=componentShapeGeometry(node),room=shape.shape==='rect'||componentGlyph(node)?.points==='terminals'?size
+    :{w:shape.inner.r-shape.inner.l,h:shape.shape==='cylinder'?size.h-2*shape.cap:size.h};
+  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),room,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type}),x=-w/2;
   if(componentHostedOnWire(node)){
     const axis=componentInlineTerminalY(node);
     return {x,y:axis==null?-h/2:-(axis/64)*h,w,h};
   }
-  let y=-Math.min(size.h*.34,38),hh=h;
+  let y=-Math.min(room.h*.34,38),hh=h;
   {
     // A card's symbol axis is its centre line: side points sit at mid-height for every
     // symbol, so cards aligned by centre are joined by straight wires.
@@ -11140,7 +11226,12 @@ function busRoutesForRender(){
   return busRouteState;
 }
 // The drawn route of a bus-routed wire, or null when it cannot be built (the router takes over).
-function busRouteFor(w){const st=busRoutesForRender(),pts=st.routes.get(w.id);return pts?clonePoints(pts):null}
+// busRoutesForRender reads both ends of every bus wire to build its key, so asking it once per wire
+// costs wires x wires end readings. A pass that routes every wire with the document standing still
+// (renderWires) asks once and holds the answer: while a state is held, busRouteFor reads it.
+let busRoutesHeld=null;
+function withBusRoutes(state,fn){const before=busRoutesHeld;busRoutesHeld=state;try{return fn()}finally{busRoutesHeld=before}}
+function busRouteFor(w){const st=busRoutesHeld||busRoutesForRender(),pts=st.routes.get(w.id);return pts?clonePoints(pts):null}
 
 // ---- What the renderer asks ---------------------------------------------------------------------
 // Two wires that cross inside the band of a bus they both ride draw no hop there.
@@ -11216,7 +11307,8 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
   iOutside.textContent=n.boundary.outside.type;
   {const host=componentHostDescriptor(n);iParent.textContent=host?.ownerKind==='wire'?`Wire · ${host.label||host.ownerId}`:componentDisplayName(parentComponent(n));}
   iScope.textContent=componentScopePath(n);
-  iBoundary.textContent=n.boundary.shape;
+  // The card's declared shape (config.presentation.shape); absent is rect.
+  iBoundary.textContent=componentConfig(n).presentation.shape||'rect';
   iFamily.textContent=s.family;iSignalMode.textContent=componentSignalLabel(componentConfig(n).signalMode);iClass.textContent=s.diagram_class;iMeaning.textContent=s.meaning;
   iVerbs.innerHTML=s.verbs.map(v=>`<span class="pill">${v}</span>`).join('');
   iProps.innerHTML=s.properties.map(v=>`<span class="pill">${v}</span>`).join('');
@@ -11382,6 +11474,30 @@ function appendComponentLeads(g,n){
     lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
   }
 }
+// A shaped card's ports stay on its bounding sides. Where the drawn outline is set back from the
+// side (a parallelogram's slanted sides, a cylinder's curves away from the centre), a wired port is
+// joined to the outline by a short lead, straight in from the port.
+function appendShapeLeads(g,n){
+  const geo=componentShapeGeometry(n);if(geo.shape==='rect')return;
+  for(const point of componentAttachmentPoints(n)){
+    const compat=point.compatId;
+    if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
+    const side=physicalPortSide(n,point.id),P=componentPortLocalPosition(n,point.id),E=geo.edge(side,P);
+    if(Math.hypot(E.x-P.x,E.y-P.y)<.5)continue;
+    const lead=document.createElementNS('http://www.w3.org/2000/svg','path');lead.setAttribute('class','component-lead shape-lead');lead.dataset.point=point.id;
+    lead.setAttribute('d',`M${P.x} ${P.y}L${+E.x.toFixed(2)} ${+E.y.toFixed(2)}`);g.appendChild(lead);
+  }
+}
+// A solid shaped body's bevel: the outline's lit half (left and top) and shaded half (right and bottom), inset.
+function appendShapeBevel(g,geo){
+  const d=SovSchematicNotation.tokens(diagram).space.bevel,w=geo.w-d*2,h=geo.h-d*2;if(w<12||h<12)return;
+  const x0=-w/2,y0=-h/2,x1=w/2,y1=h/2;let light,shade;
+  if(geo.shape==='parallelogram'){const s=geo.skew;light=`M${x0} ${y1}L${x0+s} ${y0}L${x1} ${y0}`;shade=`M${x1} ${y0}L${x1-s} ${y1}L${x0} ${y1}`}
+  else{const ry=geo.cap/2;light=`M${x0} ${y1-ry}V${y0+ry}A${x1} ${ry} 0 0 1 ${x1} ${y0+ry}`;shade=`M${x1} ${y0+ry}V${y1-ry}A${x1} ${ry} 0 0 1 ${x0} ${y1-ry}`}
+  for(const [cls,path] of [['light',light],['shade',shade]]){
+    const e=document.createElementNS('http://www.w3.org/2000/svg','path');e.setAttribute('class',`section-bevel raised ${cls}`);e.setAttribute('d',path);g.appendChild(e);
+  }
+}
 // Where a wire meets a card, a short bar on the edge in the point's own colour: amber where
 // work leaves, blue where it arrives, both halves for a two-way point, muted for control.
 function appendTerminalMarks(g,n){
@@ -11426,7 +11542,8 @@ function fitComponentLabels(g,n){
   if(t.dataset.full==null)t.dataset.full=t.textContent;
   if(u&&u.dataset.full==null)u.dataset.full=u.textContent;
   const full=t.dataset.full,subFull=u?u.dataset.full:'';if(!full)return;
-  const size=componentSize(n),inset=componentSectionInset(n),max=size.w-12-inset*2,x=t.getAttribute('x')||'0';
+  // The text keeps to the card's inner rectangle: the whole card, or what a declared shape leaves of it.
+  const full2D=componentSize(n),I=componentInnerRect(n),size={w:I.r-I.l,h:full2D.h},inset=componentSectionInset(n),max=size.w-12-inset*2,x=t.getAttribute('x')||'0';
   const gap=Number(SovSchematicNotation.tokens(diagram).space?.textGap)||3,down=t.dataset.grow==='down';
   const y0=t.dataset.y0!=null?Number(t.dataset.y0):Number(t.getAttribute('y'))||0;
   // A title drawn outside its card (under it) is not held to the card's width: it stays one line.
@@ -11443,7 +11560,7 @@ function fitComponentLabels(g,n){
     const kept=lines.length>limit?[...lines.slice(0,limit-1),lines.slice(limit-1).join(' ')]:lines;
     return kept.map(l=>cut(t,l));
   };
-  const innerTop=-size.h/2+inset+2,innerBottom=size.h/2-inset-2;
+  const innerTop=I.t+inset+2,innerBottom=I.b-inset-2;
   const graphic=componentConfig(n).presentation?.graphic;
   let topLimit=innerTop;
   if(graphic?.kind&&graphic.kind!=='none'){const box=componentInlineGraphicBox(n);if(!down)topLimit=Math.max(topLimit,box.y+box.h+2)}
@@ -11546,12 +11663,12 @@ function appendComponentText(g,n,cfg,s){
     if(labelMode==='outside')t.style.fill=roleInk(componentBackdropMode(n)==='none'?'--canvas-ink':'--muted','#6C6C65',componentFillGround(n));
     if(componentHostedOnWire(n)&&componentBackdropMode(n)==='none'){
       const box=componentInlineGraphicBox(n);t.setAttribute('x','0');t.setAttribute('y',String(box.y+box.h+11));
-    }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
+    }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(componentInnerRect(n).b-10,24)))}
     else if(labelMode==='outside'){t.setAttribute('x','0');t.setAttribute('y',String(size.h/2+18))}
     // Inside the innermost line: a label never straddles a section's own boundary.
     // A container's name heads it, under its glyph; a card's sits at its foot.
     else if(componentAcceptsChildren(n)&&((p.graphic?.kind&&p.graphic.kind!=='none')||nodes.some(c=>c.parentId===n.id))){const box=componentInlineGraphicBox(n),glyph=p.graphic?.kind&&p.graphic.kind!=='none';t.setAttribute('x','0');t.setAttribute('y',String(glyph?box.y+box.h+12:box.y+10))}
-    else {const inset=componentSectionInset(n),sec=componentForm(n).section?SovSchematicData.componentSection(n):null,bevel=sec&&(sec.core?.fill||'solid')==='solid';t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-(bevel?15:inset?11:8)-inset))}
+    else {const inset=componentSectionInset(n),sec=componentForm(n).section?SovSchematicData.componentSection(n):null,bevel=sec&&(sec.core?.fill||'solid')==='solid';t.setAttribute('x','0');t.setAttribute('y',String(componentInnerRect(n).b-(bevel?15:inset?11:8)-inset))}
     t.textContent=label;g.appendChild(t);
     // Where the title sits before any subtitle, and which way its block grows from there: up from
     // the foot of a card, down under a container's glyph, below the body, or under a wire's glyph.
@@ -11709,13 +11826,19 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     // Depth is elevation, a soft shadow by nesting level (NOTATION-MODEL.md §3), never a second outline.
     const section=SovSchematicData.componentSection(n),T=SovSchematicNotation.tokens(diagram);
     const sectioned=!!(section&&section.lines.length>=2),total=sectioned?section.bands.reduce((a,b)=>a+b.thickness,0):0;
-    const body=document.createElementNS('http://www.w3.org/2000/svg','rect');body.setAttribute('class','body');body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(SovSchematicNotation.cornerRadius(T,{total,inset:0,w:size.w,h:size.h,sectioned})));
+    // The body is a rectangle, or the path of the card's declared shape (a cylinder, a parallelogram).
+    const geo=componentShapeGeometry(n),shaped=geo.shape!=='rect';
+    const body=document.createElementNS('http://www.w3.org/2000/svg',shaped?'path':'rect');body.setAttribute('class','body');
+    if(shaped){body.setAttribute('d',geo.d);body.setAttribute('stroke-linejoin','round');g.dataset.shape=geo.shape}
+    else{body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(SovSchematicNotation.cornerRadius(T,{total,inset:0,w:size.w,h:size.h,sectioned})))}
     // A thicker body stands taller: its shadow falls further.
     {const E=SovSchematicNotation.elevation(T,componentElevation(n),surfaceAppearance()),th=Math.max(0,Number(form.body.thickness)||0);
      if(E){const dy=E.dy+Math.min(4,th*.08),blur=E.blur+Math.min(3,th*.06);body.style.filter=`drop-shadow(0 ${+dy.toFixed(2)}px ${+blur.toFixed(2)}px rgba(${surfaceAppearance()==='dark'?'0,0,0':'40,36,28'},${E.opacity}))`;body.dataset.elevation=String(componentElevation(n))}}
     // An intake plane is an open region: its outline is dashed 6 4 in the muted ink.
     if(cfg.intake===true&&String(n.symbolId||'')==='plane'){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4';body.style.stroke='var(--muted)'}
     g.appendChild(body);
+    // A cylinder's top cap: the near half of its rim, a second line in the outline colour.
+    if(geo.rim){const rim=document.createElementNS('http://www.w3.org/2000/svg','path');rim.setAttribute('class','body-rim');rim.setAttribute('d',geo.rim);rim.setAttribute('fill','none');g.appendChild(rim)}
     // A section's lines inside the outline: each line an inset boundary, each region filled as
     // what it is (solid material, or space). The outline is line L0. Corners are concentric.
     if(sectioned){
@@ -11732,7 +11855,7 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
       body.classList.add(`fill-${section.bands[0]?.fill||'solid'}`);
     }else if(form.section&&section){body.classList.add(`fill-${section.core?.fill||'solid'}`)}
     // A solid core is bevelled, lit from the top left, so a disk reads as a body, not a blank card.
-    if(form.section&&section&&(section.core?.fill||'solid')==='solid'&&!componentAcceptsChildren(n))appendSolidBevel(g,size,section);
+    if(form.section&&section&&(section.core?.fill||'solid')==='solid'&&!componentAcceptsChildren(n)){if(shaped)appendShapeBevel(g,geo);else appendSolidBevel(g,size,section)}
     if(section&&section.lines.length>=2){}else if(form.frame.mode!=='none'||backdrop==='frame'){
       const inset=Math.max(4,Math.min(Math.min(size.w,size.h)/3,form.frame.thickness||12));const frameDepth=Math.min(14,Math.max(0,form.frame.depth*.16));
       if(frameDepth>0)appendBevel(g,size.w-inset*2,size.h-inset*2,SovSchematicNotation.cornerRadius(SovSchematicNotation.tokens(diagram),{total:inset,inset,w:size.w-inset*2,h:size.h-inset*2,sectioned:true}),'recess');
@@ -11935,7 +12058,8 @@ function appendComponentStatus(g,n){
   const fade=statusFade(n),seen=fade<1?mixHex([fill,componentFillGround(n)],[fade,1-fade]):fill,chipFill=mixHex([edge,seen],[.16,.84]);
   const tone=['safe','alert','danger'].includes(st.tone)?statusTone(st.tone):null,glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'';
   const title=statusTitle(st),text=glyph?`${glyph} ${title}`:title,ch=Math.round(px*1.5);
-  const cw=tone?Math.ceil(text.length*px*.6+px*1.4):Math.ceil(title.length*px*.6+px),x=w/2-6-cw,y=-h/2+6;
+  // The corner is the inner rectangle's: the card's own, or inside what a declared shape cuts away.
+  const I=componentInnerRect(n),cw=tone?Math.ceil(text.length*px*.6+px*1.4):Math.ceil(title.length*px*.6+px),x=I.r-6-cw,y=I.t+6;
   const chip=document.createElementNS('http://www.w3.org/2000/svg','g');chip.setAttribute('class','status-chip');chip.dataset.status=st.id;
   const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
   r.setAttribute('x',String(x));r.setAttribute('y',String(y));r.setAttribute('width',String(cw));r.setAttribute('height',String(ch));r.setAttribute('rx',String(ch/2));
@@ -11944,7 +12068,7 @@ function appendComponentStatus(g,n){
   t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
   t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${tone?statusChipInk(tone):ensureContrast(edge,chipFill,TEXT_FLOOR)};stroke:none;pointer-events:none`);t.textContent=text;chip.appendChild(t);
   g.appendChild(chip);
-  if(st.outline==='dashed'){const body=g.querySelector(':scope > .body');if(body){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}}
+  if(st.outline==='dashed')for(const body of g.querySelectorAll(':scope > .body,:scope > .body-rim')){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}
 }
 // A card's badges (DATA-FORMATS.md "Badges"): the status chip's shape without a status's meaning, in a
 // row from the card's top-left corner. A badge that would come within 4 of the status chip or within 6
@@ -11953,17 +12077,17 @@ function appendComponentBadges(g,n){
   const list=Array.isArray(n?.config?.badges)?n.config.badges.filter(b=>b&&typeof b.label==='string'&&b.label.trim()):[];
   if(!list.length||componentForm(n).dimension!==2)return;
   const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
-  const ch=Math.round(px*1.5),y=-h/2+6,fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
+  const I=componentInnerRect(n),ch=Math.round(px*1.5),y=I.t+6,fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
   const widthOf=text=>Math.ceil(text.length*px*.6+px);
   // The right limit: the card's right edge less 6, or 4 short of the status chip's left edge.
-  let limit=w/2-6;
+  let limit=I.r-6;
   const st=declaredStatus(n);
   if(st){
     const tone=['safe','alert','danger'].includes(st.tone),glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'',title=statusTitle(st);
-    limit=Math.min(limit,w/2-6-(tone?Math.ceil((glyph?`${glyph} ${title}`:title).length*px*.6+px*1.4):widthOf(title))-4);
+    limit=Math.min(limit,I.r-6-(tone?Math.ceil((glyph?`${glyph} ${title}`:title).length*px*.6+px*1.4):widthOf(title))-4);
   }
   const labels=list.map(b=>b.label.trim());
-  const place=(count,more)=>{const xs=[];let x=-w/2+6;for(let i=0;i<count;i++){const cw=widthOf(i===count-1&&more?`+${labels.length-count+1}`:labels[i]);if(x+cw>limit)return null;xs.push([x,cw]);x+=cw+4}return xs};
+  const place=(count,more)=>{const xs=[];let x=I.l+6;for(let i=0;i<count;i++){const cw=widthOf(i===count-1&&more?`+${labels.length-count+1}`:labels[i]);if(x+cw>limit)return null;xs.push([x,cw]);x+=cw+4}return xs};
   let shown=labels.length,more=false,spots=place(shown,false);
   if(!spots){more=true;for(shown=labels.length-1;shown>=1;shown--){spots=place(shown,true);if(spots)break}}
   if(!spots)return;
@@ -12039,7 +12163,7 @@ function render(){
         portLabel.setAttribute('x',localX+offsets.dx);portLabel.setAttribute('y',localY+offsets.dy);portLabel.setAttribute('text-anchor',offsets.anchor);portLabel.textContent=pcfg.label;g.appendChild(portLabel);
       }
     }
-    appendComponentLeads(g,n);appendTerminalMarks(g,n);
+    appendComponentLeads(g,n);appendShapeLeads(g,n);appendTerminalMarks(g,n);
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); appendComponentWaitsOn(g,n); applyStatusFade(g,n);
   });
   renderGroups(markers);
@@ -12424,7 +12548,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
   // Wires on buses are laid out first, lanes and all, so every auto route keeps clear of them.
   const busState=typeof busRoutesForRender==='function'?busRoutesForRender():null;
   if(busState)for(const [id,pts] of busState.routes){const w=wires.find(x=>x.id===id);if(w)occupied.push(...routeSegments(pts,w))}
-  wires.forEach((w,i)=>{
+  // The bus routes found above stand for the whole pass: each wire reads them, none asks again.
+  const routeEvery=fn=>busState&&typeof withBusRoutes==='function'?withBusRoutes(busState,fn):fn();
+  routeEvery(()=>wires.forEach((w,i)=>{
     if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
     const snapshot=dragging&&(w.a===activeNodeDrag||w.b===activeNodeDrag)?dragRouteSnapshots.get(i):null;
@@ -12433,7 +12559,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const points=snapshot?clonePoints(snapshot.points):stableRouteForWire(i,w,A,B,occupied);
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
     if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
-  });
+  }));
   // Jogs out and close parallels spread a track apart (src/40-routing.js nudgeRoutes); bus lanes and taps stay fixed.
   const trackCramped=nudgeRoutes(routes,busState?[...busState.routes].flatMap(([id,pts])=>routeSegments(pts,wires.find(x=>x.id===id))):[]);
   for(const [i,r] of routes)r.segs=routeSegments(r.points,wires[i]);
@@ -12661,6 +12787,36 @@ function layoutSegmentsCross(a,b,c,d){
   const d1=o(c,d,a),d2=o(c,d,b),d3=o(a,b,c),d4=o(a,b,d);
   return ((d1>0&&d2<0)||(d1<0&&d2>0))&&((d3>0&&d4<0)||(d3<0&&d4>0));
 }
+// The crossing count asks, for a sample segment of one route, whether any sample segment of another
+// route crosses it. Two segments cross only where their boxes meet, so a route's segments are put
+// in the cells of a grid once, and a segment is tested against the ones in the cells it touches:
+// layoutSegmentsCross, on every pair that could pass it. A route with a point that is not finite, or a
+// segment over many cells, has no index and is scanned whole.
+const LAYOUT_CROSS_CELL=32;
+function layoutCrossIndex(pts){
+  let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
+  for(const p of pts){if(!Number.isFinite(p.x)||!Number.isFinite(p.y))return null;l=Math.min(l,p.x);r=Math.max(r,p.x);t=Math.min(t,p.y);b=Math.max(b,p.y)}
+  if(!(Math.max(-l,r,-t,b)<32768*LAYOUT_CROSS_CELL))return null; // a cell key holds 16 bits each way
+  const cells=new Map();
+  for(let i=1;i<pts.length;i++){
+    const P=pts[i-1],Q=pts[i];
+    const x0=Math.floor(Math.min(P.x,Q.x)/LAYOUT_CROSS_CELL),x1=Math.floor(Math.max(P.x,Q.x)/LAYOUT_CROSS_CELL),y0=Math.floor(Math.min(P.y,Q.y)/LAYOUT_CROSS_CELL),y1=Math.floor(Math.max(P.y,Q.y)/LAYOUT_CROSS_CELL);
+    if(x1-x0>8||y1-y0>8)return null;
+    for(let cx=x0;cx<=x1;cx++)for(let cy=y0;cy<=y1;cy++){const key=cx*65536+cy,list=cells.get(key);if(list)list.push(i);else cells.set(key,[i])}
+  }
+  return {cells,l,r,t,b};
+}
+// Whether P-Q, a segment of an indexed route, crosses any segment of the indexed route pts.
+function layoutCrossesIndexed(P,Q,pts,index){
+  const lx=Math.min(P.x,Q.x),hx=Math.max(P.x,Q.x),ly=Math.min(P.y,Q.y),hy=Math.max(P.y,Q.y);
+  if(lx>index.r||hx<index.l||ly>index.b||hy<index.t)return false;
+  const x0=Math.floor(lx/LAYOUT_CROSS_CELL),x1=Math.floor(hx/LAYOUT_CROSS_CELL),y0=Math.floor(ly/LAYOUT_CROSS_CELL),y1=Math.floor(hy/LAYOUT_CROSS_CELL);
+  for(let cx=x0;cx<=x1;cx++)for(let cy=y0;cy<=y1;cy++){
+    const list=index.cells.get(cx*65536+cy);if(!list)continue;
+    for(const i of list)if(layoutSegmentsCross(P,Q,pts[i-1],pts[i]))return true;
+  }
+  return false;
+}
 
 // Corner points of an orthogonal path written as M/L/H/V commands.
 function layoutPathCorners(d){
@@ -12773,7 +12929,8 @@ function layoutMetrics(options={}){
   const routes=[];
   for(const g of workspace.querySelectorAll('.wire-group')){
     const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
-    routes.push({w,pts:layoutSamplePath(path),corners:layoutPathCorners(path.getAttribute('d'))});
+    const pts=layoutSamplePath(path);
+    routes.push({w,pts,index:layoutCrossIndex(pts),corners:layoutPathCorners(path.getAttribute('d'))});
   }
   // A jog is a short step between two bends: two lines that should have been one.
   for(const {w,corners} of routes){
@@ -12826,7 +12983,11 @@ function layoutMetrics(options={}){
   for(let i=0;i<routes.length;i++)for(let j=i+1;j<routes.length;j++){
     const A=routes[i],B=routes[j],shared=[A.w.a,A.w.b].some(x=>x&&(x===B.w.a||x===B.w.b));
     let crossed=0;
-    for(let s=1;s<A.pts.length&&crossed<4;s++)for(let t=1;t<B.pts.length;t++)if(layoutSegmentsCross(A.pts[s-1],A.pts[s],B.pts[t-1],B.pts[t])){crossed++;break}
+    if(A.index&&B.index){
+      if(A.index.l<=B.index.r&&A.index.r>=B.index.l&&A.index.t<=B.index.b&&A.index.b>=B.index.t)
+        for(let s=1;s<A.pts.length&&crossed<4;s++)if(layoutCrossesIndexed(A.pts[s-1],A.pts[s],B.pts,B.index))crossed++;
+    }
+    else for(let s=1;s<A.pts.length&&crossed<4;s++)for(let t=1;t<B.pts.length;t++)if(layoutSegmentsCross(A.pts[s-1],A.pts[s],B.pts[t-1],B.pts[t])){crossed++;break}
     if(crossed&&!(shared&&crossed===1))add('crossing',[A.w.id,B.w.id],`${crossed} crossing${crossed>1?'s':''}`);
   }
   // A directed wire long enough to carry a mark must say which way it runs.
@@ -13126,7 +13287,7 @@ refreshLayoutSelect();
 // junctions, section lines, glyphs) is measured against what is actually painted beneath it:
 // the fills that precede it in paint order, composited over the canvas tone. Reads only.
 
-const CONTRAST_MARKS='path.wire, .flow-chevron, .component-lead, .terminal-mark, .junction-dot, .node .body, .dimensional-point-body, .dimensional-path-body, .section-line, use.glyph, .glyph path, .glyph line, .glyph circle, .glyph rect, .glyph polyline, .glyph polygon';
+const CONTRAST_MARKS='path.wire, .flow-chevron, .component-lead, .terminal-mark, .junction-dot, .node .body, .node .body-rim, .dimensional-point-body, .dimensional-path-body, .section-line, use.glyph, .glyph path, .glyph line, .glyph circle, .glyph rect, .glyph polyline, .glyph polygon';
 const CONTRAST_SKIP='.wire-packet, .wire-voltage, .wire-hit, .port-hit, .transform-handle-group, .move-tether, .move-anchor, .carrier-end-handle, .endpoint-halo, defs, title';
 
 function contrastCanvasColour(){

@@ -502,6 +502,31 @@
     return out;
   }
   function assertIntake(component,clearable=false){const p=intakeProblems(component,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Card shape (SECTION-MODEL.md "Card shapes") ----------------------------------------------
+  // A 2D Component that is not a group and has a closed interior may declare
+  // `config.presentation.shape`: 'rect' (the default, also when absent), 'cylinder' or
+  // 'parallelogram'. 'rect' is admitted on any Component, since it is what absent means.
+  //   SHAPE_INVALID   shape is not one of the three, or a cylinder or parallelogram sits on a
+  //                   Component that is not 2D, is a group, or has an open interior
+  const CARD_SHAPES=['rect','cylinder','parallelogram'];
+  function shapeProblems(component,clearable=false){
+    const out=[],presentation=component?.config?.presentation;if(!isObject(presentation))return out;
+    const shape=presentation.shape;if(shape===undefined||(clearable&&shape===null))return out;
+    if(!CARD_SHAPES.includes(shape)){out.push(`SHAPE_INVALID: config.presentation.shape must be one of ${CARD_SHAPES.join(', ')}, not ${JSON.stringify(shape)}`);return out}
+    if(shape==='rect')return out;
+    const symbol=normalizeSymbolId(component.symbolId||component.type);
+    const form=normalizeComponentForm(isObject(component.form)?component.form:(templatePreset(symbol)?.form||{dimension:2}),component.canvas);
+    if(symbol==='group')out.push(`SHAPE_INVALID: config.presentation.shape ${shape} belongs to a card, not a group`);
+    else if(form.dimension!==2)out.push(`SHAPE_INVALID: config.presentation.shape ${shape} belongs to a 2D Component, not a ${form.dimension}D one`);
+    else if(form.regions.interior.state==='open')out.push(`SHAPE_INVALID: config.presentation.shape ${shape} belongs to a card with a closed interior, not a container`);
+    return out;
+  }
+  function assertShape(component,clearable=false){const p=shapeProblems(component,clearable);if(p.length)throw new Error(p[0])}
+  // The shape a card is drawn in: its declared shape where that shape may be drawn, else 'rect'.
+  function cardShape(component){
+    const shape=component?.config?.presentation?.shape;
+    return (shape==='cylinder'||shape==='parallelogram')&&!shapeProblems(component).length?shape:'rect';
+  }
   // Copies an authored status and waitsOn onto a record being made.
   function adoptStatusAndWaitsOn(config,value){
     if(value?.status!==undefined&&value.status!==null)config.status=value.status;
@@ -512,6 +537,7 @@
   function clearStatusAndWaitsOn(candidate,patch){
     if(!isObject(candidate?.config)||!isObject(patch?.config))return;
     for(const key of ['status','waitsOn','badges','intake'])if(patch.config[key]===null)delete candidate.config[key];
+    if(isObject(patch.config.presentation)&&patch.config.presentation.shape===null&&isObject(candidate.config.presentation))delete candidate.config.presentation.shape;
   }
   // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
   // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
@@ -921,6 +947,8 @@
     assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
     assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges);
     if(value.config?.intake!==undefined&&value.config.intake!==null){config.intake=clone(value.config.intake);assertIntake(component)}
+    if(isObject(config.presentation)&&config.presentation.shape===null)delete config.presentation.shape;
+    assertShape(component);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -1221,6 +1249,7 @@
       normalizeComponentSize(candidate);
       assertGroupRules(doc,doc.components.map((c,i)=>i===index?candidate:c));
       if(patch?.config?.intake!==undefined||nextSymbol!==undefined)assertIntake(candidate,patch?.config?.intake===null);
+      if(patch?.config?.presentation?.shape!==undefined||nextSymbol!==undefined||patch?.form!==undefined)assertShape(candidate,patch?.config?.presentation?.shape===null);
     }else if(resource==='wire'){
       if(isObject(patch?.config))assertPathDelay(patch.config,true);
       if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
@@ -1428,6 +1457,7 @@
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of statusProblems(input,item?.config))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of intakeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
+    for(const item of input.components||[])for(const p of shapeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -1468,5 +1498,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });

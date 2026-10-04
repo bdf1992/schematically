@@ -4,7 +4,7 @@
 // junctions, section lines, glyphs) is measured against what is actually painted beneath it:
 // the fills that precede it in paint order, composited over the canvas tone. Reads only.
 
-const CONTRAST_MARKS='path.wire, .flow-chevron, .component-lead, .terminal-mark, .junction-dot, .node .body, .dimensional-point-body, .dimensional-path-body, .section-line, use.glyph, .glyph path, .glyph line, .glyph circle, .glyph rect, .glyph polyline, .glyph polygon';
+const CONTRAST_MARKS='path.wire, .flow-chevron, .component-lead, .terminal-mark, .junction-dot, .node .body, .node .body-rim, .dimensional-point-body, .dimensional-path-body, .section-line, use.glyph, .glyph path, .glyph line, .glyph circle, .glyph rect, .glyph polyline, .glyph polygon';
 const CONTRAST_SKIP='.wire-packet, .wire-voltage, .wire-hit, .port-hit, .transform-handle-group, .move-tether, .move-anchor, .carrier-end-handle, .endpoint-halo, defs, title';
 
 function contrastCanvasColour(){

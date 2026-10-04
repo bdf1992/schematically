@@ -122,6 +122,15 @@
                   }
                 }
               },
+              "presentation": {
+                "type": "object",
+                "properties": {
+                  "shape": {
+                    "enum": ["rect", "cylinder", "parallelogram"],
+                    "description": "The shape a card's body is drawn in; absent means rect. cylinder and parallelogram belong to a 2D Component that is not a group and has a closed interior; any other value, or either shape on any other Component, is SHAPE_INVALID. Ports, routing and layout keep the bounding rectangle. See SECTION-MODEL.md 'Card shapes'."
+                  }
+                }
+              },
               "intake": {
                 "type": "boolean",
                 "description": "A group or a plane that is an open region: its outline is drawn dashed. On any other kind of Component, or any other value, it is INTAKE_INVALID. See SECTION-MODEL.md 'Borders'."
