@@ -2132,6 +2132,28 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return out;
   }
   function assertStatusAndWaitsOn(doc,config,clearable=false){const p=statusProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Badges (DATA-FORMATS.md "Badges") ------------------------------------------------------
+  // A Component's `config.badges` lists at most 4 chips `{label, colorSlot?}`: a label of 1 to 24
+  // characters after trimming and a palette slot 0 to 11 (absent means 0). Presentation only.
+  //   BADGE_INVALID   badges is not that list (the message names the index and the field)
+  const BADGE_KEYS=['label','colorSlot'],BADGE_MAX=4,BADGE_LABEL_MAX=24;
+  function badgeProblems(config,clearable=false){
+    const out=[];if(!isObject(config))return out;
+    const list=config.badges;if(list===undefined||(clearable&&list===null))return out;
+    if(!Array.isArray(list)){out.push(`BADGE_INVALID: config.badges must be an array, not ${JSON.stringify(list)}`);return out}
+    if(list.length>BADGE_MAX)out.push(`BADGE_INVALID: config.badges holds ${list.length} entries; at most ${BADGE_MAX}`);
+    list.forEach((b,i)=>{
+      const at=`config.badges[${i}]`;
+      if(!isObject(b)){out.push(`BADGE_INVALID: ${at} must be an object`);return}
+      const extra=Object.keys(b).find(k=>!BADGE_KEYS.includes(k));
+      if(typeof b.label!=='string'||!b.label.trim())out.push(`BADGE_INVALID: ${at}.label must be a non-empty string`);
+      else if(b.label.trim().length>BADGE_LABEL_MAX)out.push(`BADGE_INVALID: ${at}.label must be at most ${BADGE_LABEL_MAX} characters, not ${b.label.trim().length}`);
+      else if(b.colorSlot!==undefined&&!(Number.isInteger(b.colorSlot)&&b.colorSlot>=0&&b.colorSlot<=11))out.push(`BADGE_INVALID: ${at}.colorSlot must be an integer 0 to 11, not ${JSON.stringify(b.colorSlot)}`);
+      else if(extra)out.push(`BADGE_INVALID: ${at}.${extra} is not a field of a badge (label, colorSlot)`);
+    });
+    return out;
+  }
+  function assertBadges(config,clearable=false){const p=badgeProblems(config,clearable);if(p.length)throw new Error(p[0])}
   // Copies an authored status and waitsOn onto a record being made.
   function adoptStatusAndWaitsOn(config,value){
     if(value?.status!==undefined&&value.status!==null)config.status=value.status;
@@ -2141,7 +2163,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // An update's null removes the key.
   function clearStatusAndWaitsOn(candidate,patch){
     if(!isObject(candidate?.config)||!isObject(patch?.config))return;
-    for(const key of ['status','waitsOn'])if(patch.config[key]===null)delete candidate.config[key];
+    for(const key of ['status','waitsOn','badges'])if(patch.config[key]===null)delete candidate.config[key];
   }
   // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
   // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
@@ -2543,6 +2565,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // A group's members, as written; create checks them (assertGroupRules).
     if(value.config?.members!==undefined)config.members=clone(value.config.members);
     assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
+    assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -2817,6 +2840,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(binding&&resource!=='component')throw new Error('DEFINITION_INVALID: only a component binds a definition');
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource!=='reference')assertStatusAndWaitsOn(doc,patch?.config,true);
+    if(resource==='component')assertBadges(patch?.config,true);
     if(resource==='component'){
       assertDefinitionPatch(patch,binding);
       if(!binding)assertDefinitionPortsKept(current,patch,null);
@@ -3046,6 +3070,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const f of groupFindings(input))errors.push(`component ${f.id??'?'}: ${f.code}: ${f.text}`);
     // Status and waits-on: reported, never repaired (the codes are listed at statusProblems).
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of statusProblems(input,item?.config))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
+    for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -3064,7 +3089,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(/^duplicate (?:component|wire|reference) id:/.test(message))return 'identity';
     if(/missing endpoint component:/.test(message))return 'wire-endpoint';
     if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
-    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID):/.test(message))return 'status';
+    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID|BADGE_INVALID):/.test(message))return 'status';
     return 'boundary-legality';
   }
   // Straight from validateDocument's own findings; no legality is re-derived here.
@@ -11684,7 +11709,7 @@ function statusFade(n){const st=declaredStatus(n),o=st?.opacity;return typeof o=
 function applyStatusFade(g,n){
   const fade=statusFade(n);if(fade>=1||componentForm(n).dimension!==2)return;
   for(const el of g.children){
-    if(el.localName==='text'||el.classList.contains('status-chip'))continue;
+    if(el.localName==='text'||el.classList.contains('status-chip')||el.classList.contains('card-badge'))continue;
     el.style.opacity=String((parseFloat(getComputedStyle(el).opacity)||1)*fade);
   }
 }
@@ -11713,6 +11738,42 @@ function appendComponentStatus(g,n){
   g.appendChild(chip);
   if(st.outline==='dashed'){const body=g.querySelector(':scope > .body');if(body){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}}
 }
+// A card's badges (DATA-FORMATS.md "Badges"): the status chip's shape without a status's meaning, in a
+// row from the card's top-left corner. A badge that would come within 4 of the status chip or within 6
+// of the card's right edge is not drawn; the last chip drawn then reads +N and lists the rest.
+function appendComponentBadges(g,n){
+  const list=Array.isArray(n?.config?.badges)?n.config.badges.filter(b=>b&&typeof b.label==='string'&&b.label.trim()):[];
+  if(!list.length||componentForm(n).dimension!==2)return;
+  const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
+  const ch=Math.round(px*1.5),y=-h/2+6,fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
+  const widthOf=text=>Math.ceil(text.length*px*.6+px);
+  // The right limit: the card's right edge less 6, or 4 short of the status chip's left edge.
+  let limit=w/2-6;
+  const st=declaredStatus(n);
+  if(st){
+    const tone=['safe','alert','danger'].includes(st.tone),glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'',title=statusTitle(st);
+    limit=Math.min(limit,w/2-6-(tone?Math.ceil((glyph?`${glyph} ${title}`:title).length*px*.6+px*1.4):widthOf(title))-4);
+  }
+  const labels=list.map(b=>b.label.trim());
+  const place=(count,more)=>{const xs=[];let x=-w/2+6;for(let i=0;i<count;i++){const cw=widthOf(i===count-1&&more?`+${labels.length-count+1}`:labels[i]);if(x+cw>limit)return null;xs.push([x,cw]);x+=cw+4}return xs};
+  let shown=labels.length,more=false,spots=place(shown,false);
+  if(!spots){more=true;for(shown=labels.length-1;shown>=1;shown--){spots=place(shown,true);if(spots)break}}
+  if(!spots)return;
+  const svgNS='http://www.w3.org/2000/svg';
+  spots.forEach(([x,cw],i)=>{
+    const isMore=more&&i===shown-1,badge=list[i],edge=slotColor(badge.colorSlot??0),chipFill=mixHex([edge,fill],[.16,.84]);
+    const text=isMore?`+${labels.length-shown+1}`:labels[i];
+    const chip=document.createElementNS(svgNS,'g');chip.setAttribute('class','card-badge');chip.dataset.badgeIndex=String(i);
+    if(isMore){chip.dataset.badgeMore='true';const t=document.createElementNS(svgNS,'title');t.textContent=labels.slice(shown-1).join(', ');chip.appendChild(t)}
+    const r=document.createElementNS(svgNS,'rect');
+    r.setAttribute('x',String(x));r.setAttribute('y',String(y));r.setAttribute('width',String(cw));r.setAttribute('height',String(ch));r.setAttribute('rx',String(ch/2));
+    r.setAttribute('style',`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
+    const t=document.createElementNS(svgNS,'text');t.dataset.role='caption';
+    t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
+    t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${ensureContrast(edge,chipFill,TEXT_FLOOR)};stroke:none;pointer-events:none`);t.textContent=text;chip.appendChild(t);
+    g.appendChild(chip);
+  });
+}
 // What a card waits on, under it and below any outside label: 'Waits on Bdo, rule R-29'.
 function appendComponentWaitsOn(g,n){
   const list=waitsOnList(n?.config?.waitsOn);if(!list)return;
@@ -11740,7 +11801,7 @@ function render(){
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
-    renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);
+    renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);appendComponentBadges(g,n);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
