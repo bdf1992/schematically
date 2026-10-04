@@ -76,14 +76,18 @@ function busPlan(w,A,B,spec){
   const on=busProject(first,SA),off=busProject(last,SB);
   legs.forEach((l,i)=>{l.sIn=i===0?on.s:meets[i-1].sTo;l.sOut=i===legs.length-1?off.s:meets[i].sFrom});
   return {w,A,B,SA,SB,legs,meets,
+    // Each end's card, when its body is an obstacle to this wire: a tap goes round it (leadJoin).
+    cardA:a&&endpointNeedsOuterObstacle(a,w.aSide,w)?a:null,cardB:b&&endpointNeedsOuterObstacle(b,w.bSide,w)?b:null,
     horizA:Math.abs(SA.x-A.x)>=Math.abs(SA.y-A.y),horizB:Math.abs(SB.x-B.x)>=Math.abs(SB.y-B.y)};
 }
 // The drawn route for a plan, given the wire's lane offset on each of its buses.
 function busPlanPoints(plan,offsets){
   const o=i=>offsets.get(plan.legs[i].id)||0,L=plan.legs,n=L.length;
-  // Tap on: one L from the end of the lead to the lane, its first leg continuing the lead.
+  // Tap on: one L from the end of the lead to the lane, its first leg continuing the lead. A lane
+  // behind the port is reached round the end's own card (leadJoin, src/40-routing.js), so the wire
+  // leaves along the port's normal and never doubles back over the port.
   const T=busAt(L[0].line,L[0].sIn,o(0));
-  const out=[plan.A,plan.SA,plan.horizA?{x:T.x,y:plan.SA.y}:{x:plan.SA.x,y:T.y}];
+  const out=[plan.A,plan.SA,...leadJoin(T,plan.A,plan.SA,plan.cardA,plan.horizA?{x:T.x,y:plan.SA.y}:{x:plan.SA.x,y:T.y},.01).reverse()];
   for(let i=0;i<n;i++){
     out.push(...busRide(L[i].line,L[i].sIn,L[i].sOut,o(i)));
     if(i<n-1){
@@ -94,7 +98,7 @@ function busPlanPoints(plan,offsets){
   }
   // Tap off: the mirror of tap on.
   const U=busAt(L[n-1].line,L[n-1].sOut,o(n-1));
-  out.push(plan.horizB?{x:U.x,y:plan.SB.y}:{x:plan.SB.x,y:U.y},plan.SB,plan.B);
+  out.push(...leadJoin(U,plan.B,plan.SB,plan.cardB,plan.horizB?{x:U.x,y:plan.SB.y}:{x:plan.SB.x,y:U.y},.01),plan.SB,plan.B);
   // Two consecutive points off one axis (a parallel hand-over) get a corner between them.
   const ortho=[out[0]];
   for(let i=1;i<out.length;i++){const p=ortho.at(-1),q=out[i];if(Math.abs(p.x-q.x)>.01&&Math.abs(p.y-q.y)>.01)ortho.push({x:q.x,y:p.y});ortho.push(q)}

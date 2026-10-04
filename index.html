@@ -10349,8 +10349,13 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
        anchor:routeAnchor(points)
      }))
      .sort((a,b)=>a.score-b.score);
-    // Prefer a perimeter that clears every body; only when none does is the cheapest taken.
-    chosen=fallback.find(f=>routeClear(f.points,obstacles,leads))||fallback[0];
+    // Prefer a perimeter that clears every body; when none does, the cheapest that still leaves and
+    // arrives along each port's lead (it never doubles back over a port), and only then the cheapest.
+    const alongLeads=f=>{
+      const p=normalizePoints([A,SA,...f.points.slice(1,-1),SB,B]),same=(u,v)=>!u||(!!v&&u.dx===v.dx&&u.dy===v.dy);
+      return p.length<2||(same(sourceNode&&axisDirection(A,SA),axisDirection(p[0],p[1]))&&same(targetNode&&axisDirection(SB,B),axisDirection(p.at(-2),p.at(-1))));
+    };
+    chosen=fallback.find(f=>routeClear(f.points,obstacles,leads))||fallback.find(alongLeads)||fallback[0];
   }
 
   return {
@@ -10384,6 +10389,29 @@ function routeLead(P,Q,portId,node,inward){
     for(let s=2;s<=d;s+=2){const x=P.x+nx*s,y=P.y+ny*s;if(x>R.l&&x<R.r&&y>R.t&&y<R.b){d=Math.max(4,s/2);break}}
   }
   return {x:P.x+nx*d,y:P.y+ny*d};
+}
+// How a declared route joins an end's lead (LAYOUT-MODEL.md "As built: port side"). N is the
+// route's point next to the end, P the port, S the lead's end. Returned: the corners between N and
+// S, in that order, so the route reaches S from outside the stretch between S and the port and the
+// segment touching the port runs along the port's normal. Tried in order: the corner asked for, the
+// other corner, then round the end's own card on its nearer and its farther side; the first that
+// also keeps out of the card's padding is taken. node is the end's card when its body is an
+// obstacle to this wire, else null (the corner asked for is returned). Points closer than eps to
+// one axis line count as aligned and need no corner. Pinned and guided routes (src/58-layouts.js)
+// and bus taps (src/41-buses.js) build their ends with this.
+function leadJoin(N,P,S,node,first=null,eps=.5){
+  const aligned=Math.abs(N.x-S.x)<=eps||Math.abs(N.y-S.y)<=eps,asked=aligned||!first?[]:[first];
+  const d=axisDirection(P,S);
+  if(!d||!node||componentForm(node).dimension!==2||componentHostedOnWire(node))return asked;
+  const R=componentBounds(node,Math.min(ROUTE_END_CLEARANCE,Math.abs(S.x-P.x)+Math.abs(S.y-P.y))),W=componentBounds(node,ROUTE_CLEARANCE),lead={S,R,...d};
+  const nearer=(p,q,at)=>Math.abs(p-at)<=Math.abs(q-at)?[p,q]:[q,p];
+  const options=[asked,...(aligned?[]:[[{x:S.x,y:N.y}],[{x:N.x,y:S.y}]]),
+    ...(d.dx?nearer(W.t,W.b,N.y).map(y=>[{x:N.x,y},{x:S.x,y}]):nearer(W.l,W.r,N.x).map(x=>[{x,y:N.y},{x,y:S.y}]))];
+  const path=mid=>{const out=[{x:N.x,y:N.y}];for(const q of [...mid,S]){const p=out.at(-1);out.push(Math.abs(p.x-q.x)<=eps?{x:p.x,y:q.y}:Math.abs(p.y-q.y)<=eps?{x:q.x,y:p.y}:q)}return normalizePoints(out)};
+  // The point before S is off the lead's line, or on it beyond S: never between S and the port or behind the port.
+  const reaches=mid=>{const pts=path(mid);if(pts.length<2)return true;const M=pts.at(-2),E=pts.at(-1);return Math.abs((M.x-E.x)*d.dy)+Math.abs((M.y-E.y)*d.dx)>=.5||(M.x-E.x)*d.dx+(M.y-E.y)*d.dy>=0};
+  const clear=mid=>{const pts=path(mid);for(let i=0;i<pts.length-1;i++)if(!segmentClear(pts[i],pts[i+1],[R],[lead]))return false;return true};
+  return options.find(o=>reaches(o)&&clear(o))||options.find(reaches)||asked;
 }
 function routeFence(wire){
   const surface=wire?.canvasId||'';
@@ -10877,14 +10905,18 @@ function busPlan(w,A,B,spec){
   const on=busProject(first,SA),off=busProject(last,SB);
   legs.forEach((l,i)=>{l.sIn=i===0?on.s:meets[i-1].sTo;l.sOut=i===legs.length-1?off.s:meets[i].sFrom});
   return {w,A,B,SA,SB,legs,meets,
+    // Each end's card, when its body is an obstacle to this wire: a tap goes round it (leadJoin).
+    cardA:a&&endpointNeedsOuterObstacle(a,w.aSide,w)?a:null,cardB:b&&endpointNeedsOuterObstacle(b,w.bSide,w)?b:null,
     horizA:Math.abs(SA.x-A.x)>=Math.abs(SA.y-A.y),horizB:Math.abs(SB.x-B.x)>=Math.abs(SB.y-B.y)};
 }
 // The drawn route for a plan, given the wire's lane offset on each of its buses.
 function busPlanPoints(plan,offsets){
   const o=i=>offsets.get(plan.legs[i].id)||0,L=plan.legs,n=L.length;
-  // Tap on: one L from the end of the lead to the lane, its first leg continuing the lead.
+  // Tap on: one L from the end of the lead to the lane, its first leg continuing the lead. A lane
+  // behind the port is reached round the end's own card (leadJoin, src/40-routing.js), so the wire
+  // leaves along the port's normal and never doubles back over the port.
   const T=busAt(L[0].line,L[0].sIn,o(0));
-  const out=[plan.A,plan.SA,plan.horizA?{x:T.x,y:plan.SA.y}:{x:plan.SA.x,y:T.y}];
+  const out=[plan.A,plan.SA,...leadJoin(T,plan.A,plan.SA,plan.cardA,plan.horizA?{x:T.x,y:plan.SA.y}:{x:plan.SA.x,y:T.y},.01).reverse()];
   for(let i=0;i<n;i++){
     out.push(...busRide(L[i].line,L[i].sIn,L[i].sOut,o(i)));
     if(i<n-1){
@@ -10895,7 +10927,7 @@ function busPlanPoints(plan,offsets){
   }
   // Tap off: the mirror of tap on.
   const U=busAt(L[n-1].line,L[n-1].sOut,o(n-1));
-  out.push(plan.horizB?{x:U.x,y:plan.SB.y}:{x:plan.SB.x,y:U.y},plan.SB,plan.B);
+  out.push(...leadJoin(U,plan.B,plan.SB,plan.cardB,plan.horizB?{x:U.x,y:plan.SB.y}:{x:plan.SB.x,y:U.y},.01),plan.SB,plan.B);
   // Two consecutive points off one axis (a parallel hand-over) get a corner between them.
   const ortho=[out[0]];
   for(let i=1;i<out.length;i++){const p=ortho.at(-1),q=out[i];if(Math.abs(p.x-q.x)>.01&&Math.abs(p.y-q.y)>.01)ortho.push({x:q.x,y:p.y});ortho.push(q)}
@@ -12403,6 +12435,17 @@ function layoutPathCorners(d){
   }
   return out;
 }
+// A drawn route's corners in world space: hops stripped, repeated and collinear corners merged.
+function layoutRouteCorners(path){
+  const m=layoutWorldMatrix(path),c=[];
+  for(const q0 of layoutPathCorners(String(path.getAttribute('d')||'').replace(/A[^A-Z]*?(?=[MLHV])/g,''))){
+    const q=m?new DOMPoint(q0.x,q0.y).matrixTransform(m):q0,p={x:Math.round(q.x*100)/100,y:Math.round(q.y*100)/100},l=c.at(-1);
+    if(l&&Math.abs(l.x-p.x)<.5&&Math.abs(l.y-p.y)<.5)continue;
+    if(c.length>=2){const a=c.at(-2);if((Math.abs(a.x-l.x)<.5&&Math.abs(l.x-p.x)<.5)||(Math.abs(a.y-l.y)<.5&&Math.abs(l.y-p.y)<.5)){c[c.length-1]=p;continue}}
+    c.push(p);
+  }
+  return c;
+}
 function layoutMetrics(options={}){
   const staticView=options.static!==false; // an export or a screenshot freezes animation
   const findings=[],add=(kind,ids,detail)=>findings.push({kind,ids,detail});
@@ -12624,6 +12667,35 @@ function layoutMetrics(options={}){
      if(typeof busBandHolds==='function'&&busBandHolds(x.w,y.w,mid))continue;
      seen.add(key);add('route-close-parallel',[x.w.id,y.w.id],`${d.toFixed(1)}px apart for ${Math.round(hi-lo)}px`);
    }}
+  // Ports: a wire meets a 2D card's port along the port's outward normal, from a point at least 4
+  // outside the card on the side the port faces (port-wrong-side), and the port it ends on shows a
+  // mark, the point's circle or a terminal mark at opacity .5 or more, within 3 of the route's end
+  // (port-undrawn). A wire on the card's own interior meets the boundary from inside and is held
+  // only to port-undrawn. Reported, with no weight in the score (neither is in LAYOUT_RUBRIC).
+  for(const g of workspace.querySelectorAll('.wire-group')){
+    const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
+    const c=layoutRouteCorners(path);if(c.length<2)continue;
+    for(const end of ['a','b']){
+      const ep=carrierEndpoint(w,end),n=ep?.kind==='bound'?ep.node:null;if(!n||!is2D(n)||isGroupComponent(n)||isEffectivelyHidden(n))continue;
+      const side=end==='a'?w.aSide:w.bSide,P=end==='a'?c[0]:c.at(-1),Q=end==='a'?c[1]:c.at(-2),name=n.config?.label||n.id;
+      const inward=wireEndpointInward(w,n);
+      if(!inward){
+        const u=stubPos(P,side,1,n,inward),nx=u.x-P.x,ny=u.y-P.y,dx=Q.x-P.x,dy=Q.y-P.y;
+        const facing=physicalPortSide(n,side);
+        if(Math.abs(dx*ny-dy*nx)>.5||dx*nx+dy*ny<=0)add('port-wrong-side',[w.id,n.id],`meets the ${facing} port ${side} of ${name} from another side`);
+        else if(!componentHostedOnWire(n)){
+          const R=body.get(n.id),out=facing==='left'?R.l-Q.x:facing==='top'?R.t-Q.y:facing==='bottom'?Q.y-R.b:Q.x-R.r;
+          if(out<4-.01)add('port-wrong-side',[w.id,n.id],`turns ${Math.max(0,out).toFixed(1)}px outside the ${facing} port ${side} of ${name}, under 4`);
+        }
+      }
+      const el=nodeEl(n.id);let drawn=false;
+      for(const m of el?.querySelectorAll(':scope > .port.attachment-point,:scope > .terminal-mark')||[]){
+        if(layoutEffectiveOpacity(m)<.5)continue;const B=layoutWorldBox(m);if(!B)continue;
+        if(Math.hypot(Math.max(B.l-P.x,P.x-B.r,0),Math.max(B.t-P.y,P.y-B.b,0))<=3){drawn=true;break}
+      }
+      if(!drawn)add('port-undrawn',[w.id,n.id],`the port ${side} of ${name} it ends on is not drawn`);
+    }
+  }
   // Empty container: its children and inner wires fill under a fifth of its interior (review, 03, 04, 07).
   for(const n of visible){
     if(!is2D(n)||!componentAcceptsChildren(n))continue;
@@ -12717,7 +12789,12 @@ function routeThroughSpec(A,B,w,spec){
   const inner=(spec.mode==='pinned'?spec.points:spec.via)||[];if(!inner.length)return null;
   const a=nodes.find(n=>n.id===w.a),b=nodes.find(n=>n.id===w.b);
   const SA=a?routeLead(A,inner[0],w.aSide,a,wireEndpointInward(w,a)):A,SB=b?routeLead(B,inner.at(-1),w.bSide,b,wireEndpointInward(w,b)):B;
-  const seq=[A,SA,...inner.map(p=>({x:p.x,y:p.y})),SB,B],out=[seq[0]];
+  // The router adds each end's lead when the declared points do not give it: the route joins the
+  // lead from outside it (leadJoin, src/40-routing.js), so it never doubles back over a port.
+  const pts=inner.map(p=>({x:Number(p.x),y:Number(p.y)})),first=pts[0],last=pts.at(-1);
+  const joinA=a?leadJoin(first,A,SA,endpointNeedsOuterObstacle(a,w.aSide,w)?a:null,{x:first.x,y:SA.y}).reverse():[];
+  const joinB=b?leadJoin(last,B,SB,endpointNeedsOuterObstacle(b,w.bSide,w)?b:null,{x:SB.x,y:last.y}):[];
+  const seq=[A,SA,...joinA,...pts,...joinB,SB,B],out=[seq[0]];
   for(let i=1;i<seq.length;i++){const P=out.at(-1),Q=seq[i];if(Math.abs(P.x-Q.x)>.5&&Math.abs(P.y-Q.y)>.5)out.push({x:Q.x,y:P.y});out.push(Q)}
   return normalizePoints(out);
 }

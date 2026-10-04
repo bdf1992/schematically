@@ -68,7 +68,12 @@ function routeThroughSpec(A,B,w,spec){
   const inner=(spec.mode==='pinned'?spec.points:spec.via)||[];if(!inner.length)return null;
   const a=nodes.find(n=>n.id===w.a),b=nodes.find(n=>n.id===w.b);
   const SA=a?routeLead(A,inner[0],w.aSide,a,wireEndpointInward(w,a)):A,SB=b?routeLead(B,inner.at(-1),w.bSide,b,wireEndpointInward(w,b)):B;
-  const seq=[A,SA,...inner.map(p=>({x:p.x,y:p.y})),SB,B],out=[seq[0]];
+  // The router adds each end's lead when the declared points do not give it: the route joins the
+  // lead from outside it (leadJoin, src/40-routing.js), so it never doubles back over a port.
+  const pts=inner.map(p=>({x:Number(p.x),y:Number(p.y)})),first=pts[0],last=pts.at(-1);
+  const joinA=a?leadJoin(first,A,SA,endpointNeedsOuterObstacle(a,w.aSide,w)?a:null,{x:first.x,y:SA.y}).reverse():[];
+  const joinB=b?leadJoin(last,B,SB,endpointNeedsOuterObstacle(b,w.bSide,w)?b:null,{x:SB.x,y:last.y}):[];
+  const seq=[A,SA,...joinA,...pts,...joinB,SB,B],out=[seq[0]];
   for(let i=1;i<seq.length;i++){const P=out.at(-1),Q=seq[i];if(Math.abs(P.x-Q.x)>.5&&Math.abs(P.y-Q.y)>.5)out.push({x:Q.x,y:P.y});out.push(Q)}
   return normalizePoints(out);
 }

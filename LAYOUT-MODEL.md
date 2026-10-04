@@ -206,6 +206,8 @@ Reported in counts and findings, with no weight in the score:
 | --- | --- |
 | route-hugs-node | a route segment other than its first and last running parallel to an edge of a 2D card (not a container, not a group), outside it and under 8 from that edge, for an overlap of 16 or more |
 | group-overlap | two shown groups on one canvas whose regions (`groupRect`) overlap by more than 1; the detail names each card both groups list |
+| port-wrong-side | a wire end bound to a port of a 2D card, the wire not on that card's own interior, where the drawn segment touching the port is not along the port's outward normal, or the point before the port is under 4 outside the card's edge on the side the port faces (hops stripped and collinear corners merged first, so a route that doubles back over its port counts) |
+| port-undrawn | a wire end bound to a port of a 2D card with no port mark within 3 of the route's end: the point's circle (`.port.attachment-point`) or a terminal mark (`.terminal-mark`), at an effective opacity of 0.5 or more |
 
 A card hosted on a wire (drawn inline on the line) is not counted by route-through-node or
 route-hugs-node against its own host wire.
@@ -523,6 +525,62 @@ A wire never runs through a card or along its edge.
 Tests: `tests/route_clear_of_cards_qa.py` (the Miro parity frames 4 and 5, a 4 x 4 grid with
 12 wires, a row of three, and a pocket only the search clears).
 
+## As built: port side (2026-10-04)
+
+A wire meets a port from the side the port faces, and the port it ends on is drawn.
+
+- **The rule.** Every route that ends on a port of a 2D card leaves and arrives along that port's
+  outward normal: the segment touching the port is collinear with the normal, and the point before
+  the port lies outside the card on the port's facing side, at least 4 from the edge. A wire on the
+  card's own interior meets the boundary from inside and is outside the rule.
+- **Auto routes** start and end at the lead ends (`routeLead`): the simple shapes and the A* search
+  both run from one lead's end to the other's, and a segment back over a lead enters the end card's
+  padding and is refused. A blocked route (the perimeter fallback) takes a perimeter that clears
+  every body; when none does, the cheapest that still leaves and arrives along each lead.
+- **Pinned and guided routes** (`routeThroughSpec` in `src/58-layouts.js`): the declared points are
+  kept, and the router adds each end's lead when they do not give it. `leadJoin(N, P, S, card)` in
+  `src/40-routing.js` returns the corners between the declared point N next to an end and that
+  end's lead (port P, lead end S). It tries the corner the route had before (horizontal first), the
+  other corner, then a way round the end's own card on its nearer and its farther side, along the
+  card's edge plus 12. It takes the first that reaches S from off the lead's line or from beyond S
+  (never from between S and the port, or from behind the port) and enters the card's padding (8)
+  nowhere; when none keeps out of the padding, the first that reaches S that way. A declared point
+  right of a left-facing port, on the port's line or over the card, is joined round the card and the
+  wire still arrives from the left.
+- **Bus taps** (`busPlanPoints` in `src/41-buses.js`) take the same join between the lead's end and
+  the lane: a lane behind a port is reached round the end's own card. A tap that was already clear
+  is drawn as before.
+- **Ports drawn.** A bound end on a 2D card shows a terminal mark on the card's edge at the route's
+  end (`appendTerminalMarks`), whatever the card's glyph, backdrop or attachment defaults.
+- **The audit** counts `port-wrong-side` and `port-undrawn` (§5, "Reported in counts and findings").
+  Neither has a weight in `LAYOUT_RUBRIC`.
+
+Measured (static metrics after `fitDiagram`), before then after; before is dev f241c0c:
+
+| Document | port-wrong-side | port-undrawn |
+| --- | --- | --- |
+| `tests/fixtures/task-lifecycle.sov` (frame 4) | 0, 0 | 0, 0 |
+| `tests/fixtures/work-engine-sample.sov` (frame 5) | 0, 0 | 0, 0 |
+| `docs/workengine/map.sov` | 0, 0 | 0, 0 |
+| `examples/state/bench.sov` (234 wires on overlapping cards, 42 of them blocked routes that doubled back) | 42, 0 | 0, 0 |
+| planted: pinned, last point beyond the card on the port's line | 1, 0 | 0, 0 |
+| planted: pinned, last point inside the card | 1, 0 | 0, 0 |
+| planted: guided, both ends behind their ports | 2, 0 | 0, 0 |
+| planted: a bus behind both ports | 2, 0 | 0, 0 |
+| planted: a gate boxed in by eight cards, fed from below (a blocked route) | 1, 0 | 0, 0 |
+
+The two frames and the map were already at 0 on this base: the wires the Miro study showed entering
+from the wrong side and through an undrawn port were auto routes, which the obstacle rule of "Routes
+clear of cards" and the terminal marks had put right. What changed here is the declared routes, the
+bus taps and the blocked fallback. No wire path and no count changed on the two frames, the map or
+29 of the 30 documents measured under `examples/`. The other, `examples/state/bench.sov`, is a state-space benchmark whose
+cards overlap (node-overlap 111), so many of its routes are blocked: there 207 of 234 paths changed,
+score 0 before and after, and its other counts moved both ways (route-through-node 510 to 172,
+crossing 4371 to 3767, route-jog 120 to 87; route-overlap 1024 to 1784, route-close-parallel 390 to
+580, route-hugs-node 76 to 134).
+
+Tests: `tests/port_side_qa.py`.
+
 ## As built: track gap (2026-10-04)
 
 Two wires that run side by side stand a track apart, so each can be followed by eye.
@@ -697,7 +755,8 @@ A refusal changes nothing.
 - **Tap on**: the end of the source lead (the router's `routeLead`) is projected onto the first bus's
   centreline, clamped to its extent and offset by the wire's lane, and joined by one orthogonal L whose
   first leg continues the lead. The wire rides each bus on its lane and turns once where two buses meet,
-  where the two lanes meet. **Tap off** is the mirror of tap on.
+  where the two lanes meet. **Tap off** is the mirror of tap on. When the lane lies behind the port, the
+  tap goes round the end's own card instead ("As built: port side").
 - **Lane order**, once per render, before any auto route: a bus's own `order` when it has one. Otherwise
   wires start in the order they leave the bus (ties by where they join, then wire id); that order and its
   reverse are both measured and the one with fewer crossing pairs is kept; then up to 8 passes of adjacent
