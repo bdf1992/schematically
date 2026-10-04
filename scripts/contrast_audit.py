@@ -25,7 +25,7 @@ from browser_runtime import chromium_launch_kwargs  # noqa: E402
 
 THEMES = ['pastel', 'subtle', 'reading']
 APPEARANCES = ['light', 'dark']
-DEFAULT_PALETTE = 'okabe-ito'
+DEFAULT_PALETTE = 'system-default'
 
 
 def measure(paths: list[Path]) -> dict:

@@ -2,7 +2,7 @@
 
 1. src/09-colour-core.js in Node, against reference values: WCAG 2.2 contrast, large-text
    floors, colour-vision simulation and OKLab distance.
-2. The palette as realised on screen: the default palette holds every theme's floor and stays
+2. The palette as realised on screen: the default palette (system-default; okabe-ito too) holds every theme's floor and stays
    colour-blind distinct in light and dark; a hue family is reported as not distinct.
 3. Planted defects on the rendered canvas: a faint label, a faint terminal mark and a faint
    gradient wire are each found, attributed to their owner, and cost layout score.
@@ -49,14 +49,13 @@ kinds = {f['kind'] for f in core['audit']['failures']}
 assert 'distinct' in kinds and core['audit']['closest']['deutan']['pair'] == [0, 1], core['audit']
 
 PAGE = r"""()=>{
-  const A=window.SovSchematicAPI,out={palettes:[]};
+  const A=window.SovSchematicAPI,out={palettes:[],default:A.view.colour()};
   for(const appearance of ['light','dark']){A.view.setAppearance(appearance);
-    for(const theme of ['pastel','subtle','reading'])for(const palette of ['okabe-ito','spectrum']){A.view.setColour({theme,palette});out.palettes.push(A.view.paletteAudit())}}
+    for(const theme of ['pastel','subtle','reading'])for(const palette of ['system-default','okabe-ito','spectrum']){A.view.setColour({theme,palette});out.palettes.push(A.view.paletteAudit())}}
   // In dark mode a card is lighter than the canvas: every colour slot holds 3:1 on a card too.
   A.view.setAppearance('dark');out.onCard=[];
-  for(const theme of ['pastel','subtle','reading']){A.view.setColour({theme,palette:'okabe-ito'});out.onCard.push(Math.min(...activePalette().slice(6).map(c=>SovSchematicColour.contrast(c,DARK_CARD_SURFACE))))}
+  for(const theme of ['pastel','subtle','reading'])for(const palette of ['system-default','okabe-ito']){A.view.setColour({theme,palette});out.onCard.push(Math.min(...activePalette().slice(6).map(c=>SovSchematicColour.contrast(c,DARK_CARD_SURFACE))))}
   A.view.setAppearance('light');A.view.setColour({theme:'pastel',palette:'okabe-ito'});
-  out.default=A.view.colour();
   const load=()=>{A.document.replace({schema:SovSchematicData.DOCUMENT_SCHEMA,id:'planted',components:[{id:'a',symbolId:'act',x:100,y:200,config:{label:'Source'}},{id:'b',symbolId:'act',x:400,y:200,config:{label:'Sink'}}],wires:[{id:'w',a:'a',aSide:'out',b:'b',bSide:'in'}]});fitDiagram()};
   const plant=css=>{let s=document.getElementById('planted-style');if(!s){s=document.createElement('style');s.id='planted-style';document.head.appendChild(s)}s.textContent=css;load();return {contrast:A.layout.contrast({static:true}),metrics:A.layout.metrics({static:true})}};
   out.clean=plant('');
@@ -78,11 +77,11 @@ with sync_playwright() as p:
     browser.close()
 assert not errors, errors
 
-assert r['default']['palette'] == 'okabe-ito', r['default']
+assert r['default']['palette'] == 'system-default', r['default']
 assert all(v >= 3 for v in r['onCard']), ('dark colour slots on a card', r['onCard'])
 for a in r['palettes']:
     assert not [f for f in a['failures'] if f['kind'] == 'contrast'], (a['appearance'], a['theme'], a['palette'], a['failures'])
-    if a['palette'] == 'okabe-ito':
+    if a['palette'] in ('system-default', 'okabe-ito'):
         assert a['ok'] and a['minDistance'] >= .05, (a['appearance'], a['theme'], a['closest'])
     else:
         assert a['minDistance'] < .05, ('spectrum is a hue family; if it became distinct, update the audit', a['closest'])
