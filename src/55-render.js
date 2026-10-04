@@ -446,8 +446,11 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     // A thicker body stands taller: its shadow falls further.
     {const E=SovSchematicNotation.elevation(T,componentElevation(n),surfaceAppearance()),th=Math.max(0,Number(form.body.thickness)||0);
      if(E){const dy=E.dy+Math.min(4,th*.08),blur=E.blur+Math.min(3,th*.06);body.style.filter=`drop-shadow(0 ${+dy.toFixed(2)}px ${+blur.toFixed(2)}px rgba(${surfaceAppearance()==='dark'?'0,0,0':'40,36,28'},${E.opacity}))`;body.dataset.elevation=String(componentElevation(n))}}
-    // An intake plane is an open region: its outline is dashed 6 4 in the muted ink.
-    if(cfg.intake===true&&String(n.symbolId||'')==='plane'){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4';body.style.stroke='var(--muted)'}
+    // A region's outline is drawn as its kind declares (regionDash): an intake plane is an open
+    // region, dashed 6 4 in the muted ink; a plane, a container and a gate are solid, the body as drawn.
+    {const symbol=String(n.symbolId||''),kind=cfg.intake===true&&symbol==='plane'?'intake':symbol==='plane'||symbol==='gate'?symbol:form.regions?.interior?.state==='open'?'container':null,border=kind?regionDash(kind):'solid';
+     if(border==='dashed'){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4';body.style.stroke='var(--muted)'}
+     else if(border==='none')body.style.stroke='none'}
     g.appendChild(body);
     // A cylinder's top cap: the near half of its rim, a second line in the outline colour.
     if(geo.rim){const rim=document.createElementNS('http://www.w3.org/2000/svg','path');rim.setAttribute('class','body-rim');rim.setAttribute('d',geo.rim);rim.setAttribute('fill','none');g.appendChild(rim)}
@@ -592,10 +595,18 @@ function regionInsetDefs(T){
   make(REGION_INSET_FILLED,true);make(REGION_INSET_BARE,false);
   return defs;
 }
+// The dash a region kind's border is drawn in (NOTATION-MODEL.md "Kinds"): none, solid or dashed, read
+// from the region kinds the document's notation declares. The five region kinds are the schematic
+// notation's, so a notation that does not extend it and declares none of its own draws them as it does.
+function regionDash(id){
+  const N=SovSchematicNotation,find=notation=>N.kindsOf(notation,'region').find(k=>k.id===id);
+  return (find(activeNotation())||find(N.BUILTIN.schematic))?.dash||'solid';
+}
 function renderGroups(markers=markersById()){
   const layer=groupLayer();layer.replaceChildren();
   const T=SovSchematicNotation.tokens(diagram);
   layer.appendChild(regionInsetDefs(T));
+  const borders={group:regionDash('group'),intake:regionDash('intake')};
   for(const n of nodes){
     if(!isGroupComponent(n)||isEffectivelyHidden(n))continue;
     const cfg=n.config||{},surface=n.canvasId||GLOBAL_CANVAS_ID,editor=entityEditorState(n);
@@ -608,14 +619,18 @@ function renderGroups(markers=markersById()){
     const regionFill=slot!=null?componentSurfaceFill(slotColor(slot),.9):null;
     rect.style.fill=regionFill??'none';rect.style.fillOpacity='1';
     // A group is reading only: no outline, a soft inset (an inner shadow, an SVG filter so a picture
-    // carries it). An intake group is an open region: a dashed outline in the muted ink.
+    // carries it). An intake group is an open region: a dashed outline in the muted ink. Which of the
+    // three a region draws is its kind's declared dash (regionDash): group none, intake dashed.
     rect.style.pointerEvents='none';rect.style.stroke='none';rect.style.strokeWidth='0';
     if(slot==null){rect.style.fill='#000000';rect.style.fillOpacity='0.004'}
     rect.style.filter=`url(#${slot!=null?REGION_INSET_FILLED:REGION_INSET_BARE})`;
     g.appendChild(rect);
-    if(cfg.intake===true){
+    const border=borders[cfg.intake===true?'intake':'group'];
+    if(border!=='none'){
       const edge=document.createElementNS('http://www.w3.org/2000/svg','rect');edge.setAttribute('class','group-outline');edge.setAttribute('rx',String(T.radius?.card??10));
-      edge.style.fill='none';edge.style.stroke='var(--muted)';edge.style.strokeWidth='var(--stroke-structure)';edge.style.strokeDasharray='6 4';edge.setAttribute('stroke-dasharray','6 4');edge.style.pointerEvents='none';
+      edge.style.fill='none';edge.style.stroke='var(--muted)';edge.style.strokeWidth='var(--stroke-structure)';
+      if(border==='dashed'){edge.style.strokeDasharray='6 4';edge.setAttribute('stroke-dasharray','6 4')}
+      edge.style.pointerEvents='none';
       g.appendChild(edge);
     }
     const label=String(cfg.label||'').trim();
@@ -842,10 +857,13 @@ function stableArrowPoint(path,targetD,minD,maxD){
   }
   return fallback?.q||null;
 }
-function appendChevronAt(group,q,reverse=false,className='flow-chevron'){
+// A direction mark: the chevron, or, for a wire kind whose arrowhead is filled, the closed triangle
+// through the chevron's three points, filled with the wire's stroke colour.
+function appendChevronAt(group,q,reverse=false,className='flow-chevron',filled=false){
   const c=document.createElementNS('http://www.w3.org/2000/svg','path');
   c.setAttribute('class',className);
-  c.setAttribute('d',`M ${-7*markScale} ${-5*markScale} L 0 0 L ${-7*markScale} ${5*markScale}`);
+  c.setAttribute('d',`M ${-7*markScale} ${-5*markScale} L 0 0 L ${-7*markScale} ${5*markScale}`+(filled?' Z':''));
+  if(filled){c.style.fill='var(--wire-ink,var(--canvas-ink))';c.dataset.arrowhead='filled'}
   c.setAttribute('transform',`translate(${q.x} ${q.y}) rotate(${q.angle+(reverse?180:0)})`);
   group.appendChild(c);
 }
@@ -1031,8 +1049,8 @@ function pathWithHops(points,hops){
   }
   return d;
 }
-function renderArrowPoses(group,poses,className='flow-chevron'){
-  for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className);
+function renderArrowPoses(group,poses,className='flow-chevron',filled=false){
+  for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className,filled);
 }
 
 function focusWireVisual(i){
@@ -1301,6 +1319,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
     const el=nodesG.querySelector(`.node[data-id="${hosted.id}"]`);if(el)el.setAttribute('transform',`translate(${hosted.x} ${hosted.y}) rotate(${angle})`)
   }};
 
+  const wireKinds=SovSchematicNotation.kindsOf(activeNotation(),'wire'),flowStroke=Number(SovSchematicNotation.tokens(diagram).stroke?.flow)||2.25;
   wires.forEach((w,i)=>{
     const editor=entityEditorState(w);const cfg=connectionConfig(w);if(editor.hidden||!carrierIsRenderable(w))return;
     const epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b'),a=epA.node,b=epB.node;
@@ -1355,6 +1374,15 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
     const wireStatus=declaredStatus(w);
     if(wireStatus?.outline==='dashed'){base.setAttribute('stroke-dasharray','6 4');base.style.strokeDasharray='6 4';group.dataset.status=wireStatus.id}
     else if(wireStatus)group.dataset.status=wireStatus.id;
+    // A wire's kind (NOTATION-MODEL.md "Kinds"): the dash, weight and arrowhead its notation declares
+    // for it, as attributes and inline styles so a picture carries them. Heavy is twice the flow stroke,
+    // set as the group's --stroke-flow, so the selected and hover widths in styles/app.css multiply it.
+    const wireKind=typeof w.config?.kind==='string'?wireKinds.find(k=>k.id===w.config.kind)||null:null;
+    if(wireKind){
+      group.dataset.kind=wireKind.id;
+      if(wireKind.dash==='dashed'){base.setAttribute('stroke-dasharray','6 4');base.style.strokeDasharray='6 4'}
+      if(wireKind.weight==='heavy'){const heavy=+(flowStroke*2).toFixed(4);group.dataset.weight='heavy';group.style.setProperty('--stroke-flow',`${heavy}px`);base.setAttribute('stroke-width',String(heavy))}
+    }
     wireLabelPaths.set(base,clonePoints(points));
 
     const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -1400,8 +1428,8 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
     // frozen, arrows derive from that frozen line; they can never detach from it.
     const poses=arrowPosesForPath(base,cfg.direction==='duplex');
     if(cfg.direction==='reverse')poses.forEach(p=>p.reverse=!p.reverse);
-    if(cfg.direction==='none')poses.length=0;
-    renderArrowPoses(group,poses,'flow-chevron');
+    if(cfg.direction==='none'||wireKind?.arrowhead==='none')poses.length=0;
+    renderArrowPoses(group,poses,'flow-chevron',wireKind?.arrowhead==='filled');
 
     if(snapshot){
       // The only geometry outside the frozen line is the exact displacement

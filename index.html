@@ -208,6 +208,9 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .wire-hit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
 .wire.selected{stroke-width:4}
 .wire-group:hover .wire{stroke-width:3.3}
+/* A heavy wire kind: its group's --stroke-flow is twice the token, and selected and hover multiply it by what 4 and 3.3 are to 2.25. */
+.wire-group[data-weight="heavy"] .wire.selected{stroke-width:calc(var(--stroke-flow,4.5px) * 1.7778)}
+.wire-group[data-weight="heavy"]:hover .wire{stroke-width:calc(var(--stroke-flow,4.5px) * 1.4667)}
 .wire-packet{
   display:none;
   pointer-events:none;
@@ -1271,7 +1274,16 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         light:[null,{dy:2,blur:3,opacity:.16},{dy:3,blur:5,opacity:.2},{dy:4.5,blur:7,opacity:.22}],
         dark:[null,{dy:2,blur:3.5,opacity:.6},{dy:3.2,blur:5.5,opacity:.66},{dy:4.6,blur:7.5,opacity:.7}]
       }
-    }
+    },
+    // Kinds (NOTATION-MODEL.md "Kinds"): what a region's border is drawn as, by what the region is
+    // (SECTION-MODEL.md "Borders"). A notation that extends this one adds its wire kinds to the list.
+    kinds:[
+      {id:'group',applies:'region',title:'Group',meaning:'Grouping only: no outline, a soft inset.',dash:'none'},
+      {id:'plane',applies:'region',title:'Plane',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
+      {id:'container',applies:'region',title:'Container',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
+      {id:'gate',applies:'region',title:'Gate',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
+      {id:'intake',applies:'region',title:'Intake',meaning:'An open region: a dashed outline.',dash:'dashed',open:true}
+    ]
   };
 
   // Glyphs in a 96 x 64 box. `draw` is the body only: the renderer draws a pin from each
@@ -1341,8 +1353,75 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(!cur)return {ok:false,code:'UNKNOWN_NOTATION',message:`No notation "${id}"`,next_operation:`use one of: ${Object.keys(table).join(', ')}`};
     while(cur&&!seen.has(cur.id)){chain.unshift(cur);seen.add(cur.id);cur=cur.extends?table[cur.extends]:null}
     let flat={};for(const n of chain)flat=merge(flat,n);
+    const kinds=joinKinds(chain);if(kinds)flat.kinds=kinds;
     const scaled=applyScale(flat.tokens);if(!scaled.ok)return scaled;
     flat.id=id;registerPoints(flat);return {ok:true,notation:flat};
+  }
+  // ---- Kinds (NOTATION-MODEL.md "Kinds") --------------------------------------------------------
+  // A notation declares `kinds`, one list for wires and regions: {id, applies: wire | region, title,
+  // meaning, dash, weight, arrowhead, open}. dash is solid or dashed, and for a region also none (no
+  // outline). weight (regular | heavy, absent means regular) and arrowhead (chevron | filled | none,
+  // absent means chevron) belong to a wire kind. open is a boolean, absent means false.
+  //   KIND_INVALID   an entry breaks a rule: an unknown key or value; an id used twice within one
+  //                  applies; dashed without open true, or open true without dashed; a wire kind that
+  //                  is not open and matches another one that is not open in both weight and arrowhead
+  // merge() replaces arrays, so kinds are joined along the extends chain here: a later notation's
+  // entry replaces an earlier notation's entry with the same applies and id, in its place.
+  const KIND_KEYS=['id','applies','title','meaning','dash','weight','arrowhead','open'];
+  const KIND_DASH={wire:['solid','dashed'],region:['none','solid','dashed']},KIND_WEIGHT=['regular','heavy'],KIND_ARROWHEAD=['chevron','filled','none'];
+  function joinKinds(chain){
+    let any=false;const out=[];
+    chain.forEach((n,from)=>{
+      if(!Array.isArray(n?.kinds))return;any=true;
+      for(const entry of n.kinds){
+        const at=isObject(entry)?out.findIndex(o=>o.from<from&&isObject(o.entry)&&o.entry.applies===entry.applies&&o.entry.id===entry.id):-1;
+        if(at>=0)out[at]={entry,from};else out.push({entry,from});
+      }
+    });
+    return any?out.map(o=>isObject(o.entry)?{...o.entry}:o.entry):null;
+  }
+  // Each entry of notation.kinds with the rules it breaks (none when it is admitted).
+  function judgeKinds(notation){
+    const list=Array.isArray(notation?.kinds)?notation.kinds:[];
+    const judged=list.map((entry,i)=>{
+      const broken=[],say=v=>JSON.stringify(v);
+      if(!isObject(entry))return {entry,name:`kinds[${i}]`,broken:['an entry is an object {id, applies, dash, ...}']};
+      const name=`${typeof entry.applies==='string'?entry.applies:'kinds['+i+']'} kind ${say(entry.id)}`;
+      const extra=Object.keys(entry).find(k=>!KIND_KEYS.includes(k));
+      if(extra)broken.push(`${extra} is not a field of a kind (${KIND_KEYS.join(', ')})`);
+      if(typeof entry.id!=='string'||!entry.id.trim())broken.push('id must be a non-empty string');
+      for(const key of ['title','meaning'])if(entry[key]!==undefined&&typeof entry[key]!=='string')broken.push(`${key} must be a string`);
+      if(entry.open!==undefined&&typeof entry.open!=='boolean')broken.push(`open must be true or false, not ${say(entry.open)}`);
+      const dashes=KIND_DASH[entry.applies];
+      if(!dashes){broken.push(`applies must be wire or region, not ${say(entry.applies)}`);return {entry,name,broken}}
+      if(!dashes.includes(entry.dash))broken.push(`dash must be one of ${dashes.join(', ')} for a ${entry.applies} kind, not ${say(entry.dash)}`);
+      if(entry.applies==='region'){for(const key of ['weight','arrowhead'])if(entry[key]!==undefined)broken.push(`${key} belongs to a wire kind, not a region kind`)}
+      else{
+        if(entry.weight!==undefined&&!KIND_WEIGHT.includes(entry.weight))broken.push(`weight must be one of ${KIND_WEIGHT.join(', ')}, not ${say(entry.weight)}`);
+        if(entry.arrowhead!==undefined&&!KIND_ARROWHEAD.includes(entry.arrowhead))broken.push(`arrowhead must be one of ${KIND_ARROWHEAD.join(', ')}, not ${say(entry.arrowhead)}`);
+      }
+      if(entry.dash==='dashed'&&entry.open!==true)broken.push('dash dashed needs open true: dashed is reserved for a kind that is open or provisional');
+      if(entry.open===true&&entry.dash!=='dashed')broken.push('open true needs dash dashed');
+      return {entry,name,broken};
+    });
+    // Rules between entries are read over the ones that stand on their own.
+    const sound=judged.filter(j=>!j.broken.length);
+    for(const j of sound)if(sound.some(o=>o!==j&&o.entry.applies===j.entry.applies&&o.entry.id===j.entry.id))j.broken.push(`id is used by more than one ${j.entry.applies} kind`);
+    const closed=sound.filter(j=>!j.broken.length&&j.entry.applies==='wire'&&j.entry.open!==true);
+    const look=e=>`${e.weight||'regular'} ${e.arrowhead||'chevron'}`,same=[];
+    for(const j of closed){const twin=closed.find(o=>o!==j&&look(o.entry)===look(j.entry));if(twin)same.push([j,twin])}
+    for(const [j,twin] of same)j.broken.push(`a wire kind that is not open must differ from every other in weight or arrowhead; ${JSON.stringify(twin.entry.id)} is also ${look(j.entry)}`);
+    return judged;
+  }
+  // One string per broken rule, beginning KIND_INVALID and naming the notation, the entry and the rule.
+  function kindFindings(notation){
+    const out=[];
+    for(const j of judgeKinds(notation))for(const rule of j.broken)out.push(`KIND_INVALID: notation "${notation?.id??'?'}" ${j.name}: ${rule}`);
+    return out;
+  }
+  // The admitted entries for wires or for regions, in declared order. An entry with a finding is not admitted.
+  function kindsOf(notation,applies){
+    return judgeKinds(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry}));
   }
   // The document scale, applied once to the flattened tokens (a fresh object: merge copies), so
   // every reader of tokens(doc) and resolve(doc).notation.tokens draws scaled with no multiplication
@@ -1443,7 +1522,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const {scale}=glyphBox(g,size,opts);return {dx:(t.at[0]-48)*scale,dy:(t.at[1]-axis)*scale};
   }
   function terminal(g,idOrRole){return (g?.terminals||[]).find(t=>t.id===idOrRole)||(g?.terminals||[]).find(t=>t.role===idOrRole)||null}
-  return {BUILTIN,MARGIN,drawnSize,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
+  return {BUILTIN,MARGIN,drawnSize,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
 });
 /* END src/03-notation-core.js */
 </script>
@@ -2173,6 +2252,28 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return out;
   }
   function assertStatusAndWaitsOn(doc,config,clearable=false){const p=statusProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Wire kinds (NOTATION-MODEL.md "Kinds") ---------------------------------------------------
+  // A Wire's `config.kind` names a wire kind of its document's notation (`kinds`, applies wire):
+  // the entry declares the dash, weight and arrowhead the wire is drawn in. There is no built-in
+  // wire kind, so a notation that declares none admits none. A Component takes no kind.
+  //   KIND_UNDECLARED  a kind is set and the notation declares no wire kinds
+  //   KIND_UNKNOWN     the kind is not a wire kind the notation declares
+  //   KIND_INVALID     an entry of the notation's kinds breaks a rule (src/03-notation-core.js kindFindings)
+  // Loading reports them (validateDocument); create and update refuse; an update's null removes.
+  function notationWireKinds(doc){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(!N)return {id:doc?.notation||'schematic',kinds:[]};
+    const r=N.resolve(doc||{});
+    return {id:r.ok?r.notation.id:(doc?.notation||'schematic'),kinds:r.ok?N.kindsOf(r.notation,'wire'):[]};
+  }
+  function wireKindProblems(doc,config,clearable=false){
+    const out=[];if(!isObject(config))return out;
+    const kind=config.kind;if(kind===undefined||(clearable&&kind===null))return out;
+    const {id,kinds}=notationWireKinds(doc);
+    if(!kinds.length)out.push(`KIND_UNDECLARED: config.kind ${JSON.stringify(kind)} is set, but notation "${id}" declares no wire kinds`);
+    else if(typeof kind!=='string'||!kinds.some(k=>k.id===kind))out.push(`KIND_UNKNOWN: config.kind ${JSON.stringify(kind)} is not a wire kind declared by notation "${id}"; declared: ${kinds.map(k=>k.id).join(', ')}`);
+    return out;
+  }
+  function assertWireKind(doc,config,clearable=false){const p=wireKindProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
   // ---- Badges (DATA-FORMATS.md "Badges") ------------------------------------------------------
   // A Component's `config.badges` lists at most 4 chips `{label, colorSlot?}`: a label of 1 to 24
   // characters after trimming and a palette slot 0 to 11 (absent means 0). Presentation only.
@@ -2241,6 +2342,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   function clearStatusAndWaitsOn(candidate,patch){
     if(!isObject(candidate?.config)||!isObject(patch?.config))return;
     for(const key of ['status','waitsOn','badges','intake'])if(patch.config[key]===null)delete candidate.config[key];
+    if(candidate.a!==undefined&&patch.config.kind===null)delete candidate.config.kind; // a Wire's kind
     if(isObject(patch.config.presentation)&&patch.config.presentation.shape===null&&isObject(candidate.config.presentation))delete candidate.config.presentation.shape;
   }
   // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
@@ -2866,7 +2968,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   function makeWire(doc,value={}){
     const id=cleanString(value.id,nextId(doc.wires,'k'));
-    assertPathDelay(value.config);assertStatusAndWaitsOn(doc,value.config);
+    assertPathDelay(value.config);assertStatusAndWaitsOn(doc,value.config);assertWireKind(doc,value.config);
     const wire={id,a:cleanString(value.a)||null,b:cleanString(value.b)||null,aSide:value.aSide??null,bSide:value.bSide??null,aAttachment:isObject(value.aAttachment)?clone(value.aAttachment):null,bAttachment:isObject(value.bAttachment)?clone(value.bAttachment):null};
     if(!wire.a&&!wire.aAttachment&&!wire.b&&!wire.bAttachment)throw new Error('wire.create requires a and b component ids, or free endpoints');
     for(const end of ['a','b'])if(!wire[end]&&!wire[end+'Attachment'])throw new Error(`wire.create requires ${end} (component id) or ${end}Attachment`);
@@ -2878,7 +2980,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       form:isObject(value.form)?clone(value.form):{dimension:1,body:{kind:'path',material:'generic',thickness:0}},
       lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
       net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
-      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{}),...adoptStatusAndWaitsOn({},value.config)},
+      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{}),...adoptStatusAndWaitsOn({},value.config),...(value.config?.kind!==undefined&&value.config.kind!==null?{kind:value.config.kind}:{})},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
     });
@@ -2956,6 +3058,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(patch?.config?.presentation?.shape!==undefined||nextSymbol!==undefined||patch?.form!==undefined)assertShape(candidate,patch?.config?.presentation?.shape===null);
     }else if(resource==='wire'){
       if(isObject(patch?.config))assertPathDelay(patch.config,true);
+      assertWireKind(doc,patch?.config,true);
       if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
       // A patch may rebind an end (a/aSide or aAttachment ref) or free it (aAttachment {kind:'free'}).
       for(const end of ['a','b']){
@@ -3159,6 +3262,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const f of groupFindings(input))errors.push(`component ${f.id??'?'}: ${f.code}: ${f.text}`);
     // Status and waits-on: reported, never repaired (the codes are listed at statusProblems).
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of statusProblems(input,item?.config))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
+    // Kinds: the notation's own entries, then each Wire's kind (the codes are listed at wireKindProblems).
+    {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null,r=N?N.resolve(input):null;if(r?.ok)for(const f of N.kindFindings(r.notation))errors.push(`notation: ${f}`)}
+    for(const item of input.wires||[])for(const p of wireKindProblems(input,item?.config))errors.push(`wire ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of intakeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of shapeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
@@ -3180,7 +3286,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(/^duplicate (?:component|wire|reference) id:/.test(message))return 'identity';
     if(/missing endpoint component:/.test(message))return 'wire-endpoint';
     if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
-    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID|BADGE_INVALID):/.test(message))return 'status';
+    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID|BADGE_INVALID|KIND_UNDECLARED|KIND_UNKNOWN|KIND_INVALID):/.test(message))return 'status';
     return 'boundary-legality';
   }
   // Straight from validateDocument's own findings; no legality is re-derived here.
@@ -11846,8 +11952,11 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     // A thicker body stands taller: its shadow falls further.
     {const E=SovSchematicNotation.elevation(T,componentElevation(n),surfaceAppearance()),th=Math.max(0,Number(form.body.thickness)||0);
      if(E){const dy=E.dy+Math.min(4,th*.08),blur=E.blur+Math.min(3,th*.06);body.style.filter=`drop-shadow(0 ${+dy.toFixed(2)}px ${+blur.toFixed(2)}px rgba(${surfaceAppearance()==='dark'?'0,0,0':'40,36,28'},${E.opacity}))`;body.dataset.elevation=String(componentElevation(n))}}
-    // An intake plane is an open region: its outline is dashed 6 4 in the muted ink.
-    if(cfg.intake===true&&String(n.symbolId||'')==='plane'){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4';body.style.stroke='var(--muted)'}
+    // A region's outline is drawn as its kind declares (regionDash): an intake plane is an open
+    // region, dashed 6 4 in the muted ink; a plane, a container and a gate are solid, the body as drawn.
+    {const symbol=String(n.symbolId||''),kind=cfg.intake===true&&symbol==='plane'?'intake':symbol==='plane'||symbol==='gate'?symbol:form.regions?.interior?.state==='open'?'container':null,border=kind?regionDash(kind):'solid';
+     if(border==='dashed'){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4';body.style.stroke='var(--muted)'}
+     else if(border==='none')body.style.stroke='none'}
     g.appendChild(body);
     // A cylinder's top cap: the near half of its rim, a second line in the outline colour.
     if(geo.rim){const rim=document.createElementNS('http://www.w3.org/2000/svg','path');rim.setAttribute('class','body-rim');rim.setAttribute('d',geo.rim);rim.setAttribute('fill','none');g.appendChild(rim)}
@@ -11992,10 +12101,18 @@ function regionInsetDefs(T){
   make(REGION_INSET_FILLED,true);make(REGION_INSET_BARE,false);
   return defs;
 }
+// The dash a region kind's border is drawn in (NOTATION-MODEL.md "Kinds"): none, solid or dashed, read
+// from the region kinds the document's notation declares. The five region kinds are the schematic
+// notation's, so a notation that does not extend it and declares none of its own draws them as it does.
+function regionDash(id){
+  const N=SovSchematicNotation,find=notation=>N.kindsOf(notation,'region').find(k=>k.id===id);
+  return (find(activeNotation())||find(N.BUILTIN.schematic))?.dash||'solid';
+}
 function renderGroups(markers=markersById()){
   const layer=groupLayer();layer.replaceChildren();
   const T=SovSchematicNotation.tokens(diagram);
   layer.appendChild(regionInsetDefs(T));
+  const borders={group:regionDash('group'),intake:regionDash('intake')};
   for(const n of nodes){
     if(!isGroupComponent(n)||isEffectivelyHidden(n))continue;
     const cfg=n.config||{},surface=n.canvasId||GLOBAL_CANVAS_ID,editor=entityEditorState(n);
@@ -12008,14 +12125,18 @@ function renderGroups(markers=markersById()){
     const regionFill=slot!=null?componentSurfaceFill(slotColor(slot),.9):null;
     rect.style.fill=regionFill??'none';rect.style.fillOpacity='1';
     // A group is reading only: no outline, a soft inset (an inner shadow, an SVG filter so a picture
-    // carries it). An intake group is an open region: a dashed outline in the muted ink.
+    // carries it). An intake group is an open region: a dashed outline in the muted ink. Which of the
+    // three a region draws is its kind's declared dash (regionDash): group none, intake dashed.
     rect.style.pointerEvents='none';rect.style.stroke='none';rect.style.strokeWidth='0';
     if(slot==null){rect.style.fill='#000000';rect.style.fillOpacity='0.004'}
     rect.style.filter=`url(#${slot!=null?REGION_INSET_FILLED:REGION_INSET_BARE})`;
     g.appendChild(rect);
-    if(cfg.intake===true){
+    const border=borders[cfg.intake===true?'intake':'group'];
+    if(border!=='none'){
       const edge=document.createElementNS('http://www.w3.org/2000/svg','rect');edge.setAttribute('class','group-outline');edge.setAttribute('rx',String(T.radius?.card??10));
-      edge.style.fill='none';edge.style.stroke='var(--muted)';edge.style.strokeWidth='var(--stroke-structure)';edge.style.strokeDasharray='6 4';edge.setAttribute('stroke-dasharray','6 4');edge.style.pointerEvents='none';
+      edge.style.fill='none';edge.style.stroke='var(--muted)';edge.style.strokeWidth='var(--stroke-structure)';
+      if(border==='dashed'){edge.style.strokeDasharray='6 4';edge.setAttribute('stroke-dasharray','6 4')}
+      edge.style.pointerEvents='none';
       g.appendChild(edge);
     }
     const label=String(cfg.label||'').trim();
@@ -12242,10 +12363,13 @@ function stableArrowPoint(path,targetD,minD,maxD){
   }
   return fallback?.q||null;
 }
-function appendChevronAt(group,q,reverse=false,className='flow-chevron'){
+// A direction mark: the chevron, or, for a wire kind whose arrowhead is filled, the closed triangle
+// through the chevron's three points, filled with the wire's stroke colour.
+function appendChevronAt(group,q,reverse=false,className='flow-chevron',filled=false){
   const c=document.createElementNS('http://www.w3.org/2000/svg','path');
   c.setAttribute('class',className);
-  c.setAttribute('d',`M ${-7*markScale} ${-5*markScale} L 0 0 L ${-7*markScale} ${5*markScale}`);
+  c.setAttribute('d',`M ${-7*markScale} ${-5*markScale} L 0 0 L ${-7*markScale} ${5*markScale}`+(filled?' Z':''));
+  if(filled){c.style.fill='var(--wire-ink,var(--canvas-ink))';c.dataset.arrowhead='filled'}
   c.setAttribute('transform',`translate(${q.x} ${q.y}) rotate(${q.angle+(reverse?180:0)})`);
   group.appendChild(c);
 }
@@ -12431,8 +12555,8 @@ function pathWithHops(points,hops){
   }
   return d;
 }
-function renderArrowPoses(group,poses,className='flow-chevron'){
-  for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className);
+function renderArrowPoses(group,poses,className='flow-chevron',filled=false){
+  for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className,filled);
 }
 
 function focusWireVisual(i){
@@ -12701,6 +12825,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
     const el=nodesG.querySelector(`.node[data-id="${hosted.id}"]`);if(el)el.setAttribute('transform',`translate(${hosted.x} ${hosted.y}) rotate(${angle})`)
   }};
 
+  const wireKinds=SovSchematicNotation.kindsOf(activeNotation(),'wire'),flowStroke=Number(SovSchematicNotation.tokens(diagram).stroke?.flow)||2.25;
   wires.forEach((w,i)=>{
     const editor=entityEditorState(w);const cfg=connectionConfig(w);if(editor.hidden||!carrierIsRenderable(w))return;
     const epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b'),a=epA.node,b=epB.node;
@@ -12755,6 +12880,15 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
     const wireStatus=declaredStatus(w);
     if(wireStatus?.outline==='dashed'){base.setAttribute('stroke-dasharray','6 4');base.style.strokeDasharray='6 4';group.dataset.status=wireStatus.id}
     else if(wireStatus)group.dataset.status=wireStatus.id;
+    // A wire's kind (NOTATION-MODEL.md "Kinds"): the dash, weight and arrowhead its notation declares
+    // for it, as attributes and inline styles so a picture carries them. Heavy is twice the flow stroke,
+    // set as the group's --stroke-flow, so the selected and hover widths in styles/app.css multiply it.
+    const wireKind=typeof w.config?.kind==='string'?wireKinds.find(k=>k.id===w.config.kind)||null:null;
+    if(wireKind){
+      group.dataset.kind=wireKind.id;
+      if(wireKind.dash==='dashed'){base.setAttribute('stroke-dasharray','6 4');base.style.strokeDasharray='6 4'}
+      if(wireKind.weight==='heavy'){const heavy=+(flowStroke*2).toFixed(4);group.dataset.weight='heavy';group.style.setProperty('--stroke-flow',`${heavy}px`);base.setAttribute('stroke-width',String(heavy))}
+    }
     wireLabelPaths.set(base,clonePoints(points));
 
     const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -12800,8 +12934,8 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
     // frozen, arrows derive from that frozen line; they can never detach from it.
     const poses=arrowPosesForPath(base,cfg.direction==='duplex');
     if(cfg.direction==='reverse')poses.forEach(p=>p.reverse=!p.reverse);
-    if(cfg.direction==='none')poses.length=0;
-    renderArrowPoses(group,poses,'flow-chevron');
+    if(cfg.direction==='none'||wireKind?.arrowhead==='none')poses.length=0;
+    renderArrowPoses(group,poses,'flow-chevron',wireKind?.arrowhead==='filled');
 
     if(snapshot){
       // The only geometry outside the frozen line is the exact displacement
@@ -15606,6 +15740,9 @@ function legendEntries(doc=diagram){
   // Statuses: each one a visible card or wire names, in the order the notation declares them.
   const statusesUsed=new Set([...visible,...wires.filter(w=>!entityEditorState(w).hidden)].map(x=>x?.config?.status).filter(s=>typeof s==='string'));
   for(const st of (Array.isArray(notation.statuses)?notation.statuses:[]))if(st&&statusesUsed.has(st.id))add({id:`status:${st.id}`,kind:'status',sample:{status:st.id,outline:st.outline==='dashed'?'dashed':'solid'},label:String(st.title||st.id),meaning:String(st.meaning||'')});
+  // Wire kinds: each one a visible wire names, in the order the notation declares them.
+  const kindsUsed=new Set(wires.filter(w=>!entityEditorState(w).hidden).map(w=>w?.config?.kind).filter(k=>typeof k==='string'));
+  if(kindsUsed.size)for(const k of SovSchematicNotation.kindsOf(notation,'wire'))if(kindsUsed.has(k.id))add({id:`kind:${k.id}`,kind:'wire-kind',sample:{wireKind:k.id,dash:k.dash,weight:k.weight||'regular',arrowhead:k.arrowhead||'chevron'},label:String(k.title||k.id),meaning:String(k.meaning||'')});
   return out;
 }
 // A sample for an entry, as SVG markup in a 28 x 18 box.
@@ -15613,6 +15750,11 @@ function legendSampleMarkup(e,{ink='currentColor'}={}){
   const s=e.sample||{};
   // A status: a small rounded chip, dashed when the status draws its card's outline dashed.
   if(e.kind==='status')return `<rect x="3" y="4" width="22" height="10" rx="5" style="fill:${ink};fill-opacity:.14;stroke:${ink};stroke-width:1.3${s.outline==='dashed'?';stroke-dasharray:3 2':''}"/>`;
+  // A wire kind: a line 22 long in the kind's dash and weight, its direction mark at the middle.
+  if(e.kind==='wire-kind'){
+    const width=s.weight==='heavy'?4:2,head=s.arrowhead==='none'?'':`<path d="M 12.5 5.5 L 17 9 L 12.5 12.5${s.arrowhead==='filled'?' Z':''}" style="fill:${s.arrowhead==='filled'?ink:'none'};stroke:${ink};stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"/>`;
+    return `<line x1="3" y1="9" x2="25" y2="9" style="stroke:${ink};stroke-width:${width}${s.dash==='dashed'?';stroke-dasharray:6 4':''}"/>${head}`;
+  }
   if(s.glyph)return `<use href="#sym-${s.glyph}" x="0" y="0" width="28" height="18" style="color:${ink}"/>`;
   if(s.colour)return `<rect x="4" y="3" width="20" height="12" rx="3" style="fill:${s.colour}"/>`;
   if(s.mark==='out'||s.mark==='in'||s.mark==='control'){const c=getComputedStyle(document.documentElement).getPropertyValue(s.mark==='out'?'--accent-out':s.mark==='in'?'--accent-in':'--canvas-muted').trim()||ink;return `<line x1="2" y1="9" x2="26" y2="9" style="stroke:${ink};stroke-width:2"/><rect x="12" y="3" width="4" height="12" rx="1.2" style="fill:${c}"/>`}

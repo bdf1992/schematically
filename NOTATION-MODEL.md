@@ -226,6 +226,9 @@ Anything else is shown as typed. Nothing is interpreted as HTML.
   notation's `statuses` list declares them, with its title and meaning. A status is validated
   against that list, so the legend lists only declared ones; its sample is a small rounded chip,
   dashed when the status declares `outline: dashed`, as the card's chip and outline are drawn.
+- **Wire kinds:** each wire kind a visible wire names in `config.kind`, in the order the notation's
+  `kinds` list declares them, with its title and meaning; its sample is a line 22 long in the
+  kind's dash, weight and arrowhead ("Kinds", below).
 
 In the editor it is a panel. In a picture it is a block placed beside the drawing
 (`render({legend: true})`), never over it.
@@ -346,6 +349,63 @@ dashed. A group with no intake draws no outline and a soft inset; a plane, a con
 draw solid.
 
 A badge is the chip without a status's meaning: text and a palette colour, no outline, no opacity, no legend entry (DATA-FORMATS.md "Badges").
+
+### Kinds
+
+A notation declares what its lines and borders are drawn as in one list, `kinds`, for wires and
+regions both. An entry is `{id, applies, title, meaning, dash, weight, arrowhead, open}`:
+
+| Field | Values | Absent means |
+| --- | --- | --- |
+| `id` | a non-empty string | refused |
+| `applies` | `wire` or `region` | refused |
+| `title`, `meaning` | strings, shown in the legend | the id; no meaning |
+| `dash` | `solid` or `dashed`; for a region also `none` (no outline) | refused |
+| `weight` | `regular` or `heavy`; a wire kind only | `regular` |
+| `arrowhead` | `chevron`, `filled` or `none`; a wire kind only | `chevron` |
+| `open` | `true` or `false` | `false` |
+
+The rules, each reported as `KIND_INVALID` naming the notation, the entry and the rule
+(`kindFindings` in `src/03-notation-core.js`):
+
+- An unknown key or value is refused; so are `weight` or `arrowhead` on a region kind and `dash:
+  none` on a wire kind.
+- An id is used once within one `applies`.
+- **Dashed is reserved for open.** `dash: dashed` needs `open: true`, and `open: true` needs `dash:
+  dashed`: a dashed line or border means open or provisional and nothing else, the same meaning a
+  dashed status and an intake region carry.
+- A wire kind that is not open differs from every other wire kind that is not open in `weight` or in
+  `arrowhead`, so two kinds never draw alike.
+
+An entry with a finding is not admitted: `kindsOf(notation, 'wire' | 'region')` gives the admitted
+entries in declared order. `merge` replaces arrays, so `resolve()` joins `kinds` along the `extends`
+chain itself: a later notation's entry replaces an earlier notation's entry with the same `applies`
+and `id`, in its place.
+
+**Region kinds.** The `schematic` notation declares five, and the renderer reads a region's border
+from them by id (SECTION-MODEL.md "Borders"): `group` (dash `none`), `plane`, `container` and `gate`
+(`solid`) and `intake` (`dashed`, open). A Component takes no `config.kind`: a region's kind is what
+it is.
+
+**Wire kinds.** A Wire names one in `config.kind`. There is no built-in wire kind, so the data core
+validates it against the document's resolved notation as it does a status: `KIND_UNDECLARED` when
+the notation declares no wire kinds, `KIND_UNKNOWN` when the id is not one of them (the message
+lists the declared ids). Create and update refuse them; loading reports them, with every
+`KIND_INVALID` finding of the notation. A wire with a kind is drawn as its entry declares
+(`renderWires` in `src/55-render.js`), in attributes and inline styles so a picture carries them:
+
+- `dash: dashed` draws the line `6 4`, the one dash pattern a picture uses.
+- `weight: heavy` draws the line at twice `tokens.stroke.flow` (two weights at 1 to 2, the narrow and
+  wide lines of ISO 128); `regular` is `tokens.stroke.flow`. Selected and hover still multiply it.
+- `arrowhead: chevron` is the direction mark every wire draws; `filled` draws each mark as the closed
+  triangle through the chevron's three points, filled in the wire's stroke colour; `none` draws no
+  mark. How many marks a wire carries and where they sit is not the kind's: it is the spacing rule
+  (`ARROW_SPACING`).
+
+The wire's group carries `data-kind`. A wire with no kind draws as before, and a status with
+`outline: dashed` still dashes its wire. The legend lists each wire kind a visible wire uses, after
+the statuses, with a sample line in that kind's dash, weight and arrowhead. The `work-engine`
+notation declares no wire kinds yet. `tests/wire_kind_qa.py` checks all of this.
 
 ## Open
 

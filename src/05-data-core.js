@@ -469,6 +469,28 @@
     return out;
   }
   function assertStatusAndWaitsOn(doc,config,clearable=false){const p=statusProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Wire kinds (NOTATION-MODEL.md "Kinds") ---------------------------------------------------
+  // A Wire's `config.kind` names a wire kind of its document's notation (`kinds`, applies wire):
+  // the entry declares the dash, weight and arrowhead the wire is drawn in. There is no built-in
+  // wire kind, so a notation that declares none admits none. A Component takes no kind.
+  //   KIND_UNDECLARED  a kind is set and the notation declares no wire kinds
+  //   KIND_UNKNOWN     the kind is not a wire kind the notation declares
+  //   KIND_INVALID     an entry of the notation's kinds breaks a rule (src/03-notation-core.js kindFindings)
+  // Loading reports them (validateDocument); create and update refuse; an update's null removes.
+  function notationWireKinds(doc){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(!N)return {id:doc?.notation||'schematic',kinds:[]};
+    const r=N.resolve(doc||{});
+    return {id:r.ok?r.notation.id:(doc?.notation||'schematic'),kinds:r.ok?N.kindsOf(r.notation,'wire'):[]};
+  }
+  function wireKindProblems(doc,config,clearable=false){
+    const out=[];if(!isObject(config))return out;
+    const kind=config.kind;if(kind===undefined||(clearable&&kind===null))return out;
+    const {id,kinds}=notationWireKinds(doc);
+    if(!kinds.length)out.push(`KIND_UNDECLARED: config.kind ${JSON.stringify(kind)} is set, but notation "${id}" declares no wire kinds`);
+    else if(typeof kind!=='string'||!kinds.some(k=>k.id===kind))out.push(`KIND_UNKNOWN: config.kind ${JSON.stringify(kind)} is not a wire kind declared by notation "${id}"; declared: ${kinds.map(k=>k.id).join(', ')}`);
+    return out;
+  }
+  function assertWireKind(doc,config,clearable=false){const p=wireKindProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
   // ---- Badges (DATA-FORMATS.md "Badges") ------------------------------------------------------
   // A Component's `config.badges` lists at most 4 chips `{label, colorSlot?}`: a label of 1 to 24
   // characters after trimming and a palette slot 0 to 11 (absent means 0). Presentation only.
@@ -537,6 +559,7 @@
   function clearStatusAndWaitsOn(candidate,patch){
     if(!isObject(candidate?.config)||!isObject(patch?.config))return;
     for(const key of ['status','waitsOn','badges','intake'])if(patch.config[key]===null)delete candidate.config[key];
+    if(candidate.a!==undefined&&patch.config.kind===null)delete candidate.config.kind; // a Wire's kind
     if(isObject(patch.config.presentation)&&patch.config.presentation.shape===null&&isObject(candidate.config.presentation))delete candidate.config.presentation.shape;
   }
   // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
@@ -1162,7 +1185,7 @@
   }
   function makeWire(doc,value={}){
     const id=cleanString(value.id,nextId(doc.wires,'k'));
-    assertPathDelay(value.config);assertStatusAndWaitsOn(doc,value.config);
+    assertPathDelay(value.config);assertStatusAndWaitsOn(doc,value.config);assertWireKind(doc,value.config);
     const wire={id,a:cleanString(value.a)||null,b:cleanString(value.b)||null,aSide:value.aSide??null,bSide:value.bSide??null,aAttachment:isObject(value.aAttachment)?clone(value.aAttachment):null,bAttachment:isObject(value.bAttachment)?clone(value.bAttachment):null};
     if(!wire.a&&!wire.aAttachment&&!wire.b&&!wire.bAttachment)throw new Error('wire.create requires a and b component ids, or free endpoints');
     for(const end of ['a','b'])if(!wire[end]&&!wire[end+'Attachment'])throw new Error(`wire.create requires ${end} (component id) or ${end}Attachment`);
@@ -1174,7 +1197,7 @@
       form:isObject(value.form)?clone(value.form):{dimension:1,body:{kind:'path',material:'generic',thickness:0}},
       lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
       net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
-      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{}),...adoptStatusAndWaitsOn({},value.config)},
+      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{}),...adoptStatusAndWaitsOn({},value.config),...(value.config?.kind!==undefined&&value.config.kind!==null?{kind:value.config.kind}:{})},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
     });
@@ -1252,6 +1275,7 @@
       if(patch?.config?.presentation?.shape!==undefined||nextSymbol!==undefined||patch?.form!==undefined)assertShape(candidate,patch?.config?.presentation?.shape===null);
     }else if(resource==='wire'){
       if(isObject(patch?.config))assertPathDelay(patch.config,true);
+      assertWireKind(doc,patch?.config,true);
       if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
       // A patch may rebind an end (a/aSide or aAttachment ref) or free it (aAttachment {kind:'free'}).
       for(const end of ['a','b']){
@@ -1455,6 +1479,9 @@
     for(const f of groupFindings(input))errors.push(`component ${f.id??'?'}: ${f.code}: ${f.text}`);
     // Status and waits-on: reported, never repaired (the codes are listed at statusProblems).
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of statusProblems(input,item?.config))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
+    // Kinds: the notation's own entries, then each Wire's kind (the codes are listed at wireKindProblems).
+    {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null,r=N?N.resolve(input):null;if(r?.ok)for(const f of N.kindFindings(r.notation))errors.push(`notation: ${f}`)}
+    for(const item of input.wires||[])for(const p of wireKindProblems(input,item?.config))errors.push(`wire ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of intakeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of shapeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
@@ -1476,7 +1503,7 @@
     if(/^duplicate (?:component|wire|reference) id:/.test(message))return 'identity';
     if(/missing endpoint component:/.test(message))return 'wire-endpoint';
     if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
-    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID|BADGE_INVALID):/.test(message))return 'status';
+    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID|BADGE_INVALID|KIND_UNDECLARED|KIND_UNKNOWN|KIND_INVALID):/.test(message))return 'status';
     return 'boundary-legality';
   }
   // Straight from validateDocument's own findings; no legality is re-derived here.

@@ -31,7 +31,16 @@
         light:[null,{dy:2,blur:3,opacity:.16},{dy:3,blur:5,opacity:.2},{dy:4.5,blur:7,opacity:.22}],
         dark:[null,{dy:2,blur:3.5,opacity:.6},{dy:3.2,blur:5.5,opacity:.66},{dy:4.6,blur:7.5,opacity:.7}]
       }
-    }
+    },
+    // Kinds (NOTATION-MODEL.md "Kinds"): what a region's border is drawn as, by what the region is
+    // (SECTION-MODEL.md "Borders"). A notation that extends this one adds its wire kinds to the list.
+    kinds:[
+      {id:'group',applies:'region',title:'Group',meaning:'Grouping only: no outline, a soft inset.',dash:'none'},
+      {id:'plane',applies:'region',title:'Plane',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
+      {id:'container',applies:'region',title:'Container',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
+      {id:'gate',applies:'region',title:'Gate',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
+      {id:'intake',applies:'region',title:'Intake',meaning:'An open region: a dashed outline.',dash:'dashed',open:true}
+    ]
   };
 
   // Glyphs in a 96 x 64 box. `draw` is the body only: the renderer draws a pin from each
@@ -101,8 +110,75 @@
     if(!cur)return {ok:false,code:'UNKNOWN_NOTATION',message:`No notation "${id}"`,next_operation:`use one of: ${Object.keys(table).join(', ')}`};
     while(cur&&!seen.has(cur.id)){chain.unshift(cur);seen.add(cur.id);cur=cur.extends?table[cur.extends]:null}
     let flat={};for(const n of chain)flat=merge(flat,n);
+    const kinds=joinKinds(chain);if(kinds)flat.kinds=kinds;
     const scaled=applyScale(flat.tokens);if(!scaled.ok)return scaled;
     flat.id=id;registerPoints(flat);return {ok:true,notation:flat};
+  }
+  // ---- Kinds (NOTATION-MODEL.md "Kinds") --------------------------------------------------------
+  // A notation declares `kinds`, one list for wires and regions: {id, applies: wire | region, title,
+  // meaning, dash, weight, arrowhead, open}. dash is solid or dashed, and for a region also none (no
+  // outline). weight (regular | heavy, absent means regular) and arrowhead (chevron | filled | none,
+  // absent means chevron) belong to a wire kind. open is a boolean, absent means false.
+  //   KIND_INVALID   an entry breaks a rule: an unknown key or value; an id used twice within one
+  //                  applies; dashed without open true, or open true without dashed; a wire kind that
+  //                  is not open and matches another one that is not open in both weight and arrowhead
+  // merge() replaces arrays, so kinds are joined along the extends chain here: a later notation's
+  // entry replaces an earlier notation's entry with the same applies and id, in its place.
+  const KIND_KEYS=['id','applies','title','meaning','dash','weight','arrowhead','open'];
+  const KIND_DASH={wire:['solid','dashed'],region:['none','solid','dashed']},KIND_WEIGHT=['regular','heavy'],KIND_ARROWHEAD=['chevron','filled','none'];
+  function joinKinds(chain){
+    let any=false;const out=[];
+    chain.forEach((n,from)=>{
+      if(!Array.isArray(n?.kinds))return;any=true;
+      for(const entry of n.kinds){
+        const at=isObject(entry)?out.findIndex(o=>o.from<from&&isObject(o.entry)&&o.entry.applies===entry.applies&&o.entry.id===entry.id):-1;
+        if(at>=0)out[at]={entry,from};else out.push({entry,from});
+      }
+    });
+    return any?out.map(o=>isObject(o.entry)?{...o.entry}:o.entry):null;
+  }
+  // Each entry of notation.kinds with the rules it breaks (none when it is admitted).
+  function judgeKinds(notation){
+    const list=Array.isArray(notation?.kinds)?notation.kinds:[];
+    const judged=list.map((entry,i)=>{
+      const broken=[],say=v=>JSON.stringify(v);
+      if(!isObject(entry))return {entry,name:`kinds[${i}]`,broken:['an entry is an object {id, applies, dash, ...}']};
+      const name=`${typeof entry.applies==='string'?entry.applies:'kinds['+i+']'} kind ${say(entry.id)}`;
+      const extra=Object.keys(entry).find(k=>!KIND_KEYS.includes(k));
+      if(extra)broken.push(`${extra} is not a field of a kind (${KIND_KEYS.join(', ')})`);
+      if(typeof entry.id!=='string'||!entry.id.trim())broken.push('id must be a non-empty string');
+      for(const key of ['title','meaning'])if(entry[key]!==undefined&&typeof entry[key]!=='string')broken.push(`${key} must be a string`);
+      if(entry.open!==undefined&&typeof entry.open!=='boolean')broken.push(`open must be true or false, not ${say(entry.open)}`);
+      const dashes=KIND_DASH[entry.applies];
+      if(!dashes){broken.push(`applies must be wire or region, not ${say(entry.applies)}`);return {entry,name,broken}}
+      if(!dashes.includes(entry.dash))broken.push(`dash must be one of ${dashes.join(', ')} for a ${entry.applies} kind, not ${say(entry.dash)}`);
+      if(entry.applies==='region'){for(const key of ['weight','arrowhead'])if(entry[key]!==undefined)broken.push(`${key} belongs to a wire kind, not a region kind`)}
+      else{
+        if(entry.weight!==undefined&&!KIND_WEIGHT.includes(entry.weight))broken.push(`weight must be one of ${KIND_WEIGHT.join(', ')}, not ${say(entry.weight)}`);
+        if(entry.arrowhead!==undefined&&!KIND_ARROWHEAD.includes(entry.arrowhead))broken.push(`arrowhead must be one of ${KIND_ARROWHEAD.join(', ')}, not ${say(entry.arrowhead)}`);
+      }
+      if(entry.dash==='dashed'&&entry.open!==true)broken.push('dash dashed needs open true: dashed is reserved for a kind that is open or provisional');
+      if(entry.open===true&&entry.dash!=='dashed')broken.push('open true needs dash dashed');
+      return {entry,name,broken};
+    });
+    // Rules between entries are read over the ones that stand on their own.
+    const sound=judged.filter(j=>!j.broken.length);
+    for(const j of sound)if(sound.some(o=>o!==j&&o.entry.applies===j.entry.applies&&o.entry.id===j.entry.id))j.broken.push(`id is used by more than one ${j.entry.applies} kind`);
+    const closed=sound.filter(j=>!j.broken.length&&j.entry.applies==='wire'&&j.entry.open!==true);
+    const look=e=>`${e.weight||'regular'} ${e.arrowhead||'chevron'}`,same=[];
+    for(const j of closed){const twin=closed.find(o=>o!==j&&look(o.entry)===look(j.entry));if(twin)same.push([j,twin])}
+    for(const [j,twin] of same)j.broken.push(`a wire kind that is not open must differ from every other in weight or arrowhead; ${JSON.stringify(twin.entry.id)} is also ${look(j.entry)}`);
+    return judged;
+  }
+  // One string per broken rule, beginning KIND_INVALID and naming the notation, the entry and the rule.
+  function kindFindings(notation){
+    const out=[];
+    for(const j of judgeKinds(notation))for(const rule of j.broken)out.push(`KIND_INVALID: notation "${notation?.id??'?'}" ${j.name}: ${rule}`);
+    return out;
+  }
+  // The admitted entries for wires or for regions, in declared order. An entry with a finding is not admitted.
+  function kindsOf(notation,applies){
+    return judgeKinds(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry}));
   }
   // The document scale, applied once to the flattened tokens (a fresh object: merge copies), so
   // every reader of tokens(doc) and resolve(doc).notation.tokens draws scaled with no multiplication
@@ -203,5 +279,5 @@
     const {scale}=glyphBox(g,size,opts);return {dx:(t.at[0]-48)*scale,dy:(t.at[1]-axis)*scale};
   }
   function terminal(g,idOrRole){return (g?.terminals||[]).find(t=>t.id===idOrRole)||(g?.terminals||[]).find(t=>t.role===idOrRole)||null}
-  return {BUILTIN,MARGIN,drawnSize,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
+  return {BUILTIN,MARGIN,drawnSize,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
 });
