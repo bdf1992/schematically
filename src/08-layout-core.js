@@ -379,7 +379,8 @@
     // North and Vo 1993), ELK Layered SEPARATE_CHILDREN, and Forster (GD 2002) for the order:
     // barycentre over the blocks first, then within each block. A canvas with no group runs
     // arrange() once over its cards, as before groups were placed.
-    const GROUP_PAD=24,GROUP_TITLE_BAND=28; // groupRect's padding (src/05-data-core.js)
+    // groupRect's padding: the notation's space.regionInset and space.regionTitle (src/05-data-core.js)
+    const GROUP_PAD=Number.isFinite(notation?.tokens?.space?.regionInset)?notation.tokens.space.regionInset:24,GROUP_TITLE_BAND=Number.isFinite(notation?.tokens?.space?.regionTitle)?notation.tokens.space.regionTitle:28;
     function layoutCanvas(canvas,second=null){
       const members=inScope(canvas),boxes=new Map();
       for(const c of members){

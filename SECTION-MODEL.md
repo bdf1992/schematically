@@ -199,8 +199,11 @@ Deleting a Component removes its id from every group's `members` in the same ope
 
 **Geometry.** A group has no geometry of its own while it has members.
 `groupRect(doc, groupId, sizeOf)` is the union of the members' rectangles (each centred
-on its `x, y`, sized by `sizeOf(component)`), padded 24 on each side and 28 more on top
-for the title band. It is returned centred like a Component, `{x, y, w, h}`, with its
+on its `x, y`, sized by `sizeOf(component)`), padded `space.regionInset` (24) on each side and `space.regionTitle` (28) more on top
+for the title band; both are tokens of the document's resolved notation (the schematic
+notation declares 24 and 28, `src/03-notation-core.js`). A child that comes closer than
+`regionInset` to its region's edge, or closer than `regionTitle` below its head, is
+reported as `region-inset` (LAYOUT-MODEL.md); the renderer never grows a region to fit. It is returned centred like a Component, `{x, y, w, h}`, with its
 edges `{l, r, t, b}`. A group with no members is its own `x, y` and `presentation.size`.
 
 **Drawing** (`src/55-render.js`). On each canvas, groups are drawn before every other
