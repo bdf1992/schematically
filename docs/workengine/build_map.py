@@ -11,6 +11,7 @@ surfaces, records, queries and back, ties by source order), then placed as a gri
 the map is then given two harnesses with node scripts/layout_sov.mjs (surfaces to records,
 records to queries): one trunk per wire label in the gap between two groups, streets in the row
 gaps, and every wire between the two groups routed on them (LAYOUT-MODEL.md "As built: buses").
+Both harnesses take --lanes port: wires that leave one port share a lane.
 GROUP_GAP and ROW_GAP are the sizes those harnesses need.
 
 The output is deterministic: the same gapmap.json gives the same map.sov byte for byte.
@@ -64,7 +65,7 @@ SUB_CHAR = 5.4        # width of one subtitle character
 ROW_GAP = 110         # room under a card for its status and waits-on line
 COL_GAP = 140         # room for a waits-on line wider than its card
 GROUP_GAP = 260       # surfaces to records: the harness's two trunks (20 lanes) need 184 between regions
-QUERY_GAP = 460       # records to queries: the harness's one trunk of 59 lanes needs 402 between regions
+QUERY_GAP = 320       # records to queries: the harness's one trunk of 35 lanes (59 wires, lanes port) needs 258 between regions
 MIGRATION_GAP = 80    # the migration card's right edge to the surfaces' left column
 # A gap between group regions is the gap between cards less two GROUP_PAD (24) of region padding.
 # Every gap is only as wide as its harness needs: a wider picture is fitted smaller, and labels
@@ -344,6 +345,7 @@ def main(argv: list[str]) -> int:
         if buses:
             for pair in HARNESSES:
                 cmd += ["--harness", pair]
+            cmd += ["--lanes", "port"]
         run = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
         print(run.stdout.strip())
         if run.returncode:

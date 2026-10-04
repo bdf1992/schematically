@@ -112,6 +112,68 @@ function busRoutesCross(p,q,related=false){
   }
   return false;
 }
+// The same two faults apart: 4 for two wires sharing no end on one track, else 1 for a crossing, the
+// ratio of route-overlap to crossing in the layout rubric (src/57-layout-metrics.js).
+const BUS_TRACK_COST=4;
+// A route as its segments, each the line it lies on (c) and its span along it: what onOneTrack and
+// segmentsCross (src/40-routing.js) read, taken once per route instead of once per pair.
+function busRouteSegs(pts){
+  const out=[];
+  for(let i=1;i<pts.length;i++){
+    const A=pts[i-1],B=pts[i];
+    if(A.y===B.y)out.push({h:true,c:A.y,lo:Math.min(A.x,B.x),hi:Math.max(A.x,B.x)});
+    else if(A.x===B.x)out.push({h:false,c:A.x,lo:Math.min(A.y,B.y),hi:Math.max(A.y,B.y)});
+  }
+  return out;
+}
+function busSegsCost(P,Q,related=false){
+  let cross=0;
+  for(const s of P)for(const t of Q){
+    if(s.h===t.h){if(!related&&Math.abs(s.c-t.c)<3&&Math.max(s.lo,t.lo)-Math.min(s.hi,t.hi)<8)return BUS_TRACK_COST}
+    else if(!cross&&t.c>s.lo&&t.c<s.hi&&s.c>t.lo&&s.c<t.hi)cross=1;
+  }
+  return cross;
+}
+// On a bus with lanes: 'port', after the swaps, when two of its wires that share no end lie on one
+// track. A wire that taps on along the line another wire taps off along (a card each side of the
+// bus in one row) lies on that wire's track from the other's lane to its own whenever its own lane
+// is the farther one, and a shared lane puts every wire of its port there at once. This is the
+// vertical constraint of channel routing (Hashimoto and Stevens, DAC 1971), and the swaps above
+// cannot meet it: passing the lanes in between changes nothing, so no single swap is kept. So the
+// lanes are sifted (Matuszewski, Schonfeld and Molitor, GD 1999): each in turn is walked by
+// adjacent swaps to one end of the bus and then to the other, and left where the cost over the
+// bus's wires was least (where it stood, unless another place is strictly cheaper; of equal places
+// the first met). Rounds repeat while the cost fell and a track is still shared, at most 4.
+function busSiftLanes(L,W,H,routeOf,wireOf,rebuild){
+  if(L.length<3)return;
+  const n=W.length,ix=new Map(W.map((id,i)=>[id,i])),segs=W.map(id=>busRouteSegs(routeOf(id)));
+  const related=new Uint8Array(n*n),cost=new Uint8Array(n*n),inMove=new Uint8Array(n);let total=0;
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+    related[i*n+j]=related[j*n+i]=busWiresRelated(wireOf(W[i]),wireOf(W[j]))?1:0;
+    const c=busSegsCost(segs[i],segs[j],!!related[i*n+j]);cost[i*n+j]=cost[j*n+i]=c;total+=c;
+  }
+  // Lanes k and k+1 change places: every wire in either is routed again and priced again.
+  const swap=k=>{
+    const u=L[k],v=L[k+1],ids=[...H.get(u),...H.get(v)],moved=ids.map(id=>ix.get(id));
+    L[k]=v;L[k+1]=u;rebuild(ids);
+    for(const i of moved){segs[i]=busRouteSegs(routeOf(W[i]));inMove[i]=1}
+    for(const i of moved)for(let j=0;j<n;j++){
+      if(j===i||(inMove[j]&&j<i))continue;
+      const c=busSegsCost(segs[i],segs[j],!!related[i*n+j]);total+=c-cost[i*n+j];cost[i*n+j]=cost[j*n+i]=c;
+    }
+    for(const i of moved)inMove[i]=0;
+  };
+  for(let round=0;round<4&&cost.includes(BUS_TRACK_COST);round++){
+    const before=total;
+    for(const lane of [...L]){
+      let i=L.indexOf(lane),best=total,at=i;
+      while(i>0){swap(--i);if(total<best){best=total;at=i}}
+      while(i<L.length-1){swap(i++);if(total<best){best=total;at=i}}
+      while(i>at)swap(--i);
+    }
+    if(!(total<before))break;
+  }
+}
 const busWiresRelated=(a,b)=>[`${a.a}:${a.aSide}`,`${a.b}:${a.bSide}`].some(e=>e===`${b.a}:${b.aSide}`||e===`${b.b}:${b.bSide}`);
 
 // ---- Lanes, once per render ---------------------------------------------------------------------
@@ -119,7 +181,9 @@ const busWiresRelated=(a,b)=>[`${a.a}:${a.aSide}`,`${a.b}:${a.bSide}`].some(e=>e
 // where they join, then wire id), and its lanes are the distinct lane keys in that order. Then up
 // to 8 passes of adjacent lane swaps keep a swap only when the number of crossing pairs among that
 // bus's wires strictly drops: the greedy form of the slot ordering in ELK's
-// OrthogonalRoutingGenerator. A lane's offset is (its index - (lane count - 1) / 2) x pitch.
+// OrthogonalRoutingGenerator. A bus with lanes: 'port' on which two wires sharing no end still lie
+// on one track then has its lanes sifted (busSiftLanes). A lane's offset is
+// (its index - (lane count - 1) / 2) x pitch.
 let busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map(),lanes:new Map()};
 function busRoutesForRender(){
   const all=activeBuses(),entries=[];
@@ -176,6 +240,7 @@ function busRoutesForRender(){
       }
       if(!improved)break;
     }
+    if(all[bid]?.lanes==='port')busSiftLanes(L,W,H,id=>routes.get(id),id=>plans.get(id).w,rebuild);
     order.set(bid,L.flatMap(k=>H.get(k)));
   }
   busRouteState={key,routes,fallback,on,order,lanes};

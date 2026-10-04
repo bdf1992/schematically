@@ -260,8 +260,11 @@
   // trunk per wire label in the gap between the groups; a card with another card between it and
   // the trunk reaches it along a street in the gap under its row (sending) or above it (receiving).
   const busSlug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'unlabelled';
-  function harness(doc,viewId,{between,pitch}={}){
+  function harness(doc,viewId,{between,pitch,lanes:laneMode}={}){
     const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
+    // lanes: 'port' counts a trunk's or street's lanes as its distinct a ends and writes buses with lanes: 'port'; absent or 'wire' is a lane per wire.
+    if(laneMode!=null&&laneMode!=='wire'&&laneMode!=='port')return refusal('BAD_LANES',`lanes is 'port' or 'wire', not ${JSON.stringify(laneMode)}`);
+    const byPort=laneMode==='port',endOf=w=>w.a+':'+w.aSide,laneCount=ws=>byPort?new Set(ws.map(endOf)).size:ws.length;
     if(!Array.isArray(between)||between.length!==2||String(between[0])===String(between[1]))return refusal('BAD_BETWEEN','between names two different groups: [groupA, groupB]');
     const ids=between.map(String),groups=ids.map(id=>doc.components.find(c=>c.id===id));
     for(let k=0;k<2;k++)if(!groups[k]||!grouping(groups[k]))return refusal('UNKNOWN_GROUP',`No group ${ids[k]}`);
@@ -279,7 +282,7 @@
     const side=id=>members[0].has(id)?0:members[1].has(id)?1:-1,labelOf=w=>String(w.config?.label||'');
     const wires=doc.wires.filter(w=>{const sa=side(w.a),sb=side(w.b);if(sa<0||sb<0||sa===sb)return false;const m=r.v.routes[w.id]?.mode;return m!=='pinned'&&m!=='guided'});
     if(!wires.length)return refusal('NO_WIRES',`No wire free to route runs between ${ids[0]} and ${ids[1]}`);
-    const labels=[...new Set(wires.map(labelOf))].sort((a,b)=>a<b?-1:a>b?1:0),lanes=labels.map(l=>wires.filter(w=>labelOf(w)===l).length);
+    const labels=[...new Set(wires.map(labelOf))].sort((a,b)=>a<b?-1:a>b?1:0),lanes=labels.map(l=>laneCount(wires.filter(w=>labelOf(w)===l)));
     const total=lanes.reduce((s,n)=>s+n*P,0)+BUS_TRUNK_GAP*(labels.length-1),need=total+2*BUS_MARGIN;
     if(!(gap>=need))return refusal('GAP_TOO_NARROW',`The gap between ${ids[0]} and ${ids[1]} is ${Math.floor(Math.max(0,gap))} wide; ${labels.length} trunk${labels.length===1?'':'s'} carrying ${wires.length} wires need ${Math.ceil(need)}`,{need:Math.ceil(need),have:Math.floor(Math.max(0,gap))});
     const trunkX=new Map(),trunkId=l=>`harness-${ids[0]}-${ids[1]}-${busSlug(l)}`;
@@ -298,12 +301,12 @@
     // A street id another harness already uses takes the next free suffix.
     const streetId=base=>{let id=base,k=2;while(r.v.buses[id]&&!ours(r.v.buses[id]))id=`${base}-${k++}`;return id};
     const streets=new Map();
-    const street=(k,ri,kind,w)=>{const id=streetId(`street-${groups[k].id}-${ri}${kind==='recv'?'-above':''}`);if(!streets.has(id))streets.set(id,{k,row:ri,kind,wires:[],labels:new Set()});const s=streets.get(id);s.wires.push(w.id);s.labels.add(labelOf(w));return id};
+    const street=(k,ri,kind,w)=>{const id=streetId(`street-${groups[k].id}-${ri}${kind==='recv'?'-above':''}`);if(!streets.has(id))streets.set(id,{k,row:ri,kind,wires:[],ends:new Set(),labels:new Set()});const s=streets.get(id);s.wires.push(w.id);s.ends.add(endOf(w));s.labels.add(labelOf(w));return id};
     const plan=wires.map(w=>{const sa=side(w.a),sb=side(w.b);
       return {w,trunk:trunkId(labelOf(w)),send:direct(sa,w.a)?null:street(sa,rowOf(sa,w.a),'send',w),recv:direct(sb,w.b)?null:street(sb,rowOf(sb,w.b),'recv',w)}});
     const made=[];let top=Math.min(R[0].t,R[1].t),bottom=Math.max(R[0].b,R[1].b);
     for(const [id,s] of streets){
-      const rows=lay[s.k].rows,row=rows[s.row],span=(s.wires.length-1)*P,G=R[s.k];let y;
+      const rows=lay[s.k].rows,row=rows[s.row],n=byPort?s.ends.size:s.wires.length,span=(n-1)*P,G=R[s.k];let y;
       if(s.kind==='send'){
         const next=rows[s.row+1],first=row.b+STREET_DROP;y=first+span/2;
         if(next&&first+span+STREET_ROOM>next.t)return refusal('STREET_TOO_NARROW',`Street ${id} under row ${s.row} of ${groups[s.k].id} needs ${Math.ceil(STREET_DROP+span+STREET_ROOM)} between the rows; it has ${Math.floor(next.t-row.b)}`,{street:id,need:Math.ceil(STREET_DROP+span+STREET_ROOM),have:Math.floor(next.t-row.b)});
@@ -312,7 +315,7 @@
         if(prev&&last-span-STREET_ROOM<prev.b)return refusal('STREET_TOO_NARROW',`Street ${id} above row ${s.row} of ${groups[s.k].id} needs ${Math.ceil(STREET_DROP+span+STREET_ROOM)} between the rows; it has ${Math.floor(row.t-prev.b)}`,{street:id,need:Math.ceil(STREET_DROP+span+STREET_ROOM),have:Math.floor(row.t-prev.b)});
       }
       const xs=[...s.labels].map(l=>trunkX.get(l)),to=towardTrunkIsRight(s.k)?Math.max(...xs):Math.min(...xs),far=towardTrunkIsRight(s.k)?G.l:G.r;
-      made.push({id,kind:'street',lanes:s.wires.length,points:[{x:far,y},{x:to,y}]});
+      made.push({id,kind:'street',lanes:n,points:[{x:far,y},{x:to,y}]});
       top=Math.min(top,y-span/2);bottom=Math.max(bottom,y+span/2);
     }
     {const byId=new Intl.Collator('en',{numeric:true}).compare;made.sort((a,b)=>byId(a.id,b.id))}
@@ -323,7 +326,7 @@
     const old=Object.keys(r.v.buses).filter(id=>ours(r.v.buses[id]));
     for(const id of old)delete r.v.buses[id];
     const freed=[];for(const [wid,rt] of Object.entries(r.v.routes))if(rt?.mode==='bus'&&rt.buses.some(id=>old.includes(id))){delete r.v.routes[wid];if(!plan.some(p=>p.w.id===wid))freed.push(wid)}
-    for(const b of made)r.v.buses[b.id]={points:pointsOf.get(b.id),pitch:P,between:ids,...(b.label?{label:b.label}:{})};
+    for(const b of made)r.v.buses[b.id]={points:pointsOf.get(b.id),pitch:P,between:ids,...(b.label?{label:b.label}:{}),...(byPort?{lanes:'port'}:{})};
     for(const p of plan)r.v.routes[p.w.id]={mode:'bus',buses:[p.send,p.trunk,p.recv].filter(Boolean)};
     return {ok:true,view:r.id,between:ids,orientation:vertical?'vertical':'horizontal',gap:{have:Math.floor(gap),need:Math.ceil(need)},
       buses:made.map(b=>({id:b.id,kind:b.kind,lanes:b.lanes,...(b.label?{label:b.label}:{})})),
