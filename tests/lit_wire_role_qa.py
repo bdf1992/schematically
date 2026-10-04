@@ -7,8 +7,8 @@ the lit wire takes that slot's own tone, one step lighter on dark (+1) and one s
 examples/10-clocked-signals.sov, sim_control_qa's route: the clock is reset and the file opened, the
 source slot is set before the clock runs (an edit restarts it), the lever goes up, and the clock is
 advanced into its high half, where w3 (from 'both' to the lamp) is lit.
-  - system-default, 'both' on slot 6: w3's stroke is #A6AF65 on dark and #767E34 on light (the
-    primary ramp's +1 and -1 tones in the palette study's best2.json);
+  - system-default, 'both' on slot 6: w3's stroke is #58AEE5 on dark and #004D73 on light (the
+    primary ramp's +1 tone of the dark row and -1 tone of the light row in best5.json);
   - 'both' on slot 2: w3's stroke is the computed --accent-out;
   - okabe-ito, slot 6: w3's stroke is the page's litTone(6, appearance) and not the accent;
   - after clock.reset no wire group keeps level-high or --wire-lit;
@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 EXAMPLE = ROOT / 'examples' / '10-clocked-signals.sov'
-EXPECTED = {'dark': '#A6AF65', 'light': '#767E34'}
+EXPECTED = {'dark': '#58AEE5', 'light': '#004D73'}
 
 LIGHT_UP = r"""([appearance,palette,slot])=>{
   const A=window.SovSchematicAPI;

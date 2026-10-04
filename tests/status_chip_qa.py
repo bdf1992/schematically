@@ -1,7 +1,7 @@
 """Status chip QA (NOTATION-MODEL.md "Statuses": tone and glyph; src/55-render.js appendComponentStatus).
 
 A status that declares a tone (safe, alert, danger) draws its chip as a solid pill filled with that
-status tone, the same in every palette (src/00-state.js statusTone), holding '<glyph> <title>' in
+status tone, the same in every palette and set by the appearance's row (src/00-state.js statusTone), holding '<glyph> <title>' in
 #141414 or #FFFFFF, whichever has the higher WCAG contrast on the fill (SC 1.4.3, 4.5:1 at least).
 The glyph means colour is never the only cue (SC 1.4.1).
 
@@ -21,7 +21,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 EXAMPLE = ROOT / 'examples/work-engine/status.sov'
-TONES = {'safe': '#24AB7E', 'alert': '#F0BB3B', 'danger': '#C4422C'}
+TONES = {'light': {'safe': '#01B597', 'alert': '#C28923', 'danger': '#7F1F26'},
+         'dark': {'safe': '#28D4B2', 'alert': '#E3A849', 'danger': '#EC5258'}}
 DECLARED = {'exists': ('safe', '✓', 'Exists'), 'partial': ('alert', '◷', 'Partial'),
             'missing': ('danger', '✕', 'Missing'), 'proposed': ('alert', '◷', 'Proposed')}
 CARDS = {'web-booth': 'partial', 'recording': 'partial', 'case': 'exists', 'anchor': 'missing', 'continuity-to-sqlite': 'proposed'}
@@ -61,7 +62,8 @@ def check_chips(chips: dict, where: str) -> list:
         c = chips[cid]
         tone, glyph, title = DECLARED[sid]
         assert c['status'] == sid, (where, cid, c)
-        assert c['fill'] == TONES[tone], (where, cid, 'chip fill is the declared tone', c['fill'], TONES[tone])
+        want = TONES[where.split('/')[0]][tone]
+        assert c['fill'] == want, (where, cid, 'chip fill is the declared tone', c['fill'], want)
         assert c['fillOpacity'] == 1, (where, cid, c['fillOpacity'])
         assert c['stroke'] in ('none', ''), (where, cid, c['stroke'])
         assert c['text'].startswith(glyph + ' ') and c['text'] == f'{glyph} {title}' and c['nodes'] == 1, (where, cid, c['text'])
@@ -100,7 +102,7 @@ def main() -> None:
                 where = f'{appearance}/{palette}'
                 inks.update(check_chips(page.evaluate(CHIPS), where))
                 svg = page.evaluate('()=>SovSchematicAPI.render.svg({})')
-                for tone, hexv in TONES.items():
+                for tone, hexv in TONES[appearance].items():
                     r, g, b = (int(hexv[i:i + 2], 16) for i in (1, 3, 5))
                     assert hexv.lower() in svg.lower() or f'rgb({r}, {g}, {b})' in svg, (where, 'render.svg lost the tone', tone, hexv)
                 for sid, (_, glyph, title) in DECLARED.items():

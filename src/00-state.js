@@ -154,14 +154,16 @@ const LIGHT_SURFACE_MONO=['#202020','#353535','#4B4B4B','#616161','#747474','#87
 const LIGHT_SURFACE_MONO_DEEP=['#0D0D0D','#171717','#222222','#2E2E2E','#3A3A3A','#464646'];
 const DARK_SURFACE_MONO=['#F2F2EE','#DDDDD8','#C8C8C2','#B3B3AD','#9E9E98','#898984'];
 const DARK_SURFACE_MONO_BRIGHT=['#FFFFFF','#F0F0EB','#E1E1DB','#D2D2CC','#C3C3BD','#B4B4AE'];
-// 'okabe-ito' is the default: Okabe & Ito's colour-universal hues (09-colour-core.js REFERENCES),
+// 'okabe-ito' is Okabe & Ito's colour-universal hues (09-colour-core.js REFERENCES),
 // re-tuned by search so that, after each theme's realisation (themeColor), every slot keeps its
 // contrast floor and the closest pair stays CVD_FLOOR apart under protan, deutan and tritan
 // simulation. The other colour rows are hue families: legible, not colour-blind distinct;
 // scripts/contrast_audit.py measures and says so.
 // 'system-default' is generated, not authored: SovSchematicColour.PALETTE_SYSTEMS (09-colour-core.js)
 // gives three roles and three status tones from a base hue, a ratio and a step, and slots 6-11 take
-// the middle tone of each ramp, the same six in both appearances, realised through themeColor.
+// the middle tone of each ramp; a system with a dark row (spec.dark) gives DARK_SURFACE_PALETTES its own six.
+// It is the default: its values were searched on the realised slots (best5.json) and pass
+// scripts/contrast_audit.py in every theme x appearance.
 const BASE_PALETTES={
   'okabe-ito':['#F85401','#F4C768','#98E2BD','#0092E4','#2E69A0','#7B3962'],
   'system-default':SovSchematicColour.paletteSystem(SovSchematicColour.PALETTE_SYSTEMS['system-default']).slots,
@@ -172,7 +174,7 @@ const BASE_PALETTES={
 };
 const DARK_SURFACE_PALETTES={
   'okabe-ito':['#D07807','#FBAC31','#039843','#36BEFE','#5671AC','#FF1782'],
-  'system-default':SovSchematicColour.paletteSystem(SovSchematicColour.PALETTE_SYSTEMS['system-default']).slots,
+  'system-default':SovSchematicColour.paletteSystem(SovSchematicColour.PALETTE_SYSTEMS['system-default'],'dark').slots,
   spectrum:['#FF7A7D','#E8AA58','#9AC86C','#62C9C1','#82A9F2','#B88CE5'],
   cool:['#74B8E2','#69D0CB','#82C9AE','#91AFE8','#A19BE1','#B58FC8'],
   warm:['#F37C78','#ED966A','#E8B660','#D6A071','#CE858E','#C77F9E'],
@@ -182,7 +184,7 @@ const DEFAULT_CUSTOM_PALETTE=['#C84E64','#DB8750','#B7A647','#58A27C','#4E86BE',
 
 const colorEngine={
   theme:'pastel',
-  palette:'okabe-ito',
+  palette:'system-default',
   custom:[...DEFAULT_CUSTOM_PALETTE],
   diffuse:true
 };
@@ -290,13 +292,15 @@ function normalizeSlot(v,fallback=0){
 function slotColor(slot){return activePalette()[normalizeSlot(slot)]}
 // A declared palette system (09-colour-core.js PALETTE_SYSTEMS), generated once per name.
 const paletteSystemCache=new Map();
-function declaredPaletteSystem(name){
+function declaredPaletteSystem(name,appearance=surfaceAppearance()){
   const spec=SovSchematicColour.PALETTE_SYSTEMS[name];if(!spec)return null;
-  if(!paletteSystemCache.has(name))paletteSystemCache.set(name,SovSchematicColour.paletteSystem(spec));
-  return paletteSystemCache.get(name);
+  const key=name+'|'+appearance;
+  if(!paletteSystemCache.has(key))paletteSystemCache.set(key,SovSchematicColour.paletteSystem(spec,appearance));
+  return paletteSystemCache.get(key);
 }
 // The meaning colours stay fixed in every palette: a status tone is the base tone of safe, alert or
-// danger in the active palette when that palette is a declared system, else in system-default.
+// danger in the active palette when that palette is a declared system, else in system-default, on the
+// row of the current appearance.
 function statusTone(name){
   const sys=declaredPaletteSystem(colorEngine.palette)||declaredPaletteSystem('system-default');
   const i=sys.names.indexOf(name);
@@ -307,7 +311,7 @@ function statusTone(name){
 // the slot's authored colour for that appearance, with the system step 0.08.
 function litTone(slot,appearance=surfaceAppearance()){
   const n=Number(slot);if(!Number.isInteger(n)||n<6||n>11)return null;
-  const dark=appearance==='dark',index=dark?3:1,sys=declaredPaletteSystem(colorEngine.palette);
+  const dark=appearance==='dark',index=dark?3:1,sys=declaredPaletteSystem(colorEngine.palette,appearance);
   if(sys)return sys.ramps[n-6][index];
   const row=colorEngine.palette==='mono'
     ? (dark?DARK_SURFACE_MONO_BRIGHT:LIGHT_SURFACE_MONO_DEEP)
