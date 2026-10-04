@@ -384,12 +384,23 @@
     // arrange() once over its cards, as before groups were placed.
     // groupRect's padding: the notation's space.regionInset and space.regionTitle (src/05-data-core.js)
     const GROUP_PAD=Number.isFinite(notation?.tokens?.space?.regionInset)?notation.tokens.space.regionInset:24,GROUP_TITLE_BAND=Number.isFinite(notation?.tokens?.space?.regionTitle)?notation.tokens.space.regionTitle:28;
+    // A card that draws a symbol glyph grows to hold the glyph at its fixed size and its text
+    // (NOTATION-MODEL.md §4, glyphRoom): each side to the next even whole number at or above what it
+    // needs, never smaller than it is. A pinned or locked card keeps its size. This is the one place
+    // a card's stored size grows; write() stores the box.
+    const grown=c=>{
+      const s=size(c),g=notation&&N?.glyphRoom?notation.glyphs?.[c.symbolId]:null,kind=c.config?.presentation?.graphic?.kind;
+      if(!g||(kind!=null&&kind!=='symbol')||c.editor?.pinned||c.editor?.locked)return s;
+      const {need}=N.glyphRoom(g,s,{subtitle:!!String(c.config?.subtitle||'').trim(),title:String(c.config?.label||''),type:notation.tokens?.type,glyph:notation.tokens?.glyph});
+      const even=v=>2*Math.ceil((v-1e-6)/2);
+      return {w:Math.max(s.w,even(need.w)),h:Math.max(s.h,even(need.h))};
+    };
     function layoutCanvas(canvas,second=null){
       const members=inScope(canvas),boxes=new Map();
       for(const c of members){
         // Arranging fits a container to what it holds, with room on top for its own symbol.
         if(isContainer(c)&&inScope(interiorOf(c.id)).length){const inner=layoutCanvas(interiorOf(c.id)),top=topRoom(c);boxes.set(c.id,{w:Math.max(160,inner.w+pad*2),h:Math.max(120,inner.h+pad*2+top),inner,top})}
-        else boxes.set(c.id,{...size(c),inner:null});
+        else boxes.set(c.id,{...(isContainer(c)?size(c):grown(c)),inner:null});
       }
       const R=id=>rep(id,canvas);
       // Each member in scope belongs to the first group in document order that lists it (the
@@ -471,7 +482,7 @@
       // the difference of the two terminals' offsets from their cards' centres.
       const portDy=(q,u)=>{
         const w=doc.wires.find(x=>(x.a===q&&x.b===u)||(x.b===q&&x.a===u));if(!w||!notation)return 0;
-        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c),{subtitle:!!String(c?.config?.subtitle||'').trim(),title:String(c?.config?.label||''),type:notation.tokens?.type})?.dy||0};
+        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c),{subtitle:!!String(c?.config?.subtitle||'').trim(),title:String(c?.config?.label||''),type:notation.tokens?.type,glyph:notation.tokens?.glyph})?.dy||0};
         const [qp,up]=w.a===q?[w.aSide,w.bSide]:[w.bSide,w.aSide];
         return off(q,qp)-off(u,up);
       };

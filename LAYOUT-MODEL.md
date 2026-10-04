@@ -296,6 +296,13 @@ Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLA
   - each node is pulled level with its predecessors, for straight chains
 - A container is laid out inside first and fitted to its contents, then placed as one
   node of its parent.
+- A card grows to hold its glyph and text. A card that is not a container, draws a symbol glyph
+  of the document's notation and is neither pinned nor locked is placed, and stored, at the larger
+  of its size and the size the glyph token needs (NOTATION-MODEL.md §4, `glyphRoom`), each side
+  rounded up to the next even whole number: a 112 by 84 card titled "Delivery broker" becomes 112
+  by 112. A card is never made smaller. Nothing else grows a card: no other layout op, and no
+  load, render or save. A card left without room (a pinned one, or a document never laid out) is
+  the `glyph-room` finding of `layout.metrics`.
 - A group on the canvas (SECTION-MODEL.md "Groups (reading only)") is placed the same way,
   as one block. Its members in scope on that canvas are laid out by these same steps over the
   wires among them only. The block's box is the members' extent padded 24 on the left, right
