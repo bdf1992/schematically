@@ -1,6 +1,10 @@
 'use strict';
 // 0.1 Beta concern: Sanitized Component SVG projection and Wire/packet SVG rendering.
 
+// Both are screen pixels: general is the floor of every canvas label, shrunkTitle the floor of a
+// card title marked data-shrunk.
+const LABEL_FLOORS=Object.freeze({general:12,shrunkTitle:10});
+
 function renderMoveTether(group,from,to){
   if(!from||!to) return;
   if(Math.hypot(to.x-from.x,to.y-from.y)<1) return;
@@ -187,7 +191,7 @@ function fitComponentLabels(g,n){
   // the title whole is taken; otherwise it stays at its clamped size and is cut.
   if(inCard&&isCut(r)&&screen>.25){
     const px0=(parseFloat(getComputedStyle(t).fontSize)||10)*screen;let whole=null;
-    for(let px=Math.floor(px0*2)/2-.5;px>=10-1e-9;px-=.5){t.style.fontSize=`${px/screen}px`;const r2=layout();if(!isCut(r2)){whole=r2;break}}
+    for(let px=Math.floor(px0*2)/2-.5;px>=LABEL_FLOORS.shrunkTitle-1e-9;px-=.5){t.style.fontSize=`${px/screen}px`;const r2=layout();if(!isCut(r2)){whole=r2;break}}
     if(whole){r=whole;t.dataset.shrunk='true'}else{t.style.fontSize='';r=layout()}
   }
   if(u&&(!r.showSub)){u.style.visibility='hidden';u.dataset.lod='hidden'}
@@ -558,7 +562,7 @@ function declaredStatus(record){
 function statusTitle(status){return String(status?.title||status?.id||'')}
 // 'Bdo, rule R-29, decision D1': each entry's label, or else its kind and id.
 function waitsOnList(list){return Array.isArray(list)?list.filter(w=>w&&typeof w==='object').map(w=>String(w.label||'').trim()||`${w.kind} ${w.id}`).join(', '):''}
-const CAPTION_STYLE='font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)';
+const CAPTION_STYLE=`font-size:calc(clamp(${LABEL_FLOORS.general}px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)`;
 // A label's ink is its role colour moved (darker in light, lighter in dark) only as far as TEXT_FLOOR
 // against the colour actually behind it: the ground a card stands on, a region's fill, or the canvas.
 const TEXT_FLOOR=4.6;
