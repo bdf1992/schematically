@@ -86,8 +86,8 @@ def workflows_part() -> None:
     assert 'verify' in ci['jobs']
     assert ci['jobs']['verify']['timeout-minutes'] >= 45, 'verify needs room: qa.py runs 14 to 18 minutes'
     assert ci['concurrency']['cancel-in-progress'] is True, 'a superseded run on the same ref is cancelled'
-    triggers = ci['on'] if 'on' in ci else ci[True]
-    assert triggers['push']['branches'] == ['dev', 'main'] and 'pull_request' in triggers, triggers
+    ci_on = triggers(ci)
+    assert ci_on['push']['branches'] == ['dev', 'main'] and 'pull_request' in ci_on, ci_on
     assert 'upload-pages-artifact' not in (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
     assert 'deploy-pages' not in (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
 
