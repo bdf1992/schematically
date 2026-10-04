@@ -970,6 +970,9 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
     if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
   });
+  // Jogs out and close parallels spread a track apart (src/40-routing.js nudgeRoutes); bus lanes and taps stay fixed.
+  const trackCramped=nudgeRoutes(routes,busState?[...busState.routes].flatMap(([id,pts])=>routeSegments(pts,wires.find(x=>x.id===id))):[]);
+  for(const [i,r] of routes)r.segs=routeSegments(r.points,wires[i]);
   const hops=new Map(),order=[...routes.keys()];arrowKeepClear=[];
   for(let x=0;x<order.length;x++)for(let y=x+1;y<order.length;y++){
     const P=routes.get(order[x]),Q=routes.get(order[y]);
@@ -1005,6 +1008,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':'')+((epA.kind==='free'||epB.kind==='free')?' has-free-end':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
     if(busState?.fallback.has(w.id))group.dataset.busFallback='true';
     if(routeBlockedAt(i))group.dataset.routeBlocked='true';
+    if(trackCramped.has(i))group.dataset.trackCramped='true';
 
     const gradientId=`wire-gradient-${i}-${renderEpoch++}`;
     const gradient=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
