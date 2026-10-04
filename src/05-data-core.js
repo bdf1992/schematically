@@ -491,6 +491,17 @@
     return out;
   }
   function assertBadges(config,clearable=false){const p=badgeProblems(config,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Intake (SECTION-MODEL.md "Groups": Borders) ----------------------------------------------
+  // A group or a plane may carry `config.intake: true`: an open region, drawn with a dashed outline.
+  //   INTAKE_INVALID   intake is not a boolean, or sits on a Component that is neither a group nor a plane
+  function intakeProblems(component,clearable=false){
+    const out=[],config=component?.config;if(!isObject(config)||config.intake===undefined||(clearable&&config.intake===null))return out;
+    const symbol=normalizeSymbolId(component.symbolId||component.type);
+    if(typeof config.intake!=='boolean')out.push(`INTAKE_INVALID: config.intake must be true or false, not ${JSON.stringify(config.intake)}`);
+    else if(symbol!=='group'&&symbol!=='plane')out.push(`INTAKE_INVALID: config.intake belongs to a group or a plane, not a ${symbol}`);
+    return out;
+  }
+  function assertIntake(component,clearable=false){const p=intakeProblems(component,clearable);if(p.length)throw new Error(p[0])}
   // Copies an authored status and waitsOn onto a record being made.
   function adoptStatusAndWaitsOn(config,value){
     if(value?.status!==undefined&&value.status!==null)config.status=value.status;
@@ -500,7 +511,7 @@
   // An update's null removes the key.
   function clearStatusAndWaitsOn(candidate,patch){
     if(!isObject(candidate?.config)||!isObject(patch?.config))return;
-    for(const key of ['status','waitsOn','badges'])if(patch.config[key]===null)delete candidate.config[key];
+    for(const key of ['status','waitsOn','badges','intake'])if(patch.config[key]===null)delete candidate.config[key];
   }
   // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
   // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
@@ -903,6 +914,7 @@
     if(value.config?.members!==undefined)config.members=clone(value.config.members);
     assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
     assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges);
+    if(value.config?.intake!==undefined&&value.config.intake!==null){config.intake=clone(value.config.intake);assertIntake(component)}
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -1202,6 +1214,7 @@
       assertWiresSurviveEdit(doc,current,candidate);
       normalizeComponentSize(candidate);
       assertGroupRules(doc,doc.components.map((c,i)=>i===index?candidate:c));
+      if(patch?.config?.intake!==undefined||nextSymbol!==undefined)assertIntake(candidate,patch?.config?.intake===null);
     }else if(resource==='wire'){
       if(isObject(patch?.config))assertPathDelay(patch.config,true);
       if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
@@ -1408,6 +1421,7 @@
     // Status and waits-on: reported, never repaired (the codes are listed at statusProblems).
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of statusProblems(input,item?.config))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
+    for(const item of input.components||[])for(const p of intakeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a

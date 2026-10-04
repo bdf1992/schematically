@@ -80,6 +80,7 @@ BROWSER=[
     'tests/boundary_attachment_qa.py',
     'tests/group_region_qa.py',
     'tests/region_fill_qa.py',
+    'tests/region_border_qa.py',
     'tests/sim_control_qa.py',
     'tests/wave_view_qa.py',
     'tests/server_render_qa.py',
