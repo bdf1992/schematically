@@ -299,6 +299,8 @@ what it waits on follow its label in its caption, and a dashed status dashes its
 lists each status used, in the notation's order (section 5). `examples/work-engine/status.sov`
 shows all four statuses; `tests/status_waits_on_qa.py` checks them.
 
+A badge is the chip without a status's meaning: text and a palette colour, no outline, no opacity, no legend entry (DATA-FORMATS.md "Badges").
+
 ## Open
 
 - A card with more terminals than fit on one side: spread evenly (now), or grow the card.

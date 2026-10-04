@@ -13,9 +13,10 @@ HTML = (ROOT / 'index.html').read_text()
 # Every class that draws a label on the canvas, with its base size at zoom 1.
 BASE = {'.node text.component-label': 10, '.node .outside-label': 9, '.node .dimensional-point-label': 10,
         '.connection-label': 9}
-LOW, HIGH = 12, 16
-# A card title that would otherwise be cut may shrink to 10 px on screen; it says so (data-shrunk).
-SHRUNK_LOW = 10
+HIGH = 16
+# LOW and SHRUNK_LOW are the page's LABEL_FLOORS, read once the page has loaded.
+# A card title that would otherwise be cut may shrink to its floor on screen; it says so (data-shrunk).
+LOW = SHRUNK_LOW = None
 
 
 def floor_ok(sel, m, expected):
@@ -56,6 +57,8 @@ with sync_playwright() as p:
     page.wait_for_timeout(300)
     page.evaluate(SETUP)
     page.wait_for_timeout(120)
+    floors = page.evaluate('()=>LABEL_FLOORS')
+    LOW, SHRUNK_LOW = floors['general'], floors['shrunkTitle']
 
     selectors = list(BASE)
     # Screen scale includes the workspace size as well as the nominal camera zoom.

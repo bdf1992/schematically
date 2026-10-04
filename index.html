@@ -2140,6 +2140,28 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return out;
   }
   function assertStatusAndWaitsOn(doc,config,clearable=false){const p=statusProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Badges (DATA-FORMATS.md "Badges") ------------------------------------------------------
+  // A Component's `config.badges` lists at most 4 chips `{label, colorSlot?}`: a label of 1 to 24
+  // characters after trimming and a palette slot 0 to 11 (absent means 0). Presentation only.
+  //   BADGE_INVALID   badges is not that list (the message names the index and the field)
+  const BADGE_KEYS=['label','colorSlot'],BADGE_MAX=4,BADGE_LABEL_MAX=24;
+  function badgeProblems(config,clearable=false){
+    const out=[];if(!isObject(config))return out;
+    const list=config.badges;if(list===undefined||(clearable&&list===null))return out;
+    if(!Array.isArray(list)){out.push(`BADGE_INVALID: config.badges must be an array, not ${JSON.stringify(list)}`);return out}
+    if(list.length>BADGE_MAX)out.push(`BADGE_INVALID: config.badges holds ${list.length} entries; at most ${BADGE_MAX}`);
+    list.forEach((b,i)=>{
+      const at=`config.badges[${i}]`;
+      if(!isObject(b)){out.push(`BADGE_INVALID: ${at} must be an object`);return}
+      const extra=Object.keys(b).find(k=>!BADGE_KEYS.includes(k));
+      if(typeof b.label!=='string'||!b.label.trim())out.push(`BADGE_INVALID: ${at}.label must be a non-empty string`);
+      else if(b.label.trim().length>BADGE_LABEL_MAX)out.push(`BADGE_INVALID: ${at}.label must be at most ${BADGE_LABEL_MAX} characters, not ${b.label.trim().length}`);
+      else if(b.colorSlot!==undefined&&!(Number.isInteger(b.colorSlot)&&b.colorSlot>=0&&b.colorSlot<=11))out.push(`BADGE_INVALID: ${at}.colorSlot must be an integer 0 to 11, not ${JSON.stringify(b.colorSlot)}`);
+      else if(extra)out.push(`BADGE_INVALID: ${at}.${extra} is not a field of a badge (label, colorSlot)`);
+    });
+    return out;
+  }
+  function assertBadges(config,clearable=false){const p=badgeProblems(config,clearable);if(p.length)throw new Error(p[0])}
   // Copies an authored status and waitsOn onto a record being made.
   function adoptStatusAndWaitsOn(config,value){
     if(value?.status!==undefined&&value.status!==null)config.status=value.status;
@@ -2149,7 +2171,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // An update's null removes the key.
   function clearStatusAndWaitsOn(candidate,patch){
     if(!isObject(candidate?.config)||!isObject(patch?.config))return;
-    for(const key of ['status','waitsOn'])if(patch.config[key]===null)delete candidate.config[key];
+    for(const key of ['status','waitsOn','badges'])if(patch.config[key]===null)delete candidate.config[key];
   }
   // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
   // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
@@ -2551,6 +2573,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // A group's members, as written; create checks them (assertGroupRules).
     if(value.config?.members!==undefined)config.members=clone(value.config.members);
     assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
+    assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -2825,6 +2848,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(binding&&resource!=='component')throw new Error('DEFINITION_INVALID: only a component binds a definition');
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource!=='reference')assertStatusAndWaitsOn(doc,patch?.config,true);
+    if(resource==='component')assertBadges(patch?.config,true);
     if(resource==='component'){
       assertDefinitionPatch(patch,binding);
       if(!binding)assertDefinitionPortsKept(current,patch,null);
@@ -3054,6 +3078,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const f of groupFindings(input))errors.push(`component ${f.id??'?'}: ${f.code}: ${f.text}`);
     // Status and waits-on: reported, never repaired (the codes are listed at statusProblems).
     for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of statusProblems(input,item?.config))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
+    for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -3072,7 +3097,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(/^duplicate (?:component|wire|reference) id:/.test(message))return 'identity';
     if(/missing endpoint component:/.test(message))return 'wire-endpoint';
     if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
-    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID):/.test(message))return 'status';
+    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID|BADGE_INVALID):/.test(message))return 'status';
     return 'boundary-legality';
   }
   // Straight from validateDocument's own findings; no legality is re-derived here.
@@ -11119,6 +11144,10 @@ function selectWire(i,{focus=true}={}){
 'use strict';
 // 0.1 Beta concern: Sanitized Component SVG projection and Wire/packet SVG rendering.
 
+// Both are screen pixels: general is the floor of every canvas label, shrunkTitle the floor of a
+// card title marked data-shrunk.
+const LABEL_FLOORS=Object.freeze({general:12,shrunkTitle:10});
+
 function renderMoveTether(group,from,to){
   if(!from||!to) return;
   if(Math.hypot(to.x-from.x,to.y-from.y)<1) return;
@@ -11305,7 +11334,7 @@ function fitComponentLabels(g,n){
   // the title whole is taken; otherwise it stays at its clamped size and is cut.
   if(inCard&&isCut(r)&&screen>.25){
     const px0=(parseFloat(getComputedStyle(t).fontSize)||10)*screen;let whole=null;
-    for(let px=Math.floor(px0*2)/2-.5;px>=10-1e-9;px-=.5){t.style.fontSize=`${px/screen}px`;const r2=layout();if(!isCut(r2)){whole=r2;break}}
+    for(let px=Math.floor(px0*2)/2-.5;px>=LABEL_FLOORS.shrunkTitle-1e-9;px-=.5){t.style.fontSize=`${px/screen}px`;const r2=layout();if(!isCut(r2)){whole=r2;break}}
     if(whole){r=whole;t.dataset.shrunk='true'}else{t.style.fontSize='';r=layout()}
   }
   if(u&&(!r.showSub)){u.style.visibility='hidden';u.dataset.lod='hidden'}
@@ -11676,7 +11705,7 @@ function declaredStatus(record){
 function statusTitle(status){return String(status?.title||status?.id||'')}
 // 'Bdo, rule R-29, decision D1': each entry's label, or else its kind and id.
 function waitsOnList(list){return Array.isArray(list)?list.filter(w=>w&&typeof w==='object').map(w=>String(w.label||'').trim()||`${w.kind} ${w.id}`).join(', '):''}
-const CAPTION_STYLE='font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)';
+const CAPTION_STYLE=`font-size:calc(clamp(${LABEL_FLOORS.general}px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)`;
 // A label's ink is its role colour moved (darker in light, lighter in dark) only as far as TEXT_FLOOR
 // against the colour actually behind it: the ground a card stands on, a region's fill, or the canvas.
 const TEXT_FLOOR=4.6;
@@ -11688,7 +11717,7 @@ function statusFade(n){const st=declaredStatus(n),o=st?.opacity;return typeof o=
 function applyStatusFade(g,n){
   const fade=statusFade(n);if(fade>=1||componentForm(n).dimension!==2)return;
   for(const el of g.children){
-    if(el.localName==='text'||el.classList.contains('status-chip'))continue;
+    if(el.localName==='text'||el.classList.contains('status-chip')||el.classList.contains('card-badge'))continue;
     el.style.opacity=String((parseFloat(getComputedStyle(el).opacity)||1)*fade);
   }
 }
@@ -11717,6 +11746,42 @@ function appendComponentStatus(g,n){
   g.appendChild(chip);
   if(st.outline==='dashed'){const body=g.querySelector(':scope > .body');if(body){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}}
 }
+// A card's badges (DATA-FORMATS.md "Badges"): the status chip's shape without a status's meaning, in a
+// row from the card's top-left corner. A badge that would come within 4 of the status chip or within 6
+// of the card's right edge is not drawn; the last chip drawn then reads +N and lists the rest.
+function appendComponentBadges(g,n){
+  const list=Array.isArray(n?.config?.badges)?n.config.badges.filter(b=>b&&typeof b.label==='string'&&b.label.trim()):[];
+  if(!list.length||componentForm(n).dimension!==2)return;
+  const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
+  const ch=Math.round(px*1.5),y=-h/2+6,fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
+  const widthOf=text=>Math.ceil(text.length*px*.6+px);
+  // The right limit: the card's right edge less 6, or 4 short of the status chip's left edge.
+  let limit=w/2-6;
+  const st=declaredStatus(n);
+  if(st){
+    const tone=['safe','alert','danger'].includes(st.tone),glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'',title=statusTitle(st);
+    limit=Math.min(limit,w/2-6-(tone?Math.ceil((glyph?`${glyph} ${title}`:title).length*px*.6+px*1.4):widthOf(title))-4);
+  }
+  const labels=list.map(b=>b.label.trim());
+  const place=(count,more)=>{const xs=[];let x=-w/2+6;for(let i=0;i<count;i++){const cw=widthOf(i===count-1&&more?`+${labels.length-count+1}`:labels[i]);if(x+cw>limit)return null;xs.push([x,cw]);x+=cw+4}return xs};
+  let shown=labels.length,more=false,spots=place(shown,false);
+  if(!spots){more=true;for(shown=labels.length-1;shown>=1;shown--){spots=place(shown,true);if(spots)break}}
+  if(!spots)return;
+  const svgNS='http://www.w3.org/2000/svg';
+  spots.forEach(([x,cw],i)=>{
+    const isMore=more&&i===shown-1,badge=list[i],edge=slotColor(badge.colorSlot??0),chipFill=mixHex([edge,fill],[.16,.84]);
+    const text=isMore?`+${labels.length-shown+1}`:labels[i];
+    const chip=document.createElementNS(svgNS,'g');chip.setAttribute('class','card-badge');chip.dataset.badgeIndex=String(i);
+    if(isMore){chip.dataset.badgeMore='true';const t=document.createElementNS(svgNS,'title');t.textContent=labels.slice(shown-1).join(', ');chip.appendChild(t)}
+    const r=document.createElementNS(svgNS,'rect');
+    r.setAttribute('x',String(x));r.setAttribute('y',String(y));r.setAttribute('width',String(cw));r.setAttribute('height',String(ch));r.setAttribute('rx',String(ch/2));
+    r.setAttribute('style',`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
+    const t=document.createElementNS(svgNS,'text');t.dataset.role='caption';
+    t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
+    t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${ensureContrast(edge,chipFill,TEXT_FLOOR)};stroke:none;pointer-events:none`);t.textContent=text;chip.appendChild(t);
+    g.appendChild(chip);
+  });
+}
 // What a card waits on, under it and below any outside label: 'Waits on Bdo, rule R-29'.
 function appendComponentWaitsOn(g,n){
   const list=waitsOnList(n?.config?.waitsOn);if(!list)return;
@@ -11744,7 +11809,7 @@ function render(){
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
-    renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);
+    renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);appendComponentBadges(g,n);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
@@ -12020,18 +12085,31 @@ function clearWireVisualFocus(){
 const wireLabelPaths=new Map();
 function placeWireLabels(){
   const matrix=workspace.getScreenCTM();if(!matrix)return;
-  const inverse=matrix.inverse(),clearance=6;
+  // LAYOUT-MODEL.md "Wire labels": the clearance round a label and the step it slides by, in screen pixels.
+  const inverse=matrix.inverse(),clearance=6,step=12;
   const screen=p=>new DOMPoint(p.x,p.y).matrixTransform(matrix);
+  const shown=new Map();
   const visible=el=>{
-    for(let cur=el;cur&&cur!==workspace;cur=cur.parentElement){
-      const style=getComputedStyle(cur);
-      if(style.display==='none'||style.visibility==='hidden'||Number(style.opacity)===0)return false;
-    }
-    return true;
+    if(!el||el===workspace)return true;
+    if(shown.has(el))return shown.get(el);
+    const style=getComputedStyle(el);
+    const ok=style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0&&visible(el.parentElement);
+    shown.set(el,ok);return ok;
   };
   const rect=el=>{const r=el.getBoundingClientRect();return {l:r.left,r:r.right,t:r.top,b:r.bottom}};
   const intersects=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
-  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.group-title,.component-label,.outside-label,.internal-text')].filter(visible).map(rect);
+  // What a label must stay clear of: card bodies, status chips, marker badges and every other text
+  // (titles, subtitles, port and bus labels, group titles, end tags). Wire labels join as they are placed.
+  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.status-chip,.marker-badge,#groupLayer text,#nodes text,#wires text')]
+    .filter(el=>!el.classList.contains('connection-label')&&!el.closest('.wire-packet')&&visible(el)).map(rect).filter(box=>box.r>box.l||box.b>box.t);
+  // A card drawn on a wire has no body shape; its bounds are the body the layout metrics measure.
+  for(const el of workspace.querySelectorAll('.node.wire-hosted:not(.is-container)')){
+    const n=nodes.find(x=>x.id===el.dataset.id);if(!n||componentForm(n).dimension!==2||!visible(el))continue;
+    const R=componentBounds(n),a=screen({x:R.l,y:R.t}),b=screen({x:R.r,y:R.b});
+    obstacles.push({l:Math.min(a.x,b.x),r:Math.max(a.x,b.x),t:Math.min(a.y,b.y),b:Math.max(a.y,b.y)});
+  }
+  // A container is no obstacle, but its border is: a label lies wholly inside it or wholly outside.
+  const frames=[...workspace.querySelectorAll('.node.is-container>.body')].filter(visible).map(rect);
   const entries=[...wireLabelPaths].filter(([path])=>path.isConnected&&visible(path)).map(([path,points])=>({path,points:points.map(screen)}));
   // A slab intersection also handles diagonal carrier segments without sampling.
   const crosses=(box,a,b)=>{
@@ -12060,21 +12138,63 @@ function placeWireLabels(){
     const total=path.getTotalLength(),before=screen(path.getPointAtLength(Math.max(0,total/2-.1))),after=screen(path.getPointAtLength(Math.min(total,total/2+.1)));
     beside(midpoint,before,after);
     for(let i=1;i<points.length;i++)beside({x:(points[i-1].x+points[i].x)/2,y:(points[i-1].y+points[i].y)/2},points[i-1],points[i]);
-    let chosen=null,distance=Infinity;
-    for(const candidate of candidates){
-      candidate.r=candidate.l+width;candidate.b=candidate.t+height;
-      const padded={l:candidate.l-clearance,r:candidate.r+clearance,t:candidate.t-clearance,b:candidate.b+clearance};
-      if(obstacles.some(box=>intersects(padded,box)))continue;
-      if(entries.some(other=>other!==entry&&other.points.slice(1).some((p,i)=>crosses(padded,other.points[i],p))))continue;
-      const d=Math.hypot(candidate.l+width/2-midpoint.x,candidate.t+height/2-midpoint.y);
-      if(d<distance-1e-6){chosen=candidate;distance=d}
+    // Slid along the wire: on every straight run with room for the label and its clearance, a place
+    // every step on both sides, outward from the run's middle.
+    const slid=[],runs=[points[0]];
+    for(let i=1;i<points.length;i++){
+      const p=points[i],l=runs.at(-1),a=runs.at(-2);
+      if(a&&((Math.abs(a.y-l.y)<.01&&Math.abs(l.y-p.y)<.01)||(Math.abs(a.x-l.x)<.01&&Math.abs(l.x-p.x)<.01)))runs[runs.length-1]=p;else runs.push(p);
+    }
+    for(let i=1;i<runs.length;i++){
+      const a=runs[i-1],b=runs[i],h=Math.abs(a.y-b.y)<.01,v=Math.abs(a.x-b.x)<.01;if(h===v)continue;
+      const room=(h?Math.abs(b.x-a.x):Math.abs(b.y-a.y))-(h?width:height)-2*clearance;if(room<0)continue;
+      const mid=h?(a.x+b.x)/2:(a.y+b.y)/2;
+      for(let k=0;k*step<=room/2+1e-6;k++)for(const side of k?[-1,1]:[1]){
+        const c=mid+side*k*step;
+        if(h)slid.push({l:c-width/2,t:a.y-clearance-height},{l:c-width/2,t:a.y+clearance});
+        else slid.push({l:a.x-clearance-width,t:c-height/2},{l:a.x+clearance,t:c-height/2});
+      }
+    }
+    // Only what lies within reach of this wire can meet a label beside it.
+    const reach=Math.max(width,height)+3*clearance,xs=points.map(p=>p.x),ys=points.map(p=>p.y);
+    const zone={l:Math.min(...xs)-reach,r:Math.max(...xs)+reach,t:Math.min(...ys)-reach,b:Math.max(...ys)+reach};
+    const solid=obstacles.filter(box=>intersects(zone,box)),borders=frames.filter(box=>intersects(zone,box)),lines=[];
+    for(const other of entries){
+      if(other===entry)continue;
+      for(let i=1;i<other.points.length;i++){
+        const a=other.points[i-1],b=other.points[i];
+        if(Math.max(a.x,b.x)>=zone.l&&Math.min(a.x,b.x)<=zone.r&&Math.max(a.y,b.y)>=zone.t&&Math.min(a.y,b.y)<=zone.b)lines.push([a,b]);
+      }
+    }
+    // How many things a label at this place, padded by pad, would meet; counted no further than the limit.
+    const overlaps=(place,pad,limit)=>{
+      const box={l:place.l-pad,r:place.l+width+pad,t:place.t-pad,b:place.t+height+pad};
+      let n=0;
+      for(const o of solid)if(intersects(box,o)&&++n>=limit)return n;
+      for(const o of borders)if(intersects(box,o)&&!(box.l>o.l&&box.r<o.r&&box.t>o.t&&box.b<o.b)&&++n>=limit)return n;
+      for(const [a,b] of lines)if(crosses(box,a,b)&&++n>=limit)return n;
+      return n;
+    };
+    // Today's places first, then the slid ones; in each, nearest the wire's midpoint first. The first
+    // place clear with the clearance wins; else the first clear with no padding (of those, the one
+    // meeting least with the clearance); else the place of least true overlap, and the label says so.
+    const near=list=>list.map((place,i)=>({place,i,d:Math.round(Math.hypot(place.l+width/2-midpoint.x,place.t+height/2-midpoint.y)*1e4)})).sort((p,q)=>p.d-q.d||p.i-q.i).map(x=>x.place);
+    let chosen=null,bare=Infinity,padded=Infinity;
+    for(const place of [...near(candidates),...near(slid)]){
+      const n=overlaps(place,0,bare+1);if(n>bare)continue;
+      const m=overlaps(place,clearance,n<bare?Infinity:padded);
+      if(n<bare||m<padded){chosen=place;bare=n;padded=m;if(!m)break}
     }
     if(chosen){
-      const position=new DOMPoint(chosen.l-offset.x,chosen.t-offset.y).matrixTransform(inverse);
-      label.setAttribute('x',String(position.x));label.setAttribute('y',String(position.y));
-    }
-    // A crowded path retains its existing label position. Later labels still
-    // avoid that occupied space, and the finite candidate list bounds the work.
+      // A label already at its place is left alone, so placing twice never drifts.
+      if(Math.abs(chosen.l-bounds.l)>.01||Math.abs(chosen.t-bounds.t)>.01){
+        const position=new DOMPoint(chosen.l-offset.x,chosen.t-offset.y).matrixTransform(inverse);
+        label.setAttribute('x',String(position.x));label.setAttribute('y',String(position.y));
+      }
+    }else bare=overlaps({l:bounds.l,t:bounds.t},0,Infinity); // a wire with no straight run keeps its place
+    // Crowded: the label truly overlaps a card, a border, other text or a wire at the place it has.
+    if(bare>0)label.dataset.labelCrowded='true';else delete label.dataset.labelCrowded;
+    // Later labels keep clear of this one; the finite candidate list bounds the work.
     obstacles.push(rect(label));
   }
 }
