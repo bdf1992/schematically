@@ -410,12 +410,12 @@ function updateWireDrag(e){
     statusEl.textContent=wireDrag.blankReady?'Release → new Component':'Hold briefly to grow Component';
   }
   const occupied=[];
-  wires.forEach((w,i)=>{
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{
     const WA=carrierEndpointPos(w,'a'), WB=carrierEndpointPos(w,'b');
     if(!WA||!WB) return;
     const pts=stableRouteForWire(i,w,WA,WB,occupied);
     occupied.push(...routeSegments(pts,w));
-  });
+  }));
   wireDrag.ghost.setAttribute('d',routePath(
     wireDrag.A,B,wireDrag.sourceSide,bSide,
     wireDrag.sourceNode,
@@ -500,7 +500,7 @@ function carrierEndPointerMove(e){
   const otherEp=carrierEndpoint(w,d.other);
   if(otherEp){
     const from=d.other==='a',occupied=[];
-    wires.forEach((x,j)=>{if(j===d.i)return;const XA=carrierEndpointPos(x,'a'),XB=carrierEndpointPos(x,'b');if(XA&&XB)occupied.push(...routeSegments(stableRouteForWire(j,x,XA,XB,occupied),x))});
+    withBusRoutesOnce(()=>wires.forEach((x,j)=>{if(j===d.i)return;const XA=carrierEndpointPos(x,'a'),XB=carrierEndpointPos(x,'b');if(XA&&XB)occupied.push(...routeSegments(stableRouteForWire(j,x,XA,XB,occupied),x))}));
     const A=from?otherEp.pos:B,Z=from?B:otherEp.pos;
     d.ghost.setAttribute('d',routePath(A,Z,from?(otherEp.compatId||null):(snap?.side||null),from?(snap?.side||null):(otherEp.compatId||null),from?(otherEp.node?.id||null):(snap?.node||null),from?(snap?.node||null):(otherEp.node?.id||null),d.i,occupied));
   }
