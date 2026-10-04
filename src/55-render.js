@@ -752,8 +752,12 @@ function render(){
   const markers=markersById();
   nodesG.innerHTML='';
   const unplacedIds=new Set(typeof layoutUnplacedIds==='function'?layoutUnplacedIds():[]);
+  let undrawnCards=0;
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
     if(isEffectivelyHidden(n)||isGroupComponent(n))return; // groups are drawn by renderGroups, behind
+    // A card whose drawn position is not finite is not drawn, and is counted. A card hosted on a wire or
+    // a component takes its place from its host, so its stored x and y are not the rule.
+    if(!(Number.isFinite(n.x)&&Number.isFinite(n.y))&&!(componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n))){undrawnCards++;return}
     const s=symbolOf(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
     {const form=componentForm(n),backdrop=componentBackdropMode(n);g.setAttribute('class','node'+(unplacedIds.has(n.id)?' unplaced':'')+(n.symbolId==='blank'?' blank':'')+(selectedComponentIds.has(n.id)?' selected':'')+(componentAcceptsChildren(n)?' is-container':'')+(form.frame.mode==='shell'?' form-shell':'')+(form.frame.mode==='frame'?' form-frame':'')+(n.parentId?' nested-child':'')+(componentHostedOnWire(n)?' wire-hosted':'')+(backdrop==='none'?' backdrop-none':'')+(editor.pinned?' is-pinned':'')+(editor.locked?' is-locked':''));}
     // An unplaced card keeps its fade (.42): the inline opacity would otherwise cover the class's.
@@ -793,6 +797,7 @@ function render(){
     appendComponentLeads(g,n);appendShapeLeads(g,n);appendTerminalMarks(g,n);
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); appendComponentWaitsOn(g,n); applyStatusFade(g,n);
   });
+  if(undrawnCards)workspace.setAttribute('data-undrawn-cards',String(undrawnCards));else workspace.removeAttribute('data-undrawn-cards');
   renderGroups(markers);
   // Buses (src/41-buses.js): bands in the group layer, after the group regions, behind every wire.
   if(typeof renderBuses==='function')renderBuses(groupLayer());
@@ -1266,7 +1271,8 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
 
   // Every route first, so each wire knows the crossings it makes: the later wire hops over the
   // earlier one, and neither puts an arrowhead on the crossing. Wires sharing an end never hop.
-  const routes=new Map();
+  const routes=new Map(),undrawnWires=new Set();
+  const finitePoint=q=>!!q&&Number.isFinite(q.x)&&Number.isFinite(q.y);
   // Wires on buses are laid out first, lanes and all, so every auto route keeps clear of them.
   const busState=typeof busRoutesForRender==='function'?busRoutesForRender():null;
   if(busState)for(const [id,pts] of busState.routes){const w=wires.find(x=>x.id===id);if(w)occupied.push(...routeSegments(pts,w))}
@@ -1275,10 +1281,13 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
   routeEvery(()=>wires.forEach((w,i)=>{
     if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
+    // An end with no finite position (a card that was never placed) leaves the wire out of the drawing.
+    if(!finitePoint(A)||!finitePoint(B)){undrawnWires.add(i);return}
     const snapshot=dragging&&(w.a===activeNodeDrag||w.b===activeNodeDrag)?dragRouteSnapshots.get(i):null;
     // While moving, the settled route is immutable. We do not rebuild its
     // interior, endpoint leads, arrows, or direction marks on pointer frames.
     const points=snapshot?clonePoints(snapshot.points):stableRouteForWire(i,w,A,B,occupied);
+    if(!points.length||!points.every(finitePoint)){undrawnWires.add(i);return}
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
     if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
   }));
@@ -1324,6 +1333,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
     const editor=entityEditorState(w);const cfg=connectionConfig(w);if(editor.hidden||!carrierIsRenderable(w))return;
     const epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b'),a=epA.node,b=epB.node;
     const A=epA.pos, B=epB.pos;
+    if(undrawnWires.has(i))return; // no wire-group for it: no path, gradient, label, marker or handle
     const {points,snapshot}=routes.get(i);
     // A multi-line wire is a band, not a line: it does not hop.
     const d=SovSchematicData.normalizeSection(w.form?.section,1)?.lines?.length>=2?pathD(points):pathWithHops(points,hops.get(i));
@@ -1497,6 +1507,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
     wireGroupDrawn.set(w.id,{group,base,key,index:i,hostId:hostEl?hostId:null,cls:group.getAttribute('class'),css:group.style.cssText,baseCls:base.getAttribute('class'),label:group.querySelector('.connection-label')});
     if(selected===`wire:${i}`) focusWireVisual(i);
   });
+  if(undrawnWires.size)workspace.setAttribute('data-undrawn-wires',String(undrawnWires.size));else workspace.removeAttribute('data-undrawn-wires');
   placeWireLabels();
   // Any pass that is not a move's own ends the held signal state: what it stood for may have changed.
   if(!reuse)dropDragSignalState();
