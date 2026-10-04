@@ -2,14 +2,19 @@
 // 0.1 concern: the route of a wire on buses (LAYOUT-MODEL.md "As built: buses"). A bus is a layout
 // record (src/08-layout-core.js): a centreline declared once in a layout, which wires name in their
 // route ({mode: 'bus', buses: [id, ...]}) instead of each finding a path. A wire taps on to the first
-// bus from the end of its source lead, rides each bus on its own lane, turns once where one bus
-// meets the next, and taps off the last bus to the end of its target lead. Lanes are ordered once
+// bus from the end of its source lead, rides each bus on a lane, turns once where one bus meets the
+// next, and taps off the last bus to the end of its target lead. A lane holds one wire; on a bus
+// whose record carries lanes: 'port' it holds every wire leaving one port. Lanes are ordered once
 // per render, before any auto route, so auto routes keep clear of the buses. Presentation only:
 // nothing here writes the document.
 
 function activeBuses(){const v=diagram.layout?.views?.[activeLayoutId()];return v&&v.buses&&typeof v.buses==='object'&&!Array.isArray(v.buses)?v.buses:{}}
 function busSpecOf(w){const s=typeof activeRouteSpec==='function'?activeRouteSpec(w.id):null;return s?.mode==='bus'&&Array.isArray(s.buses)&&s.buses.length?s:null}
 function busPitchOf(bus){const p=Number(bus?.pitch);return Number.isFinite(p)?Math.max(4,Math.min(16,p)):6}
+// The lane a wire takes on a bus. On a bus with lanes: 'port' the wires that share their a end
+// (card and side) share a lane: a hyperedge slot in ELK's orthogonal routing (after Sander, GD
+// 2003), one track per net in VLSI channel routing. On any other bus each wire has its own.
+function busLaneKey(w,bus){return bus?.lanes==='port'&&w.a?w.a+':'+w.aSide:'wire:'+w.id}
 
 // ---- Bus geometry: a centreline measured along its length --------------------------------------
 function busLine(bus){
@@ -107,61 +112,69 @@ const busWiresRelated=(a,b)=>[`${a.a}:${a.aSide}`,`${a.b}:${a.bSide}`].some(e=>e
 
 // ---- Lanes, once per render ---------------------------------------------------------------------
 // A bus's own order when it has one. Otherwise wires start in the order they leave the bus (ties by
-// where they join, then wire id), then up to 8 passes of adjacent swaps keep a swap only when the
-// number of crossing pairs among that bus's wires strictly drops: the greedy form of the slot
-// ordering in ELK's OrthogonalRoutingGenerator.
-let busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map()};
+// where they join, then wire id), and its lanes are the distinct lane keys in that order. Then up
+// to 8 passes of adjacent lane swaps keep a swap only when the number of crossing pairs among that
+// bus's wires strictly drops: the greedy form of the slot ordering in ELK's
+// OrthogonalRoutingGenerator. A lane's offset is (its index - (lane count - 1) / 2) x pitch.
+let busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map(),lanes:new Map()};
 function busRoutesForRender(){
   const all=activeBuses(),entries=[];
   wires.forEach(w=>{
     const spec=busSpecOf(w);if(!spec||entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     entries.push({w,spec,A:carrierEndpoint(w,'a').pos,B:carrierEndpoint(w,'b').pos});
   });
-  if(!entries.length&&!Object.keys(all).length){busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map()};return busRouteState}
+  if(!entries.length&&!Object.keys(all).length){busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map(),lanes:new Map()};return busRouteState}
   const key=JSON.stringify([activeLayoutId(),all,entries.map(e=>[e.w.id,e.spec.buses,e.w.aSide,e.w.bSide,e.A?.x,e.A?.y,e.B?.x,e.B?.y]),nodes.map(n=>[n.id,n.x,n.y,n.config?.presentation?.size])]);
   if(key===busRouteState.key)return busRouteState;
   const plans=new Map(),fallback=new Set();
   for(const e of entries){const p=busPlan(e.w,e.A,e.B,e.spec);if(p)plans.set(e.w.id,p);else fallback.add(e.w.id)}
   const on=new Map();
   for(const [id,p] of plans)for(const l of p.legs){if(!on.has(l.id))on.set(l.id,[]);if(!on.get(l.id).includes(id))on.get(l.id).push(id)}
-  const order=new Map();
+  // lanes: bus id to its lane keys in order; held: bus id to the wires of each lane; order: the
+  // wires lane by lane.
+  const order=new Map(),lanes=new Map(),held=new Map(),laneOf=(bid,id)=>busLaneKey(plans.get(id).w,all[bid]);
   for(const [bid,list] of on){
     const leg=id=>plans.get(id).legs.find(l=>l.id===bid);
     const natural=[...list].sort((x,y)=>leg(x).sOut-leg(y).sOut||leg(x).sIn-leg(y).sIn||(x<y?-1:x>y?1:0));
     const own=Array.isArray(all[bid]?.order)?all[bid].order.filter(id=>list.includes(id)):[];
-    order.set(bid,own.length?[...own,...natural.filter(id=>!own.includes(id))]:natural);
+    const first=own.length?[...own,...natural.filter(id=>!own.includes(id))]:natural,H=new Map();
+    for(const id of first){const k=laneOf(bid,id);if(!H.has(k))H.set(k,[]);H.get(k).push(id)}
+    lanes.set(bid,[...H.keys()]);held.set(bid,H);order.set(bid,[...H.values()].flat());
   }
-  const offsetsOf=id=>new Map(plans.get(id).legs.map(l=>{const L=order.get(l.id);return [l.id,(L.indexOf(id)-(L.length-1)/2)*busPitchOf(all[l.id])]}));
+  const offsetsOf=id=>new Map(plans.get(id).legs.map(l=>{const L=lanes.get(l.id);return [l.id,(L.indexOf(laneOf(l.id,id))-(L.length-1)/2)*busPitchOf(all[l.id])]}));
   const routes=new Map();for(const id of plans.keys())routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)));
   const pair=(x,y)=>x<y?`${x}|${y}`:`${y}|${x}`;
   const crosses=(x,y)=>busRoutesCross(routes.get(x),routes.get(y),busWiresRelated(plans.get(x).w,plans.get(y).w))?1:0;
   const crossingsOn=L=>{const cross=new Map();let total=0;for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length;j++){const c=crosses(L[i],L[j]);cross.set(pair(L[i],L[j]),c);total+=c}return {cross,total}};
   for(const bid of [...on.keys()].sort()){
     if(Array.isArray(all[bid]?.order)&&all[bid].order.length)continue;
-    const L=order.get(bid);if(L.length<2)continue;
+    const L=lanes.get(bid);if(L.length<2)continue;
+    const W=order.get(bid),H=held.get(bid),rebuild=ids=>{for(const id of ids)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)))};
     // Which side the first leaver takes depends on where the wires go next: the order as sorted
     // and reversed are both measured, and the swaps start from the one that crosses less.
-    let {cross,total}=crossingsOn(L);
-    {const keep=[...L];L.reverse();for(const id of L)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)));
-     const rev=crossingsOn(L);
-     if(rev.total<total){cross=rev.cross;total=rev.total}else{L.splice(0,L.length,...keep);for(const id of L)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)))}}
+    let {cross,total}=crossingsOn(W);
+    {const keep=[...L];L.reverse();rebuild(W);
+     const rev=crossingsOn(W);
+     if(rev.total<total){cross=rev.cross;total=rev.total}else{L.splice(0,L.length,...keep);rebuild(W)}}
     for(let pass=0;pass<8&&total>0;pass++){
       let improved=false;
       for(let k=0;k+1<L.length;k++){
-        const u=L[k],v=L[k+1],keep={u:routes.get(u),v:routes.get(v)},was=new Map();
-        L[k]=v;L[k+1]=u;routes.set(u,busPlanPoints(plans.get(u),offsetsOf(u)));routes.set(v,busPlanPoints(plans.get(v),offsetsOf(v)));
+        // Two neighbouring lanes change places: every wire in either is routed again.
+        const u=L[k],v=L[k+1],moved=[...H.get(u),...H.get(v)],keep=new Map(moved.map(id=>[id,routes.get(id)])),was=new Map();
+        L[k]=v;L[k+1]=u;rebuild(moved);
         let next=total;
-        for(const z of L)for(const x of [u,v]){
-          if(z===x||(x===v&&z===u))continue;const key=pair(x,z),c=crosses(x,z);
-          if(!was.has(key))was.set(key,cross.get(key));next+=c-cross.get(key);cross.set(key,c);
+        for(const x of moved)for(const z of W){
+          if(z===x)continue;const key=pair(x,z);if(was.has(key))continue;
+          const c=crosses(x,z);was.set(key,cross.get(key));next+=c-cross.get(key);cross.set(key,c);
         }
         if(next<total){total=next;improved=true;continue}
-        L[k]=u;L[k+1]=v;routes.set(u,keep.u);routes.set(v,keep.v);for(const [key,c] of was)cross.set(key,c);
+        L[k]=u;L[k+1]=v;for(const [id,pts] of keep)routes.set(id,pts);for(const [key,c] of was)cross.set(key,c);
       }
       if(!improved)break;
     }
+    order.set(bid,L.flatMap(k=>H.get(k)));
   }
-  busRouteState={key,routes,fallback,on,order};
+  busRouteState={key,routes,fallback,on,order,lanes};
   return busRouteState;
 }
 // The drawn route of a bus-routed wire, or null when it cannot be built (the router takes over).
@@ -174,7 +187,7 @@ function busBandHolds(wa,wb,c){
   const all=activeBuses();
   for(const id of sa.buses){
     if(!sb.buses.includes(id))continue;const line=busLine(all[id]);if(!line)continue;
-    const hw=((st.on.get(id)?.length||0)*busPitchOf(all[id])+8)/2;
+    const hw=((st.lanes.get(id)?.length||0)*busPitchOf(all[id])+8)/2;
     for(const g of line.segs)if(c.x>=Math.min(g.a.x,g.b.x)-hw&&c.x<=Math.max(g.a.x,g.b.x)+hw&&c.y>=Math.min(g.a.y,g.b.y)-hw&&c.y<=Math.max(g.a.y,g.b.y)+hw)return true;
   }
   return false;
@@ -184,13 +197,13 @@ function busLabelsOfWire(w){
   const spec=busSpecOf(w);if(!spec||!busRouteState.routes.has(w.id))return [];
   const all=activeBuses();return spec.buses.map(id=>all[id]?.label).filter(l=>typeof l==='string'&&l);
 }
-// Each bus as a band behind the wires: n lanes times its pitch, plus 8, with rounded ends; its
-// label once, beyond its start, reading along it.
+// Each bus as a band behind the wires: its lane count times its pitch, plus 8, with rounded ends;
+// its label once, beyond its start, reading along it.
 function renderBuses(layer){
   const all=activeBuses(),st=busRoutesForRender(),SVG='http://www.w3.org/2000/svg';
   for(const id of Object.keys(all).sort()){
     const bus=all[id],line=busLine(bus);if(!line)continue;
-    const n=st.on.get(id)?.length||0,hw=(n*busPitchOf(bus)+8)/2;
+    const n=st.lanes.get(id)?.length||0,hw=(n*busPitchOf(bus)+8)/2;
     const g=document.createElementNS(SVG,'g');g.setAttribute('class','bus-band');g.dataset.busId=id;g.dataset.lanes=String(n);
     for(const s of line.segs){
       const r=document.createElementNS(SVG,'rect');

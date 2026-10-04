@@ -88,6 +88,7 @@ BROWSER=[
     'tests/layered_groups_qa.py',
     'tests/group_rows_qa.py',
     'tests/channel_buses_qa.py',
+    'tests/bus_lane_sharing_qa.py',
     'tests/sections_qa.py',
     'tests/section_exposure_qa.py',
     'tests/notation_qa.py',
