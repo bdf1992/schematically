@@ -6,7 +6,7 @@
 // that cross them (src/08-layout-core.js, the layered engine).
 //
 //   node scripts/layout_sov.mjs file.sov [--out other.sov] [--view id] [--no-arrange]
-//                                        [--harness groupA,groupB ...] [--label-margin n]
+//                                        [--harness groupA,groupB ...] [--lanes port] [--label-margin n]
 //
 // Writes the result back to file.sov (or --out, when given) as the compact saved form, one
 // final newline. --view names a layout to arrange; left out, the document's default layout.
@@ -28,10 +28,10 @@ require(path.join(HERE, '../src/06-attachment-core.js'));
 const Data = require(path.join(HERE, '../src/05-data-core.js'));
 const Layout = require(path.join(HERE, '../src/08-layout-core.js'));
 
-const USAGE = 'usage: node scripts/layout_sov.mjs file.sov [--out other.sov] [--view id] [--no-arrange] [--harness groupA,groupB ...] [--label-margin n]';
+const USAGE = 'usage: node scripts/layout_sov.mjs file.sov [--out other.sov] [--view id] [--no-arrange] [--harness groupA,groupB ...] [--lanes port] [--label-margin n]';
 
 const args = process.argv.slice(2);
-let out = null, view = null, arrange = true, labelMargin = null;
+let out = null, view = null, arrange = true, labelMargin = null, lanes = null;
 const harnesses = [];
 const positional = [];
 for (let i = 0; i < args.length; i++) {
@@ -39,6 +39,10 @@ for (let i = 0; i < args.length; i++) {
   else if (args[i] === '--view') { view = args[++i]; }
   else if (args[i] === '--no-arrange') { arrange = false; }
   else if (args[i] === '--label-margin') { labelMargin = Number(args[++i]); }
+  else if (args[i] === '--lanes') {
+    lanes = args[++i];
+    if (lanes !== 'port') { console.error(USAGE); process.exit(2); }
+  }
   else if (args[i] === '--harness') {
     const pair = String(args[++i] ?? '').split(',').map(s => s.trim());
     if (pair.length !== 2 || !pair[0] || !pair[1]) { console.error(USAGE); process.exit(2); }
@@ -72,7 +76,7 @@ if (arrange) {
 }
 const receipts = [];
 for (const between of harnesses) {
-  const result = Layout.execute(doc, 'harness', {between, view});
+  const result = Layout.execute(doc, 'harness', {between, view, ...(lanes ? {lanes} : {})});
   if (!result.ok) fail(result);
   receipts.push(result);
 }

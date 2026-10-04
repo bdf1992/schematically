@@ -99,7 +99,7 @@ Wire ends may be free: create with `aAttachment: {kind:'free',x,y}` (and/or `bAt
 ## Layout buses
 
 ```js
-SovSchematicAPI.layout.harness({between: ['groupA', 'groupB'], pitch: 6, view})   // or harness(['groupA', 'groupB'], {pitch, view})
+SovSchematicAPI.layout.harness({between: ['groupA', 'groupB'], pitch: 6, lanes: 'port', view})   // or harness(['groupA', 'groupB'], {pitch, lanes, view}); lanes: 'port' counts a trunk's and a street's lanes by distinct a ends (default: a lane per wire)
 SovSchematicAPI.layout.bus({id, points: [{x, y}, ...], pitch, lanes, label, order}) // or bus(id, {points, ...}); lanes: 'port' gives wires sharing their a end one lane (default: a lane per wire)
 SovSchematicAPI.layout.bus({id, remove: true})
 SovSchematicAPI.layout.buses({view})                                                // read-only
@@ -109,7 +109,7 @@ SovSchematicAPI.layout.route(wireId, {mode: 'bus', buses: [busId, ...]})
 A bus is a route declared once in a layout; wires name it in their route and ride it on their own lane
 (`LAYOUT-MODEL.md` "As built: buses"). Each call runs the shared layout op through `runLayoutOp`, like
 `layout.route`, so MCP's `schematic.layout` serves the same ops. A refusal (`BAD_POINTS`, `UNKNOWN_BUS`,
-`BUS_GAP`, `GAP_TOO_NARROW`, `STREET_TOO_NARROW`, ...) comes back with its code and changes nothing. The
+`BUS_GAP`, `GAP_TOO_NARROW`, `STREET_TOO_NARROW`, `BAD_LANES`, ...) comes back with its code and changes nothing. The
 harness receipt lists the buses it made and the wires it put on them.
 
 ## Runs (state space, slice 1c)
