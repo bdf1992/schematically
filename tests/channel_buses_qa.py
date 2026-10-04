@@ -12,7 +12,8 @@ temp copy:
   - no bus centreline meets the region of a group it does not serve: a harness bus serves the two
     groups it names in `between`, a street `channel-street-<group>-...` serves its group, every
     other channel bus serves none;
-  - no bus band (lanes x pitch + 8 wide, lanes = the routes naming it) meets a card.
+  - no bus band (lanes x pitch + 8 wide; lanes = the distinct (a, aSide) ends among the wires whose
+    route names it on a bus with lanes 'port', else the routes naming it) meets a card.
 Twice: the seeded fixture of tests/layered_groups_qa.py, the booth-record fixture,
 examples/work-engine/groups.sov and docs/workengine/map.sov, each laid out, then the result laid out
 again: the two results are equal once meta.updatedAt is dropped. At 3f3aa75 none of the four is.
@@ -102,13 +103,16 @@ def node_part(tmp: Path) -> dict:
     cross = sorted(w['id'] for w in doc['wires'] if of.get(w['a']) and of.get(w['b']) and of[w['a']] != of[w['b']])
     on_bus = [wid for wid in cross if (routes.get(wid) or {}).get('mode') == 'bus']
     off = sorted(set(cross) - set(on_bus))
-    lanes: dict[str, int] = {}
+    riders: dict[str, list[str]] = {}
     for wid, rt in routes.items():
         if rt.get('mode') == 'bus':
             missing = [bid for bid in rt['buses'] if bid not in buses]
             assert not missing, (wid, missing)
             for bid in set(rt['buses']):
-                lanes[bid] = lanes.get(bid, 0) + 1
+                riders.setdefault(bid, []).append(wid)
+    # A bus with lanes 'port' has one lane per distinct (a, aSide) among its wires; any other, one per route.
+    ends = {w['id']: (w['a'], w.get('aSide')) if w.get('a') else ('wire', w['id']) for w in doc['wires']}
+    lanes = {bid: len({ends[wid] for wid in ws}) if buses[bid].get('lanes') == 'port' else len(ws) for bid, ws in riders.items()}
     print(f'booth-record-graphify: {len(buses)} buses ({sum(1 for b in buses if b.startswith("channel-"))} channel), '
           f'{len(on_bus)} of {len(cross)} cross-group wires on buses; 0 of {len(groups) * (len(groups) - 1) // 2} region pairs overlap')
     assert not off, f'{len(off)} cross-group wires ride no bus: {off[:8]}'
@@ -146,7 +150,7 @@ def twice_part(tmp: Path) -> None:
 RUNS = '''(L)=>{
  const view=diagram.layout?.views?.[diagram.layout?.default||'main']||{},routes=view.routes||{},buses=view.buses||{};
  const of=new Map();for(const g of nodes.filter(isGroupComponent))for(const m of (g.config.members||[]))if(!of.has(m))of.set(m,g.id);
- const st=busRoutesForRender(),hw=bid=>((st.on.get(bid)?.length||0)*busPitchOf(buses[bid])+8)/2;
+ const st=busRoutesForRender(),hw=bid=>((st.lanes.get(bid)?.length||0)*busPitchOf(buses[bid])+8)/2;
  const busKeys=new Set();let wireRuns=0,tapRuns=0;const fallback=[],through=[];
  const cards=nodes.filter(n=>!isGroupComponent(n)).map(n=>{const s=componentSize(n);return {id:n.id,R:{l:n.x-s.w/2,r:n.x+s.w/2,t:n.y-s.h/2,b:n.y+s.h/2}}});
  for(const el of workspace.querySelectorAll('.wire-group')){
