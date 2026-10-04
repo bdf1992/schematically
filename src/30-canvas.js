@@ -535,6 +535,7 @@ function beginKeyboardMove(node){
   keyboardMoveNodeId=node.id;
   keyboardMoveStart=[node,...descendantsOf(node.id)].map(item=>({node:item,x:item.x,y:item.y}));
   activeNodeDrag=node.id;
+  dropDragSignalState();
   captureDragSnapshots(node.id);
   workspace.classList.add('dragging-node');
 }
@@ -557,7 +558,7 @@ function moveSelectedByArrow(e){
   if(el) el.setAttribute('transform',`translate(${node.x} ${node.y})`);
 
   statusEl.textContent=`Keyboard move · ${step}px`;
-  renderWires();
+  renderWiresForDrag();
   positionSelectionBar();
 
   if(keyboardSettleTimer) clearTimeout(keyboardSettleTimer);
@@ -570,8 +571,11 @@ function finishKeyboardMove(mods){
 
   // Arrow-key steps are intentionally aligned to the selected grid unless Alt
   // was used. Settling still applies the same rule for consistency.
+  dropDragSignalState();
   settleActiveComponent(mods);
-  const movedNode=nodes.find(n=>n.id===keyboardMoveNodeId),hosted=movedNode?updateContainmentFor(movedNode):null;
+  const movedNode=nodes.find(n=>n.id===keyboardMoveNodeId),hostBefore=movedNode?`${movedNode.canvasId||GLOBAL_CANVAS_ID}|${movedNode.parentId||''}`:'',hosted=movedNode?updateContainmentFor(movedNode):null;
+  // A changed host draws every wire from nothing at the settle below.
+  if(movedNode&&hostBefore!==`${movedNode.canvasId||GLOBAL_CANVAS_ID}|${movedNode.parentId||''}`)wireGroupDrawn.clear();
   // A refused host refuses the move: the Component and what it carries return to where it started.
   if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();render()}
   else settleDraggedRoutes();
@@ -581,7 +585,8 @@ function finishKeyboardMove(mods){
   dragRouteSnapshots.clear();
   workspace.classList.remove('dragging-node');
   statusEl.textContent=hosted?.refused||'Select';
-  renderWires();
+  renderWiresForDrag();
+  dropDragSignalState();
   positionSelectionBar();
 }
 

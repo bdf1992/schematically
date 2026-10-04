@@ -6,12 +6,12 @@ function scheduleDragVisualRefresh(){
   if(dragVisualFrame)return;
   dragVisualFrame=requestAnimationFrame(()=>{
     dragVisualFrame=0;
-    renderWires();
+    renderWiresForDrag();
   });
 }
 function flushDragVisualRefresh(){
   if(dragVisualFrame){cancelAnimationFrame(dragVisualFrame);dragVisualFrame=0}
-  renderWires();
+  renderWiresForDrag();
 }
 
 let componentTransformGesture=null;
@@ -117,7 +117,7 @@ function beginActiveNodeDrag(e,g,n){
   setHistoryHint(selectedComponentIds.size>1?'Move selection':'Move Component');
   if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'recovered stale drag'});
   if(keyboardMoveNodeId)finishKeyboardMove({});if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
-  activeNodeDrag=n.id;captureDragSnapshots(n.id);workspace.classList.add('dragging-node');g.classList.add('dragging');
+  activeNodeDrag=n.id;dropDragSignalState();captureDragSnapshots(n.id);workspace.classList.add('dragging-node');g.classList.add('dragging');
   // The pressed Component becomes the primary; a multi-selection it belongs to is kept, so the drag
   // moves the whole group (issue #49). An unselected Component was selected alone above.
   selectNode(n.id,{focus:false,preserveSet:true});setSelectionBarSuppressed(true);
@@ -148,6 +148,7 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
   // the card afterwards: a press that did not drag is resolved here (see the finally block).
   const dragged=Math.hypot(state.pointer.x-state.startPointer.x,state.pointer.y-state.startPointer.y)>2;
   try{
+    dropDragSignalState();
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     settleActiveComponent(e||state.modifiers);
     // Every root's host is decided first; one refused settle refuses the whole gesture.
@@ -168,9 +169,11 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
       for(const item of state.startPositions||[]){item.node.x=item.x;item.node.y=item.y}
       routeCache.clear();arrowPoseCache.clear();
     }else for(const {root,candidate} of plan){
-      const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID;
+      const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID,beforeParent=root.parentId||null;
       applyComponentHost(root,candidate);
       const afterCanvas=root.canvasId||GLOBAL_CANVAS_ID;if(beforeCanvas!==afterCanvas)setHistoryHint(candidate?.kind==='wire'?'Settle Component on Wire':candidate?.kind==='component'?'Settle Component in Component':'Detach Component')
+      // A changed host draws every wire from nothing at the settle below.
+      if(beforeCanvas!==afterCanvas||beforeParent!==(root.parentId||null))wireGroupDrawn.clear();
     }
     clearHostCandidateArm(state);if(refusal)render();else settleDraggedRoutes();
   }catch(err){fault=err;console.error('Recovered Component drag failure',err)}
@@ -180,6 +183,7 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
     activeNodeDragState=null;activeNodeDrag=null;dragRouteSnapshots.clear();
     try{if(workspace.hasPointerCapture?.(pointerId))workspace.releasePointerCapture(pointerId)}catch(_){}
     try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
+    dropDragSignalState();
     // A plain press on a member of a multi-selection that did not drag selects that member alone,
     // as a click always has; a drag leaves the group selected (issue #49). Shift keeps the set.
     if(!dragged&&!force&&!state.modifiers?.shiftKey&&selectedComponentIds.size>1&&selectedComponentIds.has(state.node.id))selectNode(state.node.id,{focus:false});
