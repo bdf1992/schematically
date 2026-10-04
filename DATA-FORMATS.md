@@ -212,6 +212,35 @@ reports each finding as `component <id>: <CODE>: ...` or `wire <id>: <CODE>: ...
 `components[].config` and `wires[].config`.
 
 
+## Badges (2026-10-04, `NOTATION-MODEL.md` "Statuses")
+
+A Component may carry small chips of text and a palette colour, with no status's meaning.
+
+- **`config.badges`**: an array of at most 4 entries `{label, colorSlot?}`. `label` is a string of 1 to
+  24 characters after trimming; `colorSlot` is an integer 0 to 11, and absent means 0; no other key is
+  allowed. Anything else is `BADGE_INVALID`, and the message names the index and the field
+  (`config.badges[1].label must be a non-empty string`; more than 4 entries; not an array).
+
+```json
+{"label": "Booth", "badges": [{"label": "Record"}, {"label": "Owned by seat", "colorSlot": 7}]}
+```
+
+A `create` or `update` of a Component carrying a bad `badges` is refused with the code and the document
+is unchanged; an `update` with `badges: null` removes the key. Loading keeps the stored value and
+`validateDocument` reports `component <id>: BADGE_INVALID: ...` (marker rule `status`). Badges are
+presentation: they change no other validation, the runtime or the legend. The schema declares the key
+on `components[].config`.
+
+Drawing (`appendComponentBadges`, 2D cards): one chip per badge in a row from the card's top-left
+corner, 6 in from the left and top edges and 4 apart. Each chip has the status chip's geometry (height
+caption size x 1.5, width label length x caption size x 0.6 + caption size, fully rounded), is filled
+with its slot colour at .16 over the card fill, edged in the slot colour at width 1, and holds the label
+in the caption role with ink at 4.6:1 against that fill. Class `card-badge`, `data-badge-index`. A badge
+that would come within 4 of the status chip or within 6 of the card's right edge is not drawn; the last
+chip drawn then reads `+N`, N the badges without a chip of their own, and its `<title>` lists their
+labels.
+
+
 ## State space contracts (slice 1a, `STATE-SPACE.md`)
 
 The contract layer of the state space. Its code is `src/07-state-space.js`; validation is hand-written there, and the

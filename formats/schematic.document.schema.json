@@ -71,6 +71,20 @@
               "waitsOn": {
                 "$ref": "#/$defs/waitsOn",
                 "description": "What the Component waits on: people, rules and decisions, each {kind, id, label?}. Drawn under the card beside the status the notation's statuses list declares; anything else is WAITS_ON_INVALID."
+              },
+              "badges": {
+                "type": "array",
+                "maxItems": 4,
+                "description": "Chips drawn in a row from the Component's top-left corner: a status chip's shape without a status's meaning. At most 4; anything else is BADGE_INVALID. See DATA-FORMATS.md 'Badges'.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["label"],
+                  "properties": {
+                    "label": {"type": "string", "minLength": 1, "maxLength": 24, "description": "The chip's text, 1 to 24 characters after trimming."},
+                    "colorSlot": {"type": "integer", "minimum": 0, "maximum": 11, "description": "The palette slot of the chip's colour; absent means 0."}
+                  }
+                }
               }
             }
           }

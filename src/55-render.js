@@ -570,7 +570,7 @@ function statusFade(n){const st=declaredStatus(n),o=st?.opacity;return typeof o=
 function applyStatusFade(g,n){
   const fade=statusFade(n);if(fade>=1||componentForm(n).dimension!==2)return;
   for(const el of g.children){
-    if(el.localName==='text'||el.classList.contains('status-chip'))continue;
+    if(el.localName==='text'||el.classList.contains('status-chip')||el.classList.contains('card-badge'))continue;
     el.style.opacity=String((parseFloat(getComputedStyle(el).opacity)||1)*fade);
   }
 }
@@ -599,6 +599,42 @@ function appendComponentStatus(g,n){
   g.appendChild(chip);
   if(st.outline==='dashed'){const body=g.querySelector(':scope > .body');if(body){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}}
 }
+// A card's badges (DATA-FORMATS.md "Badges"): the status chip's shape without a status's meaning, in a
+// row from the card's top-left corner. A badge that would come within 4 of the status chip or within 6
+// of the card's right edge is not drawn; the last chip drawn then reads +N and lists the rest.
+function appendComponentBadges(g,n){
+  const list=Array.isArray(n?.config?.badges)?n.config.badges.filter(b=>b&&typeof b.label==='string'&&b.label.trim()):[];
+  if(!list.length||componentForm(n).dimension!==2)return;
+  const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
+  const ch=Math.round(px*1.5),y=-h/2+6,fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
+  const widthOf=text=>Math.ceil(text.length*px*.6+px);
+  // The right limit: the card's right edge less 6, or 4 short of the status chip's left edge.
+  let limit=w/2-6;
+  const st=declaredStatus(n);
+  if(st){
+    const tone=['safe','alert','danger'].includes(st.tone),glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'',title=statusTitle(st);
+    limit=Math.min(limit,w/2-6-(tone?Math.ceil((glyph?`${glyph} ${title}`:title).length*px*.6+px*1.4):widthOf(title))-4);
+  }
+  const labels=list.map(b=>b.label.trim());
+  const place=(count,more)=>{const xs=[];let x=-w/2+6;for(let i=0;i<count;i++){const cw=widthOf(i===count-1&&more?`+${labels.length-count+1}`:labels[i]);if(x+cw>limit)return null;xs.push([x,cw]);x+=cw+4}return xs};
+  let shown=labels.length,more=false,spots=place(shown,false);
+  if(!spots){more=true;for(shown=labels.length-1;shown>=1;shown--){spots=place(shown,true);if(spots)break}}
+  if(!spots)return;
+  const svgNS='http://www.w3.org/2000/svg';
+  spots.forEach(([x,cw],i)=>{
+    const isMore=more&&i===shown-1,badge=list[i],edge=slotColor(badge.colorSlot??0),chipFill=mixHex([edge,fill],[.16,.84]);
+    const text=isMore?`+${labels.length-shown+1}`:labels[i];
+    const chip=document.createElementNS(svgNS,'g');chip.setAttribute('class','card-badge');chip.dataset.badgeIndex=String(i);
+    if(isMore){chip.dataset.badgeMore='true';const t=document.createElementNS(svgNS,'title');t.textContent=labels.slice(shown-1).join(', ');chip.appendChild(t)}
+    const r=document.createElementNS(svgNS,'rect');
+    r.setAttribute('x',String(x));r.setAttribute('y',String(y));r.setAttribute('width',String(cw));r.setAttribute('height',String(ch));r.setAttribute('rx',String(ch/2));
+    r.setAttribute('style',`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
+    const t=document.createElementNS(svgNS,'text');t.dataset.role='caption';
+    t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
+    t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${ensureContrast(edge,chipFill,TEXT_FLOOR)};stroke:none;pointer-events:none`);t.textContent=text;chip.appendChild(t);
+    g.appendChild(chip);
+  });
+}
 // What a card waits on, under it and below any outside label: 'Waits on Bdo, rule R-29'.
 function appendComponentWaitsOn(g,n){
   const list=waitsOnList(n?.config?.waitsOn);if(!list)return;
@@ -626,7 +662,7 @@ function render(){
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
-    renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);
+    renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);appendComponentBadges(g,n);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
