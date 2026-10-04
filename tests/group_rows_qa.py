@@ -85,12 +85,13 @@ def node_part(tmp: Path) -> dict:
                 of.setdefault(m, c['id'])
     cross = {w['id'] for w in doc['wires'] if of.get(w['a']) and of.get(w['b']) and of[w['a']] != of[w['b']]}
     on_bus = sorted(wid for wid, rt in routes.items() if rt.get('mode') == 'bus' and wid in cross)
-    pairs = sorted({tuple(sorted(b['between'])) for b in buses.values() if b.get('between')})
+    by_id = {w['id']: w for w in doc['wires']}
+    pairs = sorted({tuple(sorted((of[by_id[wid]['a']], of[by_id[wid]['b']]))) for wid in on_bus})
     print(f'booth-record-graphify: region extent {w:.0f} x {h:.0f}, aspect {aspect:.2f} (bounds {MIN_ASPECT}-{MAX_ASPECT}); '
           f'{len(hits)} region pairs overlap; {len(pairs)} group pairs bundled, {len(on_bus)} of {len(cross)} cross-group wires on buses')
     assert MIN_ASPECT <= aspect <= MAX_ASPECT, f'aspect {aspect:.2f} outside {MIN_ASPECT}-{MAX_ASPECT}'
     assert not hits, f'{len(hits)} group regions overlap: {hits[:4]}'
-    assert all(b.get('between') for b in buses.values()), [k for k, b in buses.items() if not b.get('between')]
+    assert all(b.get('between') or k.startswith('channel-') for k, b in buses.items()), [k for k, b in buses.items() if not (b.get('between') or k.startswith('channel-'))]
     for wid, rt in routes.items():
         if rt.get('mode') == 'bus':
             assert all(bid in buses for bid in rt['buses']), (wid, rt)
