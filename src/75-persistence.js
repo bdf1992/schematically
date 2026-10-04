@@ -342,18 +342,20 @@ function restoreRecovery(){
 // (render.svg / render.png), scripts/export_svg.py and the server's render service. Computed
 // styles are inlined so the file renders outside the editor; the viewBox fits the diagram; the
 // live clock's overlay and, unless asked for, animated packets are left out.
-// A picture (export, PNG, audit) draws labels at their base size whatever the editor's zoom:
-// the on-screen clamp (app.css, issue #15) keeps the canvas readable, but a fitted picture of a
-// small diagram would otherwise carry labels at a third of their size.
+// A picture (export, snapshot, PNG, audit) draws every label at its base size times the document
+// scale, whatever the editor's zoom. The on-screen clamp (app.css, issue #15) is a reading aid for
+// the live editor only: it holds labels at 12 screen px while strokes and marks follow the camera,
+// so a file drawn through it would carry labels several times their size against the same strokes.
 function withPictureLabels(fn){
   const prev=workspace.style.getPropertyValue('--zoom');if(prev===''||Number(prev)===1)return fn();
   workspace.style.setProperty('--zoom','1');render();
   try{return fn()}finally{workspace.style.setProperty('--zoom',prev);render()}
 }
 function renderStandaloneSvg(opts={}){return withPictureLabels(()=>renderStandaloneSvgNow(opts))}
-// The snapshot (file.svg, File > Export SVG): the canvas exactly as on screen, labels where the
-// reader sees them. render.svg makes a picture instead, with labels at their base size.
-function snapshotSvg(opts={}){return renderStandaloneSvgNow(opts)}
+// The snapshot (file.svg, File > Export SVG): the same picture render.svg makes, labels at base
+// size times scale at any camera zoom. It keeps its own name because its callers are the File menu
+// and file.svg; the camera's zoom no longer reaches the file.
+function snapshotSvg(opts={}){return withPictureLabels(()=>renderStandaloneSvgNow(opts))}
 function renderStandaloneSvgNow(opts={}){
   if (typeof cancelWireDrag === 'function') cancelWireDrag();
   const live = workspace;

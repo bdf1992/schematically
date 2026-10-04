@@ -107,6 +107,33 @@ the container is lifted from the canvas. The offset outline behind cards
 **Spacing.** One token each: label clearance from an edge or a line, pin length, the gap
 between stacked text lines. These replace the 8, 11 and 15 offsets now in the renderer.
 
+**Scale.** A notation has one document scale, `tokens.scale`: a number from 0.5 to 4, 1 in the
+built-in notation. It is the one factor every drawn size follows, the way CSS `rem` sizes follow
+one root font size, so the same symbol draws at the same size everywhere in a document and, at
+the same scale, across documents. A value outside the range, or one that is not a number, is
+refused with `SCALE_INVALID`; it is never clamped.
+- `resolve()` applies it once, after flattening `extends`, to the tokens it returns, so a reader
+  of `tokens(doc)` draws scaled with no multiplication of its own. The built-in tokens stay as
+  written.
+- Multiplied: every stroke weight (`stroke.*`), every text role's `size` and its own `min`,
+  `space.pin`, and `type.screen.max` (so a scaled label is not capped).
+- Not multiplied: `type.screen.min` (the 12 px floor is screen pixels), `radius`, the other
+  `space` tokens and `elevation`.
+- The renderer multiplies the marks it draws by the same number: the visible port circle
+  (radius 5), the terminal mark (12 by 3.2), the junction dot (3.6), the body of a Point that
+  carries wires (4, or 4.5 at a junction), the wire hop (6.5) and the chevron. The stylesheet
+  multiplies each literal size on a class drawn in a picture by `--scale`.
+- Hit targets, grips, halos, handles, marker badges and every routing distance are editor or
+  layout quantities and keep their size. A card's stored size is not changed, and the glyph's
+  box still follows its card (`glyphBox`).
+- Some drawn marks keep their size because the geometry they belong to does not scale: the
+  section bevel (stroke 4, set `space.bevel` inside the outline), the through mark (a capsule 9
+  wide), the net badge and the 8 px endpoint and point tags (literal sizes, not clamps), packets,
+  and the outline of a status chip or a badge. A selected or hovered wire keeps its literal width
+  (4 and 3.3).
+- A notation chain that declares no `tokens.scale` anywhere (one that does not extend
+  `schematic`) is drawn unscaled.
+
 ## 4. Type
 
 Text is drawn as authored. Nothing on the canvas is forced into capitals. A glyph's `title`
@@ -120,6 +147,14 @@ has no label.
 | **body** | `config.presentation.text`, inside the card | `type.body` |
 | **caption** | wire labels, point labels, channel tags | `type.caption` |
 | **narration** | the subtitle track (below) | `type.narration` |
+
+**The screen clamp is a live-editor aid.** On the canvas every role is held between
+`type.screen.min` (12 screen px) and `type.screen.max` (16 times the scale), so text stays
+readable while the camera zooms; strokes and marks are world units and follow the camera. A
+picture (`render.svg`, `render.png`, `scripts/export_svg.py`) and a snapshot (`file.svg`, File >
+Export SVG) are not the screen: both draw every label at its base size times the scale, whatever
+the camera zoom, so a file is the same zoomed in or out and its labels keep their proportion to
+its strokes.
 
 **A card's title and subtitle are one block**, laid out at the size they are drawn at (after
 the on-screen clamp, so the block is laid out again when the zoom changes):

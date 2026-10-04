@@ -94,13 +94,13 @@ function appendTerminalMarks(g,n){
     const compat=point.compatId;
     if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
     const flow=activePortChannel(point.config||{}).flow||'duplex',side=physicalPortSide(n,point.id),P=componentPortLocalPosition(n,point.id);
-    const vertical=side==='left'||side==='right',len=12,th=3.2;
+    const vertical=side==='left'||side==='right',len=TERMINAL_MARK.len*markScale,th=TERMINAL_MARK.th*markScale;
     const parts=flow==='duplex'?[['in',-len/2,len/2],['out',0,len/2]]:[[flow==='control'?'control':flow==='in'?'in':'out',-len/2,len]];
     for(const [cls,off,span] of parts){
       const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('class','terminal-mark '+cls);
       if(vertical){r.setAttribute('x',String(P.x-th/2));r.setAttribute('y',String(P.y+off));r.setAttribute('width',String(th));r.setAttribute('height',String(span))}
       else{r.setAttribute('x',String(P.x+off));r.setAttribute('y',String(P.y-th/2));r.setAttribute('width',String(span));r.setAttribute('height',String(th))}
-      r.setAttribute('rx','1.2');g.appendChild(r);
+      r.setAttribute('rx',String(1.2*markScale));g.appendChild(r);
     }
   }
 }
@@ -393,7 +393,7 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     {const pos=componentPlacement(n).kind==='edge'?SovSchematicData.pointSectionPosition(diagram,n.id,'out'):null;
      if(pos&&pos.through!=null){const host=nodes.find(h=>h.id===pos.owner),s=SovSchematicData.componentSection(host),T=s.bands[pos.through]?.thickness||8;
        const cap=document.createElementNS('http://www.w3.org/2000/svg','rect');cap.setAttribute('class','through-mark');cap.setAttribute('x','-4.5');cap.setAttribute('y',String(-T/2-3));cap.setAttribute('width','9');cap.setAttribute('height',String(T+6));cap.setAttribute('rx','4.5');g.appendChild(cap)}}
-    point.setAttribute('class','dimensional-point-body port attachment-point'+(ends?' carries':'')+(ends>=3?' junction':''));point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(ends?(ends>=3?4.5:4):Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
+    point.setAttribute('class','dimensional-point-body port attachment-point'+(ends?' carries':'')+(ends>=3?' junction':''));point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(ends?(ends>=3?CARRYING_POINT_RADIUS.junction:CARRYING_POINT_RADIUS.end)*markScale:Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
     const display=String(cfg.label||'').trim()||componentTypeCaption(n,s);
     if(display){
       // A hosted Point inherits its host's angle; its label stays upright and below the point in world space.
@@ -464,12 +464,19 @@ function renderJunctionDots(){
     let join=at(paths[0],0);const reach=Math.min(...paths.map(p=>p.L));
     for(let d=0;d<=reach;d+=2){const pts=paths.map(p=>at(p,d));if(pts.some(q=>Math.hypot(q.x-pts[0].x,q.y-pts[0].y)>1.2))break;join=pts[0]}
     const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('class','junction-dot');dot.dataset.port=key;
-    dot.setAttribute('cx',String(join.x));dot.setAttribute('cy',String(join.y));dot.setAttribute('r','3.6');layer.appendChild(dot);
+    dot.setAttribute('cx',String(join.x));dot.setAttribute('cy',String(join.y));dot.setAttribute('r',String(JUNCTION_DOT_RADIUS*markScale));layer.appendChild(dot);
   }
 }
 // The notation's stroke tokens, as the CSS custom properties the stylesheet draws with.
+// The tokens arrive already multiplied by the document scale (SovSchematicNotation.resolve); --scale
+// carries the number itself to the stylesheet's literal sizes, and markScale to the marks drawn here
+// (PORT_RADIUS, TERMINAL_MARK, JUNCTION_DOT_RADIUS, CARRYING_POINT_RADIUS, WIRE_HOP_RADIUS, the chevron).
+let markScale=1;
 function applyNotationTokens(){
   const T=SovSchematicNotation.tokens(diagram);
+  markScale=Number(T.scale)||1;
+  workspace.style.setProperty('--scale',String(markScale));
+  if(T.type?.screen?.max!=null)workspace.style.setProperty('--type-screen-max',`${T.type.screen.max}px`);
   for(const [k,v] of Object.entries(T.stroke))workspace.style.setProperty(`--stroke-${k}`,`${v}px`);
   // Derived weights are computed here, not with calc(): a computed calc() is not a length a reader can parse.
   workspace.style.setProperty('--stroke-structure-container',`${+(T.stroke.structure*1.2).toFixed(2)}px`);
@@ -562,7 +569,7 @@ function declaredStatus(record){
 function statusTitle(status){return String(status?.title||status?.id||'')}
 // 'Bdo, rule R-29, decision D1': each entry's label, or else its kind and id.
 function waitsOnList(list){return Array.isArray(list)?list.filter(w=>w&&typeof w==='object').map(w=>String(w.label||'').trim()||`${w.kind} ${w.id}`).join(', '):''}
-const CAPTION_STYLE=`font-size:calc(clamp(${LABEL_FLOORS.general}px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600)`;
+const CAPTION_STYLE=`font-size:calc(clamp(${LABEL_FLOORS.general}px,var(--type-caption-size,9px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-caption-weight,600)`;
 // A label's ink is its role colour moved (darker in light, lighter in dark) only as far as TEXT_FLOOR
 // against the colour actually behind it: the ground a card stands on, a region's fill, or the canvas.
 const TEXT_FLOOR=4.6;
@@ -676,7 +683,7 @@ function render(){
       hit.setAttribute('class','port-hit attachment-point-hit');hit.dataset.point=pointId;hit.dataset.side=point.compatId;hit.dataset.canvasIds=portExposedCanvasIds(n,pointId).join(' ');hit.setAttribute('cx',localX);hit.setAttribute('cy',localY);hit.setAttribute('r','16');
       let vis=null;const selfPoint=componentForm(n).dimension===0&&pointId==='self';
       if(selfPoint){vis=g.querySelector('.dimensional-point-body');if(vis){vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}}
-      else{vis=document.createElementNS('http://www.w3.org/2000/svg','circle');vis.setAttribute('class','port attachment-point');vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.setAttribute('cx',localX);vis.setAttribute('cy',localY);vis.setAttribute('r','5');vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}
+      else{vis=document.createElementNS('http://www.w3.org/2000/svg','circle');vis.setAttribute('class','port attachment-point');vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.setAttribute('cx',localX);vis.setAttribute('cy',localY);vis.setAttribute('r',String(PORT_RADIUS*markScale));vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}
       {const pos=componentForm(n).dimension===2?SovSchematicData.pointSectionPosition(diagram,n.id,point.compatId):null;
        if(pos&&pos.through!=null){const s=SovSchematicData.componentSection(n),T=s.bands[pos.through]?.thickness||8,side=point.side,vertical=side==='left'||side==='right';
          const cap=document.createElementNS('http://www.w3.org/2000/svg','rect');cap.setAttribute('class','through-mark');
@@ -765,7 +772,7 @@ function stableArrowPoint(path,targetD,minD,maxD){
 function appendChevronAt(group,q,reverse=false,className='flow-chevron'){
   const c=document.createElementNS('http://www.w3.org/2000/svg','path');
   c.setAttribute('class',className);
-  c.setAttribute('d','M -7 -5 L 0 0 L -7 5');
+  c.setAttribute('d',`M ${-7*markScale} ${-5*markScale} L 0 0 L ${-7*markScale} ${5*markScale}`);
   c.setAttribute('transform',`translate(${q.x} ${q.y}) rotate(${q.angle+(reverse?180:0)})`);
   group.appendChild(c);
 }
@@ -906,9 +913,14 @@ function renderPacketsForWire(group,cfg,points,signal,pathLength,w){
 // A route drawn with a hop at each crossing it makes over an earlier wire: a half circle that
 // lifts it over the other line, so a crossing never reads as a junction (NOTATION-MODEL.md).
 const WIRE_HOP_RADIUS=6.5;
+// The marks drawn on cards and wires, at scale 1; each is multiplied by markScale where it is drawn.
+// PORT_RADIUS: the visible port circle. TERMINAL_MARK: the bar where a wire meets a card.
+// JUNCTION_DOT_RADIUS: the dot where wires sharing a point part. CARRYING_POINT_RADIUS: the body of a
+// Point that carries wires (one or two ends; three or more is a junction).
+const PORT_RADIUS=5,TERMINAL_MARK=Object.freeze({len:12,th:3.2}),JUNCTION_DOT_RADIUS=3.6,CARRYING_POINT_RADIUS=Object.freeze({end:4,junction:4.5});
 function pathWithHops(points,hops){
   const pts=normalizePoints(points);if(!hops?.length||pts.length<2)return pathD(pts);
-  const r=WIRE_HOP_RADIUS;let d=`M ${pts[0].x} ${pts[0].y}`;
+  const r=WIRE_HOP_RADIUS*markScale;let d=`M ${pts[0].x} ${pts[0].y}`;
   for(let i=1;i<pts.length;i++){
     const a=pts[i-1],b=pts[i],h=a.y===b.y,dir=h?Math.sign(b.x-a.x):Math.sign(b.y-a.y);
     const along=c=>h?(c.x-a.x)*dir:(c.y-a.y)*dir,len=h?Math.abs(b.x-a.x):Math.abs(b.y-a.y);
