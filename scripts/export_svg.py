@@ -24,9 +24,10 @@ sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'scripts'))
 from browser_runtime import chromium_launch_kwargs  # noqa: E402
 
-# This script makes the picture (render.svg): labels at their base size, with no overflow or
-# caption overlap. File > Export SVG makes the snapshot (file.svg): the canvas exactly as on
-# screen, labels at the fitted zoom's clamped screen size. Both call renderStandaloneSvg() in
+# This script makes the picture (render.svg): labels at their base size times the document scale
+# (tokens.scale), with no overflow or caption overlap. File > Export SVG makes the snapshot
+# (file.svg), which draws the same way at any camera zoom: the 12 px screen clamp is a live-editor
+# reading aid and reaches neither file. Both draw through withPictureLabels() in
 # src/75-persistence.js.
 EXPORT_JS = "(opts) => window.SovSchematicAPI.render.svg(opts)"
 

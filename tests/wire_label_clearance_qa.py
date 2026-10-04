@@ -90,12 +90,13 @@ def main():
                 page.evaluate('placeWireLabels()')
                 assert page.evaluate(STATE) == before
                 assert page.evaluate('''()=>{
-                  const exported=new DOMParser().parseFromString(snapshotSvg(),'image/svg+xml');
+                  const same=withPictureLabels(()=>{const exported=new DOMParser().parseFromString(snapshotSvg(),'image/svg+xml');
+                    return [...workspace.querySelectorAll('.connection-label')].every(label=>{const copy=exported.querySelector(`.wire-group[data-wire-id="${label.parentElement.dataset.wireId}"] .connection-label`);
+                      return copy&&copy.getAttribute('x')===label.getAttribute('x')&&copy.getAttribute('y')===label.getAttribute('y')})});
                   const bounds=diagramBounds(),matrix=workspace.getScreenCTM().inverse();
-                  return [...workspace.querySelectorAll('.connection-label')].every(label=>{
-                    const id=label.parentElement.dataset.wireId,copy=exported.querySelector(`.wire-group[data-wire-id="${id}"] .connection-label`);
+                  return same&&[...workspace.querySelectorAll('.connection-label')].every(label=>{
                     const r=label.getBoundingClientRect(),a=new DOMPoint(r.left,r.top).matrixTransform(matrix),b=new DOMPoint(r.right,r.bottom).matrixTransform(matrix);
-                    return copy&&copy.getAttribute('x')===label.getAttribute('x')&&copy.getAttribute('y')===label.getAttribute('y')&&a.x>=bounds.l-.1&&a.y>=bounds.t-.1&&b.x<=bounds.r+.1&&b.y<=bounds.b+.1;
+                    return a.x>=bounds.l-.1&&a.y>=bounds.t-.1&&b.x<=bounds.r+.1&&b.y<=bounds.b+.1;
                   });
                 }'''), (name, 'SVG parity/bounds')
                 # Resize, zoom and pan all remeasure without rerouting. Dense views

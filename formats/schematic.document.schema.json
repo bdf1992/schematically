@@ -121,6 +121,10 @@
                     "colorSlot": {"type": "integer", "minimum": 0, "maximum": 11, "description": "The palette slot of the chip's colour; absent means 0."}
                   }
                 }
+              },
+              "intake": {
+                "type": "boolean",
+                "description": "A group or a plane that is an open region: its outline is drawn dashed. On any other kind of Component, or any other value, it is INTAKE_INVALID. See SECTION-MODEL.md 'Borders'."
               }
             }
           }
