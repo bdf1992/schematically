@@ -373,7 +373,8 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   for(const n of scopedNodes){const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
   const wireIds=activeCanvasWireSet(canvasId),occupied=[];
   for(const w of wires)if(nodeIds.has((w.canvasId||'').replace('canvas:component:','')))wireIds.add(w.id);
-  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points,w));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
+  // The bus routes are asked for once for the whole loop (src/40-routing.js withBusRoutesOnce).
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points,w));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}}));
   // Text and custom graphics can extend beyond a Component's body. Measure their
   // actual projection in workspace coordinates, excluding selection/drag chrome.
   const inverse=workspace.getScreenCTM()?.inverse();

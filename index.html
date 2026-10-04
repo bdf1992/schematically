@@ -9427,7 +9427,8 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   for(const n of scopedNodes){const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
   const wireIds=activeCanvasWireSet(canvasId),occupied=[];
   for(const w of wires)if(nodeIds.has((w.canvasId||'').replace('canvas:component:','')))wireIds.add(w.id);
-  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points,w));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
+  // The bus routes are asked for once for the whole loop (src/40-routing.js withBusRoutesOnce).
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points,w));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}}));
   // Text and custom graphics can extend beyond a Component's body. Measure their
   // actual projection in workspace coordinates, excluding selection/drag chrome.
   const inverse=workspace.getScreenCTM()?.inverse();
@@ -10221,10 +10222,16 @@ function routeCacheFromCandidate(candidate){
   };
 }
 const drawnRoutePoints=new Map();
+// A loop that routes every wire while the document stands still asks for the bus routes once and
+// holds that answer for the loop (src/41-buses.js withBusRoutes), the way renderWires does. Asked
+// per wire, each asking reads both ends of every bus wire: wires x wires end readings a loop.
+function withBusRoutesOnce(fn){
+  return typeof busRoutesForRender==='function'&&typeof withBusRoutes==='function'?withBusRoutes(busRoutesForRender(),fn):fn();
+}
 function captureDragSnapshots(nodeId){
   dragRouteSnapshots.clear();
   const occupied=[];
-  wires.forEach((w,i)=>{
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{
     const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
     if(!A||!B) return;
     const points=stableRouteForWire(i,w,A,B,occupied);
@@ -10240,12 +10247,12 @@ function captureDragSnapshots(nodeId){
         bPos:{x:B.x,y:B.y}
       });
     }
-  });
+  }));
 }
 function settleDraggedRoutes(){
   if(!activeNodeDrag) return;
   const occupied=[];
-  wires.forEach((w,i)=>{
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{
     const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
     if(!A||!B) return;
 
@@ -10260,7 +10267,7 @@ function settleDraggedRoutes(){
       if(w.a===activeNodeDrag || w.b===activeNodeDrag)dragRouteSnapshots.delete(i);
       occupied.push(...routeSegments(points,w));
     }
-  });
+  }));
   renderWires();
   wires.forEach((w,i)=>{
     if(!(w.a===activeNodeDrag || w.b===activeNodeDrag)) return;
@@ -13732,12 +13739,12 @@ function updateWireDrag(e){
     statusEl.textContent=wireDrag.blankReady?'Release → new Component':'Hold briefly to grow Component';
   }
   const occupied=[];
-  wires.forEach((w,i)=>{
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{
     const WA=carrierEndpointPos(w,'a'), WB=carrierEndpointPos(w,'b');
     if(!WA||!WB) return;
     const pts=stableRouteForWire(i,w,WA,WB,occupied);
     occupied.push(...routeSegments(pts,w));
-  });
+  }));
   wireDrag.ghost.setAttribute('d',routePath(
     wireDrag.A,B,wireDrag.sourceSide,bSide,
     wireDrag.sourceNode,
@@ -13822,7 +13829,7 @@ function carrierEndPointerMove(e){
   const otherEp=carrierEndpoint(w,d.other);
   if(otherEp){
     const from=d.other==='a',occupied=[];
-    wires.forEach((x,j)=>{if(j===d.i)return;const XA=carrierEndpointPos(x,'a'),XB=carrierEndpointPos(x,'b');if(XA&&XB)occupied.push(...routeSegments(stableRouteForWire(j,x,XA,XB,occupied),x))});
+    withBusRoutesOnce(()=>wires.forEach((x,j)=>{if(j===d.i)return;const XA=carrierEndpointPos(x,'a'),XB=carrierEndpointPos(x,'b');if(XA&&XB)occupied.push(...routeSegments(stableRouteForWire(j,x,XA,XB,occupied),x))}));
     const A=from?otherEp.pos:B,Z=from?B:otherEp.pos;
     d.ghost.setAttribute('d',routePath(A,Z,from?(otherEp.compatId||null):(snap?.side||null),from?(snap?.side||null):(otherEp.compatId||null),from?(otherEp.node?.id||null):(snap?.node||null),from?(snap?.node||null):(otherEp.node?.id||null),d.i,occupied));
   }

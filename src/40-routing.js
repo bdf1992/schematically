@@ -214,10 +214,16 @@ function routeCacheFromCandidate(candidate){
   };
 }
 const drawnRoutePoints=new Map();
+// A loop that routes every wire while the document stands still asks for the bus routes once and
+// holds that answer for the loop (src/41-buses.js withBusRoutes), the way renderWires does. Asked
+// per wire, each asking reads both ends of every bus wire: wires x wires end readings a loop.
+function withBusRoutesOnce(fn){
+  return typeof busRoutesForRender==='function'&&typeof withBusRoutes==='function'?withBusRoutes(busRoutesForRender(),fn):fn();
+}
 function captureDragSnapshots(nodeId){
   dragRouteSnapshots.clear();
   const occupied=[];
-  wires.forEach((w,i)=>{
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{
     const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
     if(!A||!B) return;
     const points=stableRouteForWire(i,w,A,B,occupied);
@@ -233,12 +239,12 @@ function captureDragSnapshots(nodeId){
         bPos:{x:B.x,y:B.y}
       });
     }
-  });
+  }));
 }
 function settleDraggedRoutes(){
   if(!activeNodeDrag) return;
   const occupied=[];
-  wires.forEach((w,i)=>{
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{
     const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
     if(!A||!B) return;
 
@@ -253,7 +259,7 @@ function settleDraggedRoutes(){
       if(w.a===activeNodeDrag || w.b===activeNodeDrag)dragRouteSnapshots.delete(i);
       occupied.push(...routeSegments(points,w));
     }
-  });
+  }));
   renderWires();
   wires.forEach((w,i)=>{
     if(!(w.a===activeNodeDrag || w.b===activeNodeDrag)) return;
