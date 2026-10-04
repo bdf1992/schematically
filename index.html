@@ -2074,6 +2074,26 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(typeof value==='number'&&Number.isFinite(value)&&value>=0)return {ok:true,present:true,value};
     return {ok:false,code:'TIME_SCALE_INVALID',message:`TIME_SCALE_INVALID: meta.timeScale must be a finite number >= 0, not ${JSON.stringify(value)}`};
   }
+  // ---- meta.palette ("A document can carry its own palette") ----------------------------------
+  // The document's own palette: absent means unset (the view's palette draws). A known name is
+  // admitted as written; so is {custom:[six '#RRGGBB' hexes]}, hex case kept. Any other string -
+  // 'custom' and '' included, since neither names colours - is refused with PALETTE_UNKNOWN; any
+  // other shape with PALETTE_INVALID. One rule for the file (validateDocument, below), the HTTP/MCP
+  // surface and the view (src/20-ui.js setDocumentPalette runs this same function). The names are
+  // held here because the MCP server loads this file without src/00-state.js.
+  const PALETTE_NAMES=Object.freeze(['okabe-ito','system-default','spectrum','cool','warm','earth','mono']);
+  function admitPalette(value){
+    if(value===undefined)return {ok:true,present:false};
+    if(typeof value==='string'){
+      if(PALETTE_NAMES.includes(value))return {ok:true,present:true,value};
+      return {ok:false,code:'PALETTE_UNKNOWN',message:`PALETTE_UNKNOWN: meta.palette ${JSON.stringify(value)} is not a known palette; known: ${PALETTE_NAMES.join(', ')}`};
+    }
+    if(isObject(value)&&!Array.isArray(value)){
+      const keys=Object.keys(value),row=value.custom;
+      if(keys.length===1&&keys[0]==='custom'&&Array.isArray(row)&&row.length===6&&row.every(h=>typeof h==='string'&&/^#[0-9a-fA-F]{6}$/.test(h)))return {ok:true,present:true,value:{custom:[...row]}};
+    }
+    return {ok:false,code:'PALETTE_INVALID',message:`PALETTE_INVALID: meta.palette must be a palette name or {custom: [six #RRGGBB hexes]}, not ${JSON.stringify(value)}`};
+  }
   // ---- Status and waits-on (NOTATION-MODEL.md "Statuses") -------------------------------------
   // A Component's or Wire's `config.status` names an entry of its document's notation's
   // `statuses` list; there is no built-in list, so a notation that declares none admits none.
@@ -3034,7 +3054,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     for(const [i,line] of (Array.isArray(input.narration)?input.narration:[]).entries())if(!isObject(line)||typeof line.say!=='string')errors.push(`narration[${i}] needs a say`);
     // meta.timeScale: one admission rule for the file, the API and the view (issue #40).
     if(isObject(input.meta)){const ts=admitTimeScale(input.meta.timeScale);if(!ts.ok)errors.push(ts.message)}
-    // A section's regions sit between its lines: n lines bound exactly n-1 bands. Never repaired.
+    if(isObject(input.meta)){const pal=admitPalette(input.meta.palette);if(!pal.ok)errors.push(pal.message)}    // A section's regions sit between its lines: n lines bound exactly n-1 bands. Never repaired.
     for(const c of input.components||[]){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)errors.push(`component ${c.id||'?'} section: bands must be one fewer than lines (${s.lines.length} lines, ${s.bands.length} bands)`)}
     for(const wire of input.wires||[]){
       const aFree=isFreeEndpoint(wire.aAttachment),bFree=isFreeEndpoint(wire.bAttachment);
@@ -3091,7 +3111,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {admitTimeScale,statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
 /* END src/05-data-core.js */
 </script>
@@ -6283,6 +6303,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const bus={points:pts,pitch:busPitch(a.pitch)};
     if(a.label!=null&&String(a.label).trim())bus.label=String(a.label);
     if(Array.isArray(a.between)&&a.between.length===2)bus.between=a.between.map(String);
+    // lanes: 'port' gives the wires that share their a end one lane; left out, a lane per wire.
+    if(a.lanes==='port')bus.lanes='port';
     if(a.order!=null){
       if(!Array.isArray(a.order))return refusal('BAD_ORDER','order is a list of wire ids');
       const unknown=a.order.find(w=>!doc.wires.some(x=>x.id===String(w)));if(unknown!=null)return refusal('UNKNOWN_WIRE',`No wire ${unknown}`);
@@ -6705,7 +6727,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // its right, enters its receiver's by the gap on its left, and changes rows over the gaps
   // nearest the entry. A member with another member of its group between it and that gap reaches
   // it along a street in its block's row gap, placed as the harness places one. Returns what the
-  // gaps carried, for the second pass to size them; null when the grid has no item.
+  // gaps carried, for the second pass to size them; null when the grid has no item. Every bus made
+  // here carries lanes: 'port', so the wires leaving one port share a lane (a hyperedge slot in
+  // ELK's layered orthogonal routing, after Sander GD 2003; one track per net in channel routing),
+  // and the gaps are sized by lanes in place of wires.
   function channelRoutes(doc,r,grid){
     const G0=Data.GLOBAL_CANVAS_ID,G=grid.G,P=BUS_PITCH;
     dropStaleBuses(doc,r);
@@ -6765,14 +6790,16 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const recv=of.get(String(t))&&!direct(ib,t,false)?street(ib,t,'recv',xn):null;
       plans.push({w,seq:[send,...mid,recv].filter(Boolean)});
     }
-    const lanes=new Map();for(const p of plans)for(const id of new Set(p.seq))lanes.set(id,(lanes.get(id)||0)+1);
+    // A bus's lane count: the distinct a ends among the plans naming it; a wire with no a end counts alone.
+    const ends=new Map();for(const p of plans)for(const id of new Set(p.seq)){if(!ends.has(id))ends.set(id,new Set());ends.get(id).add(p.w.a?p.w.a+':'+p.w.aSide:'wire:'+p.w.id)}
+    const lanes=new Map([...ends].map(([id,e])=>[id,e.size]));
     const made=new Map();
     for(const [id,e] of used){
       if(e.kind==='h')made.set(id,[{x:e.lo,y:Hy[e.k]},{x:e.hi,y:Hy[e.k]}]);
       else made.set(id,[{x:Vx[e.k][e.j],y:Hy[e.k]},{x:Vx[e.k][e.j],y:Hy[e.k+1]}]);
     }
     for(const [id,s] of streets){
-      const row=lay(s.gid).rows[s.ri],span=(s.wires-1)*P;
+      const row=lay(s.gid).rows[s.ri],span=((lanes.get(id)||1)-1)*P;
       const y=s.kind==='send'?row.b+STREET_DROP+span/2:row.t-STREET_DROP-span/2;
       const far=s.kind==='send'?Math.min(...s.cards):Math.max(...s.cards);
       made.set(id,[{x:far,y},{x:s.x,y}]);
@@ -6782,14 +6809,14 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const routed=plans.filter(p=>{for(let i=1;i<p.seq.length;i++)if(!busMeet(made.get(p.seq[i-1]),made.get(p.seq[i])))return false;return true});
     skipped+=plans.length-routed.length;
     const named=new Set(routed.flatMap(p=>p.seq));
-    for(const [id,pts] of [...made].filter(([id])=>named.has(id)).sort((a,b)=>a[0]<b[0]?-1:1))r.v.buses[id]={points:pts,pitch:P};
+    for(const [id,pts] of [...made].filter(([id])=>named.has(id)).sort((a,b)=>a[0]<b[0]?-1:1))r.v.buses[id]={points:pts,pitch:P,lanes:'port'};
     for(const p of routed)r.v.routes[p.w.id]={mode:'bus',buses:p.seq};
     // What the gaps need: a channel BUS_MARGIN clear each side of its lanes; a block's row gap its
     // send street under a row and its receive street over the next, STREET_DROP from the cards.
     const widest=Math.max(0,...[...lanes].filter(([id])=>!id.startsWith('channel-street-')).map(([,k])=>k));
     const need=new Map();
-    for(const st of streets.values()){const L=lay(st.gid),i=st.kind==='send'?st.ri:st.ri-1;if(i<0||i>=L.rows.length-1)continue;
-      const key=st.gid+'|'+i,e=need.get(key)||{gid:st.gid,s:0,r:0};if(st.kind==='send')e.s=st.wires;else e.r=st.wires;need.set(key,e)}
+    for(const [sid,st] of streets){const L=lay(st.gid),i=st.kind==='send'?st.ri:st.ri-1;if(i<0||i>=L.rows.length-1)continue;
+      const key=st.gid+'|'+i,e=need.get(key)||{gid:st.gid,s:0,r:0},k=lanes.get(sid)||1;if(st.kind==='send')e.s=k;else e.r=k;need.set(key,e)}
     const blockGap=new Map();
     for(const e of need.values()){const gap=(e.s?STREET_DROP+(e.s-1)*P+4:0)+(e.r?STREET_DROP+(e.r-1)*P+4:0)+STREET_ROOM;blockGap.set(e.gid,Math.max(blockGap.get(e.gid)||grid.blockG,gap))}
     return {buses:named.size,streets:[...streets.keys()].filter(id=>named.has(id)).length,wires:routed.length,skipped,G,needG:2*BUS_MARGIN+widest*P,blockGap};
@@ -7271,19 +7298,39 @@ function activeMonoPalette(){
   const base=surfaceAppearance()==='dark'?DARK_SURFACE_MONO:LIGHT_SURFACE_MONO;
   return base.map(c=>themeColor(c));
 }
+// The document's own palette (meta.palette) wins over the view's while the document declares one.
+// documentPalette() is the admitted value - a palette name or {custom:[six hexes]} - or null when the
+// document declares none (or holds a refused value, which draws nothing of its own). Every palette
+// read goes through effectivePaletteName() and effectiveCustomRow(); colorEngine stays the view's own
+// palette and is never written from the document.
+function documentPalette(){
+  const declared=diagram.meta?.palette;
+  if(declared===undefined)return null;
+  const admitted=SovSchematicData.admitPalette(declared);
+  return admitted.ok&&admitted.present?admitted.value:null;
+}
+function effectivePaletteName(){
+  const declared=documentPalette();
+  if(declared===null)return colorEngine.palette;
+  return typeof declared==='string'?declared:'custom';
+}
+function effectiveCustomRow(){
+  const declared=documentPalette();
+  return declared!==null&&typeof declared!=='string'?declared.custom:colorEngine.custom;
+}
 function activeColorPalette(){
-  const dark=surfaceAppearance()==='dark';
-  const base=colorEngine.palette==='mono'
+  const dark=surfaceAppearance()==='dark',name=effectivePaletteName();
+  const base=name==='mono'
     ? (dark?DARK_SURFACE_MONO_BRIGHT:LIGHT_SURFACE_MONO_DEEP)
-    : colorEngine.palette==='custom'
-      ? colorEngine.custom
-      : (dark?(DARK_SURFACE_PALETTES[colorEngine.palette]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[colorEngine.palette]||BASE_PALETTES['okabe-ito']));
+    : name==='custom'
+      ? effectiveCustomRow()
+      : (dark?(DARK_SURFACE_PALETTES[name]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[name]||BASE_PALETTES['okabe-ito']));
   return base.map(c=>themeColor(c));
 }
 let activePaletteCacheKey=null;
 let activePaletteCacheValue=null;
 function activePalette(){
-  const key=[surfaceAppearance(),colorEngine.theme,colorEngine.palette,...colorEngine.custom].join('|');
+  const key=[surfaceAppearance(),colorEngine.theme,effectivePaletteName(),...effectiveCustomRow()].join('|');
   if(activePaletteCacheKey===key&&activePaletteCacheValue)return activePaletteCacheValue;
   activePaletteCacheKey=key;
   activePaletteCacheValue=Object.freeze([...activeMonoPalette(),...activeColorPalette()]);
@@ -7306,7 +7353,7 @@ function declaredPaletteSystem(name,appearance=surfaceAppearance()){
 // danger in the active palette when that palette is a declared system, else in system-default, on the
 // row of the current appearance.
 function statusTone(name){
-  const sys=declaredPaletteSystem(colorEngine.palette)||declaredPaletteSystem('system-default');
+  const sys=declaredPaletteSystem(effectivePaletteName())||declaredPaletteSystem('system-default');
   const i=sys.names.indexOf(name);
   return i>=3?sys.ramps[i][2]:null;
 }
@@ -7315,13 +7362,13 @@ function statusTone(name){
 // the slot's authored colour for that appearance, with the system step 0.08.
 function litTone(slot,appearance=surfaceAppearance()){
   const n=Number(slot);if(!Number.isInteger(n)||n<6||n>11)return null;
-  const dark=appearance==='dark',index=dark?3:1,sys=declaredPaletteSystem(colorEngine.palette,appearance);
+  const dark=appearance==='dark',index=dark?3:1,name=effectivePaletteName(),sys=declaredPaletteSystem(name,appearance);
   if(sys)return sys.ramps[n-6][index];
-  const row=colorEngine.palette==='mono'
+  const row=name==='mono'
     ? (dark?DARK_SURFACE_MONO_BRIGHT:LIGHT_SURFACE_MONO_DEEP)
-    : colorEngine.palette==='custom'
-      ? colorEngine.custom
-      : (dark?(DARK_SURFACE_PALETTES[colorEngine.palette]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[colorEngine.palette]||BASE_PALETTES['okabe-ito']));
+    : name==='custom'
+      ? effectiveCustomRow()
+      : (dark?(DARK_SURFACE_PALETTES[name]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[name]||BASE_PALETTES['okabe-ito']));
   const [L,C,h]=SovSchematicColour.hexOklch(row[n-6]);
   return SovSchematicColour.toneRamp(L,C,h,.08)[index];
 }
@@ -8391,24 +8438,53 @@ function renderPalettePreview(){
     palettePreview.appendChild(s);
   });
 
-  customPaletteEditor.hidden=colorEngine.palette!=='custom';
+  customPaletteEditor.hidden=effectivePaletteName()!=='custom';
 
 }
+// The swatches list the row that draws: the document's six while it declares {custom}, else the
+// view's. An edit writes where the row lives - the document's edit is an undoable document change.
 function renderCustomPaletteEditor(){
   customPaletteSwatches.replaceChildren();
-  colorEngine.custom.forEach((c,i)=>{
+  effectiveCustomRow().forEach((c,i)=>{
     const input=document.createElement('input');
     input.type='color';input.value=c;input.title=`Custom slot ${i+1}`;
     input.addEventListener('input',()=>{
-      colorEngine.custom[i]=input.value;
+      const declared=documentPalette();
+      if(declared!==null&&typeof declared!=='string'){
+        diagram.meta.palette.custom[i]=input.value;
+        setHistoryHint('Change document palette');scheduleHistoryCapture();
+      }else colorEngine.custom[i]=input.value;
       refreshPaletteDerivedColors();renderPalettePreview();render();restoreSelectedSurface();
     });
     customPaletteSwatches.appendChild(input);
   });
 }
+// The document's own palette (meta.palette). null or undefined removes it, so the view's palette
+// draws again; any other value goes through the one admission rule a file and the API use
+// (SovSchematicData.admitPalette), so a refused value changes nothing and is reported.
+function setDocumentPalette(value){
+  diagram.meta=diagram.meta||{};
+  let admitted;
+  if(value===null||value===undefined){delete diagram.meta.palette;admitted={ok:true,present:false}}
+  else{
+    admitted=SovSchematicData.admitPalette(value);
+    if(!admitted.ok){statusEl.textContent=admitted.message;colorPaletteInput.value=effectivePaletteName();return admitted}
+    diagram.meta.palette=admitted.value;
+  }
+  setHistoryHint('Change document palette');applyColorEngine();scheduleHistoryCapture();
+  return admitted;
+}
+// The one route for the picker and view.setColour: a pick writes the document while the document
+// declares a palette, the view otherwise. Picking 'custom' on a document starts from the row drawn.
+function pickPalette(name){
+  if(documentPalette()!==null)return setDocumentPalette(name==='custom'?{custom:[...effectiveCustomRow()]}:name);
+  colorEngine.palette=name;applyColorEngine();
+  return null;
+}
 function applyColorEngine(){
   colorThemeInput.value=colorEngine.theme;
-  colorPaletteInput.value=colorEngine.palette;
+  colorPaletteInput.value=effectivePaletteName();
+  paletteSettings.dataset.paletteSource=documentPalette()!==null?'document':'view';
   diffuseSignalsInput.checked=colorEngine.diffuse;
   document.documentElement.style.setProperty('--canvas-tone',canvasTone());
   refreshPaletteDerivedColors();
@@ -9997,6 +10073,7 @@ function routeCacheFromCandidate(candidate){
     blocked:!!candidate.blocked
   };
 }
+const drawnRoutePoints=new Map();
 function captureDragSnapshots(nodeId){
   dragRouteSnapshots.clear();
   const occupied=[];
@@ -10006,8 +10083,12 @@ function captureDragSnapshots(nodeId){
     const points=stableRouteForWire(i,w,A,B,occupied);
     occupied.push(...routeSegments(points,w));
     if(w.a===nodeId || w.b===nodeId){
+      const drawn=drawnRoutePoints.get(i);
+      const useDrawn=!!drawn && drawn.length>=2 &&
+        Math.abs(drawn[0].x-A.x)<=0.01 && Math.abs(drawn[0].y-A.y)<=0.01 &&
+        Math.abs(drawn[drawn.length-1].x-B.x)<=0.01 && Math.abs(drawn[drawn.length-1].y-B.y)<=0.01;
       dragRouteSnapshots.set(i,{
-        points:clonePoints(points),
+        points:clonePoints(useDrawn?drawn:points),
         aPos:{x:A.x,y:A.y},
         bPos:{x:B.x,y:B.y}
       });
@@ -10025,19 +10106,21 @@ function settleDraggedRoutes(){
     if((w.a===activeNodeDrag || w.b===activeNodeDrag) && !(typeof busSpecOf==='function'&&busSpecOf(w))){
       const candidate=routePoints(A,B,w.aSide,w.bSide,w.a,w.b,w.lane??i,occupied,w.id);
       routeCache.set(i,routeCacheFromCandidate(candidate));
-      dragRouteSnapshots.set(i,{
-        points:clonePoints(candidate.points),
-        aPos:{x:A.x,y:A.y},
-        bPos:{x:B.x,y:B.y}
-      });
+      dragRouteSnapshots.delete(i);
       occupied.push(...routeSegments(candidate.points,w));
     }else{
       const points=stableRouteForWire(i,w,A,B,occupied);
-      if(w.a===activeNodeDrag || w.b===activeNodeDrag)dragRouteSnapshots.set(i,{points:clonePoints(points),aPos:{x:A.x,y:A.y},bPos:{x:B.x,y:B.y}});
+      if(w.a===activeNodeDrag || w.b===activeNodeDrag)dragRouteSnapshots.delete(i);
       occupied.push(...routeSegments(points,w));
     }
   });
   renderWires();
+  wires.forEach((w,i)=>{
+    if(!(w.a===activeNodeDrag || w.b===activeNodeDrag)) return;
+    const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
+    if(!A||!B||!drawnRoutePoints.has(i)) return;
+    dragRouteSnapshots.set(i,{points:clonePoints(drawnRoutePoints.get(i)),aPos:{x:A.x,y:A.y},bPos:{x:B.x,y:B.y}});
+  });
   statusEl.textContent='Settled';
 }
 function scheduleDragSettle(mods=null){
@@ -10720,14 +10803,19 @@ function addNode(symbolId,x=null,y=null,mods=null,options={}){
 // 0.1 concern: the route of a wire on buses (LAYOUT-MODEL.md "As built: buses"). A bus is a layout
 // record (src/08-layout-core.js): a centreline declared once in a layout, which wires name in their
 // route ({mode: 'bus', buses: [id, ...]}) instead of each finding a path. A wire taps on to the first
-// bus from the end of its source lead, rides each bus on its own lane, turns once where one bus
-// meets the next, and taps off the last bus to the end of its target lead. Lanes are ordered once
+// bus from the end of its source lead, rides each bus on a lane, turns once where one bus meets the
+// next, and taps off the last bus to the end of its target lead. A lane holds one wire; on a bus
+// whose record carries lanes: 'port' it holds every wire leaving one port. Lanes are ordered once
 // per render, before any auto route, so auto routes keep clear of the buses. Presentation only:
 // nothing here writes the document.
 
 function activeBuses(){const v=diagram.layout?.views?.[activeLayoutId()];return v&&v.buses&&typeof v.buses==='object'&&!Array.isArray(v.buses)?v.buses:{}}
 function busSpecOf(w){const s=typeof activeRouteSpec==='function'?activeRouteSpec(w.id):null;return s?.mode==='bus'&&Array.isArray(s.buses)&&s.buses.length?s:null}
 function busPitchOf(bus){const p=Number(bus?.pitch);return Number.isFinite(p)?Math.max(4,Math.min(16,p)):6}
+// The lane a wire takes on a bus. On a bus with lanes: 'port' the wires that share their a end
+// (card and side) share a lane: a hyperedge slot in ELK's orthogonal routing (after Sander, GD
+// 2003), one track per net in VLSI channel routing. On any other bus each wire has its own.
+function busLaneKey(w,bus){return bus?.lanes==='port'&&w.a?w.a+':'+w.aSide:'wire:'+w.id}
 
 // ---- Bus geometry: a centreline measured along its length --------------------------------------
 function busLine(bus){
@@ -10825,61 +10913,69 @@ const busWiresRelated=(a,b)=>[`${a.a}:${a.aSide}`,`${a.b}:${a.bSide}`].some(e=>e
 
 // ---- Lanes, once per render ---------------------------------------------------------------------
 // A bus's own order when it has one. Otherwise wires start in the order they leave the bus (ties by
-// where they join, then wire id), then up to 8 passes of adjacent swaps keep a swap only when the
-// number of crossing pairs among that bus's wires strictly drops: the greedy form of the slot
-// ordering in ELK's OrthogonalRoutingGenerator.
-let busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map()};
+// where they join, then wire id), and its lanes are the distinct lane keys in that order. Then up
+// to 8 passes of adjacent lane swaps keep a swap only when the number of crossing pairs among that
+// bus's wires strictly drops: the greedy form of the slot ordering in ELK's
+// OrthogonalRoutingGenerator. A lane's offset is (its index - (lane count - 1) / 2) x pitch.
+let busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map(),lanes:new Map()};
 function busRoutesForRender(){
   const all=activeBuses(),entries=[];
   wires.forEach(w=>{
     const spec=busSpecOf(w);if(!spec||entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     entries.push({w,spec,A:carrierEndpoint(w,'a').pos,B:carrierEndpoint(w,'b').pos});
   });
-  if(!entries.length&&!Object.keys(all).length){busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map()};return busRouteState}
+  if(!entries.length&&!Object.keys(all).length){busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map(),lanes:new Map()};return busRouteState}
   const key=JSON.stringify([activeLayoutId(),all,entries.map(e=>[e.w.id,e.spec.buses,e.w.aSide,e.w.bSide,e.A?.x,e.A?.y,e.B?.x,e.B?.y]),nodes.map(n=>[n.id,n.x,n.y,n.config?.presentation?.size])]);
   if(key===busRouteState.key)return busRouteState;
   const plans=new Map(),fallback=new Set();
   for(const e of entries){const p=busPlan(e.w,e.A,e.B,e.spec);if(p)plans.set(e.w.id,p);else fallback.add(e.w.id)}
   const on=new Map();
   for(const [id,p] of plans)for(const l of p.legs){if(!on.has(l.id))on.set(l.id,[]);if(!on.get(l.id).includes(id))on.get(l.id).push(id)}
-  const order=new Map();
+  // lanes: bus id to its lane keys in order; held: bus id to the wires of each lane; order: the
+  // wires lane by lane.
+  const order=new Map(),lanes=new Map(),held=new Map(),laneOf=(bid,id)=>busLaneKey(plans.get(id).w,all[bid]);
   for(const [bid,list] of on){
     const leg=id=>plans.get(id).legs.find(l=>l.id===bid);
     const natural=[...list].sort((x,y)=>leg(x).sOut-leg(y).sOut||leg(x).sIn-leg(y).sIn||(x<y?-1:x>y?1:0));
     const own=Array.isArray(all[bid]?.order)?all[bid].order.filter(id=>list.includes(id)):[];
-    order.set(bid,own.length?[...own,...natural.filter(id=>!own.includes(id))]:natural);
+    const first=own.length?[...own,...natural.filter(id=>!own.includes(id))]:natural,H=new Map();
+    for(const id of first){const k=laneOf(bid,id);if(!H.has(k))H.set(k,[]);H.get(k).push(id)}
+    lanes.set(bid,[...H.keys()]);held.set(bid,H);order.set(bid,[...H.values()].flat());
   }
-  const offsetsOf=id=>new Map(plans.get(id).legs.map(l=>{const L=order.get(l.id);return [l.id,(L.indexOf(id)-(L.length-1)/2)*busPitchOf(all[l.id])]}));
+  const offsetsOf=id=>new Map(plans.get(id).legs.map(l=>{const L=lanes.get(l.id);return [l.id,(L.indexOf(laneOf(l.id,id))-(L.length-1)/2)*busPitchOf(all[l.id])]}));
   const routes=new Map();for(const id of plans.keys())routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)));
   const pair=(x,y)=>x<y?`${x}|${y}`:`${y}|${x}`;
   const crosses=(x,y)=>busRoutesCross(routes.get(x),routes.get(y),busWiresRelated(plans.get(x).w,plans.get(y).w))?1:0;
   const crossingsOn=L=>{const cross=new Map();let total=0;for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length;j++){const c=crosses(L[i],L[j]);cross.set(pair(L[i],L[j]),c);total+=c}return {cross,total}};
   for(const bid of [...on.keys()].sort()){
     if(Array.isArray(all[bid]?.order)&&all[bid].order.length)continue;
-    const L=order.get(bid);if(L.length<2)continue;
+    const L=lanes.get(bid);if(L.length<2)continue;
+    const W=order.get(bid),H=held.get(bid),rebuild=ids=>{for(const id of ids)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)))};
     // Which side the first leaver takes depends on where the wires go next: the order as sorted
     // and reversed are both measured, and the swaps start from the one that crosses less.
-    let {cross,total}=crossingsOn(L);
-    {const keep=[...L];L.reverse();for(const id of L)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)));
-     const rev=crossingsOn(L);
-     if(rev.total<total){cross=rev.cross;total=rev.total}else{L.splice(0,L.length,...keep);for(const id of L)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)))}}
+    let {cross,total}=crossingsOn(W);
+    {const keep=[...L];L.reverse();rebuild(W);
+     const rev=crossingsOn(W);
+     if(rev.total<total){cross=rev.cross;total=rev.total}else{L.splice(0,L.length,...keep);rebuild(W)}}
     for(let pass=0;pass<8&&total>0;pass++){
       let improved=false;
       for(let k=0;k+1<L.length;k++){
-        const u=L[k],v=L[k+1],keep={u:routes.get(u),v:routes.get(v)},was=new Map();
-        L[k]=v;L[k+1]=u;routes.set(u,busPlanPoints(plans.get(u),offsetsOf(u)));routes.set(v,busPlanPoints(plans.get(v),offsetsOf(v)));
+        // Two neighbouring lanes change places: every wire in either is routed again.
+        const u=L[k],v=L[k+1],moved=[...H.get(u),...H.get(v)],keep=new Map(moved.map(id=>[id,routes.get(id)])),was=new Map();
+        L[k]=v;L[k+1]=u;rebuild(moved);
         let next=total;
-        for(const z of L)for(const x of [u,v]){
-          if(z===x||(x===v&&z===u))continue;const key=pair(x,z),c=crosses(x,z);
-          if(!was.has(key))was.set(key,cross.get(key));next+=c-cross.get(key);cross.set(key,c);
+        for(const x of moved)for(const z of W){
+          if(z===x)continue;const key=pair(x,z);if(was.has(key))continue;
+          const c=crosses(x,z);was.set(key,cross.get(key));next+=c-cross.get(key);cross.set(key,c);
         }
         if(next<total){total=next;improved=true;continue}
-        L[k]=u;L[k+1]=v;routes.set(u,keep.u);routes.set(v,keep.v);for(const [key,c] of was)cross.set(key,c);
+        L[k]=u;L[k+1]=v;for(const [id,pts] of keep)routes.set(id,pts);for(const [key,c] of was)cross.set(key,c);
       }
       if(!improved)break;
     }
+    order.set(bid,L.flatMap(k=>H.get(k)));
   }
-  busRouteState={key,routes,fallback,on,order};
+  busRouteState={key,routes,fallback,on,order,lanes};
   return busRouteState;
 }
 // The drawn route of a bus-routed wire, or null when it cannot be built (the router takes over).
@@ -10892,7 +10988,7 @@ function busBandHolds(wa,wb,c){
   const all=activeBuses();
   for(const id of sa.buses){
     if(!sb.buses.includes(id))continue;const line=busLine(all[id]);if(!line)continue;
-    const hw=((st.on.get(id)?.length||0)*busPitchOf(all[id])+8)/2;
+    const hw=((st.lanes.get(id)?.length||0)*busPitchOf(all[id])+8)/2;
     for(const g of line.segs)if(c.x>=Math.min(g.a.x,g.b.x)-hw&&c.x<=Math.max(g.a.x,g.b.x)+hw&&c.y>=Math.min(g.a.y,g.b.y)-hw&&c.y<=Math.max(g.a.y,g.b.y)+hw)return true;
   }
   return false;
@@ -10902,13 +10998,13 @@ function busLabelsOfWire(w){
   const spec=busSpecOf(w);if(!spec||!busRouteState.routes.has(w.id))return [];
   const all=activeBuses();return spec.buses.map(id=>all[id]?.label).filter(l=>typeof l==='string'&&l);
 }
-// Each bus as a band behind the wires: n lanes times its pitch, plus 8, with rounded ends; its
-// label once, beyond its start, reading along it.
+// Each bus as a band behind the wires: its lane count times its pitch, plus 8, with rounded ends;
+// its label once, beyond its start, reading along it.
 function renderBuses(layer){
   const all=activeBuses(),st=busRoutesForRender(),SVG='http://www.w3.org/2000/svg';
   for(const id of Object.keys(all).sort()){
     const bus=all[id],line=busLine(bus);if(!line)continue;
-    const n=st.on.get(id)?.length||0,hw=(n*busPitchOf(bus)+8)/2;
+    const n=st.lanes.get(id)?.length||0,hw=(n*busPitchOf(bus)+8)/2;
     const g=document.createElementNS(SVG,'g');g.setAttribute('class','bus-band');g.dataset.busId=id;g.dataset.lanes=String(n);
     for(const s of line.segs){
       const r=document.createElementNS(SVG,'rect');
@@ -12068,6 +12164,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
   // Jogs out and close parallels spread a track apart (src/40-routing.js nudgeRoutes); bus lanes and taps stay fixed.
   const trackCramped=nudgeRoutes(routes,busState?[...busState.routes].flatMap(([id,pts])=>routeSegments(pts,wires.find(x=>x.id===id))):[]);
   for(const [i,r] of routes)r.segs=routeSegments(r.points,wires[i]);
+  drawnRoutePoints.clear();for(const [i,r] of routes)drawnRoutePoints.set(i,clonePoints(r.points));
   const hops=new Map(),order=[...routes.keys()];arrowKeepClear=[];
   for(let x=0;x<order.length;x++)for(let y=x+1;y<order.length;y++){
     const P=routes.get(order[x]),Q=routes.get(order[y]);
@@ -12781,10 +12878,10 @@ function contrastAudit(options={}){
 // The palette as realised now (theme x appearance), judged as a categorical palette.
 function paletteAudit(){
   const bg=canvasTone(),mono=activePalette().slice(0,6),colour=activePalette().slice(6);
-  const distinct=colorEngine.palette!=='mono';
+  const distinct=effectivePaletteName()!=='mono';
   const audit=SovSchematicColour.auditPalette(colour,{background:bg,floor:themeContrastFloor()});
   if(!distinct)audit.failures=audit.failures.filter(f=>f.kind!=='distinct');
-  return {appearance:surfaceAppearance(),theme:colorEngine.theme,palette:colorEngine.palette,background:bg,mono,colour,...audit,ok:!audit.failures.length,categorical:distinct};
+  return {appearance:surfaceAppearance(),theme:colorEngine.theme,palette:effectivePaletteName(),background:bg,mono,colour,...audit,ok:!audit.failures.length,categorical:distinct};
 }
 /* END src/59-contrast.js */
 </script>
@@ -13862,6 +13959,8 @@ function captureWorkspace(){
       camera:{...camera},
       grid:{visible:canvasGridVisible,snap:canvasSnapEnabled,size:canvasGridSize},
       showFlow,
+      // The document's own palette (meta.palette) wins over the view; a workspace carries only the
+      // view's own palette and custom row, never the document's palette.
       colorEngine:SovSchematicData.clone(colorEngine),
       appearanceMode,
       // The document's own rate (meta.timeScale) wins over the view; a workspace carries only the
@@ -13920,7 +14019,7 @@ function syncRuntimeAfterDocumentReplace(){
   selected=null;hideSelectionBar();
   persistenceFingerprint=semanticFingerprint();
   updateRevisionReadout();
-  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
+  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();if(typeof applyColorEngine==='function')applyColorEngine();
   render();selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
 }
 function replaceRuntimeDocument(input){
@@ -14433,7 +14532,7 @@ colorThemeInput.addEventListener('change',()=>{
   colorEngine.theme=colorThemeInput.value;applyColorEngine();
 });
 colorPaletteInput.addEventListener('change',()=>{
-  colorEngine.palette=colorPaletteInput.value;applyColorEngine();
+  pickPalette(colorPaletteInput.value);
 });
 diffuseSignalsInput.addEventListener('change',()=>{
   colorEngine.diffuse=diffuseSignalsInput.checked;render();restoreSelectedSurface();
@@ -15023,7 +15122,7 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
-  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()}},
+  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:effectivePaletteName(),palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom'],source:documentPalette()!==null?'document':'view',viewPalette:colorEngine.palette}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;const picked=palette?pickPalette(palette):null;if(!palette||picked?.ok===false)applyColorEngine();return picked?.ok===false?picked:{theme:colorEngine.theme,palette:effectivePaletteName()}},documentPalette:()=>SovSchematicData.clone(documentPalette()),setDocumentPalette:(value)=>{const admitted=setDocumentPalette(value);return admitted.ok===false?admitted:SovSchematicData.clone(documentPalette())},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()}},
   render:{
     svg:(options={})=>renderStandaloneSvg(options),
     png:(options={})=>renderStandalonePng(options)

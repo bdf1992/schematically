@@ -411,6 +411,26 @@
     if(typeof value==='number'&&Number.isFinite(value)&&value>=0)return {ok:true,present:true,value};
     return {ok:false,code:'TIME_SCALE_INVALID',message:`TIME_SCALE_INVALID: meta.timeScale must be a finite number >= 0, not ${JSON.stringify(value)}`};
   }
+  // ---- meta.palette ("A document can carry its own palette") ----------------------------------
+  // The document's own palette: absent means unset (the view's palette draws). A known name is
+  // admitted as written; so is {custom:[six '#RRGGBB' hexes]}, hex case kept. Any other string -
+  // 'custom' and '' included, since neither names colours - is refused with PALETTE_UNKNOWN; any
+  // other shape with PALETTE_INVALID. One rule for the file (validateDocument, below), the HTTP/MCP
+  // surface and the view (src/20-ui.js setDocumentPalette runs this same function). The names are
+  // held here because the MCP server loads this file without src/00-state.js.
+  const PALETTE_NAMES=Object.freeze(['okabe-ito','system-default','spectrum','cool','warm','earth','mono']);
+  function admitPalette(value){
+    if(value===undefined)return {ok:true,present:false};
+    if(typeof value==='string'){
+      if(PALETTE_NAMES.includes(value))return {ok:true,present:true,value};
+      return {ok:false,code:'PALETTE_UNKNOWN',message:`PALETTE_UNKNOWN: meta.palette ${JSON.stringify(value)} is not a known palette; known: ${PALETTE_NAMES.join(', ')}`};
+    }
+    if(isObject(value)&&!Array.isArray(value)){
+      const keys=Object.keys(value),row=value.custom;
+      if(keys.length===1&&keys[0]==='custom'&&Array.isArray(row)&&row.length===6&&row.every(h=>typeof h==='string'&&/^#[0-9a-fA-F]{6}$/.test(h)))return {ok:true,present:true,value:{custom:[...row]}};
+    }
+    return {ok:false,code:'PALETTE_INVALID',message:`PALETTE_INVALID: meta.palette must be a palette name or {custom: [six #RRGGBB hexes]}, not ${JSON.stringify(value)}`};
+  }
   // ---- Status and waits-on (NOTATION-MODEL.md "Statuses") -------------------------------------
   // A Component's or Wire's `config.status` names an entry of its document's notation's
   // `statuses` list; there is no built-in list, so a notation that declares none admits none.
@@ -1371,7 +1391,7 @@
     for(const [i,line] of (Array.isArray(input.narration)?input.narration:[]).entries())if(!isObject(line)||typeof line.say!=='string')errors.push(`narration[${i}] needs a say`);
     // meta.timeScale: one admission rule for the file, the API and the view (issue #40).
     if(isObject(input.meta)){const ts=admitTimeScale(input.meta.timeScale);if(!ts.ok)errors.push(ts.message)}
-    // A section's regions sit between its lines: n lines bound exactly n-1 bands. Never repaired.
+    if(isObject(input.meta)){const pal=admitPalette(input.meta.palette);if(!pal.ok)errors.push(pal.message)}    // A section's regions sit between its lines: n lines bound exactly n-1 bands. Never repaired.
     for(const c of input.components||[]){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)errors.push(`component ${c.id||'?'} section: bands must be one fewer than lines (${s.lines.length} lines, ${s.bands.length} bands)`)}
     for(const wire of input.wires||[]){
       const aFree=isFreeEndpoint(wire.aAttachment),bFree=isFreeEndpoint(wire.bAttachment);
@@ -1428,5 +1448,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {admitTimeScale,statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
