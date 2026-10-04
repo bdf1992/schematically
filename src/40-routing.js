@@ -489,8 +489,13 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
        anchor:routeAnchor(points)
      }))
      .sort((a,b)=>a.score-b.score);
-    // Prefer a perimeter that clears every body; only when none does is the cheapest taken.
-    chosen=fallback.find(f=>routeClear(f.points,obstacles,leads))||fallback[0];
+    // Prefer a perimeter that clears every body; when none does, the cheapest that still leaves and
+    // arrives along each port's lead (it never doubles back over a port), and only then the cheapest.
+    const alongLeads=f=>{
+      const p=normalizePoints([A,SA,...f.points.slice(1,-1),SB,B]),same=(u,v)=>!u||(!!v&&u.dx===v.dx&&u.dy===v.dy);
+      return p.length<2||(same(sourceNode&&axisDirection(A,SA),axisDirection(p[0],p[1]))&&same(targetNode&&axisDirection(SB,B),axisDirection(p.at(-2),p.at(-1))));
+    };
+    chosen=fallback.find(f=>routeClear(f.points,obstacles,leads))||fallback.find(alongLeads)||fallback[0];
   }
 
   return {
@@ -524,6 +529,29 @@ function routeLead(P,Q,portId,node,inward){
     for(let s=2;s<=d;s+=2){const x=P.x+nx*s,y=P.y+ny*s;if(x>R.l&&x<R.r&&y>R.t&&y<R.b){d=Math.max(4,s/2);break}}
   }
   return {x:P.x+nx*d,y:P.y+ny*d};
+}
+// How a declared route joins an end's lead (LAYOUT-MODEL.md "As built: port side"). N is the
+// route's point next to the end, P the port, S the lead's end. Returned: the corners between N and
+// S, in that order, so the route reaches S from outside the stretch between S and the port and the
+// segment touching the port runs along the port's normal. Tried in order: the corner asked for, the
+// other corner, then round the end's own card on its nearer and its farther side; the first that
+// also keeps out of the card's padding is taken. node is the end's card when its body is an
+// obstacle to this wire, else null (the corner asked for is returned). Points closer than eps to
+// one axis line count as aligned and need no corner. Pinned and guided routes (src/58-layouts.js)
+// and bus taps (src/41-buses.js) build their ends with this.
+function leadJoin(N,P,S,node,first=null,eps=.5){
+  const aligned=Math.abs(N.x-S.x)<=eps||Math.abs(N.y-S.y)<=eps,asked=aligned||!first?[]:[first];
+  const d=axisDirection(P,S);
+  if(!d||!node||componentForm(node).dimension!==2||componentHostedOnWire(node))return asked;
+  const R=componentBounds(node,Math.min(ROUTE_END_CLEARANCE,Math.abs(S.x-P.x)+Math.abs(S.y-P.y))),W=componentBounds(node,ROUTE_CLEARANCE),lead={S,R,...d};
+  const nearer=(p,q,at)=>Math.abs(p-at)<=Math.abs(q-at)?[p,q]:[q,p];
+  const options=[asked,...(aligned?[]:[[{x:S.x,y:N.y}],[{x:N.x,y:S.y}]]),
+    ...(d.dx?nearer(W.t,W.b,N.y).map(y=>[{x:N.x,y},{x:S.x,y}]):nearer(W.l,W.r,N.x).map(x=>[{x,y:N.y},{x,y:S.y}]))];
+  const path=mid=>{const out=[{x:N.x,y:N.y}];for(const q of [...mid,S]){const p=out.at(-1);out.push(Math.abs(p.x-q.x)<=eps?{x:p.x,y:q.y}:Math.abs(p.y-q.y)<=eps?{x:q.x,y:p.y}:q)}return normalizePoints(out)};
+  // The point before S is off the lead's line, or on it beyond S: never between S and the port or behind the port.
+  const reaches=mid=>{const pts=path(mid);if(pts.length<2)return true;const M=pts.at(-2),E=pts.at(-1);return Math.abs((M.x-E.x)*d.dy)+Math.abs((M.y-E.y)*d.dx)>=.5||(M.x-E.x)*d.dx+(M.y-E.y)*d.dy>=0};
+  const clear=mid=>{const pts=path(mid);for(let i=0;i<pts.length-1;i++)if(!segmentClear(pts[i],pts[i+1],[R],[lead]))return false;return true};
+  return options.find(o=>reaches(o)&&clear(o))||options.find(reaches)||asked;
 }
 function routeFence(wire){
   const surface=wire?.canvasId||'';
