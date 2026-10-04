@@ -14,9 +14,9 @@ document drawn again with labels at their base size (withPictureLabels, src/75-p
 crowded marks are read in that same drawing, so a mark and a finding describe one placement. The
 marks in the fitted view on screen, where labels hold a 12 px floor, are printed and not asserted.
 
-- tests/fixtures/task-lifecycle.sov: at most 1 label collision, and it is w5 'push, through the
-  broker' (130 world units of wire for a 137 unit label; held by task
-  schematically-a-wire-label-has-room-on-its-wire).
+- tests/fixtures/task-lifecycle.sov: 0 label collisions. w5 'push, through the broker' is wider
+  than the gap its wire runs in, so it is drawn on two lines, 'push, through' over 'the broker'
+  (tests/wire_label_wrap_qa.py).
 - tests/fixtures/work-engine-sample.sov: 0 label collisions.
 - On both, every label named in a label collision is marked crowded and no other label is.
 - A document built here, 12 act cards and 14 wires with labels of 8 to 30 characters, arranged by
@@ -145,8 +145,7 @@ def main() -> None:
 
     lifecycle, sample = fixtures['task-lifecycle.sov'], fixtures['work-engine-sample.sov']
     assert lifecycle['labels'] and sample['labels'], 'the fixtures have connection labels'
-    assert len(lifecycle['hits']) <= 1 and all(h['wire'] == 'w5' and h['text'] == 'push, through the broker' for h in lifecycle['hits']), \
-        ('task-lifecycle.sov: at most 1 label collision, and it is w5 push, through the broker', lifecycle['hits'])
+    assert not lifecycle['hits'], ('task-lifecycle.sov: 0 label collisions', lifecycle['hits'])
     assert not sample['hits'], ('work-engine-sample.sov: 0 label collisions', sample['hits'])
     for name, r in fixtures.items():
         colliding = {h['wire'] for h in r['hits']}

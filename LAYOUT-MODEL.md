@@ -665,6 +665,22 @@ for Point-Feature Label Placement", 1995; map renderers place road names the sam
   clearance meets nothing. With no such place, a place whose box with no padding meets nothing
   (of those, the one that meets least when padded, the earliest on a tie). With none of those,
   the place of least overlap with no padding.
+- **Fourth step: two lines.** Only when the place the three tiers gave truly overlaps something
+  (no padding) and the caption has a word break, the label is set on two lines and placed again:
+  the break is the one whose wider line is narrowest (the earlier break on a tie), the two-line
+  box gets the same candidates in the same order with the same clearance and step, and the same
+  three tiers run. The label stays on two lines only where that box meets nothing with no
+  padding; otherwise it goes back to one line at the place the one-line tiers gave. Every pass
+  starts by putting a wrapped label back on one line, so a label that has a clear one-line place
+  is never wrapped. A label is never cut, shrunk, broken inside a word or set on three lines.
+  This is the order line-label placement takes on maps and in diagram tools: break at a word
+  boundary before any geometry moves (Imhof, "Positioning Names on Maps", 1975).
+- **Structure.** The label is one `text.connection-label` with `x`, `y` and `text-anchor`
+  middle, and its whole caption in `data-caption`. A wrapped label also carries
+  `data-wrapped="true"` and two `tspan` children holding the lines without the break's space,
+  each with the label's `x`, the first with `dy` 0 and the second with `dy` 1.15em; `y` is the
+  first line's baseline. Collision, contrast, bounds and export read the text element's own box,
+  which spans both lines. A redraw keeps a label's place while `data-caption` and the route stand.
 - **Crowded.** `data-label-crowded="true"` is on a label whose final place truly overlaps
   something in the list above, with no padding. A label that only misses the clearance does not
   carry it. A label already at its place is not rewritten, so placing twice gives the same
@@ -674,7 +690,8 @@ for Point-Feature Label Placement", 1995; map renderers place road names the sam
   several times larger in world units and more of them are crowded. The mark describes the
   drawing it is read in.
 - **What it cannot do.** A label longer than every straight run of its wire has only the midpoint
-  places, and a wire shorter than its label between two close cards has no clear place.
+  places. A one-word label wider than the gap its wire runs in has no clear place and stays
+  crowded. A label's own wire is not among the things it must clear, on one line or two.
 
 Measured at 1600 x 1000 after `fitDiagram`, before then after. A label collision is a
 text-collision finding of static metrics that names the label's wire and quotes its text; the
@@ -682,17 +699,37 @@ marks in the picture are read in the same drawing (`withPictureLabels`):
 
 | Document | Labels | Label collisions | Crowded in the picture | Crowded in the fitted view (zoom) |
 | --- | --- | --- | --- | --- |
-| `tests/fixtures/task-lifecycle.sov` | 9 | 1, 1 | not marked, 1 | not marked, 2 (0.28) |
+| `tests/fixtures/task-lifecycle.sov` | 9 | 1, 1 (0 with the fourth step) | not marked, 1 (0 with the fourth step) | not marked, 2 (0.28) |
 | `tests/fixtures/work-engine-sample.sov` | 13 | 1, 0 | not marked, 0 | not marked, 5 (0.32) |
 | 12 act cards and 14 labelled wires laid out by `layered` | 14 | 0, 0 | not marked, 0 | not marked, 6 (0.44) |
 | `docs/workengine/map.sov` | 1 | 0, 0 | not marked, 0 | not marked, 0 (0.24) |
 
-Known residual: on task-lifecycle 'push, through the broker' (w5) still overlaps Commits and is
-marked crowded. Its wire, from Commits to GitHub's border, is 130 world units and the label is 137
-wide at base size, so no label move clears it; it needs a wider gap. Held by task
-`schematically-a-wire-label-has-room-on-its-wire`.
+With the fourth step (2026-10-04), same measure, before then after:
 
-Tests: `tests/wire_label_placement_qa.py`, `tests/wire_label_clearance_qa.py`.
+| Document | Label collisions | Crowded in the picture | Wrapped in the picture | Crowded in the fitted view | Wrapped in the fitted view |
+| --- | --- | --- | --- | --- | --- |
+| `tests/fixtures/task-lifecycle.sov` | 1, 0 | 1, 0 | 1 (w5) | 2, 2 | 0 |
+| `tests/fixtures/work-engine-sample.sov` | 0, 0 | 0, 0 | 0 | 5, 3 | 2 |
+| 12 act cards and 14 labelled wires laid out by `layered` | 0, 0 | 0, 0 | 0 | 6, 1 | 5 |
+| `docs/workengine/map.sov` | 0, 0 | 0, 0 | 0 | 0, 0 | 0 |
+
+What was measured on task-lifecycle w5 'push, through the broker', in the picture. The wire runs
+(1630,300) (1656,300) (1656,252) (1760,252) in the gap between Commits (right edge 1630) and
+GitHub's border (1760); f6 runs down the same gap at x 1734 and along y 214. On one line the label
+is 142.4 wide in a 130 gap, and its least-overlap place lay over Commits, where the card hid it.
+Its breaks give wider lines of 110.0 ('push,' / 'through the broker'), 80.1 ('push, through' /
+'the broker') and 101.7 ('push, through the' / 'broker'), so it wraps into 'push, through' over
+'the broker', a box 80.1 by 31.6. Of that box's 8 places one meets nothing with no padding: under
+the wire's midpoint, at 1630.9 to 1711.1 by 273.4 to 305.0. It is 0.9 from Commits, so it misses
+the clearance (one thing met when padded by 6 px) and is taken by the second tier. Static metrics
+report no text-collision and no text-contrast finding naming w5, in light and dark.
+
+Known residual: at that place the label lies across its own wire's vertical leg (x 1656, y 252 to
+300). A label's own wire is not an obstacle to it, so nothing counts this; the text's halo keeps
+it readable. Clearing it needs a wider gap between Commits and GitHub, which is a layout change.
+
+Tests: `tests/wire_label_placement_qa.py`, `tests/wire_label_clearance_qa.py`,
+`tests/wire_label_wrap_qa.py`.
 
 ## As built: presentation (2026-09-25)
 

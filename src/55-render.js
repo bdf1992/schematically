@@ -1064,6 +1064,20 @@ function clearWireVisualFocus(){
 // Projection-only geometry: keep the exact points used to paint each path. Label
 // layout never asks the router for another route or writes into the document.
 const wireLabelPaths=new Map();
+// The two lines a caption wraps onto: the word break whose wider line is narrowest, the earlier
+// break on a tie; null when the caption has no word break. The label is left holding the caption.
+function wireLabelLines(label,caption){
+  let best=null;
+  for(const gap of caption.matchAll(/\s+/g)){
+    const first=caption.slice(0,gap.index),second=caption.slice(gap.index+gap[0].length);
+    if(!first||!second)continue;
+    label.textContent=first;let wide=label.getComputedTextLength();
+    label.textContent=second;wide=Math.max(wide,label.getComputedTextLength());
+    if(!best||wide<best.wide-1e-6)best={wide,lines:[first,second]};
+  }
+  label.textContent=caption;
+  return best?best.lines:null;
+}
 function placeWireLabels(){
   const matrix=workspace.getScreenCTM();if(!matrix)return;
   // LAYOUT-MODEL.md "Wire labels": the clearance round a label and the step it slides by, in screen pixels.
@@ -1105,6 +1119,13 @@ function placeWireLabels(){
   for(const entry of entries){
     const {path,points}=entry,label=path.parentElement.querySelector('.connection-label');
     if(!label||!visible(label))continue;
+    // Each pass starts from one line: a wrapped label is put back before anything is measured.
+    const caption=label.dataset.caption??label.textContent;
+    const wrappedAt=label.dataset.wrapped==='true'?[label.getAttribute('x'),label.getAttribute('y')]:null;
+    if(wrappedAt){delete label.dataset.wrapped;label.textContent=caption}
+    // The label as it is drawn now (one line or two) takes a place by the three tiers; the true
+    // overlap at the place it ends at is returned.
+    const settle=()=>{
     const bounds=rect(label),width=bounds.r-bounds.l,height=bounds.b-bounds.t;
     const anchor=screen({x:Number(label.getAttribute('x')),y:Number(label.getAttribute('y'))});
     const offset={x:bounds.l-anchor.x,y:bounds.t-anchor.y};
@@ -1171,8 +1192,32 @@ function placeWireLabels(){
       if(Math.abs(chosen.l-bounds.l)>.01||Math.abs(chosen.t-bounds.t)>.01){
         const position=new DOMPoint(chosen.l-offset.x,chosen.t-offset.y).matrixTransform(inverse);
         label.setAttribute('x',String(position.x));label.setAttribute('y',String(position.y));
+        for(const line of label.children)line.setAttribute('x',String(position.x)); // a wrapped label's lines follow it
       }
     }else bare=overlaps({l:bounds.l,t:bounds.t},0,Infinity); // a wire with no straight run keeps its place
+    return bare;
+    };
+    let bare=settle();
+    // The fourth step: a label with no clear one-line place is set on two lines at a word break and
+    // placed again by the same tiers. It stays wrapped only where the two-line box meets nothing;
+    // otherwise it goes back to one line at the place the one-line tiers gave.
+    const lines=bare>0&&!window.SOV_QA_NO_WIRE_LABEL_WRAP?wireLabelLines(label,caption):null;
+    if(lines){
+      const x=label.getAttribute('x'),y=label.getAttribute('y');
+      setFittedText(label,lines,x,'1.15em');label.dataset.wrapped='true';
+      if(settle()>0){
+        delete label.dataset.wrapped;label.textContent=caption;label.setAttribute('x',x);label.setAttribute('y',y);
+      }else{
+        bare=0;
+        // A wrapped label back at the place it had (within .01 px on screen) keeps its coordinates to
+        // the digit, so placing twice never drifts.
+        const scale=Math.hypot(matrix.a,matrix.b),near=(was,now)=>Math.abs(Number(was)-Number(now))*scale<.01;
+        if(wrappedAt&&near(wrappedAt[0],label.getAttribute('x'))&&near(wrappedAt[1],label.getAttribute('y'))){
+          label.setAttribute('x',wrappedAt[0]);label.setAttribute('y',wrappedAt[1]);
+          for(const line of label.children)line.setAttribute('x',wrappedAt[0]);
+        }
+      }
+    }
     // Crowded: the label truly overlaps a card, a border, other text or a wire at the place it has.
     if(bare>0)label.dataset.labelCrowded='true';else delete label.dataset.labelCrowded;
     // Later labels keep clear of this one; the finite candidate list bounds the work.
@@ -1250,7 +1295,7 @@ function wireDrawKey(i,w,d,points,epA,epB,snapshot,busFallback,cramped,editor,si
 function renderWires(signalState=computeSignalState(),markers=markersById(),reuse=false){
   const previousLabels=new Map([...wireLabelPaths.keys()].map(path=>{
     const label=path.parentElement?.querySelector('.connection-label');
-    return [path.parentElement?.dataset.wireId,label?{text:label.textContent,d:path.getAttribute('d'),x:label.getAttribute('x'),y:label.getAttribute('y')}:null];
+    return [path.parentElement?.dataset.wireId,label?{text:label.dataset.caption,d:path.getAttribute('d'),x:label.getAttribute('x'),y:label.getAttribute('y')}:null];
   }));
   wireLabelPaths.clear();
   const emptyWireGroups=()=>{
@@ -1461,7 +1506,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
       const text=(cfg.direction==='duplex'?'↔ ':'')+caption,lift=13+(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0);
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5),previous=previousLabels.get(w.id),label=document.createElementNS('http://www.w3.org/2000/svg','text');
       const keep=previous?.text===text&&previous.d===d;
-      label.setAttribute('class','connection-label');label.setAttribute('x',keep?previous.x:q.x);label.setAttribute('y',keep?previous.y:q.y-lift);label.setAttribute('text-anchor','middle');label.textContent=text;group.appendChild(label);
+      label.setAttribute('class','connection-label');label.setAttribute('x',keep?previous.x:q.x);label.setAttribute('y',keep?previous.y:q.y-lift);label.setAttribute('text-anchor','middle');label.dataset.caption=text;label.textContent=text;group.appendChild(label);
     }
     // Channel markers belong to bound ends; a free end has no port to mark.
     if(a&&endpointShowsChannelTag(w,'a')){
