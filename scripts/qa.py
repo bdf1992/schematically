@@ -32,6 +32,7 @@ STATIC=[
     'tests/desktop_shell_qa.py',
     'tests/revision_guard_qa.py',
     'tests/mcp_surface_qa.py',
+    'tests/release_path_qa.py',
 ]
 BROWSER=[
     'tests/attachment_point_refactor_qa.py',

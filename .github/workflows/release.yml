@@ -1,0 +1,139 @@
+name: schematic-release
+# One release path: a v* tag builds the web deployment and the desktop installers from that commit,
+# stamps the revision into each, and attaches them to one GitHub release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser QA runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m playwright install --with-deps chromium
+      - name: Run authoritative RC QA
+        run: python scripts/qa.py
+
+  web:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SOV_BUILD_REVISION: ${{ github.ref_name }} ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Stage deployable site
+        run: python scripts/stage_site.py
+      - name: Zip the site
+        run: |
+          cd _site
+          zip -r ../schematically-web-${{ github.ref_name }}.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-zip
+          path: schematically-web-${{ github.ref_name }}.zip
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  pages:
+    needs: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy QA-verified build to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  desktop:
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      SOV_BUILD_REVISION: ${{ github.ref_name }} ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the page the shell embeds
+        run: python build.py
+      - name: Set the installer version from the tag (this job only, never committed)
+        shell: python
+        run: |
+          import json, os
+          path = 'desktop/src-tauri/tauri.conf.json'
+          conf = json.load(open(path, encoding='utf-8'))
+          conf['version'] = os.environ['GITHUB_REF_NAME'].lstrip('v')
+          json.dump(conf, open(path, 'w', encoding='utf-8', newline='\n'), indent=2)
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install the Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+      - name: Build the installers
+        working-directory: desktop/src-tauri
+        run: cargo tauri build
+      - name: Launch the built shell on a document
+        run: python tests/desktop_launch_qa.py --binary desktop/src-tauri/target/release/sov-schematic-desktop.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-installers
+          path: |
+            desktop/src-tauri/target/release/bundle/msi/*.msi
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+
+  release:
+    needs: [web, pages, desktop]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-zip
+          path: release
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-installers
+          path: release/desktop
+      - name: Record the revision
+        run: printf '%s\n%s\n' "${{ github.ref_name }}" "${{ github.sha }}" > release/REVISION.txt
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            release/schematically-web-${{ github.ref_name }}.zip \
+            release/desktop/*/*.msi \
+            release/desktop/*/*-setup.exe \
+            release/REVISION.txt \
+            --title "${{ github.ref_name }}" --notes "Built from ${{ github.sha }}"
