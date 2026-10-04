@@ -99,6 +99,7 @@ BROWSER=[
     'tests/notation_qa.py',
     'tests/work_engine_notation_qa.py',
     'tests/wire_crossing_qa.py',
+    'tests/arrow_spacing_qa.py',
     'tests/route_clear_of_cards_qa.py',
     'tests/port_side_qa.py',
     'tests/track_gap_qa.py',

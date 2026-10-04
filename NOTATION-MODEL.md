@@ -131,6 +131,11 @@ refused with `SCALE_INVALID`; it is never clamped.
   wide), the net badge and the 8 px endpoint and point tags (literal sizes, not clamps), packets,
   and the outline of a status chip or a badge. A selected or hovered wire keeps its literal width
   (4 and 3.3).
+- Direction marks are spaced by length: a directed wire under 20 draws none, one up to 480
+  (`ARROW_SPACING`) draws one at the middle of its longest straight segment, and each further 480
+  adds one more, at most 4, on the next-longest segments (two share a segment only when it is
+  longer than 480). A mark keeps 8 or more from a bend and slides along its segment to clear hops
+  and junctions, and a duplex wire puts a forward and a reverse mark side by side at each place.
 - A notation chain that declares no `tokens.scale` anywhere (one that does not extend
   `schematic`) is drawn unscaled.
 

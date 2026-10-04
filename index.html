@@ -12228,7 +12228,7 @@ function stableArrowPoint(path,targetD,minD,maxD){
     if(!fallback || bend<fallback.bend) fallback={q,bend};
     if(bend<=8) return q;
   }
-  return fallback?.q||pointAngleAtDistance(path,targetD,3);
+  return fallback?.q||null;
 }
 function appendChevronAt(group,q,reverse=false,className='flow-chevron'){
   const c=document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -12237,47 +12237,68 @@ function appendChevronAt(group,q,reverse=false,className='flow-chevron'){
   c.setAttribute('transform',`translate(${q.x} ${q.y}) rotate(${q.angle+(reverse?180:0)})`);
   group.appendChild(c);
 }
+// Direction marks are spaced by length: one per ARROW_SPACING of wire, at most ARROW_MAX, each at the
+// middle of a different straight leg (longest first); a leg longer than ARROW_SPACING may hold more.
+const ARROW_SPACING=480,ARROW_MAX=4,ARROW_BEND_CLEAR=8,ARROW_DUPLEX_GAP=34;
+// The straight legs of a drawn path as distance ranges along it; a hop's arc belongs to its leg.
+function arrowLegs(path){
+  const legs=[];let x=0,y=0,dist=0;
+  for(const m of (path.getAttribute('d')||'').matchAll(/([MHVLA])([^MHVLA]*)/g)){
+    const n=m[2].trim().split(/[\s,]+/).filter(Boolean).map(Number),c=m[1];
+    let axis,len;
+    if(c==='M'){x=n[0];y=n[1];continue}
+    if(c==='H'){axis='h';len=Math.abs(n[0]-x);x=n[0]}
+    else if(c==='V'){axis='v';len=Math.abs(n[0]-y);y=n[0]}
+    else if(c==='L'){axis='d';len=Math.hypot(n[0]-x,n[1]-y);x=n[0];y=n[1]}
+    else{axis=legs.at(-1)?.axis||'d';len=Math.PI*n[0];x=n[5];y=n[6]}
+    const last=legs.at(-1);
+    if(last&&axis===last.axis&&axis!=='d')last.e=dist+len;else legs.push({s:dist,e:dist+len,axis});
+    dist+=len;
+  }
+  return legs;
+}
+// Where the marks aim: the middle of each chosen leg, or an even spacing on a leg longer than ARROW_SPACING.
 function adaptiveArrowDistances(path,duplex=false){
   const L=path.getTotalLength();
   // A short directed wire still says which way it runs: one mark at its middle.
   if(L<72) return L>=20?[L/2]:[];
-
-  // Keep arrows away from terminals and scale density with actual wire length.
-  const margin=Math.min(46,Math.max(26,L*.16));
-  const usable=L-margin*2;
-  if(usable<=8) return [];
-
-  let count;
-  if(L<150) count=1;
-  else if(L<310) count=2;
-  else count=Math.min(7,Math.max(2,Math.round(L/165)));
-
-  // Duplex gets the same total visual density, split between directions,
-  // rather than doubling the number of marks.
-  const distances=[];
-  for(let i=0;i<count;i++){
-    distances.push(margin + usable*((i+1)/(count+1)));
+  const need=2*ARROW_BEND_CLEAR+(duplex?ARROW_DUPLEX_GAP:0);
+  const legs=arrowLegs(path).filter(g=>g.e-g.s>=need).sort((p,q)=>(q.e-q.s)-(p.e-p.s)||p.s-q.s);
+  if(!legs.length)return [];
+  // One mark up to 480, and one more for each further 480 that fills (a 520 wire has one, a 1200 wire three).
+  const count=Math.min(ARROW_MAX,Math.max(1,Math.round(L/ARROW_SPACING)));
+  const per=legs.map((g,i)=>i<count?1:0);
+  for(let extra=count-Math.min(count,legs.length),i=0;extra>0&&i<count*legs.length;i++){
+    const g=legs[i%legs.length];if(g.e-g.s>ARROW_SPACING){per[i%legs.length]++;extra--}
   }
-  return distances;
+  const out=[];
+  legs.forEach((g,i)=>{for(let k=1;k<=per[i];k++)out.push(g.s+(g.e-g.s)*k/(per[i]+1))});
+  return out.sort((a,b)=>a-b);
 }
 function arrowPosesForPath(path,duplex=false){
   const L=path.getTotalLength();
   const distances=adaptiveArrowDistances(path,duplex);
   if(!distances.length)return [];
-  const margin=Math.min(L/2,Math.min(46,Math.max(26,L*.16)));
-  const poses=[];
-  distances.forEach((d,i)=>{
-    const q=stableArrowPoint(path,d,margin,L-margin);
-    const reverse=duplex ? (i%2===1) : false;
-    poses.push({q,reverse});
-  });
-
-  // A one-arrow duplex wire still needs to communicate both directions.
-  if(duplex && poses.length===1){
-    poses.push({
-      q:stableArrowPoint(path,Math.min(L-margin,distances[0]+34),margin,L-margin),
-      reverse:true
-    });
+  const legs=arrowLegs(path),poses=[];
+  // A short wire puts its one mark at the middle of its longest leg.
+  if(L<72&&legs.length){const g=legs.reduce((a,b)=>(b.e-b.s)>(a.e-a.s)?b:a);distances[0]=(g.s+g.e)/2}
+  const gap=duplex?ARROW_DUPLEX_GAP:0;
+  for(const t of distances){
+    const g=legs.find(l=>t>=l.s&&t<=l.e);if(!g)continue;
+    const lo=g.s+ARROW_BEND_CLEAR,hi=g.e-ARROW_BEND_CLEAR-gap;if(lo>hi)continue;
+    // Slide along the leg to clear every hop and junction; a leg with no clear place is skipped.
+    const q=stableArrowPoint(path,t-gap/2,lo,hi);if(!q)continue;
+    if(!duplex){poses.push({q,reverse:false});continue}
+    const r=pointAngleAtDistance(path,q.d+gap,3);
+    if(arrowKeepClear.some(c=>Math.hypot(c.x-r.x,c.y-r.y)<ARROW_CROSSING_CLEAR))continue;
+    poses.push({q,reverse:false},{q:r,reverse:true});
+  }
+  // A wire whose legs are all too short or crowded still says which way it runs.
+  if(!poses.length&&L>=20){
+    const margin=Math.min(L/2,Math.min(46,Math.max(26,L*.16)));
+    const at=d=>stableArrowPoint(path,d,margin,L-margin)||pointAngleAtDistance(path,d,3);
+    poses.push({q:at(L/2),reverse:false});
+    if(duplex)poses.push({q:at(Math.min(L-margin,L/2+ARROW_DUPLEX_GAP)),reverse:true});
   }
   return poses;
 }

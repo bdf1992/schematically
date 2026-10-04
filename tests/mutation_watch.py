@@ -231,7 +231,7 @@ MUTANTS=[
       'file':'src/55-render.js',
       'old':"if(arrowKeepClear.some(c=>Math.hypot(c.x-q.x,c.y-q.y)<ARROW_CROSSING_CLEAR))continue;",
       'new':"",
-      'test':'tests/wire_crossing_qa.py'
+      'test':'tests/arrow_spacing_qa.py'
     },
 ]
 
