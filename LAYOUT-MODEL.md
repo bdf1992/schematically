@@ -542,6 +542,10 @@ Two wires that run side by side stand a track apart, so each can be followed by 
 - **Cramped.** When a channel has no room for its group, it is spread as far as the room allows.
   The wires still closer than `TRACK_GAP` carry `data-track-cramped="true"` on their wire group.
 - **Off switch.** `window.ROUTE_NUDGE=false` turns jogs and nudging off, for tests only.
+- **While a card is dragged.** A drag snapshot is the route as drawn (after jogs and nudging): it is
+  taken from the last render (`drawnRoutePoints`, set in `renderWires`) at the press, and again after
+  each settle, so a wire does not jump at the press or at the release. A frozen route is a fixed
+  segment for `nudgeRoutes`. Tests: `tests/track_gap_drag_qa.py`.
 - **The audit** counts `route-close-parallel`: two wires, not both inside one bus band, with middle
   segments 0.5 to under `TRACK_GAP` apart overlapping 24 or more, end leads left out, shared end or
   not. It has no weight in `LAYOUT_RUBRIC`. `route-overlap` and `route-jog` keep their definitions.
