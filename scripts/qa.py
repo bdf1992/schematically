@@ -89,6 +89,7 @@ BROWSER=[
     'tests/group_rows_qa.py',
     'tests/channel_buses_qa.py',
     'tests/bus_lane_sharing_qa.py',
+    'tests/work_engine_map_lanes_qa.py',
     'tests/sections_qa.py',
     'tests/section_exposure_qa.py',
     'tests/notation_qa.py',

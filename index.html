@@ -6305,8 +6305,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // trunk per wire label in the gap between the groups; a card with another card between it and
   // the trunk reaches it along a street in the gap under its row (sending) or above it (receiving).
   const busSlug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'unlabelled';
-  function harness(doc,viewId,{between,pitch}={}){
+  function harness(doc,viewId,{between,pitch,lanes:laneMode}={}){
     const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
+    // lanes: 'port' counts a trunk's or street's lanes as its distinct a ends and writes buses with lanes: 'port'; absent or 'wire' is a lane per wire.
+    if(laneMode!=null&&laneMode!=='wire'&&laneMode!=='port')return refusal('BAD_LANES',`lanes is 'port' or 'wire', not ${JSON.stringify(laneMode)}`);
+    const byPort=laneMode==='port',endOf=w=>w.a+':'+w.aSide,laneCount=ws=>byPort?new Set(ws.map(endOf)).size:ws.length;
     if(!Array.isArray(between)||between.length!==2||String(between[0])===String(between[1]))return refusal('BAD_BETWEEN','between names two different groups: [groupA, groupB]');
     const ids=between.map(String),groups=ids.map(id=>doc.components.find(c=>c.id===id));
     for(let k=0;k<2;k++)if(!groups[k]||!grouping(groups[k]))return refusal('UNKNOWN_GROUP',`No group ${ids[k]}`);
@@ -6324,7 +6327,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const side=id=>members[0].has(id)?0:members[1].has(id)?1:-1,labelOf=w=>String(w.config?.label||'');
     const wires=doc.wires.filter(w=>{const sa=side(w.a),sb=side(w.b);if(sa<0||sb<0||sa===sb)return false;const m=r.v.routes[w.id]?.mode;return m!=='pinned'&&m!=='guided'});
     if(!wires.length)return refusal('NO_WIRES',`No wire free to route runs between ${ids[0]} and ${ids[1]}`);
-    const labels=[...new Set(wires.map(labelOf))].sort((a,b)=>a<b?-1:a>b?1:0),lanes=labels.map(l=>wires.filter(w=>labelOf(w)===l).length);
+    const labels=[...new Set(wires.map(labelOf))].sort((a,b)=>a<b?-1:a>b?1:0),lanes=labels.map(l=>laneCount(wires.filter(w=>labelOf(w)===l)));
     const total=lanes.reduce((s,n)=>s+n*P,0)+BUS_TRUNK_GAP*(labels.length-1),need=total+2*BUS_MARGIN;
     if(!(gap>=need))return refusal('GAP_TOO_NARROW',`The gap between ${ids[0]} and ${ids[1]} is ${Math.floor(Math.max(0,gap))} wide; ${labels.length} trunk${labels.length===1?'':'s'} carrying ${wires.length} wires need ${Math.ceil(need)}`,{need:Math.ceil(need),have:Math.floor(Math.max(0,gap))});
     const trunkX=new Map(),trunkId=l=>`harness-${ids[0]}-${ids[1]}-${busSlug(l)}`;
@@ -6343,12 +6346,12 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // A street id another harness already uses takes the next free suffix.
     const streetId=base=>{let id=base,k=2;while(r.v.buses[id]&&!ours(r.v.buses[id]))id=`${base}-${k++}`;return id};
     const streets=new Map();
-    const street=(k,ri,kind,w)=>{const id=streetId(`street-${groups[k].id}-${ri}${kind==='recv'?'-above':''}`);if(!streets.has(id))streets.set(id,{k,row:ri,kind,wires:[],labels:new Set()});const s=streets.get(id);s.wires.push(w.id);s.labels.add(labelOf(w));return id};
+    const street=(k,ri,kind,w)=>{const id=streetId(`street-${groups[k].id}-${ri}${kind==='recv'?'-above':''}`);if(!streets.has(id))streets.set(id,{k,row:ri,kind,wires:[],ends:new Set(),labels:new Set()});const s=streets.get(id);s.wires.push(w.id);s.ends.add(endOf(w));s.labels.add(labelOf(w));return id};
     const plan=wires.map(w=>{const sa=side(w.a),sb=side(w.b);
       return {w,trunk:trunkId(labelOf(w)),send:direct(sa,w.a)?null:street(sa,rowOf(sa,w.a),'send',w),recv:direct(sb,w.b)?null:street(sb,rowOf(sb,w.b),'recv',w)}});
     const made=[];let top=Math.min(R[0].t,R[1].t),bottom=Math.max(R[0].b,R[1].b);
     for(const [id,s] of streets){
-      const rows=lay[s.k].rows,row=rows[s.row],span=(s.wires.length-1)*P,G=R[s.k];let y;
+      const rows=lay[s.k].rows,row=rows[s.row],n=byPort?s.ends.size:s.wires.length,span=(n-1)*P,G=R[s.k];let y;
       if(s.kind==='send'){
         const next=rows[s.row+1],first=row.b+STREET_DROP;y=first+span/2;
         if(next&&first+span+STREET_ROOM>next.t)return refusal('STREET_TOO_NARROW',`Street ${id} under row ${s.row} of ${groups[s.k].id} needs ${Math.ceil(STREET_DROP+span+STREET_ROOM)} between the rows; it has ${Math.floor(next.t-row.b)}`,{street:id,need:Math.ceil(STREET_DROP+span+STREET_ROOM),have:Math.floor(next.t-row.b)});
@@ -6357,7 +6360,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
         if(prev&&last-span-STREET_ROOM<prev.b)return refusal('STREET_TOO_NARROW',`Street ${id} above row ${s.row} of ${groups[s.k].id} needs ${Math.ceil(STREET_DROP+span+STREET_ROOM)} between the rows; it has ${Math.floor(row.t-prev.b)}`,{street:id,need:Math.ceil(STREET_DROP+span+STREET_ROOM),have:Math.floor(row.t-prev.b)});
       }
       const xs=[...s.labels].map(l=>trunkX.get(l)),to=towardTrunkIsRight(s.k)?Math.max(...xs):Math.min(...xs),far=towardTrunkIsRight(s.k)?G.l:G.r;
-      made.push({id,kind:'street',lanes:s.wires.length,points:[{x:far,y},{x:to,y}]});
+      made.push({id,kind:'street',lanes:n,points:[{x:far,y},{x:to,y}]});
       top=Math.min(top,y-span/2);bottom=Math.max(bottom,y+span/2);
     }
     {const byId=new Intl.Collator('en',{numeric:true}).compare;made.sort((a,b)=>byId(a.id,b.id))}
@@ -6368,7 +6371,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const old=Object.keys(r.v.buses).filter(id=>ours(r.v.buses[id]));
     for(const id of old)delete r.v.buses[id];
     const freed=[];for(const [wid,rt] of Object.entries(r.v.routes))if(rt?.mode==='bus'&&rt.buses.some(id=>old.includes(id))){delete r.v.routes[wid];if(!plan.some(p=>p.w.id===wid))freed.push(wid)}
-    for(const b of made)r.v.buses[b.id]={points:pointsOf.get(b.id),pitch:P,between:ids,...(b.label?{label:b.label}:{})};
+    for(const b of made)r.v.buses[b.id]={points:pointsOf.get(b.id),pitch:P,between:ids,...(b.label?{label:b.label}:{}),...(byPort?{lanes:'port'}:{})};
     for(const p of plan)r.v.routes[p.w.id]={mode:'bus',buses:[p.send,p.trunk,p.recv].filter(Boolean)};
     return {ok:true,view:r.id,between:ids,orientation:vertical?'vertical':'horizontal',gap:{have:Math.floor(gap),need:Math.ceil(need)},
       buses:made.map(b=>({id:b.id,kind:b.kind,lanes:b.lanes,...(b.label?{label:b.label}:{})})),
@@ -10884,6 +10887,68 @@ function busRoutesCross(p,q,related=false){
   }
   return false;
 }
+// The same two faults apart: 4 for two wires sharing no end on one track, else 1 for a crossing, the
+// ratio of route-overlap to crossing in the layout rubric (src/57-layout-metrics.js).
+const BUS_TRACK_COST=4;
+// A route as its segments, each the line it lies on (c) and its span along it: what onOneTrack and
+// segmentsCross (src/40-routing.js) read, taken once per route instead of once per pair.
+function busRouteSegs(pts){
+  const out=[];
+  for(let i=1;i<pts.length;i++){
+    const A=pts[i-1],B=pts[i];
+    if(A.y===B.y)out.push({h:true,c:A.y,lo:Math.min(A.x,B.x),hi:Math.max(A.x,B.x)});
+    else if(A.x===B.x)out.push({h:false,c:A.x,lo:Math.min(A.y,B.y),hi:Math.max(A.y,B.y)});
+  }
+  return out;
+}
+function busSegsCost(P,Q,related=false){
+  let cross=0;
+  for(const s of P)for(const t of Q){
+    if(s.h===t.h){if(!related&&Math.abs(s.c-t.c)<3&&Math.max(s.lo,t.lo)-Math.min(s.hi,t.hi)<8)return BUS_TRACK_COST}
+    else if(!cross&&t.c>s.lo&&t.c<s.hi&&s.c>t.lo&&s.c<t.hi)cross=1;
+  }
+  return cross;
+}
+// On a bus with lanes: 'port', after the swaps, when two of its wires that share no end lie on one
+// track. A wire that taps on along the line another wire taps off along (a card each side of the
+// bus in one row) lies on that wire's track from the other's lane to its own whenever its own lane
+// is the farther one, and a shared lane puts every wire of its port there at once. This is the
+// vertical constraint of channel routing (Hashimoto and Stevens, DAC 1971), and the swaps above
+// cannot meet it: passing the lanes in between changes nothing, so no single swap is kept. So the
+// lanes are sifted (Matuszewski, Schonfeld and Molitor, GD 1999): each in turn is walked by
+// adjacent swaps to one end of the bus and then to the other, and left where the cost over the
+// bus's wires was least (where it stood, unless another place is strictly cheaper; of equal places
+// the first met). Rounds repeat while the cost fell and a track is still shared, at most 4.
+function busSiftLanes(L,W,H,routeOf,wireOf,rebuild){
+  if(L.length<3)return;
+  const n=W.length,ix=new Map(W.map((id,i)=>[id,i])),segs=W.map(id=>busRouteSegs(routeOf(id)));
+  const related=new Uint8Array(n*n),cost=new Uint8Array(n*n),inMove=new Uint8Array(n);let total=0;
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+    related[i*n+j]=related[j*n+i]=busWiresRelated(wireOf(W[i]),wireOf(W[j]))?1:0;
+    const c=busSegsCost(segs[i],segs[j],!!related[i*n+j]);cost[i*n+j]=cost[j*n+i]=c;total+=c;
+  }
+  // Lanes k and k+1 change places: every wire in either is routed again and priced again.
+  const swap=k=>{
+    const u=L[k],v=L[k+1],ids=[...H.get(u),...H.get(v)],moved=ids.map(id=>ix.get(id));
+    L[k]=v;L[k+1]=u;rebuild(ids);
+    for(const i of moved){segs[i]=busRouteSegs(routeOf(W[i]));inMove[i]=1}
+    for(const i of moved)for(let j=0;j<n;j++){
+      if(j===i||(inMove[j]&&j<i))continue;
+      const c=busSegsCost(segs[i],segs[j],!!related[i*n+j]);total+=c-cost[i*n+j];cost[i*n+j]=cost[j*n+i]=c;
+    }
+    for(const i of moved)inMove[i]=0;
+  };
+  for(let round=0;round<4&&cost.includes(BUS_TRACK_COST);round++){
+    const before=total;
+    for(const lane of [...L]){
+      let i=L.indexOf(lane),best=total,at=i;
+      while(i>0){swap(--i);if(total<best){best=total;at=i}}
+      while(i<L.length-1){swap(i++);if(total<best){best=total;at=i}}
+      while(i>at)swap(--i);
+    }
+    if(!(total<before))break;
+  }
+}
 const busWiresRelated=(a,b)=>[`${a.a}:${a.aSide}`,`${a.b}:${a.bSide}`].some(e=>e===`${b.a}:${b.aSide}`||e===`${b.b}:${b.bSide}`);
 
 // ---- Lanes, once per render ---------------------------------------------------------------------
@@ -10891,7 +10956,9 @@ const busWiresRelated=(a,b)=>[`${a.a}:${a.aSide}`,`${a.b}:${a.bSide}`].some(e=>e
 // where they join, then wire id), and its lanes are the distinct lane keys in that order. Then up
 // to 8 passes of adjacent lane swaps keep a swap only when the number of crossing pairs among that
 // bus's wires strictly drops: the greedy form of the slot ordering in ELK's
-// OrthogonalRoutingGenerator. A lane's offset is (its index - (lane count - 1) / 2) x pitch.
+// OrthogonalRoutingGenerator. A bus with lanes: 'port' on which two wires sharing no end still lie
+// on one track then has its lanes sifted (busSiftLanes). A lane's offset is
+// (its index - (lane count - 1) / 2) x pitch.
 let busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map(),lanes:new Map()};
 function busRoutesForRender(){
   const all=activeBuses(),entries=[];
@@ -10948,6 +11015,7 @@ function busRoutesForRender(){
       }
       if(!improved)break;
     }
+    if(all[bid]?.lanes==='port')busSiftLanes(L,W,H,id=>routes.get(id),id=>plans.get(id).w,rebuild);
     order.set(bid,L.flatMap(k=>H.get(k)));
   }
   busRouteState={key,routes,fallback,on,order,lanes};

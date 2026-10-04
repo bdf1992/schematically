@@ -631,7 +631,8 @@ naming a wire that is gone, and drops a route that names a bus that is gone (the
 their a end (the same card `a` and the same `aSide`) take one lane, and a wire with no a end takes a
 lane of its own. Without the key (the default) every wire has its own lane. The `bus` op stores the
 key only when it is exactly `'port'`. The layered layout writes it on every channel bus; the
-harness writes none, so harness trunks and streets keep one lane per wire.
+harness writes it only when asked (`lanes: 'port'`, below), so by default harness trunks and streets
+keep one lane per wire.
 
 ### Ops
 
@@ -644,10 +645,10 @@ harness writes none, so harness trunks and streets keep one lane per wire.
 | `bus {id, remove: true}` | removes it; every wire that named it returns to `auto` and is listed in the receipt |
 | `buses {view?}` | read-only: every bus with the wires that name it |
 | `route {wireId, mode: 'bus', buses}` | puts a wire on buses, in the order it rides them |
-| `harness {between: [groupA, groupB], pitch?}` | builds the buses between two groups and routes their wires on them (below) |
+| `harness {between: [groupA, groupB], pitch?, lanes?}` | builds the buses between two groups and routes their wires on them (below) |
 
-`scripts/layout_sov.mjs file.sov --no-arrange --harness groupA,groupB [--harness ...]` runs harnesses
-from the command line, after any arranging, in order, printing each receipt. With `--no-arrange` the
+`scripts/layout_sov.mjs file.sov --no-arrange --harness groupA,groupB [--harness ...] [--lanes port]`
+runs harnesses (all with `lanes: 'port'` when `--lanes port` is given) from the command line, after any arranging, in order, printing each receipt. With `--no-arrange` the
 file is written as it was read with only its `layout` replaced.
 
 ### Harness
@@ -665,6 +666,14 @@ Between two groups (SECTION-MODEL.md "Groups"), using their regions from `Data.g
   needs, id `street-<group>-<row>`. A receiving member's street is in the gap above its row, its last
   lane 36 above the row's top edge, id `street-<group>-<row>-above` (the suffix keeps a group that both
   sends and receives from naming two streets alike). An id another harness already holds takes `-2`.
+- **Lanes**: `lanes: 'port'` (or `--lanes port`) shares lanes by sending port. A trunk's lane count is
+  the number of distinct a ends (`a` and `aSide`) among the wires of its label, a street's is the
+  number of distinct a ends among its wires, and the street's span, its y and the `STREET_TOO_NARROW`
+  need use that count; every bus the harness writes then carries `lanes: 'port'` and the receipt
+  reports those counts. Left out, or `'wire'`, a lane per wire as before; any other value is refused
+  with `BAD_LANES`. `layered` calls the harness without it. The Work Engine map
+  (`docs/workengine/build_map.py`) uses it: its `backs` trunk carries 59 wires on 35 lanes, not 59,
+  and the gap it needs falls from 402 to 258.
 - Each wire gets `{mode: 'bus', buses: [sending street?, trunk, receiving street?]}`. Running the
   harness again for the same pair replaces its buses.
 - `layered` runs the harness itself, between each pair of groups on the top-level canvas, after
@@ -684,6 +693,7 @@ Between two groups (SECTION-MODEL.md "Groups"), using their regions from `Data.g
 | `GAP_TOO_NARROW` | the gap is narrower than the trunks (lanes × pitch each, 16 between) plus 24 each side | `need`, `have` |
 | `STREET_TOO_NARROW` | a street's last lane plus 12 does not fit before the next row (or after the previous one) | `need`, `have`, `street` |
 | `UNKNOWN_GROUP`, `BAD_BETWEEN`, `NO_WIRES` | the harness has no two groups, or nothing to route | |
+| `BAD_LANES` | the harness's `lanes` is neither `'port'` nor `'wire'` | |
 
 A refusal changes nothing.
 
@@ -705,6 +715,17 @@ A refusal changes nothing.
   the slot ordering in ELK's `OrthogonalRoutingGenerator`). The reverse and each swap exchange lanes: every
   wire in the two lanes is routed again. Two wires sharing no end that run on one track count as a
   crossing pair.
+- **Sifting**, on a bus with `lanes: 'port'` whose own order is not given, when after the swaps two of
+  its wires that share no end still lie on one track. A wire that taps on along the line another wire
+  taps off along (a card each side of the bus in one row) lies on that wire's track between the two
+  lanes whenever its own lane is the farther one, and a shared lane puts every wire of its port there.
+  It is the vertical constraint of channel routing (Hashimoto and Stevens, 1971), and no single
+  adjacent swap removes it, because passing the lanes in between changes nothing. So each lane in turn
+  is walked by adjacent swaps to one end of the bus and then the other and left where the cost over the
+  bus's wires is least (sifting: Matuszewski, Schönfeld and Molitor, 1999), the cost being 4 for a pair
+  on one track and otherwise 1 for a crossing pair, the layout rubric's ratio of `route-overlap` to
+  `crossing`. A lane stays where it stood unless another place is strictly cheaper. Rounds repeat while
+  the cost falls and a track is still shared, at most 4. A bus without the key is never sifted.
 - Bus routes go into `occupied` before any auto route, so auto routes keep clear of them. A pinned or
   guided route still wins; a bus route that cannot be built falls back to the router, and its wire group
   carries `data-bus-fallback`.

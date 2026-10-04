@@ -88,7 +88,9 @@ What the full map still works around:
 - Wire routing, since 2026-10-02: `build_map.py` orders each group's cards by barycentre and gives the
   map two harnesses (`layout.harness`, surfaces to records and records to queries): every wire between
   two groups rides a labelled trunk in the gap and a street in the row gaps, so crossings fall from 665
-  on dev to 185, with no wrapped route (`check_map.py --routing`).
+  on dev to 181, with no wrapped route (`check_map.py --routing`). The harnesses take `lanes: 'port'`
+  (wires that leave one port share a lane), so the `backs` trunk carries its 59 wires on 35 lanes, the
+  gap it needs is 258, not 402, and QUERY_GAP is 320, not 460; route-overlap is 4, not 23.
 - Four backing names in the queries are not records in the gap map (ProcessRecord, Judgement board
   rows, Handoff, Reception), so they have no Wire; `build_map.py` prints them and the document's
   description names them.
