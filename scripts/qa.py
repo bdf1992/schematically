@@ -126,6 +126,7 @@ BROWSER=[
     'tests/golden_rendered_text_qa.py',
     'tests/skills_conformance_qa.py',
     'tests/render_idempotence_qa.py',
+    'tests/unplaced_render_qa.py',
     'tests/region_dimensions_qa.py',
     'tests/swarm_originals_qa.py',
     'tests/swarm_review_qa.py',
