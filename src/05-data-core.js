@@ -1333,7 +1333,15 @@
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource!=='reference')assertStatusAndWaitsOn(doc,patch?.config,true);
     // A patch that retypes the Component is read against the symbol it will have.
-    if(resource!=='reference')assertAnswers(doc,patch?.config,resource,true,resource==='component'?{symbolId:patch?.symbolId??patch?.type??current.symbolId??current.type}:null);
+    // On a retype a null for a declared concern is the patch removing that answer, so it is not read
+    // against the new symbol; the record it makes is checked below, once the patch is merged.
+    const retyped=resource==='component'&&(patch?.symbolId??patch?.type)!==undefined&&normalizeSymbolId(patch?.symbolId??patch?.type)!==normalizeSymbolId(current.symbolId??current.type);
+    let answered=patch?.config;
+    if(retyped&&isObject(answered)&&isObject(answered.answers)){
+      const declared=notationConcerns(doc,'component').concerns;
+      answered={...answered,answers:Object.fromEntries(Object.entries(answered.answers).filter(([k,v])=>!(v===null&&declared.some(c=>c.id===k))))};
+    }
+    if(resource!=='reference')assertAnswers(doc,answered,resource,true,resource==='component'?{symbolId:patch?.symbolId??patch?.type??current.symbolId??current.type}:null);
     if(resource==='component')assertBadges(patch?.config,true);
     if(resource==='component'){
       assertDefinitionPatch(patch,binding);
@@ -1389,6 +1397,13 @@
     // The record keeps its identity: an editor holding it (a gesture that has just begun, a bound
     // listener) keeps holding the updated record, not a stale copy.
     if(resource!=='reference')clearStatusAndWaitsOn(candidate,patch);
+    // A retype is checked on the record it makes: every answer the Component will hold, those the
+    // patch did not touch included, must be asked of its new symbol. The patch removes the ones that
+    // are not (answers: {id: null} or answers: null); the core never drops one on its own.
+    if(retyped){
+      const left=answerProblems(doc,candidate.config?.answers,'component','config.answers',false,candidate);
+      if(left.length)throw new Error(left.join('; '));
+    }
     for(const key of Object.keys(current))delete current[key];
     Object.assign(current,candidate);
     if(resource==='component')reconcileComponentWirePorts(doc,id);
