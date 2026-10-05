@@ -146,6 +146,7 @@ BROWSER=[
     'tests/drop_on_wire_redraw_qa.py',
     'tests/bus_lane_hold_qa.py',
     'tests/live_link_qa.py',
+    'tests/address_open_qa.py',
 ]
 TAIL=[
     'tests/mutation_watch.py',

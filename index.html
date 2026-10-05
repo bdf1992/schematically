@@ -15625,6 +15625,47 @@ async function openDesktopLaunchDocument(){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',openDesktopLaunchDocument,{once:true});
 else openDesktopLaunchDocument();
 
+// The address parameter open names a relative path on this page's own origin; a link is enough to show
+// a document. Anything with a scheme, a host, a leading slash, a backslash or a parent segment is refused.
+function addressDocumentTarget(raw,base){
+  const reason='only a relative path on this site is opened';
+  const refuse={ok:false,reason};
+  const text=String(raw??'');
+  if(!text.trim()||text.startsWith('/')||text.startsWith('\\')||text.includes('\\')||/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text))return refuse;
+  if(text.split(/[?#]/)[0].split('/').some(segment=>segment==='..'))return refuse;
+  let url;
+  try{url=new URL(text,base)}catch(_){return refuse}
+  if(url.origin!==location.origin||(url.protocol!=='http:'&&url.protocol!=='https:'))return refuse;
+  const last=url.pathname.split('/').pop()||'';
+  let name=last;
+  try{name=decodeURIComponent(last)}catch(_){ }
+  return {ok:true,url:url.href,name};
+}
+async function openAddressDocument(){
+  if(window.__TAURI__)return;
+  let raw=null;
+  try{raw=new URLSearchParams(location.search).get('open')}catch(_){ }
+  if(raw===null)return;
+  const target=addressDocumentTarget(raw,location.href);
+  if(!target.ok){
+    // A later start-up write may replace the status text, so the refusal is written after one frame.
+    requestAnimationFrame(()=>{statusEl.textContent=`Open refused · ${target.reason}`});
+    return;
+  }
+  try{
+    const response=await fetch(target.url,{credentials:'same-origin',redirect:'error',cache:'no-store'});
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    const parsed=parseFilePayload(await response.text());
+    applyOpenedPayload(parsed,target.name);
+    statusEl.textContent=`Opened · ${currentFileName}`;
+  }catch(error){
+    console.warn('Address document failed to open',error);
+    requestAnimationFrame(()=>{statusEl.textContent=`Open failed · ${target.name} · ${error.message}`});
+  }
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',openAddressDocument,{once:true});
+else openAddressDocument();
+
 if(fileBtn)fileBtn.addEventListener('click',event=>{event.stopPropagation();setFileMenu(fileMenu.hidden)});
 if(fileMenu)fileMenu.addEventListener('click',event=>event.stopPropagation());
 if(fileNewBtn)fileNewBtn.addEventListener('click',()=>{setFileMenu(false);newSchematic()});
