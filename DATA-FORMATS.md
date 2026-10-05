@@ -249,6 +249,10 @@ the answers. Every key is optional and absent is not written: a document with no
   wire concerns. There is no built-in one of either. A component concern that names `symbols` is
   asked only of Components with one of those symbol ids: an answer to it on any other Component is
   `ANSWER_UNKNOWN` (the message lists the ids asked of that symbol) and the report holds no row for it.
+  An update that changes a Component's `symbolId` is read on the record it makes: if the Component
+  would hold an answer its new symbol is not asked, the update is refused with `ANSWER_UNKNOWN`
+  naming each such concern, unless the same patch removes them (`answers: {id: null}` or `answers: null`).
+  The data core never drops an answer on its own, in a single update or in a batch.
 
 Each is an object whose keys are concern ids and whose values are non-empty strings after trimming.
 

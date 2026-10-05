@@ -31,6 +31,9 @@ Browser part (index.html in Chromium), then node scripts/validate_sov.mjs:
   (j) node scripts/validate_sov.mjs --concerns on the document of (c) with one answer exits 0 and
       prints 8 lines beginning 'open' and 'concerns: 1 answered, 8 open'; without the flag neither;
   (k) the page logs no errors.
+  (m) a retype is read on the record it makes: an act card holding an answer to a concern asked of
+      [act], retyped to hold, is refused with ANSWER_UNKNOWN (alone and in a batch) unless the same
+      patch removes the answer; a card with no answers retypes as before.
   (l) a component concern with symbols [act] gives a row for an act card and none for a hold card;
       an answer to it on the hold card is refused with ANSWER_UNKNOWN on create, on update and by
       answerConcerns, and reported on load; a later notation's entry with the same id and no
@@ -185,6 +188,20 @@ PAGE = r"""([plant])=>{
      blank:judge(cost({symbols:['act','  ']})),
      notList:judge(cost({symbols:'act'})),
    }}
+  // (m) a retype is checked on the record it makes: ore is an act card holding an answer to feeds; keeps is asked of hold.
+  {const feeds={id:'feeds',applies:'component',symbols:['act'],title:'Feeds',question:'What does this act feed?'},keeps={id:'keeps',applies:'component',symbols:['hold'],title:'Keeps',question:'What does this hold keep?'};
+   const base=(oreAnswers={feeds:'The bar.'})=>doc({list:[...plant,feeds,keeps],cardAnswers:oreAnswers});
+   const retype=(patch,start)=>{const d=made(start||base()),before=JSON.stringify(d),r=D.applyOperation(d,{op:'update',resource:'component',resourceId:'ore',patch});
+     const ore=D.read(d,'component','ore');return {ok:r.ok,message:r.error?.message||'',unchanged:JSON.stringify(d)===before,symbol:ore.symbolId,answers:ore.config.answers??null,errors:D.validateDocument(d).errors,
+       keeps:D.concernReport(d).rows.filter(x=>x.target==='ore'&&x.concern==='keeps').map(x=>[x.answered,x.answer??null])}};
+   // The same two operations, the second a retype: first leaving feeds in place, then removing it.
+   const ops=patch=>({operations:[{op:'update',resource:'component',id:'bar',patch:{config:{label:'Bar two'}}},{op:'update',resource:'component',id:'ore',patch}]});
+   const d=made(base()),before=JSON.stringify(d),batch=D.applyBatch(d,ops({symbolId:'hold'})),batchUnchanged=JSON.stringify(d)===before;
+   const batchOk=D.applyBatch(d,ops({symbolId:'hold',config:{answers:{feeds:null}}}));
+   out.retype={bare:retype({symbolId:'hold'}),removed:retype({symbolId:'hold',config:{answers:{feeds:null}}}),swapped:retype({symbolId:'hold',config:{answers:{feeds:null,keeps:'Bars.'}}}),
+     allNull:retype({symbolId:'hold',config:{answers:null}}),same:retype({symbolId:'act'}),none:retype({symbolId:'hold'},base(null)),
+     batch:{ok:batch.ok,message:batch.error?.message||'',index:batch.error?.index??null,unchanged:batchUnchanged},
+     batchOk:{ok:batchOk.ok,label:D.read(d,'component','bar').config.label,symbol:D.read(d,'component','ore').symbolId,answers:D.read(d,'component','ore').config.answers??null}}}
   // (i) saving and opening keeps every answer; a document without answers gains no answers key.
   {const full=doc({meta:{answers:{what:'An ore line.',why:'To make bars.'}},cardAnswers:{'made-by':'Dug from the pit.'},wireAnswers:{carries:'Bars, four a minute.'}});
    A.document.replace(full);fitDiagram();
@@ -334,6 +351,23 @@ def main() -> None:
         assert j['errors'] == ['notation: ' + x for x in j['findings']], (name, 'validateDocument does not report the finding', j)
         assert j['component'] == ['made-by'] and j['document'] == [i for i, _, _ in BUILTIN] and j['wire'] == [] and j['rows'] == 4 + 2, (name, 'the entry was admitted', j)
     print('(l) symbols [act]: a row for the act card and none for the hold card; an answer on the hold card is refused with ANSWER_UNKNOWN on create, update and answerConcerns; symbols [] and symbols on a document concern are CONCERN_INVALID')
+
+    # (m) A retype is checked on the record it makes.
+    t = r['retype']
+    b = t['bare']
+    assert not b['ok'] and b['message'].startswith('ANSWER_UNKNOWN:') and b['unchanged'], ('a retype that leaves an answer the new symbol is not asked must be refused with ANSWER_UNKNOWN, the document unchanged', b)
+    assert 'config.answers.feeds' in b['message'] and '"hold"' in b['message'] and 'keeps' in b['message'], ('the refusal names the answer and what the new symbol is asked', b['message'])
+    assert b['symbol'] == 'act' and b['answers'] == {'feeds': 'The bar.'}, ('a refused retype changed the card', b)
+    for name in ('removed', 'allNull'):
+        assert t[name]['ok'] and t[name]['symbol'] == 'hold' and t[name]['answers'] is None and t[name]['errors'] == [], (name, 'a retype whose patch removes the answer was refused or left it', t[name])
+    sw = t['swapped']
+    assert sw['ok'] and sw['symbol'] == 'hold' and sw['answers'] == {'keeps': 'Bars.'} and sw['keeps'] == [[True, 'Bars.']] and sw['errors'] == [], ('a retype that swaps the answers', sw)
+    assert t['same']['ok'] and t['same']['answers'] == {'feeds': 'The bar.'}, ('an update that keeps its symbol changed', t['same'])
+    assert t['none']['ok'] and t['none']['symbol'] == 'hold' and t['none']['answers'] is None, ('a retype of a card with no answers was refused', t['none'])
+    bt = t['batch']
+    assert not bt['ok'] and bt['message'].startswith('ANSWER_UNKNOWN:') and bt['index'] == 1 and bt['unchanged'], ('a batch with a refused retype must be refused whole', bt)
+    assert t['batchOk'] == {'ok': True, 'label': 'Bar two', 'symbol': 'hold', 'answers': None}, ('a batch whose retype removes the answer', t['batchOk'])
+    print('(m) a retype leaving an answer the new symbol is not asked is refused with ANSWER_UNKNOWN, alone and in a batch; the same patch may remove it')
 
     # (i) Save and open.
     kept = {'meta': {'what': 'An ore line.', 'why': 'To make bars.'}, 'ore': {'made-by': 'Dug from the pit.'}, 'bar': None, 'belt': {'carries': 'Bars, four a minute.'}}
