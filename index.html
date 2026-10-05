@@ -1258,6 +1258,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       // once to every stroke weight, every text role's size and own min, space.pin and
       // type.screen.max. The values below are the scale 1 values and stay unscaled here.
       scale:1,
+      // The glyph's box on every card that has room for it (NOTATION-MODEL.md §3, §4): the box a
+      // 112 x 84 card gives a one-line title. resolve() multiplies it by the scale.
+      glyph:{w:80.64,h:40.4},
       // Offset from inside: the core keeps radius.core, each line outward adds its band.
       radius:{core:6,card:10},
       // World units. Selected and highlighted states multiply these, never replace them.
@@ -1283,6 +1286,15 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       {id:'container',applies:'region',title:'Container',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
       {id:'gate',applies:'region',title:'Gate',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
       {id:'intake',applies:'region',title:'Intake',meaning:'An open region: a dashed outline.',dash:'dashed',open:true}
+    ],
+    // Concerns (NOTATION-MODEL.md "Concerns"): the questions a document drawn in this notation should
+    // answer. A notation that extends this one rewords one by declaring the same applies and id, and
+    // adds its own for the document, for Components and for Wires.
+    concerns:[
+      {id:'what',applies:'document',title:'What it is',question:'What is this a schematic of, in one or two sentences?'},
+      {id:'why',applies:'document',title:'Why build it',question:'Why would someone build this or study it?'},
+      {id:'alternatives',applies:'document',title:'Alternatives',question:'What are the alternatives, and why this one over the others?'},
+      {id:'smaller',applies:'document',title:'Smaller first',question:'Can a smaller version be built first, and what is it?'}
     ]
   };
 
@@ -1354,6 +1366,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     while(cur&&!seen.has(cur.id)){chain.unshift(cur);seen.add(cur.id);cur=cur.extends?table[cur.extends]:null}
     let flat={};for(const n of chain)flat=merge(flat,n);
     const kinds=joinKinds(chain);if(kinds)flat.kinds=kinds;
+    const concerns=joinKinds(chain,'concerns');if(concerns)flat.concerns=concerns;
+    const sized=checkGlyphSize(flat.tokens);if(!sized.ok)return sized;
     const scaled=applyScale(flat.tokens);if(!scaled.ok)return scaled;
     flat.id=id;registerPoints(flat);return {ok:true,notation:flat};
   }
@@ -1369,11 +1383,12 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // entry replaces an earlier notation's entry with the same applies and id, in its place.
   const KIND_KEYS=['id','applies','title','meaning','dash','weight','arrowhead','open'];
   const KIND_DASH={wire:['solid','dashed'],region:['none','solid','dashed']},KIND_WEIGHT=['regular','heavy'],KIND_ARROWHEAD=['chevron','filled','none'];
-  function joinKinds(chain){
+  // `list` names the list joined: kinds, or concerns (below), which join by the same rule.
+  function joinKinds(chain,list='kinds'){
     let any=false;const out=[];
     chain.forEach((n,from)=>{
-      if(!Array.isArray(n?.kinds))return;any=true;
-      for(const entry of n.kinds){
+      if(!Array.isArray(n?.[list]))return;any=true;
+      for(const entry of n[list]){
         const at=isObject(entry)?out.findIndex(o=>o.from<from&&isObject(o.entry)&&o.entry.applies===entry.applies&&o.entry.id===entry.id):-1;
         if(at>=0)out[at]={entry,from};else out.push({entry,from});
       }
@@ -1423,9 +1438,52 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   function kindsOf(notation,applies){
     return judgeKinds(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry}));
   }
+  // ---- Concerns (NOTATION-MODEL.md "Concerns") --------------------------------------------------
+  // A notation declares `concerns`, the questions a schematic drawn in it should answer:
+  // {id, applies: document | component | wire, title, question, meaning}. id and question are
+  // non-empty strings; title and meaning are optional strings. A document answers them in
+  // meta.answers and config.answers (src/05-data-core.js answerProblems, concernReport).
+  //   CONCERN_INVALID   an entry breaks a rule: not an object; an unknown key; an id or a question
+  //                     that is not a non-empty string; an applies that is not one of the three; a
+  //                     title or meaning that is not a string; an id used twice within one applies
+  // resolve() joins concerns along the extends chain as it joins kinds (joinKinds): a later
+  // notation's entry replaces an earlier notation's entry with the same applies and id, in its place.
+  const CONCERN_KEYS=['id','applies','title','question','meaning'],CONCERN_APPLIES=['document','component','wire'];
+  // Each entry of notation.concerns with the rules it breaks (none when it is admitted).
+  function judgeConcerns(notation){
+    const list=Array.isArray(notation?.concerns)?notation.concerns:[];
+    const judged=list.map((entry,i)=>{
+      const broken=[],say=v=>JSON.stringify(v);
+      if(!isObject(entry))return {entry,name:`concerns[${i}]`,broken:['an entry is an object {id, applies, question, ...}']};
+      const name=`${typeof entry.applies==='string'?entry.applies:'concerns['+i+']'} concern ${say(entry.id)}`;
+      const extra=Object.keys(entry).find(k=>!CONCERN_KEYS.includes(k));
+      if(extra)broken.push(`${extra} is not a field of a concern (${CONCERN_KEYS.join(', ')})`);
+      if(typeof entry.id!=='string'||!entry.id.trim())broken.push('id must be a non-empty string');
+      if(!CONCERN_APPLIES.includes(entry.applies))broken.push(`applies must be ${CONCERN_APPLIES.join(', ')}, not ${say(entry.applies)}`);
+      if(typeof entry.question!=='string'||!entry.question.trim())broken.push('question must be a non-empty string');
+      for(const key of ['title','meaning'])if(entry[key]!==undefined&&typeof entry[key]!=='string')broken.push(`${key} must be a string`);
+      return {entry,name,broken};
+    });
+    // The rule between entries is read over the ones that stand on their own.
+    const sound=judged.filter(j=>!j.broken.length);
+    for(const j of sound)if(sound.some(o=>o!==j&&o.entry.applies===j.entry.applies&&o.entry.id===j.entry.id))j.broken.push(`id is used by more than one ${j.entry.applies} concern`);
+    return judged;
+  }
+  // One string per broken rule, beginning CONCERN_INVALID and naming the notation, the entry and the rule.
+  function concernFindings(notation){
+    const out=[];
+    for(const j of judgeConcerns(notation))for(const rule of j.broken)out.push(`CONCERN_INVALID: notation "${notation?.id??'?'}" ${j.name}: ${rule}`);
+    return out;
+  }
+  // The admitted entries for the document, for Components or for Wires, in declared order. An entry
+  // with a finding is not admitted.
+  function concernsOf(notation,applies){
+    return judgeConcerns(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry}));
+  }
   // The document scale, applied once to the flattened tokens (a fresh object: merge copies), so
   // every reader of tokens(doc) and resolve(doc).notation.tokens draws scaled with no multiplication
-  // of its own. Scaled: stroke.*, each text role's size and its own min, space.pin, type.screen.max.
+  // of its own. Scaled: stroke.*, each text role's size and its own min, space.pin, type.screen.max,
+  // glyph.w and glyph.h.
   // Not scaled: type.screen.min (screen pixels), radius, the other space tokens, elevation.
   // A scale that is not a number from 0.5 to 4 is refused, never clamped.
   const SCALE_MIN=.5,SCALE_MAX=4;
@@ -1441,7 +1499,16 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(r.size!==undefined)r.size=by(r.size);if(r.min!==undefined)r.min=by(r.min);
     }
     if(isObject(t.space)&&t.space.pin!==undefined)t.space.pin=by(t.space.pin);
+    if(isObject(t.glyph)){t.glyph.w=by(t.glyph.w);t.glyph.h=by(t.glyph.h)}
     return {ok:true};
+  }
+  // The glyph token is a box {w, h}, each a finite number above 0. Anything else is refused, never
+  // replaced by the built-in size.
+  function checkGlyphSize(t){
+    if(!isObject(t)||t.glyph===undefined)return {ok:true};
+    const g=t.glyph,good=v=>typeof v==='number'&&Number.isFinite(v)&&v>0;
+    if(isObject(g)&&good(g.w)&&good(g.h))return {ok:true};
+    return {ok:false,code:'GLYPH_SIZE_INVALID',message:`tokens.glyph is ${JSON.stringify(g)}; its w and h must each be a finite number above 0`,next_operation:`set tokens.glyph to {w, h} with both above 0, or remove it to draw at ${SCHEMATIC.tokens.glyph.w} by ${SCHEMATIC.tokens.glyph.h}`};
   }
   // Glyphs whose terminals are the card's attachment points (`points: 'terminals'`), by symbol
   // id, filled whenever a notation is resolved. The attachment core reads it, so a gate's two
@@ -1494,7 +1561,27 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // The glyph leaves the card's foot to its title, and a line more for a subtitle.
   // The glyph leaves the card's foot to its title (one or two lines, from its length at the title
   // size) and a line more for a subtitle. Centred on the axis, so the room is kept on both sides.
-  function glyphBox(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type}={}){
+  // The glyph draws at one size, the glyph token F, on every card that has room for it. With
+  // s = min(F.w/96, F.h/64), the drawn glyph is 96s by 64s. A card has room when 96s is at most 72%
+  // of its width and 64s fits between the feet glyphBox keeps for the text (and, for a lone title
+  // that needs two lines, between the two-line blocks). `need` is the smallest card that has room:
+  // the width for the glyph, and the height for the glyph and the text at the wider of that width and
+  // the card's own. Only the layered layout grows a card to it (src/08-layout-core.js).
+  function glyphRoom(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type,glyph=SCHEMATIC.tokens.glyph}={}){
+    const F=glyph||SCHEMATIC.tokens.glyph,s=Math.min(F.w/96,F.h/64),ts=drawnSize(type,'title'),ss=drawnSize(type,'subtitle'),E=1e-6;
+    const heightAt=w=>{
+      const avail=Math.max(1,w-12),lines=Math.max(1,Math.min(2,Math.ceil(String(title||'').length*ts*.6/avail)));
+      const foot=8+lines*ts*1.15+(subtitle?ss*1.3:0),two=lines===2&&!subtitle&&titleWidth(title)*ts>avail*.85;
+      return 64*s+2*Math.max(foot,two?2.6*ts+4:0);
+    };
+    const needW=96*s/.72;
+    return {ok:96*s<=.72*size.w+E&&heightAt(size.w)<=size.h+E,box:{w:F.w,h:F.h,scale:s},need:{w:needW,h:heightAt(Math.max(size.w,needW))}};
+  }
+  // Where the card has room the box is the fixed one (fixed: true). Where it has not, the box follows
+  // the card as below, the shrink for a lone two-line title included (fixed: false).
+  function glyphBox(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type,glyph=SCHEMATIC.tokens.glyph}={}){
+    const fit=glyphRoom(g,size,{subtitle,title,type,glyph});
+    if(fit.ok)return {w:fit.box.w,h:fit.box.h,scale:fit.box.scale,fixed:true};
     const ts=drawnSize(type,'title'),ss=drawnSize(type,'subtitle'),avail=Math.max(1,size.w-12);
     const lines=Math.max(1,Math.min(2,Math.ceil(String(title||'').length*ts*.6/avail)));
     const foot=8+lines*ts*1.15+(subtitle?ss*1.3:0);
@@ -1506,7 +1593,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // engine (no fonts in Node) and the renderer agree; past 85% of the text width counts, a margin
     // for fonts up to 15% wider than the table (DejaVu on Linux runs about 10% wider).
     if(lines===2&&!subtitle&&titleWidth(title)*ts>avail*.85){const room=size.h-2*(2.6*ts+4);if(room<h){const k=Math.max(.6,room/h);w*=k;h*=k}}
-    return {w,h,scale:Math.min(w/96,h/64)};
+    return {w,h,scale:Math.min(w/96,h/64),fixed:false};
   }
   // A title's advance width in ems at the title weight (600), from a sans-serif width table in the
   // manner of a PDF core font's AFM metrics: close enough to tell one line from two.
@@ -1522,7 +1609,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const {scale}=glyphBox(g,size,opts);return {dx:(t.at[0]-48)*scale,dy:(t.at[1]-axis)*scale};
   }
   function terminal(g,idOrRole){return (g?.terminals||[]).find(t=>t.id===idOrRole)||(g?.terminals||[]).find(t=>t.role===idOrRole)||null}
-  return {BUILTIN,MARGIN,drawnSize,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
+  return {BUILTIN,MARGIN,drawnSize,glyphRoom,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,concernsOf,concernFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
 });
 /* END src/03-notation-core.js */
 </script>
@@ -2274,6 +2361,66 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     return out;
   }
   function assertWireKind(doc,config,clearable=false){const p=wireKindProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Concerns and answers (NOTATION-MODEL.md "Concerns") --------------------------------------
+  // A notation declares the questions a schematic should answer (`concerns`, applies document,
+  // component or wire). A document answers its own in `meta.answers`; a Component and a Wire answer
+  // theirs in `config.answers`. Each is an object of concern id to a non-empty string. Absent means
+  // nothing is answered, and an empty object is never written into a document that has none.
+  //   ANSWER_INVALID     answers is not an object, or a value is not a non-empty string
+  //   ANSWER_UNDECLARED  a key is set and the notation declares no concerns for that applies
+  //   ANSWER_UNKNOWN     the key is not a concern the notation declares for that applies
+  //   CONCERN_INVALID    an entry of the notation's concerns breaks a rule (src/03-notation-core.js concernFindings)
+  // Loading reports them (validateDocument); create and update refuse; an update's null removes.
+  // An open concern is information (concernReport), never a finding.
+  function notationConcerns(doc,applies){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(!N)return {id:doc?.notation||'schematic',concerns:[]};
+    const r=N.resolve(doc||{});
+    return {id:r.ok?r.notation.id:(doc?.notation||'schematic'),concerns:r.ok?N.concernsOf(r.notation,applies):[]};
+  }
+  // `at` is 'meta.answers' or 'config.answers', the text a message names the key under.
+  function answerProblems(doc,answers,applies,at,clearable=false){
+    const out=[];if(answers===undefined||(clearable&&answers===null))return out;
+    if(!isObject(answers)){out.push(`ANSWER_INVALID: ${at} must be an object of concern id to answer, not ${JSON.stringify(answers)}`);return out}
+    const keys=Object.keys(answers);if(!keys.length)return out;
+    const {id,concerns}=notationConcerns(doc,applies);
+    for(const key of keys){
+      const value=answers[key];
+      if(!concerns.length)out.push(`ANSWER_UNDECLARED: ${at}.${key} is set, but notation "${id}" declares no ${applies} concerns`);
+      else if(!concerns.some(c=>c.id===key))out.push(`ANSWER_UNKNOWN: ${at}.${key} is not a ${applies} concern declared by notation "${id}"; declared: ${concerns.map(c=>c.id).join(', ')}`);
+      else if(typeof value!=='string'||!value.trim())out.push(`ANSWER_INVALID: ${at}.${key} must be a non-empty string, not ${JSON.stringify(value)}`);
+    }
+    return out;
+  }
+  function assertAnswers(doc,config,applies,clearable=false){
+    if(!isObject(config))return;
+    const p=answerProblems(doc,config.answers,applies,'config.answers',clearable);if(p.length)throw new Error(p[0]);
+  }
+  // Copies authored answers onto a record being made; none, or an empty object, writes no key.
+  function adoptAnswers(config,value){
+    if(isObject(value?.answers)&&Object.keys(value.answers).length)config.answers=clone(value.answers);
+    return config;
+  }
+  // Which declared concerns a document answers and which are still open: {notation, rows, answered,
+  // open}. One row per declared concern per thing it applies to: the document's (target null), then
+  // each Component's in document order, then each Wire's. Reads the document and changes nothing.
+  // An answer the notation does not declare is not a row: validateDocument reports it.
+  function concernReport(doc){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,r=N?N.resolve(doc||{}):null;
+    const declared=applies=>r?.ok?N.concernsOf(r.notation,applies):[];
+    const rows=[];
+    const add=(concerns,applies,target,answers)=>{
+      for(const c of concerns){
+        const raw=isObject(answers)&&Object.prototype.hasOwnProperty.call(answers,c.id)?answers[c.id]:undefined,answered=typeof raw==='string'&&!!raw.trim();
+        rows.push({concern:c.id,applies,target,title:typeof c.title==='string'&&c.title?c.title:c.id,question:c.question,answered,...(answered?{answer:raw}:{})});
+      }
+    };
+    add(declared('document'),'document',null,doc?.meta?.answers);
+    const ofComponents=declared('component'),ofWires=declared('wire');
+    if(ofComponents.length)for(const c of Array.isArray(doc?.components)?doc.components:[])add(ofComponents,'component',c?.id??null,c?.config?.answers);
+    if(ofWires.length)for(const w of Array.isArray(doc?.wires)?doc.wires:[])add(ofWires,'wire',w?.id??null,w?.config?.answers);
+    const answered=rows.filter(row=>row.answered).length;
+    return {notation:r?.ok?r.notation.id:(doc?.notation||'schematic'),rows,answered,open:rows.length-answered};
+  }
   // ---- Badges (DATA-FORMATS.md "Badges") ------------------------------------------------------
   // A Component's `config.badges` lists at most 4 chips `{label, colorSlot?}`: a label of 1 to 24
   // characters after trimming and a palette slot 0 to 11 (absent means 0). Presentation only.
@@ -2341,7 +2488,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // An update's null removes the key.
   function clearStatusAndWaitsOn(candidate,patch){
     if(!isObject(candidate?.config)||!isObject(patch?.config))return;
-    for(const key of ['status','waitsOn','badges','intake'])if(patch.config[key]===null)delete candidate.config[key];
+    for(const key of ['status','waitsOn','badges','intake','answers'])if(patch.config[key]===null)delete candidate.config[key];
     if(candidate.a!==undefined&&patch.config.kind===null)delete candidate.config.kind; // a Wire's kind
     if(isObject(patch.config.presentation)&&patch.config.presentation.shape===null&&isObject(candidate.config.presentation))delete candidate.config.presentation.shape;
   }
@@ -2751,6 +2898,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // A group's members, as written; create checks them (assertGroupRules).
     if(value.config?.members!==undefined)config.members=clone(value.config.members);
     assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
+    assertAnswers(doc,value.config,'component');adoptAnswers(config,value.config);
     assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges);
     if(value.config?.intake!==undefined&&value.config.intake!==null){config.intake=clone(value.config.intake);assertIntake(component)}
     if(isObject(config.presentation)&&config.presentation.shape===null)delete config.presentation.shape;
@@ -2968,7 +3116,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   function makeWire(doc,value={}){
     const id=cleanString(value.id,nextId(doc.wires,'k'));
-    assertPathDelay(value.config);assertStatusAndWaitsOn(doc,value.config);assertWireKind(doc,value.config);
+    assertPathDelay(value.config);assertStatusAndWaitsOn(doc,value.config);assertWireKind(doc,value.config);assertAnswers(doc,value.config,'wire');
     const wire={id,a:cleanString(value.a)||null,b:cleanString(value.b)||null,aSide:value.aSide??null,bSide:value.bSide??null,aAttachment:isObject(value.aAttachment)?clone(value.aAttachment):null,bAttachment:isObject(value.bAttachment)?clone(value.bAttachment):null};
     if(!wire.a&&!wire.aAttachment&&!wire.b&&!wire.bAttachment)throw new Error('wire.create requires a and b component ids, or free endpoints');
     for(const end of ['a','b'])if(!wire[end]&&!wire[end+'Attachment'])throw new Error(`wire.create requires ${end} (component id) or ${end}Attachment`);
@@ -2980,7 +3128,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       form:isObject(value.form)?clone(value.form):{dimension:1,body:{kind:'path',material:'generic',thickness:0}},
       lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
       net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
-      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{}),...adoptStatusAndWaitsOn({},value.config),...(value.config?.kind!==undefined&&value.config.kind!==null?{kind:value.config.kind}:{})},
+      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{}),...adoptStatusAndWaitsOn({},value.config),...adoptAnswers({},value.config),...(value.config?.kind!==undefined&&value.config.kind!==null?{kind:value.config.kind}:{})},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
     });
@@ -3029,6 +3177,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(binding&&resource!=='component')throw new Error('DEFINITION_INVALID: only a component binds a definition');
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource!=='reference')assertStatusAndWaitsOn(doc,patch?.config,true);
+    if(resource!=='reference')assertAnswers(doc,patch?.config,resource,true);
     if(resource==='component')assertBadges(patch?.config,true);
     if(resource==='component'){
       assertDefinitionPatch(patch,binding);
@@ -3265,6 +3414,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // Kinds: the notation's own entries, then each Wire's kind (the codes are listed at wireKindProblems).
     {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null,r=N?N.resolve(input):null;if(r?.ok)for(const f of N.kindFindings(r.notation))errors.push(`notation: ${f}`)}
     for(const item of input.wires||[])for(const p of wireKindProblems(input,item?.config))errors.push(`wire ${item?.id||'?'}: ${p}`);
+    // Concerns and answers: the notation's own entries, then the document's answers and each
+    // Component's and Wire's (the codes are listed at answerProblems). An open concern is not reported.
+    {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null,r=N?N.resolve(input):null;if(r?.ok)for(const f of N.concernFindings(r.notation))errors.push(`notation: ${f}`)}
+    if(isObject(input.meta))for(const p of answerProblems(input,input.meta.answers,'document','meta.answers'))errors.push(p);
+    for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)if(isObject(item?.config))for(const p of answerProblems(input,item.config.answers,kind,'config.answers'))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of intakeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of shapeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
@@ -3287,6 +3441,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(/missing endpoint component:/.test(message))return 'wire-endpoint';
     if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
     if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID|BADGE_INVALID|KIND_UNDECLARED|KIND_UNKNOWN|KIND_INVALID):/.test(message))return 'status';
+    if(/(?:^|: )(?:ANSWER_INVALID|ANSWER_UNDECLARED|ANSWER_UNKNOWN|CONCERN_INVALID):/.test(message))return 'status';
     return 'boundary-legality';
   }
   // Straight from validateDocument's own findings; no legality is re-derived here.
@@ -3308,7 +3463,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,notationConcerns,answerProblems,concernReport,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
 /* END src/05-data-core.js */
 </script>
@@ -6651,12 +6806,23 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // arrange() once over its cards, as before groups were placed.
     // groupRect's padding: the notation's space.regionInset and space.regionTitle (src/05-data-core.js)
     const GROUP_PAD=Number.isFinite(notation?.tokens?.space?.regionInset)?notation.tokens.space.regionInset:24,GROUP_TITLE_BAND=Number.isFinite(notation?.tokens?.space?.regionTitle)?notation.tokens.space.regionTitle:28;
+    // A card that draws a symbol glyph grows to hold the glyph at its fixed size and its text
+    // (NOTATION-MODEL.md §4, glyphRoom): each side to the next even whole number at or above what it
+    // needs, never smaller than it is. A pinned or locked card keeps its size. This is the one place
+    // a card's stored size grows; write() stores the box.
+    const grown=c=>{
+      const s=size(c),g=notation&&N?.glyphRoom?notation.glyphs?.[c.symbolId]:null,kind=c.config?.presentation?.graphic?.kind;
+      if(!g||(kind!=null&&kind!=='symbol')||c.editor?.pinned||c.editor?.locked)return s;
+      const {need}=N.glyphRoom(g,s,{subtitle:!!String(c.config?.subtitle||'').trim(),title:String(c.config?.label||''),type:notation.tokens?.type,glyph:notation.tokens?.glyph});
+      const even=v=>2*Math.ceil((v-1e-6)/2);
+      return {w:Math.max(s.w,even(need.w)),h:Math.max(s.h,even(need.h))};
+    };
     function layoutCanvas(canvas,second=null){
       const members=inScope(canvas),boxes=new Map();
       for(const c of members){
         // Arranging fits a container to what it holds, with room on top for its own symbol.
         if(isContainer(c)&&inScope(interiorOf(c.id)).length){const inner=layoutCanvas(interiorOf(c.id)),top=topRoom(c);boxes.set(c.id,{w:Math.max(160,inner.w+pad*2),h:Math.max(120,inner.h+pad*2+top),inner,top})}
-        else boxes.set(c.id,{...size(c),inner:null});
+        else boxes.set(c.id,{...(isContainer(c)?size(c):grown(c)),inner:null});
       }
       const R=id=>rep(id,canvas);
       // Each member in scope belongs to the first group in document order that lists it (the
@@ -6738,7 +6904,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       // the difference of the two terminals' offsets from their cards' centres.
       const portDy=(q,u)=>{
         const w=doc.wires.find(x=>(x.a===q&&x.b===u)||(x.b===q&&x.a===u));if(!w||!notation)return 0;
-        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c),{subtitle:!!String(c?.config?.subtitle||'').trim(),title:String(c?.config?.label||''),type:notation.tokens?.type})?.dy||0};
+        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c),{subtitle:!!String(c?.config?.subtitle||'').trim(),title:String(c?.config?.label||''),type:notation.tokens?.type,glyph:notation.tokens?.glyph})?.dy||0};
         const [qp,up]=w.a===q?[w.aSide,w.bSide]:[w.bSide,w.aSide];
         return off(q,qp)-off(u,up);
       };
@@ -9533,17 +9699,20 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   }
   if(!scopedNodes.length&&canvasId===GLOBAL_CANVAS_ID)return null;
   let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
-  for(const n of scopedNodes){const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
+  for(const n of scopedNodes){if(!(Number.isFinite(n.x)&&Number.isFinite(n.y)))continue;const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
   const wireIds=activeCanvasWireSet(canvasId),occupied=[];
   for(const w of wires)if(nodeIds.has((w.canvasId||'').replace('canvas:component:','')))wireIds.add(w.id);
   // The bus routes are asked for once for the whole loop (src/40-routing.js withBusRoutesOnce).
-  withBusRoutesOnce(()=>wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points,w));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}}));
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B||![A,B].every(q=>Number.isFinite(q.x)&&Number.isFinite(q.y)))return;const points=stableRouteForWire(i,w,A,B,occupied);if(!points.every(q=>Number.isFinite(q.x)&&Number.isFinite(q.y)))return;occupied.push(...routeSegments(points,w));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}}));
   // Text and custom graphics can extend beyond a Component's body. Measure their
   // actual projection in workspace coordinates, excluding selection/drag chrome.
   const inverse=workspace.getScreenCTM()?.inverse();
-  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text')){
-    const node=el.closest('.node'),wire=el.closest('[data-wire-id]');
-    if(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId)))continue;
+  // Bus bands and labels (src/41-buses.js renderBuses) are drawn once, for the active layout of the
+  // global canvas, with no canvas filter: they count when the global canvas is the one measured.
+  const busEls=canvasId===GLOBAL_CANVAS_ID&&!window.__boundsLeaveBusOut;
+  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text'+(busEls?',text.bus-label,.bus-band rect':''))){
+    const node=el.closest('.node'),wire=el.closest('[data-wire-id]'),bus=el.matches('text.bus-label,.bus-band rect');
+    if(!bus&&(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId))))continue;
     if(!el.getClientRects().length||getComputedStyle(el).display==='none')continue;
     const rect=el.getBBox(),matrix=inverse.multiply(el.getScreenCTM());
     for(const [x,y] of [[rect.x,rect.y],[rect.x+rect.width,rect.y],[rect.x,rect.y+rect.height],[rect.x+rect.width,rect.y+rect.height]]){
@@ -9740,11 +9909,12 @@ function finishKeyboardMove(mods){
   // A changed host draws every wire from nothing at the settle below.
   if(movedNode&&hostBefore!==`${movedNode.canvasId||GLOBAL_CANVAS_ID}|${movedNode.parentId||''}`)wireGroupDrawn.clear();
   // A refused host refuses the move: the Component and what it carries return to where it started.
-  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();render()}
+  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();dropBusLaneHold();render()}
   else settleDraggedRoutes();
 
   keyboardMoveNodeId=null;keyboardMoveStart=null;
   activeNodeDrag=null;
+  dropBusLaneHold(); // the move is over: the lanes are ordered in full again (src/41-buses.js)
   dragRouteSnapshots.clear();
   workspace.classList.remove('dragging-node');
   statusEl.textContent=hosted?.refused||'Select';
@@ -9897,7 +10067,7 @@ function componentInlineGraphicBox(node){
   // scale from the same card size.
   const shape=componentShapeGeometry(node),room=shape.shape==='rect'||componentGlyph(node)?.points==='terminals'?size
     :{w:shape.inner.r-shape.inner.l,h:shape.shape==='cylinder'?size.h-2*shape.cap:size.h};
-  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),room,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type}),x=-w/2;
+  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),room,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type,glyph:activeNotation().tokens.glyph}),x=-w/2;
   if(componentHostedOnWire(node)){
     const axis=componentInlineTerminalY(node);
     return {x,y:axis==null?-h/2:-(axis/64)*h,w,h};
@@ -10362,8 +10532,13 @@ function captureDragSnapshots(nodeId){
       });
     }
   }));
+  // The loop above asked for the bus routes, so the lane order held from here is the one at the
+  // press, or at the last settle while held (src/41-buses.js holdBusLanes).
+  if(typeof holdBusLanes==='function')holdBusLanes();
 }
 function settleDraggedRoutes(){
+  // The pointer rests or the move ends: the bus lanes are ordered again, in full.
+  if(typeof dropBusLaneHold==='function')dropBusLaneHold();
   if(!activeNodeDrag) return;
   const occupied=[];
   withBusRoutesOnce(()=>wires.forEach((w,i)=>{
@@ -11281,7 +11456,19 @@ const busWiresRelated=(a,b)=>[`${a.a}:${a.aSide}`,`${a.b}:${a.bSide}`].some(e=>e
 // OrthogonalRoutingGenerator. A bus with lanes: 'port' on which two wires sharing no end still lie
 // on one track then has its lanes sifted (busSiftLanes). A lane's offset is
 // (its index - (lane count - 1) / 2) x pitch.
+//
+// While a card is moved the lane order is held (LAYOUT-MODEL.md "As built: buses", Lane order): the
+// hold is, per bus, its lane keys in the order last computed in full. It is taken at the press and
+// after each settle (captureDragSnapshots, src/40-routing.js) and dropped when the pointer rests
+// (settleDraggedRoutes) and wherever a move ends. Under a hold a bus whose set of lane keys is the
+// held set takes the held order and is not ordered again; a bus a wire joined or left is ordered in
+// full and its hold replaced. Plans and routes are still built on every pass, with the held lanes'
+// offsets, so a wire follows its card. busLaneHoldCount goes into the state's key, so a state
+// computed under a hold is never returned without it, or the reverse.
 let busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map(),lanes:new Map()};
+let busLaneHold=null,busLaneHoldCount=0;
+function holdBusLanes(){busLaneHold=new Map([...busRouteState.lanes].map(([bid,L])=>[bid,[...L]]));busLaneHoldCount++}
+function dropBusLaneHold(){if(!busLaneHold)return;busLaneHold=null;busLaneHoldCount++}
 function busRoutesForRender(){
   const all=activeBuses(),entries=[];
   wires.forEach(w=>{
@@ -11289,7 +11476,9 @@ function busRoutesForRender(){
     entries.push({w,spec,A:carrierEndpoint(w,'a').pos,B:carrierEndpoint(w,'b').pos});
   });
   if(!entries.length&&!Object.keys(all).length){busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map(),lanes:new Map()};return busRouteState}
-  const key=JSON.stringify([activeLayoutId(),all,entries.map(e=>[e.w.id,e.spec.buses,e.w.aSide,e.w.bSide,e.A?.x,e.A?.y,e.B?.x,e.B?.y]),nodes.map(n=>[n.id,n.x,n.y,n.config?.presentation?.size])]);
+  // holding: a hold stands and a card is being moved. Every other pass orders every bus in full.
+  const holding=busLaneHold&&activeNodeDrag?busLaneHold:null,kept=new Set();
+  const key=JSON.stringify([activeLayoutId(),all,entries.map(e=>[e.w.id,e.spec.buses,e.w.aSide,e.w.bSide,e.A?.x,e.A?.y,e.B?.x,e.B?.y]),nodes.map(n=>[n.id,n.x,n.y,n.config?.presentation?.size]),busLaneHoldCount,holding?1:0]);
   if(key===busRouteState.key)return busRouteState;
   const plans=new Map(),fallback=new Set();
   for(const e of entries){const p=busPlan(e.w,e.A,e.B,e.spec);if(p)plans.set(e.w.id,p);else fallback.add(e.w.id)}
@@ -11305,6 +11494,9 @@ function busRoutesForRender(){
     const first=own.length?[...own,...natural.filter(id=>!own.includes(id))]:natural,H=new Map();
     for(const id of first){const k=laneOf(bid,id);if(!H.has(k))H.set(k,[]);H.get(k).push(id)}
     lanes.set(bid,[...H.keys()]);held.set(bid,H);order.set(bid,[...H.values()].flat());
+    // Under a hold, a bus with the held set of lane keys takes the held order and is ordered no further.
+    const stood=holding?.get(bid);
+    if(stood&&stood.length===H.size&&stood.every(k=>H.has(k))){kept.add(bid);lanes.set(bid,[...stood]);order.set(bid,stood.flatMap(k=>H.get(k)))}
   }
   const offsetsOf=id=>new Map(plans.get(id).legs.map(l=>{const L=lanes.get(l.id);return [l.id,(L.indexOf(laneOf(l.id,id))-(L.length-1)/2)*busPitchOf(all[l.id])]}));
   const routes=new Map();for(const id of plans.keys())routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)));
@@ -11312,6 +11504,7 @@ function busRoutesForRender(){
   const crosses=(x,y)=>busRoutesCross(routes.get(x),routes.get(y),busWiresRelated(plans.get(x).w,plans.get(y).w))?1:0;
   const crossingsOn=L=>{const cross=new Map();let total=0;for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length;j++){const c=crosses(L[i],L[j]);cross.set(pair(L[i],L[j]),c);total+=c}return {cross,total}};
   for(const bid of [...on.keys()].sort()){
+    if(kept.has(bid))continue;
     if(Array.isArray(all[bid]?.order)&&all[bid].order.length)continue;
     const L=lanes.get(bid);if(L.length<2)continue;
     const W=order.get(bid),H=held.get(bid),rebuild=ids=>{for(const id of ids)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)))};
@@ -11340,6 +11533,8 @@ function busRoutesForRender(){
     if(all[bid]?.lanes==='port')busSiftLanes(L,W,H,id=>routes.get(id),id=>plans.get(id).w,rebuild);
     order.set(bid,L.flatMap(k=>H.get(k)));
   }
+  // A bus a wire joined or left during the move was ordered in full above: that order is held now.
+  if(holding)for(const bid of on.keys())if(!kept.has(bid))holding.set(bid,[...lanes.get(bid)]);
   busRouteState={key,routes,fallback,on,order,lanes};
   return busRouteState;
 }
@@ -12258,8 +12453,12 @@ function render(){
   const markers=markersById();
   nodesG.innerHTML='';
   const unplacedIds=new Set(typeof layoutUnplacedIds==='function'?layoutUnplacedIds():[]);
+  let undrawnCards=0;
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
     if(isEffectivelyHidden(n)||isGroupComponent(n))return; // groups are drawn by renderGroups, behind
+    // A card whose drawn position is not finite is not drawn, and is counted. A card hosted on a wire or
+    // a component takes its place from its host, so its stored x and y are not the rule.
+    if(!(Number.isFinite(n.x)&&Number.isFinite(n.y))&&!(componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n))){undrawnCards++;return}
     const s=symbolOf(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
     {const form=componentForm(n),backdrop=componentBackdropMode(n);g.setAttribute('class','node'+(unplacedIds.has(n.id)?' unplaced':'')+(n.symbolId==='blank'?' blank':'')+(selectedComponentIds.has(n.id)?' selected':'')+(componentAcceptsChildren(n)?' is-container':'')+(form.frame.mode==='shell'?' form-shell':'')+(form.frame.mode==='frame'?' form-frame':'')+(n.parentId?' nested-child':'')+(componentHostedOnWire(n)?' wire-hosted':'')+(backdrop==='none'?' backdrop-none':'')+(editor.pinned?' is-pinned':'')+(editor.locked?' is-locked':''));}
     // An unplaced card keeps its fade (.42): the inline opacity would otherwise cover the class's.
@@ -12299,6 +12498,7 @@ function render(){
     appendComponentLeads(g,n);appendShapeLeads(g,n);appendTerminalMarks(g,n);
     bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); appendComponentWaitsOn(g,n); applyStatusFade(g,n);
   });
+  if(undrawnCards)workspace.setAttribute('data-undrawn-cards',String(undrawnCards));else workspace.removeAttribute('data-undrawn-cards');
   renderGroups(markers);
   // Buses (src/41-buses.js): bands in the group layer, after the group regions, behind every wire.
   if(typeof renderBuses==='function')renderBuses(groupLayer());
@@ -12817,7 +13017,8 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
 
   // Every route first, so each wire knows the crossings it makes: the later wire hops over the
   // earlier one, and neither puts an arrowhead on the crossing. Wires sharing an end never hop.
-  const routes=new Map();
+  const routes=new Map(),undrawnWires=new Set();
+  const finitePoint=q=>!!q&&Number.isFinite(q.x)&&Number.isFinite(q.y);
   // Wires on buses are laid out first, lanes and all, so every auto route keeps clear of them.
   const busState=typeof busRoutesForRender==='function'?busRoutesForRender():null;
   if(busState)for(const [id,pts] of busState.routes){const w=wires.find(x=>x.id===id);if(w)occupied.push(...routeSegments(pts,w))}
@@ -12826,10 +13027,13 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
   routeEvery(()=>wires.forEach((w,i)=>{
     if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
+    // An end with no finite position (a card that was never placed) leaves the wire out of the drawing.
+    if(!finitePoint(A)||!finitePoint(B)){undrawnWires.add(i);return}
     const snapshot=dragging&&(w.a===activeNodeDrag||w.b===activeNodeDrag)?dragRouteSnapshots.get(i):null;
     // While moving, the settled route is immutable. We do not rebuild its
     // interior, endpoint leads, arrows, or direction marks on pointer frames.
     const points=snapshot?clonePoints(snapshot.points):stableRouteForWire(i,w,A,B,occupied);
+    if(!points.length||!points.every(finitePoint)){undrawnWires.add(i);return}
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
     if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
   }));
@@ -12875,6 +13079,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
     const editor=entityEditorState(w);const cfg=connectionConfig(w);if(editor.hidden||!carrierIsRenderable(w))return;
     const epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b'),a=epA.node,b=epB.node;
     const A=epA.pos, B=epB.pos;
+    if(undrawnWires.has(i))return; // no wire-group for it: no path, gradient, label, marker or handle
     const {points,snapshot}=routes.get(i);
     // A multi-line wire is a band, not a line: it does not hop.
     const d=SovSchematicData.normalizeSection(w.form?.section,1)?.lines?.length>=2?pathD(points):pathWithHops(points,hops.get(i));
@@ -13048,6 +13253,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
     wireGroupDrawn.set(w.id,{group,base,key,index:i,hostId:hostEl?hostId:null,cls:group.getAttribute('class'),css:group.style.cssText,baseCls:base.getAttribute('class'),label:group.querySelector('.connection-label')});
     if(selected===`wire:${i}`) focusWireVisual(i);
   });
+  if(undrawnWires.size)workspace.setAttribute('data-undrawn-wires',String(undrawnWires.size));else workspace.removeAttribute('data-undrawn-wires');
   placeWireLabels();
   // Any pass that is not a move's own ends the held signal state: what it stood for may have changed.
   if(!reuse)dropDragSignalState();
@@ -13335,6 +13541,23 @@ function layoutMetrics(options={}){
      const members=Array.isArray(g.config?.members)?g.config.members:[],R=body.get(g.id);
      if(!R||!members.some(id=>visible.some(v=>v.id===id)))continue;
      for(const id of members){const m=visible.find(v=>v.id===id);if(m&&is2D(m))check(m,g,{l:R.l,r:R.r,t:R.t,b:R.b},true)}
+   }}
+  // Glyph room: a card that draws a symbol glyph and has no room for it at the glyph token's size
+  // (NOTATION-MODEL.md §4, glyphRoom), so its glyph is drawn smaller than on other cards. A container
+  // with an open interior draws its glyph as a title mark and a card hosted on a wire is drawn on the
+  // line, so neither is held to it. Reported, with no weight in the score (it is not in LAYOUT_RUBRIC).
+  // The room is read from what componentInlineGraphicBox gives glyphBox: the card's size, or a
+  // shaped card's inner rectangle.
+  {const N=SovSchematicNotation,T=activeNotation().tokens,even=v=>2*Math.ceil((v-1e-6)/2),say=v=>+(+v).toFixed(2);
+   for(const n of visible){
+     if(!is2D(n)||componentAcceptsChildren(n)||componentHostedOnWire(n)||!nodeEl(n.id)?.querySelector(':scope > use.glyph'))continue;
+     const cfg=componentConfig(n),size=cfg.presentation.size,g=componentGlyph(n),shape=componentShapeGeometry(n);
+     const room=shape.shape==='rect'||g?.points==='terminals'?size:{w:shape.inner.r-shape.inner.l,h:shape.shape==='cylinder'?size.h-2*shape.cap:size.h};
+     const title=String(cfg.label||'').trim()||componentTypeCaption(n);
+     const fit=N.glyphRoom(g,room,{subtitle:!!String(cfg.subtitle||'').trim(),title,type:T.type,glyph:T.glyph});
+     if(fit.ok)continue;
+     const needW=Math.max(size.w,even(fit.need.w+size.w-room.w)),needH=Math.max(size.h,even(fit.need.h+size.h-room.h));
+     add('glyph-room',[n.id],`"${title}" is ${say(size.w)} by ${say(size.h)} and needs ${needW} by ${needH} to draw its glyph at ${say(fit.box.w)} by ${say(fit.box.h)}`);
    }}
   // Points drawn on top of each other read as one.
   {const pts=visible.filter(n=>componentForm(n).dimension===0);
@@ -13843,6 +14066,11 @@ function updateActiveNodeDrag(e){
 function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
   const state=activeNodeDragState;if(!state)return;if(!force&&e?.pointerId!=null&&e.pointerId!==state.pointerId)return;
   const pointerId=state.pointerId;let fault=null,refusal=null;
+  // Where a root stands and what hosts it; the roots whose host call changed that are redrawn below.
+  const hostStanding=n=>{const p=n.placement||{};return [n.x,n.y,p.kind||'surface',p.wireId||'',p.hostId||'',p.side||'',p.t??''].join('|')};
+  // A wire that ends on the root or on what it carries is routed again from where they now stand.
+  const dropRoutesOf=root=>{const ids=new Set([root.id,...descendantsOf(root.id).map(n=>n.id)]);wires.forEach((w,i)=>{if(ids.has(w.a)||ids.has(w.b))routeCache.delete(i)})};
+  const rehosted=[];
   // Whether the pointer moved. The gesture captures the pointer on the workspace, so no click reaches
   // the card afterwards: a press that did not drag is resolved here (see the finally block).
   const dragged=Math.hypot(state.pointer.x-state.startPointer.x,state.pointer.y-state.startPointer.y)>2;
@@ -13868,20 +14096,32 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
       for(const item of state.startPositions||[]){item.node.x=item.x;item.node.y=item.y}
       routeCache.clear();arrowPoseCache.clear();
     }else for(const {root,candidate} of plan){
-      const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID,beforeParent=root.parentId||null;
+      const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID,beforeParent=root.parentId||null,beforeStanding=hostStanding(root);
       applyComponentHost(root,candidate);
+      // A host that moved the root or changed its placement (a wire, a path, an edge) does the same.
+      if(hostStanding(root)!==beforeStanding){rehosted.push({root,standing:hostStanding(root)});dropRoutesOf(root);wireGroupDrawn.clear()}
       const afterCanvas=root.canvasId||GLOBAL_CANVAS_ID;if(beforeCanvas!==afterCanvas)setHistoryHint(candidate?.kind==='wire'?'Settle Component on Wire':candidate?.kind==='component'?'Settle Component in Component':'Detach Component')
       // A changed host draws every wire from nothing at the settle below.
       if(beforeCanvas!==afterCanvas||beforeParent!==(root.parentId||null))wireGroupDrawn.clear();
     }
-    clearHostCandidateArm(state);if(refusal)render();else settleDraggedRoutes();
+    clearHostCandidateArm(state);if(refusal){dropBusLaneHold();render()}else settleDraggedRoutes();
   }catch(err){fault=err;console.error('Recovered Component drag failure',err)}
   finally{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     clearHostCandidateArm(state);clearNodeDragVisualState();clearSettleHostGhost();
-    activeNodeDragState=null;activeNodeDrag=null;dragRouteSnapshots.clear();
+    activeNodeDragState=null;activeNodeDrag=null;dropBusLaneHold();dragRouteSnapshots.clear();
     try{if(workspace.hasPointerCapture?.(pointerId))workspace.releasePointerCapture(pointerId)}catch(_){}
-    try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
+    try{
+      flushDragVisualRefresh();
+      // A card on a wire takes its pose from the wire's drawn path once the drag is over, after
+      // that pass found every route (renderWires, poseHosted). While a pass moved a hosted root,
+      // its wires are routed and every wire is drawn again from where it stands.
+      for(let pass=0;pass<4;pass++){
+        const moved=rehosted.filter(item=>hostStanding(item.root)!==item.standing);if(!moved.length)break;
+        for(const item of moved){item.standing=hostStanding(item.root);dropRoutesOf(item.root)}
+        wireGroupDrawn.clear();renderWiresForDrag();
+      }
+    }catch(err){console.error('Drag projection recovery failed',err)}
     dropDragSignalState();
     // A plain press on a member of a multi-selection that did not drag selects that member alone,
     // as a click always has; a drag leaves the group selected (issue #49). Shift keeps the set.
@@ -15561,7 +15801,31 @@ if(typeof initializeEditorKernel==='function')initializeEditorKernel();
 // writes the document: a simulation reads a snapshot and restarts when the document changes.
 
 const simLayer=document.getElementById('simLayer');
-const simClock={run:null,playing:false,speed:1,frame:null,last:0,edgeMark:0,fingerprint:null,note:'',stubbed:[]};
+const simClock={run:null,playing:false,speed:1,frame:null,last:0,edgeMark:0,fingerprint:null,note:'',stubbed:[],painted:null,paintedAt:0,canvasMoved:false,unchecked:true,checkedAt:0};
+// A playing run repaints when what it shows changed, not on every frame. SIM_CONTINUOUS_MS is the
+// least time between two frame paints that only a continuous level asks for (20 a second).
+const SIM_CONTINUOUS_MS=50,SIM_CONTINUOUS_STEPS=50;
+// What a paint of the run shows, as two strings. steady: every level as above zero or not (a wire is
+// lit while its source is above zero, whatever the kind), the edge count and the count of waiting
+// steps; a frame whose steady part differs from the painted one paints at once. continuous: every
+// continuous level to one part in 50; a frame where only that differs paints once SIM_CONTINUOUS_MS
+// has passed since the last frame paint.
+function simPaintKey(){
+  const run=simClock.run;if(!run)return {steady:'',continuous:''};
+  const levels=run.levels();let binary='',continuous='';
+  for(const id in levels){const L=levels[id];binary+=L.value>0?'1':'0';if(L.kind!=='binary')continuous+=Math.round(L.value*SIM_CONTINUOUS_STEPS)+','}
+  return {steady:`${binary}|${run.edges().edges.length}|${run.parked().length}`,continuous};
+}
+// The canvas under the marks: a card moved or a wire group replaced without a render (a card drag, a
+// wire edit) leaves the marks and the lit wires behind until the next paint. Only frames read this.
+// It is also a sign the document may have changed (unchecked, below).
+const simCanvasWatch=typeof MutationObserver==='function'?new MutationObserver(()=>{simClock.canvasMoved=true;simClock.unchecked=true}):null;
+// A playing run restarts when the document changed. Knowing that takes the whole document as text
+// (semanticFingerprint: 9 to 17 ms on the 78-card map, most of a frame), so a frame asks only when
+// something may have changed it: the canvas was redrawn, a paint was asked for from outside the
+// frame, or SIM_DOCUMENT_MS passed, which catches an edit that draws nothing.
+const SIM_DOCUMENT_MS=500;
+if(simCanvasWatch)for(const layer of [nodesG,wiresG])if(layer)simCanvasWatch.observe(layer,{childList:true,subtree:true,attributes:true,attributeFilter:['transform']});
 
 // Handlers a document names come from its saved scenarios; any other name is stubbed, and
 // the transport says so, so a run in the editor never silently claims a real handler ran.
@@ -15588,10 +15852,17 @@ function simEnsure(){
 }
 function simFrame(now){
   if(!simClock.playing)return;
-  if(simClock.fingerprint!==semanticFingerprint()){simStart();simClock.note='restarted: the document changed'}
+  if(simClock.unchecked||now-simClock.checkedAt>=SIM_DOCUMENT_MS){
+    if(simClock.fingerprint!==semanticFingerprint()){simStart();simClock.note='restarted: the document changed'}
+    simClock.unchecked=false;simClock.checkedAt=now;
+  }
   const dt=Math.min(100,Math.max(0,now-(simClock.last||now)));simClock.last=now;
   if(simClock.run)simClock.run.advance(dt*simClock.speed);
-  paintSim();updateSimReadout();
+  // Paint when the picture would differ from the one painted last; otherwise only the waves move.
+  const key=simPaintKey(),painted=simClock.painted;
+  if(!painted||simClock.canvasMoved||key.steady!==painted.steady||(key.continuous!==painted.continuous&&now-simClock.paintedAt>=SIM_CONTINUOUS_MS)){simClock.paintedAt=now;paintSim({frame:true,key})}
+  else if(typeof paintWaves==='function')paintWaves();
+  updateSimReadout();
   simClock.frame=requestAnimationFrame(simFrame);
 }
 function simPlay(){if(!simEnsure())return false;simClock.playing=true;simClock.last=0;simClock.frame=requestAnimationFrame(simFrame);updateSimReadout();return true}
@@ -15622,19 +15893,41 @@ function updateSimReadout(){
 
 const SVGNS='http://www.w3.org/2000/svg';
 function simEl(tag,attrs,cls){const e=document.createElementNS(SVGNS,tag);if(cls)e.setAttribute('class',cls);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e}
-// Paint the engine's state over the rendered canvas. Called after every render and every frame.
-function paintSim(){
+// Paint the engine's state over the rendered canvas. Called after every render, after every clock
+// operation, and by a playing run's frame when what it shows changed (simFrame, which passes
+// frame:true and the key it compared).
+function paintSim(paint){
   if(!simLayer)return;
+  const frame=!!(paint&&paint.frame);
   // A render replaces the node groups: narration focus is put back on the new ones.
   if(typeof narrationState!=='undefined'&&narrationState.index!=null)showNarration(narrationState.index,{manual:narrationState.manual});
-  if(typeof legendState!=='undefined'&&legendState.open)renderLegendPanel();
+  // The legend is derived from the document, never from a level: a frame leaves it as it stands.
+  if(!frame&&typeof legendState!=='undefined'&&legendState.open)renderLegendPanel();
+  // The next frame compares against this paint, whoever asked for it.
+  simClock.painted=(frame&&paint.key)||simPaintKey();
+  if(simCanvasWatch)simCanvasWatch.takeRecords();
+  simClock.canvasMoved=false;if(!frame)simClock.unchecked=true;
   simLayer.replaceChildren();
   // The wave view (src/68-wave-view.js, loaded after this file) repaints its own layer on every paint.
   if(typeof paintWaves==='function')paintWaves();
   workspace.classList.toggle('sim-live',!!simClock.run);
-  for(const gEl of workspace.querySelectorAll('.wire-group.level-high')){gEl.classList.remove('level-high');gEl.style.removeProperty('--wire-lit')}
-  const run=simClock.run;if(!run)return;
-  const levels=run.levels();
+  const run=simClock.run,levels=run?run.levels():{};
+  // A wire is lit while its source end is high. A source in a role or status slot (6-11) lights it in
+  // that slot's own tone (litTone); any other source keeps the output accent. Only a group whose lit
+  // state, level or tone differs from what it carries is written.
+  const groups=new Map(),lit=new Map();
+  for(const gEl of workspace.querySelectorAll('.wire-group')){const id=gEl.dataset.wireId;if(id!=null&&!groups.has(id))groups.set(id,gEl)}
+  if(run)for(const w of wires){const v=levels[w.a]?.value??0;if(v<=0)continue;const gEl=groups.get(w.id);if(!gEl)continue;
+    const src=nodes.find(n=>n.id===w.a),slot=src?Number(componentConfig(src).colorSlot):NaN;
+    lit.set(gEl,{level:String(v),tone:(Number.isInteger(slot)&&slot>=6&&litTone(slot,surfaceAppearance()))||''})}
+  for(const gEl of workspace.querySelectorAll('.wire-group.level-high'))if(!lit.has(gEl)){gEl.classList.remove('level-high');gEl.style.removeProperty('--wire-lit')}
+  for(const [gEl,want] of lit){
+    if(!gEl.classList.contains('level-high'))gEl.classList.add('level-high');
+    if(gEl.style.getPropertyValue('--level').trim()!==want.level)gEl.style.setProperty('--level',want.level);
+    const tone=gEl.style.getPropertyValue('--wire-lit').trim();
+    if(want.tone){if(tone!==String(want.tone).trim())gEl.style.setProperty('--wire-lit',want.tone)}else if(tone)gEl.style.removeProperty('--wire-lit');
+  }
+  if(!run)return;
   const wired=new Set(wires.flatMap(w=>[w.a,w.b]));
   for(const n of nodes){
     // A level is shown where it can matter: on a wired node, or one that declares a signal.
@@ -15660,10 +15953,6 @@ function paintSim(){
     const title=simEl('title',{});title.textContent=`Send a message from ${componentConfig(n).label||n.id}`;send.appendChild(title);
     send.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();simSend(n.id)});simLayer.appendChild(send);
   }
-  // A wire is lit while its source end is high. A source in a role or status slot (6-11) lights it in
-  // that slot's own tone (litTone); any other source keeps the output accent.
-  for(const w of wires){const v=levels[w.a]?.value??0;if(v<=0)continue;const gEl=workspace.querySelector(`.wire-group[data-wire-id="${CSS.escape(w.id)}"]`);if(gEl){gEl.classList.add('level-high');gEl.style.setProperty('--level',String(v));
-    const src=nodes.find(n=>n.id===w.a),slot=src?Number(componentConfig(src).colorSlot):NaN;if(Number.isInteger(slot)&&slot>=6){const tone=litTone(slot,surfaceAppearance());if(tone)gEl.style.setProperty('--wire-lit',tone)}}}
   // New edges flash + or − beside their node.
   const edges=run.edges().edges;
   for(const e of edges.slice(simClock.edgeMark)){

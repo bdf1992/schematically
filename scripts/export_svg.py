@@ -30,6 +30,8 @@ from browser_runtime import chromium_launch_kwargs  # noqa: E402
 # reading aid and reaches neither file. Both draw through withPictureLabels() in
 # src/75-persistence.js.
 EXPORT_JS = "(opts) => window.SovSchematicAPI.render.svg(opts)"
+# What the last pass left out: cards and wires with no finite position (src/55-render.js).
+UNDRAWN_JS = "() => ['data-undrawn-cards', 'data-undrawn-wires'].map(a => Number(workspace.getAttribute(a)) || 0)"
 
 
 
@@ -59,6 +61,10 @@ def export_documents(paths: list[Path], out_dir: Path | None = None, appearance:
             page.evaluate('([t,n])=>window.SovSchematicAPI.file.open(t,n)', [text, src.name])
             page.evaluate('()=>{ if (typeof fitDiagram === "function") fitDiagram(); }')
             page.wait_for_timeout(300)
+            undrawn = page.evaluate(UNDRAWN_JS)
+            if any(undrawn):
+                print(f'note: {undrawn[0]} cards and {undrawn[1]} wires have no position and are not drawn; '
+                      'place them with node scripts/layout_sov.mjs', file=sys.stderr)
             svg = page.evaluate(EXPORT_JS, {'pad': pad, 'packets': loop is not None, 'legend': legend})
             period = 0.0
             if loop is not None:

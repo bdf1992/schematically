@@ -296,6 +296,13 @@ Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLA
   - each node is pulled level with its predecessors, for straight chains
 - A container is laid out inside first and fitted to its contents, then placed as one
   node of its parent.
+- A card grows to hold its glyph and text. A card that is not a container, draws a symbol glyph
+  of the document's notation and is neither pinned nor locked is placed, and stored, at the larger
+  of its size and the size the glyph token needs (NOTATION-MODEL.md §4, `glyphRoom`), each side
+  rounded up to the next even whole number: a 112 by 84 card titled "Delivery broker" becomes 112
+  by 112. A card is never made smaller. Nothing else grows a card: no other layout op, and no
+  load, render or save. A card left without room (a pinned one, or a document never laid out) is
+  the `glyph-room` finding of `layout.metrics`.
 - A group on the canvas (SECTION-MODEL.md "Groups (reading only)") is placed the same way,
   as one block. Its members in scope on that canvas are laid out by these same steps over the
   wires among them only. The block's box is the members' extent padded 24 on the left, right
@@ -782,6 +789,11 @@ key only when it is exactly `'port'`. The layered layout writes it on every chan
 harness writes it only when asked (`lanes: 'port'`, below), so by default harness trunks and streets
 keep one lane per wire.
 
+A bus's label and band count in a drawing's bounds (`diagramBounds`, `src/30-canvas.js`), the way card
+text and wire labels do, so the label that sits beyond the bus's start is never cut by the edge of the
+fitted view. The picture (`render.svg`, `scripts/export_svg.py`) reads the same bounds, so it draws
+every bus label whole at its padding.
+
 ### Ops
 
 `schematic.layout` (`src/08-layout-core.js`), the Browser API `layout.*` (`src/85-api.js`, through
@@ -875,6 +887,17 @@ A refusal changes nothing.
   on one track and otherwise 1 for a crossing pair, the layout rubric's ratio of `route-overlap` to
   `crossing`. A lane stays where it stood unless another place is strictly cheaper. Rounds repeat while
   the cost falls and a track is still shared, at most 4. A bus without the key is never sifted.
+- **Lanes hold while a card moves** (2026-10-04). Ordering the lanes is a batch step, so a move does not
+  run it: the lanes of every bus keep the order they had at the press (pointer or arrow key). They are
+  ordered again, in full, when the pointer rests (the settle delay, `ROUTE_SETTLE_DELAY`, 140 ms;
+  `settleDraggedRoutes`), and the order held from then on is that one, and again on release. A bus that
+  a wire joins or leaves during the move is ordered in full at once and held from there. Only the order
+  is held: every wire's plan and route are built on every step with the held lanes' offsets, so a wire
+  still follows its card. The picture at the press, at a settle and after release is what it was before
+  the hold; during a move it can differ only in wires that ride a bus. On `docs/workengine/map.sov`
+  (79 bus wires, 30 buses, 117 lanes) a drag step measured about 610 ms before and about 320 ms after
+  on one host, and `busRoutesForRender` inside it about 415 ms before and about 140 ms after; the
+  140 ms is its key (58 ms) and the plans (76 ms). `tests/bus_lane_hold_qa.py` holds it.
 - Bus routes go into `occupied` before any auto route, so auto routes keep clear of them. A pinned or
   guided route still wins; a bus route that cannot be built falls back to the router, and its wire group
   carries `data-bus-fallback`.

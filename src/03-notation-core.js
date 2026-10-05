@@ -15,6 +15,9 @@
       // once to every stroke weight, every text role's size and own min, space.pin and
       // type.screen.max. The values below are the scale 1 values and stay unscaled here.
       scale:1,
+      // The glyph's box on every card that has room for it (NOTATION-MODEL.md §3, §4): the box a
+      // 112 x 84 card gives a one-line title. resolve() multiplies it by the scale.
+      glyph:{w:80.64,h:40.4},
       // Offset from inside: the core keeps radius.core, each line outward adds its band.
       radius:{core:6,card:10},
       // World units. Selected and highlighted states multiply these, never replace them.
@@ -40,6 +43,15 @@
       {id:'container',applies:'region',title:'Container',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
       {id:'gate',applies:'region',title:'Gate',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
       {id:'intake',applies:'region',title:'Intake',meaning:'An open region: a dashed outline.',dash:'dashed',open:true}
+    ],
+    // Concerns (NOTATION-MODEL.md "Concerns"): the questions a document drawn in this notation should
+    // answer. A notation that extends this one rewords one by declaring the same applies and id, and
+    // adds its own for the document, for Components and for Wires.
+    concerns:[
+      {id:'what',applies:'document',title:'What it is',question:'What is this a schematic of, in one or two sentences?'},
+      {id:'why',applies:'document',title:'Why build it',question:'Why would someone build this or study it?'},
+      {id:'alternatives',applies:'document',title:'Alternatives',question:'What are the alternatives, and why this one over the others?'},
+      {id:'smaller',applies:'document',title:'Smaller first',question:'Can a smaller version be built first, and what is it?'}
     ]
   };
 
@@ -111,6 +123,8 @@
     while(cur&&!seen.has(cur.id)){chain.unshift(cur);seen.add(cur.id);cur=cur.extends?table[cur.extends]:null}
     let flat={};for(const n of chain)flat=merge(flat,n);
     const kinds=joinKinds(chain);if(kinds)flat.kinds=kinds;
+    const concerns=joinKinds(chain,'concerns');if(concerns)flat.concerns=concerns;
+    const sized=checkGlyphSize(flat.tokens);if(!sized.ok)return sized;
     const scaled=applyScale(flat.tokens);if(!scaled.ok)return scaled;
     flat.id=id;registerPoints(flat);return {ok:true,notation:flat};
   }
@@ -126,11 +140,12 @@
   // entry replaces an earlier notation's entry with the same applies and id, in its place.
   const KIND_KEYS=['id','applies','title','meaning','dash','weight','arrowhead','open'];
   const KIND_DASH={wire:['solid','dashed'],region:['none','solid','dashed']},KIND_WEIGHT=['regular','heavy'],KIND_ARROWHEAD=['chevron','filled','none'];
-  function joinKinds(chain){
+  // `list` names the list joined: kinds, or concerns (below), which join by the same rule.
+  function joinKinds(chain,list='kinds'){
     let any=false;const out=[];
     chain.forEach((n,from)=>{
-      if(!Array.isArray(n?.kinds))return;any=true;
-      for(const entry of n.kinds){
+      if(!Array.isArray(n?.[list]))return;any=true;
+      for(const entry of n[list]){
         const at=isObject(entry)?out.findIndex(o=>o.from<from&&isObject(o.entry)&&o.entry.applies===entry.applies&&o.entry.id===entry.id):-1;
         if(at>=0)out[at]={entry,from};else out.push({entry,from});
       }
@@ -180,9 +195,52 @@
   function kindsOf(notation,applies){
     return judgeKinds(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry}));
   }
+  // ---- Concerns (NOTATION-MODEL.md "Concerns") --------------------------------------------------
+  // A notation declares `concerns`, the questions a schematic drawn in it should answer:
+  // {id, applies: document | component | wire, title, question, meaning}. id and question are
+  // non-empty strings; title and meaning are optional strings. A document answers them in
+  // meta.answers and config.answers (src/05-data-core.js answerProblems, concernReport).
+  //   CONCERN_INVALID   an entry breaks a rule: not an object; an unknown key; an id or a question
+  //                     that is not a non-empty string; an applies that is not one of the three; a
+  //                     title or meaning that is not a string; an id used twice within one applies
+  // resolve() joins concerns along the extends chain as it joins kinds (joinKinds): a later
+  // notation's entry replaces an earlier notation's entry with the same applies and id, in its place.
+  const CONCERN_KEYS=['id','applies','title','question','meaning'],CONCERN_APPLIES=['document','component','wire'];
+  // Each entry of notation.concerns with the rules it breaks (none when it is admitted).
+  function judgeConcerns(notation){
+    const list=Array.isArray(notation?.concerns)?notation.concerns:[];
+    const judged=list.map((entry,i)=>{
+      const broken=[],say=v=>JSON.stringify(v);
+      if(!isObject(entry))return {entry,name:`concerns[${i}]`,broken:['an entry is an object {id, applies, question, ...}']};
+      const name=`${typeof entry.applies==='string'?entry.applies:'concerns['+i+']'} concern ${say(entry.id)}`;
+      const extra=Object.keys(entry).find(k=>!CONCERN_KEYS.includes(k));
+      if(extra)broken.push(`${extra} is not a field of a concern (${CONCERN_KEYS.join(', ')})`);
+      if(typeof entry.id!=='string'||!entry.id.trim())broken.push('id must be a non-empty string');
+      if(!CONCERN_APPLIES.includes(entry.applies))broken.push(`applies must be ${CONCERN_APPLIES.join(', ')}, not ${say(entry.applies)}`);
+      if(typeof entry.question!=='string'||!entry.question.trim())broken.push('question must be a non-empty string');
+      for(const key of ['title','meaning'])if(entry[key]!==undefined&&typeof entry[key]!=='string')broken.push(`${key} must be a string`);
+      return {entry,name,broken};
+    });
+    // The rule between entries is read over the ones that stand on their own.
+    const sound=judged.filter(j=>!j.broken.length);
+    for(const j of sound)if(sound.some(o=>o!==j&&o.entry.applies===j.entry.applies&&o.entry.id===j.entry.id))j.broken.push(`id is used by more than one ${j.entry.applies} concern`);
+    return judged;
+  }
+  // One string per broken rule, beginning CONCERN_INVALID and naming the notation, the entry and the rule.
+  function concernFindings(notation){
+    const out=[];
+    for(const j of judgeConcerns(notation))for(const rule of j.broken)out.push(`CONCERN_INVALID: notation "${notation?.id??'?'}" ${j.name}: ${rule}`);
+    return out;
+  }
+  // The admitted entries for the document, for Components or for Wires, in declared order. An entry
+  // with a finding is not admitted.
+  function concernsOf(notation,applies){
+    return judgeConcerns(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry}));
+  }
   // The document scale, applied once to the flattened tokens (a fresh object: merge copies), so
   // every reader of tokens(doc) and resolve(doc).notation.tokens draws scaled with no multiplication
-  // of its own. Scaled: stroke.*, each text role's size and its own min, space.pin, type.screen.max.
+  // of its own. Scaled: stroke.*, each text role's size and its own min, space.pin, type.screen.max,
+  // glyph.w and glyph.h.
   // Not scaled: type.screen.min (screen pixels), radius, the other space tokens, elevation.
   // A scale that is not a number from 0.5 to 4 is refused, never clamped.
   const SCALE_MIN=.5,SCALE_MAX=4;
@@ -198,7 +256,16 @@
       if(r.size!==undefined)r.size=by(r.size);if(r.min!==undefined)r.min=by(r.min);
     }
     if(isObject(t.space)&&t.space.pin!==undefined)t.space.pin=by(t.space.pin);
+    if(isObject(t.glyph)){t.glyph.w=by(t.glyph.w);t.glyph.h=by(t.glyph.h)}
     return {ok:true};
+  }
+  // The glyph token is a box {w, h}, each a finite number above 0. Anything else is refused, never
+  // replaced by the built-in size.
+  function checkGlyphSize(t){
+    if(!isObject(t)||t.glyph===undefined)return {ok:true};
+    const g=t.glyph,good=v=>typeof v==='number'&&Number.isFinite(v)&&v>0;
+    if(isObject(g)&&good(g.w)&&good(g.h))return {ok:true};
+    return {ok:false,code:'GLYPH_SIZE_INVALID',message:`tokens.glyph is ${JSON.stringify(g)}; its w and h must each be a finite number above 0`,next_operation:`set tokens.glyph to {w, h} with both above 0, or remove it to draw at ${SCHEMATIC.tokens.glyph.w} by ${SCHEMATIC.tokens.glyph.h}`};
   }
   // Glyphs whose terminals are the card's attachment points (`points: 'terminals'`), by symbol
   // id, filled whenever a notation is resolved. The attachment core reads it, so a gate's two
@@ -251,7 +318,27 @@
   // The glyph leaves the card's foot to its title, and a line more for a subtitle.
   // The glyph leaves the card's foot to its title (one or two lines, from its length at the title
   // size) and a line more for a subtitle. Centred on the axis, so the room is kept on both sides.
-  function glyphBox(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type}={}){
+  // The glyph draws at one size, the glyph token F, on every card that has room for it. With
+  // s = min(F.w/96, F.h/64), the drawn glyph is 96s by 64s. A card has room when 96s is at most 72%
+  // of its width and 64s fits between the feet glyphBox keeps for the text (and, for a lone title
+  // that needs two lines, between the two-line blocks). `need` is the smallest card that has room:
+  // the width for the glyph, and the height for the glyph and the text at the wider of that width and
+  // the card's own. Only the layered layout grows a card to it (src/08-layout-core.js).
+  function glyphRoom(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type,glyph=SCHEMATIC.tokens.glyph}={}){
+    const F=glyph||SCHEMATIC.tokens.glyph,s=Math.min(F.w/96,F.h/64),ts=drawnSize(type,'title'),ss=drawnSize(type,'subtitle'),E=1e-6;
+    const heightAt=w=>{
+      const avail=Math.max(1,w-12),lines=Math.max(1,Math.min(2,Math.ceil(String(title||'').length*ts*.6/avail)));
+      const foot=8+lines*ts*1.15+(subtitle?ss*1.3:0),two=lines===2&&!subtitle&&titleWidth(title)*ts>avail*.85;
+      return 64*s+2*Math.max(foot,two?2.6*ts+4:0);
+    };
+    const needW=96*s/.72;
+    return {ok:96*s<=.72*size.w+E&&heightAt(size.w)<=size.h+E,box:{w:F.w,h:F.h,scale:s},need:{w:needW,h:heightAt(Math.max(size.w,needW))}};
+  }
+  // Where the card has room the box is the fixed one (fixed: true). Where it has not, the box follows
+  // the card as below, the shrink for a lone two-line title included (fixed: false).
+  function glyphBox(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type,glyph=SCHEMATIC.tokens.glyph}={}){
+    const fit=glyphRoom(g,size,{subtitle,title,type,glyph});
+    if(fit.ok)return {w:fit.box.w,h:fit.box.h,scale:fit.box.scale,fixed:true};
     const ts=drawnSize(type,'title'),ss=drawnSize(type,'subtitle'),avail=Math.max(1,size.w-12);
     const lines=Math.max(1,Math.min(2,Math.ceil(String(title||'').length*ts*.6/avail)));
     const foot=8+lines*ts*1.15+(subtitle?ss*1.3:0);
@@ -263,7 +350,7 @@
     // engine (no fonts in Node) and the renderer agree; past 85% of the text width counts, a margin
     // for fonts up to 15% wider than the table (DejaVu on Linux runs about 10% wider).
     if(lines===2&&!subtitle&&titleWidth(title)*ts>avail*.85){const room=size.h-2*(2.6*ts+4);if(room<h){const k=Math.max(.6,room/h);w*=k;h*=k}}
-    return {w,h,scale:Math.min(w/96,h/64)};
+    return {w,h,scale:Math.min(w/96,h/64),fixed:false};
   }
   // A title's advance width in ems at the title weight (600), from a sans-serif width table in the
   // manner of a PDF core font's AFM metrics: close enough to tell one line from two.
@@ -279,5 +366,5 @@
     const {scale}=glyphBox(g,size,opts);return {dx:(t.at[0]-48)*scale,dy:(t.at[1]-axis)*scale};
   }
   function terminal(g,idOrRole){return (g?.terminals||[]).find(t=>t.id===idOrRole)||(g?.terminals||[]).find(t=>t.role===idOrRole)||null}
-  return {BUILTIN,MARGIN,drawnSize,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
+  return {BUILTIN,MARGIN,drawnSize,glyphRoom,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,concernsOf,concernFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
 });

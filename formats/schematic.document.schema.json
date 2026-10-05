@@ -27,6 +27,10 @@
       "type": "object",
       "description": "Document metadata. Beta.24 may include timeScale and persisted checkpoints. palette is the document's own palette: a palette name or {custom: [six #RRGGBB hexes]}; it wins over the view's palette when the document opens.",
       "properties": {
+        "answers": {
+          "$ref": "#/$defs/answers",
+          "description": "The document's answers to the document concerns of its notation (notation.concerns, applies document): concern id to a non-empty string. The built-in schematic notation declares what, why, alternatives and smaller. Absent means nothing is answered. A value that is not a non-empty string is ANSWER_INVALID; a key the notation does not declare is ANSWER_UNKNOWN. An unanswered concern is open, never an error. See NOTATION-MODEL.md 'Concerns'."
+        },
         "palette": {
           "oneOf": [
             {
@@ -108,6 +112,10 @@
                 "$ref": "#/$defs/waitsOn",
                 "description": "What the Component waits on: people, rules and decisions, each {kind, id, label?}. Drawn under the card beside the status the notation's statuses list declares; anything else is WAITS_ON_INVALID."
               },
+              "answers": {
+                "$ref": "#/$defs/answers",
+                "description": "The Component's answers to the component concerns of the document's notation (notation.concerns, applies component): concern id to a non-empty string. There is no built-in component concern; a notation that declares none admits none (ANSWER_UNDECLARED), and a key it does not declare is ANSWER_UNKNOWN. See NOTATION-MODEL.md 'Concerns'."
+              },
               "badges": {
                 "type": "array",
                 "maxItems": 4,
@@ -164,6 +172,10 @@
                 "$ref": "#/$defs/waitsOn",
                 "description": "What the Wire waits on: people, rules and decisions, each {kind, id, label?}. Drawn in the Wire's caption after the status the notation's statuses list declares; anything else is WAITS_ON_INVALID."
               },
+              "answers": {
+                "$ref": "#/$defs/answers",
+                "description": "The Wire's answers to the wire concerns of the document's notation (notation.concerns, applies wire): concern id to a non-empty string. There is no built-in wire concern; a notation that declares none admits none (ANSWER_UNDECLARED), and a key it does not declare is ANSWER_UNKNOWN. See NOTATION-MODEL.md 'Concerns'."
+              },
               "kind": {
                 "type": "string",
                 "description": "The Wire's kind: the id of a wire kind in the kinds list of the document's notation (notation.kinds, applies wire), which declares the dash, weight and arrowhead the Wire is drawn in. There is no built-in wire kind; a notation that declares none admits none (KIND_UNDECLARED), and an id it does not declare is KIND_UNKNOWN. A Component takes no kind. See NOTATION-MODEL.md 'Kinds'."
@@ -191,6 +203,15 @@
     "status": {
       "type": "string",
       "description": "An id from the statuses list of the document's notation (notation.statuses); the values are the notation's, never a fixed set."
+    },
+    "answers": {
+      "type": "object",
+      "description": "Answers to the concerns of the document's notation (notation.concerns): each key is a concern id, each value a non-empty string after trimming. The keys are the notation's, never a fixed set.",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
     },
     "waitsOn": {
       "type": "array",

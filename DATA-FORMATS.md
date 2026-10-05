@@ -236,6 +236,66 @@ load as `notation: KIND_INVALID: ...`. All three codes carry the marker rule `st
 declares the key on `wires[].config`.
 
 
+## Answers (2026-10-04, `NOTATION-MODEL.md` "Concerns")
+
+A notation declares the questions a schematic should answer (its `concerns`), and a document carries
+the answers. Every key is optional and absent is not written: a document with no answers has no
+`answers` key anywhere, and the data core never adds an empty one.
+
+- **`meta.answers`**: the document's answers to the document concerns of its resolved notation
+  (`SovSchematicNotation.concernsOf(notation, 'document')`). The built-in `schematic` notation
+  declares `what`, `why`, `alternatives` and `smaller`.
+- **`config.answers`** on a Component or a Wire: its answers to the notation's component concerns or
+  wire concerns. There is no built-in one of either.
+
+Each is an object whose keys are concern ids and whose values are non-empty strings after trimming.
+
+```json
+{"meta": {"answers": {"what": "A half adder.", "why": "To teach carry."}}}
+```
+
+```json
+{"label": "Smelter", "answers": {"made-by": "Smelt two ore."}}
+```
+
+| Code | When |
+| --- | --- |
+| `ANSWER_INVALID` | `answers` is not an object, or a value is not a non-empty string; the message names the key (`config.answers.made-by must be a non-empty string`) |
+| `ANSWER_UNDECLARED` | a key is set and the notation declares no concerns for that `applies` (a card's answer in a `schematic` document) |
+| `ANSWER_UNKNOWN` | the key is not a concern the notation declares for that `applies`; the message lists the declared ids |
+
+A `create` or `update` of a Component or a Wire carrying a bad `config.answers` is refused with the
+code (the error message starts with it) and the document is unchanged. An `update` merges the keys it
+names into the answers already there, and `answers: null` removes `config.answers`. Loading keeps the
+stored values as written and `validateDocument` reports each finding as `<CODE>: meta.answers...`,
+`component <id>: <CODE>: ...` or `wire <id>: <CODE>: ...`, and each broken entry of the notation's own
+`concerns` as `notation: CONCERN_INVALID: ...` (marker rule `status`). Saving, opening and compacting
+keep `meta.answers` and every `config.answers`. The schema
+(`formats/schematic.document.schema.json`) declares the key on `meta`, `components[].config` and
+`wires[].config`.
+
+**The report.** `SovSchematicData.concernReport(doc)` returns `{notation, rows, answered, open}`
+and changes nothing. `rows` holds one row per declared concern per thing it applies to: the document
+concerns in declared order with `target: null`; then each Component in document order with each
+component concern and `target` the Component's id; then each Wire the same way. A row is `{concern,
+applies, target, title, question, answered, answer}`: `title` is the entry's title or its id, and
+`answer` is present only when `answered` is true. `answered` and `open` are the two counts. An
+unanswered concern is open: it is information, never an error. An answer the notation does not
+declare is not a row; it is one of the codes above.
+
+**The validator flag.** `node scripts/validate_sov.mjs --concerns file.sov` prints, after the `ok`
+line of a valid file, one line per open row and then the counts. The exit code is the same with and
+without the flag.
+
+```
+ok   line.sov  (2 components, 1 wires)
+open  document - why: Why would the plant run this line?
+open  component smelter repeatable: Is this made once or over and over?
+open  wire belt carries: What moves along this, and how much?
+concerns: 6 answered, 3 open
+```
+
+
 ## Badges (2026-10-04, `NOTATION-MODEL.md` "Statuses")
 
 A Component may carry small chips of text and a palette colour, with no status's meaning.
