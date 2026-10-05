@@ -430,6 +430,64 @@ The wire's group carries `data-kind`. A wire with no kind draws as before, and a
 the statuses, with a sample line in that kind's dash, weight and arrowhead. The `work-engine`
 notation declares no wire kinds yet. `tests/wire_kind_qa.py` checks all of this.
 
+### Concerns
+
+A notation declares the questions a schematic drawn in it should answer in one list, `concerns`, for
+the document, for Components and for Wires. An entry is `{id, applies, title, question, meaning}`:
+
+| Field | Values | Absent means |
+| --- | --- | --- |
+| `id` | a non-empty string | refused |
+| `applies` | `document`, `component` or `wire` | refused |
+| `question` | a non-empty string after trimming: what is asked | refused |
+| `title` | a string: a short name for the question | the id |
+| `meaning` | a string: what a good answer holds | no meaning |
+
+The rules, each reported as `CONCERN_INVALID` naming the notation, the entry and the rule
+(`concernFindings` in `src/03-notation-core.js`):
+
+- An entry is an object, and a key outside the five is refused.
+- `id` and `question` are non-empty strings; `applies` is one of the three; `title` and `meaning`,
+  when present, are strings.
+- An id is used once within one `applies`.
+
+An entry with a finding is not admitted: `concernsOf(notation, 'document' | 'component' | 'wire')`
+gives the admitted entries in declared order. `resolve()` joins `concerns` along the `extends` chain
+by the join it uses for `kinds`: a later notation's entry replaces an earlier notation's entry with
+the same `applies` and `id`, in its place, and an entry with a new id is added after the ones before.
+
+**The built-in document concerns.** The `schematic` notation declares four, and every notation that
+extends it (`logic`, `work-engine`, a carried one) inherits them. It declares none for Components and
+none for Wires.
+
+| Id | Title | Question |
+| --- | --- | --- |
+| `what` | What it is | What is this a schematic of, in one or two sentences? |
+| `why` | Why build it | Why would someone build this or study it? |
+| `alternatives` | Alternatives | What are the alternatives, and why this one over the others? |
+| `smaller` | Smaller first | Can a smaller version be built first, and what is it? |
+
+**A domain rewords one.** A domain notation asks a built-in question in its own words by declaring an
+entry with the same `applies` and `id`. This entry keeps `why` second in the list and changes what is
+asked; the other two add a question for every card and one for every wire:
+
+```json
+"concerns": [
+  {"id": "why", "applies": "document", "title": "Why run it", "question": "Why would the plant run this line?"},
+  {"id": "made-by", "applies": "component", "question": "What makes this, and from what?"},
+  {"id": "carries", "applies": "wire", "question": "What moves along this, and how much?"}
+]
+```
+
+**Answers.** A document answers its document concerns in `meta.answers`; a Component and a Wire
+answer theirs in `config.answers` (DATA-FORMATS.md "Answers"). The data core validates an answer
+against the concerns of the document's resolved notation, never against a list of its own: a key
+the notation does not declare is `ANSWER_UNKNOWN`, and any key where the notation declares no concerns
+for that `applies` is `ANSWER_UNDECLARED`. A concern with no answer is open. Open is information and
+never a finding: `SovSchematicData.concernReport(doc)` lists every declared concern as answered or
+open with its question, and `node scripts/validate_sov.mjs --concerns` prints the open ones.
+Nothing is drawn for a concern. `tests/concerns_qa.py` checks all of this.
+
 ## Open
 
 - A card with more terminals than fit on one side: spread evenly (now), or grow the card.

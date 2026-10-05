@@ -43,6 +43,15 @@
       {id:'container',applies:'region',title:'Container',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
       {id:'gate',applies:'region',title:'Gate',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
       {id:'intake',applies:'region',title:'Intake',meaning:'An open region: a dashed outline.',dash:'dashed',open:true}
+    ],
+    // Concerns (NOTATION-MODEL.md "Concerns"): the questions a document drawn in this notation should
+    // answer. A notation that extends this one rewords one by declaring the same applies and id, and
+    // adds its own for the document, for Components and for Wires.
+    concerns:[
+      {id:'what',applies:'document',title:'What it is',question:'What is this a schematic of, in one or two sentences?'},
+      {id:'why',applies:'document',title:'Why build it',question:'Why would someone build this or study it?'},
+      {id:'alternatives',applies:'document',title:'Alternatives',question:'What are the alternatives, and why this one over the others?'},
+      {id:'smaller',applies:'document',title:'Smaller first',question:'Can a smaller version be built first, and what is it?'}
     ]
   };
 
@@ -114,6 +123,7 @@
     while(cur&&!seen.has(cur.id)){chain.unshift(cur);seen.add(cur.id);cur=cur.extends?table[cur.extends]:null}
     let flat={};for(const n of chain)flat=merge(flat,n);
     const kinds=joinKinds(chain);if(kinds)flat.kinds=kinds;
+    const concerns=joinKinds(chain,'concerns');if(concerns)flat.concerns=concerns;
     const sized=checkGlyphSize(flat.tokens);if(!sized.ok)return sized;
     const scaled=applyScale(flat.tokens);if(!scaled.ok)return scaled;
     flat.id=id;registerPoints(flat);return {ok:true,notation:flat};
@@ -130,11 +140,12 @@
   // entry replaces an earlier notation's entry with the same applies and id, in its place.
   const KIND_KEYS=['id','applies','title','meaning','dash','weight','arrowhead','open'];
   const KIND_DASH={wire:['solid','dashed'],region:['none','solid','dashed']},KIND_WEIGHT=['regular','heavy'],KIND_ARROWHEAD=['chevron','filled','none'];
-  function joinKinds(chain){
+  // `list` names the list joined: kinds, or concerns (below), which join by the same rule.
+  function joinKinds(chain,list='kinds'){
     let any=false;const out=[];
     chain.forEach((n,from)=>{
-      if(!Array.isArray(n?.kinds))return;any=true;
-      for(const entry of n.kinds){
+      if(!Array.isArray(n?.[list]))return;any=true;
+      for(const entry of n[list]){
         const at=isObject(entry)?out.findIndex(o=>o.from<from&&isObject(o.entry)&&o.entry.applies===entry.applies&&o.entry.id===entry.id):-1;
         if(at>=0)out[at]={entry,from};else out.push({entry,from});
       }
@@ -183,6 +194,48 @@
   // The admitted entries for wires or for regions, in declared order. An entry with a finding is not admitted.
   function kindsOf(notation,applies){
     return judgeKinds(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry}));
+  }
+  // ---- Concerns (NOTATION-MODEL.md "Concerns") --------------------------------------------------
+  // A notation declares `concerns`, the questions a schematic drawn in it should answer:
+  // {id, applies: document | component | wire, title, question, meaning}. id and question are
+  // non-empty strings; title and meaning are optional strings. A document answers them in
+  // meta.answers and config.answers (src/05-data-core.js answerProblems, concernReport).
+  //   CONCERN_INVALID   an entry breaks a rule: not an object; an unknown key; an id or a question
+  //                     that is not a non-empty string; an applies that is not one of the three; a
+  //                     title or meaning that is not a string; an id used twice within one applies
+  // resolve() joins concerns along the extends chain as it joins kinds (joinKinds): a later
+  // notation's entry replaces an earlier notation's entry with the same applies and id, in its place.
+  const CONCERN_KEYS=['id','applies','title','question','meaning'],CONCERN_APPLIES=['document','component','wire'];
+  // Each entry of notation.concerns with the rules it breaks (none when it is admitted).
+  function judgeConcerns(notation){
+    const list=Array.isArray(notation?.concerns)?notation.concerns:[];
+    const judged=list.map((entry,i)=>{
+      const broken=[],say=v=>JSON.stringify(v);
+      if(!isObject(entry))return {entry,name:`concerns[${i}]`,broken:['an entry is an object {id, applies, question, ...}']};
+      const name=`${typeof entry.applies==='string'?entry.applies:'concerns['+i+']'} concern ${say(entry.id)}`;
+      const extra=Object.keys(entry).find(k=>!CONCERN_KEYS.includes(k));
+      if(extra)broken.push(`${extra} is not a field of a concern (${CONCERN_KEYS.join(', ')})`);
+      if(typeof entry.id!=='string'||!entry.id.trim())broken.push('id must be a non-empty string');
+      if(!CONCERN_APPLIES.includes(entry.applies))broken.push(`applies must be ${CONCERN_APPLIES.join(', ')}, not ${say(entry.applies)}`);
+      if(typeof entry.question!=='string'||!entry.question.trim())broken.push('question must be a non-empty string');
+      for(const key of ['title','meaning'])if(entry[key]!==undefined&&typeof entry[key]!=='string')broken.push(`${key} must be a string`);
+      return {entry,name,broken};
+    });
+    // The rule between entries is read over the ones that stand on their own.
+    const sound=judged.filter(j=>!j.broken.length);
+    for(const j of sound)if(sound.some(o=>o!==j&&o.entry.applies===j.entry.applies&&o.entry.id===j.entry.id))j.broken.push(`id is used by more than one ${j.entry.applies} concern`);
+    return judged;
+  }
+  // One string per broken rule, beginning CONCERN_INVALID and naming the notation, the entry and the rule.
+  function concernFindings(notation){
+    const out=[];
+    for(const j of judgeConcerns(notation))for(const rule of j.broken)out.push(`CONCERN_INVALID: notation "${notation?.id??'?'}" ${j.name}: ${rule}`);
+    return out;
+  }
+  // The admitted entries for the document, for Components or for Wires, in declared order. An entry
+  // with a finding is not admitted.
+  function concernsOf(notation,applies){
+    return judgeConcerns(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry}));
   }
   // The document scale, applied once to the flattened tokens (a fresh object: merge copies), so
   // every reader of tokens(doc) and resolve(doc).notation.tokens draws scaled with no multiplication
@@ -313,5 +366,5 @@
     const {scale}=glyphBox(g,size,opts);return {dx:(t.at[0]-48)*scale,dy:(t.at[1]-axis)*scale};
   }
   function terminal(g,idOrRole){return (g?.terminals||[]).find(t=>t.id===idOrRole)||(g?.terminals||[]).find(t=>t.role===idOrRole)||null}
-  return {BUILTIN,MARGIN,drawnSize,glyphRoom,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
+  return {BUILTIN,MARGIN,drawnSize,glyphRoom,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,concernsOf,concernFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
 });
