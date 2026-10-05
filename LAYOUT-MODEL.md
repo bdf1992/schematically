@@ -668,10 +668,37 @@ for Point-Feature Label Placement", 1995; map renderers place road names the sam
   border (a label lies wholly inside a container or wholly outside), a status chip or marker
   badge, other text (titles, subtitles, port labels, group titles, bus labels, end tags, labels
   already placed) and another wire's segment.
+- **Its own wire's other legs (2026-10-05).** Every place carries the straight run it stands
+  beside, and every segment of the label's own wire that is not part of that run is a line the
+  label must clear, as another wire's segment is. The two wire-midpoint places carry the run whose
+  line passes within 0.5 px of the path's midpoint; where no run does, they count every segment.
+  An own leg is tested against the box taken 0.01 px inside each of its four edges, so a leg that
+  only touches the box at a corner or along an edge is not counted. Own legs count in all three
+  tiers (with the clearance and with no padding), for the one-line box and for the two-line box of
+  the fourth step. A wire whose segments all lie on one line has no other leg and is placed as
+  before; a label kept where it is because its wire has no straight run counts none. Label
+  placement scores a candidate against every feature drawn, the label's own line included,
+  everywhere but along the stretch it names (Imhof 1975; Christensen, Marks and Shieber 1995).
 - **Three tiers.** The label takes the first place, in the order above, whose box padded by the
   clearance meets nothing. With no such place, a place whose box with no padding meets nothing
   (of those, the one that meets least when padded, the earliest on a tie). With none of those,
   the place of least overlap with no padding.
+- **Fourth step: two lines.** Only when the place the three tiers gave truly overlaps something
+  (no padding) and the caption has a word break, the label is set on two lines and placed again:
+  the break is the one whose wider line is narrowest (the earlier break on a tie), the two-line
+  box gets the same candidates in the same order with the same clearance and step, and the same
+  three tiers run. The label stays on two lines only where that box meets nothing with no
+  padding; otherwise it goes back to one line at the place the one-line tiers gave. Every pass
+  starts by putting a wrapped label back on one line, so a label that has a clear one-line place
+  is never wrapped. A label is never cut, shrunk, broken inside a word or set on three lines.
+  This is the order line-label placement takes on maps and in diagram tools: break at a word
+  boundary before any geometry moves (Imhof, "Positioning Names on Maps", 1975).
+- **Structure.** The label is one `text.connection-label` with `x`, `y` and `text-anchor`
+  middle, and its whole caption in `data-caption`. A wrapped label also carries
+  `data-wrapped="true"` and two `tspan` children holding the lines without the break's space,
+  each with the label's `x`, the first with `dy` 0 and the second with `dy` 1.15em; `y` is the
+  first line's baseline. Collision, contrast, bounds and export read the text element's own box,
+  which spans both lines. A redraw keeps a label's place while `data-caption` and the route stand.
 - **Crowded.** `data-label-crowded="true"` is on a label whose final place truly overlaps
   something in the list above, with no padding. A label that only misses the clearance does not
   carry it. A label already at its place is not rewritten, so placing twice gives the same
@@ -681,7 +708,9 @@ for Point-Feature Label Placement", 1995; map renderers place road names the sam
   several times larger in world units and more of them are crowded. The mark describes the
   drawing it is read in.
 - **What it cannot do.** A label longer than every straight run of its wire has only the midpoint
-  places, and a wire shorter than its label between two close cards has no clear place.
+  places. A one-word label wider than the gap its wire runs in has no clear place and stays
+  crowded. A label whose every place meets a leg of its own wire takes the place of least overlap
+  and is marked crowded.
 
 Measured at 1600 x 1000 after `fitDiagram`, before then after. A label collision is a
 text-collision finding of static metrics that names the label's wire and quotes its text; the
@@ -689,17 +718,74 @@ marks in the picture are read in the same drawing (`withPictureLabels`):
 
 | Document | Labels | Label collisions | Crowded in the picture | Crowded in the fitted view (zoom) |
 | --- | --- | --- | --- | --- |
-| `tests/fixtures/task-lifecycle.sov` | 9 | 1, 1 | not marked, 1 | not marked, 2 (0.28) |
+| `tests/fixtures/task-lifecycle.sov` | 9 | 1, 1 (0 with the fourth step) | not marked, 1 (0 with the fourth step) | not marked, 2 (0.28) |
 | `tests/fixtures/work-engine-sample.sov` | 13 | 1, 0 | not marked, 0 | not marked, 5 (0.32) |
 | 12 act cards and 14 labelled wires laid out by `layered` | 14 | 0, 0 | not marked, 0 | not marked, 6 (0.44) |
 | `docs/workengine/map.sov` | 1 | 0, 0 | not marked, 0 | not marked, 0 (0.24) |
 
-Known residual: on task-lifecycle 'push, through the broker' (w5) still overlaps Commits and is
-marked crowded. Its wire, from Commits to GitHub's border, is 130 world units and the label is 137
-wide at base size, so no label move clears it; it needs a wider gap. Held by task
-`schematically-a-wire-label-has-room-on-its-wire`.
+With the fourth step (2026-10-04), same measure, before then after:
 
-Tests: `tests/wire_label_placement_qa.py`, `tests/wire_label_clearance_qa.py`.
+| Document | Label collisions | Crowded in the picture | Wrapped in the picture | Crowded in the fitted view | Wrapped in the fitted view |
+| --- | --- | --- | --- | --- | --- |
+| `tests/fixtures/task-lifecycle.sov` | 1, 0 | 1, 0 | 1 (w5) | 2, 2 | 0 |
+| `tests/fixtures/work-engine-sample.sov` | 0, 0 | 0, 0 | 0 | 5, 3 | 2 |
+| 12 act cards and 14 labelled wires laid out by `layered` | 0, 0 | 0, 0 | 0 | 6, 1 | 5 |
+| `docs/workengine/map.sov` | 0, 0 | 0, 0 | 0 | 0, 0 | 0 |
+
+With the own legs counted and room made for task-lifecycle w5 (2026-10-05), in the picture at
+1600 x 1000, before then after. 'Before' is the same tree without the own-wire rule and with the
+fixture as it stood. 'Across an own leg' counts labels whose box, taken 0.1 inside its edges, is
+crossed by a segment of their own wire. The wide font is Verdana given to the page by a test; the
+page's own font on the measuring host is Segoe UI:
+
+| Document | Font | Label collisions | Crowded | Wrapped | Across an own leg | Labels moved by the rule |
+| --- | --- | --- | --- | --- | --- | --- |
+| `tests/fixtures/task-lifecycle.sov` | own | 0, 0 | 0, 0 | 1, 1 (w5) | 1 (w5), 0 | w5, with the room |
+| `tests/fixtures/task-lifecycle.sov` | wide | 1, 0 | 1 (w5), 0 | 0, 0 | 0, 0 | w5, with the room |
+| `tests/fixtures/work-engine-sample.sov` | own | 0, 0 | 0, 0 | 0, 0 | 1, 0 | w-case-recording, w-declares-delivery-broker, w-port-exit |
+| `tests/fixtures/work-engine-sample.sov` | wide | 0, 0 | 0, 0 | 0, 0 | 0, 0 | w-port-exit |
+| 12 act cards and 14 labelled wires laid out by `layered` | own | 0, 0 | 0, 0 | 0, 0 | 1, 0 | w1, w3, w5, w9, w10, w12 |
+| 12 act cards and 14 labelled wires laid out by `layered` | wide | 0, 0 | 0, 0 | 0, 2 (w3, w5) | 5, 0 | w1, w3, w5, w10, w12 |
+| `docs/workengine/map.sov` | own | 0, 0 | 0, 0 | 0, 0 | 0, 0 | none |
+| `docs/workengine/map.sov` | wide | 0, 0 | 0, 0 | 0, 0 | 0, 0 | none |
+
+Under the page's own font the rule moves nine labels besides w5. Each had a leg of its own wire
+inside its box or inside the box padded by the clearance; none was or is crowded. In
+task-lifecycle.sov the labels right of Commits also move 60 with their cards.
+
+What was measured on task-lifecycle w5 'push, through the broker', in the picture. The fixture is
+written by hand, so the room is in the fixture: the GitHub plane and the ten cards on and right of
+it stand 60 further right than they did. 60 is the smallest of 20, 40, 60, 80, 100 and 120 at which
+the label is not crowded, lies across no leg of w5 and is named by no text-collision or
+cramped-label finding under both fonts (the page's own font is clear from 40, the wide font from
+60; `tests/wire_label_wrap_qa.py` holds the table). The wire now runs (1630,300) (1656,300)
+(1656,252) (1820,252): Commits' right edge is at 1630, GitHub's border at 1820, a gap of 190 where
+it was 130, and the fitted zoom is 0.2763. Under the page's own font the label is 142.4 wide on one
+line; the long run is 164, less than the label and twice the 6 px clearance (21.7 at that zoom), so
+no one-line place is clear and it wraps into 'push, through' over 'the broker'. The two-line box
+stands right of the vertical leg, 6 px from it, at 1677.7 to 1758.1 by 260.1 to 292.0, and meets
+nothing. Under the wide font the label is 174.1 wide and stays on one line above the wire's
+midpoint, 6 px above the long run, at 1613.9 to 1788.1 by 215.8 to 230.3: it reaches left past
+Commits' edge but stands above the card, and meets no other wire. Static
+metrics report no text-collision, cramped-label or text-contrast finding naming w5 under either
+font, in light and dark.
+
+Where the fixture stood (the gap of 130), the label is now on one line, marked crowded, and
+overlaps Commits under both fonts: the two-line place it took there under the page's own font lay
+across two legs of w5 (the stub from Commits and the vertical leg) and is no longer counted clear.
+At 60 the label takes the same place with or without the rule; the rule decides it at the widths
+either side.
+
+Why the tests run under two fonts. The page asks for system-ui, so a caption's width is the
+reader's font's: GitHub's runner drew 'push, through the broker' wide enough to overlap Commits
+where this host's Segoe UI wrapped it clear, and the placement test failed there and passed here.
+The product draws in the reader's own font and sets none, so a test that pinned one font would
+hold one reader's picture only. The two wire-label tests therefore assert what holds under any
+font, once under the page's own and once under a wide one: the label is clear of cards, text,
+other wires and its own legs, and it wraps only where one line has no clear place.
+
+Tests: `tests/wire_label_placement_qa.py`, `tests/wire_label_clearance_qa.py`,
+`tests/wire_label_wrap_qa.py`.
 
 ## As built: presentation (2026-09-25)
 

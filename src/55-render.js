@@ -1069,6 +1069,20 @@ function clearWireVisualFocus(){
 // Projection-only geometry: keep the exact points used to paint each path. Label
 // layout never asks the router for another route or writes into the document.
 const wireLabelPaths=new Map();
+// The two lines a caption wraps onto: the word break whose wider line is narrowest, the earlier
+// break on a tie; null when the caption has no word break. The label is left holding the caption.
+function wireLabelLines(label,caption){
+  let best=null;
+  for(const gap of caption.matchAll(/\s+/g)){
+    const first=caption.slice(0,gap.index),second=caption.slice(gap.index+gap[0].length);
+    if(!first||!second)continue;
+    label.textContent=first;let wide=label.getComputedTextLength();
+    label.textContent=second;wide=Math.max(wide,label.getComputedTextLength());
+    if(!best||wide<best.wide-1e-6)best={wide,lines:[first,second]};
+  }
+  label.textContent=caption;
+  return best?best.lines:null;
+}
 function placeWireLabels(){
   const matrix=workspace.getScreenCTM();if(!matrix)return;
   // LAYOUT-MODEL.md "Wire labels": the clearance round a label and the step it slides by, in screen pixels.
@@ -1110,35 +1124,54 @@ function placeWireLabels(){
   for(const entry of entries){
     const {path,points}=entry,label=path.parentElement.querySelector('.connection-label');
     if(!label||!visible(label))continue;
+    // Each pass starts from one line: a wrapped label is put back before anything is measured.
+    const caption=label.dataset.caption??label.textContent;
+    const wrappedAt=label.dataset.wrapped==='true'?[label.getAttribute('x'),label.getAttribute('y')]:null;
+    if(wrappedAt){delete label.dataset.wrapped;label.textContent=caption}
+    // The label as it is drawn now (one line or two) takes a place by the three tiers; the true
+    // overlap at the place it ends at is returned.
+    const settle=()=>{
     const bounds=rect(label),width=bounds.r-bounds.l,height=bounds.b-bounds.t;
     const anchor=screen({x:Number(label.getAttribute('x')),y:Number(label.getAttribute('y'))});
     const offset={x:bounds.l-anchor.x,y:bounds.t-anchor.y};
     const midpoint=screen(path.getPointAtLength(path.getTotalLength()/2)),candidates=[];
-    const beside=(p,a,b)=>{
-      if(Math.abs(a.y-b.y)<.01){
-        candidates.push({l:p.x-width/2,t:p.y-clearance-height},{l:p.x-width/2,t:p.y+clearance});
-      }else if(Math.abs(a.x-b.x)<.01){
-        candidates.push({l:p.x-clearance-width,t:p.y-height/2},{l:p.x+clearance,t:p.y-height/2});
-      }
-    };
-    const total=path.getTotalLength(),before=screen(path.getPointAtLength(Math.max(0,total/2-.1))),after=screen(path.getPointAtLength(Math.min(total,total/2+.1)));
-    beside(midpoint,before,after);
-    for(let i=1;i<points.length;i++)beside({x:(points[i-1].x+points[i].x)/2,y:(points[i-1].y+points[i].y)/2},points[i-1],points[i]);
-    // Slid along the wire: on every straight run with room for the label and its clearance, a place
-    // every step on both sides, outward from the run's middle.
-    const slid=[],runs=[points[0]];
+    // The wire's straight runs (collinear segments merged): run i goes from runs[i-1] to runs[i].
+    // Every segment is a leg that knows its run, and every place carries the run it stands beside.
+    const runs=[points[0]],legs=[];
     for(let i=1;i<points.length;i++){
       const p=points[i],l=runs.at(-1),a=runs.at(-2);
       if(a&&((Math.abs(a.y-l.y)<.01&&Math.abs(l.y-p.y)<.01)||(Math.abs(a.x-l.x)<.01&&Math.abs(l.x-p.x)<.01)))runs[runs.length-1]=p;else runs.push(p);
+      legs.push({a:points[i-1],b:p,run:runs.length-1});
     }
+    const beside=(p,a,b,run)=>{
+      if(Math.abs(a.y-b.y)<.01){
+        candidates.push({l:p.x-width/2,t:p.y-clearance-height,run},{l:p.x-width/2,t:p.y+clearance,run});
+      }else if(Math.abs(a.x-b.x)<.01){
+        candidates.push({l:p.x-clearance-width,t:p.y-height/2,run},{l:p.x+clearance,t:p.y-height/2,run});
+      }
+    };
+    // The wire-midpoint places stand beside the run whose line passes within half a pixel of the
+    // path's midpoint and whose span holds it; with no such run (0) they count every leg.
+    let middle=0;
+    for(let i=1;i<runs.length&&!middle;i++){
+      const a=runs[i-1],b=runs[i],dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy);if(length<1e-9)continue;
+      const along=((midpoint.x-a.x)*dx+(midpoint.y-a.y)*dy)/length;
+      if(Math.abs((midpoint.x-a.x)*dy-(midpoint.y-a.y)*dx)/length<=.5&&along>=0&&along<=length)middle=i;
+    }
+    const total=path.getTotalLength(),before=screen(path.getPointAtLength(Math.max(0,total/2-.1))),after=screen(path.getPointAtLength(Math.min(total,total/2+.1)));
+    beside(midpoint,before,after,middle);
+    for(let i=1;i<points.length;i++)beside({x:(points[i-1].x+points[i].x)/2,y:(points[i-1].y+points[i].y)/2},points[i-1],points[i],legs[i-1].run);
+    // Slid along the wire: on every straight run with room for the label and its clearance, a place
+    // every step on both sides, outward from the run's middle.
+    const slid=[];
     for(let i=1;i<runs.length;i++){
       const a=runs[i-1],b=runs[i],h=Math.abs(a.y-b.y)<.01,v=Math.abs(a.x-b.x)<.01;if(h===v)continue;
       const room=(h?Math.abs(b.x-a.x):Math.abs(b.y-a.y))-(h?width:height)-2*clearance;if(room<0)continue;
       const mid=h?(a.x+b.x)/2:(a.y+b.y)/2;
       for(let k=0;k*step<=room/2+1e-6;k++)for(const side of k?[-1,1]:[1]){
         const c=mid+side*k*step;
-        if(h)slid.push({l:c-width/2,t:a.y-clearance-height},{l:c-width/2,t:a.y+clearance});
-        else slid.push({l:a.x-clearance-width,t:c-height/2},{l:a.x+clearance,t:c-height/2});
+        if(h)slid.push({l:c-width/2,t:a.y-clearance-height,run:i},{l:c-width/2,t:a.y+clearance,run:i});
+        else slid.push({l:a.x-clearance-width,t:c-height/2,run:i},{l:a.x+clearance,t:c-height/2,run:i});
       }
     }
     // Only what lies within reach of this wire can meet a label beside it.
@@ -1159,6 +1192,13 @@ function placeWireLabels(){
       for(const o of solid)if(intersects(box,o)&&++n>=limit)return n;
       for(const o of borders)if(intersects(box,o)&&!(box.l>o.l&&box.r<o.r&&box.t>o.t&&box.b<o.b)&&++n>=limit)return n;
       for(const [a,b] of lines)if(crosses(box,a,b)&&++n>=limit)return n;
+      // The label's own wire, all but the run this place stands beside: a leg counts where it enters
+      // the box, taken .01 px inside its edges, so one that only touches a corner or an edge does not.
+      // A label kept where it is (a place with no run named) counts none.
+      if(place.run!==undefined){
+        const inner={l:box.l+.01,r:box.r-.01,t:box.t+.01,b:box.b-.01};
+        for(const leg of legs)if(leg.run!==place.run&&crosses(inner,leg.a,leg.b)&&++n>=limit)return n;
+      }
       return n;
     };
     // Today's places first, then the slid ones; in each, nearest the wire's midpoint first. The first
@@ -1176,8 +1216,32 @@ function placeWireLabels(){
       if(Math.abs(chosen.l-bounds.l)>.01||Math.abs(chosen.t-bounds.t)>.01){
         const position=new DOMPoint(chosen.l-offset.x,chosen.t-offset.y).matrixTransform(inverse);
         label.setAttribute('x',String(position.x));label.setAttribute('y',String(position.y));
+        for(const line of label.children)line.setAttribute('x',String(position.x)); // a wrapped label's lines follow it
       }
     }else bare=overlaps({l:bounds.l,t:bounds.t},0,Infinity); // a wire with no straight run keeps its place
+    return bare;
+    };
+    let bare=settle();
+    // The fourth step: a label with no clear one-line place is set on two lines at a word break and
+    // placed again by the same tiers. It stays wrapped only where the two-line box meets nothing;
+    // otherwise it goes back to one line at the place the one-line tiers gave.
+    const lines=bare>0&&!window.SOV_QA_NO_WIRE_LABEL_WRAP?wireLabelLines(label,caption):null;
+    if(lines){
+      const x=label.getAttribute('x'),y=label.getAttribute('y');
+      setFittedText(label,lines,x,'1.15em');label.dataset.wrapped='true';
+      if(settle()>0){
+        delete label.dataset.wrapped;label.textContent=caption;label.setAttribute('x',x);label.setAttribute('y',y);
+      }else{
+        bare=0;
+        // A wrapped label back at the place it had (within .01 px on screen) keeps its coordinates to
+        // the digit, so placing twice never drifts.
+        const scale=Math.hypot(matrix.a,matrix.b),near=(was,now)=>Math.abs(Number(was)-Number(now))*scale<.01;
+        if(wrappedAt&&near(wrappedAt[0],label.getAttribute('x'))&&near(wrappedAt[1],label.getAttribute('y'))){
+          label.setAttribute('x',wrappedAt[0]);label.setAttribute('y',wrappedAt[1]);
+          for(const line of label.children)line.setAttribute('x',wrappedAt[0]);
+        }
+      }
+    }
     // Crowded: the label truly overlaps a card, a border, other text or a wire at the place it has.
     if(bare>0)label.dataset.labelCrowded='true';else delete label.dataset.labelCrowded;
     // Later labels keep clear of this one; the finite candidate list bounds the work.
@@ -1255,7 +1319,7 @@ function wireDrawKey(i,w,d,points,epA,epB,snapshot,busFallback,cramped,editor,si
 function renderWires(signalState=computeSignalState(),markers=markersById(),reuse=false){
   const previousLabels=new Map([...wireLabelPaths.keys()].map(path=>{
     const label=path.parentElement?.querySelector('.connection-label');
-    return [path.parentElement?.dataset.wireId,label?{text:label.textContent,d:path.getAttribute('d'),x:label.getAttribute('x'),y:label.getAttribute('y')}:null];
+    return [path.parentElement?.dataset.wireId,label?{text:label.dataset.caption,d:path.getAttribute('d'),x:label.getAttribute('x'),y:label.getAttribute('y')}:null];
   }));
   wireLabelPaths.clear();
   const emptyWireGroups=()=>{
@@ -1471,7 +1535,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
       const text=(cfg.direction==='duplex'?'↔ ':'')+caption,lift=13+(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0);
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5),previous=previousLabels.get(w.id),label=document.createElementNS('http://www.w3.org/2000/svg','text');
       const keep=previous?.text===text&&previous.d===d;
-      label.setAttribute('class','connection-label');label.setAttribute('x',keep?previous.x:q.x);label.setAttribute('y',keep?previous.y:q.y-lift);label.setAttribute('text-anchor','middle');label.textContent=text;group.appendChild(label);
+      label.setAttribute('class','connection-label');label.setAttribute('x',keep?previous.x:q.x);label.setAttribute('y',keep?previous.y:q.y-lift);label.setAttribute('text-anchor','middle');label.dataset.caption=text;label.textContent=text;group.appendChild(label);
     }
     // Channel markers belong to bound ends; a free end has no port to mark.
     if(a&&endpointShowsChannelTag(w,'a')){

@@ -138,6 +138,7 @@ BROWSER=[
     'tests/authoring_review_qa.py',
     'tests/wire_label_clearance_qa.py',
     'tests/wire_label_placement_qa.py',
+    'tests/wire_label_wrap_qa.py',
     'tests/drag_lifecycle_stress_qa.py',
     'tests/performance_regression_qa.py',
     'tests/map_render_time_qa.py',

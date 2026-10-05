@@ -14,15 +14,21 @@ document drawn again with labels at their base size (withPictureLabels, src/75-p
 crowded marks are read in that same drawing, so a mark and a finding describe one placement. The
 marks in the fitted view on screen, where labels hold a 12 px floor, are printed and not asserted.
 
-- tests/fixtures/task-lifecycle.sov: at most 1 label collision, and it is w5 'push, through the
-  broker' (130 world units of wire for a 137 unit label; held by task
-  schematically-a-wire-label-has-room-on-its-wire).
-- tests/fixtures/work-engine-sample.sov: 0 label collisions.
-- On both, every label named in a label collision is marked crowded and no other label is.
+The page asks for system-ui, so text is as wide as the reader's own font makes it. The two fixtures
+are measured twice: under the page's own font and under a wide one (WIDE_FONT, set on a second page
+before a document opens). Every line printed names its font.
+
+- tests/fixtures/task-lifecycle.sov: 0 label collisions under both fonts. w5 'push, through the
+  broker' has a clear place under both fonts, on one line or two: the GitHub plane stands far enough
+  from Commits for either (tests/wire_label_wrap_qa.py holds the place itself).
+- tests/fixtures/work-engine-sample.sov: 0 label collisions under both fonts.
+- On both, under both fonts, every label named in a label collision is marked crowded and no other
+  label is.
 - A document built here, 12 act cards and 14 wires with labels of 8 to 30 characters, arranged by
   SovSchematicAPI.layout.apply({engine: 'layered'}): 0 label collisions and 0 crowded labels. In its
-  picture (renderStandaloneSvg) no label box overlaps a card body.
-- docs/workengine/map.sov: its numbers are printed, not asserted.
+  picture (renderStandaloneSvg) no label box overlaps a card body. It is asserted under the page's
+  own font; its numbers under the wide font are printed, not asserted.
+- docs/workengine/map.sov: its numbers are printed under both fonts, not asserted.
 - The page logs no errors.
 """
 from __future__ import annotations
@@ -37,6 +43,10 @@ from browser_runtime import chromium_launch_kwargs  # noqa: E402
 
 FIXTURES = [ROOT / 'tests' / 'fixtures' / 'task-lifecycle.sov', ROOT / 'tests' / 'fixtures' / 'work-engine-sample.sov']
 MAP = ROOT / 'docs' / 'workengine' / 'map.sov'
+# A font wider than this host's system-ui, as GitHub's runner draws text. Given to a page through
+# add_style_tag before a document opens; the product never sets a font for it.
+WIDE_FONT = '*{font-family:Verdana,"DejaVu Sans",sans-serif !important}'
+FONTS = {"the page's own font": None, 'the wide font': WIDE_FONT}
 
 # Every connection label as the picture draws it, each text-collision finding that names its wire
 # and quotes its text, and the wires marked crowded in the fitted view on screen.
@@ -115,17 +125,29 @@ def summary(r: dict) -> dict:
             'fitted zoom': round(r['zoom'], 2), 'crowded in the fitted view': len(r['fitted'])}
 
 
+def open_page(browser, errors: list, style: str | None = None):
+    """A page holding index.html; with a style, every text on it is drawn in that font."""
+    page = browser.new_page(viewport={'width': 1600, 'height': 1000})
+    page.on('pageerror', lambda exc: errors.append(str(exc)))
+    page.on('console', lambda msg: errors.append(msg.text) if msg.type == 'error' else None)
+    page.set_content((ROOT / 'index.html').read_text(encoding='utf-8'), wait_until='load')
+    if style:
+        page.add_style_tag(content=style)
+    page.wait_for_timeout(250)
+    return page
+
+
 def main() -> None:
     errors: list[str] = []
     with sync_playwright() as p:
         browser = p.chromium.launch(**chromium_launch_kwargs(disable_gpu=True))
-        page = browser.new_page(viewport={'width': 1600, 'height': 1000})
-        page.on('pageerror', lambda exc: errors.append(str(exc)))
-        page.on('console', lambda msg: errors.append(msg.text) if msg.type == 'error' else None)
-        page.set_content((ROOT / 'index.html').read_text(encoding='utf-8'), wait_until='load')
-        page.wait_for_timeout(250)
+        page = open_page(browser, errors)
+        wide_page = open_page(browser, errors, WIDE_FONT)
 
-        fixtures = {f.name: show(page, f.read_text(encoding='utf-8'), f.name) for f in FIXTURES}
+        by_font = {font: {f.name: show(pg, f.read_text(encoding='utf-8'), f.name) for f in FIXTURES}
+                   for font, pg in zip(FONTS, (page, wide_page))}
+        wide_map = show(wide_page, MAP.read_text(encoding='utf-8'), MAP.name)
+        wide_made = show(wide_page, json.dumps(generated()), 'wire-label-placement-qa.sov', arrange=True)
         the_map = show(page, MAP.read_text(encoding='utf-8'), MAP.name)
         made = show(page, json.dumps(generated()), 'wire-label-placement-qa.sov', arrange=True)
         svg = page.evaluate('()=>renderStandaloneSvg()')
@@ -135,24 +157,34 @@ def main() -> None:
         picture = picture_page.evaluate(PICTURE)
         browser.close()
 
-    for name, r in fixtures.items():
-        print(name, summary(r), [h['detail'] for h in r['hits']])
-    print('map.sov', summary(the_map), [h['detail'] for h in the_map['hits']])
-    print('generated', summary(made), [h['detail'] for h in made['hits']])
-    print('generated picture', {'captions': picture['captions'], 'cards': picture['cards'], 'label over card': picture['bad']})
+    own, wide = FONTS
+    for font, fixtures in by_font.items():
+        for name, r in fixtures.items():
+            print(f'{font}:', name, summary(r), [h['detail'] for h in r['hits']])
+    print(f'{own}:', 'map.sov', summary(the_map), [h['detail'] for h in the_map['hits']])
+    print(f'{wide}:', 'map.sov', summary(wide_map), [h['detail'] for h in wide_map['hits']], '(printed, not asserted)')
+    print(f'{own}:', 'generated', summary(made), [h['detail'] for h in made['hits']])
+    print(f'{wide}:', 'generated', summary(wide_made), [h['detail'] for h in wide_made['hits']], '(printed, not asserted)')
+    print(f'{own}:', 'generated picture', {'captions': picture['captions'], 'cards': picture['cards'], 'label over card': picture['bad']})
 
     assert not errors, ('the page logs no errors', errors)
 
-    lifecycle, sample = fixtures['task-lifecycle.sov'], fixtures['work-engine-sample.sov']
-    assert lifecycle['labels'] and sample['labels'], 'the fixtures have connection labels'
-    assert len(lifecycle['hits']) <= 1 and all(h['wire'] == 'w5' and h['text'] == 'push, through the broker' for h in lifecycle['hits']), \
-        ('task-lifecycle.sov: at most 1 label collision, and it is w5 push, through the broker', lifecycle['hits'])
-    assert not sample['hits'], ('work-engine-sample.sov: 0 label collisions', sample['hits'])
-    for name, r in fixtures.items():
-        colliding = {h['wire'] for h in r['hits']}
-        marked = {l['wire'] for l in r['labels'] if l['crowded']}
-        assert colliding <= marked, (name, 'every label in a text-collision carries data-label-crowded', sorted(colliding - marked))
-        assert marked <= colliding, (name, 'no other label carries data-label-crowded', sorted(marked - colliding))
+    # Each font is held to the same assertions; a failure under one does not hide the other's.
+    failed = []
+    for font, fixtures in by_font.items():
+        try:
+            lifecycle, sample = fixtures['task-lifecycle.sov'], fixtures['work-engine-sample.sov']
+            assert lifecycle['labels'] and sample['labels'], (font, 'the fixtures have connection labels')
+            assert not lifecycle['hits'], (font, 'task-lifecycle.sov: 0 label collisions', lifecycle['hits'])
+            assert not sample['hits'], (font, 'work-engine-sample.sov: 0 label collisions', sample['hits'])
+            for name, r in fixtures.items():
+                colliding = {h['wire'] for h in r['hits']}
+                marked = {l['wire'] for l in r['labels'] if l['crowded']}
+                assert colliding <= marked, (font, name, 'every label in a text-collision carries data-label-crowded', sorted(colliding - marked))
+                assert marked <= colliding, (font, name, 'no other label carries data-label-crowded', sorted(marked - colliding))
+        except AssertionError as failure:
+            failed.append(failure.args[0])
+    assert not failed, failed
 
     assert len(made['labels']) == 14, ('generated: every wire draws its label', len(made['labels']))
     assert not made['hits'], ('generated: 0 label collisions', made['hits'])
