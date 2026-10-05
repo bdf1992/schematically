@@ -1130,31 +1130,43 @@ function placeWireLabels(){
     const anchor=screen({x:Number(label.getAttribute('x')),y:Number(label.getAttribute('y'))});
     const offset={x:bounds.l-anchor.x,y:bounds.t-anchor.y};
     const midpoint=screen(path.getPointAtLength(path.getTotalLength()/2)),candidates=[];
-    const beside=(p,a,b)=>{
-      if(Math.abs(a.y-b.y)<.01){
-        candidates.push({l:p.x-width/2,t:p.y-clearance-height},{l:p.x-width/2,t:p.y+clearance});
-      }else if(Math.abs(a.x-b.x)<.01){
-        candidates.push({l:p.x-clearance-width,t:p.y-height/2},{l:p.x+clearance,t:p.y-height/2});
-      }
-    };
-    const total=path.getTotalLength(),before=screen(path.getPointAtLength(Math.max(0,total/2-.1))),after=screen(path.getPointAtLength(Math.min(total,total/2+.1)));
-    beside(midpoint,before,after);
-    for(let i=1;i<points.length;i++)beside({x:(points[i-1].x+points[i].x)/2,y:(points[i-1].y+points[i].y)/2},points[i-1],points[i]);
-    // Slid along the wire: on every straight run with room for the label and its clearance, a place
-    // every step on both sides, outward from the run's middle.
-    const slid=[],runs=[points[0]];
+    // The wire's straight runs (collinear segments merged): run i goes from runs[i-1] to runs[i].
+    // Every segment is a leg that knows its run, and every place carries the run it stands beside.
+    const runs=[points[0]],legs=[];
     for(let i=1;i<points.length;i++){
       const p=points[i],l=runs.at(-1),a=runs.at(-2);
       if(a&&((Math.abs(a.y-l.y)<.01&&Math.abs(l.y-p.y)<.01)||(Math.abs(a.x-l.x)<.01&&Math.abs(l.x-p.x)<.01)))runs[runs.length-1]=p;else runs.push(p);
+      legs.push({a:points[i-1],b:p,run:runs.length-1});
     }
+    const beside=(p,a,b,run)=>{
+      if(Math.abs(a.y-b.y)<.01){
+        candidates.push({l:p.x-width/2,t:p.y-clearance-height,run},{l:p.x-width/2,t:p.y+clearance,run});
+      }else if(Math.abs(a.x-b.x)<.01){
+        candidates.push({l:p.x-clearance-width,t:p.y-height/2,run},{l:p.x+clearance,t:p.y-height/2,run});
+      }
+    };
+    // The wire-midpoint places stand beside the run whose line passes within half a pixel of the
+    // path's midpoint and whose span holds it; with no such run (0) they count every leg.
+    let middle=0;
+    for(let i=1;i<runs.length&&!middle;i++){
+      const a=runs[i-1],b=runs[i],dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy);if(length<1e-9)continue;
+      const along=((midpoint.x-a.x)*dx+(midpoint.y-a.y)*dy)/length;
+      if(Math.abs((midpoint.x-a.x)*dy-(midpoint.y-a.y)*dx)/length<=.5&&along>=0&&along<=length)middle=i;
+    }
+    const total=path.getTotalLength(),before=screen(path.getPointAtLength(Math.max(0,total/2-.1))),after=screen(path.getPointAtLength(Math.min(total,total/2+.1)));
+    beside(midpoint,before,after,middle);
+    for(let i=1;i<points.length;i++)beside({x:(points[i-1].x+points[i].x)/2,y:(points[i-1].y+points[i].y)/2},points[i-1],points[i],legs[i-1].run);
+    // Slid along the wire: on every straight run with room for the label and its clearance, a place
+    // every step on both sides, outward from the run's middle.
+    const slid=[];
     for(let i=1;i<runs.length;i++){
       const a=runs[i-1],b=runs[i],h=Math.abs(a.y-b.y)<.01,v=Math.abs(a.x-b.x)<.01;if(h===v)continue;
       const room=(h?Math.abs(b.x-a.x):Math.abs(b.y-a.y))-(h?width:height)-2*clearance;if(room<0)continue;
       const mid=h?(a.x+b.x)/2:(a.y+b.y)/2;
       for(let k=0;k*step<=room/2+1e-6;k++)for(const side of k?[-1,1]:[1]){
         const c=mid+side*k*step;
-        if(h)slid.push({l:c-width/2,t:a.y-clearance-height},{l:c-width/2,t:a.y+clearance});
-        else slid.push({l:a.x-clearance-width,t:c-height/2},{l:a.x+clearance,t:c-height/2});
+        if(h)slid.push({l:c-width/2,t:a.y-clearance-height,run:i},{l:c-width/2,t:a.y+clearance,run:i});
+        else slid.push({l:a.x-clearance-width,t:c-height/2,run:i},{l:a.x+clearance,t:c-height/2,run:i});
       }
     }
     // Only what lies within reach of this wire can meet a label beside it.
@@ -1175,6 +1187,13 @@ function placeWireLabels(){
       for(const o of solid)if(intersects(box,o)&&++n>=limit)return n;
       for(const o of borders)if(intersects(box,o)&&!(box.l>o.l&&box.r<o.r&&box.t>o.t&&box.b<o.b)&&++n>=limit)return n;
       for(const [a,b] of lines)if(crosses(box,a,b)&&++n>=limit)return n;
+      // The label's own wire, all but the run this place stands beside: a leg counts where it enters
+      // the box, taken .01 px inside its edges, so one that only touches a corner or an edge does not.
+      // A label kept where it is (a place with no run named) counts none.
+      if(place.run!==undefined){
+        const inner={l:box.l+.01,r:box.r-.01,t:box.t+.01,b:box.b-.01};
+        for(const leg of legs)if(leg.run!==place.run&&crosses(inner,leg.a,leg.b)&&++n>=limit)return n;
+      }
       return n;
     };
     // Today's places first, then the slid ones; in each, nearest the wire's midpoint first. The first
