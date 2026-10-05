@@ -33,7 +33,7 @@ relative order): `03-canonical.js`,
 - `57-layout-metrics.js` — measured quality of the rendered projection (`layout.metrics()`); reads the DOM, mutates nothing.
 - `60-interactions.js` — pointer/drag gestures.
 - `70-editor-controls.js` — selection/form editing controls.
-- `75-persistence.js` — File lifecycle, `.sov`/`.sovpak`, shared standalone SVG serialization, recovery, rehydration. The headless SVG script delegates here through the browser API.
+- `75-persistence.js` — File lifecycle, `.sov`/`.sovpak`, shared standalone SVG serialization, recovery, rehydration. The headless SVG script delegates here through the browser API. The address parameter named `open` names a relative path on the origin of the page, fetched at start and handed to the same `parseFilePayload` and `applyOpenedPayload` seam, and anything with a scheme, a host, a leading slash or a parent segment is refused in the status line.
 - `80-bootstrap.js` — global controls/keyboard/startup.
 - `85-api.js` — browser API adapter.
 - `87-live.js` — live link: off unless asked (`?live=1`, `?live=<origin>`, or `SovSchematicLive.start()`), publishes a read-only snapshot (file identity, revision, camera, appearance, selection with the selected record, and the in-browser document) to `POST /api/v1/live` on selection and revision change, coalesced and backed off. Mutates nothing; loads last.
