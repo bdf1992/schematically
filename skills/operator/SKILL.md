@@ -25,6 +25,7 @@ Primary operations:
 - `document.get()` / `document.replace(doc)`
 - `history.list()` / `undo()` / `redo()`
 - `checkpoints.list()` / `create(name)` / `restore(id)`
+- `concerns.list({open})` / `concerns.answer(answers)` — the questions the notation declares, each row answered or open, and the one write that sets or removes answers (`answers: [{concern, target?, answer}]`, all or none, one undo)
 - `selection.copy()` / `paste()` / `duplicate()`
 - `view.setAppearance(mode)` / `setGlobalRate(value)` — `setGlobalRate` sets the document's own rate, written to `meta.timeScale` (0 pauses; a refused value is returned and nothing changes); `clock.setSpeed(x)` sets the view's own playback speed instead, never the document's rate
 - `view.legend()` / `view.setLegend(open)` — the legend derived from what the document uses; `render.svg({legend: true})` puts it below a picture
@@ -50,6 +51,8 @@ Additional server tools:
 - `schematic.checkpoint.list`
 - `schematic.checkpoint.create`
 - `schematic.checkpoint.restore`
+- `schematic.concerns` (`{open?}`) — the concern report: one row per question the notation declares for the document, each component and each wire, answered or open; `open: true` returns only the open rows
+- `schematic.concerns.answer` (`{answers: [{concern, target?, answer}], ifRevision?}`) — set or remove answers in one call, all or none, one revision; `target` absent is the document, `answer: null` removes one answer; read `schematic.concerns` after writing and answer what is open
 - `schematic.layout` (`op: list | unplaced | create | rename | delete | set-default | move | place | align | distribute | route | apply`) — layouts and placement; `schematic.render` takes `view` to see a layout
 - `schematic.render` (`format: svg | png`) / `schematic.layout.metrics` — see the diagram as the editor draws it, and measure it: check your layout before you report it done
 - `schematic.graph.query` — read-only graph queries (`GRAPH-MODEL.md` §5)
@@ -57,7 +60,7 @@ Additional server tools:
 - `schematic.sim.start` / `inject` / `step` / `run` / `resume` / `reconcile` / `inspect` / `scenario` / `scenarios` / `stop` — the message simulation (`GRAPH-MODEL.md` §6, now served over the state-space engine by `src/07-state-surface.js`, `STATE-SPACE.md`). It reads the document and never mutates it; a node naming a handler nobody registered refuses its messages; `step` counts ticks, where `run`'s `until` is ms like `advance`.
 - `schematic.sim.travel` / `schematic.sim.spectrum` (`{fromMs, toMs, stepMs, harmonics, nodes}`) — read the running simulation without changing it: wire travel times from declared delays, and per-node level spectra and energy over a window that has already elapsed; a window that is not a whole number of the node's period gives `harmonics: null` with a `reason`.
 
-HTTP mirrors these: `GET|POST /api/v1/graph/<verb>`, `POST /api/v1/sim/<action>`, `GET /api/v1/sim/inspect?what=…&id=…`.
+HTTP mirrors these: `GET|POST /api/v1/graph/<verb>`, `POST /api/v1/sim/<action>`, `GET /api/v1/sim/inspect?what=…&id=…`, `GET /api/v1/concerns` (`?open=1`), `POST /api/v1/concerns`.
 
 ## Mutation discipline
 

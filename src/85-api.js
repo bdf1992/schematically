@@ -26,16 +26,27 @@ function runtimeCrud(operation){
   }
   return SovSchematicData.clone(receipt);
 }
-// A batch is one history entry and one recovery save, like a single edit: all or none.
-function runtimeBatch(batch={}){
+// A write the data core takes as one (a batch, a set of answers) is one history entry and one
+// recovery save, like a single edit: all or none.
+function runtimeWrite(write,label){
   commitHistoryCapture();
-  const receipt=SovSchematicData.applyBatch(diagram,{...batch,id:batch.id||`browser-batch-${Date.now()}`});
+  const receipt=write();
   if(receipt.ok){
     normalizeRuntimeAfterCrud();
-    commitHistoryCapture(`Apply ${receipt.result.applied.length} change${receipt.result.applied.length===1?'':'s'}`);
+    commitHistoryCapture(label(receipt));
     try{saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false})}catch(_){ }
   }
   return SovSchematicData.clone(receipt);
+}
+function runtimeBatch(batch={}){
+  return runtimeWrite(()=>SovSchematicData.applyBatch(diagram,{...batch,id:batch.id||`browser-batch-${Date.now()}`}),
+    receipt=>`Apply ${receipt.result.applied.length} change${receipt.result.applied.length===1?'':'s'}`);
+}
+// Answers to concerns (DATA-FORMATS.md "Answers"): the data core's answerConcerns decides
+// everything; `answers` is its list, or {answers, ifRevision}.
+function runtimeAnswers(request){
+  const input=Array.isArray(request)?{answers:request}:(request||{});
+  return runtimeWrite(()=>SovSchematicData.answerConcerns(diagram,{...input,id:input.id||`browser-answers-${Date.now()}`}),()=>'Answer concerns');
 }
 // Runs live beside the document, not in it (STATE-SPACE.md "Surfaces"): the page's run registry
 // starts every run from snapshotDocument() and reads packs from the build's sov-packs tag. No run
@@ -90,6 +101,7 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
+  concerns:{list:(options={})=>SovSchematicData.concernReport(snapshotDocument(),options||{}),answer:(answers)=>runtimeAnswers(answers)},
   view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:effectivePaletteName(),palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom'],source:documentPalette()!==null?'document':'view',viewPalette:colorEngine.palette}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;const picked=palette?pickPalette(palette):null;if(!palette||picked?.ok===false)applyColorEngine();return picked?.ok===false?picked:{theme:colorEngine.theme,palette:effectivePaletteName()}},documentPalette:()=>SovSchematicData.clone(documentPalette()),setDocumentPalette:(value)=>{const admitted=setDocumentPalette(value);return admitted.ok===false?admitted:SovSchematicData.clone(documentPalette())},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()},
     // The wave view (src/68-wave-view.js): off, string, dots or lanes; the view's own, never the document's.
     waveStyle:()=>waveStyle(),setWaveStyle:(name)=>setWaveStyle(name)},

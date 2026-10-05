@@ -48,6 +48,7 @@ Tools:
   (`handle`), `schematic.run.trace` (`handle`), `schematic.state.query` (`handle`, `entity`, `point?`, `channel?`,
   `observable`), `schematic.run.replay` (`trace`)
 - `schematic.markers`
+- `schematic.concerns` (`open?`), `schematic.concerns.answer` (`answers`, `ifRevision?`)
 
 Graph and simulation (`GRAPH-MODEL.md`, read-only over the document; the `sim.*` tools run over the
 state-space engine through `src/07-state-surface.js`, `STATE-SPACE.md`, since contract 10 of the
@@ -86,6 +87,35 @@ HTTP: `GET /api/v1/render.svg`, `GET /api/v1/render.png?appearance=dark&scale=2`
 Resources: `component`, `wire`, `reference`.
 
 `schematic.markers` returns `{id, severity, message, rule}` for each current validation finding, delegating to the same `Data.markersFor` the browser API uses — the tool invents no legality of its own.
+
+## Concerns
+
+A notation declares the questions a schematic should answer (`NOTATION-MODEL.md` "Concerns"); a
+document carries the answers (`DATA-FORMATS.md` "Answers"). Two tools put that on this surface, and
+both delegate to the data core (`Data.concernReport`, `Data.answerConcerns`): the surface holds no
+rule about answers.
+
+- `schematic.concerns {open?}` returns the report `{notation, rows, answered, open}`: one row
+  `{concern, applies, target, title, question, answered, answer}` per declared concern for the
+  document (`target: null`), each component and each wire. `open: true` returns only the open rows;
+  the two counts stay those of every row. An open row is information, never an error.
+- `schematic.concerns.answer {answers, ifRevision?}` sets or removes answers. `answers` is a
+  non-empty list of `{concern, target?, answer}`: `target` absent or null is the document, else the
+  id of a component or a wire; `answer` is a non-empty string to set, `null` to remove. All or
+  none, one revision, one history entry (`schematic.history.undo` restores the document before
+  it), one receipt in `schematic.apply`'s shape with `result.report: {answered, open}` after the
+  write. Refusals, each changing nothing and setting `isError`: `ANSWER_INVALID`,
+  `ANSWER_TARGET_UNKNOWN`, `ANSWER_UNKNOWN`, `ANSWER_UNDECLARED`, a locked record, and a stale
+  `ifRevision`; `error.index` names the entry.
+
+```text
+GET  /api/v1/concerns            200 the report
+GET  /api/v1/concerns?open=1     200 the report with only the open rows
+POST /api/v1/concerns            {answers, ifRevision?}   200 the receipt; 409 a stale revision; 400 any other refusal
+```
+
+The file is saved only on 200. The guide's `concerns` step (`schematic.guide {step: 'concerns'}`,
+between `palette` and `apply`) tells an agent when to read and when to answer.
 
 ## Live link
 

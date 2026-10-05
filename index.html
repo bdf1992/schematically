@@ -2370,14 +2370,19 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   //   ANSWER_UNDECLARED  a key is set and the notation declares no concerns for that applies
   //   ANSWER_UNKNOWN     the key is not a concern the notation declares for that applies
   //   CONCERN_INVALID    an entry of the notation's concerns breaks a rule (src/03-notation-core.js concernFindings)
-  // Loading reports them (validateDocument); create and update refuse; an update's null removes.
+  //   ANSWER_TARGET_UNKNOWN  answerConcerns only: target names no Component and no Wire
+  // Loading reports them (validateDocument); create and update refuse. An update merges
+  // config.answers per key: a string sets that concern's answer, a null removes that one answer,
+  // `answers: null` removes them all, and the key goes with the last answer. answerConcerns is the
+  // one verb that sets or removes answers on the document, Components and Wires together.
   // An open concern is information (concernReport), never a finding.
   function notationConcerns(doc,applies){
     const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(!N)return {id:doc?.notation||'schematic',concerns:[]};
     const r=N.resolve(doc||{});
     return {id:r.ok?r.notation.id:(doc?.notation||'schematic'),concerns:r.ok?N.concernsOf(r.notation,applies):[]};
   }
-  // `at` is 'meta.answers' or 'config.answers', the text a message names the key under.
+  // `at` is 'meta.answers' or 'config.answers', the text a message names the key under. `clearable`
+  // is an update's reading: null for the whole, or for one declared key, is a removal.
   function answerProblems(doc,answers,applies,at,clearable=false){
     const out=[];if(answers===undefined||(clearable&&answers===null))return out;
     if(!isObject(answers)){out.push(`ANSWER_INVALID: ${at} must be an object of concern id to answer, not ${JSON.stringify(answers)}`);return out}
@@ -2387,6 +2392,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const value=answers[key];
       if(!concerns.length)out.push(`ANSWER_UNDECLARED: ${at}.${key} is set, but notation "${id}" declares no ${applies} concerns`);
       else if(!concerns.some(c=>c.id===key))out.push(`ANSWER_UNKNOWN: ${at}.${key} is not a ${applies} concern declared by notation "${id}"; declared: ${concerns.map(c=>c.id).join(', ')}`);
+      else if(clearable&&value===null)continue;
       else if(typeof value!=='string'||!value.trim())out.push(`ANSWER_INVALID: ${at}.${key} must be a non-empty string, not ${JSON.stringify(value)}`);
     }
     return out;
@@ -2404,7 +2410,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // open}. One row per declared concern per thing it applies to: the document's (target null), then
   // each Component's in document order, then each Wire's. Reads the document and changes nothing.
   // An answer the notation does not declare is not a row: validateDocument reports it.
-  function concernReport(doc){
+  // `{open: true}` keeps only the open rows; the two counts are of every row either way.
+  function concernReport(doc,{open=false}={}){
     const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,r=N?N.resolve(doc||{}):null;
     const declared=applies=>r?.ok?N.concernsOf(r.notation,applies):[];
     const rows=[];
@@ -2419,7 +2426,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(ofComponents.length)for(const c of Array.isArray(doc?.components)?doc.components:[])add(ofComponents,'component',c?.id??null,c?.config?.answers);
     if(ofWires.length)for(const w of Array.isArray(doc?.wires)?doc.wires:[])add(ofWires,'wire',w?.id??null,w?.config?.answers);
     const answered=rows.filter(row=>row.answered).length;
-    return {notation:r?.ok?r.notation.id:(doc?.notation||'schematic'),rows,answered,open:rows.length-answered};
+    return {notation:r?.ok?r.notation.id:(doc?.notation||'schematic'),rows:open===true?rows.filter(row=>!row.answered):rows,answered,open:rows.length-answered};
   }
   // ---- Badges (DATA-FORMATS.md "Badges") ------------------------------------------------------
   // A Component's `config.badges` lists at most 4 chips `{label, colorSlot?}`: a label of 1 to 24
@@ -2489,6 +2496,11 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   function clearStatusAndWaitsOn(candidate,patch){
     if(!isObject(candidate?.config)||!isObject(patch?.config))return;
     for(const key of ['status','waitsOn','badges','intake','answers'])if(patch.config[key]===null)delete candidate.config[key];
+    // Answers merge per key: a null removes that one answer, and no empty object is stored.
+    if(isObject(patch.config.answers)&&isObject(candidate.config.answers)){
+      for(const key of Object.keys(patch.config.answers))if(patch.config.answers[key]===null)delete candidate.config.answers[key];
+      if(!Object.keys(candidate.config.answers).length)delete candidate.config.answers;
+    }
     if(candidate.a!==undefined&&patch.config.kind===null)delete candidate.config.kind; // a Wire's kind
     if(isObject(patch.config.presentation)&&patch.config.presentation.shape===null&&isObject(candidate.config.presentation))delete candidate.config.presentation.shape;
   }
@@ -3338,6 +3350,59 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     touch(doc);
     return {schema:RECEIPT_SCHEMA,operationId:id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:{ids:refs,applied},error:null};
   }
+  // Sets or removes answers (the codes are listed at answerProblems). `answers` is a non-empty
+  // list of {concern, target, answer}: target absent or null is the document, else the id of a
+  // Component or a Wire; answer is a non-empty string to set, null to remove. All or none, one
+  // revision, one receipt: every entry is checked before anything is written, each Component and
+  // Wire named gets one update run through applyBatch (its locks, refusals and receipt), and the
+  // document's own entries go into meta.answers in that same revision. Removing an answer that is
+  // not set is admitted. result.report holds concernReport's two counts after the write; a
+  // refusal names the entry in error.index and changes nothing.
+  const ANSWER_ENTRY_KEYS=['concern','target','answer'];
+  function answerConcerns(document,request={}){
+    const id=request?.id||`answers-${Date.now()}`,entries=request?.answers;
+    const rawRevision=Math.max(0,Math.trunc(num(document?.revision,0)));
+    const refuse=(message,index=null)=>({schema:RECEIPT_SCHEMA,operationId:id,ok:false,revisionBefore:rawRevision,revisionAfter:rawRevision,result:null,error:{index,message}});
+    if(!Array.isArray(entries)||!entries.length)return refuse('ANSWER_INVALID: answers must be a non-empty list of {concern, target, answer}');
+    if(typeof request.ifRevision==='number'&&request.ifRevision!==rawRevision)return refuse(`Stale revision: expected ${request.ifRevision}, document is at ${rawRevision}`);
+    const has=(items,target)=>(Array.isArray(items)?items:[]).some(item=>item?.id===target);
+    const own=[],patches=new Map();
+    for(const [index,entry] of entries.entries()){
+      if(!isObject(entry))return refuse(`ANSWER_INVALID: answers[${index}] must be an object {concern, target, answer}, not ${JSON.stringify(entry)}`,index);
+      const extra=Object.keys(entry).find(key=>!ANSWER_ENTRY_KEYS.includes(key));
+      if(extra)return refuse(`ANSWER_INVALID: answers[${index}].${extra} is not a field of an answer (${ANSWER_ENTRY_KEYS.join(', ')})`,index);
+      const {concern,answer}=entry,target=entry.target??null;
+      if(typeof concern!=='string'||!concern)return refuse(`ANSWER_INVALID: answers[${index}].concern must be a concern id, not ${JSON.stringify(concern)}`,index);
+      if(answer!==null&&(typeof answer!=='string'||!answer.trim()))return refuse(`ANSWER_INVALID: answers[${index}].answer must be a non-empty string, or null to remove the answer, not ${JSON.stringify(answer)}`,index);
+      const resource=target===null?null:has(document?.components,target)?'component':has(document?.wires,target)?'wire':undefined;
+      if(resource===undefined)return refuse(`ANSWER_TARGET_UNKNOWN: answers[${index}].target ${JSON.stringify(target)} names no Component and no Wire`,index);
+      const problems=answerProblems(document,{[concern]:answer},resource||'document',resource?'config.answers':'meta.answers',true);
+      if(problems.length)return refuse(problems[0],index);
+      if(!resource){own.push({concern,answer});continue}
+      const key=`${resource}:${target}`;
+      if(!patches.has(key))patches.set(key,{index,resource,id:target,answers:{}});
+      patches.get(key).answers[concern]=answer;
+    }
+    if(own.length&&document?.meta?.answers!==undefined&&!isObject(document.meta.answers))return refuse(`ANSWER_INVALID: meta.answers must be an object of concern id to answer, not ${JSON.stringify(document.meta.answers)}`);
+    const planned=[...patches.values()];
+    let receipt;
+    if(planned.length){
+      receipt=applyBatch(document,{id,operations:planned.map(p=>({op:'update',resource:p.resource,id:p.id,patch:{config:{answers:p.answers}}})),ifRevision:request.ifRevision});
+      // A refused update names the first entry for its Component or Wire.
+      if(!receipt.ok)return {...receipt,error:{...receipt.error,index:receipt.error?.index==null?null:planned[receipt.error.index].index}};
+    }else{
+      const doc=normalizeDocument(document),before=doc.revision;touch(doc);
+      receipt={schema:RECEIPT_SCHEMA,operationId:id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:{ids:{},applied:[]},error:null};
+    }
+    if(own.length){
+      const meta=document.meta=isObject(document.meta)?document.meta:{},answers=isObject(meta.answers)?meta.answers:{};
+      for(const {concern,answer} of own){if(answer===null)delete answers[concern];else answers[concern]=answer}
+      if(Object.keys(answers).length)meta.answers=answers;else delete meta.answers;
+    }
+    const report=concernReport(document);
+    receipt.result.report={answered:report.answered,open:report.open};
+    return receipt;
+  }
   // A slice of the document small enough to read: the named items, or every component whose
   // position falls in an area, plus the wires among them, in the stored (compact) form.
   function readScope(document,scope={}){
@@ -3463,7 +3528,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,notationConcerns,answerProblems,concernReport,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,notationConcerns,answerProblems,concernReport,answerConcerns,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
 /* END src/05-data-core.js */
 </script>
@@ -16330,16 +16395,27 @@ function runtimeCrud(operation){
   }
   return SovSchematicData.clone(receipt);
 }
-// A batch is one history entry and one recovery save, like a single edit: all or none.
-function runtimeBatch(batch={}){
+// A write the data core takes as one (a batch, a set of answers) is one history entry and one
+// recovery save, like a single edit: all or none.
+function runtimeWrite(write,label){
   commitHistoryCapture();
-  const receipt=SovSchematicData.applyBatch(diagram,{...batch,id:batch.id||`browser-batch-${Date.now()}`});
+  const receipt=write();
   if(receipt.ok){
     normalizeRuntimeAfterCrud();
-    commitHistoryCapture(`Apply ${receipt.result.applied.length} change${receipt.result.applied.length===1?'':'s'}`);
+    commitHistoryCapture(label(receipt));
     try{saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false})}catch(_){ }
   }
   return SovSchematicData.clone(receipt);
+}
+function runtimeBatch(batch={}){
+  return runtimeWrite(()=>SovSchematicData.applyBatch(diagram,{...batch,id:batch.id||`browser-batch-${Date.now()}`}),
+    receipt=>`Apply ${receipt.result.applied.length} change${receipt.result.applied.length===1?'':'s'}`);
+}
+// Answers to concerns (DATA-FORMATS.md "Answers"): the data core's answerConcerns decides
+// everything; `answers` is its list, or {answers, ifRevision}.
+function runtimeAnswers(request){
+  const input=Array.isArray(request)?{answers:request}:(request||{});
+  return runtimeWrite(()=>SovSchematicData.answerConcerns(diagram,{...input,id:input.id||`browser-answers-${Date.now()}`}),()=>'Answer concerns');
 }
 // Runs live beside the document, not in it (STATE-SPACE.md "Surfaces"): the page's run registry
 // starts every run from snapshotDocument() and reads packs from the build's sov-packs tag. No run
@@ -16394,6 +16470,7 @@ const SovSchematicAPI={
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
+  concerns:{list:(options={})=>SovSchematicData.concernReport(snapshotDocument(),options||{}),answer:(answers)=>runtimeAnswers(answers)},
   view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:effectivePaletteName(),palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom'],source:documentPalette()!==null?'document':'view',viewPalette:colorEngine.palette}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;const picked=palette?pickPalette(palette):null;if(!palette||picked?.ok===false)applyColorEngine();return picked?.ok===false?picked:{theme:colorEngine.theme,palette:effectivePaletteName()}},documentPalette:()=>SovSchematicData.clone(documentPalette()),setDocumentPalette:(value)=>{const admitted=setDocumentPalette(value);return admitted.ok===false?admitted:SovSchematicData.clone(documentPalette())},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()},
     // The wave view (src/68-wave-view.js): off, string, dots or lanes; the view's own, never the document's.
     waveStyle:()=>waveStyle(),setWaveStyle:(name)=>setWaveStyle(name)},

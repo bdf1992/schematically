@@ -45,6 +45,8 @@
     "schematic.render",
     "schematic.layout.metrics",
     "schematic.layout",
-    "schematic.markers"
+    "schematic.markers",
+    "schematic.concerns",
+    "schematic.concerns.answer"
   ]
 }

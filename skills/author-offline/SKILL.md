@@ -98,6 +98,11 @@ Port override on a Component, for access or face. Write the whole port record; t
 
 `face` is `external` (reachable from the containing surface, the default), `internal` (reachable from the Component's own interior only), or `both`. A Component that hosts children and needs a wire from a child to the outside gives that port face `internal` or `both`, as in `examples/04-boundary-port.sov`.
 
+Answers to the questions the notation declares (its concerns; `NOTATION-MODEL.md` "Concerns"), each key a concern id the notation declares and each value a non-empty string:
+
+- the document's own, in `meta`: `"meta": {"answers": {"<concern id>": "<answer>"}}`
+- a Component's or a Wire's, in its `config`: `"config": {"answers": {"<concern id>": "<answer>"}}`
+
 ## Palette
 
 `symbolId` values and what each means. The full list with verbs and properties is `SYMBOLS` in `src/00-state.js`.
@@ -256,8 +261,11 @@ Every file in `examples/` validates and exports. Read the one closest to what yo
 ```
 node scripts/validate_sov.mjs file.sov            # exit 0 when valid; prints every problem
 node scripts/validate_sov.mjs --compact file.sov  # also prints the compact saved form
+node scripts/validate_sov.mjs --concerns file.sov # also prints the questions still open
 python scripts/export_svg.py file.sov --out out/  # standalone SVG, light theme; --appearance dark
 ```
+
+`--concerns` prints, after a valid file's `ok` line, one line per question the notation declares that the file has not answered, `open  <document, component or wire> <id, or - for the document> <concern id>: <the question>`, and then `concerns: <n> answered, <n> open`. An open line is a question nobody has answered yet, never a problem: the exit code is the same with and without the flag. Answer each one the description or the drawing settles, in `meta.answers` or that record's `config.answers`, leave the rest open, and name the ones left open when you hand the file over.
 
 `tests/author_offline_qa.py` validates every fenced document in this file and every example, and checks the palette table against the source of truth.
 

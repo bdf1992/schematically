@@ -263,10 +263,15 @@ Each is an object whose keys are concern ids and whose values are non-empty stri
 | `ANSWER_INVALID` | `answers` is not an object, or a value is not a non-empty string; the message names the key (`config.answers.made-by must be a non-empty string`) |
 | `ANSWER_UNDECLARED` | a key is set and the notation declares no concerns for that `applies` (a card's answer in a `schematic` document) |
 | `ANSWER_UNKNOWN` | the key is not a concern the notation declares for that `applies`; the message lists the declared ids |
+| `ANSWER_TARGET_UNKNOWN` | `answerConcerns` only: an entry's `target` names no Component and no Wire |
 
 A `create` or `update` of a Component or a Wire carrying a bad `config.answers` is refused with the
-code (the error message starts with it) and the document is unchanged. An `update` merges the keys it
-names into the answers already there, and `answers: null` removes `config.answers`. Loading keeps the
+code (the error message starts with it) and the document is unchanged. An `update` merges
+`config.answers` per key into the answers already there: a non-empty string sets that concern's
+answer, `null` removes that one answer (`{"answers": {"made-by": null}}`), and `answers: null`
+removes them all. When the last answer goes, the `answers` key goes with it, so no empty object is
+stored. A `null` for a key the notation does not declare is refused like any other value for it, and
+on `create` a `null` is `ANSWER_INVALID`. Loading keeps the
 stored values as written and `validateDocument` reports each finding as `<CODE>: meta.answers...`,
 `component <id>: <CODE>: ...` or `wire <id>: <CODE>: ...`, and each broken entry of the notation's own
 `concerns` as `notation: CONCERN_INVALID: ...` (marker rule `status`). Saving, opening and compacting
@@ -281,7 +286,39 @@ component concern and `target` the Component's id; then each Wire the same way. 
 applies, target, title, question, answered, answer}`: `title` is the entry's title or its id, and
 `answer` is present only when `answered` is true. `answered` and `open` are the two counts. An
 unanswered concern is open: it is information, never an error. An answer the notation does not
-declare is not a row; it is one of the codes above.
+declare is not a row; it is one of the codes above. `concernReport(doc, {open: true})` keeps only
+the open rows; the two counts stay those of every row.
+
+**The write.** `SovSchematicData.answerConcerns(doc, {answers, ifRevision})` is the one verb that
+sets or removes answers on the document, Components and Wires together. `answers` is a non-empty
+list of `{concern, target, answer}`: `target` is absent or `null` for the document, else the id of a
+Component or a Wire; `answer` is a non-empty string to set, `null` to remove.
+
+```json
+{"answers": [
+  {"concern": "what", "answer": "An ore line."},
+  {"concern": "made-by", "target": "smelter", "answer": "Smelt two ore."},
+  {"concern": "carries", "target": "belt", "answer": null}
+]}
+```
+
+It is all or none and moves the document one revision. Every entry is checked before anything is
+written; each Component and Wire named gets one `update` and they run through `applyBatch`, so
+locks, refusals and the receipt are an update's; the document's own entries are written into
+`meta.answers` in that same revision. The receipt is `applyBatch`'s with `result.report: {answered,
+open}`, the report's two counts after the write. Removing an answer that is not set is admitted and
+changes nothing for that entry. Refusals, each changing nothing, with `error.index` the entry:
+
+- `ANSWER_INVALID`: `answers` is empty or not a list, an entry is not an object, it has a key
+  outside `concern`, `target`, `answer`, its `concern` is not a non-empty string, or its `answer` is
+  neither a non-empty string nor `null`;
+- `ANSWER_TARGET_UNKNOWN`: `target` names no Component and no Wire;
+- `ANSWER_UNKNOWN` and `ANSWER_UNDECLARED`: as above, for that target's `applies` (a removal too);
+- a stale `ifRevision` (`Stale revision: expected <n>, document is at <m>`), as `applyBatch`.
+
+Every surface calls it and holds no rule of its own: `schematic.concerns.answer` (MCP),
+`POST /api/v1/concerns` (HTTP) and `SovSchematicAPI.concerns.answer` (browser); the report is
+`schematic.concerns`, `GET /api/v1/concerns` and `SovSchematicAPI.concerns.list`.
 
 **The validator flag.** `node scripts/validate_sov.mjs --concerns file.sov` prints, after the `ok`
 line of a valid file, one line per open row and then the counts. The exit code is the same with and
