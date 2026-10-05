@@ -9586,9 +9586,12 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   // Text and custom graphics can extend beyond a Component's body. Measure their
   // actual projection in workspace coordinates, excluding selection/drag chrome.
   const inverse=workspace.getScreenCTM()?.inverse();
-  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text')){
-    const node=el.closest('.node'),wire=el.closest('[data-wire-id]');
-    if(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId)))continue;
+  // Bus bands and labels (src/41-buses.js renderBuses) are drawn once, for the active layout of the
+  // global canvas, with no canvas filter: they count when the global canvas is the one measured.
+  const busEls=canvasId===GLOBAL_CANVAS_ID&&!window.__boundsLeaveBusOut;
+  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text'+(busEls?',text.bus-label,.bus-band rect':''))){
+    const node=el.closest('.node'),wire=el.closest('[data-wire-id]'),bus=el.matches('text.bus-label,.bus-band rect');
+    if(!bus&&(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId))))continue;
     if(!el.getClientRects().length||getComputedStyle(el).display==='none')continue;
     const rect=el.getBBox(),matrix=inverse.multiply(el.getScreenCTM());
     for(const [x,y] of [[rect.x,rect.y],[rect.x+rect.width,rect.y],[rect.x,rect.y+rect.height],[rect.x+rect.width,rect.y+rect.height]]){
