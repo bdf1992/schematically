@@ -6,7 +6,10 @@ one the Work Engine gap map is drawn in:
 1. In Node, over the real src files: data/work-engine.notation.json parses; the example carries
    it unchanged; it resolves through `schematic`; it declares exactly the six we- glyphs, each
    titled, explained, in a family, drawn, with an in and an out terminal, and drawn unlike any
-   built-in glyph; its statuses are exists, partial, missing, proposed in that order.
+   built-in glyph; its statuses are exists, partial, missing, proposed in that order; its four
+   document concerns are the built-in ids in the built-in order with the Work Engine questions;
+   its component concerns are meaning, authority, evidence, owner and backing, each asked of its
+   symbols; every document that carries the notation (CARRIERS) carries the file's content.
 2. scripts/validate_sov.mjs accepts the example.
 3. In the editor: the example opens with no page error, each glyph becomes a symbol, the legend
    titles each glyph and names the three colour categories, and a picture carries every label.
@@ -25,6 +28,23 @@ GLYPHS = {'we-record': 'Record', 'we-surface': 'Surface', 'we-migration': 'Migra
           'we-port': 'Port', 'we-refactor': 'Refactor', 'we-specification': 'Specification'}
 LABELS = ['Case', 'Web booth', 'Continuity records move to SQLite', 'Web booth feeds Recording',
           'Split the session guard', 'Status field for cards']
+# Every document on the tree that carries the notation in references.
+CARRIERS = [EXAMPLE, 'examples/work-engine/status.sov', 'docs/workengine/board-sample.sov', 'docs/workengine/map.sov']
+# The built-in document concerns, asked in Work Engine words: id, title, question.
+DOCUMENT_CONCERNS = [
+    ['what', 'What it shows', 'Which part of the work engine does this map show?'],
+    ['why', 'What it is for', 'What would someone build or settle from this map?'],
+    ['alternatives', 'Other readings', 'What else describes the same ground, and why read this map?'],
+    ['smaller', 'Smallest slice', 'What is the smallest slice of this map that stands on its own?'],
+]
+# The card concerns: id, the symbols each is asked of, title, question.
+COMPONENT_CONCERNS = [
+    ['meaning', ['we-record'], 'Holds', 'What does this record hold?'],
+    ['authority', ['we-surface'], 'Authority', 'What does this surface have authority over?'],
+    ['evidence', ['we-record', 'we-surface'], 'Evidence', 'What in the kernel shows this status?'],
+    ['owner', ['we-record'], 'Owner', 'Which task owns building it?'],
+    ['backing', ['we-specification'], 'Backing', 'Which records answer this query?'],
+]
 
 NODE = r"""
 const fs=require('fs'),assert=require('assert');
@@ -48,8 +68,17 @@ out.distinct=new Set(out.weIds.map(id=>shape(glyphs[id]))).size;
 out.statuses=(r.ok?r.notation.statuses||[]:[]).map(s=>({id:s.id,title:s.title,meaning:s.meaning,outline:s.outline}));
 out.categories=(r.ok?r.notation.categories||[]:[]).map(c=>[c.slot,c.name]);
 out.valid=D.validateDocument(D.makeDocument(doc)).errors;
+const concerns=applies=>r.ok?N.concernsOf(r.notation,applies):[];
+out.concerns={document:concerns('document').map(c=>[c.id,c.title,c.question]),component:concerns('component').map(c=>[c.id,c.symbols,c.title,c.question]),
+  wire:concerns('wire').map(c=>c.id),findings:r.ok?N.concernFindings(r.notation):null,builtin:N.concernsOf(N.BUILTIN.schematic,'document').map(c=>c.id)};
+out.carried={};
+for(const file of %CARRIERS%){
+  const refs=(JSON.parse(fs.readFileSync(file,'utf8')).references||[]).filter(x=>x&&x.kind==='notation'&&x.data&&x.data.id==='work-engine');
+  let same=refs.length===1;if(same)try{assert.deepStrictEqual(refs[0].data,pack)}catch(e){same=false}
+  out.carried[file]=same;
+}
 console.log(JSON.stringify(out));
-""".replace('%EXAMPLE%', EXAMPLE)
+""".replace('%EXAMPLE%', EXAMPLE).replace('%CARRIERS%', json.dumps(CARRIERS))
 proc = subprocess.run(['node', '-e', NODE], cwd=ROOT, capture_output=True, text=True)
 assert proc.returncode == 0, proc.stderr
 r = json.loads(proc.stdout)
@@ -66,6 +95,14 @@ assert [s['id'] for s in r['statuses']] == ['exists', 'partial', 'missing', 'pro
 assert all(s['title'] and s['meaning'] and s['outline'] in ('solid', 'dashed') for s in r['statuses']), r['statuses']
 assert r['categories'] == [['C1', 'Record'], ['C2', 'Surface'], ['C3', 'Work item']], r['categories']
 assert r['valid'] == [], r['valid']
+c = r['concerns']
+assert c['findings'] == [], ('the notation\'s concerns have findings', c['findings'])
+assert c['document'] == DOCUMENT_CONCERNS, ('the document concerns are not the Work Engine questions', c['document'])
+assert [x[0] for x in c['document']] == c['builtin'] == ['what', 'why', 'alternatives', 'smaller'], ('the built-in order moved', c['document'], c['builtin'])
+assert all(q.endswith('?') and q.count('?') == 1 for _, _, q in c['document']) and all(x[3].endswith('?') and x[3].count('?') == 1 for x in c['component']), ('a question does not end in one question mark', c)
+assert c['component'] == COMPONENT_CONCERNS, ('the card concerns or their symbols differ', c['component'])
+assert c['wire'] == [], ('the notation declares no wire concerns', c['wire'])
+assert r['carried'] == {path: True for path in CARRIERS}, ('a document does not carry data/work-engine.notation.json unchanged', r['carried'])
 
 v = subprocess.run(['node', 'scripts/validate_sov.mjs', EXAMPLE], cwd=ROOT, capture_output=True, text=True)
 assert v.returncode == 0, (v.stdout, v.stderr)

@@ -373,6 +373,25 @@ draw solid.
 
 A badge is the chip without a status's meaning: text and a palette colour, no outline, no opacity, no legend entry (DATA-FORMATS.md "Badges").
 
+**Concerns.** The notation asks the four built-in document questions in Work Engine words, under the
+same ids and in the same order, and adds five card questions, each asked of the symbols it names
+("Concerns" below). It declares none for Wires.
+
+| Id | Applies | Asked of | Title | Question |
+| --- | --- | --- | --- | --- |
+| `what` | document | | What it shows | Which part of the work engine does this map show? |
+| `why` | document | | What it is for | What would someone build or settle from this map? |
+| `alternatives` | document | | Other readings | What else describes the same ground, and why read this map? |
+| `smaller` | document | | Smallest slice | What is the smallest slice of this map that stands on its own? |
+| `meaning` | component | `we-record` | Holds | What does this record hold? |
+| `authority` | component | `we-surface` | Authority | What does this surface have authority over? |
+| `evidence` | component | `we-record`, `we-surface` | Evidence | What in the kernel shows this status? |
+| `owner` | component | `we-record` | Owner | Which task owns building it? |
+| `backing` | component | `we-specification` | Backing | Which records answer this query? |
+
+A migration, a port, a refactor and a group are asked nothing. `docs/workengine/map.sov` answers
+all of these from the gap map's own fields (`docs/workengine/GAPS.md` "The full map").
+
 ### Kinds
 
 A notation declares what its lines and borders are drawn as in one list, `kinds`, for wires and
@@ -433,7 +452,8 @@ notation declares no wire kinds yet. `tests/wire_kind_qa.py` checks all of this.
 ### Concerns
 
 A notation declares the questions a schematic drawn in it should answer in one list, `concerns`, for
-the document, for Components and for Wires. An entry is `{id, applies, title, question, meaning}`:
+the document, for Components and for Wires. An entry is `{id, applies, title, question, meaning,
+symbols}`:
 
 | Field | Values | Absent means |
 | --- | --- | --- |
@@ -442,23 +462,42 @@ the document, for Components and for Wires. An entry is `{id, applies, title, qu
 | `question` | a non-empty string after trimming: what is asked | refused |
 | `title` | a string: a short name for the question | the id |
 | `meaning` | a string: what a good answer holds | no meaning |
+| `symbols` | a non-empty list of symbol ids, each a non-empty string, none repeated; a component concern only | asked of every Component |
 
 The rules, each reported as `CONCERN_INVALID` naming the notation, the entry and the rule
 (`concernFindings` in `src/03-notation-core.js`):
 
-- An entry is an object, and a key outside the five is refused.
+- An entry is an object, and a key outside the six is refused.
 - `id` and `question` are non-empty strings; `applies` is one of the three; `title` and `meaning`,
   when present, are strings.
 - An id is used once within one `applies`.
+- `symbols` belongs to a component concern: on a document or a wire concern it is refused. It is a
+  non-empty list of non-empty strings with no repeats; an empty list, a repeat, a value that is not
+  a string and a value that is not a list are each refused.
+
+**A concern names the symbols it is asked of.** A component concern with `symbols` is asked only of
+the Components whose `symbolId` is in the list; one without `symbols` is asked of every Component.
+This entry is asked of record cards and of no other card, so a group or a query has no owner row
+that nobody could answer:
+
+```json
+{"id": "owner", "applies": "component", "symbols": ["we-record"], "title": "Owner", "question": "Which task owns building it?"}
+```
+
+A symbol id is not checked against the notation's glyphs: an id no Component uses is asked of
+nothing and is not a finding. One function reads the list, `concernsAskedOf` in
+`src/05-data-core.js`, and the answer check, the report and `answerConcerns` all ask it.
 
 An entry with a finding is not admitted: `concernsOf(notation, 'document' | 'component' | 'wire')`
 gives the admitted entries in declared order. `resolve()` joins `concerns` along the `extends` chain
 by the join it uses for `kinds`: a later notation's entry replaces an earlier notation's entry with
 the same `applies` and `id`, in its place, and an entry with a new id is added after the ones before.
+The later entry replaces the earlier one whole, `symbols` included: a later entry without `symbols`
+is asked of every Component, whatever the earlier one named.
 
 **The built-in document concerns.** The `schematic` notation declares four, and every notation that
-extends it (`logic`, `work-engine`, a carried one) inherits them. It declares none for Components and
-none for Wires.
+extends it (`logic`, `work-engine`, a carried one) inherits them; `work-engine` rewords all four
+("Domain notation: work-engine"). It declares none for Components and none for Wires.
 
 | Id | Title | Question |
 | --- | --- | --- |
@@ -483,7 +522,9 @@ asked; the other two add a question for every card and one for every wire:
 answer theirs in `config.answers` (DATA-FORMATS.md "Answers"). The data core validates an answer
 against the concerns of the document's resolved notation, never against a list of its own: a key
 the notation does not declare is `ANSWER_UNKNOWN`, and any key where the notation declares no concerns
-for that `applies` is `ANSWER_UNDECLARED`. A concern with no answer is open. Open is information and
+for that `applies` is `ANSWER_UNDECLARED`. A Component's answer to a component concern that is not
+asked of its symbol is `ANSWER_UNKNOWN` too, the message listing the ids asked of that symbol, and
+the report holds no row for it. A concern with no answer is open. Open is information and
 never a finding: `SovSchematicData.concernReport(doc)` lists every declared concern as answered or
 open with its question, and `node scripts/validate_sov.mjs --concerns` prints the open ones.
 Nothing is drawn for a concern. `tests/concerns_qa.py` checks all of this.

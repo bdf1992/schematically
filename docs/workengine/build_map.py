@@ -14,6 +14,12 @@ gaps, and every wire between the two groups routed on them (LAYOUT-MODEL.md "As 
 Both harnesses take --lanes port: wires that leave one port share a lane.
 GROUP_GAP and ROW_GAP are the sizes those harnesses need.
 
+The map answers the Work Engine notation's concerns (NOTATION-MODEL.md "Concerns"). The four
+document answers are the sentences in DOCUMENT_ANSWERS. A card's answers are the gap map's own
+fields as written (CARD_ANSWERS): a record's meaning, evidence and owner_task, a surface's
+authority and evidence, a query's backing. A field that is absent, or empty after trimming, writes
+no answer, so that concern stays open on that card. Groups and the migration card get none.
+
 The output is deterministic: the same gapmap.json gives the same map.sov byte for byte.
 Standard library only.
 """
@@ -76,6 +82,35 @@ LABEL_MARGIN = 16     # src/08-layout-core.js layered's own default margin, mirr
 # SCHEMATIC.tokens.type.caption.size (src/03-notation-core.js); work-engine.notation.json
 # carries no "tokens" override, so the Work Engine map draws its captions at this size too.
 CAPTION_SIZE = 9.0
+
+
+# The document's answers (meta.answers). {records}, {surfaces}, {queries} are the gap map's counts
+# and {read_on} is its meta.read_on.
+DOCUMENT_ANSWERS = {
+    "what": ("The Work Engine as {records} records, {surfaces} surfaces and {queries} screen queries, "
+             "each marked exists, partial or missing against the kernel as read on {read_on}."),
+    "why": ("To see what the booth and its screens already stand on, what is missing, "
+            "and which open decision each missing part waits on."),
+    "alternatives": ("docs/workengine/source/gapmap.json holds the same facts as lists; "
+                     "this map shows which surface feeds which record and which query reads it."),
+    "smaller": "docs/workengine/sample.sov: five records, three surfaces, one migration and one port.",
+}
+# A card's answers (config.answers): concern id -> the gap map field it is taken from, per kind.
+CARD_ANSWERS = {
+    "record": {"meaning": "meaning", "evidence": "evidence", "owner": "owner_task"},
+    "surface": {"authority": "authority", "evidence": "evidence"},
+    "query": {"backing": "backing"},
+}
+
+
+def answers_of(kind: str, item: dict) -> dict:
+    """The answers one gap map entry gives, as written; an absent or empty field gives none."""
+    out = {}
+    for concern, field in CARD_ANSWERS[kind].items():
+        value = item.get(field)
+        if isinstance(value, str) and value.strip():
+            out[concern] = value
+    return out
 
 
 def label_estimate(text: str, margin: int = LABEL_MARGIN) -> float:
@@ -154,7 +189,7 @@ def build(gap: dict) -> tuple[dict, dict]:
     components: list[dict] = []
     wires: list[dict] = []
 
-    def card(cid, symbol, label, status, slot, subtitle=None, width=None, lines=1, extra=None):
+    def card(cid, symbol, label, status, slot, subtitle=None, width=None, lines=1, extra=None, answers=None):
         w = width or card_width(label, lines)
         if subtitle:
             w = int(min(600, max(w, math.ceil((len(subtitle) * SUB_CHAR + 40) / 20) * 20)))
@@ -166,7 +201,9 @@ def build(gap: dict) -> tuple[dict, dict]:
             cfg["waitsOn"] = waits[cid]
         if extra:
             cfg.update(extra)
-        comp = {"id": cid, "symbolId": symbol, "x": 0, "y": 0, "canvasId": GLOBAL, "config": cfg}
+        if answers:
+            cfg["answers"] = answers
+        comp ={"id": cid, "symbolId": symbol, "x": 0, "y": 0, "canvasId": GLOBAL, "config": cfg}
         components.append(comp)
         return comp
 
@@ -192,7 +229,7 @@ def build(gap: dict) -> tuple[dict, dict]:
             extra = {"attachmentPoints": [{"id": "tracks-in", "side": "left", "t": 0.75, "flow": "in", "label": "Tracks",
                                            "channels": [{"id": c} for c in all_channels]}]}
         rec_cards.append(card(rec_id[r["name"]], "we-record", r["name"], r["status"], 6,
-                              subtitle=r.get("owner_task"), extra=extra))
+                              subtitle=r.get("owner_task"), extra=extra, answers=answers_of("record", r)))
     for s in surfaces:
         ch = channels(s.get("tracks", []))
         extra = None
@@ -201,13 +238,14 @@ def build(gap: dict) -> tuple[dict, dict]:
                                            "channels": [{"id": c} for c in ch]}]}
         sur_cards.append(card(sur_id[s["name"]], "we-surface", s["name"], s["status"], 7,
                               subtitle=f"{s['kind']} surface", width=card_width(s["name"], 2, floor=240, cap=300),
-                              lines=2, extra=extra))
+                              lines=2, extra=extra, answers=answers_of("surface", s)))
     unmatched: list[str] = []
     for i, q in enumerate(queries, start=1):
         qid = f"spec-{i:02d}-{q['screen']}"
         spec_cards.append(card(qid, "we-specification", q["needs"], q["status"], 8,
                                subtitle=f"{q['screen']} screen · {q['latency']}",
-                               width=card_width(q["needs"], 2, floor=280, cap=460), lines=2))
+                               width=card_width(q["needs"], 2, floor=280, cap=460), lines=2,
+                               answers=answers_of("query", q)))
         for name in backing_names(q["backing"]):
             name = rec_alias.get(name, name)
             if name in rec_id:
@@ -309,8 +347,12 @@ def build(gap: dict) -> tuple[dict, dict]:
                 "Each card's status is the gap map's (exists, partial, missing); a record's subtitle is its owning task. "
                 "Open decisions are waits-on entries on the cards whose evidence names them (DECISION_PHRASES in build_map.py). "
                 f"Decisions attached to no card: {', '.join(unattached) or 'none'}. "
-                f"Backing names that are not records in the gap map: {'; '.join(unmatched) or 'none'}."
+                f"Backing names that are not records in the gap map: {'; '.join(unmatched) or 'none'}. "
+                "Answers come from the gap map's own fields, and an absent field is left open."
             ),
+            "answers": {concern: text.format(records=len(records), surfaces=len(surfaces), queries=len(queries),
+                                             read_on=gap["meta"]["read_on"])
+                        for concern, text in DOCUMENT_ANSWERS.items()},
         },
         "components": groups + components,
         "wires": wires,

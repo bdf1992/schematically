@@ -197,15 +197,21 @@
   }
   // ---- Concerns (NOTATION-MODEL.md "Concerns") --------------------------------------------------
   // A notation declares `concerns`, the questions a schematic drawn in it should answer:
-  // {id, applies: document | component | wire, title, question, meaning}. id and question are
-  // non-empty strings; title and meaning are optional strings. A document answers them in
+  // {id, applies: document | component | wire, title, question, meaning, symbols}. id and question
+  // are non-empty strings; title and meaning are optional strings. A component concern may name
+  // the symbols it is asked of in `symbols`, a non-empty list of non-empty strings with no repeats;
+  // without it the concern is asked of every Component (src/05-data-core.js concernsAskedOf). A
+  // symbol id is not checked against the notation's glyphs. A document answers them in
   // meta.answers and config.answers (src/05-data-core.js answerProblems, concernReport).
   //   CONCERN_INVALID   an entry breaks a rule: not an object; an unknown key; an id or a question
   //                     that is not a non-empty string; an applies that is not one of the three; a
-  //                     title or meaning that is not a string; an id used twice within one applies
+  //                     title or meaning that is not a string; an id used twice within one applies;
+  //                     symbols on a document or a wire concern; symbols that is not a non-empty
+  //                     list, or holds a value that is not a non-empty string, or holds a repeat
   // resolve() joins concerns along the extends chain as it joins kinds (joinKinds): a later
-  // notation's entry replaces an earlier notation's entry with the same applies and id, in its place.
-  const CONCERN_KEYS=['id','applies','title','question','meaning'],CONCERN_APPLIES=['document','component','wire'];
+  // notation's entry replaces an earlier notation's entry with the same applies and id, in its
+  // place and whole, symbols included.
+  const CONCERN_KEYS=['id','applies','title','question','meaning','symbols'],CONCERN_APPLIES=['document','component','wire'];
   // Each entry of notation.concerns with the rules it breaks (none when it is admitted).
   function judgeConcerns(notation){
     const list=Array.isArray(notation?.concerns)?notation.concerns:[];
@@ -219,6 +225,17 @@
       if(!CONCERN_APPLIES.includes(entry.applies))broken.push(`applies must be ${CONCERN_APPLIES.join(', ')}, not ${say(entry.applies)}`);
       if(typeof entry.question!=='string'||!entry.question.trim())broken.push('question must be a non-empty string');
       for(const key of ['title','meaning'])if(entry[key]!==undefined&&typeof entry[key]!=='string')broken.push(`${key} must be a string`);
+      if(entry.symbols!==undefined){
+        const list=entry.symbols;
+        if(entry.applies==='document'||entry.applies==='wire')broken.push(`symbols belongs to a component concern, not a ${entry.applies} concern`);
+        else if(!Array.isArray(list)||!list.length)broken.push(`symbols must be a non-empty list of symbol ids, not ${say(list)}`);
+        else{
+          const at=list.findIndex(s=>typeof s!=='string'||!s.trim());
+          if(at>=0)broken.push(`symbols[${at}] must be a non-empty string, not ${say(list[at])}`);
+          const twice=list.find((s,i)=>typeof s==='string'&&list.indexOf(s)!==i);
+          if(twice!==undefined)broken.push(`symbols names ${say(twice)} more than once`);
+        }
+      }
       return {entry,name,broken};
     });
     // The rule between entries is read over the ones that stand on their own.
@@ -235,7 +252,7 @@
   // The admitted entries for the document, for Components or for Wires, in declared order. An entry
   // with a finding is not admitted.
   function concernsOf(notation,applies){
-    return judgeConcerns(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry}));
+    return judgeConcerns(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry,...(Array.isArray(j.entry.symbols)?{symbols:[...j.entry.symbols]}:{})}));
   }
   // The document scale, applied once to the flattened tokens (a fresh object: merge copies), so
   // every reader of tokens(doc) and resolve(doc).notation.tokens draws scaled with no multiplication

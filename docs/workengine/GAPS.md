@@ -54,6 +54,19 @@ generated, not hand-written: `python docs/workengine/build_map.py` writes it, an
 the gap map's status, that `node scripts/validate_sov.mjs` passes and that no two cards overlap.
 `map.svg` is `python scripts/export_svg.py docs/workengine/map.sov --legend`.
 
+Since 2026-10-05 the map answers the Work Engine notation's questions (NOTATION-MODEL.md "Domain
+notation: work-engine"). The document answers its four (what it shows, what it is for, other
+readings, smallest slice) with sentences `build_map.py` holds. Each card answers from the gap map's
+own fields, as written: a record says what it holds (`meaning`), what in the kernel shows its status
+(`evidence`) and which task owns building it (`owner_task`); a surface says what it has authority
+over (`authority`) and its `evidence`; a query says which records answer it (`backing`). Groups and
+the migration card are asked nothing. `check_map.py` prints `166 answered, 0 open`: 4 for the
+document, 3 for each of 38 records, 2 for each of 12 surfaces and 1 for each of 24 queries. No row
+is open, because the gap map holds a value for every one of those fields today. A row opens when the
+gap map holds no value for it (the field is absent, or empty after trimming): the generator writes
+no answer there and never invents one. `node scripts/validate_sov.mjs --concerns
+docs/workengine/map.sov` lists the open rows and prints the two counts.
+
 What the map says directly, using features added since the sample:
 
 - Status is data (`config.status` from the Work Engine notation's statuses), so G01 is closed.

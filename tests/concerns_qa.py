@@ -31,6 +31,12 @@ Browser part (index.html in Chromium), then node scripts/validate_sov.mjs:
   (j) node scripts/validate_sov.mjs --concerns on the document of (c) with one answer exits 0 and
       prints 8 lines beginning 'open' and 'concerns: 1 answered, 8 open'; without the flag neither;
   (k) the page logs no errors.
+  (l) a component concern with symbols [act] gives a row for an act card and none for a hold card;
+      an answer to it on the hold card is refused with ANSWER_UNKNOWN on create, on update and by
+      answerConcerns, and reported on load; a later notation's entry with the same id and no
+      symbols replaces it whole; symbols [], symbols on a document or a wire concern, a repeat, a
+      value that is not a non-empty string and symbols that is not a list each report
+      CONCERN_INVALID, and the entry is not in concernsOf.
 """
 from __future__ import annotations
 import json
@@ -150,6 +156,35 @@ PAGE = r"""([plant])=>{
     notObject:judge([plant[1],'cost']),
     badTitle:judge([plant[1],{id:'cost',applies:'component',question:'What does it cost?',title:7}]),
   };
+  // (l) a component concern names the symbols it is asked of: ore is an act card, bar a hold card.
+  {const feeds={id:'feeds',applies:'component',symbols:['act'],title:'Feeds',question:'What does this act feed?'};
+   const base=({list=[...plant,feeds],barAnswers}={})=>{const x=doc({list});x.components[1].symbolId='hold';if(barAnswers)x.components[1].config.answers=barAnswers;return x};
+   const d=made(base()),report=D.concernReport(d);
+   const tank=answers=>({id:'tank',symbolId:'hold',x:200,y:420,config:{label:'Tank',answers}}),mill=answers=>({id:'mill',symbolId:'act',x:200,y:420,config:{label:'Mill',answers}});
+   const verb=target=>{const x=made(base()),before=JSON.stringify(x),r=D.answerConcerns(x,{answers:[{concern:'feeds',target,answer:'The bar.'}]});return {ok:r.ok,message:r.error?.message||'',unchanged:JSON.stringify(x)===before}};
+   // The join along extends: a later entry with the same applies and id replaces the earlier whole, symbols included.
+   const chained=x=>{x.references=[{id:'notation-plant0',kind:'notation',label:'Plant 0',data:{id:'plant0',name:'Plant 0',version:1,extends:'schematic',concerns:[feeds]}},
+     {id:'notation-plant',kind:'notation',label:'Plant',data:{id:'plant',name:'Plant',version:1,extends:'plant0',concerns:[{id:'feeds',applies:'component',question:'What does this feed?'}]}}];return x};
+   const joined=made(chained(base()));
+   out.symbols={errors:D.validateDocument(d).errors,of:N.concernsOf(N.resolve(d).notation,'component').map(c=>[c.id,c.symbols??null]),
+     feeds:report.rows.filter(r=>r.concern==='feeds').map(row),bar:report.rows.filter(r=>r.target==='bar').map(r=>r.concern),ore:report.rows.filter(r=>r.target==='ore').map(r=>r.concern),total:report.rows.length,
+     createHold:refuse(base(),{op:'create',resource:'component',value:tank({feeds:'x'})}),
+     updateHold:refuse(base(),{op:'update',resource:'component',resourceId:'bar',patch:{config:{answers:{feeds:'x'}}}}),
+     createAct:refuse(base(),{op:'create',resource:'component',value:mill({feeds:'The bar.'})}),
+     updateAct:refuse(base(),{op:'update',resource:'component',resourceId:'ore',patch:{config:{answers:{feeds:'The bar.'}}}}),
+     verbHold:verb('bar'),verbAct:verb('ore'),
+     load:load(base({barAnswers:{feeds:'x'}})),
+     joinedOf:N.concernsOf(N.resolve(joined).notation,'component').map(c=>[c.id,c.symbols??null,c.question]),joinedFeeds:D.concernReport(joined).rows.filter(r=>r.concern==='feeds').map(row)};
+   const cost=extra=>[plant[1],{id:'cost',applies:'component',question:'What does it cost?',...extra}];
+   out.symbolsInvalid={
+     empty:judge(cost({symbols:[]})),
+     onDocument:judge([plant[1],{id:'scope',applies:'document',question:'What is in scope?',symbols:['act']}]),
+     onWire:judge([plant[1],{id:'load',applies:'wire',question:'What load does it take?',symbols:['act']}]),
+     repeat:judge(cost({symbols:['act','act']})),
+     notString:judge(cost({symbols:['act',3]})),
+     blank:judge(cost({symbols:['act','  ']})),
+     notList:judge(cost({symbols:'act'})),
+   }}
   // (i) saving and opening keeps every answer; a document without answers gains no answers key.
   {const full=doc({meta:{answers:{what:'An ore line.',why:'To make bars.'}},cardAnswers:{'made-by':'Dug from the pit.'},wireAnswers:{carries:'Bars, four a minute.'}});
    A.document.replace(full);fitDiagram();
@@ -276,6 +311,29 @@ def main() -> None:
     assert len(bad['noQuestion']['findings']) == 1 and 'component concern "cost"' in bad['noQuestion']['findings'][0], bad['noQuestion']['findings']
     assert '"card"' in bad['badApplies']['findings'][0], bad['badApplies']['findings']
     print('(h) CONCERN_INVALID for a missing question, applies card and an id used twice; the entry is not admitted')
+
+    # (l) A component concern names the symbols it is asked of.
+    s = r['symbols']
+    assert s['errors'] == [] and ['feeds', ['act']] in s['of'], ('a concern with symbols is not admitted', s['errors'], s['of'])
+    assert s['feeds'] == [['component', 'ore', 'feeds']], ('a concern with symbols [act] must be a row for the act card ore and none for the hold card bar', s['feeds'])
+    assert s['ore'] == ['made-by', 'repeatable', 'feeds'] and s['bar'] == ['made-by', 'repeatable'] and s['total'] == 4 + 3 + 2 + 1, (s['ore'], s['bar'], s['total'])
+    for name in ('createHold', 'updateHold', 'verbHold'):
+        assert not s[name]['ok'] and s[name]['message'].startswith('ANSWER_UNKNOWN:') and s[name]['unchanged'], (name, 'an answer to a concern not asked of a hold card must be refused with ANSWER_UNKNOWN', s[name])
+        assert 'config.answers.feeds' in s[name]['message'] and '"hold"' in s[name]['message'] and 'made-by, repeatable' in s[name]['message'], (name, s[name]['message'])
+    for name in ('createAct', 'updateAct', 'verbAct'):
+        assert s[name]['ok'], (name, 'an answer to a concern asked of an act card was refused', s[name])
+    assert len(s['load']) == 1 and s['load'][0].startswith('component bar: ANSWER_UNKNOWN: config.answers.feeds'), s['load']
+    assert ['feeds', None, 'What does this feed?'] in s['joinedOf'] and s['joinedFeeds'] == [['component', 'ore', 'feeds'], ['component', 'bar', 'feeds']], ('a later entry must replace the earlier whole, symbols included', s['joinedOf'], s['joinedFeeds'])
+    bad = r['symbolsInvalid']
+    for name, rule, entry in (('empty', 'symbols must be a non-empty list', 'component concern "cost"'), ('onDocument', 'symbols belongs to a component concern, not a document concern', 'document concern "scope"'),
+                              ('onWire', 'symbols belongs to a component concern, not a wire concern', 'wire concern "load"'), ('repeat', 'symbols names "act" more than once', 'component concern "cost"'),
+                              ('notString', 'symbols[1] must be a non-empty string', 'component concern "cost"'), ('blank', 'symbols[1] must be a non-empty string', 'component concern "cost"'),
+                              ('notList', 'symbols must be a non-empty list', 'component concern "cost"')):
+        j = bad[name]
+        assert len(j['findings']) == 1 and j['findings'][0].startswith('CONCERN_INVALID: notation "plant"') and entry in j['findings'][0] and rule in j['findings'][0], (name, 'expected CONCERN_INVALID naming', rule, 'got', j['findings'])
+        assert j['errors'] == ['notation: ' + x for x in j['findings']], (name, 'validateDocument does not report the finding', j)
+        assert j['component'] == ['made-by'] and j['document'] == [i for i, _, _ in BUILTIN] and j['wire'] == [] and j['rows'] == 4 + 2, (name, 'the entry was admitted', j)
+    print('(l) symbols [act]: a row for the act card and none for the hold card; an answer on the hold card is refused with ANSWER_UNKNOWN on create, update and answerConcerns; symbols [] and symbols on a document concern are CONCERN_INVALID')
 
     # (i) Save and open.
     kept = {'meta': {'what': 'An ore line.', 'why': 'To make bars.'}, 'ore': {'made-by': 'Dug from the pit.'}, 'bar': None, 'belt': {'carries': 'Bars, four a minute.'}}
