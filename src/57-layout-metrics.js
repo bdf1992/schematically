@@ -278,6 +278,23 @@ function layoutMetrics(options={}){
      if(!R||!members.some(id=>visible.some(v=>v.id===id)))continue;
      for(const id of members){const m=visible.find(v=>v.id===id);if(m&&is2D(m))check(m,g,{l:R.l,r:R.r,t:R.t,b:R.b},true)}
    }}
+  // Glyph room: a card that draws a symbol glyph and has no room for it at the glyph token's size
+  // (NOTATION-MODEL.md §4, glyphRoom), so its glyph is drawn smaller than on other cards. A container
+  // with an open interior draws its glyph as a title mark and a card hosted on a wire is drawn on the
+  // line, so neither is held to it. Reported, with no weight in the score (it is not in LAYOUT_RUBRIC).
+  // The room is read from what componentInlineGraphicBox gives glyphBox: the card's size, or a
+  // shaped card's inner rectangle.
+  {const N=SovSchematicNotation,T=activeNotation().tokens,even=v=>2*Math.ceil((v-1e-6)/2),say=v=>+(+v).toFixed(2);
+   for(const n of visible){
+     if(!is2D(n)||componentAcceptsChildren(n)||componentHostedOnWire(n)||!nodeEl(n.id)?.querySelector(':scope > use.glyph'))continue;
+     const cfg=componentConfig(n),size=cfg.presentation.size,g=componentGlyph(n),shape=componentShapeGeometry(n);
+     const room=shape.shape==='rect'||g?.points==='terminals'?size:{w:shape.inner.r-shape.inner.l,h:shape.shape==='cylinder'?size.h-2*shape.cap:size.h};
+     const title=String(cfg.label||'').trim()||componentTypeCaption(n);
+     const fit=N.glyphRoom(g,room,{subtitle:!!String(cfg.subtitle||'').trim(),title,type:T.type,glyph:T.glyph});
+     if(fit.ok)continue;
+     const needW=Math.max(size.w,even(fit.need.w+size.w-room.w)),needH=Math.max(size.h,even(fit.need.h+size.h-room.h));
+     add('glyph-room',[n.id],`"${title}" is ${say(size.w)} by ${say(size.h)} and needs ${needW} by ${needH} to draw its glyph at ${say(fit.box.w)} by ${say(fit.box.h)}`);
+   }}
   // Points drawn on top of each other read as one.
   {const pts=visible.filter(n=>componentForm(n).dimension===0);
    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++)if(Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y)<12)add('node-overlap',[pts[i].id,pts[j].id],'points drawn on top of each other')}

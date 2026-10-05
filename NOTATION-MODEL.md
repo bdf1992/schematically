@@ -116,7 +116,8 @@ refused with `SCALE_INVALID`; it is never clamped.
   of `tokens(doc)` draws scaled with no multiplication of its own. The built-in tokens stay as
   written.
 - Multiplied: every stroke weight (`stroke.*`), every text role's `size` and its own `min`,
-  `space.pin`, and `type.screen.max` (so a scaled label is not capped).
+  `space.pin`, `type.screen.max` (so a scaled label is not capped), and the glyph token's `w` and
+  `h` (below).
 - Not multiplied: `type.screen.min` (the 12 px floor is screen pixels), `radius`, the other
   `space` tokens and `elevation`.
 - The renderer multiplies the marks it draws by the same number: the visible port circle
@@ -124,8 +125,7 @@ refused with `SCALE_INVALID`; it is never clamped.
   carries wires (4, or 4.5 at a junction), the wire hop (6.5) and the chevron. The stylesheet
   multiplies each literal size on a class drawn in a picture by `--scale`.
 - Hit targets, grips, halos, handles, marker badges and every routing distance are editor or
-  layout quantities and keep their size. A card's stored size is not changed, and the glyph's
-  box still follows its card (`glyphBox`).
+  layout quantities and keep their size. A card's stored size is not changed by the scale.
 - Some drawn marks keep their size because the geometry they belong to does not scale: the
   section bevel (stroke 4, set `space.bevel` inside the outline), the through mark (a capsule 9
   wide), the net badge and the 8 px endpoint and point tags (literal sizes, not clamps), packets,
@@ -138,6 +138,14 @@ refused with `SCALE_INVALID`; it is never clamped.
   and junctions, and a duplex wire puts a forward and a reverse mark side by side at each place.
 - A notation chain that declares no `tokens.scale` anywhere (one that does not extend
   `schematic`) is drawn unscaled.
+
+**Glyph.** `tokens.glyph` is the glyph's box, `{w, h}` in world units: 80.64 by 40.4 in the
+built-in notation, the box a 112 by 84 card gives a one-line title. The glyph is drawn in that box
+on every card that has room for it (§4), so the same symbol is the same size across a document's
+cards whatever their sizes. The scale multiplies `w` and `h` (161.28 by 80.8 at scale 2). A `w` or
+`h` that is not a finite number above 0 is refused with `GLYPH_SIZE_INVALID`; it is never replaced
+by the built-in size. A symbol keeping one size while the box around it grows is the practice of
+Graphviz (`fixedsize`, a node sized from its label), ELK's node size constraints and BPMN tools.
 
 ## 4. Type
 
@@ -178,10 +186,24 @@ the on-screen clamp, so the block is laid out again when the zoom changes):
 - inside a card the block stays below the glyph (its foot plus 2) and inside the inner edge;
   when it cannot, the least important line goes first: the subtitle is hidden
   (`data-lod="hidden"`), then the title is cut to one line
-- a lone title (no subtitle) that needs a second line gets room for both under the glyph: the
-  glyph shrinks for it (`glyphBox`), keeping its aspect and never below 60% of its size;
-  whether the title needs the line is judged from a per-character width table, so the layout
-  engine and the renderer agree
+- the glyph is drawn in the glyph token's box (§3) on a card that has room for it. With F the
+  token and s = min(F.w / 96, F.h / 64), the drawn glyph is 96s by 64s, and the card has room when
+  96s is at most 72% of its width and 64s fits between the feet kept for the text on both sides of
+  the axis: 8, plus 1.15 title sizes a title line, plus 1.3 subtitle sizes for a subtitle
+  (`glyphRoom`). A shaped card is measured by its inner rectangle
+- on a card without room the glyph's box follows the card, as it did before the token:
+  `min(72% of the width, 108)` wide and `max(24, min(55% of the height, 70, the height less both
+  feet))` high (70% for a glyph whose terminals are its points)
+- a lone title (no subtitle) that needs a second line gets room for both under the glyph: on a
+  card without room the glyph shrinks for it (`glyphBox`), keeping its aspect and never below 60%
+  of its size; whether the title needs the line is judged from a per-character width table, so
+  the layout engine and the renderer agree. A card has room for the token only when the two lines
+  fit under it without that shrink
+- a card that draws a symbol glyph and has no room for it is reported by `layout.metrics` as a
+  `glyph-room` finding, naming the card, its size and the size it needs. A container's title
+  mark and a card hosted on a wire are not held to it. The finding has no weight in the score.
+  Rendering, opening and saving never change a card's stored size; the layered layout grows the
+  card (LAYOUT-MODEL.md "What `layered` does")
 - at a screen scale of 0.25 or less, a title that still runs into its glyph is hidden
   (`data-lod="hidden"`)
 - a cut line sets `data-truncated`, and the full title (and subtitle) is the card's tooltip: a
@@ -265,7 +287,8 @@ contrast (`scripts/contrast_audit.py`).
 Notes from building it:
 - A glyph's box leaves room at the card's foot for its title, and one line more for a
   subtitle. The layout engine uses the same formula (`glyphBox`, `terminalOffset`), so a
-  laid-out wire is straight.
+  laid-out wire is straight. Since 2026-10-04 the box is the glyph token's wherever the card has
+  room (`glyphRoom`, `tests/glyph_fixed_size_qa.py`).
 - An unplaced point on a card with a glyph sits on its own terminal's line, so every lead is
   straight. A point moved by hand gets a lead with one dogleg.
 - The layered engine levels a card by the terminals its wires use, not by card centres. It
