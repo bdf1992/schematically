@@ -668,6 +668,17 @@ for Point-Feature Label Placement", 1995; map renderers place road names the sam
   border (a label lies wholly inside a container or wholly outside), a status chip or marker
   badge, other text (titles, subtitles, port labels, group titles, bus labels, end tags, labels
   already placed) and another wire's segment.
+- **Its own wire's other legs (2026-10-05).** Every place carries the straight run it stands
+  beside, and every segment of the label's own wire that is not part of that run is a line the
+  label must clear, as another wire's segment is. The two wire-midpoint places carry the run whose
+  line passes within 0.5 px of the path's midpoint; where no run does, they count every segment.
+  An own leg is tested against the box taken 0.01 px inside each of its four edges, so a leg that
+  only touches the box at a corner or along an edge is not counted. Own legs count in all three
+  tiers (with the clearance and with no padding), for the one-line box and for the two-line box of
+  the fourth step. A wire whose segments all lie on one line has no other leg and is placed as
+  before; a label kept where it is because its wire has no straight run counts none. Label
+  placement scores a candidate against every feature drawn, the label's own line included,
+  everywhere but along the stretch it names (Imhof 1975; Christensen, Marks and Shieber 1995).
 - **Three tiers.** The label takes the first place, in the order above, whose box padded by the
   clearance meets nothing. With no such place, a place whose box with no padding meets nothing
   (of those, the one that meets least when padded, the earliest on a tie). With none of those,
@@ -698,7 +709,8 @@ for Point-Feature Label Placement", 1995; map renderers place road names the sam
   drawing it is read in.
 - **What it cannot do.** A label longer than every straight run of its wire has only the midpoint
   places. A one-word label wider than the gap its wire runs in has no clear place and stays
-  crowded. A label's own wire is not among the things it must clear, on one line or two.
+  crowded. A label whose every place meets a leg of its own wire takes the place of least overlap
+  and is marked crowded.
 
 Measured at 1600 x 1000 after `fitDiagram`, before then after. A label collision is a
 text-collision finding of static metrics that names the label's wire and quotes its text; the
@@ -720,20 +732,57 @@ With the fourth step (2026-10-04), same measure, before then after:
 | 12 act cards and 14 labelled wires laid out by `layered` | 0, 0 | 0, 0 | 0 | 6, 1 | 5 |
 | `docs/workengine/map.sov` | 0, 0 | 0, 0 | 0 | 0, 0 | 0 |
 
-What was measured on task-lifecycle w5 'push, through the broker', in the picture. The wire runs
-(1630,300) (1656,300) (1656,252) (1760,252) in the gap between Commits (right edge 1630) and
-GitHub's border (1760); f6 runs down the same gap at x 1734 and along y 214. On one line the label
-is 142.4 wide in a 130 gap, and its least-overlap place lay over Commits, where the card hid it.
-Its breaks give wider lines of 110.0 ('push,' / 'through the broker'), 80.1 ('push, through' /
-'the broker') and 101.7 ('push, through the' / 'broker'), so it wraps into 'push, through' over
-'the broker', a box 80.1 by 31.6. Of that box's 8 places one meets nothing with no padding: under
-the wire's midpoint, at 1630.9 to 1711.1 by 273.4 to 305.0. It is 0.9 from Commits, so it misses
-the clearance (one thing met when padded by 6 px) and is taken by the second tier. Static metrics
-report no text-collision and no text-contrast finding naming w5, in light and dark.
+With the own legs counted and room made for task-lifecycle w5 (2026-10-05), in the picture at
+1600 x 1000, before then after. 'Before' is the same tree without the own-wire rule and with the
+fixture as it stood. 'Across an own leg' counts labels whose box, taken 0.1 inside its edges, is
+crossed by a segment of their own wire. The wide font is Verdana given to the page by a test; the
+page's own font on the measuring host is Segoe UI:
 
-Known residual: at that place the label lies across its own wire's vertical leg (x 1656, y 252 to
-300). A label's own wire is not an obstacle to it, so nothing counts this; the text's halo keeps
-it readable. Clearing it needs a wider gap between Commits and GitHub, which is a layout change.
+| Document | Font | Label collisions | Crowded | Wrapped | Across an own leg | Labels moved by the rule |
+| --- | --- | --- | --- | --- | --- | --- |
+| `tests/fixtures/task-lifecycle.sov` | own | 0, 0 | 0, 0 | 1, 1 (w5) | 1 (w5), 0 | w5, with the room |
+| `tests/fixtures/task-lifecycle.sov` | wide | 1, 0 | 1 (w5), 0 | 0, 0 | 0, 0 | w5, with the room |
+| `tests/fixtures/work-engine-sample.sov` | own | 0, 0 | 0, 0 | 0, 0 | 1, 0 | w-case-recording, w-declares-delivery-broker, w-port-exit |
+| `tests/fixtures/work-engine-sample.sov` | wide | 0, 0 | 0, 0 | 0, 0 | 0, 0 | w-port-exit |
+| 12 act cards and 14 labelled wires laid out by `layered` | own | 0, 0 | 0, 0 | 0, 0 | 1, 0 | w1, w3, w5, w9, w10, w12 |
+| 12 act cards and 14 labelled wires laid out by `layered` | wide | 0, 0 | 0, 0 | 0, 2 (w3, w5) | 5, 0 | w1, w3, w5, w10, w12 |
+| `docs/workengine/map.sov` | own | 0, 0 | 0, 0 | 0, 0 | 0, 0 | none |
+| `docs/workengine/map.sov` | wide | 0, 0 | 0, 0 | 0, 0 | 0, 0 | none |
+
+Under the page's own font the rule moves nine labels besides w5. Each had a leg of its own wire
+inside its box or inside the box padded by the clearance; none was or is crowded. In
+task-lifecycle.sov the labels right of Commits also move 60 with their cards.
+
+What was measured on task-lifecycle w5 'push, through the broker', in the picture. The fixture is
+written by hand, so the room is in the fixture: the GitHub plane and the ten cards on and right of
+it stand 60 further right than they did. 60 is the smallest of 20, 40, 60, 80, 100 and 120 at which
+the label is not crowded, lies across no leg of w5 and is named by no text-collision or
+cramped-label finding under both fonts (the page's own font is clear from 40, the wide font from
+60; `tests/wire_label_wrap_qa.py` holds the table). The wire now runs (1630,300) (1656,300)
+(1656,252) (1820,252): Commits' right edge is at 1630, GitHub's border at 1820, a gap of 190 where
+it was 130, and the fitted zoom is 0.2763. Under the page's own font the label is 142.4 wide on one
+line; the long run is 164, less than the label and twice the 6 px clearance (21.7 at that zoom), so
+no one-line place is clear and it wraps into 'push, through' over 'the broker'. The two-line box
+stands right of the vertical leg, 6 px from it, at 1677.7 to 1758.1 by 260.1 to 292.0, and meets
+nothing. Under the wide font the label is 174.1 wide and stays on one line above the wire's
+midpoint, 6 px above the long run, at 1613.9 to 1788.1 by 215.8 to 230.3: it reaches left past
+Commits' edge but stands above the card, and meets no other wire. Static
+metrics report no text-collision, cramped-label or text-contrast finding naming w5 under either
+font, in light and dark.
+
+Where the fixture stood (the gap of 130), the label is now on one line, marked crowded, and
+overlaps Commits under both fonts: the two-line place it took there under the page's own font lay
+across two legs of w5 (the stub from Commits and the vertical leg) and is no longer counted clear.
+At 60 the label takes the same place with or without the rule; the rule decides it at the widths
+either side.
+
+Why the tests run under two fonts. The page asks for system-ui, so a caption's width is the
+reader's font's: GitHub's runner drew 'push, through the broker' wide enough to overlap Commits
+where this host's Segoe UI wrapped it clear, and the placement test failed there and passed here.
+The product draws in the reader's own font and sets none, so a test that pinned one font would
+hold one reader's picture only. The two wire-label tests therefore assert what holds under any
+font, once under the page's own and once under a wide one: the label is clear of cards, text,
+other wires and its own legs, and it wraps only where one line has no clear place.
 
 Tests: `tests/wire_label_placement_qa.py`, `tests/wire_label_clearance_qa.py`,
 `tests/wire_label_wrap_qa.py`.
