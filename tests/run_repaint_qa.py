@@ -185,6 +185,11 @@ def main() -> None:
         page.evaluate("()=>SovSchematicAPI.clock.play()"); page.wait_for_timeout(500)
         played = page.evaluate(FRAME_TIMES)
         page.evaluate("()=>SovSchematicAPI.clock.reset()")
+        # A continuous level reaching zero: 0.006 and 0 round to the same part in 50, and only one lights a wire.
+        crossing = page.evaluate("""()=>{
+          const at=v=>{simClock.run={levels:()=>({x:{kind:'continuous',value:v}}),edges:()=>({edges:[]}),parked:()=>[]};const k=simPaintKey();simClock.run=null;return k};
+          const low=at(0.006),zero=at(0);return {sameBucket:low.continuous===zero.continuous,steadyDiffers:low.steady!==zero.steady};
+        }""")
         browser.close()
 
     times = played['times']
@@ -227,6 +232,7 @@ def main() -> None:
     # Continuous levels.
     assert paints['meters'] >= 2 and paints['advanced'] > 500, ('the clocked example plays its meters', paints)
     assert 3 <= paints['paints'] <= CONTINUOUS_PAINTS + paints['edges'] + 1, ('continuous levels repaint at most 20 times a second', paints)
+    assert crossing == {'sameBucket': True, 'steadyDiffers': True}, ('a continuous level falling to zero repaints at once, so its wire goes dark', crossing)
     # (e)
     assert played['playing'] and len(intervals) > 20, played['playing']
     assert median_ms <= FRAME_BUDGET_MS, ('(e) the map plays at a median frame of 20 ms or less', round(median_ms, 2))

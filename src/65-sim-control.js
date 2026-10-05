@@ -9,14 +9,15 @@ const simClock={run:null,playing:false,speed:1,frame:null,last:0,edgeMark:0,fing
 // A playing run repaints when what it shows changed, not on every frame. SIM_CONTINUOUS_MS is the
 // least time between two frame paints that only a continuous level asks for (20 a second).
 const SIM_CONTINUOUS_MS=50,SIM_CONTINUOUS_STEPS=50;
-// What a paint of the run shows, as two strings. steady: every binary level as 0 or 1, the edge count
-// and the count of waiting steps; a frame whose steady part differs from the painted one paints at
-// once. continuous: every continuous level to one part in 50; a frame where only that differs paints
-// once SIM_CONTINUOUS_MS has passed since the last frame paint.
+// What a paint of the run shows, as two strings. steady: every level as above zero or not (a wire is
+// lit while its source is above zero, whatever the kind), the edge count and the count of waiting
+// steps; a frame whose steady part differs from the painted one paints at once. continuous: every
+// continuous level to one part in 50; a frame where only that differs paints once SIM_CONTINUOUS_MS
+// has passed since the last frame paint.
 function simPaintKey(){
   const run=simClock.run;if(!run)return {steady:'',continuous:''};
   const levels=run.levels();let binary='',continuous='';
-  for(const id in levels){const L=levels[id];if(L.kind==='binary')binary+=L.value>0?'1':'0';else continuous+=Math.round(L.value*SIM_CONTINUOUS_STEPS)+','}
+  for(const id in levels){const L=levels[id];binary+=L.value>0?'1':'0';if(L.kind!=='binary')continuous+=Math.round(L.value*SIM_CONTINUOUS_STEPS)+','}
   return {steady:`${binary}|${run.edges().edges.length}|${run.parked().length}`,continuous};
 }
 // The canvas under the marks: a card moved or a wire group replaced without a render (a card drag, a
