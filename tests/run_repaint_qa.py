@@ -43,7 +43,6 @@ from browser_runtime import chromium_launch_kwargs  # noqa: E402
 HTML = (ROOT / 'index.html').read_text(encoding='utf-8')
 MAP = ROOT / 'docs' / 'workengine' / 'map.sov'
 CLOCKED = ROOT / 'examples' / '10-clocked-signals.sov'
-FRAME_BUDGET_MS = 20  # 60 frames a second is 16.7 ms a frame; 50 a second is 20
 CONTINUOUS_PAINTS = 20  # a second: one every 50 ms
 
 FIXTURE = r"""()=>{
@@ -235,7 +234,11 @@ def main() -> None:
     assert crossing == {'sameBucket': True, 'steadyDiffers': True}, ('a continuous level falling to zero repaints at once, so its wire goes dark', crossing)
     # (e)
     assert played['playing'] and len(intervals) > 20, played['playing']
-    assert median_ms <= FRAME_BUDGET_MS, ('(e) the map plays at a median frame of 20 ms or less', round(median_ms, 2))
+    # The frame time is printed, not asserted: it is the machine's (16.7 ms here, 33.3 ms on the hosted
+    # runner). What the paint costs is held by a count instead: with every wire lit and no level
+    # changing, a playing run writes nothing in #wires (23,360 attribute writes in two seconds before).
+    assert played['groups'] > 20 and played['lit'] > 20, ('(e) the map plays with its wires lit', played['lit'], played['groups'])
+    assert played['wires'] == 0, ('(e) the map playing with no level changing writes no attribute in #wires', played['wires'])
     # (f)
     assert not errors, errors
     print('PASS run repaint QA')
