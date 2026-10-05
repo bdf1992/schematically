@@ -9788,11 +9788,12 @@ function finishKeyboardMove(mods){
   // A changed host draws every wire from nothing at the settle below.
   if(movedNode&&hostBefore!==`${movedNode.canvasId||GLOBAL_CANVAS_ID}|${movedNode.parentId||''}`)wireGroupDrawn.clear();
   // A refused host refuses the move: the Component and what it carries return to where it started.
-  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();render()}
+  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();dropBusLaneHold();render()}
   else settleDraggedRoutes();
 
   keyboardMoveNodeId=null;keyboardMoveStart=null;
   activeNodeDrag=null;
+  dropBusLaneHold(); // the move is over: the lanes are ordered in full again (src/41-buses.js)
   dragRouteSnapshots.clear();
   workspace.classList.remove('dragging-node');
   statusEl.textContent=hosted?.refused||'Select';
@@ -10410,8 +10411,13 @@ function captureDragSnapshots(nodeId){
       });
     }
   }));
+  // The loop above asked for the bus routes, so the lane order held from here is the one at the
+  // press, or at the last settle while held (src/41-buses.js holdBusLanes).
+  if(typeof holdBusLanes==='function')holdBusLanes();
 }
 function settleDraggedRoutes(){
+  // The pointer rests or the move ends: the bus lanes are ordered again, in full.
+  if(typeof dropBusLaneHold==='function')dropBusLaneHold();
   if(!activeNodeDrag) return;
   const occupied=[];
   withBusRoutesOnce(()=>wires.forEach((w,i)=>{
@@ -11329,7 +11335,19 @@ const busWiresRelated=(a,b)=>[`${a.a}:${a.aSide}`,`${a.b}:${a.bSide}`].some(e=>e
 // OrthogonalRoutingGenerator. A bus with lanes: 'port' on which two wires sharing no end still lie
 // on one track then has its lanes sifted (busSiftLanes). A lane's offset is
 // (its index - (lane count - 1) / 2) x pitch.
+//
+// While a card is moved the lane order is held (LAYOUT-MODEL.md "As built: buses", Lane order): the
+// hold is, per bus, its lane keys in the order last computed in full. It is taken at the press and
+// after each settle (captureDragSnapshots, src/40-routing.js) and dropped when the pointer rests
+// (settleDraggedRoutes) and wherever a move ends. Under a hold a bus whose set of lane keys is the
+// held set takes the held order and is not ordered again; a bus a wire joined or left is ordered in
+// full and its hold replaced. Plans and routes are still built on every pass, with the held lanes'
+// offsets, so a wire follows its card. busLaneHoldCount goes into the state's key, so a state
+// computed under a hold is never returned without it, or the reverse.
 let busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map(),lanes:new Map()};
+let busLaneHold=null,busLaneHoldCount=0;
+function holdBusLanes(){busLaneHold=new Map([...busRouteState.lanes].map(([bid,L])=>[bid,[...L]]));busLaneHoldCount++}
+function dropBusLaneHold(){if(!busLaneHold)return;busLaneHold=null;busLaneHoldCount++}
 function busRoutesForRender(){
   const all=activeBuses(),entries=[];
   wires.forEach(w=>{
@@ -11337,7 +11355,9 @@ function busRoutesForRender(){
     entries.push({w,spec,A:carrierEndpoint(w,'a').pos,B:carrierEndpoint(w,'b').pos});
   });
   if(!entries.length&&!Object.keys(all).length){busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map(),lanes:new Map()};return busRouteState}
-  const key=JSON.stringify([activeLayoutId(),all,entries.map(e=>[e.w.id,e.spec.buses,e.w.aSide,e.w.bSide,e.A?.x,e.A?.y,e.B?.x,e.B?.y]),nodes.map(n=>[n.id,n.x,n.y,n.config?.presentation?.size])]);
+  // holding: a hold stands and a card is being moved. Every other pass orders every bus in full.
+  const holding=busLaneHold&&activeNodeDrag?busLaneHold:null,kept=new Set();
+  const key=JSON.stringify([activeLayoutId(),all,entries.map(e=>[e.w.id,e.spec.buses,e.w.aSide,e.w.bSide,e.A?.x,e.A?.y,e.B?.x,e.B?.y]),nodes.map(n=>[n.id,n.x,n.y,n.config?.presentation?.size]),busLaneHoldCount,holding?1:0]);
   if(key===busRouteState.key)return busRouteState;
   const plans=new Map(),fallback=new Set();
   for(const e of entries){const p=busPlan(e.w,e.A,e.B,e.spec);if(p)plans.set(e.w.id,p);else fallback.add(e.w.id)}
@@ -11353,6 +11373,9 @@ function busRoutesForRender(){
     const first=own.length?[...own,...natural.filter(id=>!own.includes(id))]:natural,H=new Map();
     for(const id of first){const k=laneOf(bid,id);if(!H.has(k))H.set(k,[]);H.get(k).push(id)}
     lanes.set(bid,[...H.keys()]);held.set(bid,H);order.set(bid,[...H.values()].flat());
+    // Under a hold, a bus with the held set of lane keys takes the held order and is ordered no further.
+    const stood=holding?.get(bid);
+    if(stood&&stood.length===H.size&&stood.every(k=>H.has(k))){kept.add(bid);lanes.set(bid,[...stood]);order.set(bid,stood.flatMap(k=>H.get(k)))}
   }
   const offsetsOf=id=>new Map(plans.get(id).legs.map(l=>{const L=lanes.get(l.id);return [l.id,(L.indexOf(laneOf(l.id,id))-(L.length-1)/2)*busPitchOf(all[l.id])]}));
   const routes=new Map();for(const id of plans.keys())routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)));
@@ -11360,6 +11383,7 @@ function busRoutesForRender(){
   const crosses=(x,y)=>busRoutesCross(routes.get(x),routes.get(y),busWiresRelated(plans.get(x).w,plans.get(y).w))?1:0;
   const crossingsOn=L=>{const cross=new Map();let total=0;for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length;j++){const c=crosses(L[i],L[j]);cross.set(pair(L[i],L[j]),c);total+=c}return {cross,total}};
   for(const bid of [...on.keys()].sort()){
+    if(kept.has(bid))continue;
     if(Array.isArray(all[bid]?.order)&&all[bid].order.length)continue;
     const L=lanes.get(bid);if(L.length<2)continue;
     const W=order.get(bid),H=held.get(bid),rebuild=ids=>{for(const id of ids)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)))};
@@ -11388,6 +11412,8 @@ function busRoutesForRender(){
     if(all[bid]?.lanes==='port')busSiftLanes(L,W,H,id=>routes.get(id),id=>plans.get(id).w,rebuild);
     order.set(bid,L.flatMap(k=>H.get(k)));
   }
+  // A bus a wire joined or left during the move was ordered in full above: that order is held now.
+  if(holding)for(const bid of on.keys())if(!kept.has(bid))holding.set(bid,[...lanes.get(bid)]);
   busRouteState={key,routes,fallback,on,order,lanes};
   return busRouteState;
 }
@@ -13905,12 +13931,12 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
       // A changed host draws every wire from nothing at the settle below.
       if(beforeCanvas!==afterCanvas||beforeParent!==(root.parentId||null))wireGroupDrawn.clear();
     }
-    clearHostCandidateArm(state);if(refusal)render();else settleDraggedRoutes();
+    clearHostCandidateArm(state);if(refusal){dropBusLaneHold();render()}else settleDraggedRoutes();
   }catch(err){fault=err;console.error('Recovered Component drag failure',err)}
   finally{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     clearHostCandidateArm(state);clearNodeDragVisualState();clearSettleHostGhost();
-    activeNodeDragState=null;activeNodeDrag=null;dragRouteSnapshots.clear();
+    activeNodeDragState=null;activeNodeDrag=null;dropBusLaneHold();dragRouteSnapshots.clear();
     try{if(workspace.hasPointerCapture?.(pointerId))workspace.releasePointerCapture(pointerId)}catch(_){}
     try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
     dropDragSignalState();

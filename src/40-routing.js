@@ -240,8 +240,13 @@ function captureDragSnapshots(nodeId){
       });
     }
   }));
+  // The loop above asked for the bus routes, so the lane order held from here is the one at the
+  // press, or at the last settle while held (src/41-buses.js holdBusLanes).
+  if(typeof holdBusLanes==='function')holdBusLanes();
 }
 function settleDraggedRoutes(){
+  // The pointer rests or the move ends: the bus lanes are ordered again, in full.
+  if(typeof dropBusLaneHold==='function')dropBusLaneHold();
   if(!activeNodeDrag) return;
   const occupied=[];
   withBusRoutesOnce(()=>wires.forEach((w,i)=>{

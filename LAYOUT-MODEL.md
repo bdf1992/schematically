@@ -850,6 +850,17 @@ A refusal changes nothing.
   on one track and otherwise 1 for a crossing pair, the layout rubric's ratio of `route-overlap` to
   `crossing`. A lane stays where it stood unless another place is strictly cheaper. Rounds repeat while
   the cost falls and a track is still shared, at most 4. A bus without the key is never sifted.
+- **Lanes hold while a card moves** (2026-10-04). Ordering the lanes is a batch step, so a move does not
+  run it: the lanes of every bus keep the order they had at the press (pointer or arrow key). They are
+  ordered again, in full, when the pointer rests (the settle delay, `ROUTE_SETTLE_DELAY`, 140 ms;
+  `settleDraggedRoutes`), and the order held from then on is that one, and again on release. A bus that
+  a wire joins or leaves during the move is ordered in full at once and held from there. Only the order
+  is held: every wire's plan and route are built on every step with the held lanes' offsets, so a wire
+  still follows its card. The picture at the press, at a settle and after release is what it was before
+  the hold; during a move it can differ only in wires that ride a bus. On `docs/workengine/map.sov`
+  (79 bus wires, 30 buses, 117 lanes) a drag step measured about 610 ms before and about 320 ms after
+  on one host, and `busRoutesForRender` inside it about 415 ms before and about 140 ms after; the
+  140 ms is its key (58 ms) and the plans (76 ms). `tests/bus_lane_hold_qa.py` holds it.
 - Bus routes go into `occupied` before any auto route, so auto routes keep clear of them. A pinned or
   guided route still wins; a bus route that cannot be built falls back to the router, and its wire group
   carries `data-bus-fallback`.

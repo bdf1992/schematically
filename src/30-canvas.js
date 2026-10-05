@@ -580,11 +580,12 @@ function finishKeyboardMove(mods){
   // A changed host draws every wire from nothing at the settle below.
   if(movedNode&&hostBefore!==`${movedNode.canvasId||GLOBAL_CANVAS_ID}|${movedNode.parentId||''}`)wireGroupDrawn.clear();
   // A refused host refuses the move: the Component and what it carries return to where it started.
-  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();render()}
+  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();dropBusLaneHold();render()}
   else settleDraggedRoutes();
 
   keyboardMoveNodeId=null;keyboardMoveStart=null;
   activeNodeDrag=null;
+  dropBusLaneHold(); // the move is over: the lanes are ordered in full again (src/41-buses.js)
   dragRouteSnapshots.clear();
   workspace.classList.remove('dragging-node');
   statusEl.textContent=hosted?.refused||'Select';
