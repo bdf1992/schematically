@@ -114,7 +114,7 @@
               },
               "answers": {
                 "$ref": "#/$defs/answers",
-                "description": "The Component's answers to the component concerns of the document's notation (notation.concerns, applies component): concern id to a non-empty string. There is no built-in component concern; a notation that declares none admits none (ANSWER_UNDECLARED), and a key it does not declare is ANSWER_UNKNOWN. See NOTATION-MODEL.md 'Concerns'."
+                "description": "The Component's answers to the component concerns of the document's notation (notation.concerns, applies component): concern id to a non-empty string. There is no built-in component concern; a notation that declares none admits none (ANSWER_UNDECLARED), and a key it does not declare is ANSWER_UNKNOWN. A concern entry is {id, applies, title, question, meaning, symbols}: symbols, on a component concern only, is a non-empty list of symbol ids with no repeats, and the concern is then asked only of Components whose symbolId is in it; an answer to it on any other Component is ANSWER_UNKNOWN. Without symbols the concern is asked of every Component. See NOTATION-MODEL.md 'Concerns'."
               },
               "badges": {
                 "type": "array",

@@ -246,7 +246,9 @@ the answers. Every key is optional and absent is not written: a document with no
   (`SovSchematicNotation.concernsOf(notation, 'document')`). The built-in `schematic` notation
   declares `what`, `why`, `alternatives` and `smaller`.
 - **`config.answers`** on a Component or a Wire: its answers to the notation's component concerns or
-  wire concerns. There is no built-in one of either.
+  wire concerns. There is no built-in one of either. A component concern that names `symbols` is
+  asked only of Components with one of those symbol ids: an answer to it on any other Component is
+  `ANSWER_UNKNOWN` (the message lists the ids asked of that symbol) and the report holds no row for it.
 
 Each is an object whose keys are concern ids and whose values are non-empty strings after trimming.
 

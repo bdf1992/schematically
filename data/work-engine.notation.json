@@ -99,5 +99,16 @@
     {"id": "partial", "title": "Partial", "meaning": "Built in part; some of what it must do is still missing.", "outline": "solid", "tone": "alert", "glyph": "◷"},
     {"id": "missing", "title": "Missing", "meaning": "Needed by the work engine and not built yet.", "outline": "dashed", "opacity": 0.55, "tone": "danger", "glyph": "✕"},
     {"id": "proposed", "title": "Proposed", "meaning": "Planned work that nobody has started.", "outline": "dashed", "tone": "alert", "glyph": "◷"}
+  ],
+  "concerns": [
+    {"id": "what", "applies": "document", "title": "What it shows", "question": "Which part of the work engine does this map show?"},
+    {"id": "why", "applies": "document", "title": "What it is for", "question": "What would someone build or settle from this map?"},
+    {"id": "alternatives", "applies": "document", "title": "Other readings", "question": "What else describes the same ground, and why read this map?"},
+    {"id": "smaller", "applies": "document", "title": "Smallest slice", "question": "What is the smallest slice of this map that stands on its own?"},
+    {"id": "meaning", "applies": "component", "symbols": ["we-record"], "title": "Holds", "question": "What does this record hold?"},
+    {"id": "authority", "applies": "component", "symbols": ["we-surface"], "title": "Authority", "question": "What does this surface have authority over?"},
+    {"id": "evidence", "applies": "component", "symbols": ["we-record", "we-surface"], "title": "Evidence", "question": "What in the kernel shows this status?"},
+    {"id": "owner", "applies": "component", "symbols": ["we-record"], "title": "Owner", "question": "Which task owns building it?"},
+    {"id": "backing", "applies": "component", "symbols": ["we-specification"], "title": "Backing", "question": "Which records answer this query?"}
   ]
 }

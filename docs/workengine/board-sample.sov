@@ -2021,6 +2021,78 @@
       "slot": "C3"
      }
     ],
+    "concerns": [
+     {
+      "applies": "document",
+      "id": "what",
+      "question": "Which part of the work engine does this map show?",
+      "title": "What it shows"
+     },
+     {
+      "applies": "document",
+      "id": "why",
+      "question": "What would someone build or settle from this map?",
+      "title": "What it is for"
+     },
+     {
+      "applies": "document",
+      "id": "alternatives",
+      "question": "What else describes the same ground, and why read this map?",
+      "title": "Other readings"
+     },
+     {
+      "applies": "document",
+      "id": "smaller",
+      "question": "What is the smallest slice of this map that stands on its own?",
+      "title": "Smallest slice"
+     },
+     {
+      "applies": "component",
+      "id": "meaning",
+      "question": "What does this record hold?",
+      "symbols": [
+       "we-record"
+      ],
+      "title": "Holds"
+     },
+     {
+      "applies": "component",
+      "id": "authority",
+      "question": "What does this surface have authority over?",
+      "symbols": [
+       "we-surface"
+      ],
+      "title": "Authority"
+     },
+     {
+      "applies": "component",
+      "id": "evidence",
+      "question": "What in the kernel shows this status?",
+      "symbols": [
+       "we-record",
+       "we-surface"
+      ],
+      "title": "Evidence"
+     },
+     {
+      "applies": "component",
+      "id": "owner",
+      "question": "Which task owns building it?",
+      "symbols": [
+       "we-record"
+      ],
+      "title": "Owner"
+     },
+     {
+      "applies": "component",
+      "id": "backing",
+      "question": "Which records answer this query?",
+      "symbols": [
+       "we-specification"
+      ],
+      "title": "Backing"
+     }
+    ],
     "extends": "schematic",
     "glyphs": {
      "we-migration": {

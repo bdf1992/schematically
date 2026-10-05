@@ -1440,15 +1440,21 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   // ---- Concerns (NOTATION-MODEL.md "Concerns") --------------------------------------------------
   // A notation declares `concerns`, the questions a schematic drawn in it should answer:
-  // {id, applies: document | component | wire, title, question, meaning}. id and question are
-  // non-empty strings; title and meaning are optional strings. A document answers them in
+  // {id, applies: document | component | wire, title, question, meaning, symbols}. id and question
+  // are non-empty strings; title and meaning are optional strings. A component concern may name
+  // the symbols it is asked of in `symbols`, a non-empty list of non-empty strings with no repeats;
+  // without it the concern is asked of every Component (src/05-data-core.js concernsAskedOf). A
+  // symbol id is not checked against the notation's glyphs. A document answers them in
   // meta.answers and config.answers (src/05-data-core.js answerProblems, concernReport).
   //   CONCERN_INVALID   an entry breaks a rule: not an object; an unknown key; an id or a question
   //                     that is not a non-empty string; an applies that is not one of the three; a
-  //                     title or meaning that is not a string; an id used twice within one applies
+  //                     title or meaning that is not a string; an id used twice within one applies;
+  //                     symbols on a document or a wire concern; symbols that is not a non-empty
+  //                     list, or holds a value that is not a non-empty string, or holds a repeat
   // resolve() joins concerns along the extends chain as it joins kinds (joinKinds): a later
-  // notation's entry replaces an earlier notation's entry with the same applies and id, in its place.
-  const CONCERN_KEYS=['id','applies','title','question','meaning'],CONCERN_APPLIES=['document','component','wire'];
+  // notation's entry replaces an earlier notation's entry with the same applies and id, in its
+  // place and whole, symbols included.
+  const CONCERN_KEYS=['id','applies','title','question','meaning','symbols'],CONCERN_APPLIES=['document','component','wire'];
   // Each entry of notation.concerns with the rules it breaks (none when it is admitted).
   function judgeConcerns(notation){
     const list=Array.isArray(notation?.concerns)?notation.concerns:[];
@@ -1462,6 +1468,17 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(!CONCERN_APPLIES.includes(entry.applies))broken.push(`applies must be ${CONCERN_APPLIES.join(', ')}, not ${say(entry.applies)}`);
       if(typeof entry.question!=='string'||!entry.question.trim())broken.push('question must be a non-empty string');
       for(const key of ['title','meaning'])if(entry[key]!==undefined&&typeof entry[key]!=='string')broken.push(`${key} must be a string`);
+      if(entry.symbols!==undefined){
+        const list=entry.symbols;
+        if(entry.applies==='document'||entry.applies==='wire')broken.push(`symbols belongs to a component concern, not a ${entry.applies} concern`);
+        else if(!Array.isArray(list)||!list.length)broken.push(`symbols must be a non-empty list of symbol ids, not ${say(list)}`);
+        else{
+          const at=list.findIndex(s=>typeof s!=='string'||!s.trim());
+          if(at>=0)broken.push(`symbols[${at}] must be a non-empty string, not ${say(list[at])}`);
+          const twice=list.find((s,i)=>typeof s==='string'&&list.indexOf(s)!==i);
+          if(twice!==undefined)broken.push(`symbols names ${say(twice)} more than once`);
+        }
+      }
       return {entry,name,broken};
     });
     // The rule between entries is read over the ones that stand on their own.
@@ -1478,7 +1495,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // The admitted entries for the document, for Components or for Wires, in declared order. An entry
   // with a finding is not admitted.
   function concernsOf(notation,applies){
-    return judgeConcerns(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry}));
+    return judgeConcerns(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry,...(Array.isArray(j.entry.symbols)?{symbols:[...j.entry.symbols]}:{})}));
   }
   // The document scale, applied once to the flattened tokens (a fresh object: merge copies), so
   // every reader of tokens(doc) and resolve(doc).notation.tokens draws scaled with no multiplication
@@ -2368,8 +2385,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // nothing is answered, and an empty object is never written into a document that has none.
   //   ANSWER_INVALID     answers is not an object, or a value is not a non-empty string
   //   ANSWER_UNDECLARED  a key is set and the notation declares no concerns for that applies
-  //   ANSWER_UNKNOWN     the key is not a concern the notation declares for that applies
-  //   CONCERN_INVALID    an entry of the notation's concerns breaks a rule (src/03-notation-core.js concernFindings)
+  //   ANSWER_UNKNOWN     the key is not a concern the notation declares for that applies, or it is a
+  //                      component concern not asked of that Component's symbol (concernsAskedOf)
+  //   CONCERN_INVALID   an entry of the notation's concerns breaks a rule (src/03-notation-core.js concernFindings)
   //   ANSWER_TARGET_UNKNOWN  answerConcerns only: target names no Component and no Wire
   // Loading reports them (validateDocument); create and update refuse. An update merges
   // config.answers per key: a string sets that concern's answer, a null removes that one answer,
@@ -2381,25 +2399,36 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const r=N.resolve(doc||{});
     return {id:r.ok?r.notation.id:(doc?.notation||'schematic'),concerns:r.ok?N.concernsOf(r.notation,applies):[]};
   }
+  // Which of a notation's component concerns are asked of one Component: those that name no
+  // symbols, and those whose `symbols` hold the Component's symbolId. The one reading of
+  // `symbols`: answerProblems, concernReport and answerConcerns all ask here.
+  function concernsAskedOf(concerns,component){
+    const symbol=normalizeSymbolId(component?.symbolId??component?.type);
+    return concerns.filter(c=>!Array.isArray(c.symbols)||c.symbols.includes(symbol));
+  }
   // `at` is 'meta.answers' or 'config.answers', the text a message names the key under. `clearable`
-  // is an update's reading: null for the whole, or for one declared key, is a removal.
-  function answerProblems(doc,answers,applies,at,clearable=false){
+  // is an update's reading: null for the whole, or for one declared key, is a removal. `component`
+  // is the Component whose answers these are (applies component): its symbol decides which
+  // component concerns are asked of it.
+  function answerProblems(doc,answers,applies,at,clearable=false,component=null){
     const out=[];if(answers===undefined||(clearable&&answers===null))return out;
     if(!isObject(answers)){out.push(`ANSWER_INVALID: ${at} must be an object of concern id to answer, not ${JSON.stringify(answers)}`);return out}
     const keys=Object.keys(answers);if(!keys.length)return out;
     const {id,concerns}=notationConcerns(doc,applies);
+    const asked=applies==='component'&&component?concernsAskedOf(concerns,component):concerns;
     for(const key of keys){
       const value=answers[key];
       if(!concerns.length)out.push(`ANSWER_UNDECLARED: ${at}.${key} is set, but notation "${id}" declares no ${applies} concerns`);
       else if(!concerns.some(c=>c.id===key))out.push(`ANSWER_UNKNOWN: ${at}.${key} is not a ${applies} concern declared by notation "${id}"; declared: ${concerns.map(c=>c.id).join(', ')}`);
+      else if(!asked.some(c=>c.id===key))out.push(`ANSWER_UNKNOWN: ${at}.${key} is a component concern notation "${id}" does not ask of symbol "${normalizeSymbolId(component?.symbolId??component?.type)}"; asked of it: ${asked.map(c=>c.id).join(', ')||'none'}`);
       else if(clearable&&value===null)continue;
       else if(typeof value!=='string'||!value.trim())out.push(`ANSWER_INVALID: ${at}.${key} must be a non-empty string, not ${JSON.stringify(value)}`);
     }
     return out;
   }
-  function assertAnswers(doc,config,applies,clearable=false){
+  function assertAnswers(doc,config,applies,clearable=false,component=null){
     if(!isObject(config))return;
-    const p=answerProblems(doc,config.answers,applies,'config.answers',clearable);if(p.length)throw new Error(p[0]);
+    const p=answerProblems(doc,config.answers,applies,'config.answers',clearable,component);if(p.length)throw new Error(p[0]);
   }
   // Copies authored answers onto a record being made; none, or an empty object, writes no key.
   function adoptAnswers(config,value){
@@ -2409,7 +2438,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // Which declared concerns a document answers and which are still open: {notation, rows, answered,
   // open}. One row per declared concern per thing it applies to: the document's (target null), then
   // each Component's in document order, then each Wire's. Reads the document and changes nothing.
-  // An answer the notation does not declare is not a row: validateDocument reports it.
+  // An answer the notation does not declare is not a row: validateDocument reports it. A component
+  // concern that names symbols is a row only for the Components it is asked of (concernsAskedOf).
   // `{open: true}` keeps only the open rows; the two counts are of every row either way.
   function concernReport(doc,{open=false}={}){
     const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,r=N?N.resolve(doc||{}):null;
@@ -2423,7 +2453,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     };
     add(declared('document'),'document',null,doc?.meta?.answers);
     const ofComponents=declared('component'),ofWires=declared('wire');
-    if(ofComponents.length)for(const c of Array.isArray(doc?.components)?doc.components:[])add(ofComponents,'component',c?.id??null,c?.config?.answers);
+    if(ofComponents.length)for(const c of Array.isArray(doc?.components)?doc.components:[])add(concernsAskedOf(ofComponents,c),'component',c?.id??null,c?.config?.answers);
     if(ofWires.length)for(const w of Array.isArray(doc?.wires)?doc.wires:[])add(ofWires,'wire',w?.id??null,w?.config?.answers);
     const answered=rows.filter(row=>row.answered).length;
     return {notation:r?.ok?r.notation.id:(doc?.notation||'schematic'),rows:open===true?rows.filter(row=>!row.answered):rows,answered,open:rows.length-answered};
@@ -2910,7 +2940,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // A group's members, as written; create checks them (assertGroupRules).
     if(value.config?.members!==undefined)config.members=clone(value.config.members);
     assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
-    assertAnswers(doc,value.config,'component');adoptAnswers(config,value.config);
+    assertAnswers(doc,value.config,'component',false,component);adoptAnswers(config,value.config);
     assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges);
     if(value.config?.intake!==undefined&&value.config.intake!==null){config.intake=clone(value.config.intake);assertIntake(component)}
     if(isObject(config.presentation)&&config.presentation.shape===null)delete config.presentation.shape;
@@ -3189,7 +3219,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(binding&&resource!=='component')throw new Error('DEFINITION_INVALID: only a component binds a definition');
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource!=='reference')assertStatusAndWaitsOn(doc,patch?.config,true);
-    if(resource!=='reference')assertAnswers(doc,patch?.config,resource,true);
+    // A patch that retypes the Component is read against the symbol it will have.
+    if(resource!=='reference')assertAnswers(doc,patch?.config,resource,true,resource==='component'?{symbolId:patch?.symbolId??patch?.type??current.symbolId??current.type}:null);
     if(resource==='component')assertBadges(patch?.config,true);
     if(resource==='component'){
       assertDefinitionPatch(patch,binding);
@@ -3376,7 +3407,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(answer!==null&&(typeof answer!=='string'||!answer.trim()))return refuse(`ANSWER_INVALID: answers[${index}].answer must be a non-empty string, or null to remove the answer, not ${JSON.stringify(answer)}`,index);
       const resource=target===null?null:has(document?.components,target)?'component':has(document?.wires,target)?'wire':undefined;
       if(resource===undefined)return refuse(`ANSWER_TARGET_UNKNOWN: answers[${index}].target ${JSON.stringify(target)} names no Component and no Wire`,index);
-      const problems=answerProblems(document,{[concern]:answer},resource||'document',resource?'config.answers':'meta.answers',true);
+      const problems=answerProblems(document,{[concern]:answer},resource||'document',resource?'config.answers':'meta.answers',true,resource==='component'?document.components.find(item=>item?.id===target):null);
       if(problems.length)return refuse(problems[0],index);
       if(!resource){own.push({concern,answer});continue}
       const key=`${resource}:${target}`;
@@ -3483,7 +3514,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // Component's and Wire's (the codes are listed at answerProblems). An open concern is not reported.
     {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null,r=N?N.resolve(input):null;if(r?.ok)for(const f of N.concernFindings(r.notation))errors.push(`notation: ${f}`)}
     if(isObject(input.meta))for(const p of answerProblems(input,input.meta.answers,'document','meta.answers'))errors.push(p);
-    for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)if(isObject(item?.config))for(const p of answerProblems(input,item.config.answers,kind,'config.answers'))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
+    for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)if(isObject(item?.config))for(const p of answerProblems(input,item.config.answers,kind,'config.answers',false,kind==='component'?item:null))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of intakeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of shapeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
