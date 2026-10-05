@@ -144,6 +144,11 @@ function updateActiveNodeDrag(e){
 function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
   const state=activeNodeDragState;if(!state)return;if(!force&&e?.pointerId!=null&&e.pointerId!==state.pointerId)return;
   const pointerId=state.pointerId;let fault=null,refusal=null;
+  // Where a root stands and what hosts it; the roots whose host call changed that are redrawn below.
+  const hostStanding=n=>{const p=n.placement||{};return [n.x,n.y,p.kind||'surface',p.wireId||'',p.hostId||'',p.side||'',p.t??''].join('|')};
+  // A wire that ends on the root or on what it carries is routed again from where they now stand.
+  const dropRoutesOf=root=>{const ids=new Set([root.id,...descendantsOf(root.id).map(n=>n.id)]);wires.forEach((w,i)=>{if(ids.has(w.a)||ids.has(w.b))routeCache.delete(i)})};
+  const rehosted=[];
   // Whether the pointer moved. The gesture captures the pointer on the workspace, so no click reaches
   // the card afterwards: a press that did not drag is resolved here (see the finally block).
   const dragged=Math.hypot(state.pointer.x-state.startPointer.x,state.pointer.y-state.startPointer.y)>2;
@@ -169,8 +174,10 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
       for(const item of state.startPositions||[]){item.node.x=item.x;item.node.y=item.y}
       routeCache.clear();arrowPoseCache.clear();
     }else for(const {root,candidate} of plan){
-      const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID,beforeParent=root.parentId||null;
+      const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID,beforeParent=root.parentId||null,beforeStanding=hostStanding(root);
       applyComponentHost(root,candidate);
+      // A host that moved the root or changed its placement (a wire, a path, an edge) does the same.
+      if(hostStanding(root)!==beforeStanding){rehosted.push({root,standing:hostStanding(root)});dropRoutesOf(root);wireGroupDrawn.clear()}
       const afterCanvas=root.canvasId||GLOBAL_CANVAS_ID;if(beforeCanvas!==afterCanvas)setHistoryHint(candidate?.kind==='wire'?'Settle Component on Wire':candidate?.kind==='component'?'Settle Component in Component':'Detach Component')
       // A changed host draws every wire from nothing at the settle below.
       if(beforeCanvas!==afterCanvas||beforeParent!==(root.parentId||null))wireGroupDrawn.clear();
@@ -182,7 +189,17 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
     clearHostCandidateArm(state);clearNodeDragVisualState();clearSettleHostGhost();
     activeNodeDragState=null;activeNodeDrag=null;dropBusLaneHold();dragRouteSnapshots.clear();
     try{if(workspace.hasPointerCapture?.(pointerId))workspace.releasePointerCapture(pointerId)}catch(_){}
-    try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
+    try{
+      flushDragVisualRefresh();
+      // A card on a wire takes its pose from the wire's drawn path once the drag is over, after
+      // that pass found every route (renderWires, poseHosted). While a pass moved a hosted root,
+      // its wires are routed and every wire is drawn again from where it stands.
+      for(let pass=0;pass<4;pass++){
+        const moved=rehosted.filter(item=>hostStanding(item.root)!==item.standing);if(!moved.length)break;
+        for(const item of moved){item.standing=hostStanding(item.root);dropRoutesOf(item.root)}
+        wireGroupDrawn.clear();renderWiresForDrag();
+      }
+    }catch(err){console.error('Drag projection recovery failed',err)}
     dropDragSignalState();
     // A plain press on a member of a multi-selection that did not drag selects that member alone,
     // as a click always has; a drag leaves the group selected (issue #49). Shift keeps the set.
