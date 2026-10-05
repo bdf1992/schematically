@@ -15,6 +15,9 @@
       // once to every stroke weight, every text role's size and own min, space.pin and
       // type.screen.max. The values below are the scale 1 values and stay unscaled here.
       scale:1,
+      // The glyph's box on every card that has room for it (NOTATION-MODEL.md §3, §4): the box a
+      // 112 x 84 card gives a one-line title. resolve() multiplies it by the scale.
+      glyph:{w:80.64,h:40.4},
       // Offset from inside: the core keeps radius.core, each line outward adds its band.
       radius:{core:6,card:10},
       // World units. Selected and highlighted states multiply these, never replace them.
@@ -121,6 +124,7 @@
     let flat={};for(const n of chain)flat=merge(flat,n);
     const kinds=joinKinds(chain);if(kinds)flat.kinds=kinds;
     const concerns=joinKinds(chain,'concerns');if(concerns)flat.concerns=concerns;
+    const sized=checkGlyphSize(flat.tokens);if(!sized.ok)return sized;
     const scaled=applyScale(flat.tokens);if(!scaled.ok)return scaled;
     flat.id=id;registerPoints(flat);return {ok:true,notation:flat};
   }
@@ -235,7 +239,8 @@
   }
   // The document scale, applied once to the flattened tokens (a fresh object: merge copies), so
   // every reader of tokens(doc) and resolve(doc).notation.tokens draws scaled with no multiplication
-  // of its own. Scaled: stroke.*, each text role's size and its own min, space.pin, type.screen.max.
+  // of its own. Scaled: stroke.*, each text role's size and its own min, space.pin, type.screen.max,
+  // glyph.w and glyph.h.
   // Not scaled: type.screen.min (screen pixels), radius, the other space tokens, elevation.
   // A scale that is not a number from 0.5 to 4 is refused, never clamped.
   const SCALE_MIN=.5,SCALE_MAX=4;
@@ -251,7 +256,16 @@
       if(r.size!==undefined)r.size=by(r.size);if(r.min!==undefined)r.min=by(r.min);
     }
     if(isObject(t.space)&&t.space.pin!==undefined)t.space.pin=by(t.space.pin);
+    if(isObject(t.glyph)){t.glyph.w=by(t.glyph.w);t.glyph.h=by(t.glyph.h)}
     return {ok:true};
+  }
+  // The glyph token is a box {w, h}, each a finite number above 0. Anything else is refused, never
+  // replaced by the built-in size.
+  function checkGlyphSize(t){
+    if(!isObject(t)||t.glyph===undefined)return {ok:true};
+    const g=t.glyph,good=v=>typeof v==='number'&&Number.isFinite(v)&&v>0;
+    if(isObject(g)&&good(g.w)&&good(g.h))return {ok:true};
+    return {ok:false,code:'GLYPH_SIZE_INVALID',message:`tokens.glyph is ${JSON.stringify(g)}; its w and h must each be a finite number above 0`,next_operation:`set tokens.glyph to {w, h} with both above 0, or remove it to draw at ${SCHEMATIC.tokens.glyph.w} by ${SCHEMATIC.tokens.glyph.h}`};
   }
   // Glyphs whose terminals are the card's attachment points (`points: 'terminals'`), by symbol
   // id, filled whenever a notation is resolved. The attachment core reads it, so a gate's two
@@ -304,7 +318,27 @@
   // The glyph leaves the card's foot to its title, and a line more for a subtitle.
   // The glyph leaves the card's foot to its title (one or two lines, from its length at the title
   // size) and a line more for a subtitle. Centred on the axis, so the room is kept on both sides.
-  function glyphBox(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type}={}){
+  // The glyph draws at one size, the glyph token F, on every card that has room for it. With
+  // s = min(F.w/96, F.h/64), the drawn glyph is 96s by 64s. A card has room when 96s is at most 72%
+  // of its width and 64s fits between the feet glyphBox keeps for the text (and, for a lone title
+  // that needs two lines, between the two-line blocks). `need` is the smallest card that has room:
+  // the width for the glyph, and the height for the glyph and the text at the wider of that width and
+  // the card's own. Only the layered layout grows a card to it (src/08-layout-core.js).
+  function glyphRoom(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type,glyph=SCHEMATIC.tokens.glyph}={}){
+    const F=glyph||SCHEMATIC.tokens.glyph,s=Math.min(F.w/96,F.h/64),ts=drawnSize(type,'title'),ss=drawnSize(type,'subtitle'),E=1e-6;
+    const heightAt=w=>{
+      const avail=Math.max(1,w-12),lines=Math.max(1,Math.min(2,Math.ceil(String(title||'').length*ts*.6/avail)));
+      const foot=8+lines*ts*1.15+(subtitle?ss*1.3:0),two=lines===2&&!subtitle&&titleWidth(title)*ts>avail*.85;
+      return 64*s+2*Math.max(foot,two?2.6*ts+4:0);
+    };
+    const needW=96*s/.72;
+    return {ok:96*s<=.72*size.w+E&&heightAt(size.w)<=size.h+E,box:{w:F.w,h:F.h,scale:s},need:{w:needW,h:heightAt(Math.max(size.w,needW))}};
+  }
+  // Where the card has room the box is the fixed one (fixed: true). Where it has not, the box follows
+  // the card as below, the shrink for a lone two-line title included (fixed: false).
+  function glyphBox(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type,glyph=SCHEMATIC.tokens.glyph}={}){
+    const fit=glyphRoom(g,size,{subtitle,title,type,glyph});
+    if(fit.ok)return {w:fit.box.w,h:fit.box.h,scale:fit.box.scale,fixed:true};
     const ts=drawnSize(type,'title'),ss=drawnSize(type,'subtitle'),avail=Math.max(1,size.w-12);
     const lines=Math.max(1,Math.min(2,Math.ceil(String(title||'').length*ts*.6/avail)));
     const foot=8+lines*ts*1.15+(subtitle?ss*1.3:0);
@@ -316,7 +350,7 @@
     // engine (no fonts in Node) and the renderer agree; past 85% of the text width counts, a margin
     // for fonts up to 15% wider than the table (DejaVu on Linux runs about 10% wider).
     if(lines===2&&!subtitle&&titleWidth(title)*ts>avail*.85){const room=size.h-2*(2.6*ts+4);if(room<h){const k=Math.max(.6,room/h);w*=k;h*=k}}
-    return {w,h,scale:Math.min(w/96,h/64)};
+    return {w,h,scale:Math.min(w/96,h/64),fixed:false};
   }
   // A title's advance width in ems at the title weight (600), from a sans-serif width table in the
   // manner of a PDF core font's AFM metrics: close enough to tell one line from two.
@@ -332,5 +366,5 @@
     const {scale}=glyphBox(g,size,opts);return {dx:(t.at[0]-48)*scale,dy:(t.at[1]-axis)*scale};
   }
   function terminal(g,idOrRole){return (g?.terminals||[]).find(t=>t.id===idOrRole)||(g?.terminals||[]).find(t=>t.role===idOrRole)||null}
-  return {BUILTIN,MARGIN,drawnSize,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,concernsOf,concernFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
+  return {BUILTIN,MARGIN,drawnSize,glyphRoom,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,concernsOf,concernFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
 });

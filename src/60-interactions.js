@@ -175,12 +175,12 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
       // A changed host draws every wire from nothing at the settle below.
       if(beforeCanvas!==afterCanvas||beforeParent!==(root.parentId||null))wireGroupDrawn.clear();
     }
-    clearHostCandidateArm(state);if(refusal)render();else settleDraggedRoutes();
+    clearHostCandidateArm(state);if(refusal){dropBusLaneHold();render()}else settleDraggedRoutes();
   }catch(err){fault=err;console.error('Recovered Component drag failure',err)}
   finally{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     clearHostCandidateArm(state);clearNodeDragVisualState();clearSettleHostGhost();
-    activeNodeDragState=null;activeNodeDrag=null;dragRouteSnapshots.clear();
+    activeNodeDragState=null;activeNodeDrag=null;dropBusLaneHold();dragRouteSnapshots.clear();
     try{if(workspace.hasPointerCapture?.(pointerId))workspace.releasePointerCapture(pointerId)}catch(_){}
     try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
     dropDragSignalState();

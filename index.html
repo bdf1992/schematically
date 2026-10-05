@@ -1258,6 +1258,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       // once to every stroke weight, every text role's size and own min, space.pin and
       // type.screen.max. The values below are the scale 1 values and stay unscaled here.
       scale:1,
+      // The glyph's box on every card that has room for it (NOTATION-MODEL.md §3, §4): the box a
+      // 112 x 84 card gives a one-line title. resolve() multiplies it by the scale.
+      glyph:{w:80.64,h:40.4},
       // Offset from inside: the core keeps radius.core, each line outward adds its band.
       radius:{core:6,card:10},
       // World units. Selected and highlighted states multiply these, never replace them.
@@ -1364,6 +1367,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     let flat={};for(const n of chain)flat=merge(flat,n);
     const kinds=joinKinds(chain);if(kinds)flat.kinds=kinds;
     const concerns=joinKinds(chain,'concerns');if(concerns)flat.concerns=concerns;
+    const sized=checkGlyphSize(flat.tokens);if(!sized.ok)return sized;
     const scaled=applyScale(flat.tokens);if(!scaled.ok)return scaled;
     flat.id=id;registerPoints(flat);return {ok:true,notation:flat};
   }
@@ -1478,7 +1482,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   }
   // The document scale, applied once to the flattened tokens (a fresh object: merge copies), so
   // every reader of tokens(doc) and resolve(doc).notation.tokens draws scaled with no multiplication
-  // of its own. Scaled: stroke.*, each text role's size and its own min, space.pin, type.screen.max.
+  // of its own. Scaled: stroke.*, each text role's size and its own min, space.pin, type.screen.max,
+  // glyph.w and glyph.h.
   // Not scaled: type.screen.min (screen pixels), radius, the other space tokens, elevation.
   // A scale that is not a number from 0.5 to 4 is refused, never clamped.
   const SCALE_MIN=.5,SCALE_MAX=4;
@@ -1494,7 +1499,16 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       if(r.size!==undefined)r.size=by(r.size);if(r.min!==undefined)r.min=by(r.min);
     }
     if(isObject(t.space)&&t.space.pin!==undefined)t.space.pin=by(t.space.pin);
+    if(isObject(t.glyph)){t.glyph.w=by(t.glyph.w);t.glyph.h=by(t.glyph.h)}
     return {ok:true};
+  }
+  // The glyph token is a box {w, h}, each a finite number above 0. Anything else is refused, never
+  // replaced by the built-in size.
+  function checkGlyphSize(t){
+    if(!isObject(t)||t.glyph===undefined)return {ok:true};
+    const g=t.glyph,good=v=>typeof v==='number'&&Number.isFinite(v)&&v>0;
+    if(isObject(g)&&good(g.w)&&good(g.h))return {ok:true};
+    return {ok:false,code:'GLYPH_SIZE_INVALID',message:`tokens.glyph is ${JSON.stringify(g)}; its w and h must each be a finite number above 0`,next_operation:`set tokens.glyph to {w, h} with both above 0, or remove it to draw at ${SCHEMATIC.tokens.glyph.w} by ${SCHEMATIC.tokens.glyph.h}`};
   }
   // Glyphs whose terminals are the card's attachment points (`points: 'terminals'`), by symbol
   // id, filled whenever a notation is resolved. The attachment core reads it, so a gate's two
@@ -1547,7 +1561,27 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
   // The glyph leaves the card's foot to its title, and a line more for a subtitle.
   // The glyph leaves the card's foot to its title (one or two lines, from its length at the title
   // size) and a line more for a subtitle. Centred on the axis, so the room is kept on both sides.
-  function glyphBox(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type}={}){
+  // The glyph draws at one size, the glyph token F, on every card that has room for it. With
+  // s = min(F.w/96, F.h/64), the drawn glyph is 96s by 64s. A card has room when 96s is at most 72%
+  // of its width and 64s fits between the feet glyphBox keeps for the text (and, for a lone title
+  // that needs two lines, between the two-line blocks). `need` is the smallest card that has room:
+  // the width for the glyph, and the height for the glyph and the text at the wider of that width and
+  // the card's own. Only the layered layout grows a card to it (src/08-layout-core.js).
+  function glyphRoom(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type,glyph=SCHEMATIC.tokens.glyph}={}){
+    const F=glyph||SCHEMATIC.tokens.glyph,s=Math.min(F.w/96,F.h/64),ts=drawnSize(type,'title'),ss=drawnSize(type,'subtitle'),E=1e-6;
+    const heightAt=w=>{
+      const avail=Math.max(1,w-12),lines=Math.max(1,Math.min(2,Math.ceil(String(title||'').length*ts*.6/avail)));
+      const foot=8+lines*ts*1.15+(subtitle?ss*1.3:0),two=lines===2&&!subtitle&&titleWidth(title)*ts>avail*.85;
+      return 64*s+2*Math.max(foot,two?2.6*ts+4:0);
+    };
+    const needW=96*s/.72;
+    return {ok:96*s<=.72*size.w+E&&heightAt(size.w)<=size.h+E,box:{w:F.w,h:F.h,scale:s},need:{w:needW,h:heightAt(Math.max(size.w,needW))}};
+  }
+  // Where the card has room the box is the fixed one (fixed: true). Where it has not, the box follows
+  // the card as below, the shrink for a lone two-line title included (fixed: false).
+  function glyphBox(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type,glyph=SCHEMATIC.tokens.glyph}={}){
+    const fit=glyphRoom(g,size,{subtitle,title,type,glyph});
+    if(fit.ok)return {w:fit.box.w,h:fit.box.h,scale:fit.box.scale,fixed:true};
     const ts=drawnSize(type,'title'),ss=drawnSize(type,'subtitle'),avail=Math.max(1,size.w-12);
     const lines=Math.max(1,Math.min(2,Math.ceil(String(title||'').length*ts*.6/avail)));
     const foot=8+lines*ts*1.15+(subtitle?ss*1.3:0);
@@ -1559,7 +1593,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // engine (no fonts in Node) and the renderer agree; past 85% of the text width counts, a margin
     // for fonts up to 15% wider than the table (DejaVu on Linux runs about 10% wider).
     if(lines===2&&!subtitle&&titleWidth(title)*ts>avail*.85){const room=size.h-2*(2.6*ts+4);if(room<h){const k=Math.max(.6,room/h);w*=k;h*=k}}
-    return {w,h,scale:Math.min(w/96,h/64)};
+    return {w,h,scale:Math.min(w/96,h/64),fixed:false};
   }
   // A title's advance width in ems at the title weight (600), from a sans-serif width table in the
   // manner of a PDF core font's AFM metrics: close enough to tell one line from two.
@@ -1575,7 +1609,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     const {scale}=glyphBox(g,size,opts);return {dx:(t.at[0]-48)*scale,dy:(t.at[1]-axis)*scale};
   }
   function terminal(g,idOrRole){return (g?.terminals||[]).find(t=>t.id===idOrRole)||(g?.terminals||[]).find(t=>t.role===idOrRole)||null}
-  return {BUILTIN,MARGIN,drawnSize,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,concernsOf,concernFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
+  return {BUILTIN,MARGIN,drawnSize,glyphRoom,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,concernsOf,concernFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
 });
 /* END src/03-notation-core.js */
 </script>
@@ -6772,12 +6806,23 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     // arrange() once over its cards, as before groups were placed.
     // groupRect's padding: the notation's space.regionInset and space.regionTitle (src/05-data-core.js)
     const GROUP_PAD=Number.isFinite(notation?.tokens?.space?.regionInset)?notation.tokens.space.regionInset:24,GROUP_TITLE_BAND=Number.isFinite(notation?.tokens?.space?.regionTitle)?notation.tokens.space.regionTitle:28;
+    // A card that draws a symbol glyph grows to hold the glyph at its fixed size and its text
+    // (NOTATION-MODEL.md §4, glyphRoom): each side to the next even whole number at or above what it
+    // needs, never smaller than it is. A pinned or locked card keeps its size. This is the one place
+    // a card's stored size grows; write() stores the box.
+    const grown=c=>{
+      const s=size(c),g=notation&&N?.glyphRoom?notation.glyphs?.[c.symbolId]:null,kind=c.config?.presentation?.graphic?.kind;
+      if(!g||(kind!=null&&kind!=='symbol')||c.editor?.pinned||c.editor?.locked)return s;
+      const {need}=N.glyphRoom(g,s,{subtitle:!!String(c.config?.subtitle||'').trim(),title:String(c.config?.label||''),type:notation.tokens?.type,glyph:notation.tokens?.glyph});
+      const even=v=>2*Math.ceil((v-1e-6)/2);
+      return {w:Math.max(s.w,even(need.w)),h:Math.max(s.h,even(need.h))};
+    };
     function layoutCanvas(canvas,second=null){
       const members=inScope(canvas),boxes=new Map();
       for(const c of members){
         // Arranging fits a container to what it holds, with room on top for its own symbol.
         if(isContainer(c)&&inScope(interiorOf(c.id)).length){const inner=layoutCanvas(interiorOf(c.id)),top=topRoom(c);boxes.set(c.id,{w:Math.max(160,inner.w+pad*2),h:Math.max(120,inner.h+pad*2+top),inner,top})}
-        else boxes.set(c.id,{...size(c),inner:null});
+        else boxes.set(c.id,{...(isContainer(c)?size(c):grown(c)),inner:null});
       }
       const R=id=>rep(id,canvas);
       // Each member in scope belongs to the first group in document order that lists it (the
@@ -6859,7 +6904,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       // the difference of the two terminals' offsets from their cards' centres.
       const portDy=(q,u)=>{
         const w=doc.wires.find(x=>(x.a===q&&x.b===u)||(x.b===q&&x.a===u));if(!w||!notation)return 0;
-        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c),{subtitle:!!String(c?.config?.subtitle||'').trim(),title:String(c?.config?.label||''),type:notation.tokens?.type})?.dy||0};
+        const off=(id,port)=>{const c=byId.get(id);return N.terminalOffset(notation.glyphs?.[c?.symbolId],port,boxes.get(id)||size(c),{subtitle:!!String(c?.config?.subtitle||'').trim(),title:String(c?.config?.label||''),type:notation.tokens?.type,glyph:notation.tokens?.glyph})?.dy||0};
         const [qp,up]=w.a===q?[w.aSide,w.bSide]:[w.bSide,w.aSide];
         return off(q,qp)-off(u,up);
       };
@@ -9662,9 +9707,12 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   // Text and custom graphics can extend beyond a Component's body. Measure their
   // actual projection in workspace coordinates, excluding selection/drag chrome.
   const inverse=workspace.getScreenCTM()?.inverse();
-  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text')){
-    const node=el.closest('.node'),wire=el.closest('[data-wire-id]');
-    if(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId)))continue;
+  // Bus bands and labels (src/41-buses.js renderBuses) are drawn once, for the active layout of the
+  // global canvas, with no canvas filter: they count when the global canvas is the one measured.
+  const busEls=canvasId===GLOBAL_CANVAS_ID&&!window.__boundsLeaveBusOut;
+  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text'+(busEls?',text.bus-label,.bus-band rect':''))){
+    const node=el.closest('.node'),wire=el.closest('[data-wire-id]'),bus=el.matches('text.bus-label,.bus-band rect');
+    if(!bus&&(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId))))continue;
     if(!el.getClientRects().length||getComputedStyle(el).display==='none')continue;
     const rect=el.getBBox(),matrix=inverse.multiply(el.getScreenCTM());
     for(const [x,y] of [[rect.x,rect.y],[rect.x+rect.width,rect.y],[rect.x,rect.y+rect.height],[rect.x+rect.width,rect.y+rect.height]]){
@@ -9861,11 +9909,12 @@ function finishKeyboardMove(mods){
   // A changed host draws every wire from nothing at the settle below.
   if(movedNode&&hostBefore!==`${movedNode.canvasId||GLOBAL_CANVAS_ID}|${movedNode.parentId||''}`)wireGroupDrawn.clear();
   // A refused host refuses the move: the Component and what it carries return to where it started.
-  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();render()}
+  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();dropBusLaneHold();render()}
   else settleDraggedRoutes();
 
   keyboardMoveNodeId=null;keyboardMoveStart=null;
   activeNodeDrag=null;
+  dropBusLaneHold(); // the move is over: the lanes are ordered in full again (src/41-buses.js)
   dragRouteSnapshots.clear();
   workspace.classList.remove('dragging-node');
   statusEl.textContent=hosted?.refused||'Select';
@@ -10018,7 +10067,7 @@ function componentInlineGraphicBox(node){
   // scale from the same card size.
   const shape=componentShapeGeometry(node),room=shape.shape==='rect'||componentGlyph(node)?.points==='terminals'?size
     :{w:shape.inner.r-shape.inner.l,h:shape.shape==='cylinder'?size.h-2*shape.cap:size.h};
-  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),room,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type}),x=-w/2;
+  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),room,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type,glyph:activeNotation().tokens.glyph}),x=-w/2;
   if(componentHostedOnWire(node)){
     const axis=componentInlineTerminalY(node);
     return {x,y:axis==null?-h/2:-(axis/64)*h,w,h};
@@ -10483,8 +10532,13 @@ function captureDragSnapshots(nodeId){
       });
     }
   }));
+  // The loop above asked for the bus routes, so the lane order held from here is the one at the
+  // press, or at the last settle while held (src/41-buses.js holdBusLanes).
+  if(typeof holdBusLanes==='function')holdBusLanes();
 }
 function settleDraggedRoutes(){
+  // The pointer rests or the move ends: the bus lanes are ordered again, in full.
+  if(typeof dropBusLaneHold==='function')dropBusLaneHold();
   if(!activeNodeDrag) return;
   const occupied=[];
   withBusRoutesOnce(()=>wires.forEach((w,i)=>{
@@ -11402,7 +11456,19 @@ const busWiresRelated=(a,b)=>[`${a.a}:${a.aSide}`,`${a.b}:${a.bSide}`].some(e=>e
 // OrthogonalRoutingGenerator. A bus with lanes: 'port' on which two wires sharing no end still lie
 // on one track then has its lanes sifted (busSiftLanes). A lane's offset is
 // (its index - (lane count - 1) / 2) x pitch.
+//
+// While a card is moved the lane order is held (LAYOUT-MODEL.md "As built: buses", Lane order): the
+// hold is, per bus, its lane keys in the order last computed in full. It is taken at the press and
+// after each settle (captureDragSnapshots, src/40-routing.js) and dropped when the pointer rests
+// (settleDraggedRoutes) and wherever a move ends. Under a hold a bus whose set of lane keys is the
+// held set takes the held order and is not ordered again; a bus a wire joined or left is ordered in
+// full and its hold replaced. Plans and routes are still built on every pass, with the held lanes'
+// offsets, so a wire follows its card. busLaneHoldCount goes into the state's key, so a state
+// computed under a hold is never returned without it, or the reverse.
 let busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map(),lanes:new Map()};
+let busLaneHold=null,busLaneHoldCount=0;
+function holdBusLanes(){busLaneHold=new Map([...busRouteState.lanes].map(([bid,L])=>[bid,[...L]]));busLaneHoldCount++}
+function dropBusLaneHold(){if(!busLaneHold)return;busLaneHold=null;busLaneHoldCount++}
 function busRoutesForRender(){
   const all=activeBuses(),entries=[];
   wires.forEach(w=>{
@@ -11410,7 +11476,9 @@ function busRoutesForRender(){
     entries.push({w,spec,A:carrierEndpoint(w,'a').pos,B:carrierEndpoint(w,'b').pos});
   });
   if(!entries.length&&!Object.keys(all).length){busRouteState={key:null,routes:new Map(),fallback:new Set(),on:new Map(),order:new Map(),lanes:new Map()};return busRouteState}
-  const key=JSON.stringify([activeLayoutId(),all,entries.map(e=>[e.w.id,e.spec.buses,e.w.aSide,e.w.bSide,e.A?.x,e.A?.y,e.B?.x,e.B?.y]),nodes.map(n=>[n.id,n.x,n.y,n.config?.presentation?.size])]);
+  // holding: a hold stands and a card is being moved. Every other pass orders every bus in full.
+  const holding=busLaneHold&&activeNodeDrag?busLaneHold:null,kept=new Set();
+  const key=JSON.stringify([activeLayoutId(),all,entries.map(e=>[e.w.id,e.spec.buses,e.w.aSide,e.w.bSide,e.A?.x,e.A?.y,e.B?.x,e.B?.y]),nodes.map(n=>[n.id,n.x,n.y,n.config?.presentation?.size]),busLaneHoldCount,holding?1:0]);
   if(key===busRouteState.key)return busRouteState;
   const plans=new Map(),fallback=new Set();
   for(const e of entries){const p=busPlan(e.w,e.A,e.B,e.spec);if(p)plans.set(e.w.id,p);else fallback.add(e.w.id)}
@@ -11426,6 +11494,9 @@ function busRoutesForRender(){
     const first=own.length?[...own,...natural.filter(id=>!own.includes(id))]:natural,H=new Map();
     for(const id of first){const k=laneOf(bid,id);if(!H.has(k))H.set(k,[]);H.get(k).push(id)}
     lanes.set(bid,[...H.keys()]);held.set(bid,H);order.set(bid,[...H.values()].flat());
+    // Under a hold, a bus with the held set of lane keys takes the held order and is ordered no further.
+    const stood=holding?.get(bid);
+    if(stood&&stood.length===H.size&&stood.every(k=>H.has(k))){kept.add(bid);lanes.set(bid,[...stood]);order.set(bid,stood.flatMap(k=>H.get(k)))}
   }
   const offsetsOf=id=>new Map(plans.get(id).legs.map(l=>{const L=lanes.get(l.id);return [l.id,(L.indexOf(laneOf(l.id,id))-(L.length-1)/2)*busPitchOf(all[l.id])]}));
   const routes=new Map();for(const id of plans.keys())routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)));
@@ -11433,6 +11504,7 @@ function busRoutesForRender(){
   const crosses=(x,y)=>busRoutesCross(routes.get(x),routes.get(y),busWiresRelated(plans.get(x).w,plans.get(y).w))?1:0;
   const crossingsOn=L=>{const cross=new Map();let total=0;for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length;j++){const c=crosses(L[i],L[j]);cross.set(pair(L[i],L[j]),c);total+=c}return {cross,total}};
   for(const bid of [...on.keys()].sort()){
+    if(kept.has(bid))continue;
     if(Array.isArray(all[bid]?.order)&&all[bid].order.length)continue;
     const L=lanes.get(bid);if(L.length<2)continue;
     const W=order.get(bid),H=held.get(bid),rebuild=ids=>{for(const id of ids)routes.set(id,busPlanPoints(plans.get(id),offsetsOf(id)))};
@@ -11461,6 +11533,8 @@ function busRoutesForRender(){
     if(all[bid]?.lanes==='port')busSiftLanes(L,W,H,id=>routes.get(id),id=>plans.get(id).w,rebuild);
     order.set(bid,L.flatMap(k=>H.get(k)));
   }
+  // A bus a wire joined or left during the move was ordered in full above: that order is held now.
+  if(holding)for(const bid of on.keys())if(!kept.has(bid))holding.set(bid,[...lanes.get(bid)]);
   busRouteState={key,routes,fallback,on,order,lanes};
   return busRouteState;
 }
@@ -13423,6 +13497,23 @@ function layoutMetrics(options={}){
      if(!R||!members.some(id=>visible.some(v=>v.id===id)))continue;
      for(const id of members){const m=visible.find(v=>v.id===id);if(m&&is2D(m))check(m,g,{l:R.l,r:R.r,t:R.t,b:R.b},true)}
    }}
+  // Glyph room: a card that draws a symbol glyph and has no room for it at the glyph token's size
+  // (NOTATION-MODEL.md §4, glyphRoom), so its glyph is drawn smaller than on other cards. A container
+  // with an open interior draws its glyph as a title mark and a card hosted on a wire is drawn on the
+  // line, so neither is held to it. Reported, with no weight in the score (it is not in LAYOUT_RUBRIC).
+  // The room is read from what componentInlineGraphicBox gives glyphBox: the card's size, or a
+  // shaped card's inner rectangle.
+  {const N=SovSchematicNotation,T=activeNotation().tokens,even=v=>2*Math.ceil((v-1e-6)/2),say=v=>+(+v).toFixed(2);
+   for(const n of visible){
+     if(!is2D(n)||componentAcceptsChildren(n)||componentHostedOnWire(n)||!nodeEl(n.id)?.querySelector(':scope > use.glyph'))continue;
+     const cfg=componentConfig(n),size=cfg.presentation.size,g=componentGlyph(n),shape=componentShapeGeometry(n);
+     const room=shape.shape==='rect'||g?.points==='terminals'?size:{w:shape.inner.r-shape.inner.l,h:shape.shape==='cylinder'?size.h-2*shape.cap:size.h};
+     const title=String(cfg.label||'').trim()||componentTypeCaption(n);
+     const fit=N.glyphRoom(g,room,{subtitle:!!String(cfg.subtitle||'').trim(),title,type:T.type,glyph:T.glyph});
+     if(fit.ok)continue;
+     const needW=Math.max(size.w,even(fit.need.w+size.w-room.w)),needH=Math.max(size.h,even(fit.need.h+size.h-room.h));
+     add('glyph-room',[n.id],`"${title}" is ${say(size.w)} by ${say(size.h)} and needs ${needW} by ${needH} to draw its glyph at ${say(fit.box.w)} by ${say(fit.box.h)}`);
+   }}
   // Points drawn on top of each other read as one.
   {const pts=visible.filter(n=>componentForm(n).dimension===0);
    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++)if(Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y)<12)add('node-overlap',[pts[i].id,pts[j].id],'points drawn on top of each other')}
@@ -13961,12 +14052,12 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
       // A changed host draws every wire from nothing at the settle below.
       if(beforeCanvas!==afterCanvas||beforeParent!==(root.parentId||null))wireGroupDrawn.clear();
     }
-    clearHostCandidateArm(state);if(refusal)render();else settleDraggedRoutes();
+    clearHostCandidateArm(state);if(refusal){dropBusLaneHold();render()}else settleDraggedRoutes();
   }catch(err){fault=err;console.error('Recovered Component drag failure',err)}
   finally{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     clearHostCandidateArm(state);clearNodeDragVisualState();clearSettleHostGhost();
-    activeNodeDragState=null;activeNodeDrag=null;dragRouteSnapshots.clear();
+    activeNodeDragState=null;activeNodeDrag=null;dropBusLaneHold();dragRouteSnapshots.clear();
     try{if(workspace.hasPointerCapture?.(pointerId))workspace.releasePointerCapture(pointerId)}catch(_){}
     try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
     dropDragSignalState();

@@ -44,6 +44,7 @@ BROWSER=[
     'tests/label_zoom_qa.py',
     'tests/label_floor_source_qa.py',
     'tests/size_scale_qa.py',
+    'tests/glyph_fixed_size_qa.py',
     'tests/card_text_fit_qa.py',
     'tests/label_contrast_floor_qa.py',
     'tests/palette_point_settle_qa.py',
@@ -75,6 +76,7 @@ BROWSER=[
     'tests/blank_document_dirty_qa.py',
     'tests/svg_export_qa.py',
     'tests/export_picture_fit_qa.py',
+    'tests/picture_bounds_bus_labels_qa.py',
     'tests/layout_quality_qa.py',
     'tests/layout_review_qa.py',
     'tests/contrast_qa.py',
@@ -138,6 +140,7 @@ BROWSER=[
     'tests/performance_regression_qa.py',
     'tests/map_render_time_qa.py',
     'tests/drag_redraw_parity_qa.py',
+    'tests/bus_lane_hold_qa.py',
     'tests/live_link_qa.py',
 ]
 TAIL=[

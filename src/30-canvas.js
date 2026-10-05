@@ -378,9 +378,12 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   // Text and custom graphics can extend beyond a Component's body. Measure their
   // actual projection in workspace coordinates, excluding selection/drag chrome.
   const inverse=workspace.getScreenCTM()?.inverse();
-  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text')){
-    const node=el.closest('.node'),wire=el.closest('[data-wire-id]');
-    if(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId)))continue;
+  // Bus bands and labels (src/41-buses.js renderBuses) are drawn once, for the active layout of the
+  // global canvas, with no canvas filter: they count when the global canvas is the one measured.
+  const busEls=canvasId===GLOBAL_CANVAS_ID&&!window.__boundsLeaveBusOut;
+  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text'+(busEls?',text.bus-label,.bus-band rect':''))){
+    const node=el.closest('.node'),wire=el.closest('[data-wire-id]'),bus=el.matches('text.bus-label,.bus-band rect');
+    if(!bus&&(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId))))continue;
     if(!el.getClientRects().length||getComputedStyle(el).display==='none')continue;
     const rect=el.getBBox(),matrix=inverse.multiply(el.getScreenCTM());
     for(const [x,y] of [[rect.x,rect.y],[rect.x+rect.width,rect.y],[rect.x,rect.y+rect.height],[rect.x+rect.width,rect.y+rect.height]]){
@@ -577,11 +580,12 @@ function finishKeyboardMove(mods){
   // A changed host draws every wire from nothing at the settle below.
   if(movedNode&&hostBefore!==`${movedNode.canvasId||GLOBAL_CANVAS_ID}|${movedNode.parentId||''}`)wireGroupDrawn.clear();
   // A refused host refuses the move: the Component and what it carries return to where it started.
-  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();render()}
+  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();dropBusLaneHold();render()}
   else settleDraggedRoutes();
 
   keyboardMoveNodeId=null;keyboardMoveStart=null;
   activeNodeDrag=null;
+  dropBusLaneHold(); // the move is over: the lanes are ordered in full again (src/41-buses.js)
   dragRouteSnapshots.clear();
   workspace.classList.remove('dragging-node');
   statusEl.textContent=hosted?.refused||'Select';
@@ -734,7 +738,7 @@ function componentInlineGraphicBox(node){
   // scale from the same card size.
   const shape=componentShapeGeometry(node),room=shape.shape==='rect'||componentGlyph(node)?.points==='terminals'?size
     :{w:shape.inner.r-shape.inner.l,h:shape.shape==='cylinder'?size.h-2*shape.cap:size.h};
-  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),room,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type}),x=-w/2;
+  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),room,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type,glyph:activeNotation().tokens.glyph}),x=-w/2;
   if(componentHostedOnWire(node)){
     const axis=componentInlineTerminalY(node);
     return {x,y:axis==null?-h/2:-(axis/64)*h,w,h};
