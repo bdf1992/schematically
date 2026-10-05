@@ -8,6 +8,12 @@ Create or edit `.sov` schematics without bypassing the schematic model.
 
 Prefer the browser API, REST API, or MCP tools over direct mutation of runtime arrays. A diagram is not merely SVG: Components, Wires, Forms, Ports, containment, editor states, and history have semantic meaning.
 
+The tools an author writes and checks with: `schematic.guide`, `schematic.read`, `schematic.apply`, `schematic.concerns`, `schematic.concerns.answer`, `schematic.markers`, `schematic.render`, `schematic.layout.metrics`. In the browser: `SovSchematicAPI.apply`, `read`, `concerns.list`, `concerns.answer`, `markers`, `render.svg`.
+
+## Concerns
+
+A notation declares the questions a schematic drawn in it should answer, about the document, its Components and its Wires. `schematic.concerns {open: true}` (`SovSchematicAPI.concerns.list({open: true})`) lists the rows still open, each with its question and its target. `schematic.concerns.answer {answers: [{concern, target?, answer}]}` (`SovSchematicAPI.concerns.answer(answers)`) sets many answers in one call, all or none; `answer: null` removes one. The questions come from the report: read them, do not assume them. An open row is information, never an error; an answer to a question the notation does not declare is refused.
+
 ## Core primitives
 
 - **Point / Path / Plane** — the dimensional basis (`symbolId: point | path | plane`). A Point is an attachment; drop or create it with `placement` on a Path (`{kind:'path',hostId,t}`), a Plane boundary (`{kind:'edge',hostId,side,t}`), or a Wire (`{kind:'wire',wireId,t}`). A Plane exposes no built-in points (`config.attachmentDefaults:'none'`); wire to the Points hosted on it.
@@ -35,13 +41,15 @@ A child may connect to siblings and Ports exposed to its containing surface. To 
 
 ## Authoring sequence
 
-1. Establish Components and their Forms. For a bare region, create a Plane and host Points on its boundary where crossings are needed.
-2. Open only the interior Regions that should host children.
-3. Set Port faces/directions before crossing boundaries. A boundary-hosted Point with face `both` is the explicit crossing.
-4. Connect legal Ports with Wires.
-5. Set signal/rate behavior only after topology is valid.
-6. Save a checkpoint at meaningful milestones.
-7. Validate, inspect the normal editor and exported SVG in both appearances, then save and reopen. Structural validation alone is not visual QA.
+1. Before writing, read `schematic.concerns {open: true}` and answer the document's questions from the request with `schematic.concerns.answer`.
+2. Establish Components and their Forms. For a bare region, create a Plane and host Points on its boundary where crossings are needed.
+3. Open only the interior Regions that should host children.
+4. Set Port faces/directions before crossing boundaries. A boundary-hosted Point with face `both` is the explicit crossing.
+5. Connect legal Ports with Wires.
+6. Set signal/rate behavior only after topology is valid.
+7. After writing, read the open rows again. Answer each one the request or the drawing settles, leave the rest open, and name the rows left open in the reply to the person.
+8. Save a checkpoint at meaningful milestones.
+9. Validate, inspect the normal editor and exported SVG in both appearances, then save and reopen. Structural validation alone is not visual QA.
 
 ## Layout and review
 

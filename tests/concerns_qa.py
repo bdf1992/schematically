@@ -14,7 +14,9 @@ Browser part (index.html in Chromium), then node scripts/validate_sov.mjs:
       with the new question, and two cards and one wire give 4 + 2 * 2 + 1 = 9 rows, the document's
       first, then each card's, then the wire's;
   (d) a card created with config.answers {made-by} is admitted and its row is answered; an update
-      with answers null removes the key; a wire's answer is admitted the same way;
+      with answers null removes the key; a wire's answer is admitted the same way; on a card with
+      two answers an update with one key null leaves the other, and a second update removing the
+      last leaves no answers key;
   (e) config.answers {nope} on a card is refused with ANSWER_UNKNOWN on create and on update, the
       document unchanged; so is a wire's;
   (f) on a schematic-notation document a card's config.answers {made-by} is refused with
@@ -95,6 +97,16 @@ PAGE = r"""([plant])=>{
    const cfg=D.read(d,'component','slag').config,wcfg=D.read(d,'wire','belt').config,after=D.concernReport(d);
    out.cleared={ok:c1.ok&&w1.ok,cardKey:'answers' in cfg,wireKey:'answers' in wcfg,label:cfg.label,wireLabel:wcfg.label,
      compactKey:'answers' in D.compactComponent(D.read(d,'component','slag')).config,answered:after.answered,slag:after.rows.filter(r=>r.target==='slag').map(r=>r.answered)}}
+  // (d2) per-key removal on update: one key null leaves the other; removing the last leaves no key.
+  {const d=made(doc({cardAnswers:{'made-by':'Dug from the pit.',repeatable:'Over and over.'}}));
+   const one=D.applyOperation(d,{op:'update',resource:'component',resourceId:'ore',patch:{config:{answers:{repeatable:null}}}});
+   const left=D.read(d,'component','ore').config.answers;
+   const last=D.applyOperation(d,{op:'update',resource:'component',resourceId:'ore',patch:{config:{answers:{'made-by':null}}}});
+   const cfg=D.read(d,'component','ore').config;
+   const unknown=D.applyOperation(d,{op:'update',resource:'component',resourceId:'ore',patch:{config:{answers:{nope:null}}}});
+   const onCreate=D.applyOperation(d,{op:'create',resource:'component',value:{id:'slag',symbolId:'act',x:200,y:420,config:{label:'Slag',answers:{'made-by':null}}}});
+   out.perKey={one:one.ok,left,last:last.ok,key:'answers' in cfg,compactKey:'answers' in D.compactComponent(D.read(d,'component','ore')).config,label:cfg.label,
+     errors:D.validateDocument(d).errors,unknown:unknown.error?.message||'',onCreate:onCreate.error?.message||''}}
   // (e) (f) refusals leave the document unchanged.
   const refuse=(base,op)=>{const d=made(base),before=JSON.stringify(d);const r=D.applyOperation(d,op);return {ok:r.ok,message:r.error?.message||'',unchanged:JSON.stringify(d)===before}};
   const card=answers=>({id:'slag',symbolId:'act',x:200,y:420,config:{label:'Slag',answers}});
@@ -216,6 +228,11 @@ def main() -> None:
     assert c['ok'] and not c['cardKey'] and not c['wireKey'] and not c['compactKey'], ('answers null did not remove config.answers', c)
     assert c['label'] == 'Slag' and c['wireLabel'] == 'belt' and c['slag'] == [False, False] and c['answered'] == 1, c
     print('(d) a card and a wire answer their concerns; answers null removes config.answers')
+    pk = r['perKey']
+    assert pk['one'] and pk['left'] == {'made-by': 'Dug from the pit.'}, ('an update with one key null did not leave the other', pk)
+    assert pk['last'] and not pk['key'] and not pk['compactKey'] and pk['label'] == 'Ore' and pk['errors'] == [], ('removing the last answer left an answers key', pk)
+    assert pk['unknown'].startswith('ANSWER_UNKNOWN:') and pk['onCreate'].startswith('ANSWER_INVALID:'), ('a null for an undeclared key, or a null on create, was admitted', pk)
+    print('(d) an update with one key null removes that answer and leaves the other; removing the last leaves no answers key')
 
     # (e) (f) Refusals.
     f = r['refusals']

@@ -62,6 +62,16 @@ SovSchematicAPI.markers()
 
 Returns `{id, severity, message, rule}` for every current `document.get()`/CRUD validation finding, straight from the same check the core runs on write — no separate legality is computed for the view. The renderer draws these as a badge on each carrying element and a total count in the status area.
 
+## Concerns
+
+```js
+SovSchematicAPI.concerns.list()                // {notation, rows, answered, open}
+SovSchematicAPI.concerns.list({open: true})    // only the open rows; the counts are of every row
+SovSchematicAPI.concerns.answer([{concern, target, answer}, ...])   // or answer({answers, ifRevision})
+```
+
+`concerns.list` is the data core's `concernReport` over `document.get()`: one row `{concern, applies, target, title, question, answered, answer}` per concern the notation declares for the document (`target: null`), each Component and each Wire (`DATA-FORMATS.md` "Answers"). `concerns.answer` runs the data core's `answerConcerns`: `target` absent or null is the document, else the id of a Component or a Wire; `answer` is a non-empty string to set, `null` to remove. It is all or none and one revision, and goes through the path `apply` uses, so it is one history entry and one undo restores the document. The receipt is `apply`'s with `result.report: {answered, open}`; a refusal (`ANSWER_INVALID`, `ANSWER_TARGET_UNKNOWN`, `ANSWER_UNKNOWN`, `ANSWER_UNDECLARED`, a locked record, a stale revision) changes nothing. MCP serves the same as `schematic.concerns` and `schematic.concerns.answer`, and HTTP as `GET /api/v1/concerns` (`?open=1`; 200) and `POST /api/v1/concerns` (200, 409 for a stale revision, 400 for any other refusal).
+
 ## Editor/history API
 
 `window.SovSchematicAPI` additionally exposes `history.list/undo/redo`, `checkpoints.list/create/restore`, semantic selection clipboard helpers, and view appearance/global-rate accessors. MCP exposes history undo/redo and checkpoint list/create/restore for its file-backed document.
