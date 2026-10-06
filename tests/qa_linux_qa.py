@@ -13,6 +13,12 @@ spec.loader.exec_module(ql)
 
 checks = []
 
+# the script is mounted at the filesystem root in the container: it must import there
+root_ns = {'__file__': str(Path(Path(ROOT.anchor) / 'qa_linux.py')), '__name__': 'qa_linux_at_root'}
+exec(compile((ROOT / 'scripts/qa_linux.py').read_text(encoding='utf-8'), 'qa_linux.py', 'exec'), root_ns)
+assert callable(root_ns['inside_half']), 'imports with the script at the filesystem root'
+checks.append(('imports at the filesystem root', True))
+
 
 def check(name, cond):
     checks.append((name, bool(cond)))
@@ -131,6 +137,10 @@ check('last line counts the failure', out.splitlines()[-1] == 'LINUX QA FAIL: 1 
 check('both fc-match lines are asked', ['fc-match', 'sans-serif'] in ran and ['fc-match', 'system-ui'] in ran)
 check('build.py runs before the suites', ran.index(['python3', 'build.py']) < ran.index(['python3', 'tests/a_qa.py']))
 check('the copy leaves out .git', any('--exclude=./.git' in ' '.join(c) for c in ran))
+
+ran.clear()
+code, out, err = call(['--inside', *suites], inside_runner)
+check('the host half argv (suites after --inside) parses', code == 1 and out.splitlines()[-1] == 'LINUX QA FAIL: 1 of 3 suites')
 
 ran.clear()
 code, out, err = call(['--inside', '--suite', 'tests/a_qa.py'], lambda *a, **k: 0)

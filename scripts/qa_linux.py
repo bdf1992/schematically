@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve()
-REPO = SCRIPT.parents[1]
+REPO = SCRIPT.parent.parent  # inside the container the script sits at /, where parents[1] does not exist
 DOCKERFILE = SCRIPT.with_name('qa_linux.Dockerfile')
 IMAGE = 'schematically-qa-linux'
 DEFAULT_SUITES = [
@@ -146,8 +146,9 @@ def main(argv=None, runner=run_process) -> int:
     p.add_argument('--suite', action='append')
     p.add_argument('--print-command', action='store_true')
     p.add_argument('--inside', action='store_true')
+    p.add_argument('paths', nargs='*', help='with --inside: the suites to run, as the host half passes them')
     a = p.parse_args(argv)
-    suites = a.suite or list(DEFAULT_SUITES)
+    suites = a.paths if a.inside and a.paths else (a.suite or list(DEFAULT_SUITES))
     if a.inside:
         return inside_half(suites, runner)
     return host_half(Path(a.tree).resolve(), suites, a.print_command, runner)

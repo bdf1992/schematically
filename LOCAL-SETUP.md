@@ -49,6 +49,34 @@ managed machines), point the QA harness at any system Chromium:
 CHROMIUM_PATH=/path/to/chrome python scripts/qa.py
 ```
 
+### Windows: the font-dependent suites in Linux
+
+CI renders text with DejaVu on Ubuntu, which is about 10 percent wider than a
+Windows font, so four suites give different answers on Windows. One command
+runs them in a Linux container on Docker Desktop and prints what CI would:
+
+```bash
+python scripts/qa_linux.py                       # the four suites below, in this order
+python scripts/qa_linux.py --suite tests/svg_export_qa.py   # --suite is repeatable and replaces the four
+python scripts/qa_linux.py --tree C:\path\to\worktree       # another checkout; default is this one
+python scripts/qa_linux.py --print-command       # the docker build and run argv as JSON; calls no docker
+```
+
+The default suites are `tests/layouts_qa.py`, `tests/layout_quality_qa.py`,
+`tests/authoring_review_qa.py` and `tests/golden_rendered_text_qa.py`. Each
+prints `QA PASS path (seconds)` or `QA FAIL path (exit code, seconds)`, then
+`LINUX QA PASS: n suites` or `LINUX QA FAIL: k of n suites`.
+
+Exit codes: 0 every suite passed; 1 a suite or `build.py` failed; 2 the
+container could not run (missing suite path, no playwright pin in the tree's
+`requirements-dev.txt`, Docker engine not reachable, image build failed).
+
+Docker Desktop must be running; the script starts and stops nothing (start it
+with `docker desktop start`). The image `schematically-qa-linux` is built once
+per Dockerfile and requirements-dev.txt content and reused after. The tree is
+mounted read-only and copied inside the container, so a run changes no file on
+the host.
+
 Note: several browser suites rewrite tracked byproducts under `tests/`
 (screenshots, `saved-test.sov*`, `performance-results.json`). Discard those
 with `git checkout -- tests/` unless you intend to re-baseline them.
