@@ -33,6 +33,7 @@ STATIC=[
     'tests/revision_guard_qa.py',
     'tests/mcp_surface_qa.py',
     'tests/release_path_qa.py',
+    'tests/qa_linux_qa.py',
 ]
 BROWSER=[
     'tests/desktop_launch_page_qa.py',
