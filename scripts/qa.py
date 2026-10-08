@@ -52,6 +52,7 @@ BROWSER=[
     'tests/label_contrast_floor_qa.py',
     'tests/palette_point_settle_qa.py',
     'tests/settings_panel_placement_qa.py',
+    'tests/selection_bar_label_clear_qa.py',
     'tests/document_compaction_qa.py',
     'tests/carrier_path_qa.py',
     'tests/free_segment_route_qa.py',
