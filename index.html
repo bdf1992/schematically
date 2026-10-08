@@ -2474,10 +2474,16 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       const extra=Object.keys(b).find(k=>!BADGE_KEYS.includes(k));
       if(typeof b.label!=='string'||!b.label.trim())out.push(`BADGE_INVALID: ${at}.label must be a non-empty string`);
       else if(b.label.trim().length>BADGE_LABEL_MAX)out.push(`BADGE_INVALID: ${at}.label must be at most ${BADGE_LABEL_MAX} characters, not ${b.label.trim().length}`);
+      else if(b.label!==b.label.trim())out.push(`BADGE_INVALID: ${at}.label must not begin or end with whitespace`);
       else if(b.colorSlot!==undefined&&!(Number.isInteger(b.colorSlot)&&b.colorSlot>=0&&b.colorSlot<=11))out.push(`BADGE_INVALID: ${at}.colorSlot must be an integer 0 to 11, not ${JSON.stringify(b.colorSlot)}`);
       else if(extra)out.push(`BADGE_INVALID: ${at}.${extra} is not a field of a badge (label, colorSlot)`);
     });
     return out;
+  }
+  // Create and update store a label trimmed; the stored form is what badgeProblems holds to the rule.
+  function trimmedBadges(list){
+    if(!Array.isArray(list))return list;
+    return list.map(b=>isObject(b)&&typeof b.label==='string'?{...b,label:b.label.trim()}:b);
   }
   function assertBadges(config,clearable=false){const p=badgeProblems(config,clearable);if(p.length)throw new Error(p[0])}
   // ---- Intake (SECTION-MODEL.md "Groups": Borders) ----------------------------------------------
@@ -2941,7 +2947,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
     if(value.config?.members!==undefined)config.members=clone(value.config.members);
     assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
     assertAnswers(doc,value.config,'component',false,component);adoptAnswers(config,value.config);
-    assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges);
+    if(Array.isArray(value.config?.badges)){const badges=trimmedBadges(value.config.badges);assertBadges({badges});config.badges=clone(badges)}
+    else{assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges)}
     if(value.config?.intake!==undefined&&value.config.intake!==null){config.intake=clone(value.config.intake);assertIntake(component)}
     if(isObject(config.presentation)&&config.presentation.shape===null)delete config.presentation.shape;
     assertShape(component);
@@ -3229,7 +3236,8 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       answered={...answered,answers:Object.fromEntries(Object.entries(answered.answers).filter(([k,v])=>!(v===null&&declared.some(c=>c.id===k))))};
     }
     if(resource!=='reference')assertAnswers(doc,answered,resource,true,resource==='component'?{symbolId:patch?.symbolId??patch?.type??current.symbolId??current.type}:null);
-    if(resource==='component')assertBadges(patch?.config,true);
+    const patchBadges=resource==='component'&&Array.isArray(patch?.config?.badges)?trimmedBadges(patch.config.badges):null;
+    if(resource==='component')assertBadges(patchBadges?{badges:patchBadges}:patch?.config,true);
     if(resource==='component'){
       assertDefinitionPatch(patch,binding);
       if(!binding)assertDefinitionPortsKept(current,patch,null);
@@ -3281,6 +3289,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
       normalizeWireForm(candidate);
       candidate.duplex=candidate.config?.direction==='duplex';
     }
+    if(patchBadges)candidate.config.badges=clone(patchBadges);
     // The record keeps its identity: an editor holding it (a gesture that has just begun, a bound
     // listener) keeps holding the updated record, not a stale copy.
     if(resource!=='reference')clearStatusAndWaitsOn(candidate,patch);
