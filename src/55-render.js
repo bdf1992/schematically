@@ -1316,7 +1316,8 @@ function wireDrawKey(i,w,d,points,epA,epB,snapshot,busFallback,cramped,editor,si
     JSON.stringify(w.config||null),JSON.stringify(w.form||null),
     (wireMarkers||[]).map(m=>m.message).join('\u0001'),clear].join('\u0002');
 }
-function renderWires(signalState=computeSignalState(),markers=markersById(),reuse=false){
+function renderWiresOnce(signalState,markers,reuse){
+  const hostedMoved=new Set();
   const previousLabels=new Map([...wireLabelPaths.keys()].map(path=>{
     const label=path.parentElement?.querySelector('.connection-label');
     return [path.parentElement?.dataset.wireId,label?{text:label.dataset.caption,d:path.getAttribute('d'),x:label.getAttribute('x'),y:label.getAttribute('y')}:null];
@@ -1388,6 +1389,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
   // The cards hosted on a wire take their pose from its drawn path.
   const poseHosted=(w,base)=>{const L=base.getTotalLength();for(const hosted of nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&n.id!==activeNodeDrag)){
     const placement=componentPlacement(hosted),len=Math.max(1,Math.min(L-1,L*placement.t)),q=base.getPointAtLength(len),angle=pathTangentAngleAtLength(base,len);
+    if(Math.abs(q.x-hosted.x)>.01||Math.abs(q.y-hosted.y)>.01||Math.abs(angle-(wireHostPoseCache.get(hosted.id)?.angle??0))>.01)hostedMoved.add(hosted.id);
     hosted.x=q.x;hosted.y=q.y;wireHostPoseCache.set(hosted.id,{x:q.x,y:q.y,angle,wireId:w.id,t:placement.t});
     const el=nodesG.querySelector(`.node[data-id="${hosted.id}"]`);if(el)el.setAttribute('transform',`translate(${hosted.x} ${hosted.y}) rotate(${angle})`)
   }};
@@ -1575,4 +1577,19 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
   placeWireLabels();
   // Any pass that is not a move's own ends the held signal state: what it stood for may have changed.
   if(!reuse)dropDragSignalState();
+  return hostedMoved;
+}
+// One wire pass. A card hosted on a wire takes its pose from the host wire's drawn path, which
+// exists only after every route of the pass was found, the card's own wires among them. So when a
+// pass moved a hosted card, the wires that end on it or on a card it carries are routed again from
+// where it now stands and the pass runs once more, keeping the groups that did not change. That
+// repeats while a pass still moves a hosted card, at most 3 more times.
+function renderWires(signalState=computeSignalState(),markers=markersById(),reuse=false){
+  let moved=renderWiresOnce(signalState,markers,reuse);
+  for(let pass=0;pass<3&&moved.size;pass++){
+    const ids=new Set();
+    for(const id of moved){ids.add(id);for(const n of descendantsOf(id))ids.add(n.id)}
+    wires.forEach((w,i)=>{if(ids.has(w.a)||ids.has(w.b))routeCache.delete(i)});
+    moved=renderWiresOnce(signalState,markers,true);
+  }
 }
