@@ -871,6 +871,7 @@ function stableArrowPoint(path,targetD,minD,maxD){
 // A direction mark: the chevron, or, for a wire kind whose arrowhead is filled, the closed triangle
 // through the chevron's three points, filled with the wire's stroke colour. `scale` multiplies the
 // points of a filled mark only (2 on a heavy wire: 7 by 5 becomes 14 by 10); the chevron keeps its size.
+// The inline transform repeats the attribute's pose and scales the mark about its tip by --mark-floor.
 function appendChevronAt(group,q,reverse=false,className='flow-chevron',filled=false,scale=1){
   const c=document.createElementNS('http://www.w3.org/2000/svg','path');
   c.setAttribute('class',className);
@@ -878,6 +879,7 @@ function appendChevronAt(group,q,reverse=false,className='flow-chevron',filled=f
   c.setAttribute('d',`M ${-7*m} ${-5*m} L 0 0 L ${-7*m} ${5*m}`+(filled?' Z':''));
   if(filled){c.style.fill='var(--wire-ink,var(--canvas-ink))';c.dataset.arrowhead='filled'}
   c.setAttribute('transform',`translate(${q.x} ${q.y}) rotate(${q.angle+(reverse?180:0)})`);
+  c.style.transform=`translate(${q.x}px,${q.y}px) rotate(${q.angle+(reverse?180:0)}deg) scale(var(--mark-floor,1))`;
   group.appendChild(c);
 }
 // Direction marks are spaced by length: one per ARROW_SPACING of wire, at most ARROW_MAX, each at the

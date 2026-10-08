@@ -112,6 +112,7 @@ BROWSER=[
     'tests/arrow_spacing_qa.py',
     'tests/wire_kind_qa.py',
     'tests/work_engine_wire_kinds_qa.py',
+    'tests/wire_mark_min_size_qa.py',
     'tests/wire_click_reach_qa.py',
     'tests/route_clear_of_cards_qa.py',
     'tests/port_side_qa.py',
