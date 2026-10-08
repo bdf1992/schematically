@@ -416,7 +416,7 @@ function renderStandaloneSvgNow(opts={}){
   clone.querySelector('#waveLayer')?.remove();
   clone.querySelectorAll('.level-high').forEach(x => { x.classList.remove('level-high'); x.style.removeProperty('--wire-lit'); });
   clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
-  clone.querySelectorAll('.port-hit,.wire-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
+  clone.querySelectorAll('.port-hit,.wire-hit,.group-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
   // A still picture cannot show travel: a packet frozen mid-wire reads as a junction.
   // Packets stay only when the file is made to loop (--loop).
   if (!opts.packets) clone.querySelectorAll('.wire-packet').forEach(x => x.remove());
