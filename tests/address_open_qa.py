@@ -2,8 +2,9 @@
 
 The editor reads the open parameter at start and hands the fetched text to the same
 parseFilePayload / applyOpenedPayload seam file Open uses. A target with a scheme, a host,
-a leading slash, a backslash or a parent segment is refused in the status line and no
-request is made for it.
+a leading slash or a backslash is refused in the status line and no request is made for it.
+Two more refusals: a parent segment in any spelling (two dots, or %2e for either dot), and a
+target whose resolved path leaves the folder of the page.
 """
 import asyncio
 import http.server
@@ -101,6 +102,11 @@ async def main():
                 '../examples/13-half-adder.sov',
                 'examples\\13-half-adder.sov',
                 'javascript:alert',
+                'examples/%2e%2e/%2e%2e/x.sov',
+                'examples/%2E%2E/x.sov',
+                'examples/.%2e/x.sov',
+                'examples/%2e./x.sov',
+                '%2e%2e/x.sov',
             ]
             for target in refused:
                 status, counts, urls = await run_case(browser, base, {'open': target}, 'Open refused')
@@ -108,6 +114,35 @@ async def main():
                 assert counts == baseline, (target, counts, baseline)
                 assert all(u.startswith(base) for u in urls), (target, urls)
                 assert not any(urllib.parse.urlsplit(u).path.endswith('.sov') for u in urls), (target, urls)
+
+            # Case five: the function itself, against a page one folder deep.
+            context = await browser.new_context(viewport={'width': 1400, 'height': 900})
+            page = await context.new_page()
+            errors = []
+            page.on('pageerror', lambda e: errors.append(str(e)))
+            await page.goto(f'{base}/index.html', wait_until='load')
+            await page.wait_for_function('()=>typeof addressDocumentTarget==="function"')
+            direct = await page.evaluate(
+                '''()=>{
+                  const base=location.origin+'/a/b/index.html';
+                  const pick=t=>{const r=addressDocumentTarget(t,base);return {ok:r.ok,url:r.url,name:r.name}};
+                  return {origin:location.origin,
+                    tab:pick('.\\t./x.sov'), mixed:pick('.%2E/x.sov'), deep:pick('c/%2e%2e/%2e%2e/x.sov'),
+                    plain:pick('c/x.sov'), single:pick('c/%2e/x.sov')};
+                }''')
+            assert not errors, errors
+            for key in ('tab', 'mixed', 'deep'):
+                assert direct[key]['ok'] is False, (key, direct[key])
+            for key in ('plain', 'single'):
+                assert direct[key]['ok'] is True, (key, direct[key])
+                assert direct[key]['url'] == direct['origin'] + '/a/b/c/x.sov', (key, direct[key])
+                assert direct[key]['name'] == 'x.sov', (key, direct[key])
+            await context.close()
+
+            # Case six: a single-dot segment still opens.
+            status, counts, _ = await run_case(browser, base, {'open': 'examples/%2e/13-half-adder.sov'}, 'Opened')
+            assert status.startswith('Opened'), status
+            assert counts == want, (counts, want)
 
             await browser.close()
     finally:

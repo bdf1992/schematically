@@ -15,6 +15,7 @@ STATIC=[
     'tests/graph_core_qa.py',
     'tests/pre_repo_hardening_qa.py',
     'tests/author_offline_qa.py',
+    'tests/graph_to_sov_qa.py',
     'tests/file_load_presets_qa.py',
     'tests/declared_ports_qa.py',
     'tests/boundary_channels_qa.py',
@@ -115,6 +116,7 @@ BROWSER=[
     'tests/status_waits_on_qa.py',
     'tests/concerns_qa.py',
     'tests/card_badges_qa.py',
+    'tests/badge_label_trim_qa.py',
     'tests/card_shapes_qa.py',
     'tests/palette_system_qa.py',
     'tests/status_chip_qa.py',
@@ -145,10 +147,12 @@ BROWSER=[
     'tests/map_render_time_qa.py',
     'tests/drag_redraw_parity_qa.py',
     'tests/drop_on_wire_redraw_qa.py',
+    'tests/wire_host_settle_qa.py',
     'tests/bus_lane_hold_qa.py',
     'tests/live_link_qa.py',
     'tests/address_open_qa.py',
     'tests/served_editor_qa.py',
+    'tests/select_menu_contrast_qa.py',
 ]
 TAIL=[
     'tests/mutation_watch.py',
