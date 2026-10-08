@@ -84,6 +84,8 @@ barPortColorSlot.addEventListener('click',()=>openColorSlotPanel('port'));
 function deleteSelected(){
   cancelWireDrag();
   if(!selected)return;
+  // A bus is a record of its layout: Delete leaves it and the wires on it.
+  if(typeof selected==='string'&&selected.startsWith('bus:')){statusEl.textContent='A bus is removed through its layout';return}
   // Flush any pending edit first so deletion always has a distinct pre-delete snapshot.
   commitHistoryCapture();
 

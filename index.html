@@ -502,7 +502,9 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
 .wire-blank-ghost text{font-size:calc(clamp(8px,8px * var(--zoom,1),14px) / var(--zoom,1));font-weight:800;fill:var(--muted);letter-spacing:.05em;paint-order:stroke;stroke:var(--panel);stroke-width:2px}
 @keyframes wireBlankGhostIn{to{opacity:.62}}
 .bus-band{pointer-events:none}.bus-band rect{fill:var(--muted);fill-opacity:.06;stroke:var(--muted);stroke-opacity:.3;stroke-width:var(--stroke-structure,1)}
-.bus-label{font-weight:var(--type-caption-weight,600);letter-spacing:.02em;pointer-events:none}
+.bus-label{font-weight:var(--type-caption-weight,600);letter-spacing:.02em}
+.bus-hit{fill:transparent;stroke:transparent;stroke-width:calc(24px / var(--zoom,1));pointer-events:all;cursor:grab}
+.bus-band.selected rect,:root[data-appearance="dark"] .bus-band.selected rect{stroke:var(--canvas-ink);stroke-opacity:1;stroke-width:var(--stroke-structure-selected,2.85px)}
 .file-menu-item:disabled{color:var(--muted);opacity:.52;cursor:not-allowed}
 .file-menu-item:disabled:hover{background:transparent}
 :root[data-appearance="dark"]{
@@ -1086,6 +1088,15 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
         <dt>Label</dt><dd id="cLabel">—</dd>
       </dl>
       <details class="inline-help"><summary><span class="info-dot">i</span> Wire mapping</summary><div>The Wire maps endpoint connections and concrete packet operations. Port access declares capability; packet R/W declares the concrete operation. Access is not authority.</div></details>
+    </div>
+    <div id="busDetail" hidden>
+      <div class="kind-badge">BUS</div>
+      <dl class="kv">
+        <dt>Label</dt><dd id="bLabel"></dd>
+        <dt>Between</dt><dd id="bBetween"></dd>
+        <dt>Lanes</dt><dd id="bLanes"></dd>
+        <dt>Carries</dt><dd id="bWires"></dd>
+      </dl>
     </div>
   </div>
   <div class="section"><details class="help-disclosure"><summary><b>Reading</b><span class="helper-snippet">exists · carries · resolves</span><span class="info-dot">i</span></summary><div class="help-body"><b>Component</b> exists · <b>Connection</b> carries · <b>Reference</b> resolves · <b>Modifier</b> qualifies.</div></details></div>
@@ -11685,29 +11696,44 @@ function busLabelsOfWire(w){
   const all=activeBuses();return spec.buses.map(id=>all[id]?.label).filter(l=>typeof l==='string'&&l);
 }
 // Each bus as a band behind the wires: its lane count times its pitch, plus 8, with rounded ends;
-// its label once, beyond its start, reading along it.
+// its label once, beyond its start, reading along it. The wires on a bus lie over its band, so the
+// bus is taken by its label or by its rim: after each band a g.bus-hit-band holds one rect.bus-hit
+// per segment, the band rect again with a transparent stroke that reaches outside it
+// (styles/app.css). The selected bus (selected is bus: and its id) carries class selected.
 function renderBuses(layer){
   const all=activeBuses(),st=busRoutesForRender(),SVG='http://www.w3.org/2000/svg';
+  const chosen=typeof selected==='string'&&selected.startsWith('bus:')?selected.slice(4):null,drawn=new Set();
+  const press=id=>e=>{if(typeof beginBusGesture==='function')beginBusGesture(e,id)};
   for(const id of Object.keys(all).sort()){
     const bus=all[id],line=busLine(bus);if(!line)continue;
     const n=st.lanes.get(id)?.length||0,hw=(n*busPitchOf(bus)+8)/2;
-    const g=document.createElementNS(SVG,'g');g.setAttribute('class','bus-band');g.dataset.busId=id;g.dataset.lanes=String(n);
+    const g=document.createElementNS(SVG,'g');g.setAttribute('class','bus-band'+(chosen===id?' selected':''));g.dataset.busId=id;g.dataset.lanes=String(n);
+    const hits=document.createElementNS(SVG,'g');hits.setAttribute('class','bus-hit-band');hits.dataset.busId=id;
     for(const s of line.segs){
       const r=document.createElementNS(SVG,'rect');
       r.setAttribute('x',String(Math.min(s.a.x,s.b.x)-hw));r.setAttribute('y',String(Math.min(s.a.y,s.b.y)-hw));
       r.setAttribute('width',String(Math.abs(s.b.x-s.a.x)+2*hw));r.setAttribute('height',String(Math.abs(s.b.y-s.a.y)+2*hw));
       r.setAttribute('rx',String(hw));r.setAttribute('ry',String(hw));g.appendChild(r);
+      const h=document.createElementNS(SVG,'rect');h.setAttribute('class','bus-hit');
+      for(const k of ['x','y','width','height','rx'])h.setAttribute(k,r.getAttribute(k));
+      h.addEventListener('pointerdown',press(id));hits.appendChild(h);
     }
-    layer.appendChild(g);
+    layer.appendChild(g);layer.appendChild(hits);drawn.add(id);
     const label=typeof bus.label==='string'?bus.label.trim():'';if(!label)continue;
     const d=line.segs[0].dir,at={x:line.pts[0].x-d.x*(hw+6),y:line.pts[0].y-d.y*(hw+6)};
     const t=document.createElementNS(SVG,'text');t.setAttribute('class','bus-label');t.dataset.busId=id;t.dataset.role='caption';
     t.setAttribute('x',String(at.x));t.setAttribute('y',String(at.y));t.setAttribute('dominant-baseline','central');
     if(d.y!==0){t.setAttribute('text-anchor','start');t.setAttribute('transform',`rotate(${d.y>0?-90:90} ${at.x} ${at.y})`)}
     else t.setAttribute('text-anchor',d.x>0?'end':'start');
-    t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk()};stroke:none;pointer-events:none`);
+    t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk()};stroke:none;cursor:pointer`);
+    t.addEventListener('pointerdown',press(id));
     t.textContent=label;layer.appendChild(t);
   }
+  // A selected bus the active layout no longer holds is deselected; one that is drawn is read
+  // into the Inspector again, as drawn.
+  if(chosen==null)return;
+  if(!all[chosen]){selected=null;selectNode(null)}
+  else if(drawn.has(chosen)&&typeof selectBus==='function')selectBus(chosen,{focus:false});
 }
 /* END src/41-buses.js */
 </script>
@@ -11716,7 +11742,32 @@ function renderBuses(layer){
 'use strict';
 // 0.1 Beta concern: Selection state projected into contextual UI and inspector.
 
-function hideInspectorKinds(){componentDetail.hidden=true;connectionDetail.hidden=true;portDetail.hidden=true}
+function hideInspectorKinds(){componentDetail.hidden=true;connectionDetail.hidden=true;portDetail.hidden=true;const bus=document.getElementById('busDetail');if(bus)bus.hidden=true}
+function clearBusSelectionMarks(){document.querySelectorAll('.bus-band').forEach(el=>el.classList.remove('selected'))}
+// A bus is a record of the active layout (src/41-buses.js), selected as bus: and its id. The
+// Inspector reads what it carries; it has no selection bar.
+function selectBus(id,{focus=true}={}){
+  clearEndpointFocus();clearComponentSelectionSet();selected=`bus:${id}`;
+  if(focus)activateCanvasKeyboard();
+  document.querySelectorAll('.node').forEach(el=>el.classList.remove('selected'));
+  document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));
+  document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
+  document.querySelectorAll('.bus-band').forEach(el=>el.classList.toggle('selected',el.dataset.busId===id));
+  document.getElementById('emptyInspector').hidden=true;
+  hideInspectorKinds();hideSelectionBar();
+  const bus=activeBuses()[id]||{},cardLabel=cid=>{const n=nodes.find(n=>n.id===cid);return n?componentConfig(n).label||symbolOf(n.symbolId).name:null};
+  document.getElementById('busDetail').hidden=false;
+  document.getElementById('bLabel').textContent=typeof bus.label==='string'&&bus.label.trim()?bus.label.trim():id;
+  const between=Array.isArray(bus.between)&&bus.between.length===2?bus.between.map(cardLabel):[];
+  document.getElementById('bBetween').textContent=between.length===2&&between.every(Boolean)?between.join(' — '):'—';
+  document.getElementById('bLanes').textContent=String(busRoutesForRender().lanes.get(id)?.length||0);
+  const rows=wires.filter(w=>busSpecOf(w)?.buses.includes(id)).map(w=>{
+    const row=document.createElement('div'),label=connectionConfig(w).label;
+    row.dataset.wireId=w.id;row.textContent=`${cardLabel(w.a)||'free'} → ${cardLabel(w.b)||'free'}${label?` · ${label}`:''}`;
+    return row;
+  });
+  document.getElementById('bWires').replaceChildren(...rows);
+}
 function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false}={}){
   clearEndpointFocus();
   if(!preserveSet){
@@ -11729,6 +11780,7 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
   if(id&&focus)activateCanvasKeyboard();
   document.querySelectorAll('.node').forEach(el=>el.classList.toggle('selected',selectedComponentIds.has(el.dataset.id)));
   document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
+  clearBusSelectionMarks();
   const n=nodes.find(n=>n.id===selected);
   document.getElementById('emptyInspector').hidden=!!n;
   hideInspectorKinds();
@@ -11759,6 +11811,7 @@ function selectPortRef(info,{focus=true}={}){
   document.querySelectorAll('.node').forEach(el=>el.classList.remove('selected'));
   document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));
   document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
+  clearBusSelectionMarks();
 
   const vis=document.querySelector(`.node[data-id="${info.owner.id}"] .port[data-port="${info.portId}"]`);
   if(vis)vis.classList.add('port-selected');
@@ -11792,6 +11845,7 @@ function selectWire(i,{focus=true}={}){
   if(focus)activateCanvasKeyboard();
   document.querySelectorAll('.node').forEach(el=>el.classList.remove('selected'));document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
   document.querySelectorAll('.wire').forEach((el,j)=>el.classList.toggle('selected',j===i));
+  clearBusSelectionMarks();
   document.getElementById('emptyInspector').hidden=true;
   hideInspectorKinds();
 
@@ -14689,6 +14743,71 @@ barComponentSignalMode.addEventListener('change',()=>{
   render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 });
 barComponentColorSlot.addEventListener('click',()=>openColorSlotPanel('component'));
+
+// ---- Bus gesture: a press on a bus's label or rim selects it; a drag moves it -------------------
+// (LAYOUT-MODEL.md "As built: buses", Selecting and moving a bus.) A straight bus moves across its
+// own axis only; a bus with a corner moves freely. The move is previewed by a transform on the
+// drawn band, rim and label, and written once, on release, by the layout operation bus with only
+// the points changed. A move that would part two buses a wire rides one after the other is refused.
+let busGesture=null;
+function busGestureParts(id){
+  const of=sel=>[...document.querySelectorAll(sel)].filter(el=>el.dataset.busId===id);
+  return {groups:of('g.bus-band,g.bus-hit-band'),label:of('text.bus-label')[0]||null};
+}
+function previewBusGesture(g,dx,dy){
+  const parts=busGestureParts(g.id),moved=dx||dy,shift=`translate(${dx} ${dy})`;
+  for(const el of parts.groups){if(moved)el.setAttribute('transform',shift);else el.removeAttribute('transform')}
+  if(!parts.label)return;
+  const next=moved?(g.labelTransform?`${shift} ${g.labelTransform}`:shift):g.labelTransform;
+  if(next)parts.label.setAttribute('transform',next);else parts.label.removeAttribute('transform');
+}
+function beginBusGesture(e,id){
+  if(e.button!==0)return;
+  e.stopPropagation();
+  selectBus(id);
+  const points=SovSchematicLayout.busPoints(activeBuses()[id]?.points);if(!points)return;
+  const axis=points.every(p=>p.x===points[0].x)?'x':points.every(p=>p.y===points[0].y)?'y':'both';
+  busGesture={id,pointerId:e.pointerId,start:svgPoint(e.clientX,e.clientY),points,axis,dx:0,dy:0,labelTransform:busGestureParts(id).label?.getAttribute('transform')||''};
+}
+function moveBusGesture(e){
+  const g=busGesture;if(!g||e.pointerId!==g.pointerId)return;
+  e.preventDefault();
+  const q=svgPoint(e.clientX,e.clientY),step=dragSnapStep(e);
+  let dx=q.x-g.start.x,dy=q.y-g.start.y;
+  if(step>0){dx=Math.round(dx/step)*step;dy=Math.round(dy/step)*step}
+  // A vertical bus moves on x only, a horizontal bus on y only.
+  if(g.axis==='x')dy=0;else if(g.axis==='y')dx=0;
+  g.dx=dx;g.dy=dy;previewBusGesture(g,dx,dy);
+}
+// The first pair of buses that a wire rides one after the other, one of them this bus, and that
+// would no longer meet with this bus at points; null when every such pair still meets.
+function busMoveGap(id,points){
+  const all=activeBuses();
+  for(const w of wires){
+    const ids=busSpecOf(w)?.buses;if(!ids)continue;
+    for(let i=1;i<ids.length;i++){
+      const a=ids[i-1],b=ids[i];if((a!==id&&b!==id)||a===b||!all[a]||!all[b])continue;
+      if(!SovSchematicLayout.busMeet(a===id?points:all[a].points,b===id?points:all[b].points))return [a,b];
+    }
+  }
+  return null;
+}
+function finishBusGesture(e,{cancel=false}={}){
+  const g=busGesture;if(!g||(e&&e.pointerId!==g.pointerId))return;
+  busGesture=null;
+  if(cancel||(!g.dx&&!g.dy)){previewBusGesture(g,0,0);return}
+  const bus=activeBuses()[g.id];if(!bus){render();return}
+  const points=g.points.map(p=>({x:p.x+g.dx,y:p.y+g.dy})),gap=busMoveGap(g.id,points);
+  if(gap){render();statusEl.textContent=`Bus move refused: ${gap[0]} and ${gap[1]} would not meet`;return}
+  const result=runLayoutOp('bus',{id:g.id,points,pitch:bus.pitch,label:bus.label,between:bus.between,lanes:bus.lanes,order:bus.order},'Move bus');
+  if(!result?.ok){render();statusEl.textContent=`Bus move refused: ${result?.message||result?.code||g.id}`;return}
+  selectBus(g.id,{focus:false});
+  statusEl.textContent='Bus moved';
+}
+window.addEventListener('pointermove',moveBusGesture,true);
+window.addEventListener('pointerup',e=>finishBusGesture(e),true);
+window.addEventListener('pointercancel',e=>finishBusGesture(e,{cancel:true}),true);
+window.addEventListener('blur',()=>finishBusGesture(null,{cancel:true}));
 /* END src/60-interactions.js */
 </script>
 <script data-beta-module="src/70-editor-controls.js">
@@ -14779,6 +14898,8 @@ barPortColorSlot.addEventListener('click',()=>openColorSlotPanel('port'));
 function deleteSelected(){
   cancelWireDrag();
   if(!selected)return;
+  // A bus is a record of its layout: Delete leaves it and the wires on it.
+  if(typeof selected==='string'&&selected.startsWith('bus:')){statusEl.textContent='A bus is removed through its layout';return}
   // Flush any pending edit first so deletion always has a distinct pre-delete snapshot.
   commitHistoryCapture();
 
@@ -15543,6 +15664,7 @@ function renderStandaloneSvgNow(opts={}){
   // A still picture cannot show travel: a packet frozen mid-wire reads as a junction.
   // Packets stay only when the file is made to loop (--loop).
   if (!opts.packets) clone.querySelectorAll('.wire-packet').forEach(x => x.remove());
+  clone.querySelectorAll('.bus-hit-band').forEach(x => x.remove());
 
   // A wire on a local surface already sits just after its host in the node layer
   // (renderWires), so the picture shows it above the host body with no lifting here.

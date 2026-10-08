@@ -149,6 +149,7 @@ BROWSER=[
     'tests/drop_on_wire_redraw_qa.py',
     'tests/wire_host_settle_qa.py',
     'tests/bus_lane_hold_qa.py',
+    'tests/bus_select_move_qa.py',
     'tests/live_link_qa.py',
     'tests/address_open_qa.py',
     'tests/select_menu_contrast_qa.py',

@@ -292,27 +292,42 @@ function busLabelsOfWire(w){
   const all=activeBuses();return spec.buses.map(id=>all[id]?.label).filter(l=>typeof l==='string'&&l);
 }
 // Each bus as a band behind the wires: its lane count times its pitch, plus 8, with rounded ends;
-// its label once, beyond its start, reading along it.
+// its label once, beyond its start, reading along it. The wires on a bus lie over its band, so the
+// bus is taken by its label or by its rim: after each band a g.bus-hit-band holds one rect.bus-hit
+// per segment, the band rect again with a transparent stroke that reaches outside it
+// (styles/app.css). The selected bus (selected is bus: and its id) carries class selected.
 function renderBuses(layer){
   const all=activeBuses(),st=busRoutesForRender(),SVG='http://www.w3.org/2000/svg';
+  const chosen=typeof selected==='string'&&selected.startsWith('bus:')?selected.slice(4):null,drawn=new Set();
+  const press=id=>e=>{if(typeof beginBusGesture==='function')beginBusGesture(e,id)};
   for(const id of Object.keys(all).sort()){
     const bus=all[id],line=busLine(bus);if(!line)continue;
     const n=st.lanes.get(id)?.length||0,hw=(n*busPitchOf(bus)+8)/2;
-    const g=document.createElementNS(SVG,'g');g.setAttribute('class','bus-band');g.dataset.busId=id;g.dataset.lanes=String(n);
+    const g=document.createElementNS(SVG,'g');g.setAttribute('class','bus-band'+(chosen===id?' selected':''));g.dataset.busId=id;g.dataset.lanes=String(n);
+    const hits=document.createElementNS(SVG,'g');hits.setAttribute('class','bus-hit-band');hits.dataset.busId=id;
     for(const s of line.segs){
       const r=document.createElementNS(SVG,'rect');
       r.setAttribute('x',String(Math.min(s.a.x,s.b.x)-hw));r.setAttribute('y',String(Math.min(s.a.y,s.b.y)-hw));
       r.setAttribute('width',String(Math.abs(s.b.x-s.a.x)+2*hw));r.setAttribute('height',String(Math.abs(s.b.y-s.a.y)+2*hw));
       r.setAttribute('rx',String(hw));r.setAttribute('ry',String(hw));g.appendChild(r);
+      const h=document.createElementNS(SVG,'rect');h.setAttribute('class','bus-hit');
+      for(const k of ['x','y','width','height','rx'])h.setAttribute(k,r.getAttribute(k));
+      h.addEventListener('pointerdown',press(id));hits.appendChild(h);
     }
-    layer.appendChild(g);
+    layer.appendChild(g);layer.appendChild(hits);drawn.add(id);
     const label=typeof bus.label==='string'?bus.label.trim():'';if(!label)continue;
     const d=line.segs[0].dir,at={x:line.pts[0].x-d.x*(hw+6),y:line.pts[0].y-d.y*(hw+6)};
     const t=document.createElementNS(SVG,'text');t.setAttribute('class','bus-label');t.dataset.busId=id;t.dataset.role='caption';
     t.setAttribute('x',String(at.x));t.setAttribute('y',String(at.y));t.setAttribute('dominant-baseline','central');
     if(d.y!==0){t.setAttribute('text-anchor','start');t.setAttribute('transform',`rotate(${d.y>0?-90:90} ${at.x} ${at.y})`)}
     else t.setAttribute('text-anchor',d.x>0?'end':'start');
-    t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk()};stroke:none;pointer-events:none`);
+    t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk()};stroke:none;cursor:pointer`);
+    t.addEventListener('pointerdown',press(id));
     t.textContent=label;layer.appendChild(t);
   }
+  // A selected bus the active layout no longer holds is deselected; one that is drawn is read
+  // into the Inspector again, as drawn.
+  if(chosen==null)return;
+  if(!all[chosen]){selected=null;selectNode(null)}
+  else if(drawn.has(chosen)&&typeof selectBus==='function')selectBus(chosen,{focus:false});
 }
