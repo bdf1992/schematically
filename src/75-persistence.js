@@ -420,6 +420,7 @@ function renderStandaloneSvgNow(opts={}){
   // A still picture cannot show travel: a packet frozen mid-wire reads as a junction.
   // Packets stay only when the file is made to loop (--loop).
   if (!opts.packets) clone.querySelectorAll('.wire-packet').forEach(x => x.remove());
+  clone.querySelectorAll('.bus-hit-band').forEach(x => x.remove());
 
   // A wire on a local surface already sits just after its host in the node layer
   // (renderWires), so the picture shows it above the host body with no lifting here.

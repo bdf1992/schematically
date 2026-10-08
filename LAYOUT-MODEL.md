@@ -969,6 +969,22 @@ route-through-node, 80 text-collision. With order and both harnesses: 185, 23, 0
 Text-collision follows the fitted zoom more than the routes: labels keep their screen size, so a
 wider picture is fitted smaller and titles crowd their subtitles.
 
+**Selecting and moving a bus** (2026-10-07; `src/41-buses.js` `renderBuses`, `src/50-selection.js`
+`selectBus`, `src/60-interactions.js` `beginBusGesture`). Three rules. *What selects a bus*: a press on
+its label, or on its rim, a strip 12 screen px wide outside its band (`rect.bus-hit` in a
+`g.bus-hit-band` after each band; the export drops it). The wires on a bus lie over its band, so a press
+on a wire that rides it selects the wire. The selection value is `bus:` followed by the bus id; the band
+carries `selected`, and the Inspector shows the bus's label, the two groups it runs between, its lane
+count and one row per wire it carries. A selected bus has no selection bar, and Delete leaves it.
+*What a drag moves*: a straight bus moves across its own axis only (a vertical bus on x, a horizontal
+bus on y); a bus with a corner moves on both. The delta snaps to the grid step as a card's move does.
+On release the bus is written once by the layout operation `bus` with only its points changed (history
+label `Move bus`), and every wire that names it follows, because bus routes are rebuilt from the bus's
+points. *When a move is refused*: when a wire rides this bus and another one after the other and the two
+would no longer meet (`busMeet` null, the `BUS_GAP` rule of a declared route). The bus returns, nothing
+is written, and the status reads `Bus move refused:` with the two bus ids.
+`tests/bus_select_move_qa.py` holds all three.
+
 ## 6. Order of work
 
 1. `document.layout.views` with a `main` view migrated from entity geometry. Route

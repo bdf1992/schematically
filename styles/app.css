@@ -512,7 +512,9 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
 .wire-blank-ghost text{font-size:calc(clamp(8px,8px * var(--zoom,1),14px) / var(--zoom,1));font-weight:800;fill:var(--muted);letter-spacing:.05em;paint-order:stroke;stroke:var(--panel);stroke-width:2px}
 @keyframes wireBlankGhostIn{to{opacity:.62}}
 .bus-band{pointer-events:none}.bus-band rect{fill:var(--muted);fill-opacity:.06;stroke:var(--muted);stroke-opacity:.3;stroke-width:var(--stroke-structure,1)}
-.bus-label{font-weight:var(--type-caption-weight,600);letter-spacing:.02em;pointer-events:none}
+.bus-label{font-weight:var(--type-caption-weight,600);letter-spacing:.02em}
+.bus-hit{fill:transparent;stroke:transparent;stroke-width:calc(24px / var(--zoom,1));pointer-events:all;cursor:grab}
+.bus-band.selected rect,:root[data-appearance="dark"] .bus-band.selected rect{stroke:var(--canvas-ink);stroke-opacity:1;stroke-width:var(--stroke-structure-selected,2.85px)}
 .file-menu-item:disabled{color:var(--muted);opacity:.52;cursor:not-allowed}
 .file-menu-item:disabled:hover{background:transparent}
 :root[data-appearance="dark"]{
