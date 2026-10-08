@@ -265,7 +265,8 @@ function settleDraggedRoutes(){
       occupied.push(...routeSegments(points,w));
     }
   }));
-  renderWiresForDrag();
+  // The settle pass is the one a rerouted wire travels from (wireTravelPass, src/55-render.js).
+  try{wireTravelPass=true;renderWiresForDrag()}finally{wireTravelPass=false}
   wires.forEach((w,i)=>{
     if(!(w.a===activeNodeDrag || w.b===activeNodeDrag)) return;
     const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');

@@ -146,6 +146,7 @@ BROWSER=[
     'tests/performance_regression_qa.py',
     'tests/map_render_time_qa.py',
     'tests/drag_redraw_parity_qa.py',
+    'tests/wire_travel_qa.py',
     'tests/drop_on_wire_redraw_qa.py',
     'tests/wire_host_settle_qa.py',
     'tests/bus_lane_hold_qa.py',

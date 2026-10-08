@@ -222,6 +222,9 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .move-tether{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:1.5;stroke-linecap:round;pointer-events:none;opacity:.28;stroke-dasharray:4 6}
 .move-anchor{fill:var(--canvas-tone);stroke:var(--wire-ink,var(--canvas-ink));stroke-width:1.6;pointer-events:none;opacity:.55}
 .wire-group.drag-frozen .wire{opacity:.82}
+.wire-travel{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:var(--stroke-flow,2.25);stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.wire-group[data-travel] .wire{stroke-opacity:0}
+.wire-group[data-travel] .flow-chevron{opacity:0}
 
 #workspace .ghost-flow-chevron,
 #workspace .ghost-route-preview{display:none}

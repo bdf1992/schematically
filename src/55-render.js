@@ -1252,6 +1252,66 @@ function placeWireLabels(){
 // press of a move until a host is applied or anything else redraws the wires.
 let dragSignalState=null;
 function dropDragSignalState(){dragSignalState=null}
+// A wire that takes a new route when a move settles travels there. The settle pass
+// (settleDraggedRoutes, src/40-routing.js) is the only one that sets wireTravelPass; in it the wire
+// pass records, per wire id, the points a rerouted wire was last drawn with, and draws every group
+// at its final route as always. startWireTravel then moves one added path from the old route to the
+// new one; the drawn document itself never moves.
+let wireTravelPass=false;
+const wireTravelFrom=new Map();
+const WIRE_TRAVEL_MS=180,WIRE_TRAVEL_SAMPLES=32;
+// Whether two routes differ: in their count of points, or by more than 0.5 on any coordinate.
+function wireRouteDiffers(p,q){
+  return p.length!==q.length||p.some((v,k)=>Math.abs(v.x-q[k].x)>.5||Math.abs(v.y-q[k].y)>.5);
+}
+// count points at equal fractions of the length of a polyline, its two ends among them.
+function wireTravelSamples(points,count){
+  const lengths=[0];
+  for(let k=1;k<points.length;k++)lengths.push(lengths[k-1]+Math.hypot(points[k].x-points[k-1].x,points[k].y-points[k-1].y));
+  const total=lengths[lengths.length-1],out=[];
+  let seg=1;
+  for(let n=0;n<count;n++){
+    const at=count>1?total*n/(count-1):0;
+    while(seg<points.length-1&&lengths[seg]<at)seg++;
+    const a=points[Math.max(0,seg-1)],b=points[Math.min(seg,points.length-1)],span=lengths[Math.min(seg,points.length-1)]-lengths[Math.max(0,seg-1)];
+    const f=span>0?Math.min(1,Math.max(0,(at-lengths[seg-1])/span)):0;
+    out.push({x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f});
+  }
+  return out;
+}
+// Path interpolation by resampling: both routes are sampled at equal fractions of their length and
+// each sample moves straight to its partner, over 180 ms with a cubic ease out. One frame loop
+// drives every travel started together. A travel whose path left the document (its group was drawn
+// again) is dropped; the wire is then simply at its route.
+function startWireTravel(){
+  const from=[...wireTravelFrom];wireTravelFrom.clear();
+  if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
+  const line=pts=>pts.map((q,k)=>`${k?'L':'M'}${+q.x.toFixed(2)} ${+q.y.toFixed(2)}`).join(' ');
+  let travels=[];
+  for(const [id,old] of from){
+    const drawn=wireGroupDrawn.get(id);
+    if(!drawn||!drawn.group.isConnected||drawn.group.classList.contains('sectioned'))continue;
+    const now=drawnRoutePoints.get(drawn.index);
+    if(!now||old.length<2||now.length<2||!wireRouteDiffers(old,now))continue;
+    const a=wireTravelSamples(old,WIRE_TRAVEL_SAMPLES),b=wireTravelSamples(now,WIRE_TRAVEL_SAMPLES);
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('class','wire-travel');path.setAttribute('d',line(a));
+    drawn.group.appendChild(path);drawn.group.dataset.travel='true';
+    travels.push({path,group:drawn.group,a,b});
+  }
+  if(!travels.length)return;
+  const start=performance.now();
+  const frame=time=>{
+    const t=Math.min(1,Math.max(0,(time-start)/WIRE_TRAVEL_MS)),e=1-(1-t)**3;
+    travels=travels.filter(travel=>travel.path.isConnected);
+    for(const {path,group,a,b} of travels){
+      if(t>=1){path.remove();delete group.dataset.travel}
+      else path.setAttribute('d',line(a.map((q,k)=>({x:q.x+(b[k].x-q.x)*e,y:q.y+(b[k].y-q.y)*e}))));
+    }
+    if(t<1&&travels.length)requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
 // The wire pass of a move (pointer or keyboard): the held signal state, and the groups whose inputs
 // did not change are kept (renderWires, reuse).
 function renderWiresForDrag(){
@@ -1359,6 +1419,15 @@ function renderWiresOnce(signalState,markers,reuse){
   // Jogs out and close parallels spread a track apart (src/40-routing.js nudgeRoutes); bus lanes and taps stay fixed.
   const trackCramped=nudgeRoutes(routes,busState?[...busState.routes].flatMap(([id,pts])=>routeSegments(pts,wires.find(x=>x.id===id))):[]);
   for(const [i,r] of routes)r.segs=routeSegments(r.points,wires[i]);
+  if(wireTravelPass){
+    // A settle pass: where each rerouted wire was last drawn, kept for its travel (startWireTravel).
+    const waiting=wireTravelFrom.size;
+    for(const [i,r] of routes){
+      const was=drawnRoutePoints.get(i);
+      if(was&&wireRouteDiffers(was,r.points)&&!wireTravelFrom.has(wires[i].id))wireTravelFrom.set(wires[i].id,clonePoints(was));
+    }
+    if(!waiting&&wireTravelFrom.size)requestAnimationFrame(startWireTravel);
+  }
   drawnRoutePoints.clear();for(const [i,r] of routes)drawnRoutePoints.set(i,clonePoints(r.points));
   const hops=new Map(),order=[...routes.keys()];arrowKeepClear=[];
   for(let x=0;x<order.length;x++)for(let y=x+1;y<order.length;y++){
