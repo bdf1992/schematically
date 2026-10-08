@@ -77,9 +77,7 @@ per Dockerfile and requirements-dev.txt content and reused after. The tree is
 mounted read-only and copied inside the container, so a run changes no file on
 the host.
 
-Note: several browser suites rewrite tracked byproducts under `tests/`
-(screenshots, `saved-test.sov*`, `performance-results.json`). Discard those
-with `git checkout -- tests/` unless you intend to re-baseline them.
+A suite that leaves a tracked file under `tests/` changed after a run has a defect: discard the change with `git checkout -- tests/` and file it.
 
 ## 4. Deployment pattern
 
