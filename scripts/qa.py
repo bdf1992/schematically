@@ -152,6 +152,7 @@ BROWSER=[
     'tests/drag_lifecycle_stress_qa.py',
     'tests/performance_regression_qa.py',
     'tests/map_render_time_qa.py',
+    'tests/map_keyboard_move_qa.py',
     'tests/drag_redraw_parity_qa.py',
     'tests/wire_travel_qa.py',
     'tests/drop_on_wire_redraw_qa.py',
