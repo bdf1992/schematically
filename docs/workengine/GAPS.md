@@ -108,6 +108,60 @@ What the full map still works around:
   rows, Handoff, Reception), so they have no Wire; `build_map.py` prints them and the document's
   description names them.
 
+## The map runs
+
+Written 2026-10-07. `map.sov` paints each card's status from the gap map and says nothing about
+whether a query's status follows from the records behind it. `run_map.py` writes a copy of the map
+that the state-space engine (`src/07-state-surface.js`) runs, so the two can be compared. `map.sov`
+and `map.svg` are not changed, and no drawing reads the run.
+
+The rule:
+
+- A record is on only when its gap map status is `exists`. `partial` and `missing` are off.
+- A query is on only when every record its backing names is on.
+- A backing name the gap map holds no record for counts as off.
+- A backing name resolves to a record as `build_map.py` resolves it: by `backing_names`, then by the
+  record name, then by the part of a record name before its slash (Publication for Publication /
+  edition).
+
+In the copy each `we-record` card is an asserted binary signal at 1 or 0. Each `we-specification`
+card whose backing names all resolve is a derived binary signal with combine `and` over the `backs`
+wires `map.sov` already holds; one with a name that resolves to no record is asserted at 0, because
+no wire could carry the missing record. Today that is 8 records on and 30 off, 21 derived queries
+and 3 asserted at 0.
+
+The two commands, from the repository root:
+
+- `python docs/workengine/run_map.py --out PATH` writes the copy to PATH, the same bytes every run.
+- `python docs/workengine/run_map.py --list` runs the copy (createSimulation, then advance 100 ms)
+  and prints one line per query: `agree` or `DISAGREE`, the query id, its painted status, its level
+  in the run, and the backing names that are off or are not records. A query disagrees when it is
+  painted `exists` and runs at 0, or painted `partial` or `missing` and runs at 1.
+
+The two scenarios stored in the copy (`references`, kind `scenario`):
+
+- `s-as-read`, The gap map as read: advance 100 ms, and every query is at the level the rule gives.
+- `s-all-records-exist`, Every record exists: set each of the 30 records that is not `exists` to 1,
+  advance 100 ms, and every derived query is at 1 while the three asserted ones stay at 0.
+
+`tests/work_engine_map_run_qa.py` computes the rule from `source/gapmap.json` on its own and checks
+the copy, both scenarios, the levels of a run, one query turning on when its off record is set, and
+the listing.
+
+The disagreement lines on 2026-10-07, 2 of 24:
+
+```
+DISAGREE spec-02-live painted=exists run=0 off=Video track,Event track
+DISAGREE spec-23-inbox painted=exists run=0 off=Handoff,Reception
+disagreements: 2 of 24
+```
+
+Both are queries painted `exists` that the rule turns off. "Stream the current frame and the newest
+subtitle lines for one booth" names Video track and Event track, which the gap map marks `partial`.
+"List handoffs I must receive and their residuals" names only Handoff and Reception, which the gap
+map has no record for. No query painted `partial` or `missing` runs at 1; only one query runs at 1
+(spec-20-profile, Session and Event).
+
 ## Notes
 
 - The contract names no status for the port "Web booth feeds Recording". The sample marks it

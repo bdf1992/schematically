@@ -28,6 +28,7 @@ STATIC=[
     'tests/state_space_dev_parity_qa.py',
     'tests/sim_parity_qa.py',
     'tests/run_spectrum_qa.py',
+    'tests/work_engine_map_run_qa.py',
     'tests/state_space_perf_qa.py',
     'tests/file_load_wire_canvas_qa.py',
     'tests/desktop_shell_qa.py',
