@@ -8,7 +8,8 @@ community. It reads the raw links, never a graph library's object, because graph
 written undirected and only its links keep each edge's true source and target.
 
 ``to_sov`` writes that document and lays it out by running ``layout_sov.mjs`` from this
-folder as a subprocess. Standard library only; no network and no LLM call.
+folder as a subprocess. A system-cartographer graph is read by each node's ``kind`` and
+``code_community``, a graphify graph by its callable flags and ``community``. Standard library only; no network and no LLM call.
 
     python scripts/graph_to_sov.py GRAPH --out FILE [--labels FILE] [--label-length N] [--no-layout]
                                   [--level nodes|communities]
@@ -33,6 +34,8 @@ CANVAS = "canvas:global"
 # the card subtitle already show them.
 STRUCTURAL_RELATIONS = frozenset({"contains", "method", "rationale_for"})
 SYMBOL_BY_KIND = {"function": "act", "class": "hold", "module": "ground"}
+# What system-cartographer's `kind` field says a node is.
+_KIND_FIELD = {"function": "function", "class": "class", "file": "module"}
 BASES = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 ELLIPSIS = "…"
 
@@ -58,7 +61,7 @@ def node_kind(node: dict) -> str | None:
     label = str(node.get("label") or "")
     if label and source_file.replace("\\", "/").endswith(label):
         return "module"
-    return None
+    return _KIND_FIELD.get(node.get("kind"))
 
 
 def edge_label(relation: str, context: str | None, label_length: int = LABEL_LENGTH) -> str:
@@ -76,14 +79,20 @@ def _card_label(label: str) -> str:
     return label[:-2] if label.endswith("()") else label
 
 
-def _community(node: dict) -> int | None:
-    raw = node.get("community")
+def _as_int(raw) -> int | None:
     if raw is None or isinstance(raw, bool):
         return None
     try:
         return int(raw)
     except (TypeError, ValueError):
         return None
+
+
+def _community(node: dict) -> int | None:
+    code = _as_int(node.get("code_community"))
+    if code is not None:
+        return code
+    return _as_int(node.get("community"))
 
 
 def _cards(nodes: list[dict]) -> tuple[list[dict], dict[str, str], dict[str, int | None], int]:
