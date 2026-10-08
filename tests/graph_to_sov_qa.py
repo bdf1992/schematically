@@ -284,6 +284,33 @@ def layout_and_validate(tmp_path: Path) -> None:
     assert sorted(p.name for p in tmp_path.iterdir() if p.is_file()) == ['laid-out.sov']
 
 
+def _cart(node_id, label, kind, source_file, code_community, community=0):
+    return {'id': node_id, 'label': label, 'file_type': 'code', 'source_file': source_file,
+            'kind': kind, 'code_community': code_community, 'community': community}
+
+
+def cartographer_nodes_are_read_by_kind() -> None:
+    nodes = [
+        _cart('f1', 'one()', 'function', 'pkg/a.py', 7),
+        _cart('f2', 'two()', 'function', 'pkg/a.py', 7),
+        _cart('c1', 'Holder', 'class', 'pkg/a.py', 7),
+        _cart('m1', 'b.py', 'file', 'pkg/b.py', 9),
+        _cart('s1', 'sym', 'symbol', 'pkg/b.py', 9),
+    ]
+    links = [_link('f1', 'f2', 'calls', context='call'),
+             _link('c1', 'f1', 'calls', context='call')]
+    doc = graph_to_sov({'nodes': nodes, 'links': links})
+    cards = _cards(doc)
+    assert {cid: c['symbolId'] for cid, c in cards.items()} == {
+        'f1': 'act', 'f2': 'act', 'c1': 'hold', 'm1': 'ground'}, cards
+    assert 's1' not in cards
+    groups = _groups(doc)
+    assert [g['id'] for g in groups] == ['community-7', 'community-9'], groups
+    assert groups[0]['config']['members'] == ['c1', 'f1', 'f2']
+    assert groups[1]['config']['members'] == ['m1']
+    assert len(doc['wires']) == 2
+
+
 CASES = [
     cards_are_functions_classes_and_modules,
     card_id_collision_names_both,
@@ -297,6 +324,7 @@ CASES = [
     cli_refuses_without_node,
     cli_no_layout_writes_the_document,
     layout_and_validate,
+    cartographer_nodes_are_read_by_kind,
 ]
 
 

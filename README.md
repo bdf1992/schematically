@@ -62,7 +62,7 @@ The agent-facing corpus ships with the repository:
 python scripts/graph_to_sov.py GRAPH --out FILE [--labels FILE] [--label-length N] [--no-layout]
 ```
 
-`GRAPH` is a graphify-format `graph.json`, written by graphify or by system-cartographer. The output is a laid-out document with one card per function, class and module, one wire per call or reference marked `EXTRACTED` or `INFERRED` in `config.basis`, and one group per community. `--labels` is a JSON object from community number to group label; `--no-layout` writes the document without coordinates. The command prints its counts as one line of JSON.
+`GRAPH` is a graphify-format `graph.json`, written by graphify or by system-cartographer. The output is a laid-out document with one card per function, class and module, one wire per call or reference marked `EXTRACTED` or `INFERRED` in `config.basis`, and one group per community. From a graphify graph it reads each node's callable flags and `community`; from a system-cartographer graph it reads `kind` and `code_community`. `--labels` is a JSON object from community number to group label; `--no-layout` writes the document without coordinates. The command prints its counts as one line of JSON.
 
 `--level communities` writes FILE with one card per community and one wire per community pair labelled with its edge count, plus `FILE-stem.communities/community-N.sov`, a document of each community's functions that the card's `config.documentRef` names.
 
