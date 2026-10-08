@@ -34,7 +34,11 @@ def scenario(page,n):
       try{
         window.activePalette=function(...a){paletteCalls++;const was=inPalette;inPalette=true;try{return realPalette.apply(this,a)}finally{inPalette=was}};
         window.activeMonoPalette=function(...a){if(inPalette)paletteBuilds++;return realMono.apply(this,a)};
-        warm=samples(()=>render());
+        // One counted render first: a build seen here fails the test at once, so a
+        // page whose palette cache is gone is not sampled ten more times.
+        const first=once(()=>render());
+        if(paletteBuilds>0)return {nodes:N,wires:wires.length,svgElements:workspace.querySelectorAll('*').length,cold,warm:[first],wiresOnly:[],signal:[],paletteCalls,paletteBuilds};
+        warm=[first,...Array.from({length:RUNS-1},()=>once(()=>render()))];
         wiresOnly=samples(()=>renderWires());
       }finally{
         window.activePalette=realPalette;
@@ -49,11 +53,12 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':1280,'height':800})
     page.set_content(HTML,wait_until='load'); page.wait_for_timeout(150)
     results['small']=scenario(page,5)
-    results['medium']=scenario(page,10)
+    if results['small']['paletteBuilds']==0:
+        results['medium']=scenario(page,10)
     browser.close()
 
 for name,r in results.items():
-    med=lambda k:f"{statistics.median(r[k]):.1f}"
+    med=lambda k:f"{statistics.median(r[k]):.1f}" if r[k] else 'not sampled'
     print(f"{name}: {r['nodes']} cards, warm {med('warm')} ms, wiresOnly {med('wiresOnly')} ms, signal {med('signal')} ms (medians of {RUNS}), cold {r['cold']:.1f} ms, paletteCalls {r['paletteCalls']}, paletteBuilds {r['paletteBuilds']}")
 
 for name,r in results.items():
