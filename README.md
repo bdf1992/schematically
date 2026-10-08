@@ -56,6 +56,14 @@ The agent-facing corpus ships with the repository:
 
 `python scripts/qa.py` is the single authoritative gate, identical locally and in CI: static checks, browser interaction suites, API/HTTP/MCP parity and conformance, stress and performance watchers, mutation tests, the golden corpus, and syntax checks. Defects found by hand get an issue and, once fixed, a regression suite inside the gate. Pushes to `main` deploy to GitHub Pages only after the gate passes. `LOCAL-SETUP.md` covers machine setup, the local QA loop, and the green-main update pattern; `docs/BRANCHING.md` covers the release flow.
 
+## Code graphs
+
+```
+python scripts/graph_to_sov.py GRAPH --out FILE [--labels FILE] [--label-length N] [--no-layout]
+```
+
+`GRAPH` is a graphify-format `graph.json`, written by graphify or by system-cartographer. The output is a laid-out document with one card per function, class and module, one wire per call or reference marked `EXTRACTED` or `INFERRED` in `config.basis`, and one group per community. `--labels` is a JSON object from community number to group label; `--no-layout` writes the document without coordinates. The command prints its counts as one line of JSON.
+
 ## Direction
 
 The current line stabilizes primitives so future work adds definitions and rules rather than parallel implementations. The concerns ahead, tracked as NEXT issues and sketched in `ROADMAP.md`, `HORIZON-SPACE.md`, and `docs/vision/`:
