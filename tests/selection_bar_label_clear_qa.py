@@ -23,9 +23,8 @@ RECTS = """()=>{const r=el=>{if(!el)return null;const b=el.getBoundingClientRect
   return {bar:r(selectionBar),place:selectionBar.dataset.place,hidden:selectionBar.hidden,
     wrap:r(document.querySelector('.workspace-wrap')),
     labels:[...document.querySelectorAll('#workspace .connection-label')].filter(e=>e.getClientRects().length).map(r),
-    c:r(document.querySelector('.node[data-id="c"] rect.body'))}}"""
-# c is the card's body rectangle: the node group also holds the resize and rotate handles that
-# hang below a selected card, and those are editor chrome, not the card.
+    c:r(document.querySelector('.node[data-id="c"]')),body:r(document.querySelector('.node[data-id="c"] rect.body'))}}"""
+# c is the whole node group, resize and rotate handles included; body is the card's body alone.
 
 
 def overlap_area(a, b):
@@ -75,7 +74,7 @@ with sync_playwright() as p:
     page.wait_for_timeout(200)
     r = read(page, '(b)')
     assert r['place'] == 'above', r['place']
-    gap = r['c']['top'] - r['bar']['bottom']
+    gap = r['body']['top'] - r['bar']['bottom']
     assert gap <= 20, ('bar is more than 20 px above the card', gap)
 
     # (c) label back; drag c 150 px right by the pointer; bar and label stay apart.

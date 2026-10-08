@@ -532,8 +532,17 @@ function positionSelectionBar(){
   const wrap=document.querySelector('.workspace-wrap').getBoundingClientRect();
   const clamp=(left,top)=>({left:Math.max(90,Math.min(wrap.width-90,left)),top:Math.max(44,Math.min(wrap.height-10,top))});
   const mid=svgToWorkspacePixel((a.l+a.r)/2,0).x;
-  const above=clamp(mid,svgToWorkspacePixel(0,a.t-(isBody?10:0)).y-6);
-  const below=clamp(mid,svgToWorkspacePixel(0,a.b+(isBody?10:0)).y+6+selectionBar.offsetHeight);
+  const topY=svgToWorkspacePixel(0,a.t).y,aboveY=svgToWorkspacePixel(0,a.t-(isBody?10:0)).y-6;
+  const above=clamp(mid,aboveY);
+  // Below, a card is measured from its whole screen rectangle (its resize and rotate handles
+  // hang under the body), with the same gap as above.
+  let belowEdge=svgToWorkspacePixel(0,a.b).y;
+  if(isBody){
+    const g=document.querySelector(`.node[data-id="${selected}"]`)?.getBoundingClientRect();
+    if(g)belowEdge=Math.max(belowEdge,g.bottom-wrap.top);
+  }
+  const gap=isBody?topY-aboveY:6;
+  const below=clamp(mid,belowEdge+gap+selectionBar.offsetHeight);
   const labels=[...workspace.querySelectorAll('.connection-label')].filter(el=>el.getClientRects().length).map(el=>{
     const r=el.getBoundingClientRect();return {left:r.left-wrap.left,top:r.top-wrap.top,right:r.right-wrap.left,bottom:r.bottom-wrap.top}});
   const w2=selectionBar.offsetWidth/2,h=selectionBar.offsetHeight;
