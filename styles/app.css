@@ -38,8 +38,23 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .workspace-wrap{position:relative;overflow:hidden;user-select:none;-webkit-user-select:none}
 #workspace{width:100%;height:100%;display:block;touch-action:none;outline:none;
   background-color:var(--canvas-tone,#fbfbf9);
-  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
-  background-size:var(--canvas-grid-size) var(--canvas-grid-size);
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+    linear-gradient(color-mix(in srgb,var(--grid) 40%,transparent) 1px,transparent 1px),
+    linear-gradient(90deg,color-mix(in srgb,var(--grid) 40%,transparent) 1px,transparent 1px);
+  background-size:
+    var(--canvas-grid-major,96px) var(--canvas-grid-major,96px),
+    var(--canvas-grid-major,96px) var(--canvas-grid-major,96px),
+    var(--canvas-grid-size) var(--canvas-grid-size),
+    var(--canvas-grid-size) var(--canvas-grid-size);
+  background-position:var(--canvas-grid-x,0px) var(--canvas-grid-y,0px);
+}
+#workspace.grid-minor-hidden{
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:var(--canvas-grid-major,96px) var(--canvas-grid-major,96px);
 }
 #workspace.grid-hidden{background-image:none}
 #workspace:focus-visible{outline:2px solid #8a8a82;outline-offset:-2px}

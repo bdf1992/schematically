@@ -45,8 +45,23 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .workspace-wrap{position:relative;overflow:hidden;user-select:none;-webkit-user-select:none}
 #workspace{width:100%;height:100%;display:block;touch-action:none;outline:none;
   background-color:var(--canvas-tone,#fbfbf9);
-  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
-  background-size:var(--canvas-grid-size) var(--canvas-grid-size);
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+    linear-gradient(color-mix(in srgb,var(--grid) 40%,transparent) 1px,transparent 1px),
+    linear-gradient(90deg,color-mix(in srgb,var(--grid) 40%,transparent) 1px,transparent 1px);
+  background-size:
+    var(--canvas-grid-major,96px) var(--canvas-grid-major,96px),
+    var(--canvas-grid-major,96px) var(--canvas-grid-major,96px),
+    var(--canvas-grid-size) var(--canvas-grid-size),
+    var(--canvas-grid-size) var(--canvas-grid-size);
+  background-position:var(--canvas-grid-x,0px) var(--canvas-grid-y,0px);
+}
+#workspace.grid-minor-hidden{
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:var(--canvas-grid-major,96px) var(--canvas-grid-major,96px);
 }
 #workspace.grid-hidden{background-image:none}
 #workspace:focus-visible{outline:2px solid #8a8a82;outline-offset:-2px}
@@ -700,11 +715,11 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
       <label class="grid-row"><span>Snap on settle</span><input id="gridSnapInput" type="checkbox" checked></label>
       <label class="grid-row"><span>Grid size</span>
         <select id="gridSizeInput">
-          <option value="12">12 px</option>
-          <option value="16">16 px</option>
-          <option value="24" selected>24 px</option>
-          <option value="32">32 px</option>
-          <option value="48">48 px</option>
+          <option value="12">12</option>
+          <option value="16">16</option>
+          <option value="24" selected>24</option>
+          <option value="32">32</option>
+          <option value="48">48</option>
         </select>
       </label>
       <details class="mini-disclosure"><summary><span class="info-dot">i</span> Drag modifiers</summary><div>Shift = half grid · Ctrl/Cmd = double grid · Alt = free.</div></details>
@@ -9698,6 +9713,7 @@ function currentZoom(){
   return BASE_VIEW.w / camera.w;
 }
 function syncLabelScale(){
+  syncCanvasGrid();
   // The viewBox is also fitted into the actual workspace between the panels.
   // Nominal camera zoom alone misses this scale, especially on narrow screens.
   const matrix=workspace.getScreenCTM();
@@ -9874,8 +9890,23 @@ function snapModeLabel(step){
   if(step===0) return 'free settle';
   return `settles to ${step}`;
 }
+function syncCanvasGrid(){
+  // The grid is a CSS background drawn in world units: minor cell = canvasGridSize,
+  // the unit of the snap step; every fourth line is a major line.
+  const m=workspace.getScreenCTM();
+  if(!m)return;
+  const r=workspace.getBoundingClientRect();
+  const k=Math.hypot(m.a,m.b);
+  const minor=canvasGridSize*k;
+  const major=4*minor;
+  workspace.style.setProperty('--canvas-grid-size',`${minor}px`);
+  workspace.style.setProperty('--canvas-grid-major',`${major}px`);
+  workspace.style.setProperty('--canvas-grid-x',`${m.e-r.left-0.5}px`);
+  workspace.style.setProperty('--canvas-grid-y',`${m.f-r.top-0.5}px`);
+  workspace.classList.toggle('grid-minor-hidden',minor<8);
+}
 function applyGridSettings(){
-  document.documentElement.style.setProperty('--canvas-grid-size',`${canvasGridSize}px`);
+  syncCanvasGrid();
   workspace.classList.toggle('grid-hidden',!canvasGridVisible);
   gridVisibleInput.checked=canvasGridVisible;
   gridSnapInput.checked=canvasSnapEnabled;
