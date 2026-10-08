@@ -141,8 +141,10 @@ document body). Both answer `connected:false` when no editor is pushing, and car
 schema is refused with 400. The snapshot is the **unsaved editor state**, a different document
 from the `.sov` file this server owns; `schematic.document.get` still reads the server's file.
 
-`GET /editor` (and `GET /index.html`) serve the built `index.html` with `cache-control: no-store`,
-or 404 naming `python build.py` when no build exists. The root description's `editor` field is
+`GET /editor` and `GET /index.html` serve the built `index.html` with `cache-control: no-store`,
+or 404 naming `python build.py` when no build exists. `/editor` carries the document of the server in a
+`sov-served-document` script tag (JSON, every `<` escaped) and opens it at start; an `open` parameter in the
+address wins over it. `/index.html` is the blank build, with no tag. The root description's `editor` field is
 `/editor`.
 
 ## HTTP
