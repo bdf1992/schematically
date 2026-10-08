@@ -69,11 +69,14 @@ function historyFingerprintOf(doc){
 }
 function setHistoryHint(label){if(label)historyState.hint=String(label).slice(0,80)}
 function initializeHistory(){historyState.baseline=historyDocument();historyState.undo=[];historyState.redo=[];updateHistoryUI()}
+// One gesture is one history entry: while a pointer gesture is held the capture timer waits for its end
+// and commits nothing, and writes made during the gesture join the gesture's entry.
+function historyGestureHeld(){return !!(activeNodeDragState||wireDrag||componentTransformGesture||portSlide)}
 function scheduleHistoryCapture(label=null){
   if(historyState.replaying)return;
   if(label)setHistoryHint(label);
   if(historyState.timer)clearTimeout(historyState.timer);
-  historyState.timer=setTimeout(()=>commitHistoryCapture(),320);
+  historyState.timer=setTimeout(()=>{historyState.timer=null;if(historyGestureHeld()){scheduleHistoryCapture();return}commitHistoryCapture()},320);
 }
 function commitHistoryCapture(label=null){
   if(historyState.timer){clearTimeout(historyState.timer);historyState.timer=null}
