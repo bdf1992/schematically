@@ -521,16 +521,19 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 else openDesktopLaunchDocument();
 
 // The address parameter open names a relative path on this page's own origin; a link is enough to show
-// a document. Anything with a scheme, a host, a leading slash, a backslash or a parent segment is refused.
+// a document. Anything with a scheme, a host, a leading slash or a backslash is refused. A parent segment
+// is refused however it is spelled, and so is any target whose resolved path leaves the folder of the page.
 function addressDocumentTarget(raw,base){
   const reason='only a relative path on this site is opened';
   const refuse={ok:false,reason};
   const text=String(raw??'');
   if(!text.trim()||text.startsWith('/')||text.startsWith('\\')||text.includes('\\')||/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text))return refuse;
-  if(text.split(/[?#]/)[0].split('/').some(segment=>segment==='..'))return refuse;
+  if(text.split(/[?#]/)[0].split('/').some(segment=>segment.replace(/%2e/gi,'.')==='..'))return refuse;
   let url;
   try{url=new URL(text,base)}catch(_){return refuse}
   if(url.origin!==location.origin||(url.protocol!=='http:'&&url.protocol!=='https:'))return refuse;
+  const dir=new URL('.',base).pathname;
+  if(!url.pathname.startsWith(dir))return refuse;
   const last=url.pathname.split('/').pop()||'';
   let name=last;
   try{name=decodeURIComponent(last)}catch(_){ }
