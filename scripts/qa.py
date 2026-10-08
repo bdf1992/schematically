@@ -71,6 +71,7 @@ BROWSER=[
     'tests/appearance_tiers_qa.py',
     'tests/attached_list_qa.py',
     'tests/grid_visibility_qa.py',
+    'tests/grid_world_units_qa.py',
     'tests/editor_kernel_qa.py',
     'tests/editor_kernel_extended_qa.py',
     'tests/file_surface_qa.py',
