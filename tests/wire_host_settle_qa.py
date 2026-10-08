@@ -11,7 +11,7 @@ record of drawn groups cleared.
 
 Planted document (headless Chromium, 1600 x 1000, snap off), as in tests/drop_on_wire_redraw_qa.py:
 act cards p 404,300, q 1204,300, c 464,140, e 1204,100, f 104,140; wires x0 p-q, x1 c-e and x2 f-c.
-Five scenarios, each on the document opened afresh:
+Six scenarios, each on the document opened afresh:
 
 - (a) pointer drop: c pressed, moved 170 down in 6 pointer moves, rested 700 ms, released onto x0.
 - (b) keyboard: c selected, ArrowDown keydown events dispatched on document until c.y is 289, then
@@ -21,16 +21,24 @@ Five scenarios, each on the document opened afresh:
 - (d) host end dragged: the document of (c), p pressed, moved 220 down in 6 pointer moves, rested
   700 ms, released.
 - (e) control: c pressed, moved 60 down, rested and released, hosting nothing.
+- (f) own wire reroutes host: the document of (c) with the wires planted in the order x1, x2, x0, so
+  the hosted card's own wires are routed before their host; e at 1204,100 and f at 1504,300; then the
+  act of (c), SovSchematicAPI.update('component','p',{y:520}). Premise, checked after the oracle with
+  the wraps removed: the d of x0 from a full redraw differs from the d of x0 from a full redraw with
+  every wire that ends on c taken out of `wires` (the wires are then put back in their order and a
+  full redraw is run). The task's words `crosses its host wire's track` are read as that: the card's
+  own wire changes where its host wire is drawn.
 
 The passes are counted from the test's side: renderWires and renderWiresOnce are wrapped as globals
 for the act, each renderWires call recording how many cards each of its renderWiresOnce passes moved,
 and the wraps are removed before the oracle runs. The product code carries no counter. On a tree with
 no renderWiresOnce the count reads 0.
 
-Asserted for (a) to (d): c's placement is kind wire on x0; 0 wire paths differ from the full redraw;
+Asserted for (a) to (d) and (f): c's placement is kind wire on x0; 0 wire paths differ from the full redraw;
 a second full redraw changes no path; no drag, no keyboard move and no snapshots remain; within one
 renderWires call, the renderWiresOnce passes after the first number at most 3 and each follows a pass
-that moved a hosted card. For (e): c stays on the surface, 0 paths differ, a second full redraw
+that moved a hosted card. For (f) also: the premise holds, and in every renderWires call of the act
+the last renderWiresOnce pass moved no hosted card. For (e): c stays on the surface, 0 paths differ, a second full redraw
 changes no path, and every renderWires call of the act ran renderWiresOnce exactly once. The page logs
 no errors.
 """
@@ -52,12 +60,25 @@ DROP_DY, CONTROL_DY, HOST_END_DY, MOVES = 170, 60, 220, 6
 KEYBOARD_Y, REROUTE_Y, STORED_T = 289, 520, 0.5
 REST_MS = 700  # past HOST_ADOPT_DWELL (280) and ROUTE_SETTLE_DELAY (140)
 FOLLOWING_LIMIT = 3
+# (f): the card's own wires x1 and x2 are planted, and so routed, before their host x0.
+OWN_NAME = '(f) own wire reroutes host'
+OWN_WIRES = [WIRES[1], WIRES[2], WIRES[0]]
+OWN_E, OWN_F = (1204, 100), (1504, 300)
 
 WIRE_D = "()=>Object.fromEntries([...workspace.querySelectorAll('.wire-group')].map(g=>[g.dataset.wireId,g.querySelector('path.wire')?.getAttribute('d')??null]))"
 # P is what the act left; Q is what a pass from nothing draws at the same state, no cache kept; R is
 # the same pass from nothing run once more.
 TRIPLE = ("()=>{const read=" + WIRE_D + ";const full=()=>{routeCache.clear();arrowPoseCache.clear();wireGroupDrawn.clear();renderWires();return read()};"
           "const P=read(),Q=full(),R=full();return [P,Q,R]}")
+# The premise of (f), read with the wraps removed: the host wire's d from a full redraw, then from a
+# full redraw with every wire that ends on the card taken out of `wires`. The wires are then put back
+# in their order and a full redraw is run.
+PREMISE = ("([card,host])=>{const read=" + WIRE_D + ";const full=()=>{routeCache.clear();arrowPoseCache.clear();wireGroupDrawn.clear();renderWires();return read()};"
+           "const own=full()[host]??null,kept=wires.slice();"
+           "wires.splice(0,wires.length,...kept.filter(w=>w.a!==card&&w.b!==card));"
+           "const bare=full()[host]??null;"
+           "wires.splice(0,wires.length,...kept);full();"
+           "return {own,bare}}")
 NODE = "(id)=>{const n=nodes.find(q=>q.id===id);return {x:n.x,y:n.y,kind:n.placement?.kind||'surface',wireId:n.placement?.wireId||null,t:n.placement?.t??null,parent:n.parentId||null}}"
 SCALE = '()=>{const a=svgPoint(0,0),b=svgPoint(100,0);return 100/(b.x-a.x)}'
 STATE = '()=>({drag:activeNodeDrag,keyboard:keyboardMoveNodeId,snapshots:dragRouteSnapshots.size})'
@@ -97,15 +118,15 @@ def differing(left: dict, full: dict) -> list[str]:
     return [wire for wire in sorted(left) if differences(left[wire], full[wire])]
 
 
-def plant(page, stored_on_wire: bool) -> float:
+def plant(page, stored_on_wire: bool, cards=CARDS, wires=WIRES) -> float:
     """Open the planted document afresh; with stored_on_wire the card is saved on the host wire. The scale."""
     doc = page.evaluate('()=>({schema:SovSchematicData.DOCUMENT_SCHEMA})')
-    components = [{'id': i, 'symbolId': 'act', 'x': x, 'y': y} for i, x, y in CARDS]
+    components = [{'id': i, 'symbolId': 'act', 'x': x, 'y': y} for i, x, y in cards]
     if stored_on_wire:
         card = next(c for c in components if c['id'] == CARD)
         card.update({'canvasId': f'canvas:wire:{HOST_WIRE}', 'placement': {'kind': 'wire', 'wireId': HOST_WIRE, 't': STORED_T}})
     doc.update({'id': 'wire-host-settle', 'components': components,
-                'wires': [{'id': i, 'a': a, 'aSide': 'out', 'b': b, 'bSide': 'in'} for i, a, b in WIRES]})
+                'wires': [{'id': i, 'a': a, 'aSide': 'out', 'b': b, 'bSide': 'in'} for i, a, b in wires]})
     open_document(page, json.dumps(doc), 'wire-host-settle.sov')
     return page.evaluate(SCALE)
 
@@ -120,9 +141,9 @@ def pointer_drag(page, name: str, card: str, dy: float, scale: float) -> None:
     page.mouse.up()
 
 
-def scenario(page, name: str, stored_on_wire: bool, act) -> dict:
+def scenario(page, name: str, stored_on_wire: bool, act, cards=CARDS, wires=WIRES) -> dict:
     """One scenario on the document opened afresh: the act under the watch, then the oracle."""
-    scale = plant(page, stored_on_wire)
+    scale = plant(page, stored_on_wire, cards, wires)
     before = page.evaluate(NODE, CARD)
     page.evaluate(WATCH)
     note = act(scale)
@@ -141,6 +162,18 @@ def scenario(page, name: str, stored_on_wire: bool, act) -> dict:
           f"{sum(following)} of them following a pass that moved a hosted card (most in one call {max(following, default=0)})")
     for wire in seen['differing']:
         print(f"  {wire}: left {left[wire]!r}, full redraw {full[wire]!r}")
+    return seen
+
+
+def own_wire_scenario(page, act, e=OWN_E, f=OWN_F) -> dict:
+    """(f): the document of (c) with e and f moved and the card's own wires planted before their host;
+    after the oracle, the premise: the host wire's d with and without the wires that end on the card."""
+    at = {'e': e, 'f': f}
+    cards = [(i, *at.get(i, (x, y))) for i, x, y in CARDS]
+    seen = scenario(page, OWN_NAME, True, act, cards, OWN_WIRES)
+    seen['premise'] = page.evaluate(PREMISE, [CARD, HOST_WIRE])
+    print(f"  e at {e[0]},{e[1]}, f at {f[0]},{f[1]}, wires planted {[w for w, _, _ in OWN_WIRES]}; calls {seen['calls']}; "
+          f"{HOST_WIRE} with the card's own wires {seen['premise']['own']!r}, without them {seen['premise']['bare']!r}")
     return seen
 
 
@@ -177,6 +210,8 @@ def main() -> None:
             scenario(page, '(d) host end dragged', True, host_end),
             scenario(page, '(e) control', False, lambda scale: pointer_drag(page, '(e) control', CARD, CONTROL_DY, scale)),
         ]
+        own = own_wire_scenario(page, reroute)
+        seen.insert(-1, own)  # (e) control stays the last entry
         browser.close()
 
     print(f"renderWiresOnce {'exists' if has_once else 'does not exist: its count reads 0'}")
@@ -200,6 +235,9 @@ def main() -> None:
         check(all(len(c) >= 1 for c in s['calls']), name, 'every renderWires call runs renderWiresOnce', s['calls'])
         check(all(len(c) - 1 <= FOLLOWING_LIMIT for c in s['calls']), name, 'at most 3 passes follow in one renderWires call', s['calls'])
         check(all(c[k - 1] > 0 for c in s['calls'] for k in range(1, len(c))), name, 'a following pass follows a pass that moved a hosted card', s['calls'])
+    check(all(c[-1] == 0 for c in own['calls'] if c), own['name'], 'the last pass of every renderWires call moved no hosted card', own['calls'])
+    check(bool(differences(own['premise']['own'], own['premise']['bare'])), own['name'],
+          "the hosted card's own wire changes where its host wire is drawn", own['premise'])
     check(control['after']['kind'] == 'surface' and control['after']['parent'] is None, control['name'], 'the release hosts nothing', control['after'])
     check(all(len(c) == 1 for c in control['calls']), control['name'], 'every renderWires call ran renderWiresOnce exactly once', control['calls'])
     check(not errors, 'the page logs no errors', errors)
