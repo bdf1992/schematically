@@ -123,6 +123,13 @@
      {"id": "missing", "title": "Missing", "meaning": "Needed by the work engine and not built yet.", "outline": "dashed", "opacity": 0.55, "tone": "danger", "glyph": "✕"},
      {"id": "proposed", "title": "Proposed", "meaning": "Planned work that nobody has started.", "outline": "dashed", "tone": "alert", "glyph": "◷"}
     ],
+    "kinds": [
+     {"id": "flow", "applies": "wire", "title": "Flow", "meaning": "Facts are read along it on request.", "dash": "solid", "weight": "regular", "arrowhead": "chevron"},
+     {"id": "stream", "applies": "wire", "title": "Stream", "meaning": "A continuous feed carried as channels.", "dash": "solid", "weight": "regular", "arrowhead": "filled"},
+     {"id": "control", "applies": "wire", "title": "Control", "meaning": "One side governs the other.", "dash": "solid", "weight": "heavy", "arrowhead": "filled"},
+     {"id": "reference", "applies": "wire", "title": "Reference", "meaning": "One side is listed by the other and nothing moves.", "dash": "solid", "weight": "regular", "arrowhead": "none"},
+     {"id": "proposed", "applies": "wire", "title": "Proposed", "meaning": "Planned and not built.", "dash": "dashed", "weight": "regular", "arrowhead": "chevron", "open": true}
+    ],
     "concerns": [
      {"id": "what", "applies": "document", "title": "What it shows", "question": "Which part of the work engine does this map show?"},
      {"id": "why", "applies": "document", "title": "What it is for", "question": "What would someone build or settle from this map?"},

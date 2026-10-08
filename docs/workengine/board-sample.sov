@@ -2312,6 +2312,54 @@
      }
     },
     "id": "work-engine",
+    "kinds": [
+     {
+      "applies": "wire",
+      "arrowhead": "chevron",
+      "dash": "solid",
+      "id": "flow",
+      "meaning": "Facts are read along it on request.",
+      "title": "Flow",
+      "weight": "regular"
+     },
+     {
+      "applies": "wire",
+      "arrowhead": "filled",
+      "dash": "solid",
+      "id": "stream",
+      "meaning": "A continuous feed carried as channels.",
+      "title": "Stream",
+      "weight": "regular"
+     },
+     {
+      "applies": "wire",
+      "arrowhead": "filled",
+      "dash": "solid",
+      "id": "control",
+      "meaning": "One side governs the other.",
+      "title": "Control",
+      "weight": "heavy"
+     },
+     {
+      "applies": "wire",
+      "arrowhead": "none",
+      "dash": "solid",
+      "id": "reference",
+      "meaning": "One side is listed by the other and nothing moves.",
+      "title": "Reference",
+      "weight": "regular"
+     },
+     {
+      "applies": "wire",
+      "arrowhead": "chevron",
+      "dash": "dashed",
+      "id": "proposed",
+      "meaning": "Planned and not built.",
+      "open": true,
+      "title": "Proposed",
+      "weight": "regular"
+     }
+    ],
     "name": "Work Engine",
     "source": "Workstation Work Engine gap map, 2026-09-27",
     "statuses": [
