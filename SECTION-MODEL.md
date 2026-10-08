@@ -197,6 +197,12 @@ with an Error whose message starts with the code, and the document is left uncha
 
 Deleting a Component removes its id from every group's `members` in the same operation.
 
+**Selection.** A click on a group's title or on its ground (any part of its region that no
+card or wire covers) selects the group, and the Inspector shows it. A drag from its ground
+pans the canvas, as a drag from the blank canvas does. The arrow keys do not move a selected
+group, because its region is the union of its members: it follows its cards. QA:
+`tests/group_select_qa.py`.
+
 **Geometry.** A group has no geometry of its own while it has members.
 `groupRect(doc, groupId, sizeOf)` is the union of the members' rectangles (each centred
 on its `x, y`, sized by `sizeOf(component)`), padded `space.regionInset` (24) on each side and `space.regionTitle` (28) more on top

@@ -179,6 +179,8 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .wave-dot{fill:var(--wave-ink);stroke:none;opacity:.45}
 .wave-lane{fill:none;stroke:var(--wave-ink);vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
 .node.selected .body{stroke-width:var(--stroke-structure-selected,2.85px)}
+.group-hit{fill:transparent;stroke:none;pointer-events:all;cursor:default}
+.node.group.selected>.group-hit{stroke:var(--canvas-ink);stroke-width:var(--stroke-structure-selected,2.85px)}
 /* Labels are SVG text in world units while strokes are non-scaling, so text would grow and
    shrink with the camera. `--zoom` is the actual screen scale of #workspace; every label's
    essential text stays at 12 to 16 screen pixels, expressed back in world units.
@@ -9752,11 +9754,19 @@ function applyCamera(){
 function setPanMode(active){
   document.querySelector('.workspace-wrap')?.classList.toggle('pan-mode',!!active);
 }
+// The group whose ground a press landed on: its hit rect or its title, never a card or a wire,
+// which are not drawn inside a group's g. A group has no place of its own, so its ground pans
+// the canvas as the blank canvas does, and a press that does not move selects the group.
+function groundGroupId(target){
+  const g=target instanceof Element?target.closest('.node.group'):null;
+  return g?g.dataset.id||null:null;
+}
 function beginPanGesture(e){
-  if(e.button===0&&e.target===workspace&&e.shiftKey&&typeof beginMarqueeGesture==='function'){beginMarqueeGesture(e);return}
+  const groupId=groundGroupId(e.target),onGround=e.target===workspace||groupId!==null;
+  if(e.button===0&&onGround&&e.shiftKey&&typeof beginMarqueeGesture==='function'){beginMarqueeGesture(e);return}
   const wantsMiddle=e.button===1;
   const wantsSpace=e.button===0&&spacePanHeld;
-  const wantsBackground=e.button===0&&e.target===workspace;
+  const wantsBackground=e.button===0&&onGround;
   if(!wantsMiddle&&!wantsSpace&&!wantsBackground)return;
   if(!wantsBackground && isEditableTarget(e.target))return;
 
@@ -9774,6 +9784,7 @@ function beginPanGesture(e){
     unitsX:camera.w/Math.max(1,rect.width),
     unitsY:camera.h/Math.max(1,rect.height),
     blankTapClear:wantsBackground,
+    groupId,
     moved:false
   };
   document.querySelector('.workspace-wrap')?.classList.add('panning');
@@ -9796,11 +9807,11 @@ function movePanGesture(e){
 function finishPanGesture(e=null){
   if(!panDrag)return;
   if(e&&e.pointerId!==panDrag.pointerId)return;
-  const shouldClear=panDrag.blankTapClear && !panDrag.moved;
+  const shouldClear=panDrag.blankTapClear && !panDrag.moved,groupId=panDrag.groupId;
   panDrag=null;
   document.querySelector('.workspace-wrap')?.classList.remove('panning');
   statusEl.textContent='Ready';
-  if(shouldClear){selected=null;selectNode(null)}
+  if(shouldClear){if(groupId)selectNode(groupId);else{selected=null;selectNode(null)}}
   restoreSelectionBarAfterGesture();
 }
 
@@ -10050,6 +10061,8 @@ function moveSelectedByArrow(e){
   const node=nodes.find(n=>n.id===selected);
   if(!node) return false;
   if(isEntityLocked(node)||isEntityPinned(node)){statusEl.textContent=isEntityLocked(node)?'Locked · move refused':'Pinned · move refused';return true}
+  // A group's region is the union of its members (groupRect): it has no place of its own to move.
+  if(isGroupComponent(node)){statusEl.textContent='A group follows its cards';return true}
 
   beginKeyboardMove(node);
 
@@ -12425,7 +12438,9 @@ function markerCountEl(){
 // Groups (SECTION-MODEL.md "Groups (reading only)"): a region drawn behind every other node and
 // every wire on its canvas. On the global canvas they sit in their own layer just before the wire
 // layer; on a Component's interior, directly after the host, before the wires lifted there and
-// the host's children. A group is not a body: it hosts nothing, has no ports and takes no gesture.
+// the host's children. A group is not a body: it hosts nothing and has no ports. It is selected by
+// a click on its region (the .group-hit rect, which the title lies over) and takes no drag of its
+// own: a drag from its ground pans the canvas (beginPanGesture, src/30-canvas.js).
 function groupLayer(){
   let layer=document.getElementById('groupLayer');
   if(!layer){layer=document.createElementNS('http://www.w3.org/2000/svg','g');layer.setAttribute('id','groupLayer');workspace.insertBefore(layer,wiresG)}
@@ -12434,7 +12449,7 @@ function groupLayer(){
 function placeGroupRegion(g,n){
   const R=SovSchematicData.groupRect(diagram,n.id,componentSize);if(!R)return;
   const title=g.querySelector(':scope > .group-title');
-  for(const rect of g.querySelectorAll(':scope > .group-region,:scope > .group-outline')){rect.setAttribute('x',String(R.l));rect.setAttribute('y',String(R.t));rect.setAttribute('width',String(Math.max(1,R.w)));rect.setAttribute('height',String(Math.max(1,R.h)))}
+  for(const rect of g.querySelectorAll(':scope > .group-region,:scope > .group-hit,:scope > .group-outline')){rect.setAttribute('x',String(R.l));rect.setAttribute('y',String(R.t));rect.setAttribute('width',String(Math.max(1,R.w)));rect.setAttribute('height',String(Math.max(1,R.h)))}
   if(title){title.setAttribute('x',String(R.l+12));title.setAttribute('y',String(R.t+19))}
   const badge=g.querySelector(':scope > .marker-badge');if(badge)badge.setAttribute('transform',`translate(${R.r} ${R.t})`);
 }
@@ -12500,6 +12515,10 @@ function renderGroups(markers=markersById()){
     if(slot==null){rect.style.fill='#000000';rect.style.fillOpacity='0.004'}
     rect.style.filter=`url(#${slot!=null?REGION_INSET_FILLED:REGION_INSET_BARE})`;
     g.appendChild(rect);
+    // The hit area: the region's own rect takes no pointer events, so a rect of its own, styled in
+    // styles/app.css, takes the click that selects the group and draws the selected outline.
+    const hit=document.createElementNS('http://www.w3.org/2000/svg','rect');hit.setAttribute('class','group-hit');hit.setAttribute('rx',String(T.radius?.card??10));
+    g.appendChild(hit);
     const border=borders[cfg.intake===true?'intake':'group'];
     if(border!=='none'){
       const edge=document.createElementNS('http://www.w3.org/2000/svg','rect');edge.setAttribute('class','group-outline');edge.setAttribute('rx',String(T.radius?.card??10));
@@ -15663,7 +15682,7 @@ function renderStandaloneSvgNow(opts={}){
   clone.querySelector('#waveLayer')?.remove();
   clone.querySelectorAll('.level-high').forEach(x => { x.classList.remove('level-high'); x.style.removeProperty('--wire-lit'); });
   clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
-  clone.querySelectorAll('.port-hit,.wire-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
+  clone.querySelectorAll('.port-hit,.wire-hit,.group-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
   // A still picture cannot show travel: a packet frozen mid-wire reads as a junction.
   // Packets stay only when the file is made to loop (--loop).
   if (!opts.packets) clone.querySelectorAll('.wire-packet').forEach(x => x.remove());

@@ -550,7 +550,9 @@ function markerCountEl(){
 // Groups (SECTION-MODEL.md "Groups (reading only)"): a region drawn behind every other node and
 // every wire on its canvas. On the global canvas they sit in their own layer just before the wire
 // layer; on a Component's interior, directly after the host, before the wires lifted there and
-// the host's children. A group is not a body: it hosts nothing, has no ports and takes no gesture.
+// the host's children. A group is not a body: it hosts nothing and has no ports. It is selected by
+// a click on its region (the .group-hit rect, which the title lies over) and takes no drag of its
+// own: a drag from its ground pans the canvas (beginPanGesture, src/30-canvas.js).
 function groupLayer(){
   let layer=document.getElementById('groupLayer');
   if(!layer){layer=document.createElementNS('http://www.w3.org/2000/svg','g');layer.setAttribute('id','groupLayer');workspace.insertBefore(layer,wiresG)}
@@ -559,7 +561,7 @@ function groupLayer(){
 function placeGroupRegion(g,n){
   const R=SovSchematicData.groupRect(diagram,n.id,componentSize);if(!R)return;
   const title=g.querySelector(':scope > .group-title');
-  for(const rect of g.querySelectorAll(':scope > .group-region,:scope > .group-outline')){rect.setAttribute('x',String(R.l));rect.setAttribute('y',String(R.t));rect.setAttribute('width',String(Math.max(1,R.w)));rect.setAttribute('height',String(Math.max(1,R.h)))}
+  for(const rect of g.querySelectorAll(':scope > .group-region,:scope > .group-hit,:scope > .group-outline')){rect.setAttribute('x',String(R.l));rect.setAttribute('y',String(R.t));rect.setAttribute('width',String(Math.max(1,R.w)));rect.setAttribute('height',String(Math.max(1,R.h)))}
   if(title){title.setAttribute('x',String(R.l+12));title.setAttribute('y',String(R.t+19))}
   const badge=g.querySelector(':scope > .marker-badge');if(badge)badge.setAttribute('transform',`translate(${R.r} ${R.t})`);
 }
@@ -625,6 +627,10 @@ function renderGroups(markers=markersById()){
     if(slot==null){rect.style.fill='#000000';rect.style.fillOpacity='0.004'}
     rect.style.filter=`url(#${slot!=null?REGION_INSET_FILLED:REGION_INSET_BARE})`;
     g.appendChild(rect);
+    // The hit area: the region's own rect takes no pointer events, so a rect of its own, styled in
+    // styles/app.css, takes the click that selects the group and draws the selected outline.
+    const hit=document.createElementNS('http://www.w3.org/2000/svg','rect');hit.setAttribute('class','group-hit');hit.setAttribute('rx',String(T.radius?.card??10));
+    g.appendChild(hit);
     const border=borders[cfg.intake===true?'intake':'group'];
     if(border!=='none'){
       const edge=document.createElementNS('http://www.w3.org/2000/svg','rect');edge.setAttribute('class','group-outline');edge.setAttribute('rx',String(T.radius?.card??10));

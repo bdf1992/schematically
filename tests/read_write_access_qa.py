@@ -1,5 +1,5 @@
 from pathlib import Path
-import json, os
+import json, os, tempfile
 from playwright.sync_api import sync_playwright
 from browser_runtime import chromium_launch_kwargs
 ROOT=Path(__file__).resolve().parents[1]
@@ -36,7 +36,8 @@ with sync_playwright() as p:
     page.wait_for_timeout(180)
     duplex=page.evaluate("()=>[...document.querySelectorAll('.wire-packet-operation')].map(x=>x.textContent).sort()")
     assert duplex.count('R')>=1 and duplex.count('W')>=1,duplex
-    page.screenshot(path=str(ROOT/'tests'/'beta17-read-write.png'),full_page=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        page.screenshot(path=str(Path(tmp)/'beta17-read-write.png'),full_page=True)
     assert not errors,errors
     browser.close()
 print('PASS read/write access QA')
