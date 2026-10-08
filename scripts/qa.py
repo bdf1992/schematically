@@ -33,6 +33,7 @@ STATIC=[
     'tests/revision_guard_qa.py',
     'tests/mcp_surface_qa.py',
     'tests/release_path_qa.py',
+    'tests/qa_linux_qa.py',
 ]
 BROWSER=[
     'tests/desktop_launch_page_qa.py',
@@ -114,6 +115,7 @@ BROWSER=[
     'tests/status_waits_on_qa.py',
     'tests/concerns_qa.py',
     'tests/card_badges_qa.py',
+    'tests/badge_label_trim_qa.py',
     'tests/card_shapes_qa.py',
     'tests/palette_system_qa.py',
     'tests/status_chip_qa.py',
@@ -148,6 +150,7 @@ BROWSER=[
     'tests/bus_lane_hold_qa.py',
     'tests/live_link_qa.py',
     'tests/address_open_qa.py',
+    'tests/select_menu_contrast_qa.py',
 ]
 TAIL=[
     'tests/mutation_watch.py',

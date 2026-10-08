@@ -125,7 +125,7 @@
                   "additionalProperties": false,
                   "required": ["label"],
                   "properties": {
-                    "label": {"type": "string", "minLength": 1, "maxLength": 24, "description": "The chip's text, 1 to 24 characters after trimming."},
+                    "label": {"type": "string", "minLength": 1, "maxLength": 24, "pattern": "^\\S(?:[\\s\\S]*\\S)?$", "description": "The chip's text as stored: 1 to 24 characters with no whitespace at either end; create and update trim the label they are given."},
                     "colorSlot": {"type": "integer", "minimum": 0, "maximum": 11, "description": "The palette slot of the chip's colour; absent means 0."}
                   }
                 }

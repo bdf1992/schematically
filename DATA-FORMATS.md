@@ -344,7 +344,9 @@ concerns: 6 answered, 3 open
 A Component may carry small chips of text and a palette colour, with no status's meaning.
 
 - **`config.badges`**: an array of at most 4 entries `{label, colorSlot?}`. `label` is a string of 1 to
-  24 characters after trimming; `colorSlot` is an integer 0 to 11, and absent means 0; no other key is
+  24 characters with no whitespace at either end; `create` and `update` store the label trimmed, a
+  stored label with whitespace at either end is `BADGE_INVALID` when the file is validated, and the
+  schema refuses it with `pattern`; `colorSlot` is an integer 0 to 11, and absent means 0; no other key is
   allowed. Anything else is `BADGE_INVALID`, and the message names the index and the field
   (`config.badges[1].label must be a non-empty string`; more than 4 entries; not an array).
 
