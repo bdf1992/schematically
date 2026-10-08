@@ -3,8 +3,8 @@
 When a move settles (settleDraggedRoutes, src/40-routing.js) the wire pass draws every wire group at
 its new route at once, as it always has: the d of path.wire is final in that pass. For each wire
 whose route changed, startWireTravel (src/55-render.js) then adds one path.wire-travel to the group
-on the next animation frame and moves it from the old route to the new one over 180 ms with a cubic
-ease out. While it moves the group carries data-travel, which hides the stroke of path.wire and the
+on the next animation frame and moves it from the old route to the new one with a cubic ease out,
+over 180 ms counted from the settle pass. While it moves the group carries data-travel, which hides the stroke of path.wire and the
 direction marks (styles/app.css). Under prefers-reduced-motion nothing travels.
 
 Planted through SovSchematicAPI.create (headless Chromium, 1600 x 1000, snap off): act cards a at
@@ -22,6 +22,9 @@ Planted through SovSchematicAPI.create (headless Chromium, 1600 x 1000, snap off
 (f) b is selected and moved by 30 ArrowDown keys; frames sampled for 900 ms show a path.wire-travel
     on at least 3 frames.
 (g) The page logs no error.
+(h) The 180 ms count from the settle pass. With every animation frame held back 250 ms from the
+    test's side, so the first frame after the settle comes too late, the same drag adds no
+    .wire-travel at any time (a MutationObserver counts them) and the wire is at its redrawn route.
 """
 from __future__ import annotations
 import json
@@ -70,6 +73,20 @@ AFTER = r"""()=>{
 REDRAWN = r"""()=>{
   routeCache.clear();arrowPoseCache.clear();wireGroupDrawn.clear();renderWires();
   return workspace.querySelector('.wire-group[data-wire-id="w1"] path.wire').getAttribute('d');
+}"""
+# Test side only: every animation frame is held back ms, and each .wire-travel added is counted.
+LATE_FRAMES = r"""(ms)=>{
+  const raf=window.requestAnimationFrame.bind(window);window.__raf=window.requestAnimationFrame;
+  window.requestAnimationFrame=fn=>setTimeout(()=>raf(fn),ms);
+  window.__travelsAdded=0;
+  window.__travelWatch=new MutationObserver(records=>{for(const r of records)for(const n of r.addedNodes)
+    if(n.nodeType===1&&(n.matches('.wire-travel')||n.querySelector('.wire-travel')))window.__travelsAdded++});
+  window.__travelWatch.observe(workspace,{childList:true,subtree:true});
+}"""
+LATE_RESULT = r"""()=>{
+  window.requestAnimationFrame=window.__raf;window.__travelWatch.disconnect();
+  return {added:window.__travelsAdded,travels:workspace.querySelectorAll('.wire-travel').length,marked:workspace.querySelectorAll('.wire-group[data-travel]').length,
+    d:workspace.querySelector('.wire-group[data-wire-id="w1"] path.wire').getAttribute('d')};
 }"""
 NUMBER = re.compile(r'-?\d+(?:\.\d+)?(?:e[-+]?\d+)?')
 
@@ -128,6 +145,16 @@ def main() -> None:
         plant(page)
         keyboard = page.evaluate(KEYBOARD, [ARROWS, 900])
         keyboard_after = page.evaluate(AFTER)
+
+        plant(page)
+        point = press(page, 'b')
+        assert point, 'the press starts a drag of b'
+        for k in range(1, MOVES + 1):
+            page.mouse.move(point[0], point[1] + DRAG_PX * k / MOVES)
+        page.evaluate(LATE_FRAMES, 250)
+        page.mouse.up()
+        page.wait_for_timeout(900)
+        late = page.evaluate(LATE_RESULT)
         browser.close()
 
     travel = [f for f in frames if f['travel']]
@@ -141,6 +168,7 @@ def main() -> None:
           f'last {distances[-1] if distances else None}')
     print(f'reduced motion: {len(reduced)} frames sampled, {sum(1 for f in reduced if f["travel"])} with a travel path')
     print(f'keyboard: dy {keyboard["dy"]}, {len(keyboard["frames"])} frames sampled, {len(keyboard_travel)} with a travel path')
+    print(f'frames held back 250 ms: {late["added"]} travel paths added, {late["travels"]} left')
 
     assert len(travel) >= 3 and len(shapes) >= 3, ('(a) a travel path is seen on at least 3 frames with at least 3 different d values',
                                                   len(travel), len(shapes))
@@ -159,6 +187,8 @@ def main() -> None:
     assert keyboard_after['travels'] == 0 and keyboard_after['marked'] == 0 and float(keyboard_after['opacity']) == 1, (
         '(f) after the keyboard travel nothing of it is left', keyboard_after)
     assert not errors, ('(g) the page logs no errors', errors)
+    assert late == {'added': 0, 'travels': 0, 'marked': 0, 'd': redrawn}, (
+        '(h) a first frame later than 180 ms after the settle adds no travel path, and the wire is at its route', late, redrawn)
     print('PASS wire travel QA')
 
 

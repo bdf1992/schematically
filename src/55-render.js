@@ -1280,12 +1280,15 @@ function wireTravelSamples(points,count){
   return out;
 }
 // Path interpolation by resampling: both routes are sampled at equal fractions of their length and
-// each sample moves straight to its partner, over 180 ms with a cubic ease out. One frame loop
+// each sample moves straight to its partner, over 180 ms from start with a cubic ease out. One frame loop
 // drives every travel started together. A travel whose path left the document (its group was drawn
 // again) is dropped; the wire is then simply at its route.
-function startWireTravel(){
+function startWireTravel(start){
   const from=[...wireTravelFrom];wireTravelFrom.clear();
   if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
+  // The 180 ms count from the settle pass, the moment the line jumped: motion never adds delay
+  // after the change. Where the settle took longer than that to draw, the jump stands.
+  if(performance.now()-start>=WIRE_TRAVEL_MS)return;
   const line=pts=>pts.map((q,k)=>`${k?'L':'M'}${+q.x.toFixed(2)} ${+q.y.toFixed(2)}`).join(' ');
   let travels=[];
   for(const [id,old] of from){
@@ -1300,7 +1303,6 @@ function startWireTravel(){
     travels.push({path,group:drawn.group,a,b});
   }
   if(!travels.length)return;
-  const start=performance.now();
   const frame=time=>{
     const t=Math.min(1,Math.max(0,(time-start)/WIRE_TRAVEL_MS)),e=1-(1-t)**3;
     travels=travels.filter(travel=>travel.path.isConnected);
@@ -1426,7 +1428,7 @@ function renderWiresOnce(signalState,markers,reuse){
       const was=drawnRoutePoints.get(i);
       if(was&&wireRouteDiffers(was,r.points)&&!wireTravelFrom.has(wires[i].id))wireTravelFrom.set(wires[i].id,clonePoints(was));
     }
-    if(!waiting&&wireTravelFrom.size)requestAnimationFrame(startWireTravel);
+    if(!waiting&&wireTravelFrom.size){const at=performance.now();requestAnimationFrame(()=>startWireTravel(at))}
   }
   drawnRoutePoints.clear();for(const [i,r] of routes)drawnRoutePoints.set(i,clonePoints(r.points));
   const hops=new Map(),order=[...routes.keys()];arrowKeepClear=[];
