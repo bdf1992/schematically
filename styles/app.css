@@ -157,6 +157,8 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .wave-dot{fill:var(--wave-ink);stroke:none;opacity:.45}
 .wave-lane{fill:none;stroke:var(--wave-ink);vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
 .node.selected .body{stroke-width:var(--stroke-structure-selected,2.85px)}
+.group-hit{fill:transparent;stroke:none;pointer-events:all;cursor:default}
+.node.group.selected>.group-hit{stroke:var(--canvas-ink);stroke-width:var(--stroke-structure-selected,2.85px)}
 /* Labels are SVG text in world units while strokes are non-scaling, so text would grow and
    shrink with the camera. `--zoom` is the actual screen scale of #workspace; every label's
    essential text stays at 12 to 16 screen pixels, expressed back in world units.

@@ -84,6 +84,7 @@ BROWSER=[
     'tests/contrast_qa.py',
     'tests/boundary_attachment_qa.py',
     'tests/group_region_qa.py',
+    'tests/group_select_qa.py',
     'tests/region_fill_qa.py',
     'tests/region_border_qa.py',
     'tests/sim_control_qa.py',

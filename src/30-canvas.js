@@ -264,11 +264,19 @@ function applyCamera(){
 function setPanMode(active){
   document.querySelector('.workspace-wrap')?.classList.toggle('pan-mode',!!active);
 }
+// The group whose ground a press landed on: its hit rect or its title, never a card or a wire,
+// which are not drawn inside a group's g. A group has no place of its own, so its ground pans
+// the canvas as the blank canvas does, and a press that does not move selects the group.
+function groundGroupId(target){
+  const g=target instanceof Element?target.closest('.node.group'):null;
+  return g?g.dataset.id||null:null;
+}
 function beginPanGesture(e){
-  if(e.button===0&&e.target===workspace&&e.shiftKey&&typeof beginMarqueeGesture==='function'){beginMarqueeGesture(e);return}
+  const groupId=groundGroupId(e.target),onGround=e.target===workspace||groupId!==null;
+  if(e.button===0&&onGround&&e.shiftKey&&typeof beginMarqueeGesture==='function'){beginMarqueeGesture(e);return}
   const wantsMiddle=e.button===1;
   const wantsSpace=e.button===0&&spacePanHeld;
-  const wantsBackground=e.button===0&&e.target===workspace;
+  const wantsBackground=e.button===0&&onGround;
   if(!wantsMiddle&&!wantsSpace&&!wantsBackground)return;
   if(!wantsBackground && isEditableTarget(e.target))return;
 
@@ -286,6 +294,7 @@ function beginPanGesture(e){
     unitsX:camera.w/Math.max(1,rect.width),
     unitsY:camera.h/Math.max(1,rect.height),
     blankTapClear:wantsBackground,
+    groupId,
     moved:false
   };
   document.querySelector('.workspace-wrap')?.classList.add('panning');
@@ -308,11 +317,11 @@ function movePanGesture(e){
 function finishPanGesture(e=null){
   if(!panDrag)return;
   if(e&&e.pointerId!==panDrag.pointerId)return;
-  const shouldClear=panDrag.blankTapClear && !panDrag.moved;
+  const shouldClear=panDrag.blankTapClear && !panDrag.moved,groupId=panDrag.groupId;
   panDrag=null;
   document.querySelector('.workspace-wrap')?.classList.remove('panning');
   statusEl.textContent='Ready';
-  if(shouldClear){selected=null;selectNode(null)}
+  if(shouldClear){if(groupId)selectNode(groupId);else{selected=null;selectNode(null)}}
   restoreSelectionBarAfterGesture();
 }
 
@@ -547,6 +556,8 @@ function moveSelectedByArrow(e){
   const node=nodes.find(n=>n.id===selected);
   if(!node) return false;
   if(isEntityLocked(node)||isEntityPinned(node)){statusEl.textContent=isEntityLocked(node)?'Locked · move refused':'Pinned · move refused';return true}
+  // A group's region is the union of its members (groupRect): it has no place of its own to move.
+  if(isGroupComponent(node)){statusEl.textContent='A group follows its cards';return true}
 
   beginKeyboardMove(node);
 
