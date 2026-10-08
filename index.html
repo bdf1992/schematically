@@ -246,6 +246,9 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .move-tether{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:1.5;stroke-linecap:round;pointer-events:none;opacity:.28;stroke-dasharray:4 6}
 .move-anchor{fill:var(--canvas-tone);stroke:var(--wire-ink,var(--canvas-ink));stroke-width:1.6;pointer-events:none;opacity:.55}
 .wire-group.drag-frozen .wire{opacity:.82}
+.wire-travel{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:var(--stroke-flow,2.25);stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.wire-group[data-travel] .wire{stroke-opacity:0}
+.wire-group[data-travel] .flow-chevron{opacity:0}
 
 #workspace .ghost-flow-chevron,
 #workspace .ghost-route-preview{display:none}
@@ -519,7 +522,9 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
 .wire-blank-ghost text{font-size:calc(clamp(8px,8px * var(--zoom,1),14px) / var(--zoom,1));font-weight:800;fill:var(--muted);letter-spacing:.05em;paint-order:stroke;stroke:var(--panel);stroke-width:2px}
 @keyframes wireBlankGhostIn{to{opacity:.62}}
 .bus-band{pointer-events:none}.bus-band rect{fill:var(--muted);fill-opacity:.06;stroke:var(--muted);stroke-opacity:.3;stroke-width:var(--stroke-structure,1)}
-.bus-label{font-weight:var(--type-caption-weight,600);letter-spacing:.02em;pointer-events:none}
+.bus-label{font-weight:var(--type-caption-weight,600);letter-spacing:.02em}
+.bus-hit{fill:transparent;stroke:transparent;stroke-width:calc(24px / var(--zoom,1));pointer-events:all;cursor:grab}
+.bus-band.selected rect,:root[data-appearance="dark"] .bus-band.selected rect{stroke:var(--canvas-ink);stroke-opacity:1;stroke-width:var(--stroke-structure-selected,2.85px)}
 .file-menu-item:disabled{color:var(--muted);opacity:.52;cursor:not-allowed}
 .file-menu-item:disabled:hover{background:transparent}
 :root[data-appearance="dark"]{
@@ -1103,6 +1108,15 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
         <dt>Label</dt><dd id="cLabel">—</dd>
       </dl>
       <details class="inline-help"><summary><span class="info-dot">i</span> Wire mapping</summary><div>The Wire maps endpoint connections and concrete packet operations. Port access declares capability; packet R/W declares the concrete operation. Access is not authority.</div></details>
+    </div>
+    <div id="busDetail" hidden>
+      <div class="kind-badge">BUS</div>
+      <dl class="kv">
+        <dt>Label</dt><dd id="bLabel"></dd>
+        <dt>Between</dt><dd id="bBetween"></dd>
+        <dt>Lanes</dt><dd id="bLanes"></dd>
+        <dt>Carries</dt><dd id="bWires"></dd>
+      </dl>
     </div>
   </div>
   <div class="section"><details class="help-disclosure"><summary><b>Reading</b><span class="helper-snippet">exists · carries · resolves</span><span class="info-dot">i</span></summary><div class="help-body"><b>Component</b> exists · <b>Connection</b> carries · <b>Reference</b> resolves · <b>Modifier</b> qualifies.</div></details></div>
@@ -10744,7 +10758,8 @@ function settleDraggedRoutes(){
       occupied.push(...routeSegments(points,w));
     }
   }));
-  renderWiresForDrag();
+  // The settle pass is the one a rerouted wire travels from (wireTravelPass, src/55-render.js).
+  try{wireTravelPass=true;renderWiresForDrag()}finally{wireTravelPass=false}
   wires.forEach((w,i)=>{
     if(!(w.a===activeNodeDrag || w.b===activeNodeDrag)) return;
     const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
@@ -11751,29 +11766,44 @@ function busLabelsOfWire(w){
   const all=activeBuses();return spec.buses.map(id=>all[id]?.label).filter(l=>typeof l==='string'&&l);
 }
 // Each bus as a band behind the wires: its lane count times its pitch, plus 8, with rounded ends;
-// its label once, beyond its start, reading along it.
+// its label once, beyond its start, reading along it. The wires on a bus lie over its band, so the
+// bus is taken by its label or by its rim: after each band a g.bus-hit-band holds one rect.bus-hit
+// per segment, the band rect again with a transparent stroke that reaches outside it
+// (styles/app.css). The selected bus (selected is bus: and its id) carries class selected.
 function renderBuses(layer){
   const all=activeBuses(),st=busRoutesForRender(),SVG='http://www.w3.org/2000/svg';
+  const chosen=typeof selected==='string'&&selected.startsWith('bus:')?selected.slice(4):null,drawn=new Set();
+  const press=id=>e=>{if(typeof beginBusGesture==='function')beginBusGesture(e,id)};
   for(const id of Object.keys(all).sort()){
     const bus=all[id],line=busLine(bus);if(!line)continue;
     const n=st.lanes.get(id)?.length||0,hw=(n*busPitchOf(bus)+8)/2;
-    const g=document.createElementNS(SVG,'g');g.setAttribute('class','bus-band');g.dataset.busId=id;g.dataset.lanes=String(n);
+    const g=document.createElementNS(SVG,'g');g.setAttribute('class','bus-band'+(chosen===id?' selected':''));g.dataset.busId=id;g.dataset.lanes=String(n);
+    const hits=document.createElementNS(SVG,'g');hits.setAttribute('class','bus-hit-band');hits.dataset.busId=id;
     for(const s of line.segs){
       const r=document.createElementNS(SVG,'rect');
       r.setAttribute('x',String(Math.min(s.a.x,s.b.x)-hw));r.setAttribute('y',String(Math.min(s.a.y,s.b.y)-hw));
       r.setAttribute('width',String(Math.abs(s.b.x-s.a.x)+2*hw));r.setAttribute('height',String(Math.abs(s.b.y-s.a.y)+2*hw));
       r.setAttribute('rx',String(hw));r.setAttribute('ry',String(hw));g.appendChild(r);
+      const h=document.createElementNS(SVG,'rect');h.setAttribute('class','bus-hit');
+      for(const k of ['x','y','width','height','rx'])h.setAttribute(k,r.getAttribute(k));
+      h.addEventListener('pointerdown',press(id));hits.appendChild(h);
     }
-    layer.appendChild(g);
+    layer.appendChild(g);layer.appendChild(hits);drawn.add(id);
     const label=typeof bus.label==='string'?bus.label.trim():'';if(!label)continue;
     const d=line.segs[0].dir,at={x:line.pts[0].x-d.x*(hw+6),y:line.pts[0].y-d.y*(hw+6)};
     const t=document.createElementNS(SVG,'text');t.setAttribute('class','bus-label');t.dataset.busId=id;t.dataset.role='caption';
     t.setAttribute('x',String(at.x));t.setAttribute('y',String(at.y));t.setAttribute('dominant-baseline','central');
     if(d.y!==0){t.setAttribute('text-anchor','start');t.setAttribute('transform',`rotate(${d.y>0?-90:90} ${at.x} ${at.y})`)}
     else t.setAttribute('text-anchor',d.x>0?'end':'start');
-    t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk()};stroke:none;pointer-events:none`);
+    t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk()};stroke:none;cursor:pointer`);
+    t.addEventListener('pointerdown',press(id));
     t.textContent=label;layer.appendChild(t);
   }
+  // A selected bus the active layout no longer holds is deselected; one that is drawn is read
+  // into the Inspector again, as drawn.
+  if(chosen==null)return;
+  if(!all[chosen]){selected=null;selectNode(null)}
+  else if(drawn.has(chosen)&&typeof selectBus==='function')selectBus(chosen,{focus:false});
 }
 /* END src/41-buses.js */
 </script>
@@ -11782,7 +11812,32 @@ function renderBuses(layer){
 'use strict';
 // 0.1 Beta concern: Selection state projected into contextual UI and inspector.
 
-function hideInspectorKinds(){componentDetail.hidden=true;connectionDetail.hidden=true;portDetail.hidden=true}
+function hideInspectorKinds(){componentDetail.hidden=true;connectionDetail.hidden=true;portDetail.hidden=true;const bus=document.getElementById('busDetail');if(bus)bus.hidden=true}
+function clearBusSelectionMarks(){document.querySelectorAll('.bus-band').forEach(el=>el.classList.remove('selected'))}
+// A bus is a record of the active layout (src/41-buses.js), selected as bus: and its id. The
+// Inspector reads what it carries; it has no selection bar.
+function selectBus(id,{focus=true}={}){
+  clearEndpointFocus();clearComponentSelectionSet();selected=`bus:${id}`;
+  if(focus)activateCanvasKeyboard();
+  document.querySelectorAll('.node').forEach(el=>el.classList.remove('selected'));
+  document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));
+  document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
+  document.querySelectorAll('.bus-band').forEach(el=>el.classList.toggle('selected',el.dataset.busId===id));
+  document.getElementById('emptyInspector').hidden=true;
+  hideInspectorKinds();hideSelectionBar();
+  const bus=activeBuses()[id]||{},cardLabel=cid=>{const n=nodes.find(n=>n.id===cid);return n?componentConfig(n).label||symbolOf(n.symbolId).name:null};
+  document.getElementById('busDetail').hidden=false;
+  document.getElementById('bLabel').textContent=typeof bus.label==='string'&&bus.label.trim()?bus.label.trim():id;
+  const between=Array.isArray(bus.between)&&bus.between.length===2?bus.between.map(cardLabel):[];
+  document.getElementById('bBetween').textContent=between.length===2&&between.every(Boolean)?between.join(' — '):'—';
+  document.getElementById('bLanes').textContent=String(busRoutesForRender().lanes.get(id)?.length||0);
+  const rows=wires.filter(w=>busSpecOf(w)?.buses.includes(id)).map(w=>{
+    const row=document.createElement('div'),label=connectionConfig(w).label;
+    row.dataset.wireId=w.id;row.textContent=`${cardLabel(w.a)||'free'} → ${cardLabel(w.b)||'free'}${label?` · ${label}`:''}`;
+    return row;
+  });
+  document.getElementById('bWires').replaceChildren(...rows);
+}
 function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false}={}){
   clearEndpointFocus();
   if(!preserveSet){
@@ -11795,6 +11850,7 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
   if(id&&focus)activateCanvasKeyboard();
   document.querySelectorAll('.node').forEach(el=>el.classList.toggle('selected',selectedComponentIds.has(el.dataset.id)));
   document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
+  clearBusSelectionMarks();
   const n=nodes.find(n=>n.id===selected);
   document.getElementById('emptyInspector').hidden=!!n;
   hideInspectorKinds();
@@ -11825,6 +11881,7 @@ function selectPortRef(info,{focus=true}={}){
   document.querySelectorAll('.node').forEach(el=>el.classList.remove('selected'));
   document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));
   document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
+  clearBusSelectionMarks();
 
   const vis=document.querySelector(`.node[data-id="${info.owner.id}"] .port[data-port="${info.portId}"]`);
   if(vis)vis.classList.add('port-selected');
@@ -11858,6 +11915,7 @@ function selectWire(i,{focus=true}={}){
   if(focus)activateCanvasKeyboard();
   document.querySelectorAll('.node').forEach(el=>el.classList.remove('selected'));document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
   document.querySelectorAll('.wire').forEach((el,j)=>el.classList.toggle('selected',j===i));
+  clearBusSelectionMarks();
   document.getElementById('emptyInspector').hidden=true;
   hideInspectorKinds();
 
@@ -12757,11 +12815,13 @@ function stableArrowPoint(path,targetD,minD,maxD){
   return fallback?.q||null;
 }
 // A direction mark: the chevron, or, for a wire kind whose arrowhead is filled, the closed triangle
-// through the chevron's three points, filled with the wire's stroke colour.
-function appendChevronAt(group,q,reverse=false,className='flow-chevron',filled=false){
+// through the chevron's three points, filled with the wire's stroke colour. `scale` multiplies the
+// points of a filled mark only (2 on a heavy wire: 7 by 5 becomes 14 by 10); the chevron keeps its size.
+function appendChevronAt(group,q,reverse=false,className='flow-chevron',filled=false,scale=1){
   const c=document.createElementNS('http://www.w3.org/2000/svg','path');
   c.setAttribute('class',className);
-  c.setAttribute('d',`M ${-7*markScale} ${-5*markScale} L 0 0 L ${-7*markScale} ${5*markScale}`+(filled?' Z':''));
+  const m=markScale*(filled?scale:1);
+  c.setAttribute('d',`M ${-7*m} ${-5*m} L 0 0 L ${-7*m} ${5*m}`+(filled?' Z':''));
   if(filled){c.style.fill='var(--wire-ink,var(--canvas-ink))';c.dataset.arrowhead='filled'}
   c.setAttribute('transform',`translate(${q.x} ${q.y}) rotate(${q.angle+(reverse?180:0)})`);
   group.appendChild(c);
@@ -12948,8 +13008,8 @@ function pathWithHops(points,hops){
   }
   return d;
 }
-function renderArrowPoses(group,poses,className='flow-chevron',filled=false){
-  for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className,filled);
+function renderArrowPoses(group,poses,className='flow-chevron',filled=false,scale=1){
+  for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className,filled,scale);
 }
 
 function focusWireVisual(i){
@@ -13166,6 +13226,68 @@ function placeWireLabels(){
 // press of a move until a host is applied or anything else redraws the wires.
 let dragSignalState=null;
 function dropDragSignalState(){dragSignalState=null}
+// A wire that takes a new route when a move settles travels there. The settle pass
+// (settleDraggedRoutes, src/40-routing.js) is the only one that sets wireTravelPass; in it the wire
+// pass records, per wire id, the points a rerouted wire was last drawn with, and draws every group
+// at its final route as always. startWireTravel then moves one added path from the old route to the
+// new one; the drawn document itself never moves.
+let wireTravelPass=false;
+const wireTravelFrom=new Map();
+const WIRE_TRAVEL_MS=180,WIRE_TRAVEL_SAMPLES=32;
+// Whether two routes differ: in their count of points, or by more than 0.5 on any coordinate.
+function wireRouteDiffers(p,q){
+  return p.length!==q.length||p.some((v,k)=>Math.abs(v.x-q[k].x)>.5||Math.abs(v.y-q[k].y)>.5);
+}
+// count points at equal fractions of the length of a polyline, its two ends among them.
+function wireTravelSamples(points,count){
+  const lengths=[0];
+  for(let k=1;k<points.length;k++)lengths.push(lengths[k-1]+Math.hypot(points[k].x-points[k-1].x,points[k].y-points[k-1].y));
+  const total=lengths[lengths.length-1],out=[];
+  let seg=1;
+  for(let n=0;n<count;n++){
+    const at=count>1?total*n/(count-1):0;
+    while(seg<points.length-1&&lengths[seg]<at)seg++;
+    const a=points[Math.max(0,seg-1)],b=points[Math.min(seg,points.length-1)],span=lengths[Math.min(seg,points.length-1)]-lengths[Math.max(0,seg-1)];
+    const f=span>0?Math.min(1,Math.max(0,(at-lengths[seg-1])/span)):0;
+    out.push({x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f});
+  }
+  return out;
+}
+// Path interpolation by resampling: both routes are sampled at equal fractions of their length and
+// each sample moves straight to its partner, over 180 ms from start with a cubic ease out. One frame loop
+// drives every travel started together. A travel whose path left the document (its group was drawn
+// again) is dropped; the wire is then simply at its route.
+function startWireTravel(start){
+  const from=[...wireTravelFrom];wireTravelFrom.clear();
+  if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
+  // The 180 ms count from the settle pass, the moment the line jumped: motion never adds delay
+  // after the change. Where the settle took longer than that to draw, the jump stands.
+  if(performance.now()-start>=WIRE_TRAVEL_MS)return;
+  const line=pts=>pts.map((q,k)=>`${k?'L':'M'}${+q.x.toFixed(2)} ${+q.y.toFixed(2)}`).join(' ');
+  let travels=[];
+  for(const [id,old] of from){
+    const drawn=wireGroupDrawn.get(id);
+    if(!drawn||!drawn.group.isConnected||drawn.group.classList.contains('sectioned'))continue;
+    const now=drawnRoutePoints.get(drawn.index);
+    if(!now||old.length<2||now.length<2||!wireRouteDiffers(old,now))continue;
+    const a=wireTravelSamples(old,WIRE_TRAVEL_SAMPLES),b=wireTravelSamples(now,WIRE_TRAVEL_SAMPLES);
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('class','wire-travel');path.setAttribute('d',line(a));
+    drawn.group.appendChild(path);drawn.group.dataset.travel='true';
+    travels.push({path,group:drawn.group,a,b});
+  }
+  if(!travels.length)return;
+  const frame=time=>{
+    const t=Math.min(1,Math.max(0,(time-start)/WIRE_TRAVEL_MS)),e=1-(1-t)**3;
+    travels=travels.filter(travel=>travel.path.isConnected);
+    for(const {path,group,a,b} of travels){
+      if(t>=1){path.remove();delete group.dataset.travel}
+      else path.setAttribute('d',line(a.map((q,k)=>({x:q.x+(b[k].x-q.x)*e,y:q.y+(b[k].y-q.y)*e}))));
+    }
+    if(t<1&&travels.length)requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
 // The wire pass of a move (pointer or keyboard): the held signal state, and the groups whose inputs
 // did not change are kept (renderWires, reuse).
 function renderWiresForDrag(){
@@ -13313,6 +13435,15 @@ function renderWiresOnce(signalState,markers,reuse){
   // Jogs out and close parallels spread a track apart (src/40-routing.js nudgeRoutes); bus lanes and taps stay fixed.
   const trackCramped=nudgeRoutes(routes,busState?[...busState.routes].flatMap(([id,pts])=>routeSegments(pts,wires.find(x=>x.id===id))):[]);
   for(const [i,r] of routes)r.segs=routeSegments(r.points,wires[i]);
+  if(wireTravelPass){
+    // A settle pass: where each rerouted wire was last drawn, kept for its travel (startWireTravel).
+    const waiting=wireTravelFrom.size;
+    for(const [i,r] of routes){
+      const was=drawnRoutePoints.get(i);
+      if(was&&wireRouteDiffers(was,r.points)&&!wireTravelFrom.has(wires[i].id))wireTravelFrom.set(wires[i].id,clonePoints(was));
+    }
+    if(!waiting&&wireTravelFrom.size){const at=performance.now();requestAnimationFrame(()=>startWireTravel(at))}
+  }
   drawnRoutePoints.clear();for(const [i,r] of routes)drawnRoutePoints.set(i,clonePoints(r.points));
   const hops=new Map(),order=[...routes.keys()];arrowKeepClear=[];
   for(let x=0;x<order.length;x++)for(let y=x+1;y<order.length;y++){
@@ -13459,7 +13590,7 @@ function renderWiresOnce(signalState,markers,reuse){
     const poses=arrowPosesForPath(base,cfg.direction==='duplex');
     if(cfg.direction==='reverse')poses.forEach(p=>p.reverse=!p.reverse);
     if(cfg.direction==='none'||wireKind?.arrowhead==='none')poses.length=0;
-    renderArrowPoses(group,poses,'flow-chevron',wireKind?.arrowhead==='filled');
+    renderArrowPoses(group,poses,'flow-chevron',wireKind?.arrowhead==='filled',wireKind?.weight==='heavy'?2:1);
 
     if(snapshot){
       // The only geometry outside the frozen line is the exact displacement
@@ -14832,6 +14963,71 @@ barComponentSignalMode.addEventListener('change',()=>{
   render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 });
 barComponentColorSlot.addEventListener('click',()=>openColorSlotPanel('component'));
+
+// ---- Bus gesture: a press on a bus's label or rim selects it; a drag moves it -------------------
+// (LAYOUT-MODEL.md "As built: buses", Selecting and moving a bus.) A straight bus moves across its
+// own axis only; a bus with a corner moves freely. The move is previewed by a transform on the
+// drawn band, rim and label, and written once, on release, by the layout operation bus with only
+// the points changed. A move that would part two buses a wire rides one after the other is refused.
+let busGesture=null;
+function busGestureParts(id){
+  const of=sel=>[...document.querySelectorAll(sel)].filter(el=>el.dataset.busId===id);
+  return {groups:of('g.bus-band,g.bus-hit-band'),label:of('text.bus-label')[0]||null};
+}
+function previewBusGesture(g,dx,dy){
+  const parts=busGestureParts(g.id),moved=dx||dy,shift=`translate(${dx} ${dy})`;
+  for(const el of parts.groups){if(moved)el.setAttribute('transform',shift);else el.removeAttribute('transform')}
+  if(!parts.label)return;
+  const next=moved?(g.labelTransform?`${shift} ${g.labelTransform}`:shift):g.labelTransform;
+  if(next)parts.label.setAttribute('transform',next);else parts.label.removeAttribute('transform');
+}
+function beginBusGesture(e,id){
+  if(e.button!==0)return;
+  e.stopPropagation();
+  selectBus(id);
+  const points=SovSchematicLayout.busPoints(activeBuses()[id]?.points);if(!points)return;
+  const axis=points.every(p=>p.x===points[0].x)?'x':points.every(p=>p.y===points[0].y)?'y':'both';
+  busGesture={id,pointerId:e.pointerId,start:svgPoint(e.clientX,e.clientY),points,axis,dx:0,dy:0,labelTransform:busGestureParts(id).label?.getAttribute('transform')||''};
+}
+function moveBusGesture(e){
+  const g=busGesture;if(!g||e.pointerId!==g.pointerId)return;
+  e.preventDefault();
+  const q=svgPoint(e.clientX,e.clientY),step=dragSnapStep(e);
+  let dx=q.x-g.start.x,dy=q.y-g.start.y;
+  if(step>0){dx=Math.round(dx/step)*step;dy=Math.round(dy/step)*step}
+  // A vertical bus moves on x only, a horizontal bus on y only.
+  if(g.axis==='x')dy=0;else if(g.axis==='y')dx=0;
+  g.dx=dx;g.dy=dy;previewBusGesture(g,dx,dy);
+}
+// The first pair of buses that a wire rides one after the other, one of them this bus, and that
+// would no longer meet with this bus at points; null when every such pair still meets.
+function busMoveGap(id,points){
+  const all=activeBuses();
+  for(const w of wires){
+    const ids=busSpecOf(w)?.buses;if(!ids)continue;
+    for(let i=1;i<ids.length;i++){
+      const a=ids[i-1],b=ids[i];if((a!==id&&b!==id)||a===b||!all[a]||!all[b])continue;
+      if(!SovSchematicLayout.busMeet(a===id?points:all[a].points,b===id?points:all[b].points))return [a,b];
+    }
+  }
+  return null;
+}
+function finishBusGesture(e,{cancel=false}={}){
+  const g=busGesture;if(!g||(e&&e.pointerId!==g.pointerId))return;
+  busGesture=null;
+  if(cancel||(!g.dx&&!g.dy)){previewBusGesture(g,0,0);return}
+  const bus=activeBuses()[g.id];if(!bus){render();return}
+  const points=g.points.map(p=>({x:p.x+g.dx,y:p.y+g.dy})),gap=busMoveGap(g.id,points);
+  if(gap){render();statusEl.textContent=`Bus move refused: ${gap[0]} and ${gap[1]} would not meet`;return}
+  const result=runLayoutOp('bus',{id:g.id,points,pitch:bus.pitch,label:bus.label,between:bus.between,lanes:bus.lanes,order:bus.order},'Move bus');
+  if(!result?.ok){render();statusEl.textContent=`Bus move refused: ${result?.message||result?.code||g.id}`;return}
+  selectBus(g.id,{focus:false});
+  statusEl.textContent='Bus moved';
+}
+window.addEventListener('pointermove',moveBusGesture,true);
+window.addEventListener('pointerup',e=>finishBusGesture(e),true);
+window.addEventListener('pointercancel',e=>finishBusGesture(e,{cancel:true}),true);
+window.addEventListener('blur',()=>finishBusGesture(null,{cancel:true}));
 /* END src/60-interactions.js */
 </script>
 <script data-beta-module="src/70-editor-controls.js">
@@ -14922,6 +15118,8 @@ barPortColorSlot.addEventListener('click',()=>openColorSlotPanel('port'));
 function deleteSelected(){
   cancelWireDrag();
   if(!selected)return;
+  // A bus is a record of its layout: Delete leaves it and the wires on it.
+  if(typeof selected==='string'&&selected.startsWith('bus:')){statusEl.textContent='A bus is removed through its layout';return}
   // Flush any pending edit first so deletion always has a distinct pre-delete snapshot.
   commitHistoryCapture();
 
@@ -15686,6 +15884,7 @@ function renderStandaloneSvgNow(opts={}){
   // A still picture cannot show travel: a packet frozen mid-wire reads as a junction.
   // Packets stay only when the file is made to loop (--loop).
   if (!opts.packets) clone.querySelectorAll('.wire-packet').forEach(x => x.remove());
+  clone.querySelectorAll('.bus-hit-band').forEach(x => x.remove());
 
   // A wire on a local surface already sits just after its host in the node layer
   // (renderWires), so the picture shows it above the host body with no lifting here.
@@ -16441,7 +16640,7 @@ function legendEntries(doc=diagram){
 function legendSampleMarkup(e,{ink='currentColor'}={}){
   const s=e.sample||{};
   // A status: a small rounded chip, dashed when the status draws its card's outline dashed.
-  if(e.kind==='status')return `<rect x="3" y="4" width="22" height="10" rx="5" style="fill:${ink};fill-opacity:.14;stroke:${ink};stroke-width:1.3${s.outline==='dashed'?';stroke-dasharray:3 2':''}"/>`;
+  if(e.kind==='status')return `<rect x="3" y="4" width="22" height="10" rx="5" style="fill:${ink};fill-opacity:.14;stroke:${ink};stroke-width:1.3${s.outline==='dashed'?';stroke-dasharray:6 4':''}"/>`;
   // A wire kind: a line 22 long in the kind's dash and weight, its direction mark at the middle.
   if(e.kind==='wire-kind'){
     const width=s.weight==='heavy'?4:2,head=s.arrowhead==='none'?'':`<path d="M 12.5 5.5 L 17 9 L 12.5 12.5${s.arrowhead==='filled'?' Z':''}" style="fill:${s.arrowhead==='filled'?ink:'none'};stroke:${ink};stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"/>`;

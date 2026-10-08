@@ -56,7 +56,7 @@ function legendEntries(doc=diagram){
 function legendSampleMarkup(e,{ink='currentColor'}={}){
   const s=e.sample||{};
   // A status: a small rounded chip, dashed when the status draws its card's outline dashed.
-  if(e.kind==='status')return `<rect x="3" y="4" width="22" height="10" rx="5" style="fill:${ink};fill-opacity:.14;stroke:${ink};stroke-width:1.3${s.outline==='dashed'?';stroke-dasharray:3 2':''}"/>`;
+  if(e.kind==='status')return `<rect x="3" y="4" width="22" height="10" rx="5" style="fill:${ink};fill-opacity:.14;stroke:${ink};stroke-width:1.3${s.outline==='dashed'?';stroke-dasharray:6 4':''}"/>`;
   // A wire kind: a line 22 long in the kind's dash and weight, its direction mark at the middle.
   if(e.kind==='wire-kind'){
     const width=s.weight==='heavy'?4:2,head=s.arrowhead==='none'?'':`<path d="M 12.5 5.5 L 17 9 L 12.5 12.5${s.arrowhead==='filled'?' Z':''}" style="fill:${s.arrowhead==='filled'?ink:'none'};stroke:${ink};stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"/>`;

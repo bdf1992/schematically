@@ -869,11 +869,13 @@ function stableArrowPoint(path,targetD,minD,maxD){
   return fallback?.q||null;
 }
 // A direction mark: the chevron, or, for a wire kind whose arrowhead is filled, the closed triangle
-// through the chevron's three points, filled with the wire's stroke colour.
-function appendChevronAt(group,q,reverse=false,className='flow-chevron',filled=false){
+// through the chevron's three points, filled with the wire's stroke colour. `scale` multiplies the
+// points of a filled mark only (2 on a heavy wire: 7 by 5 becomes 14 by 10); the chevron keeps its size.
+function appendChevronAt(group,q,reverse=false,className='flow-chevron',filled=false,scale=1){
   const c=document.createElementNS('http://www.w3.org/2000/svg','path');
   c.setAttribute('class',className);
-  c.setAttribute('d',`M ${-7*markScale} ${-5*markScale} L 0 0 L ${-7*markScale} ${5*markScale}`+(filled?' Z':''));
+  const m=markScale*(filled?scale:1);
+  c.setAttribute('d',`M ${-7*m} ${-5*m} L 0 0 L ${-7*m} ${5*m}`+(filled?' Z':''));
   if(filled){c.style.fill='var(--wire-ink,var(--canvas-ink))';c.dataset.arrowhead='filled'}
   c.setAttribute('transform',`translate(${q.x} ${q.y}) rotate(${q.angle+(reverse?180:0)})`);
   group.appendChild(c);
@@ -1060,8 +1062,8 @@ function pathWithHops(points,hops){
   }
   return d;
 }
-function renderArrowPoses(group,poses,className='flow-chevron',filled=false){
-  for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className,filled);
+function renderArrowPoses(group,poses,className='flow-chevron',filled=false,scale=1){
+  for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className,filled,scale);
 }
 
 function focusWireVisual(i){
@@ -1278,6 +1280,68 @@ function placeWireLabels(){
 // press of a move until a host is applied or anything else redraws the wires.
 let dragSignalState=null;
 function dropDragSignalState(){dragSignalState=null}
+// A wire that takes a new route when a move settles travels there. The settle pass
+// (settleDraggedRoutes, src/40-routing.js) is the only one that sets wireTravelPass; in it the wire
+// pass records, per wire id, the points a rerouted wire was last drawn with, and draws every group
+// at its final route as always. startWireTravel then moves one added path from the old route to the
+// new one; the drawn document itself never moves.
+let wireTravelPass=false;
+const wireTravelFrom=new Map();
+const WIRE_TRAVEL_MS=180,WIRE_TRAVEL_SAMPLES=32;
+// Whether two routes differ: in their count of points, or by more than 0.5 on any coordinate.
+function wireRouteDiffers(p,q){
+  return p.length!==q.length||p.some((v,k)=>Math.abs(v.x-q[k].x)>.5||Math.abs(v.y-q[k].y)>.5);
+}
+// count points at equal fractions of the length of a polyline, its two ends among them.
+function wireTravelSamples(points,count){
+  const lengths=[0];
+  for(let k=1;k<points.length;k++)lengths.push(lengths[k-1]+Math.hypot(points[k].x-points[k-1].x,points[k].y-points[k-1].y));
+  const total=lengths[lengths.length-1],out=[];
+  let seg=1;
+  for(let n=0;n<count;n++){
+    const at=count>1?total*n/(count-1):0;
+    while(seg<points.length-1&&lengths[seg]<at)seg++;
+    const a=points[Math.max(0,seg-1)],b=points[Math.min(seg,points.length-1)],span=lengths[Math.min(seg,points.length-1)]-lengths[Math.max(0,seg-1)];
+    const f=span>0?Math.min(1,Math.max(0,(at-lengths[seg-1])/span)):0;
+    out.push({x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f});
+  }
+  return out;
+}
+// Path interpolation by resampling: both routes are sampled at equal fractions of their length and
+// each sample moves straight to its partner, over 180 ms from start with a cubic ease out. One frame loop
+// drives every travel started together. A travel whose path left the document (its group was drawn
+// again) is dropped; the wire is then simply at its route.
+function startWireTravel(start){
+  const from=[...wireTravelFrom];wireTravelFrom.clear();
+  if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
+  // The 180 ms count from the settle pass, the moment the line jumped: motion never adds delay
+  // after the change. Where the settle took longer than that to draw, the jump stands.
+  if(performance.now()-start>=WIRE_TRAVEL_MS)return;
+  const line=pts=>pts.map((q,k)=>`${k?'L':'M'}${+q.x.toFixed(2)} ${+q.y.toFixed(2)}`).join(' ');
+  let travels=[];
+  for(const [id,old] of from){
+    const drawn=wireGroupDrawn.get(id);
+    if(!drawn||!drawn.group.isConnected||drawn.group.classList.contains('sectioned'))continue;
+    const now=drawnRoutePoints.get(drawn.index);
+    if(!now||old.length<2||now.length<2||!wireRouteDiffers(old,now))continue;
+    const a=wireTravelSamples(old,WIRE_TRAVEL_SAMPLES),b=wireTravelSamples(now,WIRE_TRAVEL_SAMPLES);
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('class','wire-travel');path.setAttribute('d',line(a));
+    drawn.group.appendChild(path);drawn.group.dataset.travel='true';
+    travels.push({path,group:drawn.group,a,b});
+  }
+  if(!travels.length)return;
+  const frame=time=>{
+    const t=Math.min(1,Math.max(0,(time-start)/WIRE_TRAVEL_MS)),e=1-(1-t)**3;
+    travels=travels.filter(travel=>travel.path.isConnected);
+    for(const {path,group,a,b} of travels){
+      if(t>=1){path.remove();delete group.dataset.travel}
+      else path.setAttribute('d',line(a.map((q,k)=>({x:q.x+(b[k].x-q.x)*e,y:q.y+(b[k].y-q.y)*e}))));
+    }
+    if(t<1&&travels.length)requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
 // The wire pass of a move (pointer or keyboard): the held signal state, and the groups whose inputs
 // did not change are kept (renderWires, reuse).
 function renderWiresForDrag(){
@@ -1425,6 +1489,15 @@ function renderWiresOnce(signalState,markers,reuse){
   // Jogs out and close parallels spread a track apart (src/40-routing.js nudgeRoutes); bus lanes and taps stay fixed.
   const trackCramped=nudgeRoutes(routes,busState?[...busState.routes].flatMap(([id,pts])=>routeSegments(pts,wires.find(x=>x.id===id))):[]);
   for(const [i,r] of routes)r.segs=routeSegments(r.points,wires[i]);
+  if(wireTravelPass){
+    // A settle pass: where each rerouted wire was last drawn, kept for its travel (startWireTravel).
+    const waiting=wireTravelFrom.size;
+    for(const [i,r] of routes){
+      const was=drawnRoutePoints.get(i);
+      if(was&&wireRouteDiffers(was,r.points)&&!wireTravelFrom.has(wires[i].id))wireTravelFrom.set(wires[i].id,clonePoints(was));
+    }
+    if(!waiting&&wireTravelFrom.size){const at=performance.now();requestAnimationFrame(()=>startWireTravel(at))}
+  }
   drawnRoutePoints.clear();for(const [i,r] of routes)drawnRoutePoints.set(i,clonePoints(r.points));
   const hops=new Map(),order=[...routes.keys()];arrowKeepClear=[];
   for(let x=0;x<order.length;x++)for(let y=x+1;y<order.length;y++){
@@ -1571,7 +1644,7 @@ function renderWiresOnce(signalState,markers,reuse){
     const poses=arrowPosesForPath(base,cfg.direction==='duplex');
     if(cfg.direction==='reverse')poses.forEach(p=>p.reverse=!p.reverse);
     if(cfg.direction==='none'||wireKind?.arrowhead==='none')poses.length=0;
-    renderArrowPoses(group,poses,'flow-chevron',wireKind?.arrowhead==='filled');
+    renderArrowPoses(group,poses,'flow-chevron',wireKind?.arrowhead==='filled',wireKind?.weight==='heavy'?2:1);
 
     if(snapshot){
       // The only geometry outside the frozen line is the exact displacement

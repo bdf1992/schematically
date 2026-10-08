@@ -1,7 +1,32 @@
 'use strict';
 // 0.1 Beta concern: Selection state projected into contextual UI and inspector.
 
-function hideInspectorKinds(){componentDetail.hidden=true;connectionDetail.hidden=true;portDetail.hidden=true}
+function hideInspectorKinds(){componentDetail.hidden=true;connectionDetail.hidden=true;portDetail.hidden=true;const bus=document.getElementById('busDetail');if(bus)bus.hidden=true}
+function clearBusSelectionMarks(){document.querySelectorAll('.bus-band').forEach(el=>el.classList.remove('selected'))}
+// A bus is a record of the active layout (src/41-buses.js), selected as bus: and its id. The
+// Inspector reads what it carries; it has no selection bar.
+function selectBus(id,{focus=true}={}){
+  clearEndpointFocus();clearComponentSelectionSet();selected=`bus:${id}`;
+  if(focus)activateCanvasKeyboard();
+  document.querySelectorAll('.node').forEach(el=>el.classList.remove('selected'));
+  document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));
+  document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
+  document.querySelectorAll('.bus-band').forEach(el=>el.classList.toggle('selected',el.dataset.busId===id));
+  document.getElementById('emptyInspector').hidden=true;
+  hideInspectorKinds();hideSelectionBar();
+  const bus=activeBuses()[id]||{},cardLabel=cid=>{const n=nodes.find(n=>n.id===cid);return n?componentConfig(n).label||symbolOf(n.symbolId).name:null};
+  document.getElementById('busDetail').hidden=false;
+  document.getElementById('bLabel').textContent=typeof bus.label==='string'&&bus.label.trim()?bus.label.trim():id;
+  const between=Array.isArray(bus.between)&&bus.between.length===2?bus.between.map(cardLabel):[];
+  document.getElementById('bBetween').textContent=between.length===2&&between.every(Boolean)?between.join(' — '):'—';
+  document.getElementById('bLanes').textContent=String(busRoutesForRender().lanes.get(id)?.length||0);
+  const rows=wires.filter(w=>busSpecOf(w)?.buses.includes(id)).map(w=>{
+    const row=document.createElement('div'),label=connectionConfig(w).label;
+    row.dataset.wireId=w.id;row.textContent=`${cardLabel(w.a)||'free'} → ${cardLabel(w.b)||'free'}${label?` · ${label}`:''}`;
+    return row;
+  });
+  document.getElementById('bWires').replaceChildren(...rows);
+}
 function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false}={}){
   clearEndpointFocus();
   if(!preserveSet){
@@ -14,6 +39,7 @@ function selectNode(id,{focus=true,additive=false,toggle=false,preserveSet=false
   if(id&&focus)activateCanvasKeyboard();
   document.querySelectorAll('.node').forEach(el=>el.classList.toggle('selected',selectedComponentIds.has(el.dataset.id)));
   document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
+  clearBusSelectionMarks();
   const n=nodes.find(n=>n.id===selected);
   document.getElementById('emptyInspector').hidden=!!n;
   hideInspectorKinds();
@@ -44,6 +70,7 @@ function selectPortRef(info,{focus=true}={}){
   document.querySelectorAll('.node').forEach(el=>el.classList.remove('selected'));
   document.querySelectorAll('.wire').forEach(el=>el.classList.remove('selected'));
   document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
+  clearBusSelectionMarks();
 
   const vis=document.querySelector(`.node[data-id="${info.owner.id}"] .port[data-port="${info.portId}"]`);
   if(vis)vis.classList.add('port-selected');
@@ -77,6 +104,7 @@ function selectWire(i,{focus=true}={}){
   if(focus)activateCanvasKeyboard();
   document.querySelectorAll('.node').forEach(el=>el.classList.remove('selected'));document.querySelectorAll('.port').forEach(el=>el.classList.remove('port-selected'));
   document.querySelectorAll('.wire').forEach((el,j)=>el.classList.toggle('selected',j===i));
+  clearBusSelectionMarks();
   document.getElementById('emptyInspector').hidden=true;
   hideInspectorKinds();
 

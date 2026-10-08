@@ -610,3 +610,68 @@ barComponentSignalMode.addEventListener('change',()=>{
   render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 });
 barComponentColorSlot.addEventListener('click',()=>openColorSlotPanel('component'));
+
+// ---- Bus gesture: a press on a bus's label or rim selects it; a drag moves it -------------------
+// (LAYOUT-MODEL.md "As built: buses", Selecting and moving a bus.) A straight bus moves across its
+// own axis only; a bus with a corner moves freely. The move is previewed by a transform on the
+// drawn band, rim and label, and written once, on release, by the layout operation bus with only
+// the points changed. A move that would part two buses a wire rides one after the other is refused.
+let busGesture=null;
+function busGestureParts(id){
+  const of=sel=>[...document.querySelectorAll(sel)].filter(el=>el.dataset.busId===id);
+  return {groups:of('g.bus-band,g.bus-hit-band'),label:of('text.bus-label')[0]||null};
+}
+function previewBusGesture(g,dx,dy){
+  const parts=busGestureParts(g.id),moved=dx||dy,shift=`translate(${dx} ${dy})`;
+  for(const el of parts.groups){if(moved)el.setAttribute('transform',shift);else el.removeAttribute('transform')}
+  if(!parts.label)return;
+  const next=moved?(g.labelTransform?`${shift} ${g.labelTransform}`:shift):g.labelTransform;
+  if(next)parts.label.setAttribute('transform',next);else parts.label.removeAttribute('transform');
+}
+function beginBusGesture(e,id){
+  if(e.button!==0)return;
+  e.stopPropagation();
+  selectBus(id);
+  const points=SovSchematicLayout.busPoints(activeBuses()[id]?.points);if(!points)return;
+  const axis=points.every(p=>p.x===points[0].x)?'x':points.every(p=>p.y===points[0].y)?'y':'both';
+  busGesture={id,pointerId:e.pointerId,start:svgPoint(e.clientX,e.clientY),points,axis,dx:0,dy:0,labelTransform:busGestureParts(id).label?.getAttribute('transform')||''};
+}
+function moveBusGesture(e){
+  const g=busGesture;if(!g||e.pointerId!==g.pointerId)return;
+  e.preventDefault();
+  const q=svgPoint(e.clientX,e.clientY),step=dragSnapStep(e);
+  let dx=q.x-g.start.x,dy=q.y-g.start.y;
+  if(step>0){dx=Math.round(dx/step)*step;dy=Math.round(dy/step)*step}
+  // A vertical bus moves on x only, a horizontal bus on y only.
+  if(g.axis==='x')dy=0;else if(g.axis==='y')dx=0;
+  g.dx=dx;g.dy=dy;previewBusGesture(g,dx,dy);
+}
+// The first pair of buses that a wire rides one after the other, one of them this bus, and that
+// would no longer meet with this bus at points; null when every such pair still meets.
+function busMoveGap(id,points){
+  const all=activeBuses();
+  for(const w of wires){
+    const ids=busSpecOf(w)?.buses;if(!ids)continue;
+    for(let i=1;i<ids.length;i++){
+      const a=ids[i-1],b=ids[i];if((a!==id&&b!==id)||a===b||!all[a]||!all[b])continue;
+      if(!SovSchematicLayout.busMeet(a===id?points:all[a].points,b===id?points:all[b].points))return [a,b];
+    }
+  }
+  return null;
+}
+function finishBusGesture(e,{cancel=false}={}){
+  const g=busGesture;if(!g||(e&&e.pointerId!==g.pointerId))return;
+  busGesture=null;
+  if(cancel||(!g.dx&&!g.dy)){previewBusGesture(g,0,0);return}
+  const bus=activeBuses()[g.id];if(!bus){render();return}
+  const points=g.points.map(p=>({x:p.x+g.dx,y:p.y+g.dy})),gap=busMoveGap(g.id,points);
+  if(gap){render();statusEl.textContent=`Bus move refused: ${gap[0]} and ${gap[1]} would not meet`;return}
+  const result=runLayoutOp('bus',{id:g.id,points,pitch:bus.pitch,label:bus.label,between:bus.between,lanes:bus.lanes,order:bus.order},'Move bus');
+  if(!result?.ok){render();statusEl.textContent=`Bus move refused: ${result?.message||result?.code||g.id}`;return}
+  selectBus(g.id,{focus:false});
+  statusEl.textContent='Bus moved';
+}
+window.addEventListener('pointermove',moveBusGesture,true);
+window.addEventListener('pointerup',e=>finishBusGesture(e),true);
+window.addEventListener('pointercancel',e=>finishBusGesture(e,{cancel:true}),true);
+window.addEventListener('blur',()=>finishBusGesture(null,{cancel:true}));
