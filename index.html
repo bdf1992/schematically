@@ -15666,6 +15666,29 @@ async function openAddressDocument(){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',openAddressDocument,{once:true});
 else openAddressDocument();
 
+// GET /editor on a document server carries the server's document in a JSON script element; it is read
+// through the same seam as File Open, with no request. An open parameter in the address wins.
+function openServedDocument(){
+  if(window.__TAURI__)return;
+  let explicit=null;
+  try{explicit=new URLSearchParams(location.search).get('open')}catch(_){ }
+  if(explicit!==null)return;
+  // The id is joined here so the built page holds its text only where a server has put the element.
+  const holder=document.getElementById('sov-served-'+'document');
+  if(!holder)return;
+  const name=holder.getAttribute('data-name')||'document.sov';
+  try{
+    const parsed=parseFilePayload(holder.textContent);
+    applyOpenedPayload(parsed,name);
+    statusEl.textContent=`Opened · ${currentFileName}`;
+  }catch(error){
+    console.warn('Served document failed to open',error);
+    requestAnimationFrame(()=>{statusEl.textContent=`Open failed · ${name} · ${error.message}`});
+  }
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',openServedDocument,{once:true});
+else openServedDocument();
+
 if(fileBtn)fileBtn.addEventListener('click',event=>{event.stopPropagation();setFileMenu(fileMenu.hidden)});
 if(fileMenu)fileMenu.addEventListener('click',event=>event.stopPropagation());
 if(fileNewBtn)fileNewBtn.addEventListener('click',()=>{setFileMenu(false);newSchematic()});

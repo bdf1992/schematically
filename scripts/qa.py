@@ -148,6 +148,7 @@ BROWSER=[
     'tests/bus_lane_hold_qa.py',
     'tests/live_link_qa.py',
     'tests/address_open_qa.py',
+    'tests/served_editor_qa.py',
 ]
 TAIL=[
     'tests/mutation_watch.py',
