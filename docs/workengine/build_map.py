@@ -250,7 +250,7 @@ def build(gap: dict) -> tuple[dict, dict]:
             name = rec_alias.get(name, name)
             if name in rec_id:
                 wires.append({"id": f"w-backs-{slug(name)}-{i:02d}", "a": rec_id[name], "aSide": "out", "b": qid,
-                              "bSide": "in", "canvasId": GLOBAL, "config": {"label": "backs"}})
+                              "bSide": "in", "canvasId": GLOBAL, "config": {"label": "backs", "kind": "flow"}})
             else:
                 unmatched.append(f"{qid}: {name}")
 
@@ -267,16 +267,16 @@ def build(gap: dict) -> tuple[dict, dict]:
         store = sur_id.get("Workstation control store")
         if store:
             wires.append({"id": "w-moves-control-store", "a": migration["id"], "aSide": "out", "b": store, "bSide": "in",
-                          "canvasId": GLOBAL, "config": {"label": "moves records out of", "status": "proposed"}})
+                          "canvasId": GLOBAL, "config": {"label": "moves records out of", "status": "proposed", "kind": "proposed"}})
 
     for s in surfaces:
         sid = sur_id[s["name"]]
         if "Surface registration" in rec_id:
             wires.append({"id": f"w-registered-{slug(s['name'])}", "a": sid, "aSide": "out", "b": rec_id["Surface registration"],
-                          "bSide": "in", "canvasId": GLOBAL, "config": {"label": "registered by"}})
+                          "bSide": "in", "canvasId": GLOBAL, "config": {"label": "registered by", "kind": "reference"}})
         if channels(s.get("tracks", [])) and "Recording" in rec_id:
             wires.append({"id": f"w-tracks-{slug(s['name'])}", "a": sid, "aSide": "tracks-out", "b": rec_id["Recording"],
-                          "bSide": "tracks-in", "canvasId": GLOBAL, "config": {"label": "feeds tracks"}})
+                          "bSide": "tracks-in", "canvasId": GLOBAL, "config": {"label": "feeds tracks", "kind": "stream"}})
 
     # Group grid: surfaces | records | queries, each a block of columns. The gap between two
     # adjacent columns of one group is at least COL_GAP, widened to the widest label estimate

@@ -869,11 +869,13 @@ function stableArrowPoint(path,targetD,minD,maxD){
   return fallback?.q||null;
 }
 // A direction mark: the chevron, or, for a wire kind whose arrowhead is filled, the closed triangle
-// through the chevron's three points, filled with the wire's stroke colour.
-function appendChevronAt(group,q,reverse=false,className='flow-chevron',filled=false){
+// through the chevron's three points, filled with the wire's stroke colour. `scale` multiplies the
+// points of a filled mark only (2 on a heavy wire: 7 by 5 becomes 14 by 10); the chevron keeps its size.
+function appendChevronAt(group,q,reverse=false,className='flow-chevron',filled=false,scale=1){
   const c=document.createElementNS('http://www.w3.org/2000/svg','path');
   c.setAttribute('class',className);
-  c.setAttribute('d',`M ${-7*markScale} ${-5*markScale} L 0 0 L ${-7*markScale} ${5*markScale}`+(filled?' Z':''));
+  const m=markScale*(filled?scale:1);
+  c.setAttribute('d',`M ${-7*m} ${-5*m} L 0 0 L ${-7*m} ${5*m}`+(filled?' Z':''));
   if(filled){c.style.fill='var(--wire-ink,var(--canvas-ink))';c.dataset.arrowhead='filled'}
   c.setAttribute('transform',`translate(${q.x} ${q.y}) rotate(${q.angle+(reverse?180:0)})`);
   group.appendChild(c);
@@ -1060,8 +1062,8 @@ function pathWithHops(points,hops){
   }
   return d;
 }
-function renderArrowPoses(group,poses,className='flow-chevron',filled=false){
-  for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className,filled);
+function renderArrowPoses(group,poses,className='flow-chevron',filled=false,scale=1){
+  for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className,filled,scale);
 }
 
 function focusWireVisual(i){
@@ -1531,7 +1533,7 @@ function renderWiresOnce(signalState,markers,reuse){
     const poses=arrowPosesForPath(base,cfg.direction==='duplex');
     if(cfg.direction==='reverse')poses.forEach(p=>p.reverse=!p.reverse);
     if(cfg.direction==='none'||wireKind?.arrowhead==='none')poses.length=0;
-    renderArrowPoses(group,poses,'flow-chevron',wireKind?.arrowhead==='filled');
+    renderArrowPoses(group,poses,'flow-chevron',wireKind?.arrowhead==='filled',wireKind?.weight==='heavy'?2:1);
 
     if(snapshot){
       // The only geometry outside the frozen line is the exact displacement

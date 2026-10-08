@@ -392,6 +392,26 @@ same ids and in the same order, and adds five card questions, each asked of the 
 A migration, a port, a refactor and a group are asked nothing. `docs/workengine/map.sov` answers
 all of these from the gap map's own fields (`docs/workengine/GAPS.md` "The full map").
 
+**Wire kinds.** The notation declares five, named by what the line means ("Kinds" below gives the
+fields and the rules):
+
+| Id | Meaning | Dash | Weight | Arrowhead |
+| --- | --- | --- | --- | --- |
+| `flow` | Facts are read along it on request. | solid | regular | chevron |
+| `stream` | A continuous feed carried as channels. | solid | regular | filled |
+| `control` | One side governs the other. | solid | heavy | filled |
+| `reference` | One side is listed by the other and nothing moves. | solid | regular | none |
+| `proposed` | Planned and not built. | dashed (open) | regular | chevron |
+
+Each of the four relations of `docs/workengine/map.sov` takes one. A record that backs a query is
+`flow`: the query reads the record when it is asked. A surface that feeds tracks to the Recording
+record is `stream`: a continuous feed of several channels. A surface registered by the Surface
+registration record is `reference`: a listing along which nothing moves, so it carries no arrowhead.
+The migration that moves records out of the control store is `proposed`: planned work, and its wire
+keeps the status `proposed` as well. No wire of the map is `control`: a heavy wire is 4.5 wide and
+the lanes of the map's buses sit 6 apart. `tests/work_engine_wire_kinds_qa.py` checks the list and
+the map.
+
 ### Kinds
 
 A notation declares what its lines and borders are drawn as in one list, `kinds`, for wires and
@@ -443,11 +463,14 @@ lists the declared ids). Create and update refuse them; loading reports them, wi
   triangle through the chevron's three points, filled in the wire's stroke colour; `none` draws no
   mark. How many marks a wire carries and where they sit is not the kind's: it is the spacing rule
   (`ARROW_SPACING`).
+- A filled arrowhead is drawn at twice its size on a heavy wire (14 by 10 in place of 7 by 5), so
+  the mark scales with the stroke as an SVG marker does by default (`markerUnits: strokeWidth`).
+  The chevron is the same size at every weight.
 
 The wire's group carries `data-kind`. A wire with no kind draws as before, and a status with
 `outline: dashed` still dashes its wire. The legend lists each wire kind a visible wire uses, after
 the statuses, with a sample line in that kind's dash, weight and arrowhead. The `work-engine`
-notation declares no wire kinds yet. `tests/wire_kind_qa.py` checks all of this.
+notation declares five ("Domain notation: work-engine"). `tests/wire_kind_qa.py` checks all of this.
 
 ### Concerns
 
