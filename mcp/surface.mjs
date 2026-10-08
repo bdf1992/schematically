@@ -10,8 +10,9 @@
 //                                                       and route answers RENDERER_UNAVAILABLE
 //   readText(relativePath) -> string                   for schematic.guide's doc sections
 //   describe() -> any                                  the root response's `document` field
-//   editorHtml                                          accepted, unused here (the live-link
-//                                                       entrypoint serves /editor with it)
+//   editorHtml                                          the built page; /editor serves it with this
+//                                                       document in a sov-served-document tag,
+//                                                       /index.html serves it unchanged
 // and gets back {handle(request)}, request being {method, path, query (an object of strings),
 // headers (lower-case keys), body (a string or null)}; handle resolves to {status, headers, body}
 // where body is a string or a Uint8Array.
@@ -265,13 +266,24 @@ schematic.markers and schematic.render; run with schematic.run.*.`;
     }
     return jsonResponse(404,{error:'not found'});
   }
+  // /editor carries this server's document as an inert JSON script element just before the last
+  // closing body tag; every less-than sign is escaped so no document text can end the element.
+  function withServedDocument(html){
+    const at=html.lastIndexOf('</body>');
+    if(at<0)return html;
+    const described=describe();
+    const base=typeof described==='string'&&described?described.split(/[\\/]/).pop():'';
+    const name=(base||'document.sov').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+    const json=JSON.stringify(Data.clone(documentState)).replace(/</g,'\\u003c');
+    return html.slice(0,at)+`<script type="application/json" id="sov-served-document" data-name="${name}">${json}</script>`+html.slice(at);
+  }
   async function handle(request){
     if(request.method==='OPTIONS')return {status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','access-control-allow-headers':'content-type,mcp-protocol-version,mcp-method,mcp-name'},body:''};
     try{
       if((request.path==='/editor'||request.path==='/index.html')&&request.method==='GET'){
         const html=editorHtml?editorHtml():null;
         if(html==null)return jsonResponse(404,{error:'no build at index.html; run python build.py'});
-        return {status:200,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','access-control-allow-origin':'*'},body:html};
+        return {status:200,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','access-control-allow-origin':'*'},body:request.path==='/editor'?withServedDocument(html):html};
       }
       if(request.path==='/mcp'&&request.method==='POST')return await handleMcp(request);
       if(request.path.startsWith('/api/v1/'))return await handleApi(request);

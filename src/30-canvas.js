@@ -248,6 +248,7 @@ function currentZoom(){
   return BASE_VIEW.w / camera.w;
 }
 function syncLabelScale(){
+  syncCanvasGrid();
   // The viewBox is also fitted into the actual workspace between the panels.
   // Nominal camera zoom alone misses this scale, especially on narrow screens.
   const matrix=workspace.getScreenCTM();
@@ -424,8 +425,23 @@ function snapModeLabel(step){
   if(step===0) return 'free settle';
   return `settles to ${step}`;
 }
+function syncCanvasGrid(){
+  // The grid is a CSS background drawn in world units: minor cell = canvasGridSize,
+  // the unit of the snap step; every fourth line is a major line.
+  const m=workspace.getScreenCTM();
+  if(!m)return;
+  const r=workspace.getBoundingClientRect();
+  const k=Math.hypot(m.a,m.b);
+  const minor=canvasGridSize*k;
+  const major=4*minor;
+  workspace.style.setProperty('--canvas-grid-size',`${minor}px`);
+  workspace.style.setProperty('--canvas-grid-major',`${major}px`);
+  workspace.style.setProperty('--canvas-grid-x',`${m.e-r.left-0.5}px`);
+  workspace.style.setProperty('--canvas-grid-y',`${m.f-r.top-0.5}px`);
+  workspace.classList.toggle('grid-minor-hidden',minor<8);
+}
 function applyGridSettings(){
-  document.documentElement.style.setProperty('--canvas-grid-size',`${canvasGridSize}px`);
+  syncCanvasGrid();
   workspace.classList.toggle('grid-hidden',!canvasGridVisible);
   gridVisibleInput.checked=canvasGridVisible;
   gridSnapInput.checked=canvasSnapEnabled;
