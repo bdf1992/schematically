@@ -1066,6 +1066,26 @@ function clearWireVisualFocus(){
   document.querySelectorAll('.wire-group').forEach(g=>g.classList.remove('muted'));
   if(!(typeof selected==='string'&&selected.startsWith('wire:'))) clearEndpointFocus();
 }
+// Of the hit paths under the pointer, the wire whose drawn line is nearest it; fallback when none qualifies.
+function nearestWireIndexAt(clientX,clientY,fallback){
+  const p=svgPoint(clientX,clientY);
+  let best=fallback,bestD=Infinity;
+  for(const el of document.elementsFromPoint(clientX,clientY)){
+    if(!el.classList||!el.classList.contains('wire-hit')) continue;
+    const g=el.closest('.wire-group'); if(!g) continue;
+    const idx=Number(g.dataset.wireIndex);
+    const pts=drawnRoutePoints.get(idx); if(!pts||!pts.length) continue;
+    let d=Infinity;
+    if(pts.length===1) d=Math.hypot(p.x-pts[0].x,p.y-pts[0].y);
+    for(let k=0;k+1<pts.length;k++){
+      const a=pts[k],c=pts[k+1],dx=c.x-a.x,dy=c.y-a.y,l2=dx*dx+dy*dy;
+      const t=l2?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/l2)):0;
+      d=Math.min(d,Math.hypot(p.x-(a.x+t*dx),p.y-(a.y+t*dy)));
+    }
+    if(d<bestD){bestD=d;best=idx}
+  }
+  return best;
+}
 // Projection-only geometry: keep the exact points used to paint each path. Label
 // layout never asks the router for another route or writes into the document.
 const wireLabelPaths=new Map();
@@ -1565,9 +1585,17 @@ function renderWires(signalState=computeSignalState(),markers=markersById(),reus
      }}
     // Legacy Wire-owned attachment points are migrated to hosted 0D Components before projection.
 
-    hit.addEventListener('pointerdown',e=>{e.stopPropagation();selectWire(i);focusWireVisual(i)});
-    group.addEventListener('pointerenter',()=>focusWireVisual(i));
-    group.addEventListener('pointerleave',()=>{if(selected!==`wire:${i}`)clearWireVisualFocus()});
+    hit.addEventListener('pointerdown',e=>{e.stopPropagation();const j=nearestWireIndexAt(e.clientX,e.clientY,i);selectWire(j);focusWireVisual(j)});
+    hit.addEventListener('pointermove',e=>{
+      const j=nearestWireIndexAt(e.clientX,e.clientY,i);
+      const gj=[...document.querySelectorAll('.wire-group')].find(g=>Number(g.dataset.wireIndex)===j);
+      if(gj&&gj.classList.contains('wire-hover')) return;
+      document.querySelectorAll('.wire-group.wire-hover').forEach(g=>g.classList.remove('wire-hover'));
+      if(gj) gj.classList.add('wire-hover');
+      focusWireVisual(j);
+    });
+    group.addEventListener('pointerenter',()=>{document.querySelectorAll('.wire-group.wire-hover').forEach(g=>{if(g!==group)g.classList.remove('wire-hover')});group.classList.add('wire-hover');focusWireVisual(i)});
+    group.addEventListener('pointerleave',()=>{document.querySelectorAll('.wire-group.wire-hover').forEach(g=>g.classList.remove('wire-hover'));if(selected!==`wire:${i}`)clearWireVisualFocus()});
     wireGroupDrawn.set(w.id,{group,base,key,index:i,hostId:hostEl?hostId:null,cls:group.getAttribute('class'),css:group.style.cssText,baseCls:base.getAttribute('class'),label:group.querySelector('.connection-label')});
     if(selected===`wire:${i}`) focusWireVisual(i);
   });

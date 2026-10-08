@@ -105,6 +105,7 @@ BROWSER=[
     'tests/wire_crossing_qa.py',
     'tests/arrow_spacing_qa.py',
     'tests/wire_kind_qa.py',
+    'tests/wire_click_reach_qa.py',
     'tests/route_clear_of_cards_qa.py',
     'tests/port_side_qa.py',
     'tests/track_gap_qa.py',
