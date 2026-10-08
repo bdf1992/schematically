@@ -38,8 +38,23 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .workspace-wrap{position:relative;overflow:hidden;user-select:none;-webkit-user-select:none}
 #workspace{width:100%;height:100%;display:block;touch-action:none;outline:none;
   background-color:var(--canvas-tone,#fbfbf9);
-  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
-  background-size:var(--canvas-grid-size) var(--canvas-grid-size);
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+    linear-gradient(color-mix(in srgb,var(--grid) 40%,transparent) 1px,transparent 1px),
+    linear-gradient(90deg,color-mix(in srgb,var(--grid) 40%,transparent) 1px,transparent 1px);
+  background-size:
+    var(--canvas-grid-major,96px) var(--canvas-grid-major,96px),
+    var(--canvas-grid-major,96px) var(--canvas-grid-major,96px),
+    var(--canvas-grid-size) var(--canvas-grid-size),
+    var(--canvas-grid-size) var(--canvas-grid-size);
+  background-position:var(--canvas-grid-x,0px) var(--canvas-grid-y,0px);
+}
+#workspace.grid-minor-hidden{
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:var(--canvas-grid-major,96px) var(--canvas-grid-major,96px);
 }
 #workspace.grid-hidden{background-image:none}
 #workspace:focus-visible{outline:2px solid #8a8a82;outline-offset:-2px}
@@ -200,12 +215,12 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .wire-group.dormant .wire-voltage{opacity:.16}
 .wire{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:var(--stroke-flow,2.25);stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:pointer;transition:stroke-width .1s,opacity .1s}
 .wire-voltage{fill:none;stroke:var(--voltage-ink,var(--wire-ink,var(--canvas-ink)));stroke-width:calc(8px * var(--scale,1));stroke-linecap:round;stroke-linejoin:round;opacity:.10;pointer-events:none}
-.wire-hit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
+.wire-hit{fill:none;stroke:transparent;stroke-width:max(14px,calc(12px / var(--zoom,1)));pointer-events:stroke;cursor:pointer}
 .wire.selected{stroke-width:4}
-.wire-group:hover .wire{stroke-width:3.3}
+.wire-group.wire-hover .wire{stroke-width:max(3.3px,calc(3px / var(--zoom,1)))}
 /* A heavy wire kind: its group's --stroke-flow is twice the token, and selected and hover multiply it by what 4 and 3.3 are to 2.25. */
 .wire-group[data-weight="heavy"] .wire.selected{stroke-width:calc(var(--stroke-flow,4.5px) * 1.7778)}
-.wire-group[data-weight="heavy"]:hover .wire{stroke-width:calc(var(--stroke-flow,4.5px) * 1.4667)}
+.wire-group[data-weight="heavy"].wire-hover .wire{stroke-width:max(calc(var(--stroke-flow,4.5px) * 1.4667),calc(4px / var(--zoom,1)))}
 .wire-packet{
   display:none;
   pointer-events:none;
