@@ -11,6 +11,7 @@ written undirected and only its links keep each edge's true source and target.
 folder as a subprocess. Standard library only; no network and no LLM call.
 
     python scripts/graph_to_sov.py GRAPH --out FILE [--labels FILE] [--label-length N] [--no-layout]
+                                  [--level nodes|communities]
 """
 from __future__ import annotations
 
@@ -269,29 +270,190 @@ def to_sov(data: dict, output_path, *, community_labels: dict | None = None,
     )
     text = dumps_sov(document)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_document(text, output_path, layout=layout, node_exe=node_exe)
+    counts = sov_counts(document, skipped)
+    counts["output"] = str(output_path)
+    return counts
+
+
+def _run_layout(text: str, output_path: Path, *, node_exe: str) -> None:
+    """Lay ``text`` out with layout_sov.mjs into ``output_path`` through a temporary file."""
     tmp = _temp_file(output_path.parent, text)
     try:
-        if not layout:
-            os.replace(tmp, output_path)
-        else:
-            script = Path(__file__).resolve().parent / "layout_sov.mjs"
-            proc = subprocess.run(
-                [node_exe, str(script), tmp, "--out", str(output_path)],
-                capture_output=True, text=True, encoding="utf-8", errors="replace",
+        script = Path(__file__).resolve().parent / "layout_sov.mjs"
+        proc = subprocess.run(
+            [node_exe, str(script), tmp, "--out", str(output_path)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"layout_sov.mjs exited {proc.returncode}\n"
+                f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
             )
-            if proc.returncode != 0:
-                raise RuntimeError(
-                    f"layout_sov.mjs exited {proc.returncode}\n"
-                    f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
-                )
     finally:
         try:
             os.unlink(tmp)
         except OSError:
             pass
-    counts = sov_counts(document, skipped)
-    counts["output"] = str(output_path)
-    return counts
+
+
+def _write_document(text: str, output_path: Path, *, layout: bool, node_exe: str | None) -> None:
+    if layout:
+        _run_layout(text, output_path, node_exe=node_exe)
+        return
+    tmp = _temp_file(output_path.parent, text)
+    try:
+        os.replace(tmp, output_path)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def community_pairs(data: dict, card_of: dict, community_of: dict) -> list[tuple[tuple[int, int], int]]:
+    """Cross-community pairs with their non-structural link counts, sorted by pair."""
+    counts: dict[tuple[int, int], int] = {}
+    for link in _links(data):
+        if str(link.get("relation") or "") in STRUCTURAL_RELATIONS:
+            continue
+        a = card_of.get(str(link.get("source")))
+        b = card_of.get(str(link.get("target")))
+        if a is None or b is None:
+            continue
+        ca = community_of.get(a)
+        cb = community_of.get(b)
+        if ca is None or cb is None or ca == cb:
+            continue
+        key = tuple(sorted((ca, cb)))
+        counts[key] = counts.get(key, 0) + 1
+    return sorted(counts.items())
+
+
+def community_title(members: list[dict], links: list[dict] | None = None) -> str:
+    """The shared module path (two or more directory segments) of a community's members,
+    else the label of its best-connected member. ``links`` are the raw graph links the
+    degree is counted from; without them every member has degree 0."""
+    degree: dict[str, int] = {}
+    for link in links or []:
+        if str(link.get("relation") or "") in STRUCTURAL_RELATIONS:
+            continue
+        for end in (link.get("source"), link.get("target")):
+            degree[str(end)] = degree.get(str(end), 0) + 1
+
+    def rank(member: dict):
+        label = _card_label(str(member.get("label") or member.get("id")))
+        return (-degree.get(str(member.get("id")), 0), len(label), label)
+
+    top = min(members, key=rank)
+    candidate = _card_label(str(top.get("label") or top.get("id")))
+    dirs = [re.split(r"[/\\]", str(m.get("source_file") or ""))[:-1] for m in members]
+    common: list[str] = list(dirs[0]) if dirs else []
+    for parts in dirs[1:]:
+        n = 0
+        while n < len(common) and n < len(parts) and common[n] == parts[n]:
+            n += 1
+        common = common[:n]
+    if len(common) >= 2:
+        return "/".join(common)
+    return candidate
+
+
+def _community_members(data: dict) -> tuple[dict[int, list[dict]], dict, dict]:
+    """Card-bearing nodes by community, plus card_of and community_of."""
+    _cards_, card_of, community_of, _skipped = _cards(list(data.get("nodes") or []))
+    members: dict[int, list[dict]] = {}
+    for node in data.get("nodes") or []:
+        if node_kind(node) is None:
+            continue
+        community = _community(node)
+        if community is not None:
+            members.setdefault(community, []).append(node)
+    return members, card_of, community_of
+
+
+def communities_to_sov(data: dict, *, community_labels: dict | None = None,
+                       communities_dir_name: str) -> dict:
+    """The top document: one card per community, one wire per community pair. Pure."""
+    members, card_of, community_of = _community_members(data)
+    links = _links(data)
+    cards = []
+    for n in sorted(members):
+        cards.append({
+            "id": f"community-{n}",
+            "symbolId": "ground",
+            "config": {
+                "label": community_title(members[n], links),
+                "members": sorted(card_id(str(m["id"])) for m in members[n]),
+                "documentRef": f"{communities_dir_name}/community-{n}.sov",
+            },
+        })
+    wires = []
+    for (lo, hi), count in community_pairs(data, card_of, community_of):
+        wires.append({
+            "id": f"w-community-{lo}-community-{hi}",
+            "a": f"community-{lo}",
+            "aSide": "out",
+            "b": f"community-{hi}",
+            "bSide": "in",
+            "canvasId": CANVAS,
+            "config": {"label": str(count)},
+        })
+    return {
+        "schema": SCHEMA,
+        "id": "code-graph",
+        "revision": 0,
+        "meta": {"title": f"code graph: {len(cards)} communities"},
+        "references": [],
+        "components": cards,
+        "wires": wires,
+    }
+
+
+def community_document(data: dict, cid: int, *, community_labels: dict | None = None,
+                       label_length: int = LABEL_LENGTH) -> dict:
+    """The per-node export restricted to the members of community ``cid``."""
+    nodes = [n for n in data.get("nodes") or [] if _community(n) == cid]
+    ids = {str(n["id"]) for n in nodes}
+    links = [l for l in _links(data)
+             if str(l.get("source")) in ids and str(l.get("target")) in ids]
+    sub = {"directed": data.get("directed"), "multigraph": data.get("multigraph"),
+           "graph": data.get("graph"), "nodes": nodes, "links": links}
+    return graph_to_sov(sub, community_labels=community_labels, label_length=label_length)
+
+
+def to_sov_communities(data: dict, output_path, *, community_labels: dict | None = None,
+                       label_length: int = LABEL_LENGTH, layout: bool = True,
+                       node: str = "node") -> dict:
+    """Write the top document at ``output_path`` and one document per community beside it."""
+    output_path = Path(output_path)
+    node_exe = None
+    if layout:
+        node_exe = shutil.which(node)
+        if node_exe is None:
+            raise ValueError(f"node not found: {node!r} is not on PATH")
+    dir_name = f"{output_path.stem}.communities"
+    communities_dir = output_path.parent / dir_name
+    top = communities_to_sov(data, community_labels=community_labels,
+                             communities_dir_name=dir_name)
+    ids = sorted(int(c["id"].split("-", 1)[1]) for c in top["components"])
+    documents = [(n, community_document(data, n, community_labels=community_labels,
+                                        label_length=label_length)) for n in ids]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    communities_dir.mkdir(parents=True, exist_ok=True)
+    _write_document(dumps_sov(top), output_path, layout=layout, node_exe=node_exe)
+    members = 0
+    for n, document in documents:
+        members += sum(1 for c in document["components"] if c["symbolId"] != "group")
+        _write_document(dumps_sov(document), communities_dir / f"community-{n}.sov",
+                        layout=layout, node_exe=node_exe)
+    return {
+        "communities": len(ids),
+        "wires": len(top["wires"]),
+        "members": members,
+        "output": str(output_path),
+        "communities_dir": str(communities_dir),
+    }
 
 
 def _refuse(message: str) -> int:
@@ -321,7 +483,11 @@ def main(argv: list[str] | None = None) -> int:
                         help=f"longest wire label, default {LABEL_LENGTH}")
     parser.add_argument("--no-layout", action="store_true",
                         help="write the document without coordinates")
+    parser.add_argument("--level", choices=("nodes", "communities"), default="nodes",
+                        help="nodes: one card per function, class and module (default); "
+                             "communities: one card per community and a document for each")
     args = parser.parse_args(argv)
+    write = to_sov_communities if args.level == "communities" else to_sov
     try:
         data = _load_json(Path(args.graph), "GRAPH")
         labels = _load_json(Path(args.labels), "--labels") if args.labels else None
@@ -329,8 +495,8 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("GRAPH must hold a JSON object")
         if labels is not None and not isinstance(labels, dict):
             raise ValueError("--labels must hold a JSON object")
-        counts = to_sov(data, args.out, community_labels=labels,
-                        label_length=args.label_length, layout=not args.no_layout)
+        counts = write(data, args.out, community_labels=labels,
+                       label_length=args.label_length, layout=not args.no_layout)
     except ValueError as exc:
         return _refuse(str(exc))
     except RuntimeError as exc:
