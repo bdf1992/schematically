@@ -1,4 +1,4 @@
-import asyncio, math
+import asyncio, math, tempfile
 from pathlib import Path
 from playwright.async_api import async_playwright
 from browser_runtime import chromium_launch_kwargs
@@ -31,6 +31,7 @@ async def main():
     axis_y=result['useY']+(result['terminalY']/64)*result['box']['h']
     assert abs(axis_y)<.15,(axis_y,result)
     assert not errors,errors
-    await page.screenshot(path=str(ROOT/'tests/beta18-inline-wire.png'),full_page=True)
+    with tempfile.TemporaryDirectory() as tmp:
+      await page.screenshot(path=str(Path(tmp)/'beta18-inline-wire.png'),full_page=True)
     await browser.close();print('PASS wire host inline QA')
 asyncio.run(main())
