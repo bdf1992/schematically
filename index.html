@@ -13211,6 +13211,38 @@ function wireDrawKey(i,w,d,points,epA,epB,snapshot,busFallback,cramped,editor,si
     JSON.stringify(w.config||null),JSON.stringify(w.form||null),
     (wireMarkers||[]).map(m=>m.message).join('\u0001'),clear].join('\u0002');
 }
+// The order wires are routed in: every index of `wires`, host wires before the wires of the cards
+// they host (a topological order of the host relation), stored order within one depth. A card's host
+// wire is the wire of the first canvas:wire: canvas on the way up its parents. A wire with no hosted
+// end has depth 0; otherwise 1 more than the deepest host wire of its two ends. A loop of hosts ends:
+// a wire met again while its own depth is being computed counts as depth 0.
+function wireRouteOrder(){
+  const prefix='canvas:wire:';
+  const nodeById=new Map(nodes.map(n=>[n.id,n])),wireIndex=new Map(wires.map((w,i)=>[w.id,i]));
+  const hostWireOf=id=>{
+    const seen=new Set();
+    for(let n=nodeById.get(id);n&&!seen.has(n.id);n=nodeById.get(n.parentId)){
+      seen.add(n.id);
+      const canvasId=String(n.canvasId||'');
+      if(canvasId.startsWith(prefix)){const host=wireIndex.get(canvasId.slice(prefix.length));return host===undefined?null:host}
+    }
+    return null;
+  };
+  const depths=new Map(),computing=new Set();
+  const depthOf=i=>{
+    if(depths.has(i))return depths.get(i);
+    if(computing.has(i))return 0;
+    computing.add(i);
+    let depth=0;
+    for(const end of [wires[i].a,wires[i].b]){
+      const host=hostWireOf(end);
+      if(host!==null&&host!==i)depth=Math.max(depth,1+depthOf(host));
+    }
+    computing.delete(i);depths.set(i,depth);
+    return depth;
+  };
+  return wires.map((w,i)=>i).sort((x,y)=>depthOf(x)-depthOf(y)||x-y);
+}
 function renderWiresOnce(signalState,markers,reuse){
   const hostedMoved=new Set();
   const previousLabels=new Map([...wireLabelPaths.keys()].map(path=>{
@@ -13238,7 +13270,12 @@ function renderWiresOnce(signalState,markers,reuse){
   if(busState)for(const [id,pts] of busState.routes){const w=wires.find(x=>x.id===id);if(w)occupied.push(...routeSegments(pts,w))}
   // The bus routes found above stand for the whole pass: each wire reads them, none asks again.
   const routeEvery=fn=>busState&&typeof withBusRoutes==='function'?withBusRoutes(busState,fn):fn();
-  routeEvery(()=>wires.forEach((w,i)=>{
+  // Host wires are routed before the wires of the cards they host (wireRouteOrder), so `occupied`
+  // holds a host wire's segments before those wires are routed and no host wire's route is scored
+  // against them. The repeat in renderWires remains because a card's pose comes from the drawn
+  // path, which hops and track nudging still change.
+  routeEvery(()=>wireRouteOrder().forEach(i=>{
+    const w=wires[i];
     if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
     // An end with no finite position (a card that was never placed) leaves the wire out of the drawing.
@@ -13251,6 +13288,9 @@ function renderWiresOnce(signalState,markers,reuse){
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
     if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
   }));
+  // Back in stored order: the hop pairs, the track nudging and the drawn points read `routes` by wire index.
+  const routedInStoredOrder=[...routes].sort((p,q)=>p[0]-q[0]);
+  routes.clear();for(const [i,r] of routedInStoredOrder)routes.set(i,r);
   // Jogs out and close parallels spread a track apart (src/40-routing.js nudgeRoutes); bus lanes and taps stay fixed.
   const trackCramped=nudgeRoutes(routes,busState?[...busState.routes].flatMap(([id,pts])=>routeSegments(pts,wires.find(x=>x.id===id))):[]);
   for(const [i,r] of routes)r.segs=routeSegments(r.points,wires[i]);
@@ -13486,7 +13526,10 @@ function renderWiresOnce(signalState,markers,reuse){
 // exists only after every route of the pass was found, the card's own wires among them. So when a
 // pass moved a hosted card, the wires that end on it or on a card it carries are routed again from
 // where it now stands and the pass runs once more, keeping the groups that did not change. That
-// repeats while a pass still moves a hosted card, at most 3 more times.
+// repeats while a pass still moves a hosted card, at most 3 more times. Host wires are routed before
+// the wires of the cards they host (wireRouteOrder), so a host wire's route does not depend on them;
+// the repeat remains because a card's pose comes from the drawn path, which hops and track nudging
+// still change.
 function renderWires(signalState=computeSignalState(),markers=markersById(),reuse=false){
   let moved=renderWiresOnce(signalState,markers,reuse);
   for(let pass=0;pass<3&&moved.size;pass++){
