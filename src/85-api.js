@@ -48,6 +48,12 @@ function runtimeAnswers(request){
   const input=Array.isArray(request)?{answers:request}:(request||{});
   return runtimeWrite(()=>SovSchematicData.answerConcerns(diagram,{...input,id:input.id||`browser-answers-${Date.now()}`}),()=>'Answer concerns');
 }
+// The document's axes (DATA-FORMATS.md "Axes"): the data core's setAxes decides everything;
+// `request` is its list (or null to remove the axes), or {axes, ifRevision}.
+function runtimeAxes(request){
+  const input=Array.isArray(request)||request===null?{axes:request}:(request||{});
+  return runtimeWrite(()=>SovSchematicData.setAxes(diagram,{...input,id:input.id||`browser-axes-${Date.now()}`}),()=>'Set axes');
+}
 // Runs live beside the document, not in it (STATE-SPACE.md "Surfaces"): the page's run registry
 // starts every run from snapshotDocument() and reads packs from the build's sov-packs tag. No run
 // operation captures history, changes the document or its revision, or saves recovery.
@@ -102,6 +108,7 @@ const SovSchematicAPI={
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
   concerns:{list:(options={})=>SovSchematicData.concernReport(snapshotDocument(),options||{}),answer:(answers)=>runtimeAnswers(answers)},
+  axes:{list:()=>SovSchematicData.documentAxes(snapshotDocument()),set:(axes)=>runtimeAxes(axes)},
   view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:effectivePaletteName(),palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom'],source:documentPalette()!==null?'document':'view',viewPalette:colorEngine.palette}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;const picked=palette?pickPalette(palette):null;if(!palette||picked?.ok===false)applyColorEngine();return picked?.ok===false?picked:{theme:colorEngine.theme,palette:effectivePaletteName()}},documentPalette:()=>SovSchematicData.clone(documentPalette()),setDocumentPalette:(value)=>{const admitted=setDocumentPalette(value);return admitted.ok===false?admitted:SovSchematicData.clone(documentPalette())},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()},
     // The wave view (src/68-wave-view.js): off, string, dots or lanes; the view's own, never the document's.
     waveStyle:()=>waveStyle(),setWaveStyle:(name)=>setWaveStyle(name)},

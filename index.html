@@ -2053,6 +2053,8 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     if(typeof input.notation==='string'&&input.notation.trim())doc.notation=input.notation.trim();
     if(Array.isArray(input.narration))doc.narration=clone(input.narration);
     if(isObject(input.legend))doc.legend=clone(input.legend);
+    // The document's declared axes (DATA-FORMATS.md "Axes"): kept as written, absent is not written.
+    if(input.axes!==undefined)doc.axes=clone(input.axes);
     if(input.canvas&&isObject(input.canvas))doc.canvas={...doc.canvas,...clone(input.canvas),id:GLOBAL_CANVAS_ID,scope:'global',dimension:2,state:'open'};
     doc.meta.updatedAt=cleanString(doc.meta.updatedAt,nowIso());
     return normalizeDocument(doc);
@@ -2519,6 +2521,106 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     return list.map(b=>isObject(b)&&typeof b.label==='string'?{...b,label:b.label.trim()}:b);
   }
   function assertBadges(config,clearable=false){const p=badgeProblems(config,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Axes (DATA-FORMATS.md "Axes") ------------------------------------------------------------
+  // A document declares up to 3 ordered axes in `axes`: [{id, name?, values: [{id, name?}]}]. A
+  // Component or a Wire stores its value on each axis in `config.axis`: {axisId: valueId}. The
+  // field is semantic: it sits on the record, outside document.layout, and nothing is placed by it.
+  // A missing name is read by position (documentAxes): the first axis is Layer and its values
+  // Layer 1, Layer 2; the second Phase; the third Depth. The stored record keeps no default name.
+  //   AXIS_INVALID        axes is not that list, or config.axis is not an object (the message names the entry and the rule)
+  //   AXIS_UNKNOWN        config.axis names an axis the document does not declare
+  //   AXIS_VALUE_UNKNOWN  config.axis names a value its axis does not list
+  // Loading reports them (validateDocument); create and update refuse; an update's null removes
+  // the key, or one axis of it. setAxes is the one verb that writes the document's axes.
+  const AXIS_MAX=3,AXIS_DEFAULT_NAMES=Object.freeze(['Layer','Phase','Depth']),AXIS_KEYS=['id','name','values'],AXIS_VALUE_KEYS=['id','name'];
+  const axisText=value=>typeof value==='string'&&!!value&&value===value.trim();
+  function axesProblems(axes){
+    const out=[];if(axes===undefined)return out;
+    if(!Array.isArray(axes)){out.push(`AXIS_INVALID: axes must be an array of {id, name, values}, not ${JSON.stringify(axes)}`);return out}
+    if(axes.length>AXIS_MAX)out.push(`AXIS_INVALID: axes holds ${axes.length} entries; at most ${AXIS_MAX}`);
+    // One finding per entry: the first rule it breaks.
+    const entry=(item,at,keys,seen,what)=>{
+      if(!isObject(item))return `${at} must be an object {${keys.join(', ')}}`;
+      const extra=Object.keys(item).find(k=>!keys.includes(k));
+      if(!axisText(item.id))return `${at}.id must be a non-empty string with no whitespace at either end, not ${JSON.stringify(item.id)}`;
+      if(seen.has(item.id))return `${at}.id ${JSON.stringify(item.id)} is already used; ${what} ids are unique within their list`;
+      seen.add(item.id);
+      if(item.name!==undefined&&!axisText(item.name))return `${at}.name must be a non-empty string with no whitespace at either end, not ${JSON.stringify(item.name)}`;
+      if(extra)return `${at}.${extra} is not a field of ${what==='axis'?'an axis':'a value'} (${keys.join(', ')})`;
+      return null;
+    };
+    const axisIds=new Set();
+    axes.forEach((axis,i)=>{
+      const at=`axes[${i}]`,found=entry(axis,at,AXIS_KEYS,axisIds,'axis');
+      if(found)out.push(`AXIS_INVALID: ${found}`);
+      if(!isObject(axis))return;
+      if(!Array.isArray(axis.values)){out.push(`AXIS_INVALID: ${at}.values must be an array of {id, name}, not ${JSON.stringify(axis.values)}`);return}
+      const valueIds=new Set();
+      axis.values.forEach((value,j)=>{const bad=entry(value,`${at}.values[${j}]`,AXIS_VALUE_KEYS,valueIds,'value');if(bad)out.push(`AXIS_INVALID: ${bad}`)});
+    });
+    return out;
+  }
+  // The axes a document declares, each with the name it reads as: the stored name, else the
+  // default for its position. Entries that break a rule are left out (axesProblems reports them).
+  function documentAxes(doc){
+    const axes=Array.isArray(doc?.axes)?doc.axes.slice(0,AXIS_MAX):[],seen=new Set(),out=[];
+    axes.forEach((axis,i)=>{
+      if(!isObject(axis)||!axisText(axis.id)||seen.has(axis.id))return;
+      seen.add(axis.id);
+      const word=AXIS_DEFAULT_NAMES[i],ids=new Set(),values=[];
+      (Array.isArray(axis.values)?axis.values:[]).forEach((value,j)=>{
+        if(!isObject(value)||!axisText(value.id)||ids.has(value.id))return;
+        ids.add(value.id);values.push({id:value.id,name:axisText(value.name)?value.name:`${word} ${j+1}`});
+      });
+      out.push({id:axis.id,name:axisText(axis.name)?axis.name:word,values});
+    });
+    return out;
+  }
+  // `axes` is the resolved list the record is read against: the document's own, or the list a
+  // setAxes would leave. `clearable` is an update's reading: null for the whole, or for one
+  // declared axis, is a removal.
+  function axisProblems(doc,config,clearable=false,axes=documentAxes(doc)){
+    const out=[];if(!isObject(config))return out;
+    const held=config.axis;if(held===undefined||(clearable&&held===null))return out;
+    if(!isObject(held)){out.push(`AXIS_INVALID: config.axis must be an object of axis id to value id, not ${JSON.stringify(held)}`);return out}
+    for(const key of Object.keys(held)){
+      const axis=axes.find(a=>a.id===key),value=held[key];
+      if(!axis)out.push(`AXIS_UNKNOWN: config.axis.${key} names an axis the document does not declare; declared: ${axes.map(a=>a.id).join(', ')||'none'}`);
+      else if(clearable&&value===null)continue;
+      else if(typeof value!=='string'||!axis.values.some(v=>v.id===value))out.push(`AXIS_VALUE_UNKNOWN: config.axis.${key} ${JSON.stringify(value)} is not a value of axis "${key}"; declared: ${axis.values.map(v=>v.id).join(', ')||'none'}`);
+    }
+    return out;
+  }
+  function assertAxis(doc,config,clearable=false){const p=axisProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
+  // Copies an authored axis object onto a record being made; none, or an empty object, writes no key.
+  function adoptAxis(config,value){
+    if(isObject(value?.axis)&&Object.keys(value.axis).length)config.axis=clone(value.axis);
+    return config;
+  }
+  // Writes the document's axes: `axes` is the whole list, or null (or an empty list) to remove the
+  // key. All or none, one revision, one receipt whose result.axes is documentAxes after the write.
+  // Refused, changing nothing: a list that breaks a rule (AXIS_INVALID); a list that drops an axis
+  // a Component or a Wire still names (AXIS_UNKNOWN) or a value one still names
+  // (AXIS_VALUE_UNKNOWN), the message naming the record; a stale ifRevision.
+  function setAxes(document,request={}){
+    const id=request?.id||`axes-${Date.now()}`,rawRevision=Math.max(0,Math.trunc(num(document?.revision,0)));
+    const refuse=message=>({schema:RECEIPT_SCHEMA,operationId:id,ok:false,revisionBefore:rawRevision,revisionAfter:rawRevision,result:null,error:{message}});
+    if(typeof request?.ifRevision==='number'&&request.ifRevision!==rawRevision)return refuse(`Stale revision: expected ${request.ifRevision}, document is at ${rawRevision}`);
+    if(request?.axes===undefined)return refuse('AXIS_INVALID: axes must be an array of {id, name, values}, or null to remove them');
+    const next=request.axes===null?[]:request.axes,problems=axesProblems(next);
+    if(problems.length)return refuse(problems[0]);
+    // A record's finding the list would add: one it does not already carry against the axes in force.
+    const resolved=documentAxes({axes:next}),head=message=>message.split(';')[0];
+    for(const [kind,items] of [['component',document?.components],['wire',document?.wires]])for(const item of Array.isArray(items)?items:[]){
+      const carried=new Set(axisProblems(document,item?.config).map(head));
+      const added=axisProblems(document,item?.config,false,resolved).find(message=>!carried.has(head(message)));
+      if(added)return refuse(`${added} (${kind} ${item?.id||'?'} still names it)`);
+    }
+    const doc=normalizeDocument(document),before=doc.revision;
+    if(next.length)doc.axes=clone(next);else delete doc.axes;
+    touch(doc);
+    return {schema:RECEIPT_SCHEMA,operationId:id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:{axes:documentAxes(doc)},error:null};
+  }
   // ---- Intake (SECTION-MODEL.md "Groups": Borders) ----------------------------------------------
   // A group or a plane may carry `config.intake: true`: an open region, drawn with a dashed outline.
   //   INTAKE_INVALID   intake is not a boolean, or sits on a Component that is neither a group nor a plane
@@ -2564,7 +2666,12 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
   // An update's null removes the key.
   function clearStatusAndWaitsOn(candidate,patch){
     if(!isObject(candidate?.config)||!isObject(patch?.config))return;
-    for(const key of ['status','waitsOn','badges','intake','answers'])if(patch.config[key]===null)delete candidate.config[key];
+    for(const key of ['status','waitsOn','badges','intake','answers','axis'])if(patch.config[key]===null)delete candidate.config[key];
+    // An axis object merges per key: a null removes that one axis, and no empty object is stored.
+    if(isObject(patch.config.axis)&&isObject(candidate.config.axis)){
+      for(const key of Object.keys(patch.config.axis))if(patch.config.axis[key]===null)delete candidate.config.axis[key];
+      if(!Object.keys(candidate.config.axis).length)delete candidate.config.axis;
+    }
     // Answers merge per key: a null removes that one answer, and no empty object is stored.
     if(isObject(patch.config.answers)&&isObject(candidate.config.answers)){
       for(const key of Object.keys(patch.config.answers))if(patch.config.answers[key]===null)delete candidate.config.answers[key];
@@ -2980,6 +3087,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     if(value.config?.members!==undefined)config.members=clone(value.config.members);
     assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
     assertAnswers(doc,value.config,'component',false,component);adoptAnswers(config,value.config);
+    assertAxis(doc,value.config);adoptAxis(config,value.config);
     if(Array.isArray(value.config?.badges)){const badges=trimmedBadges(value.config.badges);assertBadges({badges});config.badges=clone(badges)}
     else{assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges)}
     if(value.config?.intake!==undefined&&value.config.intake!==null){config.intake=clone(value.config.intake);assertIntake(component)}
@@ -3198,7 +3306,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
   }
   function makeWire(doc,value={}){
     const id=cleanString(value.id,nextId(doc.wires,'k'));
-    assertPathDelay(value.config);assertStatusAndWaitsOn(doc,value.config);assertWireKind(doc,value.config);assertAnswers(doc,value.config,'wire');
+    assertPathDelay(value.config);assertStatusAndWaitsOn(doc,value.config);assertWireKind(doc,value.config);assertAnswers(doc,value.config,'wire');assertAxis(doc,value.config);
     const wire={id,a:cleanString(value.a)||null,b:cleanString(value.b)||null,aSide:value.aSide??null,bSide:value.bSide??null,aAttachment:isObject(value.aAttachment)?clone(value.aAttachment):null,bAttachment:isObject(value.bAttachment)?clone(value.bAttachment):null};
     if(!wire.a&&!wire.aAttachment&&!wire.b&&!wire.bAttachment)throw new Error('wire.create requires a and b component ids, or free endpoints');
     for(const end of ['a','b'])if(!wire[end]&&!wire[end+'Attachment'])throw new Error(`wire.create requires ${end} (component id) or ${end}Attachment`);
@@ -3210,7 +3318,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
       form:isObject(value.form)?clone(value.form):{dimension:1,body:{kind:'path',material:'generic',thickness:0}},
       lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
       net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
-      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{}),...adoptStatusAndWaitsOn({},value.config),...adoptAnswers({},value.config),...(value.config?.kind!==undefined&&value.config.kind!==null?{kind:value.config.kind}:{})},
+      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{}),...adoptStatusAndWaitsOn({},value.config),...adoptAnswers({},value.config),...adoptAxis({},value.config),...(value.config?.kind!==undefined&&value.config.kind!==null?{kind:value.config.kind}:{})},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
     });
@@ -3259,6 +3367,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     if(binding&&resource!=='component')throw new Error('DEFINITION_INVALID: only a component binds a definition');
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
     if(resource!=='reference')assertStatusAndWaitsOn(doc,patch?.config,true);
+    if(resource!=='reference')assertAxis(doc,patch?.config,true);
     // A patch that retypes the Component is read against the symbol it will have.
     // On a retype a null for a declared concern is the patch removing that answer, so it is not read
     // against the new symbol; the record it makes is checked below, once the patch is merged.
@@ -3503,7 +3612,10 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     const wires=doc.wires.filter(w=>(ids&&ids.has(w.id))||(picked.has(w.a)&&picked.has(w.b)));
     const references=ids?doc.references.filter(r=>ids.has(r.id)):[];
     const edge=doc.wires.filter(w=>!wires.includes(w)&&(picked.has(w.a)!==picked.has(w.b))).map(w=>({id:w.id,a:w.a,b:w.b}));
-    return {ok:true,revision:doc.revision,components:doc.components.filter(c=>picked.has(c.id)).map(compactComponent),wires:wires.map(compactWire),references,crossing:edge};
+    // A document that declares axes is read with them, each with the name it reads as, so a
+    // record's config.axis can be read in the slice; a document that declares none has no key.
+    const axes=documentAxes(doc);
+    return {ok:true,revision:doc.revision,components:doc.components.filter(c=>picked.has(c.id)).map(compactComponent),wires:wires.map(compactWire),references,crossing:edge,...(axes.length?{axes}:{})};
   }
   // The binding path (`applyBind` in the state space calls it): applies a binding patch,
   // `{config:{definition, attachmentDefaults:'none', attachmentPoints}}`, to a 2D Component with the
@@ -3529,7 +3641,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     wires.splice(0,wires.length,...incoming.wires);
     references.splice(0,references.length,...incoming.references);
     target.schema=DOCUMENT_SCHEMA;target.id=incoming.id;target.revision=incoming.revision;target.meta=incoming.meta;target.canvas=incoming.canvas;target.layout=incoming.layout;
-    for(const k of ['notation','narration','legend']){if(incoming[k]===undefined)delete target[k];else target[k]=incoming[k]}
+    for(const k of ['notation','narration','legend','axes']){if(incoming[k]===undefined)delete target[k];else target[k]=incoming[k]}
     return target;
   }
   function validateDocument(input){
@@ -3575,6 +3687,9 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of intakeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
     for(const item of input.components||[])for(const p of shapeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
+    // Axes: the document's own list, then each Component's and Wire's value on it (the codes are listed at axesProblems).
+    for(const p of axesProblems(input.axes))errors.push(p);
+    {const axes=documentAxes(input);for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of axisProblems(input,item?.config,false,axes))errors.push(`${kind} ${item?.id||'?'}: ${p}`)}
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -3595,6 +3710,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
     if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID|BADGE_INVALID|KIND_UNDECLARED|KIND_UNKNOWN|KIND_INVALID):/.test(message))return 'status';
     if(/(?:^|: )(?:ANSWER_INVALID|ANSWER_UNDECLARED|ANSWER_UNKNOWN|CONCERN_INVALID):/.test(message))return 'status';
+    if(/(?:^|: )(?:AXIS_INVALID|AXIS_UNKNOWN|AXIS_VALUE_UNKNOWN):/.test(message))return 'status';
     return 'boundary-legality';
   }
   // Straight from validateDocument's own findings; no legality is re-derived here.
@@ -3616,7 +3732,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,notationConcerns,answerProblems,concernReport,answerConcerns,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {admitTimeScale,PALETTE_NAMES,admitPalette,AXIS_DEFAULT_NAMES,axesProblems,axisProblems,documentAxes,setAxes,statusProblems,notationStatuses,notationConcerns,answerProblems,concernReport,answerConcerns,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
 /* END src/05-data-core.js */
 </script>
@@ -16960,6 +17076,12 @@ function runtimeAnswers(request){
   const input=Array.isArray(request)?{answers:request}:(request||{});
   return runtimeWrite(()=>SovSchematicData.answerConcerns(diagram,{...input,id:input.id||`browser-answers-${Date.now()}`}),()=>'Answer concerns');
 }
+// The document's axes (DATA-FORMATS.md "Axes"): the data core's setAxes decides everything;
+// `request` is its list (or null to remove the axes), or {axes, ifRevision}.
+function runtimeAxes(request){
+  const input=Array.isArray(request)||request===null?{axes:request}:(request||{});
+  return runtimeWrite(()=>SovSchematicData.setAxes(diagram,{...input,id:input.id||`browser-axes-${Date.now()}`}),()=>'Set axes');
+}
 // Runs live beside the document, not in it (STATE-SPACE.md "Surfaces"): the page's run registry
 // starts every run from snapshotDocument() and reads packs from the build's sov-packs tag. No run
 // operation captures history, changes the document or its revision, or saves recovery.
@@ -17014,6 +17136,7 @@ const SovSchematicAPI={
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
   concerns:{list:(options={})=>SovSchematicData.concernReport(snapshotDocument(),options||{}),answer:(answers)=>runtimeAnswers(answers)},
+  axes:{list:()=>SovSchematicData.documentAxes(snapshotDocument()),set:(axes)=>runtimeAxes(axes)},
   view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:effectivePaletteName(),palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom'],source:documentPalette()!==null?'document':'view',viewPalette:colorEngine.palette}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;const picked=palette?pickPalette(palette):null;if(!palette||picked?.ok===false)applyColorEngine();return picked?.ok===false?picked:{theme:colorEngine.theme,palette:effectivePaletteName()}},documentPalette:()=>SovSchematicData.clone(documentPalette()),setDocumentPalette:(value)=>{const admitted=setDocumentPalette(value);return admitted.ok===false?admitted:SovSchematicData.clone(documentPalette())},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()},
     // The wave view (src/68-wave-view.js): off, string, dots or lanes; the view's own, never the document's.
     waveStyle:()=>waveStyle(),setWaveStyle:(name)=>setWaveStyle(name)},

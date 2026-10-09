@@ -370,6 +370,82 @@ chip drawn then reads `+N`, N the badges without a chip of their own, and its `<
 labels.
 
 
+## Axes (2026-10-09)
+
+A document may declare up to three ordered, named axes, and a Component or a Wire may say which value
+it holds on each. Every key is optional and absent is not written: a document that declares no axes
+has no `axes` key, and a record that holds no value has no `config.axis` key. The field is semantic:
+it is stored on the record, outside `document.layout`, and no position, size or drawing is read from
+it.
+
+- **`axes`** (on the document): an array of at most 3 entries `{id, name?, values}`, in order.
+  `values` is an array of `{id, name?}`, in order; it may be empty. An `id` is a non-empty string with
+  no whitespace at either end, unique within its list (axis ids within `axes`, value ids within one
+  axis's `values`). A `name`, when present, is a non-empty string with no whitespace at either end; no
+  other key is allowed. Anything else is `AXIS_INVALID`, and the message names the entry and the rule
+  (`axes[1].values[0].id "a" is already used; value ids are unique within their list`; more than 3
+  entries; not an array).
+- **`config.axis`** on a Component or a Wire: an object `{axisId: valueId}`, at most one value per
+  declared axis. A key the document's `axes` does not declare is `AXIS_UNKNOWN`; a value that axis
+  does not list, or a value that is not a string, is `AXIS_VALUE_UNKNOWN`; each message lists the
+  declared ids. A `config.axis` that is not an object is `AXIS_INVALID`.
+
+```json
+{"axes": [
+  {"id": "layer", "values": [{"id": "l1"}, {"id": "l2", "name": "Service"}]},
+  {"id": "phase", "name": "Stage", "values": [{"id": "plan"}, {"id": "build"}]}
+]}
+```
+
+```json
+{"label": "Smelter", "axis": {"layer": "l2", "phase": "build"}}
+```
+
+**Default names.** A missing `name` is read by position and is not written into the file. The first
+axis is `Layer` and its values `Layer 1`, `Layer 2`, ...; the second is `Phase` with `Phase 1`,
+`Phase 2`, ...; the third is `Depth` with `Depth 1`, `Depth 2`, .... A value's default takes its
+axis's position, whatever the axis is named. `SovSchematicData.documentAxes(doc)` returns the
+declared axes with every name filled in, `[{id, name, values: [{id, name}]}]`, and changes nothing;
+for the example above it gives `Layer` (`Layer 1`, `Service`) and `Stage` (`Phase 1`, `Phase 2`).
+
+| Code | When |
+| --- | --- |
+| `AXIS_INVALID` | `axes` is not that list, or `config.axis` is not an object; the message names the entry and the rule |
+| `AXIS_UNKNOWN` | `config.axis` names an axis the document does not declare; the message lists the declared axis ids |
+| `AXIS_VALUE_UNKNOWN` | `config.axis` names a value its axis does not list; the message lists that axis's value ids |
+
+A `create` or `update` of a Component or a Wire carrying a bad `config.axis` is refused with the code
+(the error message starts with it) on every surface, and the document is unchanged. An `update` merges
+`config.axis` per key into the values already there: a value id sets that axis, `null` removes that
+one axis (`{"axis": {"phase": null}}`), and `axis: null` removes the key. When the last value goes,
+the key goes with it, so no empty object is stored; a `create` with an empty object writes no key.
+Loading keeps the stored values as written and `validateDocument` reports each finding as
+`AXIS_INVALID: axes...`, `component <id>: <CODE>: ...` or `wire <id>: <CODE>: ...` (marker rule
+`status`). Saving, opening and compacting keep `axes` and every `config.axis` as written, and both are
+part of `documentHash`. `schematic.get`, `schematic.read` and `schematic.document.get` return
+`config.axis` on the record; `schematic.read` also returns `axes` (the `documentAxes` form) when the
+document declares any, and has no `axes` key when it declares none. The schema
+(`formats/schematic.document.schema.json`) declares `axes` on the document and `axis` on
+`components[].config` and `wires[].config`.
+
+**The write.** `SovSchematicData.setAxes(doc, {axes, ifRevision})` writes the document's axes: `axes`
+is the whole list, or `null` (or an empty list) to remove the key. It is all or none and moves the
+document one revision; the receipt's `result.axes` is `documentAxes` after the write. Refusals, each
+changing nothing:
+
+- `AXIS_INVALID`: the list breaks a rule above, or `axes` is absent;
+- `AXIS_UNKNOWN`: the list drops an axis a Component or a Wire still names; the message ends with the
+  record (`(component smelter still names it)`);
+- `AXIS_VALUE_UNKNOWN`: the list drops a value a Component or a Wire still names, the same way;
+- a stale `ifRevision` (`Stale revision: expected <n>, document is at <m>`).
+
+Remove the value from the records first (an `update` with `axis: {<id>: null}`), then the axis or the
+value from the list. Renaming and reordering keep every id and are admitted. The browser serves it as
+`SovSchematicAPI.axes.set` and `SovSchematicAPI.axes.list` (`API.md` "Axes"). Over MCP and HTTP the
+list is written with `schematic.document.replace` or `PUT /api/v1/document`, which run
+`validateDocument` and so refuse the same three findings.
+
+
 ## Card shape (2026-10-04, `SECTION-MODEL.md` "Card shapes")
 
 A card may be drawn as a cylinder (a store) or a parallelogram (input and output), after the ISO 5807

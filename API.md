@@ -72,6 +72,16 @@ SovSchematicAPI.concerns.answer([{concern, target, answer}, ...])   // or answer
 
 `concerns.list` is the data core's `concernReport` over `document.get()`: one row `{concern, applies, target, title, question, answered, answer}` per concern the notation declares for the document (`target: null`), each Component and each Wire (`DATA-FORMATS.md` "Answers"). `concerns.answer` runs the data core's `answerConcerns`: `target` absent or null is the document, else the id of a Component or a Wire; `answer` is a non-empty string to set, `null` to remove. It is all or none and one revision, and goes through the path `apply` uses, so it is one history entry and one undo restores the document. The receipt is `apply`'s with `result.report: {answered, open}`; a refusal (`ANSWER_INVALID`, `ANSWER_TARGET_UNKNOWN`, `ANSWER_UNKNOWN`, `ANSWER_UNDECLARED`, a locked record, a stale revision) changes nothing. MCP serves the same as `schematic.concerns` and `schematic.concerns.answer`, and HTTP as `GET /api/v1/concerns` (`?open=1`; 200) and `POST /api/v1/concerns` (200, 409 for a stale revision, 400 for any other refusal).
 
+## Axes
+
+```js
+SovSchematicAPI.axes.list()                    // [{id, name, values: [{id, name}]}], default names filled in
+SovSchematicAPI.axes.set([{id, name, values: [{id, name}]}, ...])   // or set({axes, ifRevision}); null removes them
+SovSchematicAPI.update('component', 'smelter', {config: {axis: {layer: 'l2'}}})
+```
+
+`axes.list` is the data core's `documentAxes` over `document.get()`: the document's declared axes in order, each name the stored one or the default for its position (`DATA-FORMATS.md` "Axes"). `axes.set` runs the data core's `setAxes` with the whole list: all or none, one revision, one history entry, and the receipt's `result.axes` is the list after the write. It is refused, changing nothing, with `AXIS_INVALID` (a list that breaks a rule), with `AXIS_UNKNOWN` or `AXIS_VALUE_UNKNOWN` (the list drops an axis or a value a Component or a Wire still names) or for a stale revision. A Component's or a Wire's own value is `config.axis`, written by `create`, `update` and `apply` and returned by `get`, `read` and `document.get`; `read` also returns `axes` when the document declares any. MCP and HTTP serve `config.axis` through the same verbs (`schematic.create`, `schematic.update`, `schematic.apply`, `schematic.get`, `schematic.read`, `schematic.document.get`); there the document's `axes` list is written with `schematic.document.replace` or `PUT /api/v1/document`, which refuse the same findings.
+
 ## Editor/history API
 
 `window.SovSchematicAPI` additionally exposes `history.list/undo/redo`, `checkpoints.list/create/restore`, semantic selection clipboard helpers, and view appearance/global-rate accessors. MCP exposes history undo/redo and checkpoint list/create/restore for its file-backed document.

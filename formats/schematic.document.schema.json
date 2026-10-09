@@ -70,6 +70,33 @@
     "canvas": {
       "type": "object"
     },
+    "axes": {
+      "type": "array",
+      "maxItems": 3,
+      "description": "The axes the document declares, in order: at most 3, each an ordered list of values. A Component or a Wire says which value it holds in config.axis. A missing name is read by position and is not written: the first axis is Layer with values Layer 1, Layer 2; the second Phase; the third Depth. Ids are unique within their list. Anything else is AXIS_INVALID. Absent means the document declares no axes. See DATA-FORMATS.md 'Axes'.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "values"],
+        "properties": {
+          "id": {"$ref": "#/$defs/axisText", "description": "The axis's id, unique within axes; the key a record's config.axis names it by."},
+          "name": {"$ref": "#/$defs/axisText", "description": "The axis's name; absent means the default for its position (Layer, Phase, Depth)."},
+          "values": {
+            "type": "array",
+            "description": "The axis's values, in order; ids unique within this list.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id"],
+              "properties": {
+                "id": {"$ref": "#/$defs/axisText", "description": "The value's id, unique within its axis; what a record's config.axis stores."},
+                "name": {"$ref": "#/$defs/axisText", "description": "The value's name; absent means the default for its position (Layer 1, Layer 2 on the first axis)."}
+              }
+            }
+          }
+        }
+      }
+    },
     "components": {
       "type": "array",
       "items": {
@@ -115,6 +142,10 @@
               "answers": {
                 "$ref": "#/$defs/answers",
                 "description": "The Component's answers to the component concerns of the document's notation (notation.concerns, applies component): concern id to a non-empty string. There is no built-in component concern; a notation that declares none admits none (ANSWER_UNDECLARED), and a key it does not declare is ANSWER_UNKNOWN. A concern entry is {id, applies, title, question, meaning, symbols}: symbols, on a component concern only, is a non-empty list of symbol ids with no repeats, and the concern is then asked only of Components whose symbolId is in it; an answer to it on any other Component is ANSWER_UNKNOWN. Without symbols the concern is asked of every Component. See NOTATION-MODEL.md 'Concerns'."
+              },
+              "axis": {
+                "$ref": "#/$defs/axis",
+                "description": "The Component's value on each axis the document declares (axes): axis id to value id. An axis id the document does not declare is AXIS_UNKNOWN; a value id that axis does not list is AXIS_VALUE_UNKNOWN. Semantic: nothing is placed or drawn from it. See DATA-FORMATS.md 'Axes'."
               },
               "badges": {
                 "type": "array",
@@ -176,6 +207,10 @@
                 "$ref": "#/$defs/answers",
                 "description": "The Wire's answers to the wire concerns of the document's notation (notation.concerns, applies wire): concern id to a non-empty string. There is no built-in wire concern; a notation that declares none admits none (ANSWER_UNDECLARED), and a key it does not declare is ANSWER_UNKNOWN. See NOTATION-MODEL.md 'Concerns'."
               },
+              "axis": {
+                "$ref": "#/$defs/axis",
+                "description": "The Wire's value on each axis the document declares (axes): axis id to value id. An axis id the document does not declare is AXIS_UNKNOWN; a value id that axis does not list is AXIS_VALUE_UNKNOWN. Semantic: nothing is placed or drawn from it. See DATA-FORMATS.md 'Axes'."
+              },
               "kind": {
                 "type": "string",
                 "description": "The Wire's kind: the id of a wire kind in the kinds list of the document's notation (notation.kinds, applies wire), which declares the dash, weight and arrowhead the Wire is drawn in. There is no built-in wire kind; a notation that declares none admits none (KIND_UNDECLARED), and an id it does not declare is KIND_UNKNOWN. A Component takes no kind. See NOTATION-MODEL.md 'Kinds'."
@@ -211,6 +246,20 @@
         "type": "string",
         "minLength": 1,
         "pattern": "\\S"
+      }
+    },
+    "axisText": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+      "description": "An axis's or a value's id or name: a non-empty string with no whitespace at either end."
+    },
+    "axis": {
+      "type": "object",
+      "description": "A record's value on each declared axis: each key is the id of an axis in the document's axes, each value the id of one of that axis's values. The keys are the document's, never a fixed set.",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
       }
     },
     "waitsOn": {
