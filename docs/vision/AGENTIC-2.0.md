@@ -26,7 +26,7 @@ What 2.0 builds on, with the gap each part leaves.
 | --- | --- | --- |
 | One legality path | Every surface (browser, Browser API, HTTP, MCP) goes through `Data.applyOperation` (`src/05-data-core.js`), with optional `ifRevision` | — keep it |
 | Agent verbs | ~40 MCP tools: CRUD, history, checkpoints, runs, `graph.query`, `layout`, `render` (PNG back to the agent) (`MCP.md`); the workstation serves five meta-verbs over them, including `schematically_image` | Verbs are not a session: the agent and the person never share one |
-| Shared state | The MCP server loads the file once and keeps its own document and its own 120-snapshot history (`mcp/server.mjs`); the browser fetches nothing from it | **An agent's edit is invisible to an open editor until the file is reopened** |
+| Shared state | On `dev`: the browser pushes a read-only snapshot (revision, camera, selection, document) to `/api/v1/live` and `schematic.live.*` lets an agent see it (`src/87-live.js`). On `main` the MCP server keeps a separate document and history | **One way only: a server or agent edit still never reaches the open editor** |
 | History | `{label, at, document}`: a whole-document snapshot, session-local (`src/15-editor-kernel.js`) | **No actor.** An agent's edit can't be told apart from the person's, attributed, or rejected on its own |
 | Event log | `STATE-SPACE.md`: "the event log is authoritative; every other state is a fold". Built for runs only (`src/07-state-space.js`) | Editing does not use it |
 | Generative constraint | `HORIZON-SPACE.md`: a partly configured **Space** is "a constrained generative environment"; the data-language vision compiles one model into a diagram for a person and bounded context for an agent | Vision only |
@@ -80,7 +80,7 @@ diffed, and handed from one participant to another. This applies bdos-design's o
 
 Three primitives carry it:
 
-1. **Surface.** `surface@0.1`: parts from the catalog, each bound to a path in the
+1. **Surface.** A bdos-design document (correction, see `AGENTIC-2.0-ARCH.md`: bdos-design already has this, with participant-attributed events, merge-patch data and a long-poll event stream, so it is imported, not invented): parts from the catalog, each bound to a path in the
    document or the event log, plus the verbs it may issue. The inspector, a table of all
    wires, a layout-candidates comparison, a run timeline, and a judgement request to the
    user are all surfaces. People and agents both create them; the system agent creates
@@ -187,7 +187,7 @@ the rest can be honest.
    against an inventory (the 2026-10-05 mission's own measure).
 9. Every other control is reachable as a surface, summoned by selection, by asking, or
    by an agent, and every removed control names its route.
-10. Surfaces are records (`surface@0.1`): id, origin, bindings, revision; pin, save,
+10. Surfaces are records (bdos-design documents): id, origin, bindings, revision; pin, save,
     reopen, diff and hand-off.
 11. Agent changes outside what the Space admits for it arrive as proposals: ghosts with a
     diff, accepted or rejected in whole or in part.
@@ -241,6 +241,10 @@ the rest can be honest.
   the four references (shadcn, Miro, draw.io, Mermaid)?
 
 ## Residuals noticed while mapping
+
+- Correction 2026-10-09: this draft was first read against `main`. `dev` is 304 commits
+  ahead and already has the one-way live link and `graph_to_sov`; `AGENTIC-2.0-ARCH.md`
+  is the scan against `dev`.
 
 - `STATE-SPACE.md` and `LAYOUT-MODEL.md` both say "nothing here is implemented", but
   their code exists. A cold agent reading the header gets the wrong answer.
