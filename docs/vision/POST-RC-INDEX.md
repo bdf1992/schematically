@@ -6,6 +6,7 @@ user proof live in [the root roadmap](../../ROADMAP.md).
 
 - `DATA-DRIVEN-SCHEMATIC-LANGUAGE.md` — root data-driven language, packs, skills, Space, and instruction-machine direction.
 - `TOPOLOGY-CELL-GRAMMAR.md` — Point / Path / Surface cell/incidence grammar, Parts, boundary structure, parametric attachment, and `Wire → Path` direction.
+- `AGENTIC-2.0.md` — the agentic interface and experience: four participants on one attributed record, generative and stateful surfaces, bdos-design, graph levels, and 3D earned as planes in depth. Draft expectations awaiting Bdo's confirmation.
 - Issue #6 — small data-driven logic machine for particle routing.
 
 Feature PRs return to `dev`; a later stabilization cut follows the release gate.
