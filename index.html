@@ -11976,6 +11976,19 @@ function selectWire(i,{focus=true}={}){
 // Both are screen pixels: general is the floor of every canvas label, shrunkTitle the floor of a
 // card title marked data-shrunk.
 const LABEL_FLOORS=Object.freeze({general:12,shrunkTitle:10});
+// Both are screen scales (screen pixels per canvas unit), the one home of the zoom levels at which
+// detail is dropped. Below body, body text (12 canvas units) draws under 7.2 screen px, is not
+// readable and is hidden. secondary is the deep-overview level, below which subtitles and wire
+// labels are hidden; it is set equal to the scale at which a title over its glyph is already
+// hidden, because a fitted view keeps its wire labels and subtitles: measured on 2026-10-09, the
+// review fixture 02-service-circuit fitted to a 1440 wide window sits at 0.459, and at 0.284 on a
+// 768 wide one. Group titles and bus labels are never hidden here. Both values are first settings.
+const DETAIL_FLOORS=Object.freeze({body:.6,secondary:.25});
+// The screen scale the canvas is drawn at: the --zoom style property of #workspace, or 1. It reads
+// the property, never the screen matrix, so a picture (rendered with --zoom at 1) shows everything.
+function detailScreenScale(){
+  return parseFloat(typeof workspace!=='undefined'&&workspace?workspace.style.getPropertyValue('--zoom'):'')||1;
+}
 
 function renderMoveTether(group,from,to){
   if(!from||!to) return;
@@ -12151,6 +12164,8 @@ function fitComponentLabels(g,n){
   const subLine=u&&subFull?cut(u,subFull):null;
   const ok=r=>!inCard||(r.top>=topLimit-.01&&r.bottom<=innerBottom+.01);
   const isCut=r=>r.lines.some(l=>l.endsWith('…'));
+  // Below DETAIL_FLOORS.secondary the subtitle is not shown from the first pass: the title gets the room.
+  const screen=detailScreenScale(),subShown=!!subLine&&screen>=DETAIL_FLOORS.secondary;
   // The whole layout at the title's current font size: wrap, place, then the least important line
   // goes first (the subtitle, then the title's second line).
   const layout=()=>{
@@ -12176,11 +12191,10 @@ function fitComponentLabels(g,n){
   const fit=(lines,showSub)=>{const base=foot;let r=place(lines,showSub);
     if(!ok(r)&&inCard&&!down&&base<innerBottom){foot=innerBottom;r=place(lines,showSub);foot=base}
     return r};
-  let r=fit(wrap(2),!!subLine);
+  let r=fit(wrap(2),subShown);
   if(!ok(r)&&r.showSub)r=fit(r.lines,false);
   if(!ok(r)&&r.lines.length>1)r=fit(wrap(1),false);
   return r};
-  const screen=parseFloat(typeof workspace!=='undefined'&&workspace?workspace.style.getPropertyValue('--zoom'):'')||1;
   t.style.fontSize='';delete t.dataset.shrunk;
   let r=layout();
   // A title inside its card that would be cut may shrink below the 12 px screen floor, down to
@@ -12213,6 +12227,7 @@ function refitComponentLabels(){
   const zoom=workspace.style.getPropertyValue('--zoom');if(zoom===componentLabelFitZoom)return;componentLabelFitZoom=zoom;
   const byId=new Map(nodes.map(n=>[n.id,n]));
   for(const g of nodesG.querySelectorAll('.node:not(.group)')){
+    applyBodyTextDetail(g);
     const n=byId.get(g.dataset.id);if(!n||componentForm(n).dimension!==2)continue;
     fitComponentLabels(g,n);
     const waits=g.querySelector(':scope > text.waits-on');if(waits){waits.remove();appendComponentWaitsOn(g,n)}
@@ -12295,6 +12310,14 @@ function appendMarkdownLite(textEl,source,{x=0,lineHeight=11}={}){
     textEl.appendChild(line);
   });
   return lines.length;
+}
+// Below DETAIL_FLOORS.body a card's body text is too small to read and is hidden
+// (data-lod="hidden"); at or above it the text is shown again.
+function applyBodyTextDetail(g){
+  const hide=detailScreenScale()<DETAIL_FLOORS.body;
+  for(const t of g.querySelectorAll(':scope > text.internal-text')){
+    if(hide){t.style.visibility='hidden';t.dataset.lod='hidden'}else{t.style.visibility='';delete t.dataset.lod}
+  }
 }
 function appendComponentTransformHandles(g,n,cfg){
   const {w,h}=componentSize(n);
@@ -12773,7 +12796,7 @@ function render(){
       }
     }
     appendComponentLeads(g,n);appendShapeLeads(g,n);appendTerminalMarks(g,n);
-    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); appendComponentWaitsOn(g,n); applyStatusFade(g,n);
+    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); applyBodyTextDetail(g); appendComponentWaitsOn(g,n); applyStatusFade(g,n);
   });
   if(undrawnCards)workspace.setAttribute('data-undrawn-cards',String(undrawnCards));else workspace.removeAttribute('data-undrawn-cards');
   renderGroups(markers);
@@ -13086,6 +13109,12 @@ function wireLabelLines(label,caption){
   return best?best.lines:null;
 }
 function placeWireLabels(){
+  // Below DETAIL_FLOORS.secondary a wire's label is hidden (data-lod="hidden"); bus labels, port
+  // labels, end tags and reciprocity marks stay.
+  {const hide=detailScreenScale()<DETAIL_FLOORS.secondary;
+   for(const label of workspace.querySelectorAll('.connection-label')){
+     if(hide){label.style.visibility='hidden';label.dataset.lod='hidden'}else{label.style.visibility='';delete label.dataset.lod}
+   }}
   const matrix=workspace.getScreenCTM();if(!matrix)return;
   // LAYOUT-MODEL.md "Wire labels": the clearance round a label and the step it slides by, in screen pixels.
   const inverse=matrix.inverse(),clearance=6,step=12;
