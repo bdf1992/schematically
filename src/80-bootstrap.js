@@ -32,7 +32,7 @@ function setUtilityMenu(which,open){for(const [btn,menu] of [[editBtn,editMenu],
 editBtn?.addEventListener('click',e=>{e.stopPropagation();setUtilityMenu(editMenu,editMenu.hidden)});viewBtn?.addEventListener('click',e=>{e.stopPropagation();setUtilityMenu(viewMenu,viewMenu.hidden)});editMenu?.addEventListener('click',e=>e.stopPropagation());viewMenu?.addEventListener('click',e=>e.stopPropagation());helpBtn?.addEventListener('click',e=>{e.stopPropagation();shortcutHelp.hidden=!shortcutHelp.hidden;setUtilityMenu(null,false);helpBtn.setAttribute('aria-expanded',String(!shortcutHelp.hidden))});shortcutHelp?.addEventListener('click',e=>e.stopPropagation());
 // Capture phase: canvas/palette gestures stopPropagation on pointerdown, which must not veto menu dismissal.
 document.addEventListener('pointerdown',e=>{if(editMenu&&!editMenu.hidden&&!editMenu.contains(e.target)&&!editBtn?.contains(e.target))setUtilityMenu(editMenu,false);if(viewMenu&&!viewMenu.hidden&&!viewMenu.contains(e.target)&&!viewBtn?.contains(e.target))setUtilityMenu(viewMenu,false);if(shortcutHelp&&!shortcutHelp.hidden&&!shortcutHelp.contains(e.target)&&e.target!==helpBtn){shortcutHelp.hidden=true;helpBtn?.setAttribute('aria-expanded','false')}},true);
-document.getElementById('editUndoBtn')?.addEventListener('click',undoHistory);document.getElementById('editRedoBtn')?.addEventListener('click',redoHistory);document.getElementById('editCutBtn')?.addEventListener('click',cutSelection);document.getElementById('editCopyBtn')?.addEventListener('click',copySelection);document.getElementById('editPasteBtn')?.addEventListener('click',()=>pasteClipboard());document.getElementById('editDuplicateBtn')?.addEventListener('click',duplicateSelection);document.getElementById('checkpointCreateBtn')?.addEventListener('click',()=>createCheckpoint());document.getElementById('viewObjectsBtn')?.addEventListener('click',()=>{selectNode(null);document.querySelector('.inspector')?.scrollTo({top:0,behavior:'smooth'})});document.getElementById('viewFocusBtn')?.addEventListener('click',()=>{const n=nodes.find(n=>n.id===selected);if(n)focusComponent(n)});
+document.getElementById('editUndoBtn')?.addEventListener('click',undoHistory);document.getElementById('editRedoBtn')?.addEventListener('click',redoHistory);document.getElementById('editCutBtn')?.addEventListener('click',cutSelection);document.getElementById('editCopyBtn')?.addEventListener('click',copySelection);document.getElementById('editPasteBtn')?.addEventListener('click',()=>pasteClipboard());document.getElementById('editDuplicateBtn')?.addEventListener('click',duplicateSelection);document.getElementById('checkpointCreateBtn')?.addEventListener('click',()=>createCheckpoint());document.getElementById('viewObjectsBtn')?.addEventListener('click',()=>{if(typeof setPanelShown==='function')setPanelShown('inspector',true);selectNode(null);document.querySelector('.inspector')?.scrollTo({top:0,behavior:'smooth'})});document.getElementById('viewFocusBtn')?.addEventListener('click',()=>{const n=nodes.find(n=>n.id===selected);if(n)focusComponent(n)});
 document.getElementById('quickUndoBtn')?.addEventListener('click',undoHistory);document.getElementById('quickRedoBtn')?.addEventListener('click',redoHistory);document.getElementById('quickCheckpointBtn')?.addEventListener('click',()=>createCheckpoint());
 
 paletteBtn.addEventListener('click',e=>{
@@ -92,9 +92,57 @@ flowBtn.addEventListener('click',()=>{
 workspace.classList.toggle('show-flow',showFlow); flowBtn.classList.toggle('active',showFlow);
 });
 
+// Side panels and top bar: shown or hidden by View items, restore buttons and keys; the choice lives
+// in localStorage only, never in the document or the workspace package.
+const PANEL_PREF_KEY='soveraeign.schematic.panels';
+const panelShown={palette:true,inspector:true,header:true};
+const PANEL_PARTS=[['header','hide-header','viewHeaderBtn','showHeaderBtn'],['palette','hide-palette','viewPaletteBtn','showPaletteBtn'],['inspector','hide-inspector','viewInspectorBtn','showInspectorBtn']];
+function applyPanelVisibility(){
+  const app=document.querySelector('.app');
+  let anyHidden=false;
+  for(const [part,cls,menuId,restoreId] of PANEL_PARTS){
+    const on=panelShown[part];
+    app?.classList.toggle(cls,!on);
+    document.getElementById(menuId)?.setAttribute('aria-pressed',String(on));
+    const restore=document.getElementById(restoreId);
+    if(restore)restore.hidden=on;
+    if(!on)anyHidden=true;
+  }
+  const bar=document.getElementById('panelRestore');
+  if(bar)bar.hidden=!anyHidden;
+  requestAnimationFrame(positionSelectionBar);
+}
+function storePanelVisibility(){
+  try{localStorage.setItem(PANEL_PREF_KEY,JSON.stringify(panelShown))}catch(_){}
+}
+function loadPanelVisibility(){
+  try{
+    const stored=JSON.parse(localStorage.getItem(PANEL_PREF_KEY)||'null');
+    if(stored&&typeof stored==='object'&&['palette','inspector','header'].every(k=>typeof stored[k]==='boolean')){
+      for(const k of ['palette','inspector','header'])panelShown[k]=stored[k];
+    }
+  }catch(_){}
+}
+function setPanelShown(part,on){
+  if(!(part in panelShown))return;
+  panelShown[part]=!!on;
+  storePanelVisibility();
+  applyPanelVisibility();
+}
+function togglePanel(part){setPanelShown(part,!panelShown[part])}
+for(const [part,,menuId,restoreId] of PANEL_PARTS){
+  document.getElementById(menuId)?.addEventListener('click',()=>togglePanel(part));
+  document.getElementById(restoreId)?.addEventListener('click',()=>setPanelShown(part,true));
+}
+
 function handleCanvasKeydown(e){
   if(isEditableTarget(e.target))return;
   const code=shortcutCode(e),mod=e.ctrlKey||e.metaKey;
+
+  if(mod&&!e.shiftKey){
+    if(code==='KeyB'){e.preventDefault();e.stopPropagation();togglePanel(e.altKey?'inspector':'palette');return}
+    if(code==='Backslash'&&!e.altKey){e.preventDefault();e.stopPropagation();togglePanel('header');return}
+  }
 
   // Escape must dismiss open header menus even when focus sits on the menu button, before the canvas-focus guard.
   if(code==='Escape'){
@@ -233,6 +281,8 @@ applyGridSettings();
 // Resize may fire between inline modules while the document is still parsing.
 // Register after the renderer has loaded, since label scale also places labels.
 new ResizeObserver(syncLabelScale).observe(workspace);
+loadPanelVisibility();
+applyPanelVisibility();
 applyCamera();
 applyColorEngine();
 
