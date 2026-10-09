@@ -207,6 +207,18 @@ the on-screen clamp, so the block is laid out again when the zoom changes):
   card (LAYOUT-MODEL.md "What `layered` does")
 - at a screen scale of 0.25 or less, a title that still runs into its glyph is hidden
   (`data-lod="hidden"`)
+- the editor draws less text as it zooms out, at two levels held in one place, `DETAIL_FLOORS`
+  in `src/55-render.js` (`{body: 0.6, secondary: 0.25}`, both screen scales): below `body`, a
+  card's body text would draw under 7.2 screen px and is hidden; below `secondary`, the
+  deep-overview level, subtitles and wire labels are hidden. Each hidden text carries
+  `data-lod="hidden"`, and a hidden subtitle gives its room to the title and stays in the card's
+  tooltip
+- `secondary` equals the scale at which a title over its glyph is already hidden, so that a
+  fitted view keeps its wire labels and subtitles: the review fixture `02-service-circuit`
+  fitted to a 1440 wide window sits at 0.459, and at 0.284 on a 768 wide one (measured
+  2026-10-09). Both values are first settings
+- card titles, group titles and bus labels are not hidden by these levels, nor are port labels,
+  end tags or reciprocity marks. A picture is drawn at screen scale 1, so it shows all of it
 - a cut line sets `data-truncated`, and the full title (and subtitle) is the card's tooltip: a
   `<title class="card-text-full">` on the card's group, never inside the drawn `<text>`, so a
   text's contents are only what is drawn; the status chip

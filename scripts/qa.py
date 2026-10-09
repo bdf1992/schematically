@@ -51,6 +51,7 @@ BROWSER=[
     'tests/glyph_fixed_size_qa.py',
     'tests/card_text_fit_qa.py',
     'tests/body_text_zoom_qa.py',
+    'tests/detail_levels_qa.py',
     'tests/label_contrast_floor_qa.py',
     'tests/palette_point_settle_qa.py',
     'tests/settings_panel_placement_qa.py',
