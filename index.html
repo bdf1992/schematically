@@ -199,6 +199,7 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
    multiplied here. The upper bound of each clamp scales, so a scaled label is not capped; the
    lower bound is screen pixels and does not. Editor feedback (ghosts, previews, drop targets,
    guides, halos, tethers, handles, selection and hover states) is not drawing and keeps its size.
+   Body text is the one label drawn in world units at its picture size, because its line step and position are world units.
    --mark-floor is the factor that holds a wire's direction mark at 7 screen px, built from the same --zoom (written by syncLabelScale in src/30-canvas.js) and --scale that clamp the labels, and it is 1 wherever the mark is already that long. */
 #workspace{--zoom:1;--mark-floor:max(1,calc(1 / (var(--scale,1) * var(--zoom,1))))}
 .node text{font-size:calc(clamp(12px,var(--type-title-size,10px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));fill:var(--component-text-color,var(--component-boundary-color,var(--component-color,#171715)));font-weight:var(--type-title-weight,600);letter-spacing:.015em;pointer-events:none;user-select:none}
@@ -213,7 +214,7 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 /* The interior guide is an editing aid: shown while the container is selected or a card is being dragged, never in a picture. */
 .node.is-container:not(.selected)>.container-guide{opacity:0}#workspace.dragging-node .node.is-container>.container-guide{opacity:.22}
 .node.is-container>.body{stroke-width:var(--stroke-structure-container,1.8px)}
-.node .internal-text{font-size:calc(clamp(12px,var(--type-body-size,9px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-body-weight,400)}.node .internal-text .md-strong{font-weight:700}.node .internal-text .md-em{font-style:italic}.node .internal-text .md-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.node .internal-text{font-size:clamp(12px,var(--type-body-size,9px),calc(16px * var(--scale,1)));text-rendering:geometricPrecision;text-rendering:geometricPrecision;font-weight:var(--type-body-weight,400)}.node .internal-text .md-strong{font-weight:700}.node .internal-text .md-em{font-style:italic}.node .internal-text .md-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .node .component-subtitle{font-size:calc(clamp(8px,var(--type-subtitle-size,8.5px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-subtitle-weight,400);letter-spacing:0}
 .node .outside-label{font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-caption-weight,600)}
 .port-hit{fill:transparent;stroke:none;cursor:pointer;pointer-events:all;touch-action:none}

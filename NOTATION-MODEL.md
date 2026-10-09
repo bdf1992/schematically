@@ -167,7 +167,8 @@ readable while the camera zooms; strokes and marks are world units and follow th
 picture (`render.svg`, `render.png`, `scripts/export_svg.py`) and a snapshot (`file.svg`, File >
 Export SVG) are not the screen: both draw every label at its base size times the scale, whatever
 the camera zoom, so a file is the same zoomed in or out and its labels keep their proportion to
-its strokes.
+its strokes. A card's body text is the exception on the canvas: it is drawn as in a picture, at
+its base size times the scale in world units, because its line step and position are world units.
 
 **A card's title and subtitle are one block**, laid out at the size they are drawn at (after
 the on-screen clamp, so the block is laid out again when the zoom changes):
