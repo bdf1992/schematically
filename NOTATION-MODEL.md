@@ -442,7 +442,8 @@ The rules, each reported as `KIND_INVALID` naming the notation, the entry and th
 An entry with a finding is not admitted: `kindsOf(notation, 'wire' | 'region')` gives the admitted
 entries in declared order. `merge` replaces arrays, so `resolve()` joins `kinds` along the `extends`
 chain itself: a later notation's entry replaces an earlier notation's entry with the same `applies`
-and `id`, in its place.
+and `id`, in its place. A base kind therefore comes first in a derived notation's order, even when the
+derived notation replaces it.
 
 **Region kinds.** The `schematic` notation declares five, and the renderer reads a region's border
 from them by id (SECTION-MODEL.md "Borders"): `group` (dash `none`), `plane`, `container` and `gate`

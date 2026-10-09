@@ -123,7 +123,7 @@ def main() -> None:
     assert n['keys'].index('kinds') == n['keys'].index('statuses') + 1 == n['keys'].index('concerns') - 1, ('kinds does not sit after statuses and before concerns', n['keys'])
     assert n['ok'], ('the notation the map carries must resolve', n['code'])
     assert n['findings'] == [], ('the resolved notation has kind findings', n['findings'])
-    assert n['admitted'] == [k['id'] for k in KINDS], ('a declared wire kind is not admitted', n['admitted'])
+    assert n['admitted'] == ['reference'] + [k['id'] for k in KINDS if k['id'] != 'reference'],('a declared wire kind is not admitted', n['admitted'])
     assert n['valid'] == [], n['valid']
     assert n['wires'], 'the map has no wires'
     unnamed = [w for w in n['wires'] if not w[2]]
@@ -165,7 +165,7 @@ def main() -> None:
     assert m['streamMarks'], 'no stream wire carries a mark'
     assert all(path.endswith('Z') and fill not in (None, '', 'none') for path, fill in m['streamMarks']), ('a mark on a stream wire is not filled', m['streamMarks'])
     assert m['flowMarks'] and all(not path.endswith('Z') and fill == 'none' for path, fill in m['flowMarks']), ('a mark on a flow wire is filled', m['flowMarks'][:4])
-    assert m['legend'] == ['kind:flow', 'kind:stream', 'kind:reference', 'kind:proposed'], ('the legend lists other wire kinds', m['legend'])
+    assert m['legend'] == ['kind:reference', 'kind:flow', 'kind:stream', 'kind:proposed'], ('the legend lists other wire kinds', m['legend'])
     assert m['statusSamples'], 'the legend lists no status with a dashed outline'
     assert all('stroke-dasharray:6 4' in markup for _, markup in m['statusSamples']), ('a dashed status sample is not dashed 6 4', m['statusSamples'])
     assert all('stroke-dasharray' not in markup for _, markup in m['solidSamples']), ('a solid status sample is dashed', m['solidSamples'])
