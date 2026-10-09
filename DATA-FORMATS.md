@@ -401,12 +401,14 @@ it.
 {"label": "Smelter", "axis": {"layer": "l2", "phase": "build"}}
 ```
 
-**Default names.** A missing `name` is read by position and is not written into the file. The first
-axis is `Layer` and its values `Layer 1`, `Layer 2`, ...; the second is `Phase` with `Phase 1`,
-`Phase 2`, ...; the third is `Depth` with `Depth 1`, `Depth 2`, .... A value's default takes its
-axis's position, whatever the axis is named. `SovSchematicData.documentAxes(doc)` returns the
-declared axes with every name filled in, `[{id, name, values: [{id, name}]}]`, and changes nothing;
-for the example above it gives `Layer` (`Layer 1`, `Service`) and `Stage` (`Phase 1`, `Phase 2`).
+**Default names.** A missing `name` has a default that is read, never written into the file. An
+unnamed axis is named by its position: the first is `Layer`, the second `Phase`, the third `Depth`.
+An unnamed value takes its own axis's name and its position in that axis's `values`: `Layer 1`,
+`Layer 2`, ... on an unnamed first axis, `Phase 1`, `Phase 2`, ... on an unnamed second, `Depth 1`,
+`Depth 2`, ... on an unnamed third, and `Stage 1`, `Stage 2`, ... on an axis named `Stage` wherever
+it sits. `SovSchematicData.documentAxes(doc)` returns the declared axes with every name filled in,
+`[{id, name, values: [{id, name}]}]`, and changes nothing; for the example above it gives `Layer`
+(`Layer 1`, `Service`) and `Stage` (`Stage 1`, `Stage 2`).
 
 | Code | When |
 | --- | --- |
@@ -440,10 +442,11 @@ changing nothing:
 - a stale `ifRevision` (`Stale revision: expected <n>, document is at <m>`).
 
 Remove the value from the records first (an `update` with `axis: {<id>: null}`), then the axis or the
-value from the list. Renaming and reordering keep every id and are admitted. The browser serves it as
-`SovSchematicAPI.axes.set` and `SovSchematicAPI.axes.list` (`API.md` "Axes"). Over MCP and HTTP the
-list is written with `schematic.document.replace` or `PUT /api/v1/document`, which run
-`validateDocument` and so refuse the same three findings.
+value from the list. Renaming and reordering keep every id and are admitted. Every surface calls it
+and holds no rule of its own: `schematic.axes.set` (MCP), `POST /api/v1/axes` (HTTP; 200 the receipt,
+409 a stale revision, 400 any other refusal) and `SovSchematicAPI.axes.set` (browser), each one
+history entry per call; `SovSchematicAPI.axes.list` is `documentAxes`. `schematic.document.replace`
+and `PUT /api/v1/document` run `validateDocument` and so refuse the same three findings.
 
 
 ## Card shape (2026-10-04, `SECTION-MODEL.md` "Card shapes")

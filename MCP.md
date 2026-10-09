@@ -49,6 +49,7 @@ Tools:
   `observable`), `schematic.run.replay` (`trace`)
 - `schematic.markers`
 - `schematic.concerns` (`open?`), `schematic.concerns.answer` (`answers`, `ifRevision?`)
+- `schematic.axes.set` (`axes`, `ifRevision?`)
 
 Graph and simulation (`GRAPH-MODEL.md`, read-only over the document; the `sim.*` tools run over the
 state-space engine through `src/07-state-surface.js`, `STATE-SPACE.md`, since contract 10 of the
@@ -116,6 +117,32 @@ POST /api/v1/concerns            {answers, ifRevision?}   200 the receipt; 409 a
 
 The file is saved only on 200. The guide's `concerns` step (`schematic.guide {step: 'concerns'}`,
 between `palette` and `apply`) tells an agent when to read and when to answer.
+
+## Axes
+
+A document may declare up to three ordered axes, and a component or a wire stores its value on each
+in `config.axis` (`DATA-FORMATS.md` "Axes"). One tool writes the document's list, and it delegates to
+the data core (`Data.setAxes`): the surface holds no rule about axes.
+
+- `schematic.axes.set {axes, ifRevision?}` writes the whole list: at most 3 entries
+  `{id, name?, values: [{id, name?}]}`, in order; `null` or an empty list removes the axes. All or
+  none, one revision, one history entry (`schematic.history.undo` restores the document before it),
+  one receipt whose `result.axes` is the list after the write with every name filled in (an unnamed
+  axis is `Layer`, `Phase` or `Depth` by position; an unnamed value is its axis's name and its
+  position, `Layer 1`). Refusals, each changing nothing and setting `isError`: `AXIS_INVALID` (the
+  list breaks a rule; the message names the entry), `AXIS_UNKNOWN` and `AXIS_VALUE_UNKNOWN` (the list
+  drops an axis or a value a component or a wire still names; the message names the record), and a
+  stale `ifRevision`.
+- A record's own value is `config.axis: {axisId: valueId}`, written with `schematic.create`,
+  `schematic.update` and `schematic.apply` (`axis: {id: null}` removes one axis, `axis: null` the
+  key) and returned by `schematic.get`, `schematic.read` and `schematic.document.get`.
+  `schematic.read` also returns `axes`, the named list, when the document declares any.
+
+```text
+POST /api/v1/axes                {axes, ifRevision?}      200 the receipt; 409 a stale revision; 400 any other refusal
+```
+
+The file is saved only on 200.
 
 ## Live link
 

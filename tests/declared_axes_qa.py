@@ -5,8 +5,9 @@ Component or a Wire stores its value on each in `config.axis`: {axisId: valueId}
 semantic: it sits on the record, outside document.layout, and nothing is placed or drawn from it.
 
 Node, on src/05-data-core.js:
-  (a) a missing name is read by position: Layer / Layer 1, Layer 2; Phase / Phase 1; Depth / Depth 1;
-      a stored name wins; the stored record keeps no default name;
+  (a) an unnamed axis is read by position (Layer, Phase, Depth) and an unnamed value as its axis's
+      name and its position (Layer 1, Layer 2; Stage 1 on an axis named Stage); a stored name wins;
+      the stored record keeps no default name;
   (b) every bad `axes` list is AXIS_INVALID, naming the entry and the rule, on load and in setAxes,
       and a refused setAxes leaves the document unchanged;
   (c) create and update of a Component and of a Wire, singly and in a batch, refuse an undeclared
@@ -29,7 +30,10 @@ The server (mcp/server.mjs) on a temporary file, over MCP and HTTP:
   (j) schematic.update, schematic.create and schematic.apply write and refuse the same way;
       schematic.get, schematic.read and schematic.document.get return config.axis; the saved file
       holds it; a restarted server reads it back; schematic.document.replace and PUT
-      /api/v1/document refuse a list that drops an axis a record names.
+      /api/v1/document refuse a list that drops an axis a record names; schematic.axes.set and
+      POST /api/v1/axes are listed (tools/list, mcp/tools.json, MCP.md), refuse with the same codes
+      changing nothing (400, and 409 for a stale revision), and a set moves one revision, saves, and
+      is taken back by one undo.
 Headless Chromium on index.html:
   (k) SovSchematicAPI create, update, get, read, document.get and axes.list/axes.set behave the
       same; one undo takes back a set; saving and opening gives the same text; the exported picture
@@ -55,7 +59,7 @@ AXES = [
 ]
 NAMED = [
     {'id': 'layer', 'name': 'Layer', 'values': [{'id': 'l1', 'name': 'Layer 1'}, {'id': 'l2', 'name': 'Service'}]},
-    {'id': 'phase', 'name': 'Stage', 'values': [{'id': 'plan', 'name': 'Phase 1'}, {'id': 'build', 'name': 'Phase 2'}]},
+    {'id': 'phase', 'name': 'Stage', 'values': [{'id': 'plan', 'name': 'Stage 1'}, {'id': 'build', 'name': 'Stage 2'}]},
     {'id': 'depth', 'name': 'Depth', 'values': [{'id': 'd1', 'name': 'Depth 1'}, {'id': 'd2', 'name': 'Depth 2'}]},
 ]
 DOC = {
@@ -204,6 +208,7 @@ for(const [name,[axis]] of Object.entries(input.badAxis)){
   D.applyBatch(doc,{operations:[{op:'update',resource:'component',id:'ore',patch:{config:{axis:null}}},{op:'update',resource:'wire',id:'belt',patch:{config:{axis:null}}}]});
   attempt('null removes the key',{axes:null});
   out.setAxes={tries,hasKey:Object.prototype.hasOwnProperty.call(doc,'axes'),valid:D.validateDocument(doc).ok};
+  out.setAxes.unnamedReorder=D.setAxes(fresh(),{axes:[...input.doc.axes].reverse()}).result.axes;
   const again=fresh();D.setAxes(again,{axes:[]});out.setAxes.emptyRemoves=!Object.prototype.hasOwnProperty.call(again,'axes');
   const blank=D.makeDocument({});const made=D.setAxes(blank,{axes:[{id:'a',values:[{id:'v'}]},{id:'b',values:[{id:'v'}]},{id:'c',values:[]}]});
   out.setAxes.onBlank={ok:made.ok,axes:made.result?.axes,stored:blank.axes};
@@ -367,8 +372,11 @@ def core_part() -> None:
     assert [v['id'] for v in T['drop a value nothing names']['result']['axes'][0]['values']] == ['l2'], T['drop a value nothing names']['result']
     ro = T['rename and reorder']
     assert ro['ok'] and [(a['id'], a['name']) for a in ro['result']['axes']] == [('depth', 'DEPTH'), ('phase', 'PHASE'), ('layer', 'LAYER')], ro
-    # After the reorder the value defaults follow the new positions: depth is first, so Layer 1.
-    assert [v['name'] for v in ro['result']['axes'][0]['values']] == ['Layer 1', 'Layer 2'], ro['result']['axes'][0]
+    # An unnamed value takes its own axis's name, wherever the axis sits.
+    assert [v['name'] for v in ro['result']['axes'][0]['values']] == ['DEPTH 1', 'DEPTH 2'], ro['result']['axes'][0]
+    U = r['setAxes']['unnamedReorder']
+    # An unnamed axis is named by its position, and its unnamed values follow that name.
+    assert [(a['id'], a['name'], [v['name'] for v in a['values']]) for a in U] == [('depth', 'Layer', ['Layer 1', 'Layer 2']), ('phase', 'Stage', ['Stage 1', 'Stage 2']), ('layer', 'Depth', ['Depth 1', 'Service'])], U
     assert T['drop an axis once the component let go']['ok'], T['drop an axis once the component let go']
     assert T['null removes the key']['ok'] and T['null removes the key']['result'] == {'axes': []} and r['setAxes']['hasKey'] is False, T['null removes the key']
     assert r['setAxes']['valid'] and r['setAxes']['emptyRemoves'], r['setAxes']
@@ -530,6 +538,57 @@ def server_part() -> None:
             markers, _ = tool(base, 'schematic.markers')
             assert markers == [], markers
 
+            # schematic.axes.set and POST /api/v1/axes: listed, refused with the same codes, one revision
+            # and one history entry per call.
+            tools = rpc(base, 'tools/list')['tools']
+            by_name = {t['name']: t for t in tools}
+            assert 'schematic.axes.set' in by_name and by_name['schematic.axes.set']['inputSchema'].get('type') == 'object' and by_name['schematic.axes.set'].get('description'), sorted(by_name)
+            assert by_name['schematic.axes.set']['inputSchema']['required'] == ['axes'], by_name['schematic.axes.set']['inputSchema']
+            manifest = json.loads((ROOT / 'mcp/tools.json').read_text(encoding='utf-8'))['tools']
+            assert sorted(by_name) == sorted(manifest) and len(tools) == len(manifest), ('tools/list differs from mcp/tools.json', sorted(set(by_name) ^ set(manifest)))
+            assert '`schematic.axes.set`' in (ROOT / 'MCP.md').read_text(encoding='utf-8') and 'POST /api/v1/axes' in (ROOT / 'MCP.md').read_text(encoding='utf-8'), 'MCP.md does not list the verb'
+            for label, axes, want_code, want_text in (
+                    ('drop an axis a component names', dropped['axes'], 'AXIS_UNKNOWN', '(component ore still names it)'),
+                    ('drop a value a wire names', thinner['axes'], 'AXIS_VALUE_UNKNOWN', '(wire belt still names it)'),
+                    ('four axes', four['axes'], 'AXIS_INVALID', 'axes holds 4 entries; at most 3'),
+                    ('a repeated value id', BAD_AXES['a repeated value id'][0], 'AXIS_INVALID', 'axes[1].values[1].id "v" is already used'),
+                    ('not a list', 'layer', 'AXIS_INVALID', 'axes must be an array'),
+                    ('remove every axis while named', None, 'AXIS_UNKNOWN', 'still names it)')):
+                refused, is_error = tool(base, 'schematic.axes.set', {'axes': axes})
+                msg = (refused.get('error') or {}).get('message', '')
+                assert is_error and refused['ok'] is False and refused['result'] is None and code(msg) == want_code and want_text in msg, (label, refused)
+                assert refused['revisionAfter'] == refused['revisionBefore'] == before['revision'], (label, refused)
+                status, body = http_json(base + '/api/v1/axes', 'POST', {'axes': axes})
+                assert status == 400 and body['ok'] is False and body['error']['message'] == msg, (label, status, body)
+                assert document() == before and file.read_text(encoding='utf-8') == before_text, (label, 'a refused axes.set changed the document or the file')
+            refused, is_error = tool(base, 'schematic.axes.set', {})
+            assert is_error and code(refused['error']['message']) == 'AXIS_INVALID', refused
+            stale = {'axes': AXES, 'ifRevision': before['revision'] - 1}
+            refused, is_error = tool(base, 'schematic.axes.set', stale)
+            assert is_error and refused['error']['message'].startswith('Stale revision'), refused
+            status, body = http_json(base + '/api/v1/axes', 'POST', stale)
+            assert status == 409 and body['ok'] is False and body['error']['message'].startswith('Stale revision'), (status, body)
+            assert document() == before and file.read_text(encoding='utf-8') == before_text, 'a stale axes.set changed the document or the file'
+
+            renamed = [dict(AXES[0], name='Tier'), {'id': 'phase', 'values': [{'id': 'plan'}, {'id': 'build', 'name': 'Make'}]}, AXES[2]]
+            receipt, is_error = tool(base, 'schematic.axes.set', {'axes': renamed, 'ifRevision': before['revision']})
+            assert not is_error and receipt['ok'] and receipt['error'] is None, receipt
+            assert receipt['revisionBefore'] == before['revision'] and receipt['revisionAfter'] == before['revision'] + 1, ('the revision did not move by exactly 1', receipt)
+            assert [(a['name'], [v['name'] for v in a['values']]) for a in receipt['result']['axes']] == [('Tier', ['Tier 1', 'Service']), ('Phase', ['Phase 1', 'Make']), ('Depth', ['Depth 1', 'Depth 2'])], receipt['result']
+            after = document()
+            assert after['axes'] == renamed and after['revision'] == before['revision'] + 1, (after['axes'], after['revision'])
+            assert {**after, 'axes': None, 'revision': None, 'meta': None} == {**before, 'axes': None, 'revision': None, 'meta': None}, 'axes.set changed something other than axes'
+            assert json.loads(file.read_text(encoding='utf-8'))['axes'] == renamed, 'axes.set was not saved'
+            assert tool(base, 'schematic.read', {'ids': ['ore']})[0]['axes'] == receipt['result']['axes']
+            undone, is_error = tool(base, 'schematic.history.undo')
+            assert not is_error and document() == before, 'one schematic.history.undo did not restore the document before axes.set'
+            status, posted = http_json(base + '/api/v1/axes', 'POST', {'axes': renamed, 'ifRevision': before['revision']})
+            assert status == 200 and posted['ok'] and set(posted) == set(receipt) and posted['result'] == receipt['result'], (status, posted)
+            assert posted['revisionAfter'] == before['revision'] + 1 and json.loads(file.read_text(encoding='utf-8'))['axes'] == renamed, 'POST /api/v1/axes did not move one revision and save'
+            undone, is_error = tool(base, 'schematic.history.undo')
+            assert not is_error and document() == before, 'one schematic.history.undo did not restore the document before POST /api/v1/axes'
+            print('     schematic.axes.set and POST /api/v1/axes: listed in tools/list, mcp/tools.json and MCP.md; six refusals with the same codes, 400 and 409 over HTTP, nothing changed; a set moves one revision, saves, and one undo restores')
+
             # null removes, over MCP.
             receipt, is_error = tool(base, 'schematic.update', {'resource': 'component', 'id': slag, 'patch': {'config': {'axis': None}}})
             assert not is_error and receipt['ok'] and 'axis' not in receipt['result']['config'], receipt
@@ -621,7 +680,7 @@ def browser_part() -> None:
     assert r['round']['state'] == {'axes': AXES, 'ore': {'layer': 'l2', 'phase': 'build'}, 'belt': {'depth': 'd1'}}, r['round']['state']
     assert r['cleared'] == {'ok': True, 'has': False}, r['cleared']
     assert not errors, errors
-    print('(k) browser: create, update, get, read, document.get and axes.list/axes.set agree with the data core; one undo takes back a set; save and open give the same text; the picture is unchanged; no page errors')
+    print('(k) browser: create, update, get, read, document.get and axes.list/axes.set agree with the data core; one undo takes back a set; save and open give the same text; the exported picture keeps its elements, classes and text; no page errors')
 
 
 def main() -> None:

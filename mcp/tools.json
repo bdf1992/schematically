@@ -47,6 +47,7 @@
     "schematic.layout",
     "schematic.markers",
     "schematic.concerns",
-    "schematic.concerns.answer"
+    "schematic.concerns.answer",
+    "schematic.axes.set"
   ]
 }

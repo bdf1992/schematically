@@ -73,7 +73,7 @@
     "axes": {
       "type": "array",
       "maxItems": 3,
-      "description": "The axes the document declares, in order: at most 3, each an ordered list of values. A Component or a Wire says which value it holds in config.axis. A missing name is read by position and is not written: the first axis is Layer with values Layer 1, Layer 2; the second Phase; the third Depth. Ids are unique within their list. Anything else is AXIS_INVALID. Absent means the document declares no axes. See DATA-FORMATS.md 'Axes'.",
+      "description": "The axes the document declares, in order: at most 3, each an ordered list of values. A Component or a Wire says which value it holds in config.axis. A missing name is read, not written: an unnamed axis is Layer, Phase or Depth by position, and an unnamed value is its axis's name and its position (Layer 1, Layer 2; Stage 1 on an axis named Stage). Ids are unique within their list. Anything else is AXIS_INVALID. Absent means the document declares no axes. See DATA-FORMATS.md 'Axes'.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -90,7 +90,7 @@
               "required": ["id"],
               "properties": {
                 "id": {"$ref": "#/$defs/axisText", "description": "The value's id, unique within its axis; what a record's config.axis stores."},
-                "name": {"$ref": "#/$defs/axisText", "description": "The value's name; absent means the default for its position (Layer 1, Layer 2 on the first axis)."}
+                "name": {"$ref": "#/$defs/axisText", "description": "The value's name; absent means its axis's name and its position (Layer 1, Layer 2 on an unnamed first axis)."}
               }
             }
           }

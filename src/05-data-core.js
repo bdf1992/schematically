@@ -605,8 +605,9 @@
   // A document declares up to 3 ordered axes in `axes`: [{id, name?, values: [{id, name?}]}]. A
   // Component or a Wire stores its value on each axis in `config.axis`: {axisId: valueId}. The
   // field is semantic: it sits on the record, outside document.layout, and nothing is placed by it.
-  // A missing name is read by position (documentAxes): the first axis is Layer and its values
-  // Layer 1, Layer 2; the second Phase; the third Depth. The stored record keeps no default name.
+  // A missing axis name is read by position (documentAxes): the first axis is Layer, the second
+  // Phase, the third Depth. A missing value name is its axis's name and its position: Layer 1,
+  // Layer 2, or Stage 1 on an axis named Stage. The stored record keeps no default name.
   //   AXIS_INVALID        axes is not that list, or config.axis is not an object (the message names the entry and the rule)
   //   AXIS_UNKNOWN        config.axis names an axis the document does not declare
   //   AXIS_VALUE_UNKNOWN  config.axis names a value its axis does not list
@@ -641,18 +642,19 @@
     return out;
   }
   // The axes a document declares, each with the name it reads as: the stored name, else the
-  // default for its position. Entries that break a rule are left out (axesProblems reports them).
+  // default (an axis's by its position, a value's from its axis's name and its own position).
+  // Entries that break a rule are left out (axesProblems reports them).
   function documentAxes(doc){
     const axes=Array.isArray(doc?.axes)?doc.axes.slice(0,AXIS_MAX):[],seen=new Set(),out=[];
     axes.forEach((axis,i)=>{
       if(!isObject(axis)||!axisText(axis.id)||seen.has(axis.id))return;
       seen.add(axis.id);
-      const word=AXIS_DEFAULT_NAMES[i],ids=new Set(),values=[];
+      const name=axisText(axis.name)?axis.name:AXIS_DEFAULT_NAMES[i],ids=new Set(),values=[];
       (Array.isArray(axis.values)?axis.values:[]).forEach((value,j)=>{
         if(!isObject(value)||!axisText(value.id)||ids.has(value.id))return;
-        ids.add(value.id);values.push({id:value.id,name:axisText(value.name)?value.name:`${word} ${j+1}`});
+        ids.add(value.id);values.push({id:value.id,name:axisText(value.name)?value.name:`${name} ${j+1}`});
       });
-      out.push({id:axis.id,name:axisText(axis.name)?axis.name:word,values});
+      out.push({id:axis.id,name,values});
     });
     return out;
   }
