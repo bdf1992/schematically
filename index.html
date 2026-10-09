@@ -1312,8 +1312,11 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
       }
     },
     // Kinds (NOTATION-MODEL.md "Kinds"): what a region's border is drawn as, by what the region is
-    // (SECTION-MODEL.md "Borders"). A notation that extends this one adds its wire kinds to the list.
+    // (SECTION-MODEL.md "Borders"), and the one wire kind every document may draw: reference, an
+    // undirected relation. A notation that extends this one adds its wire kinds to the list, and may
+    // replace reference by declaring the same applies and id.
     kinds:[
+      {id:'reference',applies:'wire',title:'Reference',meaning:'One side is listed by the other and nothing moves.',dash:'solid',weight:'regular',arrowhead:'none'},
       {id:'group',applies:'region',title:'Group',meaning:'Grouping only: no outline, a soft inset.',dash:'none'},
       {id:'plane',applies:'region',title:'Plane',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
       {id:'container',applies:'region',title:'Container',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
