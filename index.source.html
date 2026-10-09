@@ -66,6 +66,9 @@
         <label class="menu-field"><span>Appearance</span><select id="appearanceMode"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
         <label class="menu-field"><span>Global rate</span><select id="globalRate"><option value="0">Paused</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
         <div class="file-menu-separator"></div>
+        <button class="file-menu-item" id="viewPaletteBtn" type="button" aria-pressed="true"><span>Palette</span><kbd>Ctrl B</kbd></button>
+        <button class="file-menu-item" id="viewInspectorBtn" type="button" aria-pressed="true"><span>Inspector</span><kbd>Ctrl Alt B</kbd></button>
+        <button class="file-menu-item" id="viewHeaderBtn" type="button" aria-pressed="true"><span>Top bar</span><kbd>Ctrl Backslash</kbd></button>
         <button class="file-menu-item" id="viewObjectsBtn" type="button"><span>Objects</span></button>
         <button class="file-menu-item" id="viewFocusBtn" type="button"><span>Focus selection</span><kbd>Enter</kbd></button>
       </div>
@@ -75,6 +78,7 @@
       <b>Shortcuts</b><div><kbd>Ctrl Z</kbd> undo · <kbd>Ctrl Shift Z</kbd> redo · <kbd>Ctrl C/V/D</kbd> copy/paste/duplicate</div>
       <div><kbd>Shift click</kbd> multi-select · <kbd>Shift drag</kbd> marquee · <kbd>double-click</kbd> focus</div>
       <div><kbd>type</kbd> search when nothing is selected · <kbd>?</kbd> this help · <kbd>Esc</kbd> cancel</div>
+      <div><kbd>Ctrl B</kbd> palette · <kbd>Ctrl Alt B</kbd> inspector · <kbd>Ctrl \</kbd> top bar</div>
     </div>
     <div class="toolbar-separator" aria-hidden="true"></div>
     <button class="btn" id="zoomOutBtn" title="Zoom out (−)">−</button>
@@ -169,6 +173,11 @@
 </aside>
 
 <main class="workspace-wrap">
+  <div class="panel-restore" id="panelRestore" hidden>
+    <button class="btn" id="showHeaderBtn" type="button" title="Show top bar (Ctrl+\)" hidden>Top bar</button>
+    <button class="btn" id="showPaletteBtn" type="button" title="Show palette (Ctrl+B)" hidden>Palette</button>
+    <button class="btn" id="showInspectorBtn" type="button" title="Show inspector (Ctrl+Alt+B)" hidden>Inspector</button>
+  </div>
   <svg id="workspace" viewBox="0 0 1200 760" preserveAspectRatio="xMidYMid meet" tabindex="0" aria-label="Schematic canvas">
     <g id="waveLayer" aria-hidden="true"></g><g id="wires"></g>
     <g id="ghostLayer" aria-hidden="true"></g>

@@ -13,8 +13,17 @@ html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 button,input,textarea{font:inherit}
 button{user-select:none}
-.app{height:100%;display:grid;grid-template-columns:250px minmax(0,1fr) 300px;grid-template-rows:52px 1fr}
-header{grid-column:1/-1;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:10px}
+.app{--palette-w:250px;--inspector-w:300px;--header-h:52px;height:100%;display:grid;grid-template-columns:var(--palette-w) minmax(0,1fr) var(--inspector-w);grid-template-rows:var(--header-h) 1fr}
+.app>.palette{grid-column:1;grid-row:2}
+.app>.workspace-wrap{grid-column:2;grid-row:2}
+.app>.inspector{grid-column:3;grid-row:2}
+.app.hide-palette{--palette-w:0px}
+.app.hide-inspector{--inspector-w:0px}
+.app.hide-header{--header-h:0px}
+.app.hide-palette>.palette,.app.hide-inspector>.inspector,.app.hide-header>header{display:none}
+.panel-restore{position:absolute;top:8px;left:8px;z-index:30;display:flex;gap:6px}
+.panel-restore[hidden],.panel-restore .btn[hidden]{display:none}
+header{grid-column:1/-1;grid-row:1;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:10px}
 .brand{font-weight:800;letter-spacing:.05em}
 .tag,.status{color:var(--muted);font-size:12px}
 .toolbar{margin-left:auto;display:flex;gap:6px;align-items:center;position:relative}
@@ -443,7 +452,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
 .connection-label{font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-caption-weight,600);fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:calc(4px * var(--scale,1));pointer-events:none}.reciprocity-mark{font-size:calc(clamp(12px,9px * var(--scale,1) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:600;font-style:italic;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:calc(4px * var(--scale,1));pointer-events:none}
 
 @media(max-width:900px){
-  .app{grid-template-columns:210px minmax(0,1fr);}
+  .app{--palette-w:210px;--inspector-w:0px}
   .inspector{display:none}
   .tag{display:none}
 }
