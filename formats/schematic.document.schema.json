@@ -178,7 +178,7 @@
               },
               "kind": {
                 "type": "string",
-                "description": "The Wire's kind: the id of a wire kind in the kinds list of the document's notation (notation.kinds, applies wire), which declares the dash, weight and arrowhead the Wire is drawn in. There is no built-in wire kind; a notation that declares none admits none (KIND_UNDECLARED), and an id it does not declare is KIND_UNKNOWN. A Component takes no kind. See NOTATION-MODEL.md 'Kinds'."
+                "description": "The Wire's kind: the id of a wire kind in the kinds list of the document's notation (notation.kinds, applies wire), which declares the dash, weight and arrowhead the Wire is drawn in. The built-in schematic notation declares one wire kind, reference; a notation that declares none admits none (KIND_UNDECLARED), and an id it does not declare is KIND_UNKNOWN. A Component takes no kind. See NOTATION-MODEL.md 'Kinds'."
               }
             }
           }

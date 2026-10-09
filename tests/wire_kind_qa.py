@@ -13,7 +13,10 @@ one per kind and one with no kind:
   - reference has no .flow-chevron and each other wire has one; control's mark has a fill, flow's none;
   - each wire group carries its data-kind;
   - config.kind 'missing-kind' is refused with KIND_UNKNOWN (create and update), the document unchanged;
-  - on a document whose notation is schematic a config.kind is refused with KIND_UNDECLARED;
+  - a document with no notation of its own declares one wire kind, reference: a wire of that kind is
+    accepted and drawn with no direction mark, a wire with no kind is drawn as before, and any other
+    config.kind is refused with KIND_UNKNOWN listing reference (a carried reference replaces the base
+    one by id, in place, so reference leads every list);
   - a carried notation with a dashed kind that lacks open true, and one with two kinds both solid,
     regular and chevron, each report KIND_INVALID and do not admit the entry;
   - the resolved notation's region kinds are group, plane, container, gate and intake with dash none,
@@ -85,6 +88,15 @@ PAGE = r"""([kinds,names])=>{
   // The legend drops a kind no wire names any more.
   {const r=A.update('wire','w-proposed',{config:{kind:null}});out.cleared={ok:r.ok,key:'kind' in (A.file.document().wires.find(w=>w.id==='w-proposed').config||{}),
      legend:A.view.legend().entries.filter(e=>e.kind==='wire-kind').map(e=>e.id),dash:getComputedStyle(document.querySelector('.wire-group[data-wire-id="w-proposed"] path.wire')).strokeDasharray}}
+  // A document with no notation of its own: the base notation's reference kind, and nothing else.
+  {const base={schema:D.DOCUMENT_SCHEMA,id:'base-kinds',
+     components:[0,1].flatMap(i=>[{id:'a'+i,symbolId:'act',x:200,y:120+i*150,config:{label:'From'}},{id:'b'+i,symbolId:'act',x:200+dx,y:120+i*150,config:{label:'To'}}]),
+     wires:[{id:'w-ref',a:'a0',aSide:'out',b:'b0',bSide:'in',config:{kind:'reference'}},{id:'w-none',a:'a1',aSide:'out',b:'b1',bSide:'in',config:{}}]};
+   A.document.replace(base);
+   const info=id=>{const g=document.querySelector(`.wire-group[data-wire-id="${id}"]`),p=g.querySelector('path.wire');return {kind:g.dataset.kind??null,marks:g.querySelectorAll('.flow-chevron').length,dash:p.getAttribute('stroke-dasharray'),width:parseFloat(getComputedStyle(p).strokeWidth)}};
+   const d=D.makeDocument(base);
+   const bad=(()=>{const e=D.makeDocument(base);D.normalizeDocument(e);const before=JSON.stringify(e);const r=D.applyOperation(e,{op:'update',resource:'wire',resourceId:'w-none',patch:{config:{kind:'missing-kind'}}});return {ok:r.ok,message:r.error?.message||'',unchanged:JSON.stringify(e)===before}})();
+   out.base={ref:info('w-ref'),none:info('w-none'),errors:D.validateDocument(d).errors,ids:N.kindsOf(N.resolve(d).notation,'wire').map(k=>k.id),unknown:bad}}
   // Refusals leave the document unchanged.
   const refuse=(base,op)=>{const d=D.makeDocument(base);D.normalizeDocument(d);const before=JSON.stringify(d);const r=D.applyOperation(d,op);return {ok:r.ok,message:r.error?.message||'',unchanged:JSON.stringify(d)===before}};
   const back=kind=>({id:'back',a:'b0',aSide:'out',b:'a0',bSide:'in',config:{kind}});
@@ -162,17 +174,26 @@ def main() -> None:
 
     # Refusals.
     f = r['refusals']
-    for name, code in (('unknownUpdate', 'KIND_UNKNOWN'), ('unknownCreate', 'KIND_UNKNOWN'), ('undeclaredUpdate', 'KIND_UNDECLARED'), ('undeclaredCreate', 'KIND_UNDECLARED')):
+    for name, code in (('unknownUpdate', 'KIND_UNKNOWN'), ('unknownCreate', 'KIND_UNKNOWN'), ('undeclaredUpdate', 'KIND_UNKNOWN'), ('undeclaredCreate', 'KIND_UNKNOWN')):
         assert not f[name]['ok'] and f[name]['message'].startswith(code + ':') and f[name]['unchanged'], (name, f[name])
-    assert 'flow, control, reference, proposed' in f['unknownUpdate']['message'], f['unknownUpdate']['message']
+    assert 'reference, flow, control, proposed' in f['unknownUpdate']['message'], f['unknownUpdate']['message']
+    for name in ('undeclaredUpdate', 'undeclaredCreate'):
+        assert 'reference' in f[name]['message'], (name, f[name]['message'])
     assert f['knownUpdate']['ok'], f['knownUpdate']
     assert len(r['loadUnknown']) == 1 and r['loadUnknown'][0].startswith('wire w-plain: KIND_UNKNOWN:'), r['loadUnknown']
-    assert len(r['loadUndeclared']) == 4 and all('KIND_UNDECLARED' in e for e in r['loadUndeclared']), r['loadUndeclared']
+    assert len(r['loadUndeclared']) == 3 and all('KIND_UNKNOWN' in e for e in r['loadUndeclared']), r['loadUndeclared']
+
+    # A document with no notation of its own: reference is declared and draws with no mark; no kind draws as before.
+    b = r['base']
+    assert b['ids'] == ['reference'] and b['errors'] == [], ('the base notation declares more or less than reference', b)
+    assert b['ref']['kind'] == 'reference' and b['ref']['marks'] == 0 and b['ref']['dash'] is None, ('a reference wire on a bare document is not drawn with no direction mark', b['ref'])
+    assert b['none']['kind'] is None and b['none']['marks'] == 1 and abs(b['none']['width'] - b['ref']['width']) < 1e-6, ('a wire with no kind is drawn differently', b['none'])
+    assert not b['unknown']['ok'] and b['unknown']['message'].startswith('KIND_UNKNOWN:') and 'reference' in b['unknown']['message'] and b['unknown']['unchanged'], b['unknown']
 
     # The notation's own entries.
     bad = r['invalid']
-    for name, dropped, kept in (('dashedNotOpen', ['maybe'], ['flow']), ('openNotDashed', ['maybe'], ['flow']), ('twins', ['one', 'two'], ['control']),
-                                ('wireNone', ['ghost'], ['flow']), ('unknownKey', ['odd'], ['flow']), ('dotted', ['dots'], ['flow']), ('twice', ['flow'], [])):
+    for name, dropped, kept in (('dashedNotOpen', ['maybe'], ['reference', 'flow']), ('openNotDashed', ['maybe'], ['reference', 'flow']), ('twins', ['one', 'two'], ['reference', 'control']),
+                                ('wireNone', ['ghost'], ['reference', 'flow']), ('unknownKey', ['odd'], ['reference', 'flow']), ('dotted', ['dots'], ['reference', 'flow']), ('twice', ['flow'], ['reference'])):
         j = bad[name]
         assert j['errors'] and j['findings'] and all(x.startswith('KIND_INVALID: notation "kinds-test"') for x in j['findings']), (name, j)
         assert all(e.startswith('notation: KIND_INVALID:') for e in j['errors']) and len(j['errors']) == len(j['findings']), (name, j)
@@ -182,16 +203,16 @@ def main() -> None:
     assert 'open true' in bad['dashedNotOpen']['findings'][0], bad['dashedNotOpen']['findings']
     assert 'weight or arrowhead' in bad['twins']['findings'][0], bad['twins']['findings']
     z = bad['regionWeight']
-    assert z['errors'] and 'region kind "zone"' in z['findings'][0] and z['regions'] == 5 and z['admitted'] == ['flow'], z
+    assert z['errors'] and 'region kind "zone"' in z['findings'][0] and z['regions'] == 5 and z['admitted'] == ['reference', 'flow'], z
 
     # Region kinds: declared in the schematic notation, joined through extends.
     assert r['regions'] == [['group', 'none'], ['plane', 'solid'], ['container', 'solid'], ['gate', 'solid'], ['intake', 'dashed']], r['regions']
 
     # Legend: the kinds in use, in declared order; not one no wire names.
-    assert [e['id'] for e in r['legend']] == ['kind:flow', 'kind:control', 'kind:reference', 'kind:proposed'], r['legend']
-    assert [e['label'] for e in r['legend']] == ['Flow', 'Control', 'Reference', 'Proposed'] and all(e['meaning'] for e in r['legend']), r['legend']
+    assert [e['id'] for e in r['legend']] == ['kind:reference', 'kind:flow', 'kind:control', 'kind:proposed'], r['legend']
+    assert [e['label'] for e in r['legend']] == ['Reference', 'Flow', 'Control', 'Proposed'] and all(e['meaning'] for e in r['legend']), r['legend']
     c = r['cleared']
-    assert c['ok'] and not c['key'] and c['legend'] == ['kind:flow', 'kind:control', 'kind:reference'], ('the legend lists a kind no wire names', c)
+    assert c['ok'] and not c['key'] and c['legend'] == ['kind:reference', 'kind:flow', 'kind:control'], ('the legend lists a kind no wire names', c)
     assert dash_of(c['dash']) == 'none', ('a wire whose kind was removed is still dashed', c)
 
     # Save and open.

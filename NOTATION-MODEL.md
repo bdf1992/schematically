@@ -443,17 +443,22 @@ The rules, each reported as `KIND_INVALID` naming the notation, the entry and th
 An entry with a finding is not admitted: `kindsOf(notation, 'wire' | 'region')` gives the admitted
 entries in declared order. `merge` replaces arrays, so `resolve()` joins `kinds` along the `extends`
 chain itself: a later notation's entry replaces an earlier notation's entry with the same `applies`
-and `id`, in its place.
+and `id`, in its place. A base kind therefore comes first in a derived notation's order, even when the
+derived notation replaces it.
 
 **Region kinds.** The `schematic` notation declares five, and the renderer reads a region's border
 from them by id (SECTION-MODEL.md "Borders"): `group` (dash `none`), `plane`, `container` and `gate`
 (`solid`) and `intake` (`dashed`, open). A Component takes no `config.kind`: a region's kind is what
 it is.
 
-**Wire kinds.** A Wire names one in `config.kind`. There is no built-in wire kind, so the data core
-validates it against the document's resolved notation as it does a status: `KIND_UNDECLARED` when
-the notation declares no wire kinds, `KIND_UNKNOWN` when the id is not one of them (the message
-lists the declared ids). Create and update refuse them; loading reports them, with every
+**Wire kinds.** A Wire names one in `config.kind`. The `schematic` notation declares one wire kind,
+`reference` (solid, regular, arrowhead `none`: "One side is listed by the other and nothing
+moves."), so a wire in any document can be drawn as an undirected relation with no notation of its
+own; a notation that extends it replaces `reference` by declaring the same `applies` and `id`
+(the `work-engine` notation does). The data core validates the kind against the document's resolved
+notation as it does a status: `KIND_UNDECLARED` when the notation declares no wire kinds (one that
+does not extend `schematic`), `KIND_UNKNOWN` when the id is not one of them (the message lists the
+declared ids). Create and update refuse them; loading reports them, with every
 `KIND_INVALID` finding of the notation. A wire with a kind is drawn as its entry declares
 (`renderWires` in `src/55-render.js`), in attributes and inline styles so a picture carries them:
 

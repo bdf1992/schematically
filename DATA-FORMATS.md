@@ -219,7 +219,8 @@ A Wire may say what kind of line it is. The key is optional and absent is not wr
 
 - **`config.kind`** (Wires only): a string, the `id` of a wire kind in the `kinds` list of the
   document's resolved notation (`SovSchematicNotation.kindsOf(notation, 'wire')`). The entry declares
-  the dash, weight and arrowhead the Wire is drawn in. There is no built-in wire kind: a kind in a
+  the dash, weight and arrowhead the Wire is drawn in. The built-in `schematic` notation declares one wire
+  kind, `reference` (solid, regular, no arrowhead). A kind in a
   document whose notation declares no wire kinds is `KIND_UNDECLARED`; a value the notation does not
   declare, or a value that is not a string, is `KIND_UNKNOWN`, and the message lists the declared ids.
   A Component takes no `config.kind`: a region's kind is what it is (a group, a plane, a container,
