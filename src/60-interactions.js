@@ -218,7 +218,9 @@ function beginPortSlide(e,n,pointId){
 function slidePortTo(n,compat,x,y,{snap=true}={}){
   const q=nearestPointOnComponentEdge(n,x,y);if(!q)return null;
   const t=snap?Math.round(q.t*8)/8:Math.round(q.t*1000)/1000;
-  componentConfig(n).ports[compat].boundary={side:q.side,t};
+  // A port the layout on screen places moves in that layout; the record keeps its own side.
+  if(!SovSchematicLayout.movePortPlacement(diagram,activeLayoutId(),n.id,Attachment.resolveSpec(n,compat),{side:q.side,t}))
+    componentConfig(n).ports[compat].boundary={side:q.side,t};
   routeCache.clear();arrowPoseCache.clear();render();
   return {side:q.side,t};
 }

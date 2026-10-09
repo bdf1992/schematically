@@ -75,7 +75,7 @@ function appendComponentLeads(g,n){
   const axis=componentGlyphAxis(n);if(!axis)return;
   const glyph=componentGlyph(n);
   for(const t of glyph?.terminals||[]){
-    const spec=Attachment.resolveSpec(n,t.id);if(!spec||spec.side!==t.toward)continue;
+    const spec=drawnPortSpec(n,t.id);if(!spec||spec.side!==t.toward)continue;
     if(!wires.some(x=>(x.a===n.id&&x.aSide===spec.compatId)||(x.b===n.id&&x.bSide===spec.compatId)))continue;
     const P=componentPortLocalPosition(n,spec.id),[ex,ey]=SovSchematicNotation.pinEnd(t),E={x:axis.x0+ex*axis.scale,y:axis.y0+ey*axis.scale};
     const horizontal=t.toward==='left'||t.toward==='right';

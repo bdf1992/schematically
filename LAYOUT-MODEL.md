@@ -57,6 +57,7 @@ document.layout
        name, audience, engine?,           engine: the layout engine that last arranged it
        nodes:  { <componentId>: {x, y, w, h, t?, side?} },
        routes: { <wireId>: {mode: auto | guided | pinned, via?: [{x,y}], points?: [{x,y}], lane?} },
+       ports?: { <componentId>: { <portId>: {side, t} } },   a card's own port, as this layout draws it
        collapsed: [componentId…],
        hidden:    { groups: [groupId…], entities: [id…] },
        camera:    {x, y, zoom}
@@ -121,14 +122,17 @@ parity rule already in `AGENTS.md`.
 
 **Engines** for `layout.apply` must be deterministic for a given seed:
 
-| Engine | Use |
-| --- | --- |
-| `layered` | flow left to right by carrier direction; minimises crossings |
-| `orthogonal` | compacts an existing arrangement onto the grid, keeping its topology |
-| `tree` | hierarchies and fan-outs |
-| `radial` | one hub and its neighbours |
-| `force` | undirected structure; exploration only |
-| `nested` | lays out each open container's interior on its own, then its parent |
+| Engine | Use | Built |
+| --- | --- | --- |
+| `layered` | flow left to right by carrier direction; minimises crossings | yes ("What `layered` does") |
+| `n2` | cards on the diagonal, outcomes along the row and intakes down the column, so a wire's one corner is the cell of its sender and receiver | yes ("What `n2` does") |
+| `orthogonal` | compacts an existing arrangement onto the grid, keeping its topology | no |
+| `tree` | hierarchies and fan-outs | no |
+| `radial` | one hub and its neighbours | no |
+| `force` | undirected structure; exploration only | no |
+| `nested` | lays out each open container's interior on its own, then its parent | no (`layered` lays a container out inside first) |
+
+`apply` refuses any other engine name with `UNKNOWN_ENGINE`.
 
 Pinned Components and pinned routes are constraints every engine must respect.
 
@@ -236,7 +240,7 @@ Still not measured:
 ## As built: layouts (2026-09-25)
 
 `src/08-layout-core.js` (`SovSchematicLayout`) has no DOM and is shared by the editor and
-the server. It implements §1–3 and the `layered` engine.
+the server. It implements §1–3 and the `layered` and `n2` engines.
 
 ### Storage
 
@@ -246,6 +250,8 @@ the server. It implements §1–3 and the `layered` engine.
   `{name, audience, nodes: {id: {x, y, w, h} | {side, t}}, routes: {wireId: route}}`.
 - A boundary Point's `{side, t}` is stored per layout, since where it sits along its host's
   edge is layout.
+- A card's own port may be placed per layout too: `ports: {cardId: {portId: {side, t}}}`
+  ("As built: port sides per layout"). A view that places no port has no `ports` key.
 - `default` can move with `set-default`. The old default's geometry is then kept as a
   stored layout.
 - An entity with no position in a layout is **unplaced**. It is listed, shown faint and
@@ -282,10 +288,10 @@ Available on the Browser API (`layout.*`) and MCP (`schematic.layout` with `op`)
 - `move`, `place` (`right-of` / `left-of` / `above` / `below` another, with a gap), `align`,
   `distribute`
 - `route`
-- `apply` with `engine: layered`, `scope` and `into`
+- `apply` with `engine: layered` or `engine: n2`, `scope` and `into`
 
 Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLACED`,
-`UNKNOWN_*`. `schematic.render` takes `view`, so an agent can see any layout.
+`DEFAULT_LAYOUT`, `UNKNOWN_*`. `schematic.render` takes `view`, so an agent can see any layout.
 
 ### What `layered` does
 
@@ -470,9 +476,75 @@ Refusals are typed: `PINNED`, `LOCKED`, `HOSTED` (move the host instead), `UNPLA
 
 Every example, arranged, scores 10 on the audit (`tests/layouts_qa.py`).
 
+### What `n2` does (2026-10-09)
+
+`apply {engine: 'n2', into | view, scope?, gap?}` draws the N-squared chart of the NASA Systems
+Engineering Handbook (appendix F, N2 diagrams), which is the design structure matrix (Steward
+1981; Eppinger and Browning 2012) drawn with the cards themselves: functions on the diagonal,
+each one's outcomes along its row and its intakes down its column, forward flow above the
+diagonal and feedback below it. Position then carries meaning: the cell at (row of A, column of
+B) holds the corner of every wire from A to B, and nothing else.
+
+- **A stored layout only.** `n2` writes `nodes`, `ports` and `routes` of one stored layout: a new
+  one with `into`, or the stored layout `view` names. On the default layout with no `into` it is
+  refused with `DEFAULT_LAYOUT`, before anything is made, because the default layout is the
+  records' own geometry. No component record and no wire record changes, and the default
+  layout's record is left as it was (`tests/n2_layout_qa.py` compares them byte for byte).
+- **Cards.** Every card placed on the canvas (the top level, or the interior of `scope`) that is
+  not a group and not hosted, in document order, group by group: a card belongs to the first
+  group in document order that lists it (the rule `layered` uses), and groups and ungrouped
+  cards come in the order their first card comes. A group's cards are therefore next to each
+  other on the diagonal and its region is a square block on it.
+- **The diagonal.** Card `i` is centred at `(x0 + i × pitch, y0 + i × pitch)`. One pitch serves
+  rows and columns: the largest width or height among the cards plus `gap` (default 96, at least
+  48). At 96 two neighbouring groups' regions (padded 24, and 28 more on top) stay 48 apart
+  across and 20 apart down. The top-left card corner stays where it was. With `scope`, the
+  container is fitted to the diagonal (44 of padding and its head room) and keeps its centre.
+- **What moves with a card.** A container's children move with it (`shift`). A pinned or locked
+  card stays where it is, takes no place on the diagonal and is listed in `frozen`; its wires are
+  left to the router.
+- **Ports.** For each wire between two placed cards the sender is `a`, or `b` when
+  `config.direction` is `reverse`. A forward wire (sender before receiver on the diagonal) needs
+  its outcome port on the sender's right and its intake port on the receiver's top; a feedback
+  wire needs the sender's left and the receiver's bottom. The view's `ports` holds those sides.
+  The ports on one side of a card stand evenly along it in the card's own port order
+  (`t = (k + 1) / (n + 1)`; one port sits at the middle).
+- **A port has one side.** Forward wires choose first, in document order, then feedback wires. A
+  wire that needs a port on a side other than the one it already has keeps an auto route and is
+  listed in the receipt as `PORT_SHARED` with the card, the port and the side it has. So an
+  intake port fed by both a forward and a feedback wire sits on top and the feedback wire is
+  routed; an outcome port sending both ways sits on the right and its feedback wire is routed.
+- **Routes.** Each wire whose two ports got their sides is `{mode: 'pinned', points: [{x, y}]}`:
+  `x` is the receiver port's x (its column), `y` the sender port's y (its row). Each end's lead
+  runs along its port's normal, which lies on that row and that column, so the wire is drawn
+  with that one corner: along the row, then up or down the column, ending on its port. A 0D
+  Point placed as a card has no side and needs none.
+- **Left to the router.** A wire with an end outside the placed cards (a card of another canvas,
+  a container's boundary Point, a frozen card), a wire with an end that is not a boundary port
+  of a 2D card or a 0D Point (`NO_PORT`), and every wire on the interior of a placed card: their
+  routes in this layout return to auto. A top-level `n2` also deletes the buses no route names.
+- **Receipt.** `{view, engine: 'n2', placed, order, pitch, frozen, ports, wires: {pinned,
+  forward, feedback, auto}, autoRouted: [{wire, reason, card?, port?, side?}]}`.
+  `scripts/layout_sov.mjs file.sov --engine n2 --into name` runs it from the command line and
+  writes the file as it was read with only its `layout` replaced.
+- **What it does not do.** It does not order the cards to reduce feedback (the DSM's
+  partitioning); the order is the document's. It draws no mark in a cell other than the wire's
+  corner. A container on the canvas sets the pitch for every card: on
+  `tests/fixtures/task-lifecycle.sov` the GitHub plane makes the pitch 1176 for 11 cards.
+
+Measured (2026-10-09): `examples/work-engine/groups.sov`, 5 cards in 2 groups, pitch 208, 3 of 3
+wires pinned (1 forward, 2 feedback), 6 ports placed, audit 9.8 (one crossing, the feedback row
+of Web booth over the column into Recording). `tests/fixtures/task-lifecycle.sov`, 11 cards, 9
+wires pinned (7 forward, 2 feedback), 1 left auto as `PORT_SHARED` (f9: Tombstone's intake is on
+top for a forward wire), 16 ports placed. `examples/08-gated-service.sov`, 4 cards, no wire
+pinned: all three top-level wires end on the Service plane's boundary Points.
+
+Tests: `tests/n2_layout_qa.py`.
+
 **Not yet built:**
 - `layout.candidates` (settling as data)
-- engines other than `layered`
+- engines other than `layered` and `n2`
+- an op that places one port in a layout by hand (a drag of a placed port does it in the editor)
 - collapse and hidden groups per layout, which need groups from `GRAPH-MODEL.md`
 - a `stale` metric for pinned routes
 
@@ -588,6 +660,42 @@ crossing 4371 to 3767, route-jog 120 to 87; route-overlap 1024 to 1784, route-cl
 580, route-hugs-node 76 to 134).
 
 Tests: `tests/port_side_qa.py`.
+
+## As built: port sides per layout (2026-10-09)
+
+Which side of a card a port is drawn on, and where along it, is layout (§1), the same way the
+side of a boundary Point on a container's edge is. A stored view may place a card's own port:
+
+```text
+document.layout.views[<layoutId>].ports[<cardId>][<portId>] = {side: left | right | top | bottom, t: 0..1}
+```
+
+- **The record decides unless a view says otherwise.** `portId` is the port's compat id, the key
+  the record uses for the same port (`config.ports[<portId>]`) and the name a wire end gives it
+  (`aSide`, `bSide`); the port's own id is read too. With no entry, the port is drawn where the
+  record puts it (`config.ports[<portId>].boundary`, else the template's side), exactly as
+  before. A view that places no port has no `ports` key, so a document that uses none is stored
+  as it was. No layout op and no drawing writes the record's side.
+- **Drawing.** `drawnPortSpec(n, pointId)` (`src/30-canvas.js`) is the one place the layout on
+  screen is asked: it returns the port's spec with the active view's `{side, t}` and `placed`
+  set, or the record's spec. `componentPortLocalPosition` (where the port is), `physicalPortSide`
+  (its normal, through `stubPos`: every lead, `leadJoin`, the bus taps, the terminal marks, the
+  shape leads, the channel tags and the `port-wrong-side` finding) and `appendComponentLeads`
+  read through it. So the port-side rule above holds for the side the view gives: the wire still
+  ends on its port and meets it along its normal. A glyph's inner lead to a terminal is drawn
+  only while the port is on the side that terminal faces.
+- **Storage.** A layout copied from another copies its `ports`. `ensure()` drops an entry that
+  names a card that is gone, a port that is not a boundary port of that card, or no valid side;
+  it clamps `t` to 0..1 (absent: 0.5) and removes an empty `ports`. The default layout's own view
+  record may hold `ports` too; `set-default` leaves each view's `ports` with that view.
+- **Editing.** Dragging a port the view places moves it in the view (`slidePortTo`,
+  `movePortPlacement`); a port the view does not place moves in the record, as before. The
+  Ports panel shows the record.
+- **Who writes it.** The `n2` engine ("What `n2` does"). There is no layout op that places one
+  port yet.
+
+Tests: `tests/n2_layout_qa.py` (ports drawn on the view's sides, back on the record's sides in
+the default layout, a drag kept in the view, `ensure()`); `tests/port_side_qa.py` unchanged.
 
 ## As built: track gap (2026-10-04)
 

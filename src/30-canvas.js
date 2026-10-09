@@ -805,8 +805,18 @@ function sectionPointInset(host,pos){
   const sum=k=>s.bands.slice(0,k).reduce((a,b)=>a+b.thickness,0);
   return pos.line!=null?sum(pos.line):sum(pos.through)+(s.bands[pos.through]?.thickness||0)/2;
 }
+// A port as the layout on screen draws it (LAYOUT-MODEL.md "As built: port sides per layout"):
+// where the record puts it, or, for a card's own boundary port the active view places, at that
+// view's {side, t}. Position, normal, leads and marks all read the port through here; the record
+// is never written.
+function drawnPortSpec(n,pointId){
+  const spec=Attachment.resolveSpec(n,pointId);
+  if(!spec||spec.role!=='boundary'||typeof activeLayoutId!=='function'||!diagram.layout?.views)return spec;
+  const placed=SovSchematicLayout.portPlacement(diagram,activeLayoutId(),n.id,spec);
+  return placed?{...spec,side:placed.side,t:placed.t,placed:true}:spec;
+}
 function componentPortLocalPosition(n,pointId){
-  const size=componentSize(n),spec=Attachment.resolveSpec(n,pointId);if(!spec)return{x:0,y:0};
+  const size=componentSize(n),spec=drawnPortSpec(n,pointId);if(!spec)return{x:0,y:0};
   const cfg=componentConfig(n),pcfg=cfg.ports[spec.compatId],effective=Attachment.effectiveDimension(n);
   if(effective===0)return{x:0,y:0};
   if(effective===1){
@@ -955,7 +965,7 @@ function portLayout(n){
   return result;
 }
 function portPos(n,pointId){const spec=Attachment.resolveSpec(n,pointId);return portLayout(n)[spec?.id||pointId]||{x:n.x,y:n.y}}
-function physicalPortSide(n,pointId){return Attachment.resolveSpec(n,pointId)?.side||'right'}
+function physicalPortSide(n,pointId){return drawnPortSpec(n,pointId)?.side||'right'}
 function portNormal(side){
   if(side==='left')return{x:-1,y:0};if(side==='top')return{x:0,y:-1};if(side==='bottom')return{x:0,y:1};return{x:1,y:0};
 }

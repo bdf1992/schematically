@@ -6579,17 +6579,21 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
 // so a reader that knows nothing of layouts sees the default. Every other layout lives in
 // document.layout.views[id] = {name, audience, nodes: {id: {x, y, w, h}}, routes: {wireId: route}}.
 // An entity with no position in a layout is unplaced: reported, never put at (0, 0).
+// A view may also hold ports: {cardId: {portId: {side, t}}}, where a card's own port is drawn in
+// that view (LAYOUT-MODEL.md "As built: port sides per layout"); the record's side is never written.
 (function(root,factory){
   let Data=root.SovSchematicData;
   if(!Data&&typeof module!=='undefined'&&module.exports){require('./06-attachment-core.js');Data=require('./05-data-core.js')}
-  const api=factory(Data);
+  const api=factory(Data,root.SovSchematicAttachment);
   root.SovSchematicLayout=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(Data){
+})(typeof globalThis!=='undefined'?globalThis:this,function(Data,Attachment){
   if(!Data)throw new Error('SovSchematicData core is required');
+  if(!Attachment)throw new Error('SovSchematicAttachment core is required');
   const clone=Data.clone,isObject=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
   const DEFAULT_ID='main',POINT=24,MAX=4096;
   const ROUTE_MODES=['auto','guided','pinned','bus'];
+  const PORT_SIDES=['left','right','top','bottom'],unitT=v=>Math.max(0,Math.min(1,Number.isFinite(Number(v))?Number(v):.5));
   // Buses (LAYOUT-MODEL.md "As built: buses"): a route declared once per layout, which wires name
   // instead of each finding a path. The yFiles bus descriptor model: the bus is the record, a wire
   // only names it.
@@ -6627,8 +6631,35 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
         if(Array.isArray(b.order))b.order=b.order.filter(id=>doc.wires.some(w=>w.id===id));
       }
       for(const [k,rt] of Object.entries(v.routes))if(rt?.mode==='bus'&&(!Array.isArray(rt.buses)||!rt.buses.length||rt.buses.some(id=>!v.buses[id])))delete v.routes[k];
+      // Port placements name a boundary port of a card that exists, on one of four sides; a view
+      // that places no port has no ports key.
+      if(v.ports!==undefined){
+        if(isObject(v.ports))for(const [cid,ps] of Object.entries(v.ports)){
+          const c=doc.components.find(x=>x.id===cid);
+          if(!c||!isObject(ps)){delete v.ports[cid];continue}
+          for(const [pid,p] of Object.entries(ps)){
+            if(!isObject(p)||!PORT_SIDES.includes(p.side)||Attachment.resolveSpec(c,pid)?.role!=='boundary')delete ps[pid];else ps[pid]={side:p.side,t:unitT(p.t)};
+          }
+          if(!Object.keys(ps).length)delete v.ports[cid];
+        }
+        if(!isObject(v.ports)||!Object.keys(v.ports).length)delete v.ports;
+      }
     }
     return L;
+  }
+  // Where a view draws a card's own port: {side, t}, or null when the view does not place it and
+  // the record decides. spec is the port's attachment spec (its id and compatId). Reading never writes.
+  function portPlacement(doc,viewId,cardId,spec){
+    const ps=doc?.layout?.views?.[viewId??defaultId(doc)]?.ports?.[cardId];if(!isObject(ps)||!spec)return null;
+    const p=ps[spec.compatId]||ps[spec.id];
+    return isObject(p)&&PORT_SIDES.includes(p.side)?{side:p.side,t:unitT(p.t)}:null;
+  }
+  // Move a port a view already places: the entry is rewritten under the key it has. False when
+  // the view does not place this port.
+  function movePortPlacement(doc,viewId,cardId,spec,to){
+    const ps=doc?.layout?.views?.[viewId??defaultId(doc)]?.ports?.[cardId];if(!isObject(ps)||!spec||!PORT_SIDES.includes(to?.side))return false;
+    const key=isObject(ps[spec.compatId])?spec.compatId:isObject(ps[spec.id])?spec.id:null;if(key==null)return false;
+    ps[key]={side:to.side,t:unitT(to.t)};return true;
   }
   function viewRecord(doc,id){const L=ensure(doc),v=L.views[id??L.default];return v?{L,v,id:id??L.default,isDefault:(id??L.default)===L.default}:null}
   function slug(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'layout'}
@@ -6636,7 +6667,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
   function createView(doc,{id,name,audience=null,from=null,empty=false}={}){
     const L=ensure(doc);let vid=slug(id||name);let k=2;while(L.views[vid])vid=`${slug(id||name)}-${k++}`;
     const source=from??L.default;if(!empty&&!L.views[source])return refusal('UNKNOWN_LAYOUT',`No layout ${source}`);
-    L.views[vid]={name:String(name||id||vid),audience:audience||null,nodes:{},routes:empty?{}:clone(L.views[source].routes||{}),buses:empty?{}:clone(L.views[source].buses||{})};
+    L.views[vid]={name:String(name||id||vid),audience:audience||null,nodes:{},routes:empty?{}:clone(L.views[source].routes||{}),buses:empty?{}:clone(L.views[source].buses||{}),...(!empty&&isObject(L.views[source].ports)?{ports:clone(L.views[source].ports)}:{})};
     if(!empty)for(const c of doc.components)if(!hosted(c)||c.placement?.kind==='edge'){const g=geometry(doc,source,c.id);if(g)L.views[vid].nodes[c.id]=g}
     return {ok:true,id:vid,view:summary(doc,vid)};
   }
@@ -7386,6 +7417,119 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     }
   }
 
+  // ---- N-squared layout ---------------------------------------------------------------------
+  // The N-squared chart (NASA Systems Engineering Handbook, appendix F, N2 diagrams; the design
+  // structure matrix, Steward 1981): the cards of one canvas on the diagonal of a square grid, an
+  // outcome leaving along its card's row and an intake arriving down its card's column, so the one
+  // corner of a wire sits in the cell (sender row, receiver column); forward wires turn above the
+  // diagonal, feedback below. Written to a stored layout only: positions in nodes, the side each
+  // wired port is drawn on in ports, one pinned point per wire in routes. No record is touched.
+  const N2_GAP=96;
+  // What n2 refuses before any layout is made, so a refusal changes nothing.
+  function n2Refusal(doc,a){
+    const L=ensure(doc),source=a.view??L.default;
+    if(!L.views[source])return refusal('UNKNOWN_LAYOUT',`No layout ${source}`);
+    if(!a.into&&source===L.default)return refusal('DEFAULT_LAYOUT','n2 writes a stored layout and leaves the default as it is: name a stored layout with view, or a new one with into');
+    if(a.scope!=null&&!doc.components.some(c=>c.id===a.scope))return refusal('UNKNOWN_NODE',`No component ${a.scope}`);
+    return null;
+  }
+  // The room a container keeps above its children for its own head (as layered keeps it).
+  function headRoom(c){
+    const g=c?.config?.presentation?.graphic?.kind,s=Data.componentSection?Data.componentSection(c):null;
+    return (g&&g!=='none'?64:18)+(s&&s.lines.length>=2?s.bands.reduce((a,b)=>a+b.thickness,0):0);
+  }
+  function n2(doc,viewId,{scope=null,gap=N2_GAP,pad=44}={}){
+    const r=viewRecord(doc,viewId);if(!r)return refusal('UNKNOWN_LAYOUT',`No layout ${viewId}`);
+    if(r.isDefault)return refusal('DEFAULT_LAYOUT','n2 writes a stored layout and leaves the default as it is: name a stored layout with view, or a new one with into');
+    const G0=Data.GLOBAL_CANVAS_ID,canvas=scope?interiorOf(scope):G0,byId=new Map(doc.components.map(c=>[c.id,c]));
+    if(scope&&!byId.has(scope))return refusal('UNKNOWN_NODE',`No component ${scope}`);
+    // The cards: everything placed on the canvas that is not a group, in document order, group by
+    // group. A card belongs to the first group in document order that lists it (as layered has it);
+    // groups and ungrouped cards come in the order their first card comes.
+    const members=doc.components.filter(c=>!hosted(c)&&!grouping(c)&&(c.canvasId||G0)===canvas);
+    const here=new Set(members.map(c=>c.id)),blockOf=new Map();
+    for(const g of doc.components){
+      if(!grouping(g)||!Array.isArray(g.config?.members))continue;
+      for(const m of g.config.members.map(String))if(here.has(m)&&!blockOf.has(m))blockOf.set(m,g.id);
+    }
+    const keyOf=c=>blockOf.has(c.id)?`group:${blockOf.get(c.id)}`:`card:${c.id}`,keys=[];
+    for(const c of members)if(!keys.includes(keyOf(c)))keys.push(keyOf(c));
+    const ordered=keys.flatMap(k=>members.filter(c=>keyOf(c)===k));
+    // A pinned or locked card stays where it is and takes no place on the diagonal.
+    const frozen=ordered.filter(c=>c.editor?.pinned||c.editor?.locked).map(c=>c.id);
+    const cards=ordered.filter(c=>!frozen.includes(c.id)),index=new Map(cards.map((c,i)=>[c.id,i]));
+    const was=new Map(cards.map(c=>[c.id,geometry(doc,r.id,c.id)||entityGeometry(c)]));
+    // One pitch for rows and columns: the largest card side plus the gap.
+    const W=Math.max(0,...cards.map(c=>was.get(c.id).w)),H=Math.max(0,...cards.map(c=>was.get(c.id).h));
+    const G=Math.max(48,num(gap,N2_GAP)),pitch=Math.max(W,H)+G,n=cards.length;
+    // The top-left card corner stays where it was; inside a container, the container is fitted.
+    let ox=80,oy=80;
+    if(scope){
+      const sc=geometry(doc,r.id,scope)||entityGeometry(byId.get(scope)),top=headRoom(byId.get(scope));
+      const w=Math.max(160,(n?(n-1)*pitch+W:0)+pad*2),h=Math.max(120,(n?(n-1)*pitch+H:0)+pad*2+top);
+      setGeometry(doc,r.id,scope,{x:sc.x,y:sc.y,w,h});ox=sc.x-w/2+pad;oy=sc.y-h/2+pad+top;
+    }else if(n){ox=Math.min(...cards.map(c=>was.get(c.id).x-was.get(c.id).w/2));oy=Math.min(...cards.map(c=>was.get(c.id).y-was.get(c.id).h/2))}
+    const at=new Map();
+    cards.forEach((c,i)=>{
+      const g=was.get(c.id),x=ox+W/2+i*pitch,y=oy+H/2+i*pitch;
+      if(!geometry(doc,r.id,c.id))setGeometry(doc,r.id,c.id,g);
+      shift(doc,r.id,c.id,x-g.x,y-g.y);at.set(c.id,{x,y,w:g.w,h:g.h});
+    });
+    // Every wire on this canvas, and on anything a placed card holds, returns to the router; a
+    // top-level layout also drops the buses no route names any more.
+    const moved=new Set([canvas,...cards.flatMap(c=>[c.id,...descendants(doc,c.id)]).map(interiorOf)]);
+    for(const w of doc.wires)if(moved.has(w.canvasId||G0)||index.has(w.a)||index.has(w.b))delete r.v.routes[w.id];
+    if(!scope){const named=new Set(Object.values(r.v.routes).flatMap(rt=>rt?.mode==='bus'&&Array.isArray(rt.buses)?rt.buses:[]));for(const id of Object.keys(r.v.buses))if(!named.has(id))delete r.v.buses[id]}
+    if(isObject(r.v.ports))for(const c of cards)delete r.v.ports[c.id];
+    // The wires between two placed cards. The sender is a, or b when the wire's direction is
+    // reverse. An end is a boundary port of a 2D card, which the view places on a side, or a 0D
+    // Point, which has no side. Any other end leaves the wire to the router.
+    const end=(id,port)=>{
+      const c=byId.get(id),d=Attachment.effectiveDimension(c);
+      if(d===0)return {id,point:true};
+      const spec=d===2?Attachment.resolveSpec(c,port):null;
+      return spec&&spec.role==='boundary'?{id,spec,key:`${id}|${spec.id}`}:null;
+    };
+    const plans=[],autoRouted=[];
+    for(const w of doc.wires){
+      if(!index.has(w.a)||!index.has(w.b)||w.a===w.b||(w.canvasId||G0)!==canvas)continue;
+      const rev=w.config?.direction==='reverse',S=end(rev?w.b:w.a,rev?w.bSide:w.aSide),R=end(rev?w.a:w.b,rev?w.aSide:w.bSide);
+      if(!S||!R){autoRouted.push({wire:w.id,reason:'NO_PORT'});continue}
+      const forward=index.get(S.id)<index.get(R.id);
+      plans.push({w,S,R,forward,sSide:forward?'right':'left',rSide:forward?'top':'bottom'});
+    }
+    // A port is drawn on one side. Forward wires choose first, in document order, then feedback
+    // wires; a wire that needs a port on a side other than the one it already has keeps an auto route.
+    const sideOf=new Map(),pinned=[];
+    for(const p of [...plans.filter(x=>x.forward),...plans.filter(x=>!x.forward)]){
+      const clash=[[p.S,p.sSide],[p.R,p.rSide]].find(([e,side])=>e.key&&sideOf.has(e.key)&&sideOf.get(e.key)!==side);
+      if(clash){autoRouted.push({wire:p.w.id,reason:'PORT_SHARED',card:clash[0].id,port:clash[0].spec.compatId,side:sideOf.get(clash[0].key)});continue}
+      if(p.S.key)sideOf.set(p.S.key,p.sSide);if(p.R.key)sideOf.set(p.R.key,p.rSide);pinned.push(p);
+    }
+    // The ports of one side of a card stand evenly along it, in the card's own port order.
+    const placedAt=new Map();let ports=0;
+    for(const c of cards){
+      const specs=Attachment.pointSpecs(c).filter(s=>sideOf.has(`${c.id}|${s.id}`));if(!specs.length)continue;
+      const entry={};
+      for(const side of PORT_SIDES){
+        const on=specs.filter(s=>sideOf.get(`${c.id}|${s.id}`)===side);
+        // Keyed as the record keys its own port (config.ports[compatId]) and as a wire names it.
+        on.forEach((s,k)=>{const t=(k+1)/(on.length+1);entry[s.compatId]={side,t};placedAt.set(`${c.id}|${s.id}`,{side,t});ports++});
+      }
+      if(!isObject(r.v.ports))r.v.ports={};r.v.ports[c.id]=entry;
+    }
+    if(isObject(r.v.ports)&&!Object.keys(r.v.ports).length)delete r.v.ports;
+    // One pinned point per wire: the receiver's column (the x of its port) on the sender's row
+    // (the y of its port). The renderer adds each end's lead along the port's normal, which lies
+    // on that row and that column, so the wire is drawn with this one corner.
+    const colX=e=>{const g=at.get(e.id);return e.point?g.x:g.x-g.w/2+g.w*placedAt.get(e.key).t};
+    const rowY=e=>{const g=at.get(e.id);return e.point?g.y:g.y-g.h/2+g.h*placedAt.get(e.key).t};
+    for(const p of pinned)r.v.routes[p.w.id]={mode:'pinned',points:[{x:colX(p.R),y:rowY(p.S)}]};
+    autoRouted.sort((a,b)=>a.wire<b.wire?-1:a.wire>b.wire?1:0);
+    return {ok:true,view:r.id,engine:'n2',placed:n,order:cards.map(c=>c.id),pitch,frozen,ports,
+      wires:{pinned:pinned.length,forward:pinned.filter(p=>p.forward).length,feedback:pinned.filter(p=>!p.forward).length,auto:autoRouted.length},autoRouted};
+  }
+
   // ---- One dispatch for every surface -----------------------------------------------------------
   const OPS={
     list:(doc)=>({ok:true,default:defaultId(doc),views:views(doc).map(v=>summary(doc,v.id))}),
@@ -7402,15 +7546,20 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     bus:(doc,a)=>a.remove?removeBus(doc,a.view,String(a.id??'')):setBus(doc,a.view,a),
     buses:(doc,a)=>listBuses(doc,a.view),
     harness:(doc,a)=>harness(doc,a.view,a),
-    apply:(doc,a)=>{if((a.engine||'layered')!=='layered')return refusal('UNKNOWN_ENGINE','engine is layered');let view=a.view;if(a.into){const made=createView(doc,{name:a.into,from:a.view,audience:a.audience});if(!made.ok)return made;view=made.id}return layered(doc,view,a)}
+    apply:(doc,a)=>{
+      const engine=a.engine||'layered';if(engine!=='layered'&&engine!=='n2')return refusal('UNKNOWN_ENGINE','engine is layered or n2');
+      if(engine==='n2'){const bad=n2Refusal(doc,a);if(bad)return bad}
+      let view=a.view;if(a.into){const made=createView(doc,{name:a.into,from:a.view,audience:a.audience});if(!made.ok)return made;view=made.id}
+      return engine==='n2'?n2(doc,view,a):layered(doc,view,a);
+    }
   };
   const READ_ONLY=new Set(['list','unplaced','buses']);
   function execute(doc,op,args={}){const fn=OPS[op];if(!fn)return refusal('UNKNOWN_OP',`Unknown layout op ${op}`,{ops:Object.keys(OPS)});return fn(doc,isObject(args)?args:{})}
   function tool(){
-    return {name:'schematic.layout',description:`Arrange the document without changing what it means. op: ${Object.keys(OPS).join(' | ')}. view names a layout (default: the document's default). move {id, x,y | dx,dy} · place {id, relation: right-of|left-of|above|below, of, gap} · align {ids, axis: left|center|right|top|middle|bottom} · distribute {ids, axis: x|y, gap?} · route {wireId, mode: auto|guided|pinned|bus, points|via|buses} · bus {id, points: [{x,y}...] 2+ with horizontal or vertical steps, pitch?: 4-16 (6), label?, order?: [wireId...]} sets a bus; bus {id, remove: true} removes it and returns its wires to auto · buses {} lists every bus with the wires that name it · harness {between: [groupA, groupB], pitch?} makes one trunk per wire label in the gap between two groups, and streets in the row gaps for cards with no direct line, and routes the wires between them on those buses · apply {engine: layered, scope?: containerId, into?: new layout name, labelMargin?: margin either side of a crossing wire label's estimated width (16)} · create {name, from?, empty?} · rename {view, name} · delete {view} · set-default {view}. Refusals are typed: PINNED, LOCKED, HOSTED, UNPLACED, BAD_POINTS, UNKNOWN_BUS, BUS_GAP, GAP_TOO_NARROW, STREET_TOO_NARROW, UNKNOWN_*.`,
+    return {name:'schematic.layout',description:`Arrange the document without changing what it means. op: ${Object.keys(OPS).join(' | ')}. view names a layout (default: the document's default). move {id, x,y | dx,dy} · place {id, relation: right-of|left-of|above|below, of, gap} · align {ids, axis: left|center|right|top|middle|bottom} · distribute {ids, axis: x|y, gap?} · route {wireId, mode: auto|guided|pinned|bus, points|via|buses} · bus {id, points: [{x,y}...] 2+ with horizontal or vertical steps, pitch?: 4-16 (6), label?, order?: [wireId...]} sets a bus; bus {id, remove: true} removes it and returns its wires to auto · buses {} lists every bus with the wires that name it · harness {between: [groupA, groupB], pitch?} makes one trunk per wire label in the gap between two groups, and streets in the row gaps for cards with no direct line, and routes the wires between them on those buses · apply {engine: layered, scope?: containerId, into?: new layout name, labelMargin?: margin either side of a crossing wire label's estimated width (16)} · apply {engine: n2, into: new layout name (or view: a stored layout), scope?: containerId, gap?: room between cards (96)} puts the cards on the diagonal in document order, group by group, and pins each wire between two of them with one corner on the sender's row and the receiver's column; it writes a stored layout only, where it also places the wired ports (outcomes right, intakes top; feedback left and bottom), and refuses the default layout with DEFAULT_LAYOUT · create {name, from?, empty?} · rename {view, name} · delete {view} · set-default {view}. Refusals are typed: PINNED, LOCKED, HOSTED, UNPLACED, BAD_POINTS, UNKNOWN_BUS, BUS_GAP, GAP_TOO_NARROW, STREET_TOO_NARROW, UNKNOWN_*.`,
       inputSchema:{type:'object',properties:{op:{type:'string',enum:Object.keys(OPS)},view:{type:'string'},id:{type:'string'},ids:{type:'array',items:{type:'string'}},of:{type:'string'},relation:{type:'string'},gap:{type:'number'},x:{type:'number'},y:{type:'number'},dx:{type:'number'},dy:{type:'number'},axis:{type:'string'},wireId:{type:'string'},mode:{type:'string'},points:{type:'array'},via:{type:'array'},buses:{type:'array',items:{type:'string'}},pitch:{type:'number'},label:{type:'string'},order:{type:'array',items:{type:'string'}},remove:{type:'boolean'},between:{type:'array',items:{type:'string'},minItems:2,maxItems:2},engine:{type:'string'},scope:{type:'string'},into:{type:'string'},name:{type:'string'},from:{type:'string'},empty:{type:'boolean'},audience:{type:'string'},labelMargin:{type:'number'}},required:['op'],additionalProperties:false}};
   }
-  return {DEFAULT_ID,ROUTE_MODES,views,ensure,defaultId,createView,deleteView,renameView,setDefault,geometry,setGeometry,unplaced,move,place,align,distribute,route,routeFor,busPoints,busMeet,setBus,removeBus,listBuses,harness,layered,execute,isReadOnly:op=>READ_ONLY.has(op),tool,hosted,size};
+  return {DEFAULT_ID,ROUTE_MODES,views,ensure,defaultId,createView,deleteView,renameView,setDefault,geometry,setGeometry,unplaced,move,place,align,distribute,route,routeFor,busPoints,busMeet,setBus,removeBus,listBuses,harness,layered,n2,portPlacement,movePortPlacement,PORT_SIDES,execute,isReadOnly:op=>READ_ONLY.has(op),tool,hosted,size};
 });
 /* END src/08-layout-core.js */
 </script>
@@ -10312,8 +10461,18 @@ function sectionPointInset(host,pos){
   const sum=k=>s.bands.slice(0,k).reduce((a,b)=>a+b.thickness,0);
   return pos.line!=null?sum(pos.line):sum(pos.through)+(s.bands[pos.through]?.thickness||0)/2;
 }
+// A port as the layout on screen draws it (LAYOUT-MODEL.md "As built: port sides per layout"):
+// where the record puts it, or, for a card's own boundary port the active view places, at that
+// view's {side, t}. Position, normal, leads and marks all read the port through here; the record
+// is never written.
+function drawnPortSpec(n,pointId){
+  const spec=Attachment.resolveSpec(n,pointId);
+  if(!spec||spec.role!=='boundary'||typeof activeLayoutId!=='function'||!diagram.layout?.views)return spec;
+  const placed=SovSchematicLayout.portPlacement(diagram,activeLayoutId(),n.id,spec);
+  return placed?{...spec,side:placed.side,t:placed.t,placed:true}:spec;
+}
 function componentPortLocalPosition(n,pointId){
-  const size=componentSize(n),spec=Attachment.resolveSpec(n,pointId);if(!spec)return{x:0,y:0};
+  const size=componentSize(n),spec=drawnPortSpec(n,pointId);if(!spec)return{x:0,y:0};
   const cfg=componentConfig(n),pcfg=cfg.ports[spec.compatId],effective=Attachment.effectiveDimension(n);
   if(effective===0)return{x:0,y:0};
   if(effective===1){
@@ -10462,7 +10621,7 @@ function portLayout(n){
   return result;
 }
 function portPos(n,pointId){const spec=Attachment.resolveSpec(n,pointId);return portLayout(n)[spec?.id||pointId]||{x:n.x,y:n.y}}
-function physicalPortSide(n,pointId){return Attachment.resolveSpec(n,pointId)?.side||'right'}
+function physicalPortSide(n,pointId){return drawnPortSpec(n,pointId)?.side||'right'}
 function portNormal(side){
   if(side==='left')return{x:-1,y:0};if(side==='top')return{x:0,y:-1};if(side==='bottom')return{x:0,y:1};return{x:1,y:0};
 }
@@ -12025,7 +12184,7 @@ function appendComponentLeads(g,n){
   const axis=componentGlyphAxis(n);if(!axis)return;
   const glyph=componentGlyph(n);
   for(const t of glyph?.terminals||[]){
-    const spec=Attachment.resolveSpec(n,t.id);if(!spec||spec.side!==t.toward)continue;
+    const spec=drawnPortSpec(n,t.id);if(!spec||spec.side!==t.toward)continue;
     if(!wires.some(x=>(x.a===n.id&&x.aSide===spec.compatId)||(x.b===n.id&&x.bSide===spec.compatId)))continue;
     const P=componentPortLocalPosition(n,spec.id),[ex,ey]=SovSchematicNotation.pinEnd(t),E={x:axis.x0+ex*axis.scale,y:axis.y0+ey*axis.scale};
     const horizontal=t.toward==='left'||t.toward==='right';
@@ -14577,7 +14736,9 @@ function beginPortSlide(e,n,pointId){
 function slidePortTo(n,compat,x,y,{snap=true}={}){
   const q=nearestPointOnComponentEdge(n,x,y);if(!q)return null;
   const t=snap?Math.round(q.t*8)/8:Math.round(q.t*1000)/1000;
-  componentConfig(n).ports[compat].boundary={side:q.side,t};
+  // A port the layout on screen places moves in that layout; the record keeps its own side.
+  if(!SovSchematicLayout.movePortPlacement(diagram,activeLayoutId(),n.id,Attachment.resolveSpec(n,compat),{side:q.side,t}))
+    componentConfig(n).ports[compat].boundary={side:q.side,t};
   routeCache.clear();arrowPoseCache.clear();render();
   return {side:q.side,t};
 }

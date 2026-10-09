@@ -122,6 +122,24 @@ A bus is a route declared once in a layout; wires name it in their route and rid
 `BUS_GAP`, `GAP_TOO_NARROW`, `STREET_TOO_NARROW`, `BAD_LANES`, ...) comes back with its code and changes nothing. The
 harness receipt lists the buses it made and the wires it put on them.
 
+## N-squared layout and port sides per layout
+
+```js
+SovSchematicAPI.layout.apply({engine: 'n2', into: 'N2'})            // a new stored layout, shown at once
+SovSchematicAPI.layout.apply({engine: 'n2', view: 'n2', scope, gap}) // an existing stored layout; scope: a container; gap: room between cards (96)
+```
+
+`n2` puts the cards of a canvas on the diagonal in document order, group by group, and pins each
+wire between two of them with one corner on the sender's row and the receiver's column
+(`LAYOUT-MODEL.md` "What `n2` does"). It writes a stored layout only and refuses the default layout
+with `DEFAULT_LAYOUT`; no component or wire record changes. The receipt is `{view, engine, placed,
+order, pitch, frozen, ports, wires: {pinned, forward, feedback, auto}, autoRouted: [{wire, reason,
+card?, port?, side?}]}`. MCP's `schematic.layout {op: 'apply', engine: 'n2', into}` is the same op.
+
+The layout also holds the side each wired port is drawn on in it,
+`document.layout.views[id].ports[cardId][portId] = {side, t}` (`LAYOUT-MODEL.md` "As built: port
+sides per layout"). Every other layout draws the port where the record puts it.
+
 ## Runs (state space, slice 1c)
 
 ```js

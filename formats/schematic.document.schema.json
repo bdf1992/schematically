@@ -195,7 +195,8 @@
       }
     },
     "layout": {
-      "type": "object"
+      "type": "object",
+      "description": "Named layouts: default, and views[id] = {name, audience, nodes, routes, buses, ports?}. ports[cardId][portId] = {side: left|right|top|bottom, t: 0..1} is where that layout draws a card's own port; absent, the Component record decides. See LAYOUT-MODEL.md 'As built: layouts' and 'As built: port sides per layout'."
     }
   },
   "additionalProperties": true,

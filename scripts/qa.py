@@ -97,6 +97,7 @@ BROWSER=[
     'tests/server_render_qa.py',
     'tests/access_panel_qa.py',
     'tests/layouts_qa.py',
+    'tests/n2_layout_qa.py',
     'tests/layout_sov_qa.py',
     'tests/layout_label_gutters_qa.py',
     'tests/layered_groups_qa.py',

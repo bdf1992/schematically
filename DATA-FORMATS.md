@@ -15,6 +15,12 @@ The normal editable schematic file. It contains semantic document state only:
 
 It intentionally excludes local camera/grid/editor preferences so the schematic stays portable and deterministic.
 
+`layout` holds the document's named layouts (`LAYOUT-MODEL.md` "As built: layouts"): `default`, and
+`views[id] = {name, audience, nodes, routes, buses, ports?}`. `ports[cardId][portId] = {side, t}` is
+where that layout draws a card's own port (`side`: `left`, `right`, `top` or `bottom`; `t`: 0 to 1
+along the side). It is optional and presentation only: a reader that ignores it draws the port where
+the Component record puts it, and the record's own port side is never written from a layout.
+
 MIME: `application/vnd.soveraeign.schematic+json`.
 
 Schema: `formats/schematic.document.schema.json`.

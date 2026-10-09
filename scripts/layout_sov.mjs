@@ -7,9 +7,14 @@
 //
 //   node scripts/layout_sov.mjs file.sov [--out other.sov] [--view id] [--no-arrange]
 //                                        [--harness groupA,groupB ...] [--lanes port] [--label-margin n]
+//                                        [--engine layered|n2] [--into name]
 //
 // Writes the result back to file.sov (or --out, when given) as the compact saved form, one
 // final newline. --view names a layout to arrange; left out, the document's default layout.
+// --engine n2 puts the cards on the diagonal and pins each wire between two of them with one
+// corner (LAYOUT-MODEL.md "What n2 does"). It writes a stored layout only, so it needs --into (a
+// new layout) or --view (a stored one), and the file is written as it was read with only its
+// layout replaced. --into also works with layered: the arrangement goes into a new layout.
 // --no-arrange keeps every card where it is. --harness (repeatable) runs the harness op
 // between two groups after any arranging, in the order given, and prints each receipt: one
 // trunk per wire label in the gap between the groups, streets in their row gaps, and the wires
@@ -28,16 +33,21 @@ require(path.join(HERE, '../src/06-attachment-core.js'));
 const Data = require(path.join(HERE, '../src/05-data-core.js'));
 const Layout = require(path.join(HERE, '../src/08-layout-core.js'));
 
-const USAGE = 'usage: node scripts/layout_sov.mjs file.sov [--out other.sov] [--view id] [--no-arrange] [--harness groupA,groupB ...] [--lanes port] [--label-margin n]';
+const USAGE = 'usage: node scripts/layout_sov.mjs file.sov [--out other.sov] [--view id] [--no-arrange] [--harness groupA,groupB ...] [--lanes port] [--label-margin n] [--engine layered|n2] [--into name]';
 
 const args = process.argv.slice(2);
-let out = null, view = null, arrange = true, labelMargin = null, lanes = null;
+let out = null, view = null, arrange = true, labelMargin = null, lanes = null, engine = 'layered', into = null;
 const harnesses = [];
 const positional = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--out') { out = args[++i]; }
   else if (args[i] === '--view') { view = args[++i]; }
   else if (args[i] === '--no-arrange') { arrange = false; }
+  else if (args[i] === '--engine') {
+    engine = args[++i];
+    if (engine !== 'layered' && engine !== 'n2') { console.error(USAGE); process.exit(2); }
+  }
+  else if (args[i] === '--into') { into = args[++i]; }
   else if (args[i] === '--label-margin') { labelMargin = Number(args[++i]); }
   else if (args[i] === '--lanes') {
     lanes = args[++i];
@@ -51,7 +61,7 @@ for (let i = 0; i < args.length; i++) {
   else positional.push(args[i]);
 }
 const file = positional[0];
-if (!file || out === undefined || view === undefined) {
+if (!file || out === undefined || view === undefined || into === undefined) {
   console.error(USAGE);
   process.exit(2);
 }
@@ -63,9 +73,9 @@ const fail = (result) => {
   console.log(`  ${result.code}: ${result.message}`);
   process.exit(1);
 };
-let placed = null, usedLabelMargin = null, bundles = null, channels = null;
+let placed = null, usedLabelMargin = null, bundles = null, channels = null, n2 = null;
 if (arrange) {
-  const applyArgs = {engine: 'layered', view};
+  const applyArgs = {engine, view, ...(into ? {into} : {})};
   if (labelMargin != null && Number.isFinite(labelMargin)) applyArgs.labelMargin = labelMargin;
   const result = Layout.execute(doc, 'apply', applyArgs);
   if (!result.ok) fail(result);
@@ -73,6 +83,7 @@ if (arrange) {
   usedLabelMargin = result.labelMargin;
   bundles = result.bundles || null;
   channels = result.channels || null;
+  n2 = result.engine === 'n2' ? result : null;
 }
 const receipts = [];
 for (const between of harnesses) {
@@ -85,10 +96,16 @@ const target = out || file;
 // Arranging rewrites geometry, so the document is written in its compact saved form. Without it
 // only the layouts changed: the file is written as it was read with its layout replaced, so the
 // loader's filled-in defaults never reach a hand-authored or generated document.
-const asRead = !arrange && payload && typeof payload === 'object' && payload.schema === Data.DOCUMENT_SCHEMA;
+// n2 changes no record either, so its file is written the same way.
+const asRead = (!arrange || engine === 'n2') && payload && typeof payload === 'object' && payload.schema === Data.DOCUMENT_SCHEMA;
 const written = asRead ? {...payload, layout: doc.layout} : Data.compactDocument(doc);
 fs.writeFileSync(target, JSON.stringify(written, null, 1) + '\n');
-console.log(`ok ${file}${placed != null ? ` (${placed} placed) labelMargin ${usedLabelMargin}` : ''}`);
+console.log(`ok ${file}${placed != null ? ` (${placed} placed)${n2 ? '' : ` labelMargin ${usedLabelMargin}`}` : ''}`);
+// n2 writes a stored layout: its name, the pitch, and what became of the wires between placed cards.
+if (n2) {
+  console.log(`  n2: layout ${n2.view}, pitch ${n2.pitch}, ${n2.wires.pinned} wires pinned (${n2.wires.forward} forward, ${n2.wires.feedback} feedback), ${n2.wires.auto} left to the router, ${n2.ports} ports placed`);
+  for (const a of n2.autoRouted) console.log(`    auto ${a.wire}: ${a.reason}${a.card ? ` (${a.card} ${a.port} is on the ${a.side})` : ''}`);
+}
 // A packed canvas routes the wires between its items on channel buses instead of bundling pairs.
 if (channels) {
   console.log(`  channels: ${channels.wires} wires on ${channels.buses} buses (${channels.streets} streets), gap ${channels.gap}${channels.skipped > 0 ? `, ${channels.skipped} skipped` : ''}`);
