@@ -107,6 +107,7 @@ function entryFor(file){
 }
 function surfaceOf(entry,base){
   if(!entry.surface){
+    entry.base=base;
     entry.surface=createSurface({
       store:createFileStore(entry.file),
       packs:packsJson,
@@ -296,6 +297,40 @@ function preflight(res){
   res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','access-control-allow-headers':'content-type,mcp-protocol-version,mcp-method,mcp-name'});
   return res.end('');
 }
+// POST /documents/<id>/close drops the document's surface (the id and file stay registered; the
+// next call to /d/<id>/... builds a fresh one from the store). POST /documents/<id>/reload drops it
+// and builds a new one from the file at once; with --db the file is not the working copy, so it is
+// refused and POST /documents/<id>/import is the call that re-reads it. Two ids that name one file
+// share one entry, so either id acts on both. Returns true when it answered.
+function handleLifecycleRoute(req,res,pathname){
+  const m=pathname.match(/^\/documents\/([^/]+)\/(close|reload)$/);
+  if(!m)return false;
+  if(req.method==='OPTIONS'){preflight(res);return true}
+  if(req.method!=='POST')return false;
+  let id=null;try{id=decodeURIComponent(m[1])}catch(_){}
+  if(id===null||!ID_PATTERN.test(id)){sendJson(res,400,{ok:false,code:'DOCUMENT_ID_INVALID',message:ID_MESSAGE});return true}
+  const kind=m[2];
+  if(db){
+    const known=db.get(id)||(ROOT_DIR&&isFileOnDisk(path.join(ROOT_DIR,id+'.sov')));
+    if(!known){sendJson(res,404,{ok:false,code:'DOCUMENT_NOT_FOUND',message:`no document is in the database or found under id ${id}`});return true}
+    if(kind==='reload'){sendJson(res,409,{ok:false,code:'DOCUMENT_DATABASE_BACKED',message:`document ${id} is kept in the database, which is its working copy; POST /documents/${encodeURIComponent(id)}/import re-reads its source file`});return true}
+    dbDocs.delete(id);
+    sendJson(res,200,{ok:true,id,open:false});
+    return true;
+  }
+  const entry=resolveId(id);
+  if(!entry){sendJson(res,404,{ok:false,code:'DOCUMENT_NOT_FOUND',message:`no document is registered or found under id ${id}`});return true}
+  if(kind==='close'){
+    entry.surface=null;
+    sendJson(res,200,{ok:true,id,open:false});
+    return true;
+  }
+  if(!isFileOnDisk(entry.file)){sendJson(res,404,{ok:false,code:'DOCUMENT_FILE_MISSING',message:`${entry.file} is not a file on disk`});return true}
+  entry.surface=null;
+  surfaceOf(entry,entry.base!==undefined?entry.base:'/d/'+encodeURIComponent(id));
+  sendJson(res,200,{ok:true,id,file:entry.file,open:true});
+  return true;
+}
 // The --db routes answered before /d/. Returns true when it answered.
 function handleDbRoute(req,res,pathname,body){
   if(pathname==='/profiles'){
@@ -345,6 +380,7 @@ const server=http.createServer(async(req,res)=>{
   const headers={};for(const [k,v] of Object.entries(req.headers))headers[k.toLowerCase()]=v;
   const pathname=url.pathname;
   try{
+    if(handleLifecycleRoute(req,res,pathname))return;
     if(db&&handleDbRoute(req,res,pathname,body))return;
     if(pathname==='/documents'){
       if(req.method==='GET')return sendJson(res,200,db?listDbDocuments():listDocuments());

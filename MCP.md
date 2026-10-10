@@ -68,6 +68,28 @@ export overwrites the file it names.
 - `GET /profiles` answers `{profiles: [{id, created, documents}]}`; `GET /profiles/<id>/documents`
   answers `{profile, documents}`, or 404 `PROFILE_NOT_FOUND`.
 
+### Close and reload
+
+A surface reads its document once, on first use, and writes the whole state on every mutation. A
+file rewritten by another program is therefore not seen, and the next write overwrites it. Two
+routes end that without a restart:
+
+- `POST /documents/<id>/close` drops the document's surface and keeps the id and file registered:
+  200 `{ok, id, open: false}`, also when it was not open. The next call to `/d/<id>/...` builds a
+  fresh surface from the store, as first use does. Undo history, runs and the live snapshot end
+  there. 400 `DOCUMENT_ID_INVALID`, 404 `DOCUMENT_NOT_FOUND`.
+- `POST /documents/<id>/reload` (without `--db`) drops the surface and builds a new one from the
+  file at once: 200 `{ok, id, file, open: true}`. 404 `DOCUMENT_FILE_MISSING` when the file is not
+  on disk, and the surface stays as it was; the other codes are close's. A file that is not a
+  document reads as an empty one, as on first use.
+- With `--db` the database is the working copy, so reload answers 409 `DOCUMENT_DATABASE_BACKED`
+  and names `POST /documents/<id>/import`, the call that re-reads the source file (import is
+  unchanged). Close drops the open surface and answers 200; a row's `open` goes false.
+- Two ids that name one file share one entry: closing or reloading by either id affects both.
+- The default document (`--file`) is reached by these routes only through an id registered for
+  its file; there is no unprefixed form. `OPTIONS` on both answers 204 with the same CORS headers
+  as the other `/documents` routes.
+
 The revision a database row reports counts the texts written for that id in this database (1 is the
 first); it is not the revision field inside the document. `--db` needs Node with `node:sqlite` and no
 flag (22.13 or later); a server without `--db` does not need it.
