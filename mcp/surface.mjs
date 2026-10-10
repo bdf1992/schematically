@@ -13,12 +13,15 @@
 //   editorHtml                                          the built page; /editor serves it with this
 //                                                       document in a sov-served-document tag,
 //                                                       /index.html serves it unchanged
+//   base     a string, default empty: the path prefix this surface is mounted under (mcp/server.mjs
+//            mounts one surface per document at /d/<id> and strips the prefix before handle); it is
+//            used only in the root description, so mcp, api and editor read base+'/mcp' and so on
 // and gets back {handle(request)}, request being {method, path, query (an object of strings),
 // headers (lower-case keys), body (a string or null)}; handle resolves to {status, headers, body}
 // where body is a string or a Uint8Array.
 import {guide} from './guide.mjs';
 
-export function createSurface({store,packs,render,readText,describe,editorHtml}){
+export function createSurface({store,packs,render,readText,describe,editorHtml,base=''}){
   const Data=globalThis.SovSchematicData;
   const State=globalThis.SovSchematicStateSpace,Layout=globalThis.SovSchematicLayout;
   const SimSurface=globalThis.SovSchematicSimSurface;
@@ -287,7 +290,7 @@ schematic.markers and schematic.render; run with schematic.run.*.`;
       }
       if(request.path==='/mcp'&&request.method==='POST')return await handleMcp(request);
       if(request.path.startsWith('/api/v1/'))return await handleApi(request);
-      return jsonResponse(200,{name:'soveraeign-schematic',version:'0.1.24',document:describe(),mcp:'/mcp',api:'/api/v1',editor:'/editor'});
+      return jsonResponse(200,{name:'soveraeign-schematic',version:'0.1.24',document:describe(),mcp:base+'/mcp',api:base+'/api/v1',editor:base+'/editor'});
     }catch(error){return jsonResponse(500,{error:String(error.message||error)})}
   }
   return {handle};
