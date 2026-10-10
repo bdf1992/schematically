@@ -6610,7 +6610,9 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
 })(typeof globalThis!=='undefined'?globalThis:this,function(Data){
   if(!Data)throw new Error('SovSchematicData core is required');
   const clone=Data.clone,isObject=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
-  const DEFAULT_ID='main',POINT=24,MAX=4096;
+  // The largest side a card or Plane may have, in canvas units; a nested drawing needs sides past 4096.
+  const MAX_SIDE=65536;
+  const DEFAULT_ID='main',POINT=24,MAX=MAX_SIDE;
   const ROUTE_MODES=['auto','guided','pinned','bus'];
   // Buses (LAYOUT-MODEL.md "As built: buses"): a route declared once per layout, which wires name
   // instead of each finding a path. The yFiles bus descriptor model: the bus is the record, a wire
@@ -8327,6 +8329,8 @@ function componentBackdropMode(n){
   if(!['auto','none','body','frame'].includes(p.backdrop))p.backdrop='auto';
   return p.backdrop==='auto'?(componentHostedOnWire(n)?'none':'body'):p.backdrop;
 }
+// The largest side a card or Plane may have, in canvas units; a nested drawing needs sides past 4096.
+const COMPONENT_MAX_SIDE=65536;
 function componentConfig(n){
   ensureComponentStructure(n);
   if(!n.config)n.config={};
@@ -8339,7 +8343,7 @@ function componentConfig(n){
   if(typeof presentation.graphic.svg!=='string')presentation.graphic.svg='';
   // The data core's normaliser, so a file never declares a size the screen silently refuses.
   presentation.size=SovSchematicData.normalizePresentationSize(presentation.size);
-  presentation.size.w=Math.min(4096,presentation.size.w);presentation.size.h=Math.min(4096,presentation.size.h);
+  presentation.size.w=Math.min(COMPONENT_MAX_SIDE,presentation.size.w);presentation.size.h=Math.min(COMPONENT_MAX_SIDE,presentation.size.h);
   // The label mode is read through SovSchematicData.effectiveLabelMode; an absent one is derived, never written.
   if(presentation.labelMode!==undefined&&!['boundary','inside','outside','none'].includes(presentation.labelMode))delete presentation.labelMode;
   if(!Number.isInteger(presentation.interiorColorSlot))presentation.interiorColorSlot=n.config.colorSlot??0;

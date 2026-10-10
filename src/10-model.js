@@ -376,6 +376,8 @@ function componentBackdropMode(n){
   if(!['auto','none','body','frame'].includes(p.backdrop))p.backdrop='auto';
   return p.backdrop==='auto'?(componentHostedOnWire(n)?'none':'body'):p.backdrop;
 }
+// The largest side a card or Plane may have, in canvas units; a nested drawing needs sides past 4096.
+const COMPONENT_MAX_SIDE=65536;
 function componentConfig(n){
   ensureComponentStructure(n);
   if(!n.config)n.config={};
@@ -388,7 +390,7 @@ function componentConfig(n){
   if(typeof presentation.graphic.svg!=='string')presentation.graphic.svg='';
   // The data core's normaliser, so a file never declares a size the screen silently refuses.
   presentation.size=SovSchematicData.normalizePresentationSize(presentation.size);
-  presentation.size.w=Math.min(4096,presentation.size.w);presentation.size.h=Math.min(4096,presentation.size.h);
+  presentation.size.w=Math.min(COMPONENT_MAX_SIDE,presentation.size.w);presentation.size.h=Math.min(COMPONENT_MAX_SIDE,presentation.size.h);
   // The label mode is read through SovSchematicData.effectiveLabelMode; an absent one is derived, never written.
   if(presentation.labelMode!==undefined&&!['boundary','inside','outside','none'].includes(presentation.labelMode))delete presentation.labelMode;
   if(!Number.isInteger(presentation.interiorColorSlot))presentation.interiorColorSlot=n.config.colorSlot??0;

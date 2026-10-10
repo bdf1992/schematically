@@ -13,7 +13,9 @@
 })(typeof globalThis!=='undefined'?globalThis:this,function(Data){
   if(!Data)throw new Error('SovSchematicData core is required');
   const clone=Data.clone,isObject=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
-  const DEFAULT_ID='main',POINT=24,MAX=4096;
+  // The largest side a card or Plane may have, in canvas units; a nested drawing needs sides past 4096.
+  const MAX_SIDE=65536;
+  const DEFAULT_ID='main',POINT=24,MAX=MAX_SIDE;
   const ROUTE_MODES=['auto','guided','pinned','bus'];
   // Buses (LAYOUT-MODEL.md "As built: buses"): a route declared once per layout, which wires name
   // instead of each finding a path. The yFiles bus descriptor model: the bus is the record, a wire

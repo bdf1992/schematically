@@ -147,6 +147,7 @@ BROWSER=[
     'tests/render_idempotence_qa.py',
     'tests/unplaced_render_qa.py',
     'tests/region_dimensions_qa.py',
+    'tests/wide_container_qa.py',
     'tests/swarm_originals_qa.py',
     'tests/swarm_review_qa.py',
     'tests/authoring_review_qa.py',
