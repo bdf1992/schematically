@@ -12,6 +12,10 @@ const LABEL_FLOORS=Object.freeze({general:12,shrunkTitle:10});
 // review fixture 02-service-circuit fitted to a 1440 wide window sits at 0.459, and at 0.284 on a
 // 768 wide one. Group titles and bus labels are never hidden here. Both values are first settings.
 const DETAIL_FLOORS=Object.freeze({body:.6,secondary:.25});
+// Screen pixels on the shorter side of a card that hosts other cards, and the one home of that
+// level: under it the hosted cards are too small to read, and the card is drawn closed
+// (applyInteriorDetail). It is a first setting.
+const INTERIOR_FLOOR=Object.freeze({px:240});
 // The screen scale the canvas is drawn at: the --zoom style property of #workspace, or 1. It reads
 // the property, never the screen matrix, so a picture (rendered with --zoom at 1) shows everything.
 function detailScreenScale(){
@@ -260,6 +264,7 @@ function refitComponentLabels(){
     fitComponentLabels(g,n);
     const waits=g.querySelector(':scope > text.waits-on');if(waits){waits.remove();appendComponentWaitsOn(g,n)}
   }
+  applyInteriorDetail();
 }
 if(typeof MutationObserver==='function'&&typeof workspace!=='undefined'&&workspace)
   new MutationObserver(()=>{if(workspace.style.getPropertyValue('--zoom')!==componentLabelFitZoom&&!componentLabelFitFrame)componentLabelFitFrame=requestAnimationFrame(refitComponentLabels)})
@@ -345,6 +350,64 @@ function applyBodyTextDetail(g){
   const hide=detailScreenScale()<DETAIL_FLOORS.body;
   for(const t of g.querySelectorAll(':scope > text.internal-text')){
     if(hide){t.style.visibility='hidden';t.dataset.lod='hidden'}else{t.style.visibility='';delete t.dataset.lod}
+  }
+}
+// One card that hosts other cards: the shorter side of its body in screen pixels (its size in
+// canvas units times detailScreenScale()), and whether the card is drawn closed, which is when
+// that side is under INTERIOR_FLOOR.px. A picture draws every interior: it is drawn with --zoom
+// at 1 or not set (withPictureLabels, src/75-persistence.js), so at that value no card is closed.
+function cardInteriorDetail(n){
+  const {w,h}=componentSize(n),side=Math.min(w,h)*detailScreenScale();
+  const zoom=typeof workspace!=='undefined'&&workspace?workspace.style.getPropertyValue('--zoom'):'';
+  return {side,closed:zoom!==''&&Number(zoom)!==1&&side<INTERIOR_FLOOR.px};
+}
+// A closed card shows its body, its title and the Points on its own boundary, with their labels and
+// the wires outside it that end on them. Everything inside it is hidden (visibility hidden,
+// data-lod="hidden") and takes no pointer events: every card, Point and group whose parents reach
+// it, and every wire on its surface or on the surface of a card inside it. A Point on a card's
+// boundary is drawn whenever that card is. A record inside two closed cards is hidden by the outer
+// one, so it stays hidden while any card around it is closed, and is drawn again, with data-lod
+// removed, when none is. A junction dot goes with its card, or when fewer than two of its wires
+// are left drawn.
+let interiorHidden=0;
+function applyInteriorDetail(){
+  const cardById=new Map(nodes.map(n=>[n.id,n])),wireById=new Map(wires.map(w=>[w.id,w])),owner=new Map();
+  for(const n of nodes)owner.set(n.canvas?.id||`canvas:component:${n.id}`,{card:n});
+  for(const w of wires)owner.set(w.canvas?.id||`canvas:wire:${w.id}`,{wire:w});
+  // Whether a surface lies inside a closed card: its owner is one, or is itself inside one. A wire's
+  // surface (the cards hosted on the wire) is where the wire is.
+  const inside=new Map();
+  const surfaceInside=(surface,depth)=>{
+    if(inside.has(surface))return inside.get(surface);
+    const o=depth<64?owner.get(surface):null;
+    const hidden=o?.card?cardInside(o.card,depth+1)||cardInteriorDetail(o.card).closed:o?.wire?surfaceInside(o.wire.canvasId||GLOBAL_CANVAS_ID,depth+1):false;
+    inside.set(surface,hidden);return hidden;
+  };
+  const cardInside=(n,depth=0)=>{
+    const host=depth<64&&componentHostedOnComponentEdge(n)?cardById.get(componentPlacement(n).hostId):null;
+    if(host)return cardInside(host,depth+1);
+    return surfaceInside(n.canvasId||(n.parentId?`canvas:component:${n.parentId}`:GLOBAL_CANVAS_ID),depth);
+  };
+  const wireInside=w=>surfaceInside(w.canvasId||GLOBAL_CANVAS_ID,0);
+  const hiddenCards=new Set(nodes.filter(n=>cardInside(n)).map(n=>n.id)),hiddenWires=new Set(wires.filter(wireInside).map(w=>w.id));
+  if(!hiddenCards.size&&!hiddenWires.size&&!interiorHidden)return;
+  // Parts of a card and of a wire set pointer-events in styles/app.css (.port-hit, .wire,
+  // .transform-handle), which visibility does not switch off; one rule switches them off.
+  if(!document.getElementById('interiorDetailStyle')){
+    const style=document.createElement('style');style.id='interiorDetailStyle';
+    style.textContent='#workspace g[data-lod="hidden"],#workspace g[data-lod="hidden"] *{pointer-events:none!important}';
+    document.head.appendChild(style);
+  }
+  interiorHidden=0;
+  const set=(el,hide)=>{
+    if(hide){interiorHidden++;if(el.dataset.lod!=='hidden'){el.style.visibility='hidden';el.dataset.lod='hidden'}}
+    else if(el.dataset.lod==='hidden'){el.style.visibility='';delete el.dataset.lod}
+  };
+  for(const g of workspace.querySelectorAll('.node'))if(cardById.has(g.dataset.id))set(g,hiddenCards.has(g.dataset.id));
+  for(const g of workspace.querySelectorAll('.wire-group'))if(wireById.has(g.dataset.wireId))set(g,hiddenWires.has(g.dataset.wireId));
+  for(const dot of document.querySelectorAll('#junctionLayer > .junction-dot')){
+    const key=dot.dataset.port||'',cut=key.lastIndexOf('|'),id=key.slice(0,cut),side=key.slice(cut+1);
+    set(dot,hiddenCards.has(id)||wires.filter(w=>!hiddenWires.has(w.id)&&((w.a===id&&w.aSide===side)||(w.b===id&&w.bSide===side))).length<2);
   }
 }
 function appendComponentTransformHandles(g,n,cfg){
@@ -833,6 +896,7 @@ function render(){
   renderWires(signalState,markers);
   {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
   renderJunctionDots();
+  applyInteriorDetail();
   if(typeof paintSim==='function')paintSim();
   renderObjectsPanel?.();if(quickSearchActive)updateQuickSearch(document.getElementById('quickSearchInput')?.value||'');
   if(typeof scheduleLocalAutosave==='function')scheduleLocalAutosave();
@@ -1752,6 +1816,8 @@ function renderWiresOnce(signalState,markers,reuse){
     if(selected===`wire:${i}`) focusWireVisual(i);
   });
   if(undrawnWires.size)workspace.setAttribute('data-undrawn-wires',String(undrawnWires.size));else workspace.removeAttribute('data-undrawn-wires');
+  // A wire group drawn by this pass inside a closed card is hidden before the labels are placed.
+  applyInteriorDetail();
   placeWireLabels();
   // Any pass that is not a move's own ends the held signal state: what it stood for may have changed.
   if(!reuse)dropDragSignalState();
