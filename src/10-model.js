@@ -107,7 +107,6 @@ function ensureComponentStructure(n){
   if(!n.boundary){
     n.boundary={
       kind:'boundary',
-      shape:'blank',
       inside:{type:n.symbolId==='blank'?null:n.symbolId},
       outside:{type:'canvas'}
     };
@@ -116,7 +115,7 @@ function ensureComponentStructure(n){
   if(!n.boundary.outside)n.boundary.outside={type:'canvas'};
   if(!('type' in n.boundary.inside))n.boundary.inside.type=n.symbolId==='blank'?null:n.symbolId;
   if(!n.boundary.outside.type)n.boundary.outside.type='canvas';
-  if(!n.boundary.shape)n.boundary.shape='blank';
+  // A card's shape is config.presentation.shape (SECTION-MODEL.md "Card shapes"); the boundary holds none.
 
   const insideType=n.boundary.inside.type;
   n.type=insideType;

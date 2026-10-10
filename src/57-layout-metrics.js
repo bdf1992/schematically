@@ -38,6 +38,36 @@ function layoutSegmentsCross(a,b,c,d){
   const d1=o(c,d,a),d2=o(c,d,b),d3=o(a,b,c),d4=o(a,b,d);
   return ((d1>0&&d2<0)||(d1<0&&d2>0))&&((d3>0&&d4<0)||(d3<0&&d4>0));
 }
+// The crossing count asks, for a sample segment of one route, whether any sample segment of another
+// route crosses it. Two segments cross only where their boxes meet, so a route's segments are put
+// in the cells of a grid once, and a segment is tested against the ones in the cells it touches:
+// layoutSegmentsCross, on every pair that could pass it. A route with a point that is not finite, or a
+// segment over many cells, has no index and is scanned whole.
+const LAYOUT_CROSS_CELL=32;
+function layoutCrossIndex(pts){
+  let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
+  for(const p of pts){if(!Number.isFinite(p.x)||!Number.isFinite(p.y))return null;l=Math.min(l,p.x);r=Math.max(r,p.x);t=Math.min(t,p.y);b=Math.max(b,p.y)}
+  if(!(Math.max(-l,r,-t,b)<32768*LAYOUT_CROSS_CELL))return null; // a cell key holds 16 bits each way
+  const cells=new Map();
+  for(let i=1;i<pts.length;i++){
+    const P=pts[i-1],Q=pts[i];
+    const x0=Math.floor(Math.min(P.x,Q.x)/LAYOUT_CROSS_CELL),x1=Math.floor(Math.max(P.x,Q.x)/LAYOUT_CROSS_CELL),y0=Math.floor(Math.min(P.y,Q.y)/LAYOUT_CROSS_CELL),y1=Math.floor(Math.max(P.y,Q.y)/LAYOUT_CROSS_CELL);
+    if(x1-x0>8||y1-y0>8)return null;
+    for(let cx=x0;cx<=x1;cx++)for(let cy=y0;cy<=y1;cy++){const key=cx*65536+cy,list=cells.get(key);if(list)list.push(i);else cells.set(key,[i])}
+  }
+  return {cells,l,r,t,b};
+}
+// Whether P-Q, a segment of an indexed route, crosses any segment of the indexed route pts.
+function layoutCrossesIndexed(P,Q,pts,index){
+  const lx=Math.min(P.x,Q.x),hx=Math.max(P.x,Q.x),ly=Math.min(P.y,Q.y),hy=Math.max(P.y,Q.y);
+  if(lx>index.r||hx<index.l||ly>index.b||hy<index.t)return false;
+  const x0=Math.floor(lx/LAYOUT_CROSS_CELL),x1=Math.floor(hx/LAYOUT_CROSS_CELL),y0=Math.floor(ly/LAYOUT_CROSS_CELL),y1=Math.floor(hy/LAYOUT_CROSS_CELL);
+  for(let cx=x0;cx<=x1;cx++)for(let cy=y0;cy<=y1;cy++){
+    const list=index.cells.get(cx*65536+cy);if(!list)continue;
+    for(const i of list)if(layoutSegmentsCross(P,Q,pts[i-1],pts[i]))return true;
+  }
+  return false;
+}
 
 // Corner points of an orthogonal path written as M/L/H/V commands.
 function layoutPathCorners(d){
@@ -49,18 +79,34 @@ function layoutPathCorners(d){
   }
   return out;
 }
+// A drawn route's corners in world space: hops stripped, repeated and collinear corners merged.
+function layoutRouteCorners(path){
+  const m=layoutWorldMatrix(path),c=[];
+  for(const q0 of layoutPathCorners(String(path.getAttribute('d')||'').replace(/A[^A-Z]*?(?=[MLHV])/g,''))){
+    const q=m?new DOMPoint(q0.x,q0.y).matrixTransform(m):q0,p={x:Math.round(q.x*100)/100,y:Math.round(q.y*100)/100},l=c.at(-1);
+    if(l&&Math.abs(l.x-p.x)<.5&&Math.abs(l.y-p.y)<.5)continue;
+    if(c.length>=2){const a=c.at(-2);if((Math.abs(a.x-l.x)<.5&&Math.abs(l.x-p.x)<.5)||(Math.abs(a.y-l.y)<.5&&Math.abs(l.y-p.y)<.5)){c[c.length-1]=p;continue}}
+    c.push(p);
+  }
+  return c;
+}
 function layoutMetrics(options={}){
   const staticView=options.static!==false; // an export or a screenshot freezes animation
   const findings=[],add=(kind,ids,detail)=>findings.push({kind,ids,detail});
-  const visible=nodes.filter(n=>!isEffectivelyHidden(n));
-  const body=new Map(visible.map(n=>[n.id,componentBounds(n)]));
+  // A group (SECTION-MODEL.md "Groups (reading only)") is drawn behind everything and is never an
+  // obstacle: it is left out of every check that measures a body (node-overlap, route-through-node,
+  // a text over a node, cramped labels, route wrapping). Its title is still text, and still counts
+  // in text-collision against other text. Its body is the region it is drawn as.
+  const shown=nodes.filter(n=>!isEffectivelyHidden(n));
+  const visible=shown.filter(n=>!isGroupComponent(n));
+  const body=new Map(shown.map(n=>[n.id,isGroupComponent(n)?SovSchematicData.groupRect(diagram,n.id,componentSize):componentBounds(n)]));
   const nodeEl=id=>nodesG.querySelector(`.node[data-id="${CSS.escape(id)}"]`);
   const ancestors=id=>{const out=new Set();let n=nodes.find(x=>x.id===id);while(n?.parentId){out.add(n.parentId);n=nodes.find(x=>x.id===n.parentId)}return out};
   const is2D=n=>componentForm(n).dimension===2;
 
   // Text: every visible label, in world space.
   const texts=[];
-  for(const el of workspace.querySelectorAll('#nodes text,#wires text')){
+  for(const el of workspace.querySelectorAll('#groupLayer text,#nodes text,#wires text')){
     if(!el.textContent.trim()||layoutEffectiveOpacity(el)<.1)continue;
     if(el.closest('.wire-packet'))continue; // motion, never structure; static exports drop it
     const box=layoutWorldBox(el);if(!box)continue;
@@ -130,10 +176,12 @@ function layoutMetrics(options={}){
   }
 
   // Routes.
+  const onWire=w=>nodes.filter(n=>(n.canvasId||'')===localCanvasId('wire',w.id)).map(n=>n.id);
   const routes=[];
   for(const g of workspace.querySelectorAll('.wire-group')){
     const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
-    routes.push({w,pts:layoutSamplePath(path),corners:layoutPathCorners(path.getAttribute('d'))});
+    const pts=layoutSamplePath(path);
+    routes.push({w,pts,index:layoutCrossIndex(pts),corners:layoutPathCorners(path.getAttribute('d'))});
   }
   // A jog is a short step between two bends: two lines that should have been one.
   for(const {w,corners} of routes){
@@ -146,7 +194,9 @@ function layoutMetrics(options={}){
     // A route may leave and meet its own end cards at their ports, but never run through them.
     const inner=pts.slice(Math.min(pts.length,4),Math.max(0,pts.length-4));
     for(const end of [w.a,w.b]){const n=end&&nodes.find(x=>x.id===end);if(!n||!is2D(n)||componentAcceptsChildren(n))continue;const R=body.get(n.id);if(R&&inner.some(p=>layoutInside(p,R,3))){add('route-through-node',[w.id,n.id],`runs through its own end ${n.config?.label||n.id}`);break}}
-    const exempt=new Set([w.a,w.b,canvasOwner,...ancestors(w.a),...ancestors(w.b)].filter(Boolean));
+    // A card hosted on this wire is drawn on the line itself (inline): the wire is its host, not
+    // a route through it.
+    const exempt=new Set([w.a,w.b,canvasOwner,...ancestors(w.a),...ancestors(w.b),...onWire(w)].filter(Boolean));
     for(const n of visible){
       if(exempt.has(n.id)||!is2D(n))continue;
       const R=body.get(n.id),inner=componentAcceptsChildren(n);
@@ -159,10 +209,36 @@ function layoutMetrics(options={}){
     if(!componentAcceptsChildren(n))continue;const gl=nodeEl(n.id)?.querySelector(':scope > .glyph');if(!gl)continue;
     const G=layoutWorldBox(gl);if(G&&pts.some(p=>layoutInside(p,G,4))){add('route-through-node',[w.id,n.id],`crosses the symbol of ${n.config?.label||n.id}`)}
   }
+  // Hugging: a middle segment (not the lead out of a port or into one) running along a card's
+  // edge, outside it but under 8 from it, for 16 or more: a reader cannot tell the wire from the
+  // card's outline. Hops are stripped first, and collinear corners merged, so a hop does not split
+  // a lead into a lead and a middle segment.
+  for(const g of workspace.querySelectorAll('.wire-group')){
+    const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
+    const m=layoutWorldMatrix(path);
+    const raw=layoutPathCorners(String(path.getAttribute('d')||'').replace(/A[^A-Z]*?(?=[MLHV])/g,'')).map(q=>m?new DOMPoint(q.x,q.y).matrixTransform(m):q);
+    const c=[];for(const q of raw){const p={x:Math.round(q.x*100)/100,y:Math.round(q.y*100)/100},l=c.at(-1);if(l&&Math.abs(l.x-p.x)<.5&&Math.abs(l.y-p.y)<.5)continue;
+      if(c.length>=2){const a=c.at(-2);if((Math.abs(a.x-l.x)<.5&&Math.abs(l.x-p.x)<.5)||(Math.abs(a.y-l.y)<.5&&Math.abs(l.y-p.y)<.5)){c[c.length-1]=p;continue}}c.push(p)}
+    let hugged=null;const inline=new Set(onWire(w));
+    for(let s=1;s+2<c.length&&!hugged;s++){
+      const P=c[s],Q=c[s+1],h=Math.abs(P.y-Q.y)<.5,v=Math.abs(P.x-Q.x)<.5;if(!h&&!v)continue;
+      for(const n of visible){
+        if(!is2D(n)||componentAcceptsChildren(n)||inline.has(n.id))continue;const R=body.get(n.id);if(!R)continue;
+        const along=h?overlap1D(P.x,Q.x,R.l,R.r):overlap1D(P.y,Q.y,R.t,R.b);if(along<16)continue;
+        const at=h?P.y:P.x,lo=h?R.t:R.l,hi=h?R.b:R.r,gap=at<=lo+.5?lo-at:at>=hi-.5?at-hi:-1;
+        if(gap>=-.5&&gap<8){hugged=n;break}
+      }
+    }
+    if(hugged)add('route-hugs-node',[w.id,hugged.id],`runs along the edge of ${hugged.config?.label||hugged.id}`);
+  }
   for(let i=0;i<routes.length;i++)for(let j=i+1;j<routes.length;j++){
     const A=routes[i],B=routes[j],shared=[A.w.a,A.w.b].some(x=>x&&(x===B.w.a||x===B.w.b));
     let crossed=0;
-    for(let s=1;s<A.pts.length&&crossed<4;s++)for(let t=1;t<B.pts.length;t++)if(layoutSegmentsCross(A.pts[s-1],A.pts[s],B.pts[t-1],B.pts[t])){crossed++;break}
+    if(A.index&&B.index){
+      if(A.index.l<=B.index.r&&A.index.r>=B.index.l&&A.index.t<=B.index.b&&A.index.b>=B.index.t)
+        for(let s=1;s<A.pts.length&&crossed<4;s++)if(layoutCrossesIndexed(A.pts[s-1],A.pts[s],B.pts,B.index))crossed++;
+    }
+    else for(let s=1;s<A.pts.length&&crossed<4;s++)for(let t=1;t<B.pts.length;t++)if(layoutSegmentsCross(A.pts[s-1],A.pts[s],B.pts[t-1],B.pts[t])){crossed++;break}
     if(crossed&&!(shared&&crossed===1))add('crossing',[A.w.id,B.w.id],`${crossed} crossing${crossed>1?'s':''}`);
   }
   // A directed wire long enough to carry a mark must say which way it runs.
@@ -180,6 +256,45 @@ function layoutMetrics(options={}){
     const inset=typeof componentSectionInset==='function'?componentSectionInset(owner):0,C=componentBounds(owner,-inset),B=body.get(n.id);
     if(B&&(B.l<C.l-.5||B.r>C.r+.5||B.t<C.t-.5||B.b>C.b+.5))add('node-overlap',[n.id,owner.id],`crosses ${inset?'the skin':'the boundary'} of ${owner.config?.label||owner.id}`);
   }
+  // Region inset: a child keeps space.regionInset from its container's core edge, and space.regionTitle
+  // below the top edge when the container draws a label or a glyph at its head. Reported, with no
+  // weight in the score (it is not in LAYOUT_RUBRIC). A group's members are measured against its
+  // region, which groupRect pads by the same two tokens; a group with no placed member has none.
+  {const space=SovSchematicNotation.tokens(diagram).space||{},pad=Number.isFinite(space.regionInset)?space.regionInset:24,band=Number.isFinite(space.regionTitle)?space.regionTitle:28;
+   const check=(n,owner,C,head)=>{
+     const B=body.get(n.id);if(!B)return;
+     const sides=[['left',B.l-C.l,pad],['right',C.r-B.r,pad],['top',B.t-C.t,head?band:pad],['bottom',C.b-B.b,pad]].filter(([,gap,need])=>gap<need-.5);
+     if(sides.length)add('region-inset',[n.id,owner.id],`${n.config?.label||n.id} comes within ${sides.map(([s,gap,need])=>`${Math.max(0,gap).toFixed(1)}px of the ${s} of ${owner.config?.label||owner.id} (needs ${need})`).join(' and ')}`);
+   };
+   for(const n of visible){
+     const owner=String(n.canvasId||'').startsWith('canvas:component:')?nodes.find(x=>x.id===String(n.canvasId).slice(17)):null;
+     if(!owner||!is2D(n)||n.placement?.kind==='edge'||isGroupComponent(owner))continue;
+     const inset=typeof componentSectionInset==='function'?componentSectionInset(owner):0,C=componentBounds(owner,-inset);
+     const head=texts.some(t=>t.owner===owner.id&&/component-label/.test(t.cls))||!!nodeEl(owner.id)?.querySelector(':scope > .glyph');
+     check(n,owner,C,head);
+   }
+   for(const g of shown.filter(isGroupComponent)){
+     const members=Array.isArray(g.config?.members)?g.config.members:[],R=body.get(g.id);
+     if(!R||!members.some(id=>visible.some(v=>v.id===id)))continue;
+     for(const id of members){const m=visible.find(v=>v.id===id);if(m&&is2D(m))check(m,g,{l:R.l,r:R.r,t:R.t,b:R.b},true)}
+   }}
+  // Glyph room: a card that draws a symbol glyph and has no room for it at the glyph token's size
+  // (NOTATION-MODEL.md §4, glyphRoom), so its glyph is drawn smaller than on other cards. A container
+  // with an open interior draws its glyph as a title mark and a card hosted on a wire is drawn on the
+  // line, so neither is held to it. Reported, with no weight in the score (it is not in LAYOUT_RUBRIC).
+  // The room is read from what componentInlineGraphicBox gives glyphBox: the card's size, or a
+  // shaped card's inner rectangle.
+  {const N=SovSchematicNotation,T=activeNotation().tokens,even=v=>2*Math.ceil((v-1e-6)/2),say=v=>+(+v).toFixed(2);
+   for(const n of visible){
+     if(!is2D(n)||componentAcceptsChildren(n)||componentHostedOnWire(n)||!nodeEl(n.id)?.querySelector(':scope > use.glyph'))continue;
+     const cfg=componentConfig(n),size=cfg.presentation.size,g=componentGlyph(n),shape=componentShapeGeometry(n);
+     const room=shape.shape==='rect'||g?.points==='terminals'?size:{w:shape.inner.r-shape.inner.l,h:shape.shape==='cylinder'?size.h-2*shape.cap:size.h};
+     const title=String(cfg.label||'').trim()||componentTypeCaption(n);
+     const fit=N.glyphRoom(g,room,{subtitle:!!String(cfg.subtitle||'').trim(),title,type:T.type,glyph:T.glyph});
+     if(fit.ok)continue;
+     const needW=Math.max(size.w,even(fit.need.w+size.w-room.w)),needH=Math.max(size.h,even(fit.need.h+size.h-room.h));
+     add('glyph-room',[n.id],`"${title}" is ${say(size.w)} by ${say(size.h)} and needs ${needW} by ${needH} to draw its glyph at ${say(fit.box.w)} by ${say(fit.box.h)}`);
+   }}
   // Points drawn on top of each other read as one.
   {const pts=visible.filter(n=>componentForm(n).dimension===0);
    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++)if(Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y)<12)add('node-overlap',[pts[i].id,pts[j].id],'points drawn on top of each other')}
@@ -189,6 +304,15 @@ function layoutMetrics(options={}){
     if(!is2D(a)||!is2D(b)||(a.canvasId||'')!==(b.canvasId||''))continue;
     if(layoutOverlap(body.get(a.id),body.get(b.id),1))add('node-overlap',[a.id,b.id],'bodies overlap');
   }
+  // Group regions on one canvas that overlap read as one region: reported, with no weight in the
+  // score (it is not in LAYOUT_RUBRIC), naming each card both groups list.
+  {const groups=shown.filter(isGroupComponent);
+   for(let i=0;i<groups.length;i++)for(let j=i+1;j<groups.length;j++){
+     const a=groups[i],b=groups[j],A=body.get(a.id),B=body.get(b.id);
+     if((a.canvasId||'')!==(b.canvasId||'')||!A||!B||!layoutOverlap(A,B,1))continue;
+     const listed=new Set(Array.isArray(a.config?.members)?a.config.members:[]),both=(Array.isArray(b.config?.members)?b.config.members:[]).filter(id=>listed.has(id));
+     add('group-overlap',[a.id,b.id],`regions of ${a.config?.label||a.id} and ${b.config?.label||b.id} overlap${both.map(id=>`; both list ${id}`).join('')}`);
+   }}
   // Wrapping: a route that runs outside everything drawn in its canvas, round the picture
   // instead of through it (review, 06).
   for(const w of wires){
@@ -206,6 +330,60 @@ function layoutMetrics(options={}){
    for(let i=0;i<segs.length;i++)for(let j=i+1;j<segs.length;j++){const x=segs[i],y=segs[j];if(x.w===y.w||x.ends.some(e=>y.ends.includes(e)))continue;
      const key=[x.w.id,y.w.id].sort().join('|');if(seen.has(key))continue;
      if(onOneTrack(x.a,x.b,y.a,y.b,8)){seen.add(key);add('route-overlap',[x.w.id,y.w.id],'two wires run on one track')}}}
+  // Close parallels: two wires whose middle segments run 0.5 to under TRACK_GAP apart for 24 or
+  // more, end leads left out, shared end or not; a pair inside one bus band is a bus's own lanes.
+  // Reported, with no weight in the score (it is not in LAYOUT_RUBRIC).
+  {const gap=typeof TRACK_GAP==='number'?TRACK_GAP:10,segs=[];
+   for(const g of wiresG.querySelectorAll('.wire-group')){
+     const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
+     const m=layoutWorldMatrix(path),c=[];
+     for(const q0 of layoutPathCorners(String(path.getAttribute('d')||'').replace(/A[^A-Z]*?(?=[MLHV])/g,''))){
+       const q=m?new DOMPoint(q0.x,q0.y).matrixTransform(m):q0,p={x:Math.round(q.x*100)/100,y:Math.round(q.y*100)/100},l=c.at(-1);
+       if(l&&Math.abs(l.x-p.x)<.5&&Math.abs(l.y-p.y)<.5)continue;
+       if(c.length>=2){const a=c.at(-2);if((Math.abs(a.x-l.x)<.5&&Math.abs(l.x-p.x)<.5)||(Math.abs(a.y-l.y)<.5&&Math.abs(l.y-p.y)<.5)){c[c.length-1]=p;continue}}
+       c.push(p);
+     }
+     for(let s=1;s+2<c.length;s++){const P=c[s],Q=c[s+1],h=Math.abs(P.y-Q.y)<.5,v=Math.abs(P.x-Q.x)<.5;if(h===v)continue;segs.push({w,h,at:h?P.y:P.x,lo:h?Math.min(P.x,Q.x):Math.min(P.y,Q.y),hi:h?Math.max(P.x,Q.x):Math.max(P.y,Q.y)})}
+   }
+   const seen=new Set();
+   for(let i=0;i<segs.length;i++)for(let j=i+1;j<segs.length;j++){
+     const x=segs[i],y=segs[j];if(x.w===y.w||x.h!==y.h)continue;
+     const key=[x.w.id,y.w.id].sort().join('|');if(seen.has(key))continue;
+     const d=Math.abs(x.at-y.at),lo=Math.max(x.lo,y.lo),hi=Math.min(x.hi,y.hi);
+     if(d<.5||d>=gap||hi-lo<24)continue;
+     const mid=x.h?{x:(lo+hi)/2,y:(x.at+y.at)/2}:{x:(x.at+y.at)/2,y:(lo+hi)/2};
+     if(typeof busBandHolds==='function'&&busBandHolds(x.w,y.w,mid))continue;
+     seen.add(key);add('route-close-parallel',[x.w.id,y.w.id],`${d.toFixed(1)}px apart for ${Math.round(hi-lo)}px`);
+   }}
+  // Ports: a wire meets a 2D card's port along the port's outward normal, from a point at least 4
+  // outside the card on the side the port faces (port-wrong-side), and the port it ends on shows a
+  // mark, the point's circle or a terminal mark at opacity .5 or more, within 3 of the route's end
+  // (port-undrawn). A wire on the card's own interior meets the boundary from inside and is held
+  // only to port-undrawn. Reported, with no weight in the score (neither is in LAYOUT_RUBRIC).
+  for(const g of workspace.querySelectorAll('.wire-group')){
+    const path=g.querySelector('path.wire'),w=wires.find(x=>x.id===g.dataset.wireId);if(!path||!w)continue;
+    const c=layoutRouteCorners(path);if(c.length<2)continue;
+    for(const end of ['a','b']){
+      const ep=carrierEndpoint(w,end),n=ep?.kind==='bound'?ep.node:null;if(!n||!is2D(n)||isGroupComponent(n)||isEffectivelyHidden(n))continue;
+      const side=end==='a'?w.aSide:w.bSide,P=end==='a'?c[0]:c.at(-1),Q=end==='a'?c[1]:c.at(-2),name=n.config?.label||n.id;
+      const inward=wireEndpointInward(w,n);
+      if(!inward){
+        const u=stubPos(P,side,1,n,inward),nx=u.x-P.x,ny=u.y-P.y,dx=Q.x-P.x,dy=Q.y-P.y;
+        const facing=physicalPortSide(n,side);
+        if(Math.abs(dx*ny-dy*nx)>.5||dx*nx+dy*ny<=0)add('port-wrong-side',[w.id,n.id],`meets the ${facing} port ${side} of ${name} from another side`);
+        else if(!componentHostedOnWire(n)){
+          const R=body.get(n.id),out=facing==='left'?R.l-Q.x:facing==='top'?R.t-Q.y:facing==='bottom'?Q.y-R.b:Q.x-R.r;
+          if(out<4-.01)add('port-wrong-side',[w.id,n.id],`turns ${Math.max(0,out).toFixed(1)}px outside the ${facing} port ${side} of ${name}, under 4`);
+        }
+      }
+      const el=nodeEl(n.id);let drawn=false;
+      for(const m of el?.querySelectorAll(':scope > .port.attachment-point,:scope > .terminal-mark')||[]){
+        if(layoutEffectiveOpacity(m)<.5)continue;const B=layoutWorldBox(m);if(!B)continue;
+        if(Math.hypot(Math.max(B.l-P.x,P.x-B.r,0),Math.max(B.t-P.y,P.y-B.b,0))<=3){drawn=true;break}
+      }
+      if(!drawn)add('port-undrawn',[w.id,n.id],`the port ${side} of ${name} it ends on is not drawn`);
+    }
+  }
   // Empty container: its children and inner wires fill under a fifth of its interior (review, 03, 04, 07).
   for(const n of visible){
     if(!is2D(n)||!componentAcceptsChildren(n))continue;

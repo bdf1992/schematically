@@ -1,6 +1,6 @@
 # State Space · design
 
-**Status: design, settled for slices 1–3.** Nothing here is implemented. Slice 4 (the instrument) has one open question. Each slice becomes an issue; this document is the reference for the concern, like `FORM-MODEL.md`, and changes with it.
+**Status: slices 1–3 run.** The one-runtime plan (`control/sketchbooks/ep-root-20260926/plans/unify-runtime.md`) finished at contract 10 (2026-10-03): `src/07-graph-core.js`'s `createSimulation`, `runScenario`, `createSession` and `tools` delegate to `src/07-state-surface.js`, which runs every dev document on this engine; the old message engine is deleted. Slice 4 (the instrument) has one open question. Each slice becomes an issue; this document is the reference for the concern, like `FORM-MODEL.md`, and changes with it.
 
 Sources: *State Planes for Governed Graph Systems* (2026-09-25); Issue #6 (logic machine); `docs/vision/DATA-DRIVEN-SCHEMATIC-LANGUAGE.md` ("Logic/runtime proof"); the current `src/25-signal.js`; and a review pass (2026-09-25) comparing the design with DEVS and VHDL/SystemC scheduling, Temporal-style replay, W3C PROV, OpenTelemetry and CloudEvents, digital-twin specifications, GUM/VIM metrology, directed graph Laplacians and idempotent effects, plus a red-team pass. The review's accepted suggestions are folded into the text below.
 
@@ -119,13 +119,15 @@ Every claim has the same coordinates, whether it is a logic level, a gate verdic
 | `vantage` | seen from where | `space` (Eulerian: the whole graph at a time), `point` (Lagrangian: one subject's history), `relative` (against a `reference`) |
 | `observable` | what is measured | a declared observable id, e.g. `logic.level`, `device.state`, `cost` |
 | `kind` | how it became true | `registered`, `measured`, `derived`, `predicted` (`estimated` from slice 4) |
-| `form` | its shape | `binary`, `continuous`, `categorical` |
-| `value` | the value | per `form`, under the numeric policy |
+| `form` | its shape | `binary`, `continuous`, `categorical`, `message`, `state` (a device's memory, see *Device state*) |
+| `value` | the value | per `form`, under the numeric policy; for `message`, `{id, root, parent, channel, payload, origin}` with the payload JSON whose numbers are all safe integers, canonicalized by RFC 8785 |
 | `time` | when | `{logical, sequence, mode: observed \| predicted}` |
 | `certainty` | how sure | `{kind: exact}` until slice 4 |
 | `observer` | who produced it | an observer id: a rule, a sensor, a person |
 | `provenance` | from what, by which rule | `{rule, inputs: [record ids], threshold?}` |
 | `perturbation` | did observing change it | `none`, `disturbed` (with a ledger entry), `created` |
+| `principal` *(optional)* | who it acts for | a principal string, or `null` when nobody is named; every message record carries it |
+| `hop` *(optional, form `message` only)* | what happened to the message here | `{event, wire?, to?, reason?, parkId?, effectKey?}`, `event` one of the graph core's hop events: `injected`, `arrived`, `sent`, `crossed`, `forwarded`, `delivered`, `refused`, `handled`, `absorbed`, `observed`, `buffered`, `released`, `waiting`, `joined`, `parked`, `resumed`, `replayed`, `ambiguous`, `controlled`, `asserted`, `edge` |
 
 `time.sequence` is **for serialization only**: it gives records a total order in a file, and no outcome may depend on it (see *Two-phase ticks*).
 
@@ -186,6 +188,15 @@ Kept exactly as Issue #6 separates them:
 
 A device evaluates signal state, never particles, so an AND gate sees both inputs when only one transition arrives. The rendered packet is a projection of a particle; it is never the source of a value.
 
+**A message is a recorded value on the message channel.** Every Path carries a second channel, `message`, in each direction it carries; topology adds it and no port declares it. Which Paths carry, for levels and messages alike, is the graph core's passability (`src/07-graph-core.js` `build`: the Wire's direction, each leg's emit and receive flows, legacy `config.ports` connections included, and its operation against the ports' access), read through the rule both engines share in `src/04-signal-model.js`. A leg that does not carry is recorded once, at the first tick, as a `path.carries` record of form `categorical` with rule `blocked` and the graph core's reason as its value (`a.in cannot emit`). A Wire that carries in no direction is blocked this way too, never refused, as the graph core only blocks it.
+
+- An **inject** is an input on channel `message` whose value is `{channel, payload, principal}`; several may share a port and tick, ordered by their canonical value. Its message is `m-<seq>`, `seq` being the ledger entry of that input. Every number in a payload is a safe integer: a fraction is refused with `PAYLOAD_FRACTION` naming the path to it (state it in integer units, a weight of 1.5 kg as 1500 g). The payload is otherwise JSON canonicalized by RFC 8785 as it is.
+- The message leaves by the component's carried legs, fanout: one child per leg whose Wire's `config.accepts` (when it is an array) holds the message's channel, `<parent id>.<n>` with `n` its index among those legs in (wire id, direction) order. A Point relays on every carried leg but the one it arrived by. A component with no leg left delivers; one whose legs all refuse the channel refuses with `no end accepts channel X`, never drops. A passive card absorbs; a participant with `config.principal` sends in its own name.
+- Every step is one record of form `message` on the subject's `message` channel, observable `message`, carrying `principal` and `hop`. A message's hops are its records in sequence order; its lineage is the records that share its `root`. Each record names the record before it in `provenance.inputs`, and never precedes it.
+- Arrivals reach the port's merge on channel `message`: `queue` by default, and every message that arrives in a tick is delivered in that tick, in merge order (the declared Paths first, the rest a stochastic draw recorded like any draw), as the graph core delivers same-time arrivals. One delivery per tick is the level channel's queue only. A port may declare its own merge for channel `message` (a declared order, say); any combine other than `queue` is refused with `MERGE_FORM`.
+
+A message flow traces and replays the way a level run does: the same ledger (start, inputs, draws), the same byte comparison.
+
 **Devices read only committed state.** A device reads signal state committed in the update phase of the current tick and its own state committed at the previous tick; it never reads a value written during the evaluate phase it is part of. This is the condition under which VHDL and SystemC scheduling stay deterministic, and SystemC loses it the moment two processes share a variable. No code path in the runtime lets a device read in-flight state.
 
 ### Device state
@@ -193,6 +204,39 @@ A device evaluates signal state, never particles, so an AND gate sees both input
 A device with memory keeps it in the log, not in the runtime. Its memory is a `device.state` record (`vantage: point`, `kind: derived`) written at commit; a stateful rule reads its own committed state and its inputs, and nothing else. A device's **initial state** is a registered value declared in the document; a stateful device without one refuses to run.
 
 This is the one mechanism for memory: hysteresis (slice 2) and latches, edges and clocks (slice 5) all mean "a rule that reads its own prior records".
+
+A flow card (below) is the first stateful device. Its initial state is its pattern's default, not a value declared in the document, so a flow card always runs. The messages that reach one card in one tick are handled one after another in delivery order (a buffer's releases, then injects, then arrivals in merge order), each seeing the state the one before it left; the card reads the state committed at the previous tick when the tick starts, and what it holds at the end of the tick is committed as one `device.state` record (form `state`, `vantage: point`, `kind: derived`, observer and rule the card's definition, inputs the message records that changed it). The run keeps the latest value beside its signal state, and `settle` hashes it with the rest of the state that determines the future, leaving out the record ids it names.
+
+### Flow cards
+
+What a card does with a message is a **flow pattern**, the graph core's `arrive`, `continueAt`, `forward` and `release` (`src/07-graph-core.js` at `7b939e3`, lines 334-352 and 375-459). A flow pattern acts on the message channel only: the card's level is still its signal model or its bound definition, so one card may have both. Flow patterns generate no ports, so no Component binds one through `config.definition` (`DEFINITION_NOT_BINDABLE`); a card reaches one only through **the binding lookup**:
+
+1. a declared `config.flow.policy` other than `fanout` names `flow.<policy>@1`, when the packs define it;
+2. else the first pack whose `bindings` name the card's symbol id gives the definition;
+3. else the card relays by fanout as before. A Point is looked up like any card, so a Point with `config.flow` relays with that policy.
+
+A pack's optional `bindings` maps a symbol id to an `id@version` of a flow definition in the same pack; a binding to a definition the pack does not hold, or to a level pattern, is refused with `PACK_INVALID`. The built-ins are the `core.flow` pack in `data/`: `flow.fanout`, `flow.distribute`, `flow.select`, `flow.join`, `flow.buffer`, `flow.limit`, `flow.switch`, `flow.gate`, `flow.observe`, `flow.receipt`, `flow.refuse` and `flow.hold`, the behaviours `flow.handler`, `flow.effect` and `flow.park`, with bindings for `buffer`, `limit`, `switch`, `gate`, `observe`, `receipt`, `refuse` and `hold`. A run without `core.flow` relays those cards by fanout. The definitions a run reaches this way are in its replay key.
+
+Instance settings are the card's own, read once at start as the graph core's `flowConfig` reads them: `config.flow` `by`, `key`, `capacity`, `releaseMs` (default 10 ms) and `rate {count, windowMs}`, and `config.behavior.handler`. Times are converted to ticks once, a time above 0 never under one tick.
+
+| Pattern | Parameters | device.state (initial) | What it does |
+|---|---|---|---|
+| `route@1` | `policy`: `fanout`, `distribute`, `select` | `{rr: 0}` | fanout to every open end; distribute to one, by round-robin (the counter), by `channel` (the first end declaring it, else `no end declares channel X`) or by `key` (the fnv of the key's canonical text, `message has no key K` when absent); select refuses `select needs a handler (config.behavior.handler)` |
+| `join@1` | none | `{fifos: {}}` | one FIFO per incoming Path; each arrival waits (`waiting`); when every Path has one, a joined message `<id>.j` with payload `{parts: {wireId: payload}}` (`joined`) goes on from the card |
+| `buffer@1` | none | `{queue: [], releasing: false}` | refuses `buffer full (n)` at capacity; holds the message (`buffered`) and releases one every `releaseMs` (`released`), which goes on by the Path it came by. Timed: a cycle through a buffer is not a zero-delay cycle |
+| `limit@1` | none | `{arrivals: []}` | the arrival ticks within the rate's span; refuses `limit has no rate (config.flow.rate {count, windowMs})` and `limit n per Wms exceeded` |
+| `gate@1` | `kind`: `switch`, `gate` | `{open: false}` | a message on a control Path (one landing on a control port) sets `open` from `payload.open`, default true, and ends `controlled`; a switch refuses `switch is closed` while shut; a service gate with no control Path and no handler refuses `gate has no condition: wire its control point or name a handler`, and while shut `gate is closed: no control has opened it` |
+| `terminal@1` | `kind`: `observe`, `receipt`, `refuse` | none (stateless) | observe ends the message (`observed`, rule `observation`); receipt writes a record of observable `receipt` (rule `receipt`) and passes the message on; refuse refuses `REFUSE terminal` |
+| `hold@1` | none | `{value: null}` | keeps the payload, then forwards |
+
+After its pattern takes a message in, a card's **behaviours** run in the graph core's order (`continueAt`, 422-454): park, then effect, then handler, then the flow policy. They are flow patterns too, reached by the same lookup from `config.behavior`: `human` names `flow.park@1` (`park@1`), `effect` names `flow.effect@1` (`effect@1`, see *Collapse and receipts*) and `handler` names `flow.handler@1` (`handler@1`), each in `core.flow`; none keeps `device.state`. A handler is one of the run's `handlers` (`startRun` option, name to `{kind: stub}`, `{kind: fixture, key, responses, otherwise?, merge?}` or a function): a list of outputs fans out (`handled`, children `<id>.h<i>`), `absorb` ends the message, `refuse` refuses it, and on a service gate an answer with `pass: false` refuses with its reason; a name with no handler refuses `no handler registered: <name>`, as does a flow card naming a handler when no pack defines `flow.handler@1`. An answer that is not JSON or carries a fraction is refused. A passive card absorbs; otherwise the message is forwarded, by the legs the pattern chooses. A flow card's records carry its definition as observer (`rule:flow.gate@1`) and rule; a behaviour's records carry its own (`rule:flow.handler@1`).
+
+Two signal behaviours the graph core runs for every card come with them:
+
+- **Levels set by messages.** A message reaching a card whose signal is asserted (a lever, a clock, or `config.signal.mode` asserted, by the signal model) with `set` or `toggle` in its payload ends `asserted` (rule `asserted`) and sets the card's level on its out ports in the next delta round of the tick: `set` is quantized at the card's threshold, `toggle` inverts the current level.
+- **Edges that start work.** When a card's level on its first out port changes and its `config.signal.on` (`+`, `-` or `±`) matches the polarity, a message `e-<card>-<tick>` starts on `config.signal.channel` (default `edge`) with payload `{node, polarity, from, to, at}` (`at` in ms; `from` and `to` 0 or 1 on a binary card), origin the card and principal the card's own (`edge`, rule `edge`), and goes on from that card: the edge message goes to the card's `continueAt` (effect, handler, then the flow policy), as the graph core's `setLevel` hands it (`src/07-graph-core.js:469-473` at `7b939e3`), never through the card's own intake (control, asserted set or toggle, flow intake, park), so a limit card that raises an edge does not rate-limit its own message. Edges noted in a delta round start their messages at the end of that round, card by card.
+
+Within a round, level ports are updated in the walk's order and message ports always in port order, so no outcome depends on the walk. `tests/state_space_flow_qa.py` runs each flow case of `tests/graph_core_qa.py` in ticks against the graph core on the same document.
 
 ### Assertions: binary as a cut through continuous
 
@@ -254,7 +298,7 @@ A consequential effect removes every path in which it did not happen. That is th
 
 RECEIPT and REFUSE are the boundaries in the document; `in-doubt` is a state of the effect, not a symbol. Refusals are recorded with the same fidelity as receipts.
 
-**Effect keys** are derived, never generated: `(run, effect-site entity, logical tick, occurrence index)`. Each key is stored with a fingerprint of the effect's payload; the same key with a different payload is refused with a typed error. Replay returns the recorded outcome instead of acting again, because a collapsed state cannot collapse twice. A re-run has a new run id, so new keys; outside systems dedupe only within their own windows (Stripe prunes keys after 24 hours), which is why the two operations are separate in the API.
+**Effect keys** are derived, never generated: an effect key is the declared business key at the effect site, `<card id>:<value>`, the value read from the message at the card's `config.behavior.effect.key` (a string as it is, any other value as its JSON; a missing or empty value refuses `effect has no identity (<key path>)`). The run is provenance, not part of the key: the effect's records carry the run in their subject, and an effects ledger handed to a new run must stop a second send, which a key holding the run could not do (owner call Q6, 2026-10-02; `tests/graph_core_qa.py` 34-36 hands one run's effects to the next and requires no second send). The run's effects ledger holds each key as attempted, confirmed with its result, or ambiguous with its error. A confirmed key ends a later message at that card `replayed`, and nothing is sent; an ambiguous one refuses `effect <key> is ambiguous: reconcile before retrying` until a `reconcile` confirms it (with a result) or clears it. A handler error leaves the effect ambiguous; a handler refusal or absorb removes the attempt. Replay returns the recorded outcome instead of acting again, because a collapsed state cannot collapse twice. Outside systems dedupe only within their own windows (Stripe prunes keys after 24 hours), which is why replay and re-run are separate operations in the API, and why the ledger is handed on explicitly (`startRun` option `effects`, an `effects` ledger entry) rather than kept by an outside system.
 
 Everything upstream of a receipt may stay open or uncertain; everything downstream is fact.
 
@@ -328,7 +372,7 @@ A port is a declared 0D attachment point on a Component: the only place a Path m
 - **A Point declares its one port too.** A 0D Component's only port is `self`. It may be declared, to give it channels and merges, as a single `attachmentPoints` entry `{id: 'self', flow?, channels}` with no `side` or `t`, since a Point has no boundary to place it on. The first runtime (slice 1b) stored such an entry with a placeholder `side`; the loader will accept and clean both forms, and the goldens will be regenerated when this lands.
 - **Generated from a definition.** A Component bound to a definition gets its ports from the definition's contract: one port per input and per output, ids and flow taken from the pattern (`a`, `b` in, `q` out for `truth_table` with two inputs). Default placement is inputs spread evenly on the left and outputs on the right. Position (`side`, `t`) is presentation and may be moved; the port id is identity and may not be changed while a definition owns it.
 - **Channels.** A port carries one or more named **channels**, each with its observable and form; the default is one channel, `main`. A Path carries the channels its two bound ports share, matched by channel id; binding two ports that share no channel is refused, with the same refusal over every surface. Several channels on one port let one Path carry several signals.
-- **Direction.** A Path carries only in the direction(s) it declares. `forward` carries a → b; `reverse` carries b → a; `duplex` is two independent channels of the same declared delay, one each way; `none` carries nothing. A direction is carried only where both ports' flows admit it (an `out` or `duplex` port emits; an `in`, `duplex`, `control` or `trigger` port receives), as the editor already draws it: a `duplex` Path from an `out` port to an `in` port carries forward only. A Path none of whose declared directions is admitted by its ports carries nothing and is refused at load (`PATH_DIRECTION_FLOW`). Port `access` (read / write) and a Path's `forwardOperation` / `reverseOperation` stay presentation until a pack gives them meaning.
+- **Direction.** A Path carries only in the direction(s) it declares. `forward` carries a → b; `reverse` carries b → a; `duplex` is two independent channels of the same declared delay, one each way; `none` carries nothing. Which legs carry is the graph core's passability, read through `src/04-signal-model.js`: a leg carries only where the sending port's active connection emits (`out` or `duplex`), the receiving port's receives (`in`, `duplex` or `control`), and the leg's `forwardOperation` / `reverseOperation` is allowed by the ports' `access`; a `duplex` Path from an `out` port to an `in` port carries forward only. A Path that carries in no direction is blocked, not refused: the run records it once at start with rule `blocked` and the graph core's reason.
 
 ### Merge and ordering
 
@@ -342,18 +386,18 @@ A port (or one of its channels) may declare a **merge**, an instance of the `mer
   - `observed`: the order in which an outside system reported the arrivals (instrument only, slice 4), recorded as a measured record;
   - `stochastic`: the engine draws an order.
 
-**Undeclared means stochastic, and stochastic means recorded.** A port with same-tick fan-in and no merge declared uses `combine: last, order: stochastic`. A declared list that leaves some incoming Paths out orders the listed ones first and draws the rest. Every draw is written to the ledger as an `order` record (subject: the port and channel at that tick; value: the order drawn; observer `engine:merge@1`; provenance: the seed and the draw key). The draw is keyed by `(run seed, tick, port, channel)`, never by evaluation order, so it is reproducible, and replay reads the recorded order and checks that it re-derives. The trace lists every port that used stochastic order, so a reader knows where order was chance rather than design. Order-free combines need no order and record none.
+**Undeclared means stochastic, and stochastic means recorded.** A port with same-tick fan-in and no merge declared uses `combine: last, order: stochastic` on a level channel, and `combine: queue, order: stochastic` on channel `message`, where `queue` is the default and the only combine (a message is delivered, never merged away; on channel `message` every arrival of a tick is delivered in that tick, in this order). A message arrival is ordered as `<wire>#<message id>`, since one Path may bring several in a tick. A declared list that leaves some incoming Paths out orders the listed ones first and draws the rest. Every draw is written to the ledger as an `order` record (subject: the port and channel at that tick; value: the order drawn; observer `engine:merge@1`; provenance: the seed and the draw key). The draw is keyed by `(run seed, tick, port, channel)`, never by evaluation order, so it is reproducible, and replay reads the recorded order and checks that it re-derives. The trace lists every port that used stochastic order, so a reader knows where order was chance rather than design. Order-free combines need no order and record none.
 
 ### Two-phase ticks
 
-**Path delay is at least 1**, checked at load. A device's output therefore always arrives at a later tick, even with device delay 0, and no zero-time chain can form. Each tick has two phases:
+**Path delay is 0 or more**, checked at load (a negative delay is `PATH_DELAY_INVALID`). Each tick runs in **delta rounds**; each round has two phases:
 
 1. **Update:** gather every arrival scheduled for tick t, merge the arrivals at each port by its merge, apply them to signal state, and commit.
 2. **Evaluate:** evaluate every device whose inputs changed, reading only committed state; schedule its outputs; commit its `device.state`.
 
-Same-tick arrivals at one port are resolved by the merge, and nowhere else; within each phase, the order in which the engine processes ports and devices is irrelevant, which is the VHDL delta-cycle guarantee without the delta machinery. `sequence` is assigned afterwards by sorting on stable ids (target entity, target port, channel, source Path) and serves serialization only.
+Round 0 takes what was scheduled for the tick. What a zero-delay Path (or a delay-0 device output over one) schedules for the same tick is the next round, over the state the round before committed, until nothing more is due at the tick; one step processes the whole tick. A cycle made only of zero-delay legs would never end, so it is refused at start with `ZERO_DELAY_CYCLE` (its components and Wires); the budget bounds the rounds besides. A merge draw in a round after the first carries `round` in its key and its ledger entry.
 
-Zero-delay Paths stay forbidden until a domain pack needs them. Allowing them would require full delta rounds and a static check that every cycle has total delay ≥ 1, refusing an "algebraic loop" otherwise.
+Same-tick arrivals at one port are resolved by the merge, and nowhere else; within each phase, the order in which the engine processes ports and devices is irrelevant, which is the VHDL delta-cycle guarantee. `sequence` is assigned afterwards by sorting on stable ids (round, target entity, target port, channel, source Path; for messages the delivery order at the port) and then moving a record only as far as needed so that none precedes a record it names in `provenance.inputs`. It serves serialization only.
 
 ### Components hosted on a Path
 
@@ -388,6 +432,15 @@ One `schematic.run.step` is **one tick**: the smallest unit whose result is dete
 - **quiet**: the queue is empty;
 - **oscillating `{period, subjects}`**: the run has entered a cycle. At each tick the runtime hashes the full state that determines the future: committed signal state, every `device.state`, and the pending queue with arrival times taken relative to the current tick. A repeated hash proves a cycle; committed signal state alone would not, because transitions still in flight can differ between two ticks that look the same. A NOT feeding itself ends here, not in budget exhaustion. Where a cycle passes through a port with stochastic order, draws are keyed by the absolute tick, which the state hash does not hold: `oscillating` then means the state recurred, not that the future is strictly periodic.
 - **budget spent**: what was left in the queue. A single `step` over budget is a refusal (`BUDGET_SPENT`); inside `settle` a budget stop is one of settle's three results, not a refusal.
+
+**Between steps the ledger takes four more kinds of entry**, each what a replay cannot recompute:
+
+- **input**, given mid-run by `addInput(run, input)`: checked as `startRun` checks one, its body adds `after`, the tick processed before it was given (`null` before any), and it is scheduled at `max(at, after + 1)`. A message input's message is `m-<seq>` of its entry.
+- **resume**, by `resume(run, parkId, {decision, payload, reason})`, the answer to a message a card parked for a person (`config.behavior.human`, `park@1`; the message waits as `p-<message id>`): taken up in the next tick, `approve` continues at the card with an object payload laid over an object message payload; any other decision refuses the message with the reason or `rejected at <label or id>`. `UNKNOWN_PARK` when nothing is parked under that id.
+- **reconcile**, by `reconcile(run, effectKey, {confirmed, result})`, the answer to an ambiguous effect: confirmed, the effect is confirmed with the result; not, it is cleared. `NOT_AMBIGUOUS` otherwise.
+- **result**, written by a step: a function handler's answer `{tick, entity, messageId, result | error}`, recorded when the run first reaches it. A declarative handler (`stub`, `fixture`) is evaluated and not recorded.
+
+An **effects** entry, right after start, records an effects ledger handed in from an earlier run (`startRun` option `effects`). A replay applies each `input`, `resume` and `reconcile` entry carrying `after` at the point it was given, after that tick and before the next, reads each `result` entry instead of calling the function, and starts from the `effects` entry; the declarative handlers are given to it again, like the packs. The recomputed ledger still matches the trace byte for byte, and a run with none of these entries writes exactly the ledger it wrote before them.
 
 **Runs are addressed by handle.** A run's id is derived from its replay key, so two runs of the same document and inputs share it, and record ids and goldens depend on it. Each start on a surface therefore also gets a unique handle (`<runId>.<n>`), and surfaces address runs by handle: a second client's run never touches the first's. A replay is not registered and has no handle.
 
@@ -442,7 +495,7 @@ A document references definitions by `id@version` and records which packs it use
 
 ### What `signalMode` becomes
 
-`source` / `relay` / `passive` keep their meaning. The current "active" set in `computeSignalState()` is the **settled state** of a run in which every source is high and every relay passes: the fixpoint the fixed six passes approximate. When the runtime lands, the editor's idle picture is that settled state, computed by the fold, and `25-signal.js` becomes a projection of it instead of its own computation.
+`source` / `relay` / `passive` keep their meaning. The current "active" set in `computeSignalState()` is the **settled state** of a run in which every source is high and every relay passes: the fixpoint the fixed six passes approximate. The runtime landed at contract 10 of the one-runtime plan (2026-10-03): the editor's idle picture is that settled state, computed by the fold, and `25-signal.js` is a projection of it instead of its own computation.
 
 ## Files
 
@@ -471,11 +524,30 @@ These are not CRUD: `operation@0.1` covers create / read / update / delete on co
 
 **Standards live at the edges, never in the core record (slice 4).** Export provenance as PROV-JSON (observer → Agent, rule application → Activity, record → Entity, inputs → wasDerivedFrom). Import measured records from OpenTelemetry, with metrics becoming signal state and spans becoming particles, and CloudEvents for discrete events. Each import adapter pins its semantic-convention version; the GenAI conventions are still pre-stable.
 
+### Reading a run: travel and spectrum
+
+The sim surface (`src/07-state-surface.js`) has two reads of the run it drives: `sim.travel()` and `sim.spectrum(window)`, served as `schematic.sim.travel` and `schematic.sim.spectrum` over MCP, `POST /api/v1/sim/travel|spectrum` over HTTP and `SovSchematicAPI.sim.travel|spectrum` in the browser. Both read `run.wires`, `run.clocks` and `run.records`, write nothing into the run, its records or its ledger, and give byte-identical canonical JSON for the same document and inputs, a restored run included. Floating point is used only in these views; the run keeps its integers (Numeric policy).
+
+**Travel** is a wire's declared delay and nothing else: `{ok, tickMs, wires: [{id, a, b, forward, reverse, delayTicks, travelMs}]}` in `run.wires` order. `delayTicks` is the delay the engine resolved at start (`config.delay` in ticks, else `latencyMs` converted, rounding half up, never under one tick above 0 ms), and `travelMs = delayTicks * tickMs`. A zero-delay wire reports 0: it runs in delta rounds within its tick. A wire that carries in neither direction is listed with `forward` and `reverse` false. No speed, length or distance is computed.
+
+**A node's period** is the least common multiple of the `periodMs` of every clock its level depends on, found by following carrying legs (each wire's forward and reverse) upstream from the node to `run.clocks`; a clock's period is its own. A node no clock reaches has no period.
+
+**Spectrum** `{fromMs, toMs, stepMs, harmonics = 8, nodes}` (`nodes` defaults to every component with a level) takes M = (toMs - fromMs) / stepMs samples per node: x_j is the level (0..1, as `levels()` reports it) in effect at t_j = fromMs + j·stepMs, after every level record at a tick at or before t_j / tickMs. Per node it gives `{node, periodMs, samples, mean, energy, harmonics, rest, parsevalError, reason}`:
+
+- `energy` = mean((x − mean)²), the signal's power with its mean removed;
+- with q = (toMs − fromMs) / periodMs a whole number, X_k = Σ_j x_j·e^(−2πijk/M) by direct DFT, and `harmonics` = `[{n, amplitude, phase}]` for n = 1..harmonics with n·q under M/2: amplitude 2|X_(nq)|/M and phase atan2(Im, Re) of X_(nq) in radians, so x ≈ mean + Σ a_n cos(2πn(t − fromMs)/periodMs + phase_n);
+- `rest` = energy − Σ a_n²/2, the power above the last harmonic given;
+- `parsevalError` = |energy − Σ_(k=1..M−1) |X_k|²/M²|, Parseval's theorem as the check;
+- a window that is not a whole number of periods gives `harmonics: null` and `reason: 'window-not-whole-periods'`; a node with no period gives `harmonics: null` and `reason: 'no-period'`; `energy` and `parsevalError` are given either way.
+
+A sampled square or saw falls as 1/sin(πk/N) over N samples a period, not 1/k, so its ratios are those of the sampled wave. Refusals, typed `{ok: false, code, message}`: `WINDOW_NOT_ELAPSED` when `toMs` is after the surface's time; `WINDOW_STEP` when `stepMs` is not a positive whole multiple of `tickMs` or `toMs − fromMs` not a positive whole multiple of `stepMs`; `WINDOW_TOO_LONG` over 4096 samples; `UNKNOWN_NODE`. `tests/run_spectrum_qa.py` checks the values against the sampled waves' closed forms, Parseval to 1e-12, replay and restore identity, and the same JSON over node, MCP and HTTP.
+
 ## Module ownership
 
 Proposed additions to `MODULES.md`:
 
 - `src/03-canonical.js`: canonical JSON (RFC 8785 for the value set in use), synchronous pure-JS SHA-256, and the seeded draw used by merges. Pure; loaded before `05`, and by `07`, scripts and the MCP server.
+- `src/04-signal-model.js`: the signal model both engines read: `signalConfig`, `COMBINES`, `DEFAULT_LATENCY_MS` and passability (`activeConnection`, `canEmit`, `canReceive`, `accessAllows`). Pure, no dependencies; loaded after `03-canonical` and before `06-attachment-core` everywhere, and required by `07-state-space.js`, so a run never depends on whether `07-graph-core.js` is loaded (it re-exports them).
 - `src/05-data-core.js`: gains `documentHash`, template port sets, the smallest-form storage of port lists, channel matching and the port operations.
 - `src/06-attachment-core.js`: point specs come from declared ports only; the hard-coded trio moves to template data.
 - `src/07-state-space.js`: the state record, event log, scheduler, fold, patterns (including `merge`), caches, fields and residuals. Pure; no DOM; loadable by `scripts/`, `mcp/server.mjs` and the editor, like `05-data-core.js` and `06-attachment-core.js`.
@@ -490,8 +562,9 @@ Proposed additions to `MODULES.md`:
 What the runtime checks, and where. Each becomes a QA assertion in the slice that introduces it.
 
 At load (typed refusal, the document still opens):
-- every Path delay ≥ 1;
-- every Path binds two ports that share at least one channel, and at least one of its declared directions is admitted by both ports' flows;
+- every Path delay ≥ 0, and no cycle made only of zero-delay legs (`ZERO_DELAY_CYCLE`, when the run starts);
+- every Path binds two ports that share at least one channel (a Path none of whose directions the ports admit is not refused: the run blocks it and records it);
+- no number in an input value or a message payload is a fraction or an unsafe integer (`PAYLOAD_FRACTION`, with the path to the number);
 - every referenced definition resolves, children included; its parameters pass its pattern's validator; any derived member it states equals what is derived;
 - every port a definition owns exists on its Component with the generated id, flow and channels;
 - every declared merge names a known combine, and a `declared` order names only Paths that end on that port;
@@ -526,6 +599,12 @@ Each slice ends with its QA suite inside `python scripts/qa.py`.
 4. **Instrument.** Observer registry with class, limits and read/write sets; observation account; perturbation ledger; instrument coordinates (quality, source and receipt time, GUM certainty) and the `estimated` kind; sensor, structural and drift residuals; controllability; `schematic.state.observe` with the OpenTelemetry adapter first; PROV-JSON export; intent logging and reconciliation for effects that reach outside; generative steps as recorded effects with attempts and their recorded inputs; the `rate` pattern with declared conditioning keys; evidence carried across revisions by identity.
 5. **Later, only when earned.** Latches, clocks and edges (`transition`); the `compose` pattern with per-attempt retries and scored forecasts; possibility sets and ensembles; sensor placement from the uncertainty map; an OPC UA / DTDL adapter if an industrial pack earns it; inertial delay as a DELAY parameter; interposing hosted Components after the carrier/Component record merge.
 
+## Intended differences from the graph core
+
+`src/07-graph-core.js` at `7b939e3` is the parity reference; `tests/state_space_dev_parity_qa.py` runs its example checks on this engine. Where the two differ on purpose, the difference is listed here.
+
+- **Same-tick level arrivals at an undeclared Point.** When level arrivals reach a Point that declares no merge in the same tick, as in `tests/graph_core_qa.py:163` (`planeDoc(acl,0)`: the `svc:ops` lever's 0 and the anonymous lever's 1 at the Vault door), this engine settles them by the recorded seeded draw (Settled item 15), where the graph core applies them first in, first out. The door's level here is the value of the Path last in the drawn order; a level refusal at the door is made exactly when that value is the anonymous lever's, and replay reproduces the drawn result byte for byte.
+
 ## Non-goals
 
 Analog or electrical simulation; exact Redstone emulation; HDL synthesis; amplitudes (probabilities narrow by observation and that is enough unless paths must cancel); 3D.
@@ -536,9 +615,9 @@ Analog or electrical simulation; exact Redstone emulation; HDL synthesis; amplit
 2. **Behaviour** is definitions as data, delivered in domain packs; built-ins are the `core.logic` pack. *(2026-09-25)*
 3. **Runs are saved** as `.sovtrace`, separate from the document. *(2026-09-25)*
 4. **Active observation** is paid relative to the observed run: a reserved observation account holding a declared share of the initial budget (default 10%); exhausting it refuses observation, not the run. *(2026-09-25; mechanism amended by review the same day)*
-5. **Zero-delay Paths** are forbidden; Path delay ≥ 1 is checked at load. *(2026-09-25)*
+5. **Zero-delay Paths** are allowed: `config.delay` 0, or `latencyMs` 0, arrives in the same tick, in a later delta round. A cycle made only of zero-delay legs is refused at start with `ZERO_DELAY_CYCLE`, naming its components and Wires, as the graph core refuses `ZERO_LATENCY_CYCLE`; a negative delay is `PATH_DELAY_INVALID`. A `latencyMs` above 0 is never less than one tick, so a short latency never becomes a zero-delay Path (2026-09-29). *(Bdo, 2026-09-26; replaces the 2026-09-25 rule that forbade them)*
 6. **Hysteresis** ships in slice 2 on the `device.state` record. *(2026-09-25)*
-7. **Scheduling** is two-phase ticks over committed state; `sequence` is serialization only; one step is one tick. *(2026-09-25)*
+7. **Scheduling** is two-phase ticks over committed state; `sequence` is serialization only; one step is one tick (with all its delta rounds). Within a tick no record precedes a record it names in `provenance.inputs`. *(2026-09-25; delta rounds and causal order 2026-09-26)*
 8. **Intent logging** waits for effects that reach outside (slice 4); until then replay identity is the divergence check. *(2026-09-25)*
 9. **The first import standard** is OpenTelemetry. *(2026-09-25)*
 10. **Ownership.** The engine owns the shape of state and a small closed set of patterns; domain packs instantiate patterns with data; contracts are generated from pattern and parameters, never hand-written. *(2026-09-25)*

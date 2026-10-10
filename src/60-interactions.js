@@ -6,12 +6,12 @@ function scheduleDragVisualRefresh(){
   if(dragVisualFrame)return;
   dragVisualFrame=requestAnimationFrame(()=>{
     dragVisualFrame=0;
-    renderWires();
+    renderWiresForDrag();
   });
 }
 function flushDragVisualRefresh(){
   if(dragVisualFrame){cancelAnimationFrame(dragVisualFrame);dragVisualFrame=0}
-  renderWires();
+  renderWiresForDrag();
 }
 
 let componentTransformGesture=null;
@@ -117,7 +117,7 @@ function beginActiveNodeDrag(e,g,n){
   setHistoryHint(selectedComponentIds.size>1?'Move selection':'Move Component');
   if(activeNodeDragState)finishActiveNodeDrag(null,{force:true,reason:'recovered stale drag'});
   if(keyboardMoveNodeId)finishKeyboardMove({});if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
-  activeNodeDrag=n.id;captureDragSnapshots(n.id);workspace.classList.add('dragging-node');g.classList.add('dragging');
+  activeNodeDrag=n.id;dropDragSignalState();captureDragSnapshots(n.id);workspace.classList.add('dragging-node');g.classList.add('dragging');
   // The pressed Component becomes the primary; a multi-selection it belongs to is kept, so the drag
   // moves the whole group (issue #49). An unselected Component was selected alone above.
   selectNode(n.id,{focus:false,preserveSet:true});setSelectionBarSuppressed(true);
@@ -144,10 +144,15 @@ function updateActiveNodeDrag(e){
 function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
   const state=activeNodeDragState;if(!state)return;if(!force&&e?.pointerId!=null&&e.pointerId!==state.pointerId)return;
   const pointerId=state.pointerId;let fault=null,refusal=null;
+  // Where a root stands and what hosts it; the roots whose host call changed that are redrawn below.
+  const hostStanding=n=>{const p=n.placement||{};return [n.x,n.y,p.kind||'surface',p.wireId||'',p.hostId||'',p.side||'',p.t??''].join('|')};
+  // A wire that ends on the root or on what it carries is routed again from where they now stand.
+  const dropRoutesOf=root=>{const ids=new Set([root.id,...descendantsOf(root.id).map(n=>n.id)]);wires.forEach((w,i)=>{if(ids.has(w.a)||ids.has(w.b))routeCache.delete(i)})};
   // Whether the pointer moved. The gesture captures the pointer on the workspace, so no click reaches
   // the card afterwards: a press that did not drag is resolved here (see the finally block).
   const dragged=Math.hypot(state.pointer.x-state.startPointer.x,state.pointer.y-state.startPointer.y)>2;
   try{
+    dropDragSignalState();
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     settleActiveComponent(e||state.modifiers);
     // Every root's host is decided first; one refused settle refuses the whole gesture.
@@ -168,18 +173,25 @@ function finishActiveNodeDrag(e=null,{force=false,reason=''}={}){
       for(const item of state.startPositions||[]){item.node.x=item.x;item.node.y=item.y}
       routeCache.clear();arrowPoseCache.clear();
     }else for(const {root,candidate} of plan){
-      const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID;
+      const beforeCanvas=root.canvasId||GLOBAL_CANVAS_ID,beforeParent=root.parentId||null,beforeStanding=hostStanding(root);
       applyComponentHost(root,candidate);
+      // A host that moved the root or changed its placement (a wire, a path, an edge) does the same.
+      if(hostStanding(root)!==beforeStanding){dropRoutesOf(root);wireGroupDrawn.clear()}
       const afterCanvas=root.canvasId||GLOBAL_CANVAS_ID;if(beforeCanvas!==afterCanvas)setHistoryHint(candidate?.kind==='wire'?'Settle Component on Wire':candidate?.kind==='component'?'Settle Component in Component':'Detach Component')
+      // A changed host draws every wire from nothing at the settle below.
+      if(beforeCanvas!==afterCanvas||beforeParent!==(root.parentId||null))wireGroupDrawn.clear();
     }
-    clearHostCandidateArm(state);if(refusal)render();else settleDraggedRoutes();
+    clearHostCandidateArm(state);if(refusal){dropBusLaneHold();render()}else settleDraggedRoutes();
   }catch(err){fault=err;console.error('Recovered Component drag failure',err)}
   finally{
     if(settleTimer){clearTimeout(settleTimer);settleTimer=null}
     clearHostCandidateArm(state);clearNodeDragVisualState();clearSettleHostGhost();
-    activeNodeDragState=null;activeNodeDrag=null;dragRouteSnapshots.clear();
+    activeNodeDragState=null;activeNodeDrag=null;dropBusLaneHold();dragRouteSnapshots.clear();
     try{if(workspace.hasPointerCapture?.(pointerId))workspace.releasePointerCapture(pointerId)}catch(_){}
-    try{flushDragVisualRefresh()}catch(err){console.error('Drag projection recovery failed',err)}
+    try{
+      flushDragVisualRefresh();
+    }catch(err){console.error('Drag projection recovery failed',err)}
+    dropDragSignalState();
     // A plain press on a member of a multi-selection that did not drag selects that member alone,
     // as a click always has; a drag leaves the group selected (issue #49). Shift keeps the set.
     if(!dragged&&!force&&!state.modifiers?.shiftKey&&selectedComponentIds.size>1&&selectedComponentIds.has(state.node.id))selectNode(state.node.id,{focus:false});
@@ -410,12 +422,12 @@ function updateWireDrag(e){
     statusEl.textContent=wireDrag.blankReady?'Release → new Component':'Hold briefly to grow Component';
   }
   const occupied=[];
-  wires.forEach((w,i)=>{
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{
     const WA=carrierEndpointPos(w,'a'), WB=carrierEndpointPos(w,'b');
     if(!WA||!WB) return;
     const pts=stableRouteForWire(i,w,WA,WB,occupied);
     occupied.push(...routeSegments(pts,w));
-  });
+  }));
   wireDrag.ghost.setAttribute('d',routePath(
     wireDrag.A,B,wireDrag.sourceSide,bSide,
     wireDrag.sourceNode,
@@ -500,7 +512,7 @@ function carrierEndPointerMove(e){
   const otherEp=carrierEndpoint(w,d.other);
   if(otherEp){
     const from=d.other==='a',occupied=[];
-    wires.forEach((x,j)=>{if(j===d.i)return;const XA=carrierEndpointPos(x,'a'),XB=carrierEndpointPos(x,'b');if(XA&&XB)occupied.push(...routeSegments(stableRouteForWire(j,x,XA,XB,occupied),x))});
+    withBusRoutesOnce(()=>wires.forEach((x,j)=>{if(j===d.i)return;const XA=carrierEndpointPos(x,'a'),XB=carrierEndpointPos(x,'b');if(XA&&XB)occupied.push(...routeSegments(stableRouteForWire(j,x,XA,XB,occupied),x))}));
     const A=from?otherEp.pos:B,Z=from?B:otherEp.pos;
     d.ghost.setAttribute('d',routePath(A,Z,from?(otherEp.compatId||null):(snap?.side||null),from?(snap?.side||null):(otherEp.compatId||null),from?(otherEp.node?.id||null):(snap?.node||null),from?(snap?.node||null):(otherEp.node?.id||null),d.i,occupied));
   }
@@ -598,3 +610,68 @@ barComponentSignalMode.addEventListener('change',()=>{
   render();selectNode(n.id,{focus:false});scheduleHistoryCapture();
 });
 barComponentColorSlot.addEventListener('click',()=>openColorSlotPanel('component'));
+
+// ---- Bus gesture: a press on a bus's label or rim selects it; a drag moves it -------------------
+// (LAYOUT-MODEL.md "As built: buses", Selecting and moving a bus.) A straight bus moves across its
+// own axis only; a bus with a corner moves freely. The move is previewed by a transform on the
+// drawn band, rim and label, and written once, on release, by the layout operation bus with only
+// the points changed. A move that would part two buses a wire rides one after the other is refused.
+let busGesture=null;
+function busGestureParts(id){
+  const of=sel=>[...document.querySelectorAll(sel)].filter(el=>el.dataset.busId===id);
+  return {groups:of('g.bus-band,g.bus-hit-band'),label:of('text.bus-label')[0]||null};
+}
+function previewBusGesture(g,dx,dy){
+  const parts=busGestureParts(g.id),moved=dx||dy,shift=`translate(${dx} ${dy})`;
+  for(const el of parts.groups){if(moved)el.setAttribute('transform',shift);else el.removeAttribute('transform')}
+  if(!parts.label)return;
+  const next=moved?(g.labelTransform?`${shift} ${g.labelTransform}`:shift):g.labelTransform;
+  if(next)parts.label.setAttribute('transform',next);else parts.label.removeAttribute('transform');
+}
+function beginBusGesture(e,id){
+  if(e.button!==0)return;
+  e.stopPropagation();
+  selectBus(id);
+  const points=SovSchematicLayout.busPoints(activeBuses()[id]?.points);if(!points)return;
+  const axis=points.every(p=>p.x===points[0].x)?'x':points.every(p=>p.y===points[0].y)?'y':'both';
+  busGesture={id,pointerId:e.pointerId,start:svgPoint(e.clientX,e.clientY),points,axis,dx:0,dy:0,labelTransform:busGestureParts(id).label?.getAttribute('transform')||''};
+}
+function moveBusGesture(e){
+  const g=busGesture;if(!g||e.pointerId!==g.pointerId)return;
+  e.preventDefault();
+  const q=svgPoint(e.clientX,e.clientY),step=dragSnapStep(e);
+  let dx=q.x-g.start.x,dy=q.y-g.start.y;
+  if(step>0){dx=Math.round(dx/step)*step;dy=Math.round(dy/step)*step}
+  // A vertical bus moves on x only, a horizontal bus on y only.
+  if(g.axis==='x')dy=0;else if(g.axis==='y')dx=0;
+  g.dx=dx;g.dy=dy;previewBusGesture(g,dx,dy);
+}
+// The first pair of buses that a wire rides one after the other, one of them this bus, and that
+// would no longer meet with this bus at points; null when every such pair still meets.
+function busMoveGap(id,points){
+  const all=activeBuses();
+  for(const w of wires){
+    const ids=busSpecOf(w)?.buses;if(!ids)continue;
+    for(let i=1;i<ids.length;i++){
+      const a=ids[i-1],b=ids[i];if((a!==id&&b!==id)||a===b||!all[a]||!all[b])continue;
+      if(!SovSchematicLayout.busMeet(a===id?points:all[a].points,b===id?points:all[b].points))return [a,b];
+    }
+  }
+  return null;
+}
+function finishBusGesture(e,{cancel=false}={}){
+  const g=busGesture;if(!g||(e&&e.pointerId!==g.pointerId))return;
+  busGesture=null;
+  if(cancel||(!g.dx&&!g.dy)){previewBusGesture(g,0,0);return}
+  const bus=activeBuses()[g.id];if(!bus){render();return}
+  const points=g.points.map(p=>({x:p.x+g.dx,y:p.y+g.dy})),gap=busMoveGap(g.id,points);
+  if(gap){render();statusEl.textContent=`Bus move refused: ${gap[0]} and ${gap[1]} would not meet`;return}
+  const result=runLayoutOp('bus',{id:g.id,points,pitch:bus.pitch,label:bus.label,between:bus.between,lanes:bus.lanes,order:bus.order},'Move bus');
+  if(!result?.ok){render();statusEl.textContent=`Bus move refused: ${result?.message||result?.code||g.id}`;return}
+  selectBus(g.id,{focus:false});
+  statusEl.textContent='Bus moved';
+}
+window.addEventListener('pointermove',moveBusGesture,true);
+window.addEventListener('pointerup',e=>finishBusGesture(e),true);
+window.addEventListener('pointercancel',e=>finishBusGesture(e,{cancel:true}),true);
+window.addEventListener('blur',()=>finishBusGesture(null,{cancel:true}));

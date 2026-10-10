@@ -4,7 +4,7 @@
 // junctions, section lines, glyphs) is measured against what is actually painted beneath it:
 // the fills that precede it in paint order, composited over the canvas tone. Reads only.
 
-const CONTRAST_MARKS='path.wire, .flow-chevron, .component-lead, .terminal-mark, .junction-dot, .node .body, .dimensional-point-body, .dimensional-path-body, .section-line, use.glyph, .glyph path, .glyph line, .glyph circle, .glyph rect, .glyph polyline, .glyph polygon';
+const CONTRAST_MARKS='path.wire, .flow-chevron, .component-lead, .terminal-mark, .junction-dot, .node .body, .node .body-rim, .dimensional-point-body, .dimensional-path-body, .section-line, use.glyph, .glyph path, .glyph line, .glyph circle, .glyph rect, .glyph polyline, .glyph polygon';
 const CONTRAST_SKIP='.wire-packet, .wire-voltage, .wire-hit, .port-hit, .transform-handle-group, .move-tether, .move-anchor, .carrier-end-handle, .endpoint-halo, defs, title';
 
 function contrastCanvasColour(){
@@ -96,8 +96,8 @@ function contrastAudit(options={}){
 // The palette as realised now (theme x appearance), judged as a categorical palette.
 function paletteAudit(){
   const bg=canvasTone(),mono=activePalette().slice(0,6),colour=activePalette().slice(6);
-  const distinct=colorEngine.palette!=='mono';
+  const distinct=effectivePaletteName()!=='mono';
   const audit=SovSchematicColour.auditPalette(colour,{background:bg,floor:themeContrastFloor()});
   if(!distinct)audit.failures=audit.failures.filter(f=>f.kind!=='distinct');
-  return {appearance:surfaceAppearance(),theme:colorEngine.theme,palette:colorEngine.palette,background:bg,mono,colour,...audit,ok:!audit.failures.length,categorical:distinct};
+  return {appearance:surfaceAppearance(),theme:colorEngine.theme,palette:effectivePaletteName(),background:bg,mono,colour,...audit,ok:!audit.failures.length,categorical:distinct};
 }

@@ -113,24 +113,53 @@ function renderPalettePreview(){
     palettePreview.appendChild(s);
   });
 
-  customPaletteEditor.hidden=colorEngine.palette!=='custom';
+  customPaletteEditor.hidden=effectivePaletteName()!=='custom';
 
 }
+// The swatches list the row that draws: the document's six while it declares {custom}, else the
+// view's. An edit writes where the row lives - the document's edit is an undoable document change.
 function renderCustomPaletteEditor(){
   customPaletteSwatches.replaceChildren();
-  colorEngine.custom.forEach((c,i)=>{
+  effectiveCustomRow().forEach((c,i)=>{
     const input=document.createElement('input');
     input.type='color';input.value=c;input.title=`Custom slot ${i+1}`;
     input.addEventListener('input',()=>{
-      colorEngine.custom[i]=input.value;
+      const declared=documentPalette();
+      if(declared!==null&&typeof declared!=='string'){
+        diagram.meta.palette.custom[i]=input.value;
+        setHistoryHint('Change document palette');scheduleHistoryCapture();
+      }else colorEngine.custom[i]=input.value;
       refreshPaletteDerivedColors();renderPalettePreview();render();restoreSelectedSurface();
     });
     customPaletteSwatches.appendChild(input);
   });
 }
+// The document's own palette (meta.palette). null or undefined removes it, so the view's palette
+// draws again; any other value goes through the one admission rule a file and the API use
+// (SovSchematicData.admitPalette), so a refused value changes nothing and is reported.
+function setDocumentPalette(value){
+  diagram.meta=diagram.meta||{};
+  let admitted;
+  if(value===null||value===undefined){delete diagram.meta.palette;admitted={ok:true,present:false}}
+  else{
+    admitted=SovSchematicData.admitPalette(value);
+    if(!admitted.ok){statusEl.textContent=admitted.message;colorPaletteInput.value=effectivePaletteName();return admitted}
+    diagram.meta.palette=admitted.value;
+  }
+  setHistoryHint('Change document palette');applyColorEngine();scheduleHistoryCapture();
+  return admitted;
+}
+// The one route for the picker and view.setColour: a pick writes the document while the document
+// declares a palette, the view otherwise. Picking 'custom' on a document starts from the row drawn.
+function pickPalette(name){
+  if(documentPalette()!==null)return setDocumentPalette(name==='custom'?{custom:[...effectiveCustomRow()]}:name);
+  colorEngine.palette=name;applyColorEngine();
+  return null;
+}
 function applyColorEngine(){
   colorThemeInput.value=colorEngine.theme;
-  colorPaletteInput.value=colorEngine.palette;
+  colorPaletteInput.value=effectivePaletteName();
+  paletteSettings.dataset.paletteSource=documentPalette()!==null?'document':'view';
   diffuseSignalsInput.checked=colorEngine.diffuse;
   document.documentElement.style.setProperty('--canvas-tone',canvasTone());
   refreshPaletteDerivedColors();
@@ -483,22 +512,44 @@ function restoreSelectedSurface(){
     const n=nodes.find(n=>n.id===selected);if(n)selectNode(n.id);
   }
 }
+// The bar sits above the selection or below it. Both places are tried, and the one whose bar
+// rectangle covers less wire-label area is taken; on equal cover, above. A wire label never
+// moves for the bar.
 function positionSelectionBar(){
   if(selectionBar.hidden)return;
-  let p=null;
+  let a=null,isBody=false;
   if(typeof selected==='string'&&selected.startsWith('wire:')){
-    const i=Number(selected.split(':')[1]),w=wires[i];if(w)p=connectionMidpoint(w,i);
+    const i=Number(selected.split(':')[1]),w=wires[i];
+    if(w){const m=connectionMidpoint(w,i);a={l:m.x,r:m.x,t:m.y,b:m.y}}
   }else if(isAttachmentSelectionValue(selected)){
     const info=selectedPortInfo();
-    if(info)p=portPos(info.node,info.pointId||info.portId);
+    if(info){const m=portPos(info.node,info.pointId||info.portId);a={l:m.x,r:m.x,t:m.y,b:m.y}}
   }else{
-    const n=nodes.find(n=>n.id===selected);if(n){const size=componentSize(n);p={x:n.x,y:n.y-size.h/2-10}}
+    const n=nodes.find(n=>n.id===selected);
+    if(n){a=(isGroupComponent(n)&&SovSchematicData.groupRect(diagram,n.id,componentSize))||componentBounds(n);isBody=true}
   }
-  if(!p){hideSelectionBar();return}
-  const q=svgToWorkspacePixel(p.x,p.y);
+  if(!a){hideSelectionBar();return}
   const wrap=document.querySelector('.workspace-wrap').getBoundingClientRect();
-  const x=Math.max(90,Math.min(wrap.width-90,q.x));
-  const y=Math.max(44,Math.min(wrap.height-10,q.y-6));
-  selectionBar.style.left=`${x}px`;selectionBar.style.top=`${y}px`;
+  const clamp=(left,top)=>({left:Math.max(90,Math.min(wrap.width-90,left)),top:Math.max(44,Math.min(wrap.height-10,top))});
+  const mid=svgToWorkspacePixel((a.l+a.r)/2,0).x;
+  const topY=svgToWorkspacePixel(0,a.t).y,aboveY=svgToWorkspacePixel(0,a.t-(isBody?10:0)).y-6;
+  const above=clamp(mid,aboveY);
+  // Below, a card is measured from its whole screen rectangle (its resize and rotate handles
+  // hang under the body), with the same gap as above.
+  let belowEdge=svgToWorkspacePixel(0,a.b).y;
+  if(isBody){
+    const g=document.querySelector(`.node[data-id="${selected}"]`)?.getBoundingClientRect();
+    if(g)belowEdge=Math.max(belowEdge,g.bottom-wrap.top);
+  }
+  const gap=isBody?topY-aboveY:6;
+  const below=clamp(mid,belowEdge+gap+selectionBar.offsetHeight);
+  const labels=[...workspace.querySelectorAll('.connection-label')].filter(el=>el.getClientRects().length).map(el=>{
+    const r=el.getBoundingClientRect();return {left:r.left-wrap.left,top:r.top-wrap.top,right:r.right-wrap.left,bottom:r.bottom-wrap.top}});
+  const w2=selectionBar.offsetWidth/2,h=selectionBar.offsetHeight;
+  const cost=c=>{const bar={left:c.left-w2,right:c.left+w2,top:c.top-h,bottom:c.top};return labels.reduce((s,l)=>s+rectOverlapArea(bar,l),0)};
+  const pick=cost(below)<cost(above)?'below':'above';
+  const at=pick==='below'?below:above;
+  selectionBar.style.left=`${at.left}px`;selectionBar.style.top=`${at.top}px`;
+  selectionBar.dataset.place=pick;
   placeSelectionSettingsPanel();
 }

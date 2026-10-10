@@ -159,8 +159,18 @@ const planeDoc=(acl,leverValue=1)=>doc([
  assert.ok(reasons.some(r=>/eve may not enter Vault/.test(r)),reasons);assert.ok(reasons.some(r=>/no principal may enter Vault anonymously/.test(r)),reasons);
  // Levels cross under the driving node's principal: the principalled lever drives the inside level...
  assert.equal(sim.levels().inside.value,1,'svc:ops lever drives the inside level');
- // ...and when only the anonymous lever drives the door, its level stops there.
- {const {sim:s2}=G.createSimulation(planeDoc(acl,0));s2.run();assert.ok(s2.refusals().some(r=>r.level&&r.node==='door'&&/anonymously/.test(r.reason)),'anonymous level refused at the door');assert.equal(s2.levels().inside.value,0)}
+ // ...and when only the anonymous lever drives the door, its level stops there: the door refuses
+ // the anonymous level exactly when the run's own recorded draw puts the anonymous lever's wire
+ // (k4) last (STATE-SPACE.md, Settled item 15); the inside level stays 0 either way.
+ {const drawn=seed=>{const {sim:s2}=G.createSimulation(planeDoc(acl,0),seed===undefined?{}:{seed});s2.run();
+  const draw=s2.currentRun().ledger.find(e=>e.kind==='draw'&&e.body.entity==='door');
+  assert.ok(draw,'the run records a draw at the door');assert.deepEqual([...draw.body.order].sort(),['k3','k4']);
+  const refused=s2.refusals().some(r=>r.level&&r.node==='door'&&/anonymously/.test(r.reason));
+  assert.equal(refused,draw.body.order.at(-1)==='k4','the door refuses the anonymous level exactly when the recorded draw puts k4 last');
+  assert.equal(s2.levels().inside.value,0);return draw.body.order.at(-1)};
+ const lasts=[undefined,'0','1','2','3','4','5'].map(drawn);
+ assert.equal(lasts[0],lasts[1],'the default seed is seed 0');
+ assert.deepEqual([...new Set(lasts)].sort(),['k3','k4'],'the seeds exercise both draw outcomes')}
  assert.deepEqual(G.query(d,'acl',{componentId:'vault',principal:'svc:intruder',op:'enter'}).ok,false);
  assert.equal(G.query(d,'acl',{componentId:'vault',principal:'svc:ops',op:'enter'}).ok,true);
  assert.equal(G.query(d,'acl').planes[0].id,'vault')}

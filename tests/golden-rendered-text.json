@@ -219,7 +219,7 @@
   [
    "component:case",
    "component-label",
-   "Case · Customerproof 48219Case · Customer proof 48219"
+   "Case · Customerproof 48219"
   ],
   [
    "component:run",
@@ -229,7 +229,7 @@
   [
    "component:customer",
    "component-label",
-   "Customer · externalserviceCustomer · external service"
+   "Customer ·external service"
   ],
   [
    "component:run-in",
@@ -244,7 +244,7 @@
   [
    "component:ingest",
    "component-label",
-   "Ingest · AIworkflowIngest · AI workflow"
+   "Ingest · AIworkflow"
   ],
   [
    "component:evaluate",
@@ -259,12 +259,12 @@
   [
    "component:monitor",
    "component-label",
-   "Monitor · evalscoresMonitor · eval scores"
+   "Monitor ·eval scores"
   ],
   [
    "component:notify",
    "component-label",
-   "Notify customer ·effectNotify customer · effect"
+   "Notify customer ·effect"
   ],
   [
    "component:evidence",
@@ -365,7 +365,7 @@
   [
    "component:both",
    "component-label",
-   "Clock ANDenableClock AND enable"
+   "Clock ANDenable"
   ],
   [
    "component:lamp",
@@ -375,7 +375,7 @@
   [
    "component:sensor",
    "component-label",
-   "Sensor · sine4sSensor · sine 4s"
+   "Sensor · sine4s"
   ],
   [
    "component:level",
@@ -427,7 +427,7 @@
   [
    "component:coated",
    "component-label",
-   "Coated · skin aroundsolidCoated · skin around solid"
+   "Coated · skinaround solid"
   ],
   [
    "component:double",

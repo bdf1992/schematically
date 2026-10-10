@@ -2,6 +2,9 @@
   "protocolVersion": "2026-07-28",
   "endpoint": "/mcp",
   "tools": [
+    "schematic.guide",
+    "schematic.read",
+    "schematic.apply",
     "schematic.list",
     "schematic.get",
     "schematic.create",
@@ -14,6 +17,8 @@
     "schematic.checkpoint.list",
     "schematic.checkpoint.create",
     "schematic.checkpoint.restore",
+    "schematic.live.get",
+    "schematic.live.selection",
     "schematic.run.start",
     "schematic.run.step",
     "schematic.run.settle",
@@ -33,11 +38,15 @@
     "schematic.sim.resume",
     "schematic.sim.reconcile",
     "schematic.sim.inspect",
+    "schematic.sim.travel",
+    "schematic.sim.spectrum",
     "schematic.sim.scenario",
     "schematic.sim.scenarios",
     "schematic.render",
     "schematic.layout.metrics",
     "schematic.layout",
-    "schematic.markers"
+    "schematic.markers",
+    "schematic.concerns",
+    "schematic.concerns.answer"
   ]
 }

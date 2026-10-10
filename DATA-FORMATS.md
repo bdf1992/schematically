@@ -84,7 +84,11 @@ Loading a file cannot be used to make a child Component implicitly reach through
 
 ## Editor utility fields
 
-Components and Wires may carry an `editor` object with `pinned`, `locked`, `hidden`, `opacity`, and `rate`. Named checkpoints persist in `document.meta.checkpoints`; each checkpoint stores a non-recursive document snapshot. Global rate is `document.meta.timeScale`.
+Components and Wires may carry an `editor` object with `pinned`, `locked`, `hidden`, `opacity`, and `rate`. Named checkpoints persist in `document.meta.checkpoints`; each checkpoint stores a non-recursive document snapshot.
+
+`document.meta.timeScale` is the document's own rate (issue #40: the document's rate beats the view's). It is a finite number >= 0, where 0 means paused; anything else - negative, `NaN`, `Infinity`, `null`, a string, a boolean - is refused with `TIME_SCALE_INVALID`, by file open, by `PUT /api/v1/document` and by `view.setGlobalRate` alike (one admission rule). A workspace never rewrites it: `view.playbackSpeed` is the view's own playback speed (the simulation clock), independent of the document's rate.
+
+`document.meta.palette` is the document's own palette. It takes one of two shapes: a palette name, one of `okabe-ito`, `system-default`, `spectrum`, `cool`, `warm`, `earth` or `mono`; or `{"custom": ["#RRGGBB", ...]}` with exactly six hexes and no other key. It wins over the view's palette when the document opens; a document without it draws in the view's palette. A string that is not one of the seven names (`custom` and the empty string included) is refused with `PALETTE_UNKNOWN`, and any other shape (`null`, a number, a boolean, an array, a wrong count, a non-hex entry, an extra key) with `PALETTE_INVALID`, by file open, by `PUT /api/v1/document` and document replace, and by `view.setDocumentPalette` alike (one admission rule); a refused value is reported and changes nothing. Custom hexes are kept as written and realised through the same theme contrast floor as every palette, one row for both appearances. The palette picker (and `view.setColour`) writes the document while the document declares a palette and the view otherwise; `view.setDocumentPalette(null)` removes the declaration. A workspace or package view never carries the document's palette: `view.colorEngine` holds only the view's own palette and custom row.
 
 
 ### Access axis
@@ -181,6 +185,215 @@ with `a`/`aSide` or frees it with `aAttachment: {kind:'free',x,y}`. Validation r
 bound ends to exist and two bound ends to share a surface; free ends are always valid.
 
 
+## Status and waits-on (2026-10-01, `NOTATION-MODEL.md` "Domain notation: work-engine")
+
+A Component or a Wire may say how far along it is and what it waits on. Both keys are optional and
+absent is not written.
+
+- **`config.status`**: a string, the `id` of an entry in the `statuses` list of the document's
+  resolved notation (`SovSchematicNotation.resolve(doc).notation.statuses`). There is no built-in list:
+  the values are the notation's (the `work-engine` notation declares `exists`, `partial`, `missing`,
+  `proposed`). A status in a document whose notation declares no statuses is `STATUS_UNDECLARED`; a
+  value the notation does not declare, or a value that is not a string, is `STATUS_UNKNOWN`, and the
+  message lists the declared ids.
+- **`config.waitsOn`**: an array of `{kind, id, label?}`, where `kind` is `person | rule | decision`,
+  `id` is a non-empty string and `label`, when present, is a string; no other key is allowed. Anything
+  else is `WAITS_ON_INVALID`, and the message names the index and the field
+  (`config.waitsOn[1].kind must be one of person, rule, decision`).
+
+```json
+{"label": "Continuity records move to SQLite", "status": "proposed",
+ "waitsOn": [{"kind": "person", "id": "bdo", "label": "Bdo"}, {"kind": "rule", "id": "R-29"}, {"kind": "decision", "id": "D1"}]}
+```
+
+A `create` or `update` carrying either key in a bad form is refused with the code (the error message
+starts with it) on every surface, and the document is unchanged. An `update` with `status: null` or
+`waitsOn: null` removes that key. Loading keeps the stored values as written and `validateDocument`
+reports each finding as `component <id>: <CODE>: ...` or `wire <id>: <CODE>: ...` (marker rule
+`status`). The schema (`formats/schematic.document.schema.json`) declares both keys on
+`components[].config` and `wires[].config`.
+
+### A Wire's kind (2026-10-04, `NOTATION-MODEL.md` "Kinds")
+
+A Wire may say what kind of line it is. The key is optional and absent is not written.
+
+- **`config.kind`** (Wires only): a string, the `id` of a wire kind in the `kinds` list of the
+  document's resolved notation (`SovSchematicNotation.kindsOf(notation, 'wire')`). The entry declares
+  the dash, weight and arrowhead the Wire is drawn in. The built-in `schematic` notation declares one wire
+  kind, `reference` (solid, regular, no arrowhead). A kind in a
+  document whose notation declares no wire kinds is `KIND_UNDECLARED`; a value the notation does not
+  declare, or a value that is not a string, is `KIND_UNKNOWN`, and the message lists the declared ids.
+  A Component takes no `config.kind`: a region's kind is what it is (a group, a plane, a container,
+  a gate, an intake region).
+
+```json
+{"label": "approves", "kind": "control"}
+```
+
+It is validated the way a status is: a `create` or `update` with a bad kind is refused with the code
+and the document is unchanged, an `update` with `kind: null` removes the key, and loading reports
+`wire <id>: <CODE>: ...`. An entry of the notation's own `kinds` that breaks a rule is reported on
+load as `notation: KIND_INVALID: ...`. All three codes carry the marker rule `status`. The schema
+declares the key on `wires[].config`.
+
+
+## Answers (2026-10-04, `NOTATION-MODEL.md` "Concerns")
+
+A notation declares the questions a schematic should answer (its `concerns`), and a document carries
+the answers. Every key is optional and absent is not written: a document with no answers has no
+`answers` key anywhere, and the data core never adds an empty one.
+
+- **`meta.answers`**: the document's answers to the document concerns of its resolved notation
+  (`SovSchematicNotation.concernsOf(notation, 'document')`). The built-in `schematic` notation
+  declares `what`, `why`, `alternatives` and `smaller`.
+- **`config.answers`** on a Component or a Wire: its answers to the notation's component concerns or
+  wire concerns. There is no built-in one of either. A component concern that names `symbols` is
+  asked only of Components with one of those symbol ids: an answer to it on any other Component is
+  `ANSWER_UNKNOWN` (the message lists the ids asked of that symbol) and the report holds no row for it.
+  An update that changes a Component's `symbolId` is read on the record it makes: if the Component
+  would hold an answer its new symbol is not asked, the update is refused with `ANSWER_UNKNOWN`
+  naming each such concern, unless the same patch removes them (`answers: {id: null}` or `answers: null`).
+  The data core never drops an answer on its own, in a single update or in a batch.
+
+Each is an object whose keys are concern ids and whose values are non-empty strings after trimming.
+
+```json
+{"meta": {"answers": {"what": "A half adder.", "why": "To teach carry."}}}
+```
+
+```json
+{"label": "Smelter", "answers": {"made-by": "Smelt two ore."}}
+```
+
+| Code | When |
+| --- | --- |
+| `ANSWER_INVALID` | `answers` is not an object, or a value is not a non-empty string; the message names the key (`config.answers.made-by must be a non-empty string`) |
+| `ANSWER_UNDECLARED` | a key is set and the notation declares no concerns for that `applies` (a card's answer in a `schematic` document) |
+| `ANSWER_UNKNOWN` | the key is not a concern the notation declares for that `applies`; the message lists the declared ids |
+| `ANSWER_TARGET_UNKNOWN` | `answerConcerns` only: an entry's `target` names no Component and no Wire |
+
+A `create` or `update` of a Component or a Wire carrying a bad `config.answers` is refused with the
+code (the error message starts with it) and the document is unchanged. An `update` merges
+`config.answers` per key into the answers already there: a non-empty string sets that concern's
+answer, `null` removes that one answer (`{"answers": {"made-by": null}}`), and `answers: null`
+removes them all. When the last answer goes, the `answers` key goes with it, so no empty object is
+stored. A `null` for a key the notation does not declare is refused like any other value for it, and
+on `create` a `null` is `ANSWER_INVALID`. Loading keeps the
+stored values as written and `validateDocument` reports each finding as `<CODE>: meta.answers...`,
+`component <id>: <CODE>: ...` or `wire <id>: <CODE>: ...`, and each broken entry of the notation's own
+`concerns` as `notation: CONCERN_INVALID: ...` (marker rule `status`). Saving, opening and compacting
+keep `meta.answers` and every `config.answers`. The schema
+(`formats/schematic.document.schema.json`) declares the key on `meta`, `components[].config` and
+`wires[].config`.
+
+**The report.** `SovSchematicData.concernReport(doc)` returns `{notation, rows, answered, open}`
+and changes nothing. `rows` holds one row per declared concern per thing it applies to: the document
+concerns in declared order with `target: null`; then each Component in document order with each
+component concern and `target` the Component's id; then each Wire the same way. A row is `{concern,
+applies, target, title, question, answered, answer}`: `title` is the entry's title or its id, and
+`answer` is present only when `answered` is true. `answered` and `open` are the two counts. An
+unanswered concern is open: it is information, never an error. An answer the notation does not
+declare is not a row; it is one of the codes above. `concernReport(doc, {open: true})` keeps only
+the open rows; the two counts stay those of every row.
+
+**The write.** `SovSchematicData.answerConcerns(doc, {answers, ifRevision})` is the one verb that
+sets or removes answers on the document, Components and Wires together. `answers` is a non-empty
+list of `{concern, target, answer}`: `target` is absent or `null` for the document, else the id of a
+Component or a Wire; `answer` is a non-empty string to set, `null` to remove.
+
+```json
+{"answers": [
+  {"concern": "what", "answer": "An ore line."},
+  {"concern": "made-by", "target": "smelter", "answer": "Smelt two ore."},
+  {"concern": "carries", "target": "belt", "answer": null}
+]}
+```
+
+It is all or none and moves the document one revision. Every entry is checked before anything is
+written; each Component and Wire named gets one `update` and they run through `applyBatch`, so
+locks, refusals and the receipt are an update's; the document's own entries are written into
+`meta.answers` in that same revision. The receipt is `applyBatch`'s with `result.report: {answered,
+open}`, the report's two counts after the write. Removing an answer that is not set is admitted and
+changes nothing for that entry. Refusals, each changing nothing, with `error.index` the entry:
+
+- `ANSWER_INVALID`: `answers` is empty or not a list, an entry is not an object, it has a key
+  outside `concern`, `target`, `answer`, its `concern` is not a non-empty string, or its `answer` is
+  neither a non-empty string nor `null`;
+- `ANSWER_TARGET_UNKNOWN`: `target` names no Component and no Wire;
+- `ANSWER_UNKNOWN` and `ANSWER_UNDECLARED`: as above, for that target's `applies` (a removal too);
+- a stale `ifRevision` (`Stale revision: expected <n>, document is at <m>`), as `applyBatch`.
+
+Every surface calls it and holds no rule of its own: `schematic.concerns.answer` (MCP),
+`POST /api/v1/concerns` (HTTP) and `SovSchematicAPI.concerns.answer` (browser); the report is
+`schematic.concerns`, `GET /api/v1/concerns` and `SovSchematicAPI.concerns.list`.
+
+**The validator flag.** `node scripts/validate_sov.mjs --concerns file.sov` prints, after the `ok`
+line of a valid file, one line per open row and then the counts. The exit code is the same with and
+without the flag.
+
+```
+ok   line.sov  (2 components, 1 wires)
+open  document - why: Why would the plant run this line?
+open  component smelter repeatable: Is this made once or over and over?
+open  wire belt carries: What moves along this, and how much?
+concerns: 6 answered, 3 open
+```
+
+
+## Badges (2026-10-04, `NOTATION-MODEL.md` "Statuses")
+
+A Component may carry small chips of text and a palette colour, with no status's meaning.
+
+- **`config.badges`**: an array of at most 4 entries `{label, colorSlot?}`. `label` is a string of 1 to
+  24 characters with no whitespace at either end; `create` and `update` store the label trimmed, a
+  stored label with whitespace at either end is `BADGE_INVALID` when the file is validated, and the
+  schema refuses it with `pattern`; `colorSlot` is an integer 0 to 11, and absent means 0; no other key is
+  allowed. Anything else is `BADGE_INVALID`, and the message names the index and the field
+  (`config.badges[1].label must be a non-empty string`; more than 4 entries; not an array).
+
+```json
+{"label": "Booth", "badges": [{"label": "Record"}, {"label": "Owned by seat", "colorSlot": 7}]}
+```
+
+A `create` or `update` of a Component carrying a bad `badges` is refused with the code and the document
+is unchanged; an `update` with `badges: null` removes the key. Loading keeps the stored value and
+`validateDocument` reports `component <id>: BADGE_INVALID: ...` (marker rule `status`). Badges are
+presentation: they change no other validation, the runtime or the legend. The schema declares the key
+on `components[].config`.
+
+Drawing (`appendComponentBadges`, 2D cards): one chip per badge in a row from the card's top-left
+corner, 6 in from the left and top edges and 4 apart. Each chip has the status chip's geometry (height
+caption size x 1.5, width label length x caption size x 0.6 + caption size, fully rounded), is filled
+with its slot colour at .16 over the card fill, edged in the slot colour at width 1, and holds the label
+in the caption role with ink at 4.6:1 against that fill. Class `card-badge`, `data-badge-index`. A badge
+that would come within 4 of the status chip or within 6 of the card's right edge is not drawn; the last
+chip drawn then reads `+N`, N the badges without a chip of their own, and its `<title>` lists their
+labels.
+
+
+## Card shape (2026-10-04, `SECTION-MODEL.md` "Card shapes")
+
+A card may be drawn as a cylinder (a store) or a parallelogram (input and output), after the ISO 5807
+flowchart symbols.
+
+- **`config.presentation.shape`**: `rect`, `cylinder` or `parallelogram`. Absent means `rect`, and
+  `rect` is admitted on any Component. `cylinder` and `parallelogram` belong to a 2D Component that is
+  not a group and has a closed interior. Any other value, or either shape on any other Component, is
+  `SHAPE_INVALID` (`config.presentation.shape must be one of rect, cylinder, parallelogram, not "disk"`).
+  `disk` names a section preset (`SECTION-MODEL.md` "Presets"), never a shape.
+
+```json
+{"label": "Store", "presentation": {"shape": "cylinder"}}
+```
+
+A `create` or `update` of a Component carrying a bad `shape` is refused with the code and the document
+is unchanged; an `update` with `shape: null` removes the key. Loading keeps the stored value and
+`validateDocument` reports `component <id>: SHAPE_INVALID: ...`; a card whose shape is not admitted is
+drawn as a rectangle. The shape is presentation: it changes no port position, no route, no layout
+metric and nothing the runtime reads. The schema declares the key on `components[].config.presentation`.
+The selection panel's Boundary row shows it. QA: `tests/card_shapes_qa.py`.
+
+
 ## State space contracts (slice 1a, `STATE-SPACE.md`)
 
 The contract layer of the state space. Its code is `src/07-state-space.js`; validation is hand-written there, and the
@@ -225,9 +438,10 @@ A `.sov` carries three pieces of authored state-space data, and nothing a run co
   back to its canvas; a `delete` that would change a bound one's exposed ports that way (the canvas is a Wire's) is
   refused with `DEFINITION_PORTS`, and nothing is deleted. Setting `config.definition` to `null` unbinds and leaves the
   ports as stored.
-- **`config.delay`** on a Wire: its propagation delay in logical ticks, an integer >= 1. Absent means 1 and is not
-  written. A Wire `update` with `delay: null` removes it. A Wire `create` or `update` carrying any other value is
-  refused with `PATH_DELAY_INVALID` on every surface; loading keeps a stored value as written.
+- **`config.delay`** on a Wire: its propagation delay in logical ticks, an integer >= 0. Absent means 1 and is not
+  written. `0` is a zero-delay Path; a cycle made only of zero-delay legs is refused when the run starts, with
+  `ZERO_DELAY_CYCLE`. A Wire `update` with `delay: null` removes it. A Wire `create` or `update` carrying any
+  other value is refused with `PATH_DELAY_INVALID` on every surface; loading keeps a stored value as written.
 - **`merge`** on a declared port's channel: the `merge@1` parameters for same-tick arrivals there.
 - **A Point's `self`.** A Point (0D) has one port, `self`, and may declare it, to give it channels and merges, as a
   single `attachmentPoints` entry `{id: 'self', flow?, channels}` with no `side` or `t`. Loading reads the placeholder

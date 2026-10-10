@@ -1,12 +1,16 @@
 'use strict';
 // 0.1 Beta concern: Runtime state, DOM handles, palette/color kernel.
 
-const SYMBOLS = [{"id":"blank","name":"BLANK","family":"UNSET","role":"incomplete","meaning":"Incomplete component. Choose its type.","verbs":[],"properties":["incomplete","type-required"],"diagram_class":"COMPONENT"},{"id":"ground","name":"GROUND","family":"PASSIVE","role":"reference","meaning":"Reference point used to resolve meaning, state, or authority.","verbs":["resolve","reference"],"properties":["non-authoritative-by-itself"],"diagram_class":"REFERENCE"},{"id":"point","name":"POINT","family":"PRIMITIVE","role":"attachment","meaning":"0D attachment. Sticks to a Path, a Plane boundary, or a Wire; Wires end on Points.","verbs":["attach","enter","exit"],"properties":["addressable","0d"],"diagram_class":"BOUNDARY"},{"id":"port","name":"PORT","family":"PASSIVE","role":"boundary","meaning":"Legacy alias of POINT. Documents normalize it to point.","verbs":["enter","exit"],"properties":["addressable","legacy-alias"],"diagram_class":"BOUNDARY"},{"id":"path","name":"PATH","family":"PRIMITIVE","role":"carrier","meaning":"1D route with start and end. Hosts Points along its length. It does not imply permission or success.","verbs":["carry"],"properties":["direction-neutral","1d"],"diagram_class":"CONNECTION"},{"id":"plane","name":"PLANE","family":"PRIMITIVE","role":"surface","meaning":"Bounded 2D region. Hosts Points on its boundary and Components in its interior. A typed Plane is a Component.","verbs":["host","bound"],"properties":["bounded","hosts","2d"],"diagram_class":"SURFACE"},{"id":"join","name":"JOIN","family":"MECHANICAL","role":"connection","meaning":"Paths are connected.","verbs":["join"],"properties":["connected"],"diagram_class":"CONNECTION"},{"id":"cross","name":"CROSS","family":"PASSIVE","role":"connection","meaning":"Paths cross but do not connect.","verbs":["cross"],"properties":["not-connected"],"diagram_class":"CONNECTION"},{"id":"hold","name":"HOLD","family":"PASSIVE","role":"state","meaning":"Keeps bounded state.","verbs":["hold","store"],"properties":["stateful"],"diagram_class":"STATE"},{"id":"buffer","name":"BUFFER","family":"PASSIVE","role":"state","meaning":"Holds flow temporarily, then releases it.","verbs":["buffer","release"],"properties":["temporary-state"],"diagram_class":"STATE"},{"id":"act","name":"ACT","family":"ACTIVE","role":"transform","meaning":"Transforms input into output. Activity does not grant authority.","verbs":["act","transform"],"properties":["agentic","authority-neutral"],"diagram_class":"TRANSFORM"},{"id":"gate","name":"GATE","family":"MECHANICAL","role":"control","meaning":"Passes or refuses flow using a declared condition.","verbs":["check","pass","refuse"],"properties":["conditional","authority-neutral"],"diagram_class":"CONTROL"},{"id":"switch","name":"SWITCH","family":"MECHANICAL","role":"control","meaning":"Opens or closes a path from explicit control.","verbs":["open","close"],"properties":["externally-controlled"],"diagram_class":"CONTROL"},{"id":"limit","name":"LIMIT","family":"PASSIVE","role":"constraint","meaning":"Restricts a flow dimension without judgement.","verbs":["limit"],"properties":["non-judgemental"],"diagram_class":"CONTROL"},{"id":"one-way","name":"ONE-WAY","family":"PASSIVE","role":"direction","meaning":"Allows flow in one direction.","verbs":["pass"],"properties":["directional","non-reciprocal"],"diagram_class":"CONNECTION"},{"id":"return","name":"RETURN","family":"PASSIVE","role":"reciprocity","meaning":"Requires a matching return path.","verbs":["return"],"properties":["reciprocal"],"diagram_class":"CONNECTION"},{"id":"observe","name":"OBSERVE","family":"PASSIVE","role":"evidence","meaning":"Reads evidence from outside the action path.","verbs":["observe"],"properties":["independent-read"],"diagram_class":"EVIDENCE"},{"id":"receipt","name":"RECEIPT","family":"PASSIVE","role":"evidence","meaning":"Durable evidence emitted by a crossing or action.","verbs":["record","return"],"properties":["durable","evidentiary"],"diagram_class":"EVIDENCE"},{"id":"authority","name":"AUTHORITY","family":"PASSIVE","role":"control-reference","meaning":"Typed, scoped permission supplied as a control input.","verbs":["grant","scope"],"properties":["typed","scoped"],"diagram_class":"REFERENCE"},{"id":"refuse","name":"REFUSE","family":"MECHANICAL","role":"termination","meaning":"Ends an attempted path explicitly.","verbs":["refuse","stop"],"properties":["explicit-terminal"],"diagram_class":"TERMINATION"},{"id":"clock","name":"CLOCK","family":"ACTIVE","role":"timing","meaning":"Drives time: its level rises and falls on a declared period. An edge may start work.","verbs":["tick","schedule"],"properties":["asserted","periodic"],"diagram_class":"TIMING"},{"id":"lever","name":"LEVER","family":"MECHANICAL","role":"input","meaning":"An asserted level: it holds the state it was set to until an operation changes it.","verbs":["set","toggle"],"properties":["asserted","stateful"],"diagram_class":"CONTROL"}];
+const SYMBOLS = [{"id":"blank","name":"BLANK","family":"UNSET","role":"incomplete","meaning":"Incomplete component. Choose its type.","verbs":[],"properties":["incomplete","type-required"],"diagram_class":"COMPONENT"},{"id":"ground","name":"GROUND","family":"PASSIVE","role":"reference","meaning":"Reference point used to resolve meaning, state, or authority.","verbs":["resolve","reference"],"properties":["non-authoritative-by-itself"],"diagram_class":"REFERENCE"},{"id":"point","name":"POINT","family":"PRIMITIVE","role":"attachment","meaning":"0D attachment. Sticks to a Path, a Plane boundary, or a Wire; Wires end on Points.","verbs":["attach","enter","exit"],"properties":["addressable","0d"],"diagram_class":"BOUNDARY"},{"id":"port","name":"PORT","family":"PASSIVE","role":"boundary","meaning":"Legacy alias of POINT. Documents normalize it to point.","verbs":["enter","exit"],"properties":["addressable","legacy-alias"],"diagram_class":"BOUNDARY"},{"id":"path","name":"PATH","family":"PRIMITIVE","role":"carrier","meaning":"1D route with start and end. Hosts Points along its length. It does not imply permission or success.","verbs":["carry"],"properties":["direction-neutral","1d"],"diagram_class":"CONNECTION"},{"id":"plane","name":"PLANE","family":"PRIMITIVE","role":"surface","meaning":"Bounded 2D region. Hosts Points on its boundary and Components in its interior. A typed Plane is a Component.","verbs":["host","bound"],"properties":["bounded","hosts","2d"],"diagram_class":"SURFACE"},{"id":"join","name":"JOIN","family":"MECHANICAL","role":"connection","meaning":"Paths are connected.","verbs":["join"],"properties":["connected"],"diagram_class":"CONNECTION"},{"id":"cross","name":"CROSS","family":"PASSIVE","role":"connection","meaning":"Paths cross but do not connect.","verbs":["cross"],"properties":["not-connected"],"diagram_class":"CONNECTION"},{"id":"hold","name":"HOLD","family":"PASSIVE","role":"state","meaning":"Keeps bounded state.","verbs":["hold","store"],"properties":["stateful"],"diagram_class":"STATE"},{"id":"buffer","name":"BUFFER","family":"PASSIVE","role":"state","meaning":"Holds flow temporarily, then releases it.","verbs":["buffer","release"],"properties":["temporary-state"],"diagram_class":"STATE"},{"id":"act","name":"ACT","family":"ACTIVE","role":"transform","meaning":"Transforms input into output. Activity does not grant authority.","verbs":["act","transform"],"properties":["agentic","authority-neutral"],"diagram_class":"TRANSFORM"},{"id":"gate","name":"GATE","family":"MECHANICAL","role":"control","meaning":"Passes or refuses flow using a declared condition.","verbs":["check","pass","refuse"],"properties":["conditional","authority-neutral"],"diagram_class":"CONTROL"},{"id":"switch","name":"SWITCH","family":"MECHANICAL","role":"control","meaning":"Opens or closes a path from explicit control.","verbs":["open","close"],"properties":["externally-controlled"],"diagram_class":"CONTROL"},{"id":"limit","name":"LIMIT","family":"PASSIVE","role":"constraint","meaning":"Restricts a flow dimension without judgement.","verbs":["limit"],"properties":["non-judgemental"],"diagram_class":"CONTROL"},{"id":"one-way","name":"ONE-WAY","family":"PASSIVE","role":"direction","meaning":"Allows flow in one direction.","verbs":["pass"],"properties":["directional","non-reciprocal"],"diagram_class":"CONNECTION"},{"id":"return","name":"RETURN","family":"PASSIVE","role":"reciprocity","meaning":"Requires a matching return path.","verbs":["return"],"properties":["reciprocal"],"diagram_class":"CONNECTION"},{"id":"observe","name":"OBSERVE","family":"PASSIVE","role":"evidence","meaning":"Reads evidence from outside the action path.","verbs":["observe"],"properties":["independent-read"],"diagram_class":"EVIDENCE"},{"id":"receipt","name":"RECEIPT","family":"PASSIVE","role":"evidence","meaning":"Durable evidence emitted by a crossing or action.","verbs":["record","return"],"properties":["durable","evidentiary"],"diagram_class":"EVIDENCE"},{"id":"authority","name":"AUTHORITY","family":"PASSIVE","role":"control-reference","meaning":"Typed, scoped permission supplied as a control input.","verbs":["grant","scope"],"properties":["typed","scoped"],"diagram_class":"REFERENCE"},{"id":"refuse","name":"REFUSE","family":"MECHANICAL","role":"termination","meaning":"Ends an attempted path explicitly.","verbs":["refuse","stop"],"properties":["explicit-terminal"],"diagram_class":"TERMINATION"},{"id":"clock","name":"CLOCK","family":"ACTIVE","role":"timing","meaning":"Drives time: its level rises and falls on a declared period. An edge may start work.","verbs":["tick","schedule"],"properties":["asserted","periodic"],"diagram_class":"TIMING"},{"id":"lever","name":"LEVER","family":"MECHANICAL","role":"input","meaning":"An asserted level: it holds the state it was set to until an operation changes it.","verbs":["set","toggle"],"properties":["asserted","stateful"],"diagram_class":"CONTROL"},{"id":"group","name":"GROUP","family":"PRIMITIVE","role":"grouping","meaning":"Collects Components for reading. Not a boundary: it hosts nothing and has no ports; a Wire between members of different groups is one Wire.","verbs":["group"],"properties":["reading-only","2d"],"diagram_class":"SURFACE"}];
 // Primitives are the dimensional basis (0D / 1D / 2D). Components are typed 2D forms
 // whose attachment defaults are template data; a typed Plane is an ordinary Component.
 const GROUPS = {"Primitives": ["point","path","plane"], "Components": ["blank","act","hold","buffer","gate","switch","limit","receipt","observe"], "Signals": ["clock","lever"]};
-const PRIMITIVE_SYMBOL_IDS=new Set(GROUPS.Primitives);
+// A group (SECTION-MODEL.md "Groups (reading only)") is a primitive that is not in the palette:
+// it collects Components for reading and is authored by data, not drawn from the palette.
+const PRIMITIVE_SYMBOL_IDS=new Set([...GROUPS.Primitives,'group']);
 function isPrimitiveSymbol(id){return PRIMITIVE_SYMBOL_IDS.has(String(id||''))}
+// A group is never an obstacle and never a host: routing, layout and the layout metrics leave it out.
+function isGroupComponent(n){return String(n?.symbolId||'')==='group'}
 const workspace = document.getElementById('workspace');
 const nodesG = document.getElementById('nodes');
 const wiresG = document.getElementById('wires');
@@ -150,13 +154,19 @@ const LIGHT_SURFACE_MONO=['#202020','#353535','#4B4B4B','#616161','#747474','#87
 const LIGHT_SURFACE_MONO_DEEP=['#0D0D0D','#171717','#222222','#2E2E2E','#3A3A3A','#464646'];
 const DARK_SURFACE_MONO=['#F2F2EE','#DDDDD8','#C8C8C2','#B3B3AD','#9E9E98','#898984'];
 const DARK_SURFACE_MONO_BRIGHT=['#FFFFFF','#F0F0EB','#E1E1DB','#D2D2CC','#C3C3BD','#B4B4AE'];
-// 'okabe-ito' is the default: Okabe & Ito's colour-universal hues (09-colour-core.js REFERENCES),
+// 'okabe-ito' is Okabe & Ito's colour-universal hues (09-colour-core.js REFERENCES),
 // re-tuned by search so that, after each theme's realisation (themeColor), every slot keeps its
 // contrast floor and the closest pair stays CVD_FLOOR apart under protan, deutan and tritan
 // simulation. The other colour rows are hue families: legible, not colour-blind distinct;
 // scripts/contrast_audit.py measures and says so.
+// 'system-default' is generated, not authored: SovSchematicColour.PALETTE_SYSTEMS (09-colour-core.js)
+// gives three roles and three status tones from a base hue, a ratio and a step, and slots 6-11 take
+// the middle tone of each ramp; a system with a dark row (spec.dark) gives DARK_SURFACE_PALETTES its own six.
+// It is the default: its values were searched on the realised slots (best5.json) and pass
+// scripts/contrast_audit.py in every theme x appearance.
 const BASE_PALETTES={
   'okabe-ito':['#F85401','#F4C768','#98E2BD','#0092E4','#2E69A0','#7B3962'],
+  'system-default':SovSchematicColour.paletteSystem(SovSchematicColour.PALETTE_SYSTEMS['system-default']).slots,
   spectrum:['#D34E4E','#D99032','#79A948','#3EA7A0','#507CCB','#8A5BC0'],
   cool:['#3C7EA6','#3AA2A0','#54A58B','#6589BF','#6D67B1','#8A69A7'],
   warm:['#C34B48','#D36F3E','#D7983D','#B77A4C','#A85E65','#91546F'],
@@ -164,6 +174,7 @@ const BASE_PALETTES={
 };
 const DARK_SURFACE_PALETTES={
   'okabe-ito':['#D07807','#FBAC31','#039843','#36BEFE','#5671AC','#FF1782'],
+  'system-default':SovSchematicColour.paletteSystem(SovSchematicColour.PALETTE_SYSTEMS['system-default'],'dark').slots,
   spectrum:['#FF7A7D','#E8AA58','#9AC86C','#62C9C1','#82A9F2','#B88CE5'],
   cool:['#74B8E2','#69D0CB','#82C9AE','#91AFE8','#A19BE1','#B58FC8'],
   warm:['#F37C78','#ED966A','#E8B660','#D6A071','#CE858E','#C77F9E'],
@@ -173,7 +184,7 @@ const DEFAULT_CUSTOM_PALETTE=['#C84E64','#DB8750','#B7A647','#58A27C','#4E86BE',
 
 const colorEngine={
   theme:'pastel',
-  palette:'okabe-ito',
+  palette:'system-default',
   custom:[...DEFAULT_CUSTOM_PALETTE],
   diffuse:true
 };
@@ -256,19 +267,39 @@ function activeMonoPalette(){
   const base=surfaceAppearance()==='dark'?DARK_SURFACE_MONO:LIGHT_SURFACE_MONO;
   return base.map(c=>themeColor(c));
 }
+// The document's own palette (meta.palette) wins over the view's while the document declares one.
+// documentPalette() is the admitted value - a palette name or {custom:[six hexes]} - or null when the
+// document declares none (or holds a refused value, which draws nothing of its own). Every palette
+// read goes through effectivePaletteName() and effectiveCustomRow(); colorEngine stays the view's own
+// palette and is never written from the document.
+function documentPalette(){
+  const declared=diagram.meta?.palette;
+  if(declared===undefined)return null;
+  const admitted=SovSchematicData.admitPalette(declared);
+  return admitted.ok&&admitted.present?admitted.value:null;
+}
+function effectivePaletteName(){
+  const declared=documentPalette();
+  if(declared===null)return colorEngine.palette;
+  return typeof declared==='string'?declared:'custom';
+}
+function effectiveCustomRow(){
+  const declared=documentPalette();
+  return declared!==null&&typeof declared!=='string'?declared.custom:colorEngine.custom;
+}
 function activeColorPalette(){
-  const dark=surfaceAppearance()==='dark';
-  const base=colorEngine.palette==='mono'
+  const dark=surfaceAppearance()==='dark',name=effectivePaletteName();
+  const base=name==='mono'
     ? (dark?DARK_SURFACE_MONO_BRIGHT:LIGHT_SURFACE_MONO_DEEP)
-    : colorEngine.palette==='custom'
-      ? colorEngine.custom
-      : (dark?(DARK_SURFACE_PALETTES[colorEngine.palette]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[colorEngine.palette]||BASE_PALETTES['okabe-ito']));
+    : name==='custom'
+      ? effectiveCustomRow()
+      : (dark?(DARK_SURFACE_PALETTES[name]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[name]||BASE_PALETTES['okabe-ito']));
   return base.map(c=>themeColor(c));
 }
 let activePaletteCacheKey=null;
 let activePaletteCacheValue=null;
 function activePalette(){
-  const key=[surfaceAppearance(),colorEngine.theme,colorEngine.palette,...colorEngine.custom].join('|');
+  const key=[surfaceAppearance(),colorEngine.theme,effectivePaletteName(),...effectiveCustomRow()].join('|');
   if(activePaletteCacheKey===key&&activePaletteCacheValue)return activePaletteCacheValue;
   activePaletteCacheKey=key;
   activePaletteCacheValue=Object.freeze([...activeMonoPalette(),...activeColorPalette()]);
@@ -279,6 +310,37 @@ function normalizeSlot(v,fallback=0){
   return Number.isInteger(n)?Math.max(0,Math.min(11,n)):fallback;
 }
 function slotColor(slot){return activePalette()[normalizeSlot(slot)]}
+// A declared palette system (09-colour-core.js PALETTE_SYSTEMS), generated once per name.
+const paletteSystemCache=new Map();
+function declaredPaletteSystem(name,appearance=surfaceAppearance()){
+  const spec=SovSchematicColour.PALETTE_SYSTEMS[name];if(!spec)return null;
+  const key=name+'|'+appearance;
+  if(!paletteSystemCache.has(key))paletteSystemCache.set(key,SovSchematicColour.paletteSystem(spec,appearance));
+  return paletteSystemCache.get(key);
+}
+// The meaning colours stay fixed in every palette: a status tone is the base tone of safe, alert or
+// danger in the active palette when that palette is a declared system, else in system-default, on the
+// row of the current appearance.
+function statusTone(name){
+  const sys=declaredPaletteSystem(effectivePaletteName())||declaredPaletteSystem('system-default');
+  const i=sys.names.indexOf(name);
+  return i>=3?sys.ramps[i][2]:null;
+}
+// A lit wire's tone for a source in hue slot 6-11: one step lighter on dark (+1), one step darker on
+// light (-1), on that slot's ramp. A declared system has its ramps; any other palette builds one from
+// the slot's authored colour for that appearance, with the system step 0.08.
+function litTone(slot,appearance=surfaceAppearance()){
+  const n=Number(slot);if(!Number.isInteger(n)||n<6||n>11)return null;
+  const dark=appearance==='dark',index=dark?3:1,name=effectivePaletteName(),sys=declaredPaletteSystem(name,appearance);
+  if(sys)return sys.ramps[n-6][index];
+  const row=name==='mono'
+    ? (dark?DARK_SURFACE_MONO_BRIGHT:LIGHT_SURFACE_MONO_DEEP)
+    : name==='custom'
+      ? effectiveCustomRow()
+      : (dark?(DARK_SURFACE_PALETTES[name]||DARK_SURFACE_PALETTES['okabe-ito']):(BASE_PALETTES[name]||BASE_PALETTES['okabe-ito']));
+  const [L,C,h]=SovSchematicColour.hexOklch(row[n-6]);
+  return SovSchematicColour.toneRamp(L,C,h,.08)[index];
+}
 function nearestSlot(hex){
   const c=hexRgb(hex);let best=0,bestD=Infinity;
   activePalette().forEach((h,i)=>{
@@ -289,7 +351,15 @@ function nearestSlot(hex){
 }
 function lighten(hex,amount=.88){return mixHex([hex,'#FFFFFF'],[1-amount,amount])}
 function darken(hex,amount=.72){return mixHex([hex,'#111315'],[1-amount,amount])}
-function componentSurfaceFill(hex,amount=.86){return surfaceAppearance()==='dark'?darken(hex,Math.min(.88,amount*.82)):lighten(hex,amount)}
+// A region's fill is the ground it sits on moved toward the region's own colour - not the
+// colour moved toward the ground. The two constructions agree in a light theme and disagree
+// badly in a dark one (a dark-only darken and a light-only lighten made every coloured region a
+// bright slab against a near-black canvas); starting from the ground is symmetric by
+// construction and reads as a surface in both appearances. `ground` is the surface this region
+// sits inside - the host's drawn interior for a nested region, a group's own fill for a member,
+// canvasTone() otherwise - so a nested region is always the one above it moved toward its own
+// colour, never the bare canvas moved twice.
+function componentSurfaceFill(hex,amount=.86,ground=canvasTone()){return mixHex([ground,hex],[amount,1-amount])}
 
 const DEFAULT_COMPONENT_COLOR='#171715';
 const DEFAULT_WIRE_COLOR='#171715';

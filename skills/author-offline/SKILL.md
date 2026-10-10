@@ -98,6 +98,11 @@ Port override on a Component, for access or face. Write the whole port record; t
 
 `face` is `external` (reachable from the containing surface, the default), `internal` (reachable from the Component's own interior only), or `both`. A Component that hosts children and needs a wire from a child to the outside gives that port face `internal` or `both`, as in `examples/04-boundary-port.sov`.
 
+Answers to the questions the notation declares (its concerns; `NOTATION-MODEL.md` "Concerns"), each key a concern id the notation declares and each value a non-empty string:
+
+- the document's own, in `meta`: `"meta": {"answers": {"<concern id>": "<answer>"}}`
+- a Component's or a Wire's, in its `config`: `"config": {"answers": {"<concern id>": "<answer>"}}`
+
 ## Palette
 
 `symbolId` values and what each means. The full list with verbs and properties is `SYMBOLS` in `src/00-state.js`.
@@ -122,6 +127,7 @@ Port override on a Component, for access or face. Write the whole port record; t
 | `plane` | Bounded 2D region that hosts Points on its boundary and Components inside. |
 | `point` | 0D attachment on a Path, a Plane boundary, or a Wire. |
 | `path` | 1D route with start and end that hosts Points. |
+| `group` | Collects Components for reading: `config.members` lists their ids, all on the group's canvas. Not a boundary: it hosts nothing and has no ports, and a Wire between members of different groups is one Wire. Not in the palette; see SECTION-MODEL.md "Groups (reading only)". |
 | `clock` | Drives time: its level rises and falls on a declared period. Needs `config.signal.clock.periodMs`. |
 | `lever` | An asserted level: it holds the state it was set to until an operation changes it. |
 | `blank` | Incomplete component whose type is still to be chosen. Do not author these. |
@@ -180,7 +186,7 @@ All of this is optional data. `GRAPH-MODEL.md` specifies it in full.
 ## Procedure
 
 1. Write the topology as a list before any JSON: each record with its type and role, each wire as `a.side → b.side`, and which surface each wire is on.
-2. Decide the regions. Anything that is "inside" something else gets a Plane host and boundary Points for every crossing.
+2. Decide the regions. A collection drawn only to help the reader (records here, surfaces there) is a `group` with `config.members`; Wires run straight between members, one Wire each, with no boundary Points. Only real containment, something truly inside something else, gets a Plane host and boundary Points for every crossing.
 3. Place records on a grid with a separate control/feedback lane. Compute Plane sizes from child bounds and title/label clearance. Apply the palette, port audit and graphic rules in [author](../author/SKILL.md#layout-and-review); connection slots, not wire hex fields, own wire colors.
 4. Write the file in the authored form above.
 5. Validate: `node scripts/validate_sov.mjs my.sov`. Fix every line it prints. It uses the same checks the editor runs at load, plus the wire `canvasId` check.
@@ -255,11 +261,41 @@ Every file in `examples/` validates and exports. Read the one closest to what yo
 ```
 node scripts/validate_sov.mjs file.sov            # exit 0 when valid; prints every problem
 node scripts/validate_sov.mjs --compact file.sov  # also prints the compact saved form
+node scripts/validate_sov.mjs --concerns file.sov # also prints the questions still open
 python scripts/export_svg.py file.sov --out out/  # standalone SVG, light theme; --appearance dark
 ```
+
+`--concerns` prints, after a valid file's `ok` line, one line per question the notation declares that the file has not answered, `open  <document, component or wire> <id, or - for the document> <concern id>: <the question>`, and then `concerns: <n> answered, <n> open`. An open line is a question nobody has answered yet, never a problem: the exit code is the same with and without the flag. Answer each one the description or the drawing settles, in `meta.answers` or that record's `config.answers`, leave the rest open, and name the ones left open when you hand the file over.
 
 `tests/author_offline_qa.py` validates every fenced document in this file and every example, and checks the palette table against the source of truth.
 
 ## Read/write axis
 
 Treat direction, access, and authority as separate. `direction ≠ access ≠ authority`. A Port access value constrains representable Read/Write packet operations; it does not grant authority.
+
+## Offline layout
+
+Hand coordinates do not scale: a document generated from data — say 50 records and their
+wires — cannot be placed one card at a time. `node scripts/layout_sov.mjs` runs the same
+layout engine the editor's `schematic.layout apply` uses without a browser, so a generated
+map gets its positions the way a hand-authored one gets its topology.
+
+```
+node scripts/layout_sov.mjs file.sov [--out other.sov] [--view id]
+```
+
+It loads `file.sov` with the same data core the editor and validator run, then arranges it
+with `schematic.layout`'s `layered` engine (`LAYOUT-MODEL.md`): sources on the left, sinks on
+the right, columns by wire direction, rows levelled with the wires crossing them, so it never
+needs an authored `x`/`y` to start from. It writes the result back over the input, or to the
+file named by `--out`, and prints `ok <file> (<placed> placed)`. `--view` arranges a named
+layout instead of the document's default; left out, the default. A refusal from the engine
+(an unknown layout, for one) prints `FAIL` with its code and message and exits 1; a missing
+file argument prints the usage and exits 2.
+
+A generated map needs no hand coordinates: write every Component and Wire with `id`,
+`symbolId`, and `config` only, run `layout_sov.mjs`, then validate and export as above. What
+the layered engine does not place is what it does not own: a Plane's boundary Points still
+follow the placement rules above (`t` between 0.2 and 0.8, at least 100 units of interior
+clearance), since a Point's position is data the generator has to declare or a follow-up
+layout pass has to set, not something the card layout infers for it.

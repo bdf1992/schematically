@@ -9,6 +9,10 @@ let currentFileHandle=null;
 let currentFileName='Untitled.sov';
 let currentFileFormat='document';
 let lastFileFingerprint=null;
+// The fingerprint of a document the editor made and nobody has touched. Set whenever a
+// document is placed fresh (startup, File -> New); cleared whenever a file is opened,
+// restored or saved, since lastFileFingerprint then carries the comparison instead.
+let pristineFingerprint=null;
 
 function snapshotDocument(){
   // Files and API snapshots carry authored truth only; runtime projections are rebuilt on load.
@@ -20,7 +24,10 @@ function snapshotDocument(){
 function semanticFingerprint(){
   const doc=snapshotDocument();
   doc.revision=0;
-  if(doc.meta){delete doc.meta.updatedAt;delete doc.meta.savedAt}
+  // Timestamps, and the checkpoint list (lazily created by the editor kernel's own startup, not
+  // by anything the user did), are not document content: documentHash() strips the same fields
+  // for undo/redo identity, so a fresh checkpoint store must not read as an edit here either.
+  if(doc.meta){delete doc.meta.updatedAt;delete doc.meta.savedAt;delete doc.meta.checkpoints}
   return JSON.stringify(doc);
 }
 function captureWorkspace(){
@@ -31,9 +38,15 @@ function captureWorkspace(){
       camera:{...camera},
       grid:{visible:canvasGridVisible,snap:canvasSnapEnabled,size:canvasGridSize},
       showFlow,
+      // The document's own palette (meta.palette) wins over the view; a workspace carries only the
+      // view's own palette and custom row, never the document's palette.
       colorEngine:SovSchematicData.clone(colorEngine),
       appearanceMode,
-      globalRate:globalTimeScale(),
+      // The document's own rate (meta.timeScale) wins over the view; a workspace carries only the
+      // view's own playback speed, never the document's rate (issue #40).
+      playbackSpeed:simClock.speed,
+      // The wave view's style (src/68-wave-view.js) is the view's alone: never in the document.
+      waveStyle:typeof waveStyle==='function'?waveStyle():'off',
       layout:typeof activeLayoutId==='function'?activeLayoutId():null
     }
   };
@@ -87,6 +100,7 @@ function syncRuntimeAfterDocumentReplace(){
   selected=null;hideSelectionBar();
   persistenceFingerprint=semanticFingerprint();
   updateRevisionReadout();
+  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();if(typeof applyColorEngine==='function')applyColorEngine();
   render();selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
 }
 function replaceRuntimeDocument(input){
@@ -113,7 +127,15 @@ function applyWorkspace(bundle){
   if(view.appearanceMode){appearanceMode=view.appearanceMode;applyAppearanceMode()}
   // The layout on screen is a viewer's choice, kept with the workspace, never in the file.
   if(view.layout&&typeof switchLayout==='function'&&view.layout!==activeLayoutId())switchLayout(view.layout);
-  if(view.globalRate!=null){diagram.meta=diagram.meta||{};diagram.meta.timeScale=Number(view.globalRate)||1}
+  // The document's own rate (meta.timeScale) is never set from a workspace: an older package's
+  // view.globalRate is ignored outright (issue #40). Only the view's own playback speed moves.
+  if(typeof view.playbackSpeed==='number'&&Number.isFinite(view.playbackSpeed)&&view.playbackSpeed>0){
+    simClock.speed=view.playbackSpeed;
+    const sel=document.getElementById('simSpeed');if(sel)sel.value=String(simClock.speed);
+  }
+  // A workspace without view.waveStyle, or with a value that is not one of the four, gives off.
+  if(typeof waveStyleFromView==='function')waveStyleFromView(view);
+  if(typeof syncGlobalRateSelect==='function')syncGlobalRateSelect();
   render();
   return captureWorkspace();
 }
@@ -190,7 +212,7 @@ function snapshotPackage(){
 function packageFileText(){return JSON.stringify(snapshotPackage(),null,2)}
 function fileTextForFormat(format){return format==='package'?packageFileText():documentFileText()}
 function mimeForFormat(format){return format==='package'?'application/vnd.soveraeign.schematic-package+json':'application/vnd.soveraeign.schematic+json'}
-function isFileDirty(){return lastFileFingerprint===null||semanticFingerprint()!==lastFileFingerprint}
+function isFileDirty(){return lastFileFingerprint===null?semanticFingerprint()!==pristineFingerprint:semanticFingerprint()!==lastFileFingerprint}
 function updateFileReadout(){
   const dirty=isFileDirty();
   if(fileNameReadout)fileNameReadout.textContent=currentFileName||suggestedFileName(currentFileFormat);
@@ -202,6 +224,7 @@ function markFileSaved(name,format,handle=null){
   currentFileFormat=format||'document';
   currentFileHandle=handle||null;
   lastFileFingerprint=semanticFingerprint();
+  pristineFingerprint=null;
   updateFileReadout();
 }
 function triggerDownload(text,name,mime){
@@ -268,6 +291,7 @@ function applyOpenedPayload(parsed,name='Untitled.sov',handle=null){
   currentFileName=name||suggestedFileName(currentFileFormat);
   currentFileHandle=handle;
   lastFileFingerprint=semanticFingerprint();
+  pristineFingerprint=null;
   saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false});
   updateFileReadout();
   return snapshotDocument();
@@ -302,6 +326,7 @@ function newSchematic(){
   const doc=SovSchematicData.makeDocument({id:`schematic-${Date.now()}`,meta:{title:'Untitled'}});
   replaceRuntimeDocument(doc);
   currentFileHandle=null;currentFileName='Untitled.sov';currentFileFormat='document';lastFileFingerprint=null;
+  pristineFingerprint=semanticFingerprint();
   saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false});
   updateFileReadout();
   statusEl.textContent='New schematic';
@@ -312,6 +337,7 @@ function restoreRecovery(){
   const raw=localStorage.getItem(LOCAL_RECOVERY_KEY)||localStorage.getItem(LEGACY_LOCAL_SAVE_KEY);if(!raw)throw new Error('No recovery snapshot found');
   applyWorkspace(JSON.parse(raw));
   currentFileHandle=null;currentFileName='Recovered.sov';currentFileFormat='document';lastFileFingerprint=null;
+  pristineFingerprint=null;
   updateFileReadout();
   statusEl.textContent='Recovery restored · save to keep it';
   return true;
@@ -320,18 +346,20 @@ function restoreRecovery(){
 // (render.svg / render.png), scripts/export_svg.py and the server's render service. Computed
 // styles are inlined so the file renders outside the editor; the viewBox fits the diagram; the
 // live clock's overlay and, unless asked for, animated packets are left out.
-// A picture (export, PNG, audit) draws labels at their base size whatever the editor's zoom:
-// the on-screen clamp (app.css, issue #15) keeps the canvas readable, but a fitted picture of a
-// small diagram would otherwise carry labels at a third of their size.
+// A picture (export, snapshot, PNG, audit) draws every label at its base size times the document
+// scale, whatever the editor's zoom. The on-screen clamp (app.css, issue #15) is a reading aid for
+// the live editor only: it holds labels at 12 screen px while strokes and marks follow the camera,
+// so a file drawn through it would carry labels several times their size against the same strokes.
 function withPictureLabels(fn){
   const prev=workspace.style.getPropertyValue('--zoom');if(prev===''||Number(prev)===1)return fn();
   workspace.style.setProperty('--zoom','1');render();
   try{return fn()}finally{workspace.style.setProperty('--zoom',prev);render()}
 }
 function renderStandaloneSvg(opts={}){return withPictureLabels(()=>renderStandaloneSvgNow(opts))}
-// The snapshot (file.svg, File > Export SVG): the canvas exactly as on screen, labels where the
-// reader sees them. render.svg makes a picture instead, with labels at their base size.
-function snapshotSvg(opts={}){return renderStandaloneSvgNow(opts)}
+// The snapshot (file.svg, File > Export SVG): the same picture render.svg makes, labels at base
+// size times scale at any camera zoom. It keeps its own name because its callers are the File menu
+// and file.svg; the camera's zoom no longer reaches the file.
+function snapshotSvg(opts={}){return withPictureLabels(()=>renderStandaloneSvgNow(opts))}
 function renderStandaloneSvgNow(opts={}){
   if (typeof cancelWireDrag === 'function') cancelWireDrag();
   const live = workspace;
@@ -384,12 +412,15 @@ function renderStandaloneSvgNow(opts={}){
   clone.querySelector('#paletteDropLayer')?.replaceChildren();
   // A running clock's overlay is a moment, not the document.
   clone.querySelector('#simLayer')?.replaceChildren();
-  clone.querySelectorAll('.level-high').forEach(x => x.classList.remove('level-high'));
+  // The wave view's layer is a moment too, and it is the view's: the picture carries no trace of it.
+  clone.querySelector('#waveLayer')?.remove();
+  clone.querySelectorAll('.level-high').forEach(x => { x.classList.remove('level-high'); x.style.removeProperty('--wire-lit'); });
   clone.querySelectorAll('.selected,.snap-target,.wiring-source').forEach(x => x.classList.remove('selected','snap-target','wiring-source'));
-  clone.querySelectorAll('.port-hit,.wire-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
+  clone.querySelectorAll('.port-hit,.wire-hit,.group-hit,.transform-handle-group,.carrier-end-handle').forEach(x => x.remove());
   // A still picture cannot show travel: a packet frozen mid-wire reads as a junction.
   // Packets stay only when the file is made to loop (--loop).
   if (!opts.packets) clone.querySelectorAll('.wire-packet').forEach(x => x.remove());
+  clone.querySelectorAll('.bus-hit-band').forEach(x => x.remove());
 
   // A wire on a local surface already sits just after its host in the node layer
   // (renderWires), so the picture shows it above the host body with no lifting here.
@@ -462,19 +493,100 @@ function setFileMenu(open){
 function initializePersistenceTracking(){
   persistenceFingerprint=semanticFingerprint();
   lastFileFingerprint=null;
+  pristineFingerprint=semanticFingerprint();
   updateRevisionReadout();
 }
+// The desktop shell's launch document. After it is applied (or fails to apply) the page tells the
+// shell what it loaded through report_loaded, which the shell registers only for a smoke run
+// (--smoke-report); in an ordinary launch that call is refused and the refusal is ignored.
 async function openDesktopLaunchDocument(){
   if(!window.__TAURI__)return;
+  const tauri=window.__TAURI__;
+  const report=args=>tauri.core.invoke('report_loaded',args).catch(()=>{});
+  let opened=null;
   try{
-    const opened=await window.__TAURI__.core.invoke('opened_document');
+    opened=await tauri.core.invoke('opened_document');
     if(!opened)return;
     const parsed=parseFilePayload(opened.text);
-    applyOpenedPayload(parsed,opened.name);
+    const loaded=applyOpenedPayload(parsed,opened.name);
     statusEl.textContent=`Opened · ${currentFileName}`;
-  }catch(error){console.warn('Desktop launch document failed to open',error)}
+    await report({name:opened.name,components:(loaded?.components||[]).length,wires:(loaded?.wires||[]).length,ok:true,error:null});
+  }catch(error){
+    console.warn('Desktop launch document failed to open',error);
+    if(opened)await report({name:opened.name||'',components:0,wires:0,ok:false,error:String(error?.message||error)});
+  }
 }
-openDesktopLaunchDocument();
+// src/65-sim-control.js and later files load after this one, and opening a document reaches them
+// (simClock), so the launch open waits until every script has run.
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',openDesktopLaunchDocument,{once:true});
+else openDesktopLaunchDocument();
+
+// The address parameter open names a relative path on this page's own origin; a link is enough to show
+// a document. Anything with a scheme, a host, a leading slash or a backslash is refused. A parent segment
+// is refused however it is spelled, and so is any target whose resolved path leaves the folder of the page.
+function addressDocumentTarget(raw,base){
+  const reason='only a relative path on this site is opened';
+  const refuse={ok:false,reason};
+  const text=String(raw??'');
+  if(!text.trim()||text.startsWith('/')||text.startsWith('\\')||text.includes('\\')||/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text))return refuse;
+  if(text.split(/[?#]/)[0].split('/').some(segment=>segment.replace(/%2e/gi,'.')==='..'))return refuse;
+  let url;
+  try{url=new URL(text,base)}catch(_){return refuse}
+  if(url.origin!==location.origin||(url.protocol!=='http:'&&url.protocol!=='https:'))return refuse;
+  const dir=new URL('.',base).pathname;
+  if(!url.pathname.startsWith(dir))return refuse;
+  const last=url.pathname.split('/').pop()||'';
+  let name=last;
+  try{name=decodeURIComponent(last)}catch(_){ }
+  return {ok:true,url:url.href,name};
+}
+async function openAddressDocument(){
+  if(window.__TAURI__)return;
+  let raw=null;
+  try{raw=new URLSearchParams(location.search).get('open')}catch(_){ }
+  if(raw===null)return;
+  const target=addressDocumentTarget(raw,location.href);
+  if(!target.ok){
+    // A later start-up write may replace the status text, so the refusal is written after one frame.
+    requestAnimationFrame(()=>{statusEl.textContent=`Open refused · ${target.reason}`});
+    return;
+  }
+  try{
+    const response=await fetch(target.url,{credentials:'same-origin',redirect:'error',cache:'no-store'});
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    const parsed=parseFilePayload(await response.text());
+    applyOpenedPayload(parsed,target.name);
+    statusEl.textContent=`Opened · ${currentFileName}`;
+  }catch(error){
+    console.warn('Address document failed to open',error);
+    requestAnimationFrame(()=>{statusEl.textContent=`Open failed · ${target.name} · ${error.message}`});
+  }
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',openAddressDocument,{once:true});
+else openAddressDocument();
+
+// GET /editor on a document server carries the server's document in a JSON script element; it is read
+// through the same seam as File Open, with no request. An open parameter in the address wins.
+function openServedDocument(){
+  if(window.__TAURI__)return;
+  let explicit=null;
+  try{explicit=new URLSearchParams(location.search).get('open')}catch(_){ }
+  if(explicit!==null)return;
+  // The id is joined here so the built page holds its text only where a server has put the element.
+  const holder=document.getElementById('sov-served-'+'document');
+  if(!holder)return;
+  const name=holder.getAttribute('data-name')||'document.sov';
+  try{
+    const parsed=parseFilePayload(holder.textContent);
+    applyOpenedPayload(parsed,name);
+    statusEl.textContent=`Opened · ${currentFileName}`;
+  }catch(error){
+    console.warn('Served document failed to open',error);
+    requestAnimationFrame(()=>{statusEl.textContent=`Open failed · ${name} · ${error.message}`});
+  }
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',openServedDocument,{once:true});
+else openServedDocument();
 
 if(fileBtn)fileBtn.addEventListener('click',event=>{event.stopPropagation();setFileMenu(fileMenu.hidden)});
 if(fileMenu)fileMenu.addEventListener('click',event=>event.stopPropagation());

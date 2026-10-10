@@ -1,0 +1,651 @@
+{
+ "schema": "soveraeign.schematic/document@0.1",
+ "id": "work-engine-groups",
+ "revision": 0,
+ "meta": {
+  "title": "Work Engine: records and surfaces as reading-only groups",
+  "updatedAt": "2026-10-04T12:02:45.588Z"
+ },
+ "components": [
+  {
+   "id": "records",
+   "symbolId": "group",
+   "x": 600,
+   "y": 266,
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "Records",
+    "colorSlot": 2,
+    "members": [
+     "case",
+     "recording",
+     "anchor"
+    ],
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 400,
+      "h": 360
+     }
+    },
+    "attachmentDefaults": "none",
+    "ports": {}
+   },
+   "form": {
+    "dimension": 2,
+    "body": {
+     "kind": "surface",
+     "material": "generic",
+     "thickness": 0
+    },
+    "frame": {
+     "mode": "none",
+     "thickness": 0,
+     "depth": 0
+    },
+    "regions": {
+     "interior": {
+      "state": "closed"
+     }
+    }
+   }
+  },
+  {
+   "id": "surfaces",
+   "symbolId": "group",
+   "x": 160,
+   "y": 266,
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "Surfaces",
+    "colorSlot": 4,
+    "members": [
+     "web-booth",
+     "delivery-broker"
+    ],
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 160,
+      "h": 360
+     }
+    },
+    "attachmentDefaults": "none",
+    "ports": {}
+   },
+   "form": {
+    "dimension": 2,
+    "body": {
+     "kind": "surface",
+     "material": "generic",
+     "thickness": 0
+    },
+    "frame": {
+     "mode": "none",
+     "thickness": 0,
+     "depth": 0
+    },
+    "regions": {
+     "interior": {
+      "state": "closed"
+     }
+    }
+   }
+  },
+  {
+   "id": "case",
+   "symbolId": "hold",
+   "x": 409.59999999999997,
+   "y": 194,
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "Case",
+    "ports": {
+     "in": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "in",
+        "access": "read-write"
+       }
+      ]
+     },
+     "out": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "out",
+        "access": "read-write"
+       }
+      ]
+     },
+     "control": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "control",
+        "access": "read-write"
+       }
+      ]
+     }
+    },
+    "presentation": {
+     "size": {
+      "w": 112,
+      "h": 84
+     }
+    }
+   },
+   "form": {
+    "body": {
+     "kind": "surface",
+     "material": "generic",
+     "thickness": 0
+    },
+    "dimension": 2,
+    "frame": {
+     "mode": "none",
+     "thickness": 0,
+     "depth": 0
+    },
+    "regions": {
+     "interior": {
+      "state": "closed"
+     }
+    }
+   }
+  },
+  {
+   "id": "recording",
+   "symbolId": "hold",
+   "x": 409.59999999999997,
+   "y": 334,
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "Recording",
+    "ports": {
+     "in": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "in",
+        "access": "read-write"
+       }
+      ]
+     },
+     "out": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "out",
+        "access": "read-write"
+       }
+      ]
+     },
+     "control": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "control",
+        "access": "read-write"
+       }
+      ]
+     }
+    },
+    "presentation": {
+     "size": {
+      "w": 112,
+      "h": 84
+     }
+    }
+   },
+   "form": {
+    "body": {
+     "kind": "surface",
+     "material": "generic",
+     "thickness": 0
+    },
+    "dimension": 2,
+    "frame": {
+     "mode": "none",
+     "thickness": 0,
+     "depth": 0
+    },
+    "regions": {
+     "interior": {
+      "state": "closed"
+     }
+    }
+   }
+  },
+  {
+   "id": "anchor",
+   "symbolId": "hold",
+   "x": 604,
+   "y": 194,
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "Anchor",
+    "ports": {
+     "in": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "in",
+        "access": "read-write"
+       }
+      ]
+     },
+     "out": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "out",
+        "access": "read-write"
+       }
+      ]
+     },
+     "control": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "control",
+        "access": "read-write"
+       }
+      ]
+     }
+    },
+    "presentation": {
+     "size": {
+      "w": 112,
+      "h": 84
+     }
+    }
+   },
+   "form": {
+    "body": {
+     "kind": "surface",
+     "material": "generic",
+     "thickness": 0
+    },
+    "dimension": 2,
+    "frame": {
+     "mode": "none",
+     "thickness": 0,
+     "depth": 0
+    },
+    "regions": {
+     "interior": {
+      "state": "closed"
+     }
+    }
+   }
+  },
+  {
+   "id": "web-booth",
+   "symbolId": "act",
+   "x": 160,
+   "y": 180,
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "Web booth",
+    "signalMode": "source",
+    "ports": {
+     "in": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "in",
+        "access": "read-write"
+       }
+      ]
+     },
+     "out": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "out",
+        "access": "read-write"
+       }
+      ]
+     },
+     "control": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "control",
+        "access": "read-write"
+       }
+      ]
+     }
+    },
+    "presentation": {
+     "size": {
+      "w": 112,
+      "h": 84
+     }
+    }
+   },
+   "form": {
+    "body": {
+     "kind": "surface",
+     "material": "generic",
+     "thickness": 0
+    },
+    "dimension": 2,
+    "frame": {
+     "mode": "none",
+     "thickness": 0,
+     "depth": 0
+    },
+    "regions": {
+     "interior": {
+      "state": "closed"
+     }
+    }
+   }
+  },
+  {
+   "id": "delivery-broker",
+   "symbolId": "act",
+   "x": 160,
+   "y": 334,
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "Delivery broker",
+    "signalMode": "source",
+    "ports": {
+     "in": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "in",
+        "access": "read-write"
+       }
+      ]
+     },
+     "out": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "out",
+        "access": "read-write"
+       }
+      ]
+     },
+     "control": {
+      "face": "external",
+      "label": "",
+      "connectionCount": 1,
+      "activeConnection": 0,
+      "connections": [
+       {
+        "id": "connection-1",
+        "colorSlot": 0,
+        "flow": "control",
+        "access": "read-write"
+       }
+      ]
+     }
+    },
+    "presentation": {
+     "size": {
+      "w": 112,
+      "h": 112
+     }
+    }
+   },
+   "form": {
+    "body": {
+     "kind": "surface",
+     "material": "generic",
+     "thickness": 0
+    },
+    "dimension": 2,
+    "frame": {
+     "mode": "none",
+     "thickness": 0,
+     "depth": 0
+    },
+    "regions": {
+     "interior": {
+      "state": "closed"
+     }
+    }
+   }
+  }
+ ],
+ "wires": [
+  {
+   "id": "booth-to-case",
+   "a": "web-booth",
+   "aSide": "out",
+   "b": "case",
+   "bSide": "in",
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "opens",
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   },
+   "aAttachment": {
+    "kind": "attachment-ref",
+    "componentId": "web-booth",
+    "pointId": "right"
+   },
+   "bAttachment": {
+    "kind": "attachment-ref",
+    "componentId": "case",
+    "pointId": "left"
+   },
+   "form": {
+    "dimension": 1,
+    "body": {
+     "kind": "path",
+     "material": "generic",
+     "thickness": 0
+    }
+   },
+   "role": "carrier"
+  },
+  {
+   "id": "broker-to-recording",
+   "a": "delivery-broker",
+   "aSide": "out",
+   "b": "recording",
+   "bSide": "in",
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "delivers",
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   },
+   "aAttachment": {
+    "kind": "attachment-ref",
+    "componentId": "delivery-broker",
+    "pointId": "right"
+   },
+   "bAttachment": {
+    "kind": "attachment-ref",
+    "componentId": "recording",
+    "pointId": "left"
+   },
+   "form": {
+    "dimension": 1,
+    "body": {
+     "kind": "path",
+     "material": "generic",
+     "thickness": 0
+    }
+   },
+   "role": "carrier"
+  },
+  {
+   "id": "case-to-anchor",
+   "a": "case",
+   "aSide": "out",
+   "b": "anchor",
+   "bSide": "in",
+   "canvasId": "canvas:global",
+   "config": {
+    "label": "anchors",
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   },
+   "aAttachment": {
+    "kind": "attachment-ref",
+    "componentId": "case",
+    "pointId": "right"
+   },
+   "bAttachment": {
+    "kind": "attachment-ref",
+    "componentId": "anchor",
+    "pointId": "left"
+   },
+   "form": {
+    "dimension": 1,
+    "body": {
+     "kind": "path",
+     "material": "generic",
+     "thickness": 0
+    }
+   },
+   "role": "carrier"
+  }
+ ],
+ "references": [],
+ "layout": {
+  "default": "main",
+  "views": {
+   "main": {
+    "name": "Main",
+    "routes": {
+     "booth-to-case": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-surfaces-opens"
+      ]
+     },
+     "broker-to-recording": {
+      "mode": "bus",
+      "buses": [
+       "harness-records-surfaces-delivers"
+      ]
+     }
+    },
+    "buses": {
+     "harness-records-surfaces-delivers": {
+      "points": [
+       {
+        "x": 273.79999999999995,
+        "y": 86
+       },
+       {
+        "x": 273.79999999999995,
+        "y": 414
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "surfaces"
+      ],
+      "label": "delivers"
+     },
+     "harness-records-surfaces-opens": {
+      "points": [
+       {
+        "x": 295.79999999999995,
+        "y": 86
+       },
+       {
+        "x": 295.79999999999995,
+        "y": 414
+       }
+      ],
+      "pitch": 6,
+      "between": [
+       "records",
+       "surfaces"
+      ],
+      "label": "opens"
+     }
+    }
+   }
+  }
+ }
+}

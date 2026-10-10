@@ -51,7 +51,7 @@ def main():
                   for(let i=0;i<labels.length;i++){
                     const el=labels[i],r=el.getBoundingClientRect(),m=el.getScreenCTM();
                     const pixels=parseFloat(getComputedStyle(el).fontSize)*Math.hypot(m.a,m.b);
-                    if(pixels<11.9||r.left<viewport.left||r.right>viewport.right||r.top<viewport.top||r.bottom>viewport.bottom)bad.push(['clipped/small',el.textContent,pixels]);
+                    if(pixels<(el.classList.contains('component-label')&&el.dataset.shrunk==='true'?LABEL_FLOORS.shrunkTitle-0.1:LABEL_FLOORS.general-0.1)||r.left<viewport.left||r.right>viewport.right||r.top<viewport.top||r.bottom>viewport.bottom)bad.push(['clipped/small',el.textContent,pixels]);
                     for(let j=i+1;j<labels.length;j++)if(overlaps(r,labels[j].getBoundingClientRect()))bad.push(['labels',el.textContent,labels[j].textContent]);
                     for(const body of workspace.querySelectorAll('.node:not(.is-container)>.body'))if(body.closest('.node')!==el.closest('.node')&&overlaps(r,body.getBoundingClientRect()))bad.push(['node',el.textContent,body.closest('.node').dataset.id]);
                   }

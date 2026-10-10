@@ -1,0 +1,147 @@
+{
+ "schema": "soveraeign.schematic/document@0.1",
+ "id": "example-work-engine-status",
+ "revision": 0,
+ "notation": "work-engine",
+ "meta": {
+  "title": "Work Engine status: what exists, what is partial, missing or proposed, and what it waits on"
+ },
+ "components": [
+  {"id": "web-booth", "symbolId": "we-surface", "x": 280, "y": 200, "config": {"label": "Web booth", "colorSlot": 7, "status": "partial"}},
+  {"id": "recording", "symbolId": "we-record", "x": 760, "y": 200, "config": {"label": "Recording", "colorSlot": 6, "status": "partial"}},
+  {"id": "case", "symbolId": "we-record", "x": 760, "y": 460, "config": {"label": "Case", "colorSlot": 6, "status": "exists"}},
+  {"id": "anchor", "symbolId": "we-record", "x": 760, "y": 720, "config": {"label": "Anchor", "colorSlot": 6, "status": "missing"}},
+  {"id": "continuity-to-sqlite", "symbolId": "we-migration", "x": 280, "y": 460, "config": {"label": "Continuity records move to SQLite", "colorSlot": 8, "status": "proposed", "waitsOn": [{"kind": "person", "id": "bdo", "label": "Bdo"}, {"kind": "rule", "id": "R-29"}, {"kind": "decision", "id": "D1"}]}}
+ ],
+ "wires": [
+  {"id": "w1", "a": "web-booth", "aSide": "out", "b": "recording", "bSide": "in", "config": {"label": "Web booth feeds Recording", "status": "partial"}}
+ ],
+ "references": [
+  {
+   "id": "notation-work-engine",
+   "kind": "notation",
+   "label": "Work Engine",
+   "data": {
+    "id": "work-engine",
+    "name": "Work Engine",
+    "version": 1,
+    "extends": "schematic",
+    "source": "Workstation Work Engine gap map, 2026-09-27",
+    "categories": [
+     {"slot": "C1", "name": "Record"},
+     {"slot": "C2", "name": "Surface"},
+     {"slot": "C3", "name": "Work item"}
+    ],
+    "glyphs": {
+     "we-record": {
+      "title": "Record",
+      "family": "record",
+      "meaning": "A store the work engine keeps its facts in, such as a table, a file or a log.",
+      "draw": [
+       {"d": "M28 18a20 6 0 1 0 40 0a20 6 0 1 0-40 0"},
+       {"d": "M28 18v28a20 6 0 0 0 40 0V18"}
+      ],
+      "terminals": [
+       {"id": "in", "role": "in", "at": [28, 32], "toward": "left"},
+       {"id": "out", "role": "out", "at": [68, 32], "toward": "right"}
+      ]
+     },
+     "we-surface": {
+      "title": "Surface",
+      "family": "surface",
+      "meaning": "A place a person or an agent reads or acts on the work, such as a page, a panel or a command.",
+      "draw": [
+       {"d": "M31 14h34a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H31a3 3 0 0 1-3-3V17a3 3 0 0 1 3-3z"},
+       {"d": "M28 23h40"},
+       {"d": "M33 18.5h1M38 18.5h1", "width": 3}
+      ],
+      "terminals": [
+       {"id": "in", "role": "in", "at": [28, 32], "toward": "left"},
+       {"id": "out", "role": "out", "at": [68, 32], "toward": "right"}
+      ]
+     },
+     "we-migration": {
+      "title": "Migration",
+      "family": "work",
+      "meaning": "Work that moves data or behaviour from one home to another.",
+      "draw": [
+       {"d": "M28 12h30l10 10v30H28z"},
+       {"d": "M58 12v10h10"},
+       {"d": "M35 34h22M51 28l6 6-6 6"}
+      ],
+      "terminals": [
+       {"id": "in", "role": "in", "at": [28, 32], "toward": "left"},
+       {"id": "out", "role": "out", "at": [68, 32], "toward": "right"}
+      ]
+     },
+     "we-port": {
+      "title": "Port",
+      "family": "work",
+      "meaning": "Work that connects one part to another so each can reach the other.",
+      "draw": [
+       {"d": "M28 12h30l10 10v30H28z"},
+       {"d": "M58 12v10h10"},
+       {"d": "M35 30h20M51 26l4 4-4 4M61 42H41M45 38l-4 4 4 4"}
+      ],
+      "terminals": [
+       {"id": "in", "role": "in", "at": [28, 32], "toward": "left"},
+       {"id": "out", "role": "out", "at": [68, 32], "toward": "right"}
+      ]
+     },
+     "we-refactor": {
+      "title": "Refactor",
+      "family": "work",
+      "meaning": "Work that reshapes existing code without changing what it does.",
+      "draw": [
+       {"d": "M28 12h30l10 10v30H28z"},
+       {"d": "M58 12v10h10"},
+       {"d": "M50 27a9 9 0 0 1 5 15M53 38l2 4 4-1M46 45a9 9 0 0 1-5-15M43 34l-2-4-4 1"}
+      ],
+      "terminals": [
+       {"id": "in", "role": "in", "at": [28, 32], "toward": "left"},
+       {"id": "out", "role": "out", "at": [68, 32], "toward": "right"}
+      ]
+     },
+     "we-specification": {
+      "title": "Specification",
+      "family": "work",
+      "meaning": "Work that writes down what something must do before it is built.",
+      "draw": [
+       {"d": "M28 12h30l10 10v30H28z"},
+       {"d": "M58 12v10h10"},
+       {"d": "M35 28h16M35 36h26M35 44h20", "width": 2.5}
+      ],
+      "terminals": [
+       {"id": "in", "role": "in", "at": [28, 32], "toward": "left"},
+       {"id": "out", "role": "out", "at": [68, 32], "toward": "right"}
+      ]
+     }
+    },
+    "statuses": [
+     {"id": "exists", "title": "Exists", "meaning": "Built and in use today.", "outline": "solid", "tone": "safe", "glyph": "✓"},
+     {"id": "partial", "title": "Partial", "meaning": "Built in part; some of what it must do is still missing.", "outline": "solid", "tone": "alert", "glyph": "◷"},
+     {"id": "missing", "title": "Missing", "meaning": "Needed by the work engine and not built yet.", "outline": "dashed", "opacity": 0.55, "tone": "danger", "glyph": "✕"},
+     {"id": "proposed", "title": "Proposed", "meaning": "Planned work that nobody has started.", "outline": "dashed", "tone": "alert", "glyph": "◷"}
+    ],
+    "kinds": [
+     {"id": "flow", "applies": "wire", "title": "Flow", "meaning": "Facts are read along it on request.", "dash": "solid", "weight": "regular", "arrowhead": "chevron"},
+     {"id": "stream", "applies": "wire", "title": "Stream", "meaning": "A continuous feed carried as channels.", "dash": "solid", "weight": "regular", "arrowhead": "filled"},
+     {"id": "control", "applies": "wire", "title": "Control", "meaning": "One side governs the other.", "dash": "solid", "weight": "heavy", "arrowhead": "filled"},
+     {"id": "reference", "applies": "wire", "title": "Reference", "meaning": "One side is listed by the other and nothing moves.", "dash": "solid", "weight": "regular", "arrowhead": "none"},
+     {"id": "proposed", "applies": "wire", "title": "Proposed", "meaning": "Planned and not built.", "dash": "dashed", "weight": "regular", "arrowhead": "chevron", "open": true}
+    ],
+    "concerns": [
+     {"id": "what", "applies": "document", "title": "What it shows", "question": "Which part of the work engine does this map show?"},
+     {"id": "why", "applies": "document", "title": "What it is for", "question": "What would someone build or settle from this map?"},
+     {"id": "alternatives", "applies": "document", "title": "Other readings", "question": "What else describes the same ground, and why read this map?"},
+     {"id": "smaller", "applies": "document", "title": "Smallest slice", "question": "What is the smallest slice of this map that stands on its own?"},
+     {"id": "meaning", "applies": "component", "symbols": ["we-record"], "title": "Holds", "question": "What does this record hold?"},
+     {"id": "authority", "applies": "component", "symbols": ["we-surface"], "title": "Authority", "question": "What does this surface have authority over?"},
+     {"id": "evidence", "applies": "component", "symbols": ["we-record", "we-surface"], "title": "Evidence", "question": "What in the kernel shows this status?"},
+     {"id": "owner", "applies": "component", "symbols": ["we-record"], "title": "Owner", "question": "Which task owns building it?"},
+     {"id": "backing", "applies": "component", "symbols": ["we-specification"], "title": "Backing", "question": "Which records answer this query?"}
+    ]
+   }
+  }
+ ]
+}

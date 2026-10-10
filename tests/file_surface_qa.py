@@ -68,7 +68,10 @@ async def main():
         count=await page.evaluate("window.SovSchematicAPI.list('component').result.length")
         assert count==0
         new_info=await page.evaluate('window.SovSchematicAPI.file.info()')
-        assert new_info['name']=='Untitled.sov' and new_info['dirty'] is True
+        assert new_info['name']=='Untitled.sov' and new_info['dirty'] is False
+        await page.evaluate("window.SovSchematicAPI.create('component',{symbolId:'act',x:240,y:180})")
+        edited_info=await page.evaluate('window.SovSchematicAPI.file.info()')
+        assert edited_info['dirty'] is True
         await page.evaluate('window.setFileMenu(true)')
         await page.screenshot(path=str(OUT/'file-menu.png'), full_page=False)
         assert not errors, errors

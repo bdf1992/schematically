@@ -28,7 +28,10 @@
     // The palette Path is a carrier: a Wire with two free ends. `symbolId:'path'` on a
     // component record is the static 1D role (a rail that hosts Points).
     path:{carrier:true,form:{dimension:1},presentation:{graphic:{kind:'none'},size:{w:240,h:64}}},
-    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}}
+    plane:{form:{dimension:2,regions:{interior:{state:'open'}}},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}},
+    // A group collects Components for reading (SECTION-MODEL.md "Groups (reading only)"). It is
+    // not a boundary: its interior stays closed, it hosts nothing, and it has no ports.
+    group:{form:{dimension:2},attachmentDefaults:'none',presentation:{graphic:{kind:'none'},size:{w:320,h:220}}}
   };
   // Declared ports: `{id, compatId?, side: left|right|top|bottom, t: 0..1,
   // flow: in|out|control|duplex|trigger, channels: [{id}], label?}`. The typed Component
@@ -63,6 +66,7 @@
   }
   function normalizeSymbolId(value){const id=String(value||'blank')||'blank';return LEGACY_SYMBOL_IDS[id]||id}
   function templatePreset(symbolId){return clone(TEMPLATE_PRESETS[normalizeSymbolId(symbolId)]||null)}
+  function symbolIds(){return Object.keys(TEMPLATE_PRESETS)}
   function isPrimitiveSymbol(symbolId){return Object.prototype.hasOwnProperty.call(TEMPLATE_PRESETS,normalizeSymbolId(symbolId))}
   // A label mode is read, never written by a preset: an authored mode is used as written;
   // otherwise a label under a 0D or 1D form sits outside it, under a 2D form on its
@@ -387,12 +391,347 @@
     }
     return errors;
   }
-  // A Wire's propagation delay (STATE-SPACE.md "Two-phase ticks"): absent means 1; a value an
-  // edit supplies must be an integer >= 1. An update's `delay: null` removes it (`clearable`).
-  // Loading keeps a stored value as written, for the state space's load check to report.
+  // A Wire's propagation delay (STATE-SPACE.md "Two-phase ticks"): absent means 1; an edit may
+  // supply an integer >= 0. 0 is a zero-delay Path, and a cycle made only of zero-delay legs is
+  // refused when the run starts (ZERO_DELAY_CYCLE, src/07-state-space.js). An update's
+  // `delay: null` removes it (`clearable`). Loading keeps a stored value as written, for the
+  // state space's load check to report.
   function assertPathDelay(config,clearable=false){
     if(!isObject(config)||config.delay===undefined||(clearable&&config.delay===null))return;
-    if(!(Number.isInteger(config.delay)&&config.delay>=1))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
+    if(!(Number.isInteger(config.delay)&&config.delay>=0))throw new Error(`PATH_DELAY_INVALID: config.delay must be an integer >= 0, not ${JSON.stringify(config.delay)}`);
+  }
+  // ---- meta.timeScale (issue #40, "The document's rate beats the view's") ---------------------
+  // The document's own rate: absent means unset (the view defaults it to 1); a finite number >= 0
+  // is admitted as written, 0 meaning paused. Anything else - negative, NaN, Infinity, null, a
+  // string, a boolean - is refused with TIME_SCALE_INVALID. One rule for the file (validateDocument,
+  // below), the HTTP/MCP surface (PUT /api/v1/document already answers 400 from validateDocument's
+  // errors) and the view (src/15-editor-kernel.js setGlobalTimeScale runs this same function).
+  function admitTimeScale(value){
+    if(value===undefined)return {ok:true,present:false};
+    if(typeof value==='number'&&Number.isFinite(value)&&value>=0)return {ok:true,present:true,value};
+    return {ok:false,code:'TIME_SCALE_INVALID',message:`TIME_SCALE_INVALID: meta.timeScale must be a finite number >= 0, not ${JSON.stringify(value)}`};
+  }
+  // ---- meta.palette ("A document can carry its own palette") ----------------------------------
+  // The document's own palette: absent means unset (the view's palette draws). A known name is
+  // admitted as written; so is {custom:[six '#RRGGBB' hexes]}, hex case kept. Any other string -
+  // 'custom' and '' included, since neither names colours - is refused with PALETTE_UNKNOWN; any
+  // other shape with PALETTE_INVALID. One rule for the file (validateDocument, below), the HTTP/MCP
+  // surface and the view (src/20-ui.js setDocumentPalette runs this same function). The names are
+  // held here because the MCP server loads this file without src/00-state.js.
+  const PALETTE_NAMES=Object.freeze(['okabe-ito','system-default','spectrum','cool','warm','earth','mono']);
+  function admitPalette(value){
+    if(value===undefined)return {ok:true,present:false};
+    if(typeof value==='string'){
+      if(PALETTE_NAMES.includes(value))return {ok:true,present:true,value};
+      return {ok:false,code:'PALETTE_UNKNOWN',message:`PALETTE_UNKNOWN: meta.palette ${JSON.stringify(value)} is not a known palette; known: ${PALETTE_NAMES.join(', ')}`};
+    }
+    if(isObject(value)&&!Array.isArray(value)){
+      const keys=Object.keys(value),row=value.custom;
+      if(keys.length===1&&keys[0]==='custom'&&Array.isArray(row)&&row.length===6&&row.every(h=>typeof h==='string'&&/^#[0-9a-fA-F]{6}$/.test(h)))return {ok:true,present:true,value:{custom:[...row]}};
+    }
+    return {ok:false,code:'PALETTE_INVALID',message:`PALETTE_INVALID: meta.palette must be a palette name or {custom: [six #RRGGBB hexes]}, not ${JSON.stringify(value)}`};
+  }
+  // ---- Status and waits-on (NOTATION-MODEL.md "Statuses") -------------------------------------
+  // A Component's or Wire's `config.status` names an entry of its document's notation's
+  // `statuses` list; there is no built-in list, so a notation that declares none admits none.
+  // `config.waitsOn` lists what the thing waits on: `{kind: person|rule|decision, id, label?}`.
+  //   STATUS_UNDECLARED  a status is set and the notation declares no statuses
+  //   STATUS_UNKNOWN     the status is not one the notation declares
+  //   WAITS_ON_INVALID   waitsOn is not that list (the message names the index and the field)
+  // Loading reports them (validateDocument); create and update refuse; an update's null removes.
+  const WAITS_ON_KINDS=['person','rule','decision'],WAITS_ON_KEYS=['kind','id','label'];
+  function notationStatuses(doc){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(!N)return {id:doc?.notation||'schematic',statuses:[]};
+    const r=N.resolve(doc||{});const list=r.ok&&Array.isArray(r.notation.statuses)?r.notation.statuses.filter(s=>isObject(s)&&typeof s.id==='string'):[];
+    return {id:r.ok?r.notation.id:(doc?.notation||'schematic'),statuses:list};
+  }
+  function statusProblems(doc,config,clearable=false){
+    const out=[];if(!isObject(config))return out;
+    const status=config.status;
+    if(status!==undefined&&!(clearable&&status===null)){
+      const {id,statuses}=notationStatuses(doc);
+      if(!statuses.length)out.push(`STATUS_UNDECLARED: config.status ${JSON.stringify(status)} is set, but notation "${id}" declares no statuses`);
+      else if(typeof status!=='string'||!statuses.some(s=>s.id===status))out.push(`STATUS_UNKNOWN: config.status ${JSON.stringify(status)} is not declared by notation "${id}"; declared: ${statuses.map(s=>s.id).join(', ')}`);
+    }
+    const waits=config.waitsOn;
+    if(waits!==undefined&&!(clearable&&waits===null)){
+      if(!Array.isArray(waits))out.push(`WAITS_ON_INVALID: config.waitsOn must be an array, not ${JSON.stringify(waits)}`);
+      else waits.forEach((w,i)=>{
+        const at=`config.waitsOn[${i}]`;
+        if(!isObject(w)){out.push(`WAITS_ON_INVALID: ${at} must be an object`);return}
+        const extra=Object.keys(w).find(k=>!WAITS_ON_KEYS.includes(k));
+        if(!WAITS_ON_KINDS.includes(w.kind))out.push(`WAITS_ON_INVALID: ${at}.kind must be one of ${WAITS_ON_KINDS.join(', ')}, not ${JSON.stringify(w.kind)}`);
+        else if(typeof w.id!=='string'||!w.id.trim())out.push(`WAITS_ON_INVALID: ${at}.id must be a non-empty string`);
+        else if(w.label!==undefined&&typeof w.label!=='string')out.push(`WAITS_ON_INVALID: ${at}.label must be a string`);
+        else if(extra)out.push(`WAITS_ON_INVALID: ${at}.${extra} is not a field of a waitsOn entry (kind, id, label)`);
+      });
+    }
+    return out;
+  }
+  function assertStatusAndWaitsOn(doc,config,clearable=false){const p=statusProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Wire kinds (NOTATION-MODEL.md "Kinds") ---------------------------------------------------
+  // A Wire's `config.kind` names a wire kind of its document's notation (`kinds`, applies wire):
+  // the entry declares the dash, weight and arrowhead the wire is drawn in. There is no built-in
+  // wire kind, so a notation that declares none admits none. A Component takes no kind.
+  //   KIND_UNDECLARED  a kind is set and the notation declares no wire kinds
+  //   KIND_UNKNOWN     the kind is not a wire kind the notation declares
+  //   KIND_INVALID     an entry of the notation's kinds breaks a rule (src/03-notation-core.js kindFindings)
+  // Loading reports them (validateDocument); create and update refuse; an update's null removes.
+  function notationWireKinds(doc){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(!N)return {id:doc?.notation||'schematic',kinds:[]};
+    const r=N.resolve(doc||{});
+    return {id:r.ok?r.notation.id:(doc?.notation||'schematic'),kinds:r.ok?N.kindsOf(r.notation,'wire'):[]};
+  }
+  function wireKindProblems(doc,config,clearable=false){
+    const out=[];if(!isObject(config))return out;
+    const kind=config.kind;if(kind===undefined||(clearable&&kind===null))return out;
+    const {id,kinds}=notationWireKinds(doc);
+    if(!kinds.length)out.push(`KIND_UNDECLARED: config.kind ${JSON.stringify(kind)} is set, but notation "${id}" declares no wire kinds`);
+    else if(typeof kind!=='string'||!kinds.some(k=>k.id===kind))out.push(`KIND_UNKNOWN: config.kind ${JSON.stringify(kind)} is not a wire kind declared by notation "${id}"; declared: ${kinds.map(k=>k.id).join(', ')}`);
+    return out;
+  }
+  function assertWireKind(doc,config,clearable=false){const p=wireKindProblems(doc,config,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Concerns and answers (NOTATION-MODEL.md "Concerns") --------------------------------------
+  // A notation declares the questions a schematic should answer (`concerns`, applies document,
+  // component or wire). A document answers its own in `meta.answers`; a Component and a Wire answer
+  // theirs in `config.answers`. Each is an object of concern id to a non-empty string. Absent means
+  // nothing is answered, and an empty object is never written into a document that has none.
+  //   ANSWER_INVALID     answers is not an object, or a value is not a non-empty string
+  //   ANSWER_UNDECLARED  a key is set and the notation declares no concerns for that applies
+  //   ANSWER_UNKNOWN     the key is not a concern the notation declares for that applies, or it is a
+  //                      component concern not asked of that Component's symbol (concernsAskedOf)
+  //   CONCERN_INVALID   an entry of the notation's concerns breaks a rule (src/03-notation-core.js concernFindings)
+  //   ANSWER_TARGET_UNKNOWN  answerConcerns only: target names no Component and no Wire
+  // Loading reports them (validateDocument); create and update refuse. An update merges
+  // config.answers per key: a string sets that concern's answer, a null removes that one answer,
+  // `answers: null` removes them all, and the key goes with the last answer. answerConcerns is the
+  // one verb that sets or removes answers on the document, Components and Wires together.
+  // An open concern is information (concernReport), never a finding.
+  function notationConcerns(doc,applies){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(!N)return {id:doc?.notation||'schematic',concerns:[]};
+    const r=N.resolve(doc||{});
+    return {id:r.ok?r.notation.id:(doc?.notation||'schematic'),concerns:r.ok?N.concernsOf(r.notation,applies):[]};
+  }
+  // Which of a notation's component concerns are asked of one Component: those that name no
+  // symbols, and those whose `symbols` hold the Component's symbolId. The one reading of
+  // `symbols`: answerProblems, concernReport and answerConcerns all ask here.
+  function concernsAskedOf(concerns,component){
+    const symbol=normalizeSymbolId(component?.symbolId??component?.type);
+    return concerns.filter(c=>!Array.isArray(c.symbols)||c.symbols.includes(symbol));
+  }
+  // `at` is 'meta.answers' or 'config.answers', the text a message names the key under. `clearable`
+  // is an update's reading: null for the whole, or for one declared key, is a removal. `component`
+  // is the Component whose answers these are (applies component): its symbol decides which
+  // component concerns are asked of it.
+  function answerProblems(doc,answers,applies,at,clearable=false,component=null){
+    const out=[];if(answers===undefined||(clearable&&answers===null))return out;
+    if(!isObject(answers)){out.push(`ANSWER_INVALID: ${at} must be an object of concern id to answer, not ${JSON.stringify(answers)}`);return out}
+    const keys=Object.keys(answers);if(!keys.length)return out;
+    const {id,concerns}=notationConcerns(doc,applies);
+    const asked=applies==='component'&&component?concernsAskedOf(concerns,component):concerns;
+    for(const key of keys){
+      const value=answers[key];
+      if(!concerns.length)out.push(`ANSWER_UNDECLARED: ${at}.${key} is set, but notation "${id}" declares no ${applies} concerns`);
+      else if(!concerns.some(c=>c.id===key))out.push(`ANSWER_UNKNOWN: ${at}.${key} is not a ${applies} concern declared by notation "${id}"; declared: ${concerns.map(c=>c.id).join(', ')}`);
+      else if(!asked.some(c=>c.id===key))out.push(`ANSWER_UNKNOWN: ${at}.${key} is a component concern notation "${id}" does not ask of symbol "${normalizeSymbolId(component?.symbolId??component?.type)}"; asked of it: ${asked.map(c=>c.id).join(', ')||'none'}`);
+      else if(clearable&&value===null)continue;
+      else if(typeof value!=='string'||!value.trim())out.push(`ANSWER_INVALID: ${at}.${key} must be a non-empty string, not ${JSON.stringify(value)}`);
+    }
+    return out;
+  }
+  function assertAnswers(doc,config,applies,clearable=false,component=null){
+    if(!isObject(config))return;
+    const p=answerProblems(doc,config.answers,applies,'config.answers',clearable,component);if(p.length)throw new Error(p[0]);
+  }
+  // Copies authored answers onto a record being made; none, or an empty object, writes no key.
+  function adoptAnswers(config,value){
+    if(isObject(value?.answers)&&Object.keys(value.answers).length)config.answers=clone(value.answers);
+    return config;
+  }
+  // Which declared concerns a document answers and which are still open: {notation, rows, answered,
+  // open}. One row per declared concern per thing it applies to: the document's (target null), then
+  // each Component's in document order, then each Wire's. Reads the document and changes nothing.
+  // An answer the notation does not declare is not a row: validateDocument reports it. A component
+  // concern that names symbols is a row only for the Components it is asked of (concernsAskedOf).
+  // `{open: true}` keeps only the open rows; the two counts are of every row either way.
+  function concernReport(doc,{open=false}={}){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,r=N?N.resolve(doc||{}):null;
+    const declared=applies=>r?.ok?N.concernsOf(r.notation,applies):[];
+    const rows=[];
+    const add=(concerns,applies,target,answers)=>{
+      for(const c of concerns){
+        const raw=isObject(answers)&&Object.prototype.hasOwnProperty.call(answers,c.id)?answers[c.id]:undefined,answered=typeof raw==='string'&&!!raw.trim();
+        rows.push({concern:c.id,applies,target,title:typeof c.title==='string'&&c.title?c.title:c.id,question:c.question,answered,...(answered?{answer:raw}:{})});
+      }
+    };
+    add(declared('document'),'document',null,doc?.meta?.answers);
+    const ofComponents=declared('component'),ofWires=declared('wire');
+    if(ofComponents.length)for(const c of Array.isArray(doc?.components)?doc.components:[])add(concernsAskedOf(ofComponents,c),'component',c?.id??null,c?.config?.answers);
+    if(ofWires.length)for(const w of Array.isArray(doc?.wires)?doc.wires:[])add(ofWires,'wire',w?.id??null,w?.config?.answers);
+    const answered=rows.filter(row=>row.answered).length;
+    return {notation:r?.ok?r.notation.id:(doc?.notation||'schematic'),rows:open===true?rows.filter(row=>!row.answered):rows,answered,open:rows.length-answered};
+  }
+  // ---- Badges (DATA-FORMATS.md "Badges") ------------------------------------------------------
+  // A Component's `config.badges` lists at most 4 chips `{label, colorSlot?}`: a label of 1 to 24
+  // characters after trimming and a palette slot 0 to 11 (absent means 0). Presentation only.
+  //   BADGE_INVALID   badges is not that list (the message names the index and the field)
+  const BADGE_KEYS=['label','colorSlot'],BADGE_MAX=4,BADGE_LABEL_MAX=24;
+  function badgeProblems(config,clearable=false){
+    const out=[];if(!isObject(config))return out;
+    const list=config.badges;if(list===undefined||(clearable&&list===null))return out;
+    if(!Array.isArray(list)){out.push(`BADGE_INVALID: config.badges must be an array, not ${JSON.stringify(list)}`);return out}
+    if(list.length>BADGE_MAX)out.push(`BADGE_INVALID: config.badges holds ${list.length} entries; at most ${BADGE_MAX}`);
+    list.forEach((b,i)=>{
+      const at=`config.badges[${i}]`;
+      if(!isObject(b)){out.push(`BADGE_INVALID: ${at} must be an object`);return}
+      const extra=Object.keys(b).find(k=>!BADGE_KEYS.includes(k));
+      if(typeof b.label!=='string'||!b.label.trim())out.push(`BADGE_INVALID: ${at}.label must be a non-empty string`);
+      else if(b.label.trim().length>BADGE_LABEL_MAX)out.push(`BADGE_INVALID: ${at}.label must be at most ${BADGE_LABEL_MAX} characters, not ${b.label.trim().length}`);
+      else if(b.label!==b.label.trim())out.push(`BADGE_INVALID: ${at}.label must not begin or end with whitespace`);
+      else if(b.colorSlot!==undefined&&!(Number.isInteger(b.colorSlot)&&b.colorSlot>=0&&b.colorSlot<=11))out.push(`BADGE_INVALID: ${at}.colorSlot must be an integer 0 to 11, not ${JSON.stringify(b.colorSlot)}`);
+      else if(extra)out.push(`BADGE_INVALID: ${at}.${extra} is not a field of a badge (label, colorSlot)`);
+    });
+    return out;
+  }
+  // Create and update store a label trimmed; the stored form is what badgeProblems holds to the rule.
+  function trimmedBadges(list){
+    if(!Array.isArray(list))return list;
+    return list.map(b=>isObject(b)&&typeof b.label==='string'?{...b,label:b.label.trim()}:b);
+  }
+  function assertBadges(config,clearable=false){const p=badgeProblems(config,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Intake (SECTION-MODEL.md "Groups": Borders) ----------------------------------------------
+  // A group or a plane may carry `config.intake: true`: an open region, drawn with a dashed outline.
+  //   INTAKE_INVALID   intake is not a boolean, or sits on a Component that is neither a group nor a plane
+  function intakeProblems(component,clearable=false){
+    const out=[],config=component?.config;if(!isObject(config)||config.intake===undefined||(clearable&&config.intake===null))return out;
+    const symbol=normalizeSymbolId(component.symbolId||component.type);
+    if(typeof config.intake!=='boolean')out.push(`INTAKE_INVALID: config.intake must be true or false, not ${JSON.stringify(config.intake)}`);
+    else if(symbol!=='group'&&symbol!=='plane')out.push(`INTAKE_INVALID: config.intake belongs to a group or a plane, not a ${symbol}`);
+    return out;
+  }
+  function assertIntake(component,clearable=false){const p=intakeProblems(component,clearable);if(p.length)throw new Error(p[0])}
+  // ---- Card shape (SECTION-MODEL.md "Card shapes") ----------------------------------------------
+  // A 2D Component that is not a group and has a closed interior may declare
+  // `config.presentation.shape`: 'rect' (the default, also when absent), 'cylinder' or
+  // 'parallelogram'. 'rect' is admitted on any Component, since it is what absent means.
+  //   SHAPE_INVALID   shape is not one of the three, or a cylinder or parallelogram sits on a
+  //                   Component that is not 2D, is a group, or has an open interior
+  const CARD_SHAPES=['rect','cylinder','parallelogram'];
+  function shapeProblems(component,clearable=false){
+    const out=[],presentation=component?.config?.presentation;if(!isObject(presentation))return out;
+    const shape=presentation.shape;if(shape===undefined||(clearable&&shape===null))return out;
+    if(!CARD_SHAPES.includes(shape)){out.push(`SHAPE_INVALID: config.presentation.shape must be one of ${CARD_SHAPES.join(', ')}, not ${JSON.stringify(shape)}`);return out}
+    if(shape==='rect')return out;
+    const symbol=normalizeSymbolId(component.symbolId||component.type);
+    const form=normalizeComponentForm(isObject(component.form)?component.form:(templatePreset(symbol)?.form||{dimension:2}),component.canvas);
+    if(symbol==='group')out.push(`SHAPE_INVALID: config.presentation.shape ${shape} belongs to a card, not a group`);
+    else if(form.dimension!==2)out.push(`SHAPE_INVALID: config.presentation.shape ${shape} belongs to a 2D Component, not a ${form.dimension}D one`);
+    else if(form.regions.interior.state==='open')out.push(`SHAPE_INVALID: config.presentation.shape ${shape} belongs to a card with a closed interior, not a container`);
+    return out;
+  }
+  function assertShape(component,clearable=false){const p=shapeProblems(component,clearable);if(p.length)throw new Error(p[0])}
+  // The shape a card is drawn in: its declared shape where that shape may be drawn, else 'rect'.
+  function cardShape(component){
+    const shape=component?.config?.presentation?.shape;
+    return (shape==='cylinder'||shape==='parallelogram')&&!shapeProblems(component).length?shape:'rect';
+  }
+  // Copies an authored status and waitsOn onto a record being made.
+  function adoptStatusAndWaitsOn(config,value){
+    if(value?.status!==undefined&&value.status!==null)config.status=value.status;
+    if(value?.waitsOn!==undefined&&value.waitsOn!==null)config.waitsOn=clone(value.waitsOn);
+    return config;
+  }
+  // An update's null removes the key.
+  function clearStatusAndWaitsOn(candidate,patch){
+    if(!isObject(candidate?.config)||!isObject(patch?.config))return;
+    for(const key of ['status','waitsOn','badges','intake','answers'])if(patch.config[key]===null)delete candidate.config[key];
+    // Answers merge per key: a null removes that one answer, and no empty object is stored.
+    if(isObject(patch.config.answers)&&isObject(candidate.config.answers)){
+      for(const key of Object.keys(patch.config.answers))if(patch.config.answers[key]===null)delete candidate.config.answers[key];
+      if(!Object.keys(candidate.config.answers).length)delete candidate.config.answers;
+    }
+    if(candidate.a!==undefined&&patch.config.kind===null)delete candidate.config.kind; // a Wire's kind
+    if(isObject(patch.config.presentation)&&patch.config.presentation.shape===null&&isObject(candidate.config.presentation))delete candidate.config.presentation.shape;
+  }
+  // ---- Groups (SECTION-MODEL.md "Groups (reading only)") ---------------------------------------
+  // A group collects Components for reading. It is not a boundary: it hosts nothing, it has no
+  // ports, and a Wire between members of different groups is one Wire on their shared canvas.
+  // `config.members` holds distinct Component ids. The rules, one finding each:
+  //   GROUP_MEMBER_UNKNOWN  a member names no Component (or is not a Component id)
+  //   GROUP_MEMBER_CANVAS   a member's canvasId differs from the group's
+  //   GROUP_MEMBER_HOSTED   a member rides on a host (placement kind edge, wire or path)
+  //   GROUP_MEMBER_GROUP    a member is a group
+  //   GROUP_MEMBER_TWICE    a Component listed twice (by two groups, or twice by one)
+  //   GROUP_PORTS           a group carries config.attachmentPoints or attachmentDefaults 'standard'
+  //   GROUP_HOST            a Component placed on a group (placement.hostId) or in its interior
+  // Loading reports them (validateDocument); create and update refuse an edit that adds one.
+  // The inset and the title band come from the document's resolved notation (space.regionInset,
+  // space.regionTitle); the schematic notation declares 24 and 28.
+  function regionSpace(doc){
+    const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation,space=N?.tokens?.(doc||{})?.space||{};
+    return {pad:Number.isFinite(space.regionInset)?space.regionInset:24,band:Number.isFinite(space.regionTitle)?space.regionTitle:28};
+  }
+  function isGroup(component){return !!component&&normalizeSymbolId(component.symbolId||component.type)==='group'}
+  function groupMembers(component){const m=component?.config?.members;return Array.isArray(m)?m:[]}
+  function groupFindings(doc){
+    const components=Array.isArray(doc?.components)?doc.components:[],out=[];
+    const byId=new Map(components.filter(c=>c&&c.id!=null).map(c=>[c.id,c]));
+    const add=(code,id,text)=>out.push({code,id,text});
+    const listedBy=new Map();
+    for(const g of components){
+      if(!isGroup(g))continue;
+      const raw=g.config?.members;
+      if(raw!==undefined&&!Array.isArray(raw))add('GROUP_MEMBER_UNKNOWN',g.id,`group ${g.id} config.members must be an array of Component ids`);
+      for(const member of groupMembers(g)){
+        if(typeof member!=='string'||!byId.has(member)){add('GROUP_MEMBER_UNKNOWN',g.id,`group ${g.id} lists ${JSON.stringify(member)}, which is not a Component`);continue}
+        const m=byId.get(member);
+        if(listedBy.has(member))add('GROUP_MEMBER_TWICE',g.id,`group ${g.id} lists ${member}, already listed by group ${listedBy.get(member)}`);else listedBy.set(member,g.id);
+        if(isGroup(m)){add('GROUP_MEMBER_GROUP',g.id,`group ${g.id} lists ${member}, which is a group`);continue}
+        const kind=m.placement?.kind;
+        if(['edge','wire','path'].includes(kind)||String(m.canvasId||'').startsWith('canvas:wire:')){add('GROUP_MEMBER_HOSTED',g.id,`group ${g.id} lists ${member}, which rides on a host (placement ${kind||'wire'})`);continue}
+        if(containingCanvasId(m)!==containingCanvasId(g))add('GROUP_MEMBER_CANVAS',g.id,`group ${g.id} is on ${containingCanvasId(g)} and lists ${member}, which is on ${containingCanvasId(m)}`);
+      }
+      const cfg=g.config||{};
+      if(Array.isArray(cfg.attachmentPoints)||cfg.attachmentDefaults==='standard')add('GROUP_PORTS',g.id,`group ${g.id} has no ports: it carries ${Array.isArray(cfg.attachmentPoints)?'config.attachmentPoints':"attachmentDefaults 'standard'"}`);
+    }
+    for(const c of components){
+      if(!c)continue;
+      const host=c.placement?.hostId!=null?byId.get(c.placement.hostId):null;
+      const interior=String(c.canvasId||'').startsWith('canvas:component:')?byId.get(String(c.canvasId).slice('canvas:component:'.length)):null;
+      const g=isGroup(host)?host:isGroup(interior)?interior:null;
+      if(g)add('GROUP_HOST',c.id,`component ${c.id} is placed on group ${g.id}; a group hosts nothing`);
+    }
+    return out;
+  }
+  const groupFindingKey=f=>`${f.code}|${f.id}|${f.text}`;
+  // An edit may not add a group finding: the first one the trial document has and the current
+  // document does not is thrown, with its code first, before anything is written.
+  function assertGroupRules(doc,trialComponents){
+    const before=new Set(groupFindings(doc).map(groupFindingKey));
+    const added=groupFindings({...doc,components:trialComponents}).find(f=>!before.has(groupFindingKey(f)));
+    if(added)throw new Error(`${added.code}: ${added.text}`);
+  }
+  // The region a group is drawn as: the union of its members' rectangles (each centred on its
+  // x, y and sized by sizeOf(component)) padded regionInset on every side and regionTitle more
+  // on top for the title. A group with no placed member is its own x, y and presentation.size.
+  // Returned centred, like a Component: {x, y, w, h} plus its edges {l, r, t, b}.
+  function groupRect(doc,groupId,sizeOf){
+    const components=Array.isArray(doc?.components)?doc.components:[];
+    const g=components.find(c=>c?.id===groupId);if(!g)return null;
+    const size=typeof sizeOf==='function'?sizeOf:(c=>normalizePresentationSize(c?.config?.presentation?.size));
+    let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
+    for(const id of groupMembers(g)){
+      const m=components.find(c=>c?.id===id);if(!m||isGroup(m)||!Number.isFinite(Number(m.x))||!Number.isFinite(Number(m.y)))continue;
+      const s=size(m),x=Number(m.x),y=Number(m.y);
+      l=Math.min(l,x-s.w/2);r=Math.max(r,x+s.w/2);t=Math.min(t,y-s.h/2);b=Math.max(b,y+s.h/2);
+    }
+    if(!Number.isFinite(l)){
+      const s=normalizePresentationSize(g.config?.presentation?.size||TEMPLATE_PRESETS.group.presentation.size),x=num(g.x,0),y=num(g.y,0);
+      return {x,y,w:s.w,h:s.h,l:x-s.w/2,r:x+s.w/2,t:y-s.h/2,b:y+s.h/2};
+    }
+    const {pad,band}=regionSpace(doc);
+    l-=pad;r+=pad;t-=pad+band;b+=pad;
+    return {x:(l+r)/2,y:(t+b)/2,w:r-l,h:b-t,l,r,t,b};
   }
   // `config.definition` is null (unbound) or an `id@version` string, anywhere it is written
   // (DEFINITION_INVALID). Only the binding path (`applyBinding`) sets it to a non-null value: a
@@ -717,6 +1056,15 @@
     // A bound definition (`id@version`) is kept only on a copy, so a pasted or duplicated bound Component stays bound.
     if(copy)assertDefinitionValue(value.config?.definition);else assertDefinitionPatch(value,false);
     if(value.config?.definition!==undefined)config.definition=clone(value.config.definition);
+    // A group's members, as written; create checks them (assertGroupRules).
+    if(value.config?.members!==undefined)config.members=clone(value.config.members);
+    assertStatusAndWaitsOn(doc,value.config);adoptStatusAndWaitsOn(config,value.config);
+    assertAnswers(doc,value.config,'component',false,component);adoptAnswers(config,value.config);
+    if(Array.isArray(value.config?.badges)){const badges=trimmedBadges(value.config.badges);assertBadges({badges});config.badges=clone(badges)}
+    else{assertBadges(value.config);if(value.config?.badges!==undefined&&value.config.badges!==null)config.badges=clone(value.config.badges)}
+    if(value.config?.intake!==undefined&&value.config.intake!==null){config.intake=clone(value.config.intake);assertIntake(component)}
+    if(isObject(config.presentation)&&config.presentation.shape===null)delete config.presentation.shape;
+    assertShape(component);
     config.ports=isObject(value.config?.ports)?clone(value.config.ports):{};
     component.canvas.dimension=component.form.dimension;component.canvas.state=component.form.regions.interior.state;
     if(isObject(value.boundary))component.boundary=clone(value.boundary);
@@ -930,7 +1278,7 @@
   }
   function makeWire(doc,value={}){
     const id=cleanString(value.id,nextId(doc.wires,'k'));
-    assertPathDelay(value.config);
+    assertPathDelay(value.config);assertStatusAndWaitsOn(doc,value.config);assertWireKind(doc,value.config);assertAnswers(doc,value.config,'wire');
     const wire={id,a:cleanString(value.a)||null,b:cleanString(value.b)||null,aSide:value.aSide??null,bSide:value.bSide??null,aAttachment:isObject(value.aAttachment)?clone(value.aAttachment):null,bAttachment:isObject(value.bAttachment)?clone(value.bAttachment):null};
     if(!wire.a&&!wire.aAttachment&&!wire.b&&!wire.bAttachment)throw new Error('wire.create requires a and b component ids, or free endpoints');
     for(const end of ['a','b'])if(!wire[end]&&!wire[end+'Attachment'])throw new Error(`wire.create requires ${end} (component id) or ${end}Attachment`);
@@ -942,7 +1290,7 @@
       form:isObject(value.form)?clone(value.form):{dimension:1,body:{kind:'path',material:'generic',thickness:0}},
       lane:Math.max(0,Math.trunc(num(value.lane,doc.wires.length))),
       net:Math.max(0,Math.trunc(num(value.net,doc.wires.length))),
-      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{})},
+      config:{direction:['none','forward','reverse','duplex'].includes(value.config?.direction)?value.config.direction:'forward',reciprocity:['none','expected','required'].includes(value.config?.reciprocity)?value.config.reciprocity:'none',forwardOperation:['none','read','write'].includes(value.config?.forwardOperation)?value.config.forwardOperation:'none',reverseOperation:['none','read','write'].includes(value.config?.reverseOperation)?value.config.reverseOperation:'none',aConnectionIndex:Math.max(0,Math.trunc(num(value.config?.aConnectionIndex,0))),bConnectionIndex:Math.max(0,Math.trunc(num(value.config?.bConnectionIndex,0))),aChannelMarker:cleanString(value.config?.aChannelMarker,'1'),bChannelMarker:cleanString(value.config?.bChannelMarker,'1'),label:cleanString(value.config?.label,''),...(value.config?.delay!==undefined?{delay:clone(value.config.delay)}:{}),...adoptStatusAndWaitsOn({},value.config),...adoptAnswers({},value.config),...(value.config?.kind!==undefined&&value.config.kind!==null?{kind:value.config.kind}:{})},
       editor:isObject(value.editor)?clone(value.editor):{pinned:false,locked:false,hidden:false,opacity:1,rate:1},
       attachments:Array.isArray(value.attachments)?clone(value.attachments):[],duplex:value.config?.direction==='duplex'
     });
@@ -980,6 +1328,7 @@
     if(resource==='wire'){assertCarrierEndpointAccepts(doc,value?.a);assertCarrierEndpointAccepts(doc,value?.b)}
     const record=resource==='component'?makeComponent(doc,value):resource==='wire'?makeWire(doc,value):makeReference(doc,value);
     if(arr.some(x=>x.id===record.id))throw new Error(`${resource} id already exists: ${record.id}`);
+    if(resource==='component')assertGroupRules(doc,[...doc.components,record]);
     arr.push(record);return clone(record);
   }
   // `binding` is the binding path only (`applyBinding`): the one update that may set a non-null
@@ -989,6 +1338,19 @@
     const current=arr[index];assertUnlocked(current,resource);
     if(binding&&resource!=='component')throw new Error('DEFINITION_INVALID: only a component binds a definition');
     const candidate=deepMerge(clone(current),patch);candidate.id=id;
+    if(resource!=='reference')assertStatusAndWaitsOn(doc,patch?.config,true);
+    // A patch that retypes the Component is read against the symbol it will have.
+    // On a retype a null for a declared concern is the patch removing that answer, so it is not read
+    // against the new symbol; the record it makes is checked below, once the patch is merged.
+    const retyped=resource==='component'&&(patch?.symbolId??patch?.type)!==undefined&&normalizeSymbolId(patch?.symbolId??patch?.type)!==normalizeSymbolId(current.symbolId??current.type);
+    let answered=patch?.config;
+    if(retyped&&isObject(answered)&&isObject(answered.answers)){
+      const declared=notationConcerns(doc,'component').concerns;
+      answered={...answered,answers:Object.fromEntries(Object.entries(answered.answers).filter(([k,v])=>!(v===null&&declared.some(c=>c.id===k))))};
+    }
+    if(resource!=='reference')assertAnswers(doc,answered,resource,true,resource==='component'?{symbolId:patch?.symbolId??patch?.type??current.symbolId??current.type}:null);
+    const patchBadges=resource==='component'&&Array.isArray(patch?.config?.badges)?trimmedBadges(patch.config.badges):null;
+    if(resource==='component')assertBadges(patchBadges?{badges:patchBadges}:patch?.config,true);
     if(resource==='component'){
       assertDefinitionPatch(patch,binding);
       if(!binding)assertDefinitionPortsKept(current,patch,null);
@@ -1012,8 +1374,12 @@
       if(!binding)assertDefinitionPortsKept(current,patch,candidate);
       assertWiresSurviveEdit(doc,current,candidate);
       normalizeComponentSize(candidate);
+      assertGroupRules(doc,doc.components.map((c,i)=>i===index?candidate:c));
+      if(patch?.config?.intake!==undefined||nextSymbol!==undefined)assertIntake(candidate,patch?.config?.intake===null);
+      if(patch?.config?.presentation?.shape!==undefined||nextSymbol!==undefined||patch?.form!==undefined)assertShape(candidate,patch?.config?.presentation?.shape===null);
     }else if(resource==='wire'){
       if(isObject(patch?.config))assertPathDelay(patch.config,true);
+      assertWireKind(doc,patch?.config,true);
       if(patch?.config?.delay===null&&isObject(candidate.config))delete candidate.config.delay; // absent means 1
       // A patch may rebind an end (a/aSide or aAttachment ref) or free it (aAttachment {kind:'free'}).
       for(const end of ['a','b']){
@@ -1036,8 +1402,17 @@
       normalizeWireForm(candidate);
       candidate.duplex=candidate.config?.direction==='duplex';
     }
+    if(patchBadges)candidate.config.badges=clone(patchBadges);
     // The record keeps its identity: an editor holding it (a gesture that has just begun, a bound
     // listener) keeps holding the updated record, not a stale copy.
+    if(resource!=='reference')clearStatusAndWaitsOn(candidate,patch);
+    // A retype is checked on the record it makes: every answer the Component will hold, those the
+    // patch did not touch included, must be asked of its new symbol. The patch removes the ones that
+    // are not (answers: {id: null} or answers: null); the core never drops one on its own.
+    if(retyped){
+      const left=answerProblems(doc,candidate.config?.answers,'component','config.answers',false,candidate);
+      if(left.length)throw new Error(left.join('; '));
+    }
     for(const key of Object.keys(current))delete current[key];
     Object.assign(current,candidate);
     if(resource==='component')reconcileComponentWirePorts(doc,id);
@@ -1054,6 +1429,8 @@
       for(const child of fallsBack){const trial=clone(child);trial.canvasId=containing;trial.placement={kind:'surface',x:child.x,y:child.y};assertDefinitionPortsKept(child,{placement:trial.placement},trial)}
       for(const child of fallsBack){child.canvasId=containing;child.parentId=removed.parentId??null;child.placement={kind:'surface',x:child.x,y:child.y};}
       for(let i=doc.wires.length-1;i>=0;i--)if(doc.wires[i].a===id||doc.wires[i].b===id)remove(doc,'wire',doc.wires[i].id);
+      // A deleted Component leaves every group that listed it, in the same operation.
+      for(const g of doc.components)if(isGroup(g)&&Array.isArray(g.config?.members)&&g.config.members.includes(id))g.config.members=g.config.members.filter(m=>m!==id);
     }else if(resource==='wire'){
       const hostedCanvas=`canvas:wire:${id}`;
       for(const component of doc.components)if(component.canvasId===hostedCanvas){component.canvasId=GLOBAL_CANVAS_ID;component.parentId=null;component.placement={kind:'surface',x:component.x,y:component.y};}
@@ -1087,6 +1464,126 @@
       if(mutates)touch(doc);
       return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:value,error:null};
     }catch(error){return {schema:RECEIPT_SCHEMA,operationId:op.id,ok:false,revisionBefore:before,revisionAfter:doc.revision,result:null,error:{message:String(error.message||error)}}}
+  }
+  // A batch is many writes taken as one: every operation applies in order or none does, the
+  // document moves one revision, and one receipt answers it. A create may omit its id (the core
+  // assigns one) and name itself with `ref: "$name"`; any later string equal to "$name" in that
+  // batch (a wire's a or b, a parentId, a placement's hostId) is that created id, and
+  // "canvas:component:$name" is its interior surface. A refused operation leaves the document
+  // exactly as it was and the receipt names its index. Reads are not batched.
+  const BATCH_OPS=['create','update','delete'];
+  function resolveRefs(value,refs){
+    if(typeof value==='string'){
+      if(Object.prototype.hasOwnProperty.call(refs,value))return refs[value];
+      // A surface is named after its owner: canvas:component:$plane is the created plane's surface.
+      const surface=value.match(/^(canvas:(?:component|wire):)(\$.+)$/);
+      return surface&&Object.prototype.hasOwnProperty.call(refs,surface[2])?surface[1]+refs[surface[2]]:value;
+    }
+    if(Array.isArray(value))return value.map(v=>resolveRefs(v,refs));
+    if(isObject(value)){const out={};for(const [k,v] of Object.entries(value))out[k]=resolveRefs(v,refs);return out}
+    return value;
+  }
+  function applyBatch(document,batch={}){
+    const id=batch.id||`batch-${Date.now()}`,operations=Array.isArray(batch.operations)?batch.operations:null;
+    const rawRevision=Math.max(0,Math.trunc(num(document?.revision,0)));
+    const refuse=(message,index=null,revision=rawRevision)=>({schema:RECEIPT_SCHEMA,operationId:id,ok:false,revisionBefore:rawRevision,revisionAfter:revision,result:null,error:{index,message}});
+    if(!operations||!operations.length)return refuse('a batch needs a non-empty operations array');
+    if(typeof batch.ifRevision==='number'&&batch.ifRevision!==rawRevision)return refuse(`Stale revision: expected ${batch.ifRevision}, document is at ${rawRevision}`);
+    const doc=normalizeDocument(document),before=doc.revision,snapshot=clone(doc);
+    const refs={},applied=[],errorsBefore=new Set(validateDocument(doc).errors);
+    const restore=()=>replaceDocument(doc,snapshot);
+    for(const [index,raw] of operations.entries()){
+      const op=raw?.op,resource=raw?.resource;
+      try{
+        if(!BATCH_OPS.includes(op))throw new Error(`op must be one of ${BATCH_OPS.join(', ')}`);
+        if(!RESOURCE_KEYS[resource])throw new Error(`resource must be one of ${Object.keys(RESOURCE_KEYS).join(', ')}`);
+        const ref=raw.ref==null?null:String(raw.ref);
+        if(ref!==null&&(!ref.startsWith('$')||ref.length<2))throw new Error('a ref starts with $ and names something');
+        if(ref!==null&&refs[ref]!==undefined)throw new Error(`ref ${ref} is already used in this batch`);
+        let value;
+        if(op==='create'){
+          value=create(doc,resource,resolveRefs(clone(raw.value||{}),refs));
+          if(ref!==null)refs[ref]=value.id;
+        }else{
+          const target=resolveRefs(raw.id,refs);if(typeof target!=='string'||!target)throw new Error(`${op} needs the id of a ${resource}`);
+          if(op==='update')value=update(doc,resource,target,resolveRefs(clone(raw.patch||{}),refs));
+          else{value=remove(doc,resource,target);if(value===null)throw new Error(`${resource} not found: ${target}`)}
+        }
+        applied.push({index,op,resource,id:value.id,...(ref!==null?{ref}:{})});
+      }catch(error){restore();return refuse(String(error.message||error),index,before)}
+    }
+    // The batch may not leave the document less legal than it found it.
+    const introduced=validateDocument(doc).errors.filter(message=>!errorsBefore.has(message));
+    if(introduced.length){restore();return refuse(`the batch leaves the document invalid: ${introduced.join('; ')}`,null,before)}
+    touch(doc);
+    return {schema:RECEIPT_SCHEMA,operationId:id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:{ids:refs,applied},error:null};
+  }
+  // Sets or removes answers (the codes are listed at answerProblems). `answers` is a non-empty
+  // list of {concern, target, answer}: target absent or null is the document, else the id of a
+  // Component or a Wire; answer is a non-empty string to set, null to remove. All or none, one
+  // revision, one receipt: every entry is checked before anything is written, each Component and
+  // Wire named gets one update run through applyBatch (its locks, refusals and receipt), and the
+  // document's own entries go into meta.answers in that same revision. Removing an answer that is
+  // not set is admitted. result.report holds concernReport's two counts after the write; a
+  // refusal names the entry in error.index and changes nothing.
+  const ANSWER_ENTRY_KEYS=['concern','target','answer'];
+  function answerConcerns(document,request={}){
+    const id=request?.id||`answers-${Date.now()}`,entries=request?.answers;
+    const rawRevision=Math.max(0,Math.trunc(num(document?.revision,0)));
+    const refuse=(message,index=null)=>({schema:RECEIPT_SCHEMA,operationId:id,ok:false,revisionBefore:rawRevision,revisionAfter:rawRevision,result:null,error:{index,message}});
+    if(!Array.isArray(entries)||!entries.length)return refuse('ANSWER_INVALID: answers must be a non-empty list of {concern, target, answer}');
+    if(typeof request.ifRevision==='number'&&request.ifRevision!==rawRevision)return refuse(`Stale revision: expected ${request.ifRevision}, document is at ${rawRevision}`);
+    const has=(items,target)=>(Array.isArray(items)?items:[]).some(item=>item?.id===target);
+    const own=[],patches=new Map();
+    for(const [index,entry] of entries.entries()){
+      if(!isObject(entry))return refuse(`ANSWER_INVALID: answers[${index}] must be an object {concern, target, answer}, not ${JSON.stringify(entry)}`,index);
+      const extra=Object.keys(entry).find(key=>!ANSWER_ENTRY_KEYS.includes(key));
+      if(extra)return refuse(`ANSWER_INVALID: answers[${index}].${extra} is not a field of an answer (${ANSWER_ENTRY_KEYS.join(', ')})`,index);
+      const {concern,answer}=entry,target=entry.target??null;
+      if(typeof concern!=='string'||!concern)return refuse(`ANSWER_INVALID: answers[${index}].concern must be a concern id, not ${JSON.stringify(concern)}`,index);
+      if(answer!==null&&(typeof answer!=='string'||!answer.trim()))return refuse(`ANSWER_INVALID: answers[${index}].answer must be a non-empty string, or null to remove the answer, not ${JSON.stringify(answer)}`,index);
+      const resource=target===null?null:has(document?.components,target)?'component':has(document?.wires,target)?'wire':undefined;
+      if(resource===undefined)return refuse(`ANSWER_TARGET_UNKNOWN: answers[${index}].target ${JSON.stringify(target)} names no Component and no Wire`,index);
+      const problems=answerProblems(document,{[concern]:answer},resource||'document',resource?'config.answers':'meta.answers',true,resource==='component'?document.components.find(item=>item?.id===target):null);
+      if(problems.length)return refuse(problems[0],index);
+      if(!resource){own.push({concern,answer});continue}
+      const key=`${resource}:${target}`;
+      if(!patches.has(key))patches.set(key,{index,resource,id:target,answers:{}});
+      patches.get(key).answers[concern]=answer;
+    }
+    if(own.length&&document?.meta?.answers!==undefined&&!isObject(document.meta.answers))return refuse(`ANSWER_INVALID: meta.answers must be an object of concern id to answer, not ${JSON.stringify(document.meta.answers)}`);
+    const planned=[...patches.values()];
+    let receipt;
+    if(planned.length){
+      receipt=applyBatch(document,{id,operations:planned.map(p=>({op:'update',resource:p.resource,id:p.id,patch:{config:{answers:p.answers}}})),ifRevision:request.ifRevision});
+      // A refused update names the first entry for its Component or Wire.
+      if(!receipt.ok)return {...receipt,error:{...receipt.error,index:receipt.error?.index==null?null:planned[receipt.error.index].index}};
+    }else{
+      const doc=normalizeDocument(document),before=doc.revision;touch(doc);
+      receipt={schema:RECEIPT_SCHEMA,operationId:id,ok:true,revisionBefore:before,revisionAfter:doc.revision,result:{ids:{},applied:[]},error:null};
+    }
+    if(own.length){
+      const meta=document.meta=isObject(document.meta)?document.meta:{},answers=isObject(meta.answers)?meta.answers:{};
+      for(const {concern,answer} of own){if(answer===null)delete answers[concern];else answers[concern]=answer}
+      if(Object.keys(answers).length)meta.answers=answers;else delete meta.answers;
+    }
+    const report=concernReport(document);
+    receipt.result.report={answered:report.answered,open:report.open};
+    return receipt;
+  }
+  // A slice of the document small enough to read: the named items, or every component whose
+  // position falls in an area, plus the wires among them, in the stored (compact) form.
+  function readScope(document,scope={}){
+    const doc=normalizeDocument(clone(document)),ids=Array.isArray(scope.ids)?new Set(scope.ids.map(String)):null,area=isObject(scope.area)?scope.area:null;
+    if(!ids&&!area)return {ok:false,error:{message:'read needs ids or an area {x, y, width, height}'}};
+    const inArea=c=>area&&num(c.x,NaN)>=num(area.x,0)&&num(c.x,NaN)<=num(area.x,0)+num(area.width,0)&&num(c.y,NaN)>=num(area.y,0)&&num(c.y,NaN)<=num(area.y,0)+num(area.height,0);
+    const picked=new Set(doc.components.filter(c=>(ids&&ids.has(c.id))||inArea(c)).map(c=>c.id));
+    // A component brings what sits on its interior, so a plane is read with its points.
+    let grew=true;while(grew){grew=false;for(const c of doc.components)if(!picked.has(c.id)&&[...picked].some(p=>c.canvasId===`canvas:component:${p}`)){picked.add(c.id);grew=true}}
+    const wires=doc.wires.filter(w=>(ids&&ids.has(w.id))||(picked.has(w.a)&&picked.has(w.b)));
+    const references=ids?doc.references.filter(r=>ids.has(r.id)):[];
+    const edge=doc.wires.filter(w=>!wires.includes(w)&&(picked.has(w.a)!==picked.has(w.b))).map(w=>({id:w.id,a:w.a,b:w.b}));
+    return {ok:true,revision:doc.revision,components:doc.components.filter(c=>picked.has(c.id)).map(compactComponent),wires:wires.map(compactWire),references,crossing:edge};
   }
   // The binding path (`applyBind` in the state space calls it): applies a binding patch,
   // `{config:{definition, attachmentDefaults:'none', attachmentPoints}}`, to a 2D Component with the
@@ -1129,7 +1626,9 @@
     {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null;if(N&&input.notation!=null){const r=N.resolve(input);if(!r.ok)errors.push(`notation: ${r.message} (${r.code})`)}}
     if(input.narration!=null&&!Array.isArray(input.narration))errors.push('narration must be an array of {at, say}');
     for(const [i,line] of (Array.isArray(input.narration)?input.narration:[]).entries())if(!isObject(line)||typeof line.say!=='string')errors.push(`narration[${i}] needs a say`);
-    // A section's regions sit between its lines: n lines bound exactly n-1 bands. Never repaired.
+    // meta.timeScale: one admission rule for the file, the API and the view (issue #40).
+    if(isObject(input.meta)){const ts=admitTimeScale(input.meta.timeScale);if(!ts.ok)errors.push(ts.message)}
+    if(isObject(input.meta)){const pal=admitPalette(input.meta.palette);if(!pal.ok)errors.push(pal.message)}    // A section's regions sit between its lines: n lines bound exactly n-1 bands. Never repaired.
     for(const c of input.components||[]){const s=c?.form?.section;if(s&&Array.isArray(s.lines)&&Array.isArray(s.bands)&&s.bands.length!==s.lines.length-1)errors.push(`component ${c.id||'?'} section: bands must be one fewer than lines (${s.lines.length} lines, ${s.bands.length} bands)`)}
     for(const wire of input.wires||[]){
       const aFree=isFreeEndpoint(wire.aAttachment),bFree=isFreeEndpoint(wire.bAttachment);
@@ -1141,6 +1640,21 @@
       const ws=wire.form?.section;if(ws&&Array.isArray(ws.lines)&&Array.isArray(ws.bands)&&ws.bands.length!==ws.lines.length-1)errors.push(`wire ${wire.id||'?'} section: bands must be one fewer than lines (${ws.lines.length} lines, ${ws.bands.length} bands)`);
       for(const key of ['forwardOperation','reverseOperation'])if(wire.config?.[key]!=null&&!['none','read','write'].includes(wire.config[key]))errors.push(`wire ${wire.id||'?'} invalid ${key}: ${wire.config[key]}`);
     }
+    // Groups: reported, never repaired (the codes are listed at groupFindings).
+    for(const f of groupFindings(input))errors.push(`component ${f.id??'?'}: ${f.code}: ${f.text}`);
+    // Status and waits-on: reported, never repaired (the codes are listed at statusProblems).
+    for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)for(const p of statusProblems(input,item?.config))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
+    // Kinds: the notation's own entries, then each Wire's kind (the codes are listed at wireKindProblems).
+    {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null,r=N?N.resolve(input):null;if(r?.ok)for(const f of N.kindFindings(r.notation))errors.push(`notation: ${f}`)}
+    for(const item of input.wires||[])for(const p of wireKindProblems(input,item?.config))errors.push(`wire ${item?.id||'?'}: ${p}`);
+    // Concerns and answers: the notation's own entries, then the document's answers and each
+    // Component's and Wire's (the codes are listed at answerProblems). An open concern is not reported.
+    {const N=(typeof globalThis!=='undefined'&&globalThis.SovSchematicNotation)||null,r=N?N.resolve(input):null;if(r?.ok)for(const f of N.concernFindings(r.notation))errors.push(`notation: ${f}`)}
+    if(isObject(input.meta))for(const p of answerProblems(input,input.meta.answers,'document','meta.answers'))errors.push(p);
+    for(const [kind,items] of [['component',input.components||[]],['wire',input.wires||[]]])for(const item of items)if(isObject(item?.config))for(const p of answerProblems(input,item.config.answers,kind,'config.answers',false,kind==='component'?item:null))errors.push(`${kind} ${item?.id||'?'}: ${p}`);
+    for(const item of input.components||[])for(const p of badgeProblems(item?.config))errors.push(`component ${item?.id||'?'}: ${p}`);
+    for(const item of input.components||[])for(const p of intakeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
+    for(const item of input.components||[])for(const p of shapeProblems(item))errors.push(`component ${item?.id||'?'}: ${p}`);
     return {ok:errors.length===0,errors};
   }
   // Labels an existing validateDocument error string with the id of the element it names and a
@@ -1159,6 +1673,8 @@
     if(/^duplicate (?:component|wire|reference) id:/.test(message))return 'identity';
     if(/missing endpoint component:/.test(message))return 'wire-endpoint';
     if(/invalid (?:forwardOperation|reverseOperation):/.test(message))return 'wire-operation';
+    if(/: (?:STATUS_UNDECLARED|STATUS_UNKNOWN|WAITS_ON_INVALID|BADGE_INVALID|KIND_UNDECLARED|KIND_UNKNOWN|KIND_INVALID):/.test(message))return 'status';
+    if(/(?:^|: )(?:ANSWER_INVALID|ANSWER_UNDECLARED|ANSWER_UNKNOWN|CONCERN_INVALID):/.test(message))return 'status';
     return 'boundary-legality';
   }
   // Straight from validateDocument's own findings; no legality is re-derived here.
@@ -1180,5 +1696,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,notationConcerns,answerProblems,concernReport,answerConcerns,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });

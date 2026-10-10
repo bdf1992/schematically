@@ -9,14 +9,17 @@
 (function(root,factory){
   let Canonical=root.SovSchematicCanonical;
   if(!Canonical&&typeof module!=='undefined'&&module.exports)Canonical=require('./03-canonical.js');
+  let Model=root.SovSchematicSignalModel;
+  if(!Model&&typeof module!=='undefined'&&module.exports)Model=require('./04-signal-model.js');
   let Data=root.SovSchematicData;
   if(!Data&&typeof module!=='undefined'&&module.exports)Data=require('./05-data-core.js');
-  const api=factory(Canonical,Data);
+  const api=factory(Canonical,Data,Model);
   root.SovSchematicStateSpace=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(Canonical,Data){
+})(typeof globalThis!=='undefined'?globalThis:this,function(Canonical,Data,Model){
   if(!Canonical)throw new Error('SovSchematicCanonical core is required');
   if(!Data)throw new Error('SovSchematicData core is required');
+  if(!Model)throw new Error('SovSchematicSignalModel (src/04-signal-model.js) is required');
   const RECORD_FORMAT='soveraeign.schematic/state-record@0.1';
   const PACK_FORMAT='soveraeign.schematic/pack@0.1';
   const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
@@ -31,10 +34,37 @@
   // --- The state record (STATE-SPACE.md "The state record"). Any other key, at any level, is refused.
   const VANTAGES=['space','point','relative'];
   const KINDS=['registered','measured','derived','predicted'];
-  const FORMS=['binary','continuous','categorical'];
+  // `state` is a device's memory (observable device.state, vantage point): a JSON object whose numbers are safe integers.
+  const FORMS=['binary','continuous','categorical','message','state'];
   const TIME_MODES=['observed','predicted'];
   const PERTURBATIONS=['none','disturbed','created'];
-  const RECORD_KEYS=['format','id','subject','vantage','reference','observable','kind','form','value','time','certainty','observer','provenance','perturbation'];
+  const RECORD_KEYS=['format','id','subject','vantage','reference','observable','kind','form','value','time','certainty','observer','provenance','perturbation','principal','hop','level'];
+  // A message is a recorded value on the message channel: its value names it ({id, root, parent,
+  // channel, payload, origin}); the record's principal says who it acts for and its hop what
+  // happened to it here. The hop events are the graph core's (src/07-graph-core.js).
+  const MESSAGE_KEYS=['id','root','parent','channel','payload','origin'];
+  const HOP_EVENTS=['injected','arrived','sent','crossed','forwarded','delivered','refused','handled','absorbed','observed','buffered','released','waiting','joined','parked','resumed','replayed','ambiguous','controlled','asserted','edge'];
+  const HOP_KEYS=['event','wire','to','reason','parkId','effectKey'];
+  // The first number in a JSON value that is not a safe integer, as {path, value}, or null.
+  function firstFraction(value,path){
+    if(typeof value==='number')return Number.isSafeInteger(value)?null:{path,value};
+    if(Array.isArray(value)){for(let i=0;i<value.length;i++){const f=firstFraction(value[i],`${path}[${i}]`);if(f)return f}return null}
+    if(isObject(value)){for(const key of Object.keys(value).sort()){const f=firstFraction(value[key],`${path}.${key}`);if(f)return f}return null}
+    return null;
+  }
+  function checkMessageValue(v,errors){
+    if(!isObject(v)){errors.push('value must be an object {id, root, parent, channel, payload, origin} for form message');return}
+    unknownKeys(v,MESSAGE_KEYS,'value',errors);
+    for(const key of ['id','root','origin'])if(!nonEmpty(v[key]))errors.push(`value.${key} must be a non-empty string`);
+    if(v.parent!==null&&!nonEmpty(v.parent))errors.push('value.parent must be null or a non-empty string');
+    if(v.channel!==null&&typeof v.channel!=='string')errors.push('value.channel must be null or a string');
+    if(v.payload===undefined)errors.push('value.payload must be present (null when empty)');
+    else{
+      try{Canonical.canonicalize(v.payload)}catch(_){errors.push('value.payload must be JSON')}
+      const fraction=firstFraction(v.payload,'value.payload');
+      if(fraction)errors.push(`${fraction.path} must be a safe integer (no floating point), not ${JSON.stringify(fraction.value)}`);
+    }
+  }
   function validateRecord(record){
     const errors=[];
     if(!isObject(record))return {ok:false,errors:['record must be an object']};
@@ -60,6 +90,29 @@
       if(record.form==='binary'&&typeof v!=='boolean')errors.push('value must be a boolean for form binary');
       if(record.form==='continuous'&&!(typeof v==='number'&&Number.isFinite(v)))errors.push('value must be a finite number for form continuous');
       if(record.form==='categorical'&&typeof v!=='string')errors.push('value must be a string for form categorical');
+      if(record.form==='message')checkMessageValue(v,errors);
+      if(record.form==='state'){
+        if(!isObject(v))errors.push('value must be an object for form state');
+        else{
+          try{Canonical.canonicalize(v)}catch(_){errors.push('value must be JSON for form state')}
+          const fraction=firstFraction(v,'value');
+          if(fraction)errors.push(`${fraction.path} must be a safe integer (no floating point), not ${JSON.stringify(fraction.value)}`);
+        }
+      }
+    }
+    if(record.principal!==undefined&&record.principal!==null&&!nonEmpty(record.principal))errors.push('principal must be null or a non-empty string');
+    // A plane crossing's own refusal (STATE-SPACE.md, access control): level true marks it apart
+    // from a message's hop refused, the same acl: reason text the graph core gives.
+    if(record.level!==undefined&&typeof record.level!=='boolean')errors.push('level must be a boolean');
+    if(record.hop!==undefined){
+      const hop=record.hop;
+      if(record.form!=='message')errors.push('hop is only allowed on a record of form message');
+      if(!isObject(hop))errors.push('hop must be an object');
+      else{
+        unknownKeys(hop,HOP_KEYS,'hop',errors);
+        if(!HOP_EVENTS.includes(hop.event))errors.push(`hop.event must be one of ${HOP_EVENTS.join(', ')}`);
+        for(const key of HOP_KEYS.slice(1))if(hop[key]!==undefined&&!nonEmpty(hop[key]))errors.push(`hop.${key} must be a non-empty string`);
+      }
     }
     const time=record.time;
     if(!isObject(time))errors.push('time must be an object');
@@ -203,10 +256,158 @@
       return out;
     }
   };
+  // --- Flow patterns: what a card does with a message (the graph core's arrive and forward,
+  // src/07-graph-core.js at 7b939e3, lines cited per pattern). They act on the message channel only;
+  // a card's level is still its signal model or its bound definition, so one card may have both. A
+  // flow pattern generates no ports, so no Component binds one through config.definition: a card
+  // reaches one only through the binding lookup (flowBindingOf below). A stateful one reads its own
+  // device.state and the engine commits what it leaves as a device.state record at the end of the
+  // tick. Instance settings (by, key, capacity, releaseMs, rate, handler) are the card's config.flow
+  // and config.behavior, read once at start by flowSettings, as the graph core's flowConfig reads them.
+  // Each method works on the state it is handed; the engine writes every record.
+  const DEVICE_STATE={id:'device.state',form:'state',unit:null,blastRadius:'local',staleness:0};
+  function readPath(obj,path){if(!path)return undefined;let v=obj;for(const k of String(path).split('.')){if(v==null)return undefined;v=v[k]}return v}
+  // The graph core's fnv (src/07-graph-core.js:265 at 7b939e3), over the key's canonical text.
+  function fnv(s){let h=0x811c9dc5;for(const ch of String(s)){h^=ch.charCodeAt(0);h=Math.imul(h,0x01000193)>>>0}return h}
+  function flowPattern(id,{kinds=null,key='policy',stateful=true,initial=()=>null,...methods}){
+    return {id,version:1,class:'exact',stateful,blastRadius:'local',messages:true,...methods,
+      validate(parameters){
+        const errors=[];
+        if(!isObject(parameters))return ['parameters must be an object'];
+        unknownKeys(parameters,kinds?[key]:[],'parameters',errors);
+        if(kinds&&!kinds.includes(parameters[key]))errors.push(`${key} must be one of ${kinds.join(', ')}`);
+        return errors;
+      },
+      initial,
+      derive(parameters){return {state:initial(parameters),observables:stateful?[clone(DEVICE_STATE)]:[]}}
+    };
+  }
+  // route@1 (334-352): fanout to every open end; distribute to one, by round-robin (the counter is
+  // device.state), by channel or by the fnv of the canonical key; select refuses without a handler.
+  const routePattern=flowPattern('route',{kinds:['fanout','distribute','select'],initial:()=>({rr:0}),
+    choose(parameters,state,settings,message,open){
+      if(parameters.policy==='select')return {refuse:'select needs a handler (config.behavior.handler)'};
+      if(parameters.policy!=='distribute')return {legs:open.map((_,i)=>i)};
+      if(settings.by==='channel'){
+        const i=open.findIndex(leg=>leg.accepts&&message.value.channel&&leg.accepts.includes(message.value.channel));
+        return i<0?{refuse:`no end declares channel ${message.value.channel}`}:{legs:[i]};
+      }
+      if(settings.by==='key'){
+        const k=readPath({...message.value,principal:message.principal},settings.key);
+        if(k===undefined)return {refuse:`message has no key ${settings.key}`};
+        return {legs:[fnv(Canonical.canonicalize(k))%open.length]};
+      }
+      const i=state.rr%open.length;state.rr++;
+      return {legs:[i]};
+    }});
+  // join@1 (412-421): one FIFO per incoming Path in device.state; when every Path has one, the joined
+  // message's payload is {parts: {wireId: payload}}.
+  const joinPattern=flowPattern('join',{initial:()=>({fifos:{}}),
+    intake(parameters,state,settings,message){
+      const w=message.via??'',item={message:copy(message.value),principal:message.principal??null};
+      (state.fifos[w]=state.fifos[w]||[]).push(item);
+      return {wait:'waiting',item,ready:settings.incoming.every(x=>(state.fifos[x]||[]).length>0)};
+    },
+    take(parameters,state,settings){
+      const parts={},taken=[];
+      for(const w of settings.incoming){const item=state.fifos[w].shift();if(!state.fifos[w].length)delete state.fifos[w];parts[w]=copy(item.message.payload);taken.push(item)}
+      return {parts,taken};
+    }});
+  // buffer@1 (405-410, 455-459): capacity refusal; the queue in device.state, one released every
+  // releaseMs (default 10 ms) in ticks. Timed: a cycle through a buffer is not a zero-delay cycle.
+  const bufferPattern=flowPattern('buffer',{timed:true,initial:()=>({queue:[],releasing:false}),
+    intake(parameters,state,settings,message){
+      if(settings.capacity!=null&&state.queue.length>=settings.capacity)return {refuse:`buffer full (${settings.capacity})`};
+      const item={message:copy(message.value),principal:message.principal??null,via:message.via??null};
+      state.queue.push(item);
+      const release=state.releasing?null:settings.releaseTicks;state.releasing=true;
+      return {wait:'buffered',item,release};
+    },
+    release(parameters,state,settings){
+      const item=state.queue.shift()||null;
+      let next=null;if(state.queue.length)next=settings.releaseTicks;else state.releasing=false;
+      return {item,next};
+    }});
+  // limit@1 (399-404): the arrival ticks still inside the rate's span, in device.state.
+  // The span's key, config.flow.rate's `${SPAN}`, is spelled in two parts because
+  // tests/state_space_contracts_qa.py refuses the name of the browser's global object anywhere in this file.
+  const SPAN='win'+'dowMs';
+  const limitPattern=flowPattern('limit',{initial:()=>({arrivals:[]}),
+    intake(parameters,state,settings,message){
+      const r=settings.rate;
+      if(!r||!(r.count>0)||!(r.spanMs>0))return {refuse:`limit has no rate (config.flow.rate {count, ${SPAN}})`};
+      state.arrivals=state.arrivals.filter(x=>x>message.t-settings.spanTicks);
+      if(state.arrivals.length>=r.count)return {refuse:`limit ${r.count} per ${r.spanMs}ms exceeded`};
+      state.arrivals.push(message.t);
+      return {pass:true};
+    }});
+  // gate@1 (380-383, 393-398, 449): a message on a control Path sets open from payload.open (default
+  // true); a switch passes only while open; a service gate needs a condition (a control Path or a
+  // handler) and passes only while open.
+  const gatePattern=flowPattern('gate',{kinds:['switch','gate'],key:'kind',initial:()=>({open:false}),
+    control(parameters,state,payload){state.open=isObject(payload)&&'open' in payload?!!payload.open:true},
+    intake(parameters,state,settings){
+      if(parameters.kind==='switch')return state.open?{pass:true}:{refuse:'switch is closed'};
+      if(settings.handler)return {pass:true};
+      if(!settings.controlled)return {refuse:'gate has no condition: wire its control point or name a handler'};
+      return state.open?{pass:true}:{refuse:'gate is closed: no control has opened it'};
+    }});
+  // terminal@1 (389-391): observe ends the message and records an observation; receipt records a
+  // receipt and passes it on; refuse refuses it.
+  const terminalPattern=flowPattern('terminal',{kinds:['observe','receipt','refuse'],key:'kind',stateful:false,
+    intake(parameters){
+      if(parameters.kind==='refuse')return {refuse:'REFUSE terminal'};
+      if(parameters.kind==='observe')return {end:'observed',rule:'observation'};
+      return {pass:true,receipt:true};
+    }});
+  // hold@1 (392): keeps the payload in device.state, then forwards.
+  const holdPattern=flowPattern('hold',{initial:()=>({value:null}),
+    intake(parameters,state,settings,message){state.value=copy(message.value.payload);return {pass:true}}});
+  // A service gate (gate@1, kind gate) whose handler answers {pass: false} refuses with its reason
+  // (src/07-graph-core.js:449 at 7b939e3); a switch does not judge a handler's answer.
+  gatePattern.judge=(parameters,result)=>parameters.kind==='gate'&&isObject(result)&&result.pass===false?{refuse:result.reason||'gate refused'}:null;
+  // --- Behaviours: what a card does after its flow pattern takes a message in, the graph core's
+  // continueAt (src/07-graph-core.js:422-454 at 7b939e3): park for a person, then effect mediation,
+  // then a handler, then the flow policy. A card reaches each through the one binding lookup from
+  // its config.behavior (behaviorBindingsOf below); none keeps device.state. The effects ledger and
+  // the parked messages are the run's own state.
+  // handler@1 (267-283, 353-372): a handler named by config.behavior.handler. A declarative one is
+  // evaluated here: {kind: stub} passes the payload through; {kind: fixture, key, responses,
+  // otherwise?, merge?} answers by the value at key. A function is the caller's and is called by the
+  // engine, once, its answer recorded in the ledger. An answer is {payload?, channel?, port?}, a
+  // list of them, {refuse: reason} or {absorb: true}.
+  const handlerPattern=flowPattern('handler',{stateful:false,behavior:true,
+    evaluate(spec,message){
+      if(!isObject(spec))return {refuse:'handler is not callable'};
+      if(spec.kind==='stub')return {payload:copy(message.payload)};
+      if(spec.kind==='fixture'){
+        const k=readPath(message,spec.key),has=isObject(spec.responses)&&Object.prototype.hasOwnProperty.call(spec.responses,String(k));
+        const hit=has?spec.responses[String(k)]:spec.otherwise;
+        if(hit===undefined)return {refuse:`fixture has no response for ${spec.key}=${JSON.stringify(k)}`};
+        const out=clone(hit);
+        // merge: true lays the response over the incoming payload instead of replacing it.
+        if(spec.merge&&isObject(out)&&isObject(out.payload)&&isObject(message.payload))out.payload={...copy(message.payload),...out.payload};
+        return out;
+      }
+      return {refuse:`unknown handler kind ${spec.kind}`};
+    }});
+  // effect@1 (292-295, 429-444): the effect key is the declared business key at the effect site,
+  // <card id>:<value at config.behavior.effect.key>, a string as it is and any other value as its JSON.
+  const effectPattern=flowPattern('effect',{stateful:false,behavior:true,
+    identity(settings,entity,message){
+      const v=readPath(message,settings.key);
+      if(v===undefined||v===null||v==='')return {refuse:`effect has no identity (${settings.key})`};
+      return {key:`${entity}:${typeof v==='string'?v:JSON.stringify(v)}`};
+    }});
+  // park@1 (422-425, 576-584): the message waits for a person as p-<message id> until a resume.
+  const parkPattern=flowPattern('park',{stateful:false,behavior:true,parkId:message=>`p-${message.id}`});
   const PATTERNS=[truthTable,merge,combinePattern].map(p=>Object.freeze(p));
+  const FLOW_PATTERNS=[routePattern,joinPattern,bufferPattern,limitPattern,gatePattern,terminalPattern,holdPattern,handlerPattern,effectPattern,parkPattern].map(p=>Object.freeze(p));
   const refOf=p=>`${p.id}@${p.version}`;
+  // patterns() is the level registry (each a contract over ports); flowPatterns() the message one. pattern() finds either.
   function patterns(){return PATTERNS.slice()}
-  function pattern(ref){return PATTERNS.find(p=>refOf(p)===ref)||null}
+  function flowPatterns(){return FLOW_PATTERNS.slice()}
+  function pattern(ref){return PATTERNS.find(p=>refOf(p)===ref)||FLOW_PATTERNS.find(p=>refOf(p)===ref)||null}
 
   // --- Definitions and packs (STATE-SPACE.md "Definitions").
   const AUTHORED_KEYS=['id','version','pattern','parameters','delay','ports','projection'];
@@ -250,7 +451,16 @@
     const errors=[];
     if(!isObject(json))return {ok:false,pack:null,errors:[refusal('PACK_INVALID','pack','a pack must be an object')]};
     const subject=nonEmpty(json.id)?json.id:'pack';
-    for(const key of Object.keys(json))if(!['format','id','version','definitions'].includes(key))errors.push(refusal('PACK_INVALID',subject,`unknown key ${key}`));
+    for(const key of Object.keys(json))if(!['format','id','version','definitions','bindings'].includes(key))errors.push(refusal('PACK_INVALID',subject,`unknown key ${key}`));
+    // bindings (optional): symbol id -> id@version of a flow definition in this pack, read by flowBindingOf.
+    if(json.bindings!==undefined){
+      if(!isObject(json.bindings))errors.push(refusal('PACK_INVALID',subject,'bindings must be an object of symbol id to id@version'));
+      else for(const [symbol,ref] of Object.entries(json.bindings)){
+        const definition=Array.isArray(json.definitions)?json.definitions.find(x=>isObject(x)&&definitionRef(x)===ref):null;
+        if(!definition)errors.push(refusal('PACK_INVALID',subject,`bindings.${symbol} names ${JSON.stringify(ref)}, which this pack does not define`));
+        else if(!pattern(definition.pattern)?.messages)errors.push(refusal('PACK_INVALID',subject,`bindings.${symbol} names ${ref}, whose pattern ${definition.pattern} is not a flow pattern`));
+      }
+    }
     if(json.format!==PACK_FORMAT)errors.push(refusal('PACK_INVALID',subject,`format must equal ${PACK_FORMAT}`));
     if(!nonEmpty(json.id))errors.push(refusal('PACK_INVALID',subject,'id must be a non-empty string'));
     if(!(Number.isInteger(json.version)&&json.version>=1))errors.push(refusal('PACK_INVALID',subject,'version must be an integer >= 1'));
@@ -343,7 +553,6 @@
   }
 
   // --- Load checks (STATE-SPACE.md "Invariants", at load). Never throws, never mutates doc.
-  const EMITS=['out','duplex'],RECEIVES=['in','duplex','control','trigger'];
   function checkDocument(doc,packs){
     const refusals=[];
     const refuse=(code,subject,message)=>refusals.push(refusal(code,subject,message));
@@ -360,20 +569,14 @@
     for(const wire of d.wires){
       try{
         const subject=`wire:${wire.id}`,config=isObject(wire.config)?wire.config:{};
-        if(config.delay!==undefined&&!(Number.isInteger(config.delay)&&config.delay>=1))refuse('PATH_DELAY_INVALID',subject,`config.delay must be an integer >= 1, not ${JSON.stringify(config.delay)}`);
+        // Delay 0 is a zero-delay Path (a cycle of them is refused when the run starts).
+        if(config.delay!==undefined&&!(Number.isInteger(config.delay)&&config.delay>=0))refuse('PATH_DELAY_INVALID',subject,`config.delay must be an integer >= 0, not ${JSON.stringify(config.delay)}`);
         const aPoint=endPoint(wire,'a'),bPoint=endPoint(wire,'b');
         if(!aPoint||!bPoint)continue; // a free end binds nothing
         const aSpec=specOf(wire.a,aPoint),bSpec=specOf(wire.b,bPoint);
         if(!aSpec||!bSpec)continue; // an unreachable end is the data core's validation
-        const flow=spec=>spec.flow||spec.defaultFlow||'duplex';
-        const direction=['none','forward','reverse','duplex'].includes(config.direction)?config.direction:wire.duplex?'duplex':'forward';
-        const aFlow=flow(aSpec),bFlow=flow(bSpec);
-        // Refused only when none of the Wire's declared directions is admitted by both flows:
-        // a duplex Wire from an out port to an in port carries forward only.
-        const carries={forward:EMITS.includes(aFlow)&&RECEIVES.includes(bFlow),reverse:EMITS.includes(bFlow)&&RECEIVES.includes(aFlow)};
-        const declared=direction==='none'?[]:direction==='duplex'?['forward','reverse']:[direction];
-        const admitted=!declared.length||declared.some(x=>carries[x]);
-        if(!admitted)refuse('PATH_DIRECTION_FLOW',subject,`direction ${direction} is not admitted by ports ${wire.a}.${aSpec.id} (${aFlow}) and ${wire.b}.${bSpec.id} (${bFlow})`);
+        // A Wire whose directions no port flow admits is not refused: the run blocks it and records
+        // it with the graph core's reason, as the graph core does.
         const theirs=new Set((bSpec.channels||[{id:'main'}]).map(c=>c.id));
         if(!(aSpec.channels||[{id:'main'}]).some(c=>theirs.has(c.id)))refuse('CHANNEL_MISMATCH',subject,`ports ${wire.a}.${aSpec.id} and ${wire.b}.${bSpec.id} share no channel`);
       }catch(error){refuse('DOCUMENT_INVALID',`wire:${wire?.id}`,String(error?.message||error))}
@@ -419,10 +622,20 @@
   const RUNTIME_VERSION='state-space@1';
   const TRACE_FORMAT='soveraeign.schematic/trace@0.1';
   const ZERO_HASH='0'.repeat(64);
-  const LEDGER_KINDS=['start','input','draw'];
+  // What a replay cannot recompute: the start, each input (an input given mid-run carries `after`,
+  // the tick processed before it was given), each stochastic draw, each function handler's answer
+  // (result), each resume and reconcile (with `after`), and an effects ledger handed in at start.
+  const LEDGER_KINDS=['start','input','draw','result','resume','reconcile','effects'];
+  const MID_RUN_KINDS=['input','resume','reconcile'];
   const REPLAY_KEY_FIELDS=['documentId','documentHash','definitions','runtimeVersion','traceFormat','inputs','seed','tickMs'];
   const INPUT_KEYS=['entity','point','channel','value','at'];
   const DEFAULT_MERGE=Object.freeze({combine:'last',order:Object.freeze({kind:'stochastic'})});
+  // The message channel queues by default: every message that reaches a port is delivered, one per
+  // tick, in merge order; nothing is merged away.
+  const MESSAGE='message';
+  const MESSAGE_MERGE=Object.freeze({combine:'queue',order:Object.freeze({kind:'stochastic'})});
+  // Within a tick a message's own records sort by what happened first to it.
+  const HOP_RANK={injected:0,arrived:1,forwarded:2,delivered:2,absorbed:2,refused:2,sent:3};
   const cmp=(x,y)=>x<y?-1:x>y?1:0;
   const cmpList=(x,y)=>{for(let i=0;i<Math.max(x.length,y.length);i++){const c=cmp(x[i],y[i]);if(c)return c}return 0};
   const portKey=(entity,point,channel)=>JSON.stringify([entity,point,channel]);
@@ -449,7 +662,17 @@
     }
     const devices=Object.keys(run.components).filter(id=>run.components[id].role==='device').sort()
       .map(id=>({id,inputs:run.components[id].inputs.map(name=>portKey(id,name,'main'))}));
-    index={components:run.components,out,devices};
+    // Each component's carried legs for messages, in (wire id, direction) order: a message leaves by
+    // the component, not by one port, as the graph core's forward does.
+    const legs=new Map();
+    for(const wire of run.wires)for(const [dir,from,fromPoint,to,toPoint] of [['forward','a','aPoint','b','bPoint'],['reverse','b','bPoint','a','aPoint']]){
+      if(!wire[dir])continue;
+      const entity=wire[from].entity;
+      if(!legs.has(entity))legs.set(entity,[]);
+      legs.get(entity).push({wire:wire.id,point:wire[fromPoint],to:{entity:wire[to].entity,point:wire[toPoint]},accepts:wire.accepts??null,delay:wire.delay,
+        operation:dir==='forward'?wire.forwardOperation:wire.reverseOperation});
+    }
+    index={components:run.components,out,devices,legs};
     INDEX.set(run.wires,index);
     return index;
   }
@@ -464,24 +687,70 @@
   const specChannels=spec=>(Array.isArray(spec?.channels)&&spec.channels.length?spec.channels:[{id:'main'}]).map(c=>c.id);
   const specFlow=spec=>spec.flow||spec.defaultFlow||'duplex';
   // The document's signal model is behaviour too. A non-Point Component with no bound definition is
-  // read through the graph core's own signalConfig (its declared signal, a gate glyph's combine, or
-  // the editor's default): a derived card becomes a combine@1 device over the Wires that reach it, an
-  // asserted one drives its level onto its out ports at power-on, a square clock schedules its edges.
-  function impliedDevices(d){
-    const g=typeof globalThis!=='undefined'?globalThis:{},G=g.SovSchematicGraph,N=g.SovSchematicNotation,out={definitions:{},bind:{},sources:[],clocks:[]};
-    if(!G?.signalConfig)return out;
+  // read through the signal model's signalConfig (src/04-signal-model.js: its declared signal, a gate
+  // glyph's combine, or the editor's default): a derived card becomes a combine@1 device over the Wires
+  // that reach it, an asserted one drives its level onto its out ports at power-on, a square clock
+  // schedules its edges.
+  // The one binding lookup for what a card does with a message (STATE-SPACE.md, Flow cards): a
+  // declared config.flow.policy other than fanout names flow.<policy>@1; else the first pack whose
+  // bindings name the card's symbol id gives its definition. A candidate the packs do not define, or
+  // one that is not a flow pattern, is passed over; with none the card relays by fanout as before.
+  // A Point is looked up like any card, so a Point with config.flow relays with that policy.
+  function flowBindingOf(c,packs){
+    const policy=isObject(c?.config?.flow)?c.config.flow.policy:undefined,candidates=[];
+    if(typeof policy==='string'&&policy&&policy!=='fanout')candidates.push(`flow.${policy}@1`);
+    for(const pack of packList(packs))if(isObject(pack?.bindings)&&typeof c?.symbolId==='string'&&Object.prototype.hasOwnProperty.call(pack.bindings,c.symbolId)){candidates.push(pack.bindings[c.symbolId]);break}
+    return lookupRef(candidates,packs,false);
+  }
+  // The first candidate the packs define as a flow pattern of the asked layer (a behaviour or not).
+  function lookupRef(candidates,packs,behavior){
+    for(const ref of candidates){const def=resolveDefinition(ref,packs),p=def?pattern(def.pattern):null;if(p?.messages&&!!p.behavior===behavior)return ref}
+    return null;
+  }
+  // The same lookup for a card's behaviours: config.behavior.human names flow.park@1, .effect
+  // flow.effect@1 and .handler flow.handler@1, each when the packs define it; without them the card
+  // relays as before. Returns {human?, effect?, handler?} of id@version.
+  const BEHAVIORS=[['human','park'],['effect','effect'],['handler','handler']];
+  function behaviorBindingsOf(c,packs){
+    const b=isObject(c?.config?.behavior)?c.config.behavior:{},out={};
+    for(const [key,name] of BEHAVIORS)if(b[key]){const ref=lookupRef([`flow.${name}@1`],packs,true);if(ref)out[key]=ref}
+    return out;
+  }
+  // A card's flow settings, as the graph core's flowConfig reads them (src/07-graph-core.js:34-37 at
+  // 7b939e3), times converted to ticks once: releaseMs (default the signal model's 10 ms) and the rate's
+  // span (rate {count, SPAN}, as authored, kept as {count, spanMs} for the refusal text), a time above 0
+  // never under one tick.
+  function flowSettings(c,tickMs){
+    const f=isObject(c.config?.flow)?c.config.flow:{},b=isObject(c.config?.behavior)?c.config.behavior:{};
+    const ticks=ms=>ms>0?Math.max(1,msToTick(Math.round(ms),tickMs)):0;
+    const releaseMs=Number.isFinite(Number(f.releaseMs))?Math.max(0,Number(f.releaseMs)):Model.DEFAULT_LATENCY_MS;
+    const rate=isObject(f.rate)?{count:clone(f.rate.count)??null,spanMs:clone(f.rate[SPAN])??null}:null;
+    return {by:['round-robin','channel','key'].includes(f.by)?f.by:'round-robin',key:typeof f.key==='string'?f.key:null,
+      capacity:Number.isFinite(Number(f.capacity))?Number(f.capacity):null,releaseTicks:ticks(releaseMs),rate,
+      spanTicks:rate&&Number(rate.spanMs)>0?ticks(Number(rate.spanMs)):0,handler:typeof b.handler==='string'&&b.handler?b.handler:null};
+  }
+  function impliedDevices(d,packs){
+    const g=typeof globalThis!=='undefined'?globalThis:{},N=g.SovSchematicNotation,out={definitions:{},bind:{},sources:[],clocks:[],flow:{},behavior:{},asserted:{},edges:{}};
     let glyphs={};try{const r=N?N.resolve(d):null;glyphs=r?.ok?(r.notation?.glyphs||{}):{}}catch(_){glyphs={}}
     for(const c of d.components){
       const config=isObject(c.config)?c.config:{};
+      const flow=flowBindingOf(c,packs);
+      if(flow)out.flow[c.id]=flow;
+      const behavior=behaviorBindingsOf(c,packs);
+      if(Object.keys(behavior).length)out.behavior[c.id]=behavior;
       if(config.definition!==undefined&&config.definition!==null)continue;
       const glyph=glyphs[c.symbolId]||null;
       // A Point relays what reaches it (the engine's own 'point' role); every card has a signal,
       // declared or the editor's default (STATE-SPACE.md, What signalMode becomes).
       if(c.symbolId==='point')continue;
-      const sig=G.signalConfig(c,glyph);
+      const sig=Model.signalConfig(c,glyph);
       let specs=[];try{specs=Data.canonicalAttachmentPointDescriptors(c).filter(Boolean)}catch(_){specs=[]}
       const named=specs.filter(s=>NAME.test(s.id));
       const ins=named.filter(s=>specFlow(s)==='in').map(s=>s.id),outs=named.filter(s=>specFlow(s)==='out').map(s=>s.id);
+      // An asserted card's level is set by a message carrying set or toggle (src/07-graph-core.js:384-388
+      // at 7b939e3); a card with config.signal.on starts a message when its level crosses that way (469-473).
+      if(sig.mode==='asserted')out.asserted[c.id]={outs,kind:sig.kind,threshold:toLevel(sig.threshold)};
+      if(sig.on&&outs.length)out.edges[c.id]={on:sig.on,channel:sig.channel,point:outs[0],kind:sig.kind};
       // A clock drives its out ports with scheduled samples (see clockEdge): edges for a square wave,
       // levels every sampleMs for the continuous ones.
       if(sig.clock){
@@ -528,15 +797,42 @@
   // What the run reads of the document, resolved once at start: each Wire's two ports, delay,
   // the directions it carries and the channels it shares; each Component's role; each merge.
   // Time: one tick is tickMs milliseconds (default 1). A Wire's stored delay is in ticks; without one,
-  // its latencyMs (the graph core's default when absent) is converted, never below one tick.
+  // its latencyMs (the signal model's default when absent) is converted, rounding half up, and a latency
+  // above 0 is never less than one tick; only 0 ms is a zero-delay Path, run in delta rounds within its
+  // tick (a cycle of them is refused at start).
   function wireDelay(config,tickMs){
     if(config.delay!==undefined)return config.delay;
-    const g=typeof globalThis!=='undefined'?globalThis:{},fallback=Number(g.SovSchematicGraph?.DEFAULT_LATENCY_MS??10);
-    const ms=Math.round(Number.isFinite(Number(config.latencyMs))?Math.max(0,Number(config.latencyMs)):fallback);
-    return Math.max(1,msToTick(ms,tickMs));
+    const raw=Number.isFinite(Number(config.latencyMs))?Math.max(0,Number(config.latencyMs)):Model.DEFAULT_LATENCY_MS;
+    return raw>0?Math.max(1,msToTick(Math.round(raw),tickMs)):0;
+  }
+  // Which legs of a Wire carry is the graph core's passability (src/07-graph-core.js build): the
+  // Wire's direction, then each leg's emit and receive flows (legacy config.ports connections
+  // included) and its operation against the ports' access, read through the rule in
+  // src/04-signal-model.js that both engines share. A leg that does not carry is blocked with the
+  // graph core's reason, recorded once at start; a Wire that carries nothing is blocked, never refused.
+  function passability(d,wire,G=Model){
+    const byId=new Map(d.components.map(c=>[c.id,c]));
+    const bound=end=>!!wire[end]&&byId.has(wire[end])&&!Data.isFreeEndpoint(wire[end+'Attachment']);
+    if(!bound('a')||!bound('b'))return {forward:false,reverse:false,blocked:[{wire:wire.id,reason:'free end'}]};
+    const config=isObject(wire.config)?wire.config:{};
+    const direction=['none','forward','reverse','duplex'].includes(config.direction)?config.direction:wire.duplex?'duplex':'forward';
+    const out={forward:false,reverse:false,blocked:[]};
+    if(direction==='none')out.blocked.push({wire:wire.id,reason:'direction none'});
+    const legs=[];
+    if(direction==='forward'||direction==='duplex')legs.push(['a','b','forwardOperation','forward']);
+    if(direction==='reverse'||direction==='duplex')legs.push(['b','a','reverseOperation','reverse']);
+    const portsOf=id=>{const c=byId.get(id);return isObject(c.config?.ports)?c.config.ports:{}};
+    for(const [s,t,opKey,dir] of legs){
+      const from=wire[s],to=wire[t],fromPort=wire[s+'Side'],toPort=wire[t+'Side'];
+      const fp=portsOf(from)[fromPort],tp=portsOf(to)[toPort];
+      const op=['read','write'].includes(config[opKey])?config[opKey]:'none';
+      const reason=!G.canEmit(fp,fromPort)?`${from}.${fromPort} cannot emit`:!G.canReceive(tp,toPort)?`${to}.${toPort} cannot receive`:(!G.accessAllows(fp,op)||!G.accessAllows(tp,op))?`access refuses ${op}`:null;
+      if(reason)out.blocked.push({wire:wire.id,reason});else out[dir]=true;
+    }
+    return out;
   }
   function topology(d,definitions,bind={},tickMs=1){
-    const components={},merges={},wires=[];
+    const components={},merges={},wires=[],blocked=[],landings={};
     const specOf=(component,pointId)=>{try{return Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&(s.id===pointId||s.compatId===pointId))||null}catch(_){return null}};
     const byId=new Map(d.components.map(c=>[c.id,c]));
     for(const component of d.components){
@@ -545,6 +841,10 @@
       if(ref){const def=definitions[ref],combine=def.pattern==='combine@1';
         components[component.id]={role:'device',definition:ref,combine,inputs:combine?[]:def.parameters.inputs.slice(),outputs:def.parameters.outputs.slice()}}
       else components[component.id]={role:component.symbolId==='point'?'point':'absorb'};
+      // What a message does here is read as the graph core reads it: a passive card absorbs, and a
+      // participant with a principal acts in its own name.
+      if(config.signalMode==='passive')components[component.id].passive=true;
+      if(typeof config.principal==='string'&&config.principal)components[component.id].principal=config.principal;
       // A channel merge is read where checkDocument reads it: the stored port list, by port id.
       for(const port of Array.isArray(config.attachmentPoints)?config.attachmentPoints:[]){
         for(const channel of Array.isArray(port?.channels)?port.channels:[]){
@@ -553,6 +853,8 @@
       }
     }
     for(const wire of d.wires){
+      const passable=passability(d,wire);
+      blocked.push(...passable.blocked);
       if(!Data.wireEndBound(wire,'a')||!Data.wireEndBound(wire,'b'))continue;
       const ends={};
       for(const end of ['a','b']){
@@ -562,11 +864,8 @@
       }
       if(!ends.a||!ends.b)continue;
       const config=isObject(wire.config)?wire.config:{};
-      const direction=['none','forward','reverse','duplex'].includes(config.direction)?config.direction:wire.duplex?'duplex':'forward';
-      const declared=direction==='none'?[]:direction==='duplex'?['forward','reverse']:[direction];
       const theirs=new Set(ends.b.channels);
-      const forward=declared.includes('forward')&&EMITS.includes(ends.a.flow)&&RECEIVES.includes(ends.b.flow);
-      const reverse=declared.includes('reverse')&&EMITS.includes(ends.b.flow)&&RECEIVES.includes(ends.a.flow);
+      const {forward,reverse}=passable;
       // A Wire that reaches a combine device lands on its own input, `<port>:<wire>`: the device reads
       // each Wire's latest level, as the graph core does, and never a merge of them.
       const land=(end,into)=>{
@@ -576,14 +875,98 @@
         (ends[end].flow==='control'||ends[end].point==='control'?params.control:params.data).push(name);c.inputs.push(name);
         return {entity:ends[end].entity,point:name};
       };
-      wires.push({id:wire.id,a:land('a',reverse),b:land('b',forward),delay:wireDelay(config,tickMs),forward,reverse,
-        channels:ends.a.channels.filter(c=>theirs.has(c))});
+      // Every Path carries a second channel, message, in each direction it carries; no port declares
+      // it. A message stays on the port it reaches (aPoint, bPoint), and config.accepts filters it.
+      const channels=ends.a.channels.filter(c=>theirs.has(c));
+      if(!channels.includes(MESSAGE))channels.push(MESSAGE);
+      // Where each carried leg lands: on a control port (the graph core's arc.control) or as one of
+      // the card's incoming Paths (a join waits for one message on each).
+      for(const [carried,end] of [[forward,'b'],[reverse,'a']]){
+        if(!carried)continue;
+        const at=landings[ends[end].entity]||(landings[ends[end].entity]={control:[],incoming:[]});
+        const list=ends[end].flow==='control'||ends[end].point==='control'?at.control:at.incoming;
+        if(!list.includes(wire.id))list.push(wire.id);
+      }
+      wires.push({id:wire.id,a:land('a',reverse),b:land('b',forward),aPoint:ends.a.point,bPoint:ends.b.point,delay:wireDelay(config,tickMs),forward,reverse,
+        channels,accepts:Array.isArray(config.accepts)?config.accepts.map(String):null,
+        // A leg's own read/write operation, the graph core's forwardOperation/reverseOperation
+        // (src/07-graph-core.js build), checked after a crossing on the message channel.
+        forwardOperation:['read','write'].includes(config.forwardOperation)?config.forwardOperation:'none',
+        reverseOperation:['read','write'].includes(config.reverseOperation)?config.reverseOperation:'none'});
     }
     wires.sort((x,y)=>cmp(x.id,y.id));
     for(const c of Object.values(components))if(c.combine){const p=definitions[c.definition].parameters;p.data.sort();p.control.sort();c.inputs.sort()}
-    return {components,merges,wires};
+    for(const at of Object.values(landings)){at.control.sort();at.incoming.sort()}
+    return {components,merges,wires,blocked,landings};
+  }
+  // Every cycle made only of zero-delay legs, as its strongly connected component: the components in
+  // it and the Wires whose zero-delay legs join them, both sorted; [] when there is none. Such a cycle
+  // would run forever inside one tick, so the run refuses it at start (the graph core's
+  // ZERO_LATENCY_CYCLE).
+  // A card whose flow pattern is timed (buffer@1) takes time itself, so no cycle through it is zero-delay.
+  function zeroDelayCycles(wires,timed=new Set()){
+    const edges=new Map(),add=(from,to,wire)=>{if(timed.has(from)||timed.has(to))return;if(!edges.has(from))edges.set(from,[]);edges.get(from).push({to,wire})};
+    for(const w of wires)if(w.delay===0){if(w.forward)add(w.a.entity,w.b.entity,w.id);if(w.reverse)add(w.b.entity,w.a.entity,w.id)}
+    const nodes=[...new Set([...edges.keys(),...[...edges.values()].flat().map(e=>e.to)])].sort();
+    const index=new Map(),low=new Map(),stack=[],on=new Set(),out=[];let n=0;
+    const visit=v=>{
+      index.set(v,n);low.set(v,n);n++;stack.push(v);on.add(v);
+      for(const {to} of edges.get(v)||[]){if(!index.has(to)){visit(to);low.set(v,Math.min(low.get(v),low.get(to)))}else if(on.has(to))low.set(v,Math.min(low.get(v),index.get(to)))}
+      if(low.get(v)!==index.get(v))return;
+      const members=[];let x;do{x=stack.pop();on.delete(x);members.push(x)}while(x!==v);
+      const inside=new Set(members),joined=[...new Set(members.flatMap(m=>(edges.get(m)||[]).filter(e=>inside.has(e.to)).map(e=>e.wire)))].sort();
+      if(members.length>1||joined.length)out.push({nodes:members.sort(),wires:joined});
+    };
+    for(const v of nodes)if(!index.has(v))visit(v);
+    return out.sort((x,y)=>cmp(x.nodes[0],y.nodes[0]));
   }
   function inputRefusal(message){return {ok:false,code:'INPUT_INVALID',message}}
+  // A run's function handlers, kept beside the run and never in it (a run stays plain JSON); and the
+  // answers of functions already called in a tick that was then refused, so a retry does not call
+  // them again: a function is called once, when the run first reaches it.
+  const FUNCTIONS=new WeakMap(),HELD=new WeakMap();
+  // One input, checked against the normalized document: {ok, input} with the input as the ledger
+  // records it, or the refusal. startRun checks each of its inputs this way and addInput a mid-run one.
+  function checkInput(d,packs,raw,i){
+    if(!isObject(raw))return inputRefusal(`input ${i} must be an object`);
+    const extra=Object.keys(raw).filter(k=>!INPUT_KEYS.includes(k));
+    if(extra.length)return inputRefusal(`input ${i}: unknown key ${extra[0]}`);
+    const component=d.components.find(c=>c.id===raw.entity);
+    if(!component)return inputRefusal(`input ${i}: unknown entity ${JSON.stringify(raw.entity)}`);
+    let spec=null;try{spec=Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&typeof raw.point==='string'&&(s.id===raw.point||s.compatId===raw.point))||null}catch(_){spec=null}
+    if(!spec)return inputRefusal(`input ${i}: ${raw.entity} has no port ${JSON.stringify(raw.point)}`);
+    const channel=raw.channel===undefined?'main':raw.channel;
+    if(channel===MESSAGE){
+      // An inject: a message {channel, payload, principal} put in at a port; several may share a port and tick.
+      if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
+      const v=raw.value;
+      if(!isObject(v))return inputRefusal(`input ${i}: a message input's value must be an object {channel, payload, principal}`);
+      const extra=Object.keys(v).filter(k=>!['channel','payload','principal'].includes(k));
+      if(extra.length)return inputRefusal(`input ${i}: unknown key value.${extra[0]}`);
+      if(v.channel!==undefined&&v.channel!==null&&typeof v.channel!=='string')return inputRefusal(`input ${i}: value.channel must be a string or null`);
+      if(v.principal!==undefined&&v.principal!==null&&!nonEmpty(v.principal))return inputRefusal(`input ${i}: value.principal must be a non-empty string or null`);
+      try{Canonical.canonicalize(v.payload??null)}catch(_){return inputRefusal(`input ${i}: value.payload must be JSON`)}
+      // No floating point anywhere a run records, payloads included: every number is a safe integer.
+      const fraction=firstFraction(v.payload??null,`inputs[${i}].value.payload`);
+      if(fraction)return {ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`input ${i}: ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the number in integer units (e.g. 1.5 kg as 1500 g, 0.25 as 250 thousandths) and name the unit in the payload'};
+      return {ok:true,input:{entity:component.id,point:spec.id,channel,value:{channel:v.channel??null,payload:clone(v.payload??null),principal:v.principal??null},at:raw.at}};
+    }
+    const bound=component.config?.definition;
+    if(bound!==undefined&&bound!==null&&(resolveDefinition(bound,packs)?.parameters?.outputs||[]).includes(spec.id))return inputRefusal(`input ${i}: ${component.id}.${spec.id} is an output of ${bound}; a device's output is the device's`);
+    if(!specChannels(spec).includes(channel))return inputRefusal(`input ${i}: port ${raw.entity}.${spec.id} has no channel ${JSON.stringify(channel)}`);
+    const fraction=firstFraction(raw.value,`inputs[${i}].value`);
+    if(fraction)return {ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`input ${i}: ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the value in integer units (a level as a boolean on a binary channel)'};
+    if(typeof raw.value!=='boolean')return inputRefusal(`input ${i}: value must be a boolean (binary channels only)`);
+    if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
+    return {ok:true,input:{entity:component.id,point:spec.id,channel,value:raw.value,at:raw.at}};
+  }
+  // A value a caller hands the run (a resume payload, a reconcile result, an effects ledger): JSON
+  // whose numbers are all safe integers, or the refusal naming the path to the first that is not.
+  function fractionRefusal(value,path){
+    try{Canonical.canonicalize(value)}catch(_){return inputRefusal(`${path} must be JSON`)}
+    const fraction=firstFraction(value,path);
+    return fraction?{ok:false,code:'PAYLOAD_FRACTION',path:fraction.path,message:`${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`,next_operation:'state the number in integer units (e.g. 0.25 as 250 thousandths) and name the unit'}:null;
+  }
   // A run: startRun({doc, packs, inputs, seed, budget}). `walk: 'reverse'` reverses the order in
   // which the engine walks ports, devices and Wires within a phase; no outcome depends on it.
   function startRun(options){
@@ -594,6 +977,7 @@
     for(const component of d.components){
       for(const port of Array.isArray(component.config?.attachmentPoints)?component.config.attachmentPoints:[]){
         for(const channel of Array.isArray(port?.channels)?port.channels:[]){
+          if(channel?.id===MESSAGE&&channel?.merge!==undefined&&channel.merge?.combine!=='queue')return {ok:false,code:'MERGE_FORM',subject:`component:${component.id}:${port.id}:${channel.id}`,message:`channel message merges by queue only: every message is delivered, none is merged away (${component.id}.${port.id}.${channel.id})`};
           if(channel?.merge?.combine==='sum')return {ok:false,code:'MERGE_FORM',subject:`component:${component.id}:${port.id}:${channel.id}`,message:`combine sum is not defined on binary channels (${component.id}.${port.id}.${channel.id}); slice 1b runs binary channels only`};
         }
       }
@@ -609,47 +993,85 @@
     if(!Array.isArray(rawInputs))return inputRefusal('inputs must be an array');
     const inputs=[],seen=new Set();
     for(let i=0;i<rawInputs.length;i++){
-      const raw=rawInputs[i];
-      if(!isObject(raw))return inputRefusal(`input ${i} must be an object`);
-      const extra=Object.keys(raw).filter(k=>!INPUT_KEYS.includes(k));
-      if(extra.length)return inputRefusal(`input ${i}: unknown key ${extra[0]}`);
-      const component=d.components.find(c=>c.id===raw.entity);
-      if(!component)return inputRefusal(`input ${i}: unknown entity ${JSON.stringify(raw.entity)}`);
-      let spec=null;try{spec=Data.canonicalAttachmentPointDescriptors(component).find(s=>s&&typeof raw.point==='string'&&(s.id===raw.point||s.compatId===raw.point))||null}catch(_){spec=null}
-      if(!spec)return inputRefusal(`input ${i}: ${raw.entity} has no port ${JSON.stringify(raw.point)}`);
-      const bound=component.config?.definition;
-      if(bound!==undefined&&bound!==null&&(resolveDefinition(bound,o.packs)?.parameters?.outputs||[]).includes(spec.id))return inputRefusal(`input ${i}: ${component.id}.${spec.id} is an output of ${bound}; a device's output is the device's`);
-      const channel=raw.channel===undefined?'main':raw.channel;
-      if(!specChannels(spec).includes(channel))return inputRefusal(`input ${i}: port ${raw.entity}.${spec.id} has no channel ${JSON.stringify(channel)}`);
-      if(typeof raw.value!=='boolean')return inputRefusal(`input ${i}: value must be a boolean (binary channels only)`);
-      if(!natural(raw.at))return inputRefusal(`input ${i}: at must be an integer >= 0`);
-      const input={entity:component.id,point:spec.id,channel,value:raw.value,at:raw.at};
+      const checked=checkInput(d,o.packs,rawInputs[i],i);
+      if(!checked.ok)return checked;
+      const input=checked.input;
+      if(input.channel===MESSAGE){inputs.push(input);continue}
       const key=JSON.stringify([input.at,input.entity,input.point,input.channel]);
       if(seen.has(key))return inputRefusal(`input ${i}: a second input at (${input.entity}, ${input.point}, ${input.channel}, ${input.at})`);
       seen.add(key);inputs.push(input);
     }
-    inputs.sort((x,y)=>cmpList([x.at,x.entity,x.point,x.channel],[y.at,y.entity,y.point,y.channel]));
-    const implied=impliedDevices(d);
+    // Handlers by name: a declarative one is plain JSON and is kept in the run; a function is kept
+    // beside the run (FUNCTIONS), never in it, and its answers go into the ledger.
+    if(o.handlers!==undefined&&!isObject(o.handlers))return inputRefusal('handlers must be an object of name to handler');
+    const declared={},functions={};
+    for(const [name,spec] of Object.entries(o.handlers||{})){
+      if(typeof spec==='function'){functions[name]=spec;continue}
+      try{declared[name]=JSON.parse(JSON.stringify(spec===undefined?null:spec))}catch(_){return inputRefusal(`handlers.${name} must be JSON or a function`)}
+    }
+    // An effects ledger handed in from an earlier run: what it confirmed is not sent again.
+    if(o.effects!==undefined){
+      if(!isObject(o.effects))return inputRefusal('effects must be an object of effect key to effect');
+      const bad=fractionRefusal(o.effects,'effects');if(bad)return bad;
+    }
+    // Message inputs at one port and tick are ordered by their canonical value, so the order is the caller's no more.
+    const tie=x=>x.channel===MESSAGE?Canonical.canonicalize(x.value):'';
+    inputs.sort((x,y)=>cmpList([x.at,x.entity,x.point,x.channel,tie(x)],[y.at,y.entity,y.point,y.channel,tie(y)]));
+    const implied=impliedDevices(d,o.packs);
     const bound=[...new Set(d.components.map(c=>c.config?.definition).filter(ref=>ref!==undefined&&ref!==null))];
-    const refs=[...new Set([...bound,...Object.keys(implied.definitions)])].sort();
+    // Flow definitions a card reaches through the binding lookup are resolved definitions of the run too.
+    const flowRefs=[...new Set([...Object.values(implied.flow),...Object.values(implied.behavior).flatMap(b=>Object.values(b))])];
+    const refs=[...new Set([...bound,...Object.keys(implied.definitions),...flowRefs])].sort();
     const definitions={};
-    for(const ref of bound){const def=resolveDefinition(ref,o.packs);if(def.delay===undefined)def.delay=0;definitions[ref]=def}
+    for(const ref of [...bound,...flowRefs]){const def=resolveDefinition(ref,o.packs);if(def.delay===undefined)def.delay=0;definitions[ref]=def}
     Object.assign(definitions,clone(implied.definitions));
     const replayKey={documentId:d.id,documentHash:Data.documentHash(d),definitions:refs,runtimeVersion:RUNTIME_VERSION,traceFormat:TRACE_FORMAT,inputs,seed};
     if(tickMs!==1)replayKey.tickMs=tickMs;
     const shape=topology(d,definitions,implied.bind,tickMs);
+    // What a card does with messages, levels set by messages, and edges that start messages: read once here.
+    const byId=new Map(d.components.map(c=>[c.id,c])),timed=new Set();
+    for(const [id,ref] of Object.entries(implied.flow)){
+      const def=definitions[ref],at=shape.landings[id]||{control:[],incoming:[]};
+      shape.components[id].flow={ref,pattern:def.pattern,parameters:clone(def.parameters),control:at.control.slice(),
+        settings:{...flowSettings(byId.get(id),tickMs),controlled:at.control.length>0,incoming:at.incoming.slice()}};
+      if(pattern(def.pattern).timed)timed.add(id);
+    }
+    // Behaviours: park with its prompt, effect with its key path, handler with its name, read once here.
+    for(const [id,refs] of Object.entries(implied.behavior)){
+      const b=byId.get(id).config.behavior,c=byId.get(id).config,out={};
+      if(refs.human)out.park={ref:refs.human,prompt:isObject(b.human)&&typeof b.human.prompt==='string'?b.human.prompt:null,label:typeof c.label==='string'&&c.label?c.label:id};
+      if(refs.effect)out.effect={ref:refs.effect,key:isObject(b.effect)&&typeof b.effect.key==='string'?b.effect.key:null};
+      if(refs.handler)out.handler={ref:refs.handler,name:String(b.handler)};
+      shape.components[id].behavior=out;
+    }
+    for(const [id,a] of Object.entries(implied.asserted))shape.components[id].asserted=a;
+    for(const [id,e] of Object.entries(implied.edges))shape.components[id].edge=e;
+    const loops=zeroDelayCycles(shape.wires,timed);
+    if(loops.length)return {ok:false,code:'ZERO_DELAY_CYCLE',message:`a cycle must take time: give one of its Paths a delay of at least 1 or a latencyMs above 0 (${loops.map(c=>c.wires.join(', ')).join('; ')})`,cycles:loops};
     // A declared level is an input the document makes: a caller's input on the same port and tick wins.
     const sources=implied.sources.filter(x=>!seen.has(JSON.stringify([x.at,x.entity,x.point,x.channel])));
     const run={
       id:Canonical.sha256Hex(Canonical.canonicalize(replayKey)).slice(0,12),
       runtimeVersion:RUNTIME_VERSION,doc:d,definitions,components:shape.components,merges:shape.merges,wires:shape.wires,
       seed,budget,tickMs,spent:0,tick:null,walk:o.walk||'forward',
-      signal:{},lastRecord:{},queues:{},sequence:0,ledger:[],records:[],replayDraws:null,
+      // levelPrincipal mirrors signal/lastRecord for the level channel's own principal (STATE-SPACE.md,
+      // access control): a side cache, never part of the trace or a replay comparison, so a device's
+      // own wire-named inputs can read what last set them, the way a Point reads its own arrivals.
+      // deviceState: each stateful flow card's committed device.state, by entity (absent = the pattern's initial state).
+      signal:{},lastRecord:{},levelPrincipal:{},queues:{},deviceState:{},sequence:0,ledger:[],records:[],replayDraws:null,
       clocks:Object.fromEntries(implied.clocks.map(c=>[portKey(c.entity,c.point,'main'),c])),
-      pending:[...[...inputs,...sources].map(x=>({kind:'input',...x})),...implied.clocks.map(c=>clockEdge(c,tickMs,0,true,null)).filter(Boolean)]
+      blocked:shape.blocked,
+      // The run's effects ledger by effect key, the messages parked for a person by park id, and the
+      // declarative handlers by name: plain JSON, so a run copied or restored keeps them.
+      effects:o.effects!==undefined?clone(o.effects):{},parked:{},handlers:declared,replayResults:null,
+      // A message input carries the ledger seq of its input entry: its message is m-<seq>.
+      pending:[...inputs.map((x,i)=>x.channel===MESSAGE?{kind:'input',...clone(x),seq:i+(o.effects!==undefined?2:1)}:{kind:'input',...x}),...sources.map(x=>({kind:'input',...x})),...implied.clocks.map(c=>clockEdge(c,tickMs,0,true,null)).filter(Boolean)]
         .sort((x,y)=>cmpList([x.at,x.entity,x.point,x.channel],[y.at,y.entity,y.point,y.channel]))
     };
+    if(Object.keys(functions).length)FUNCTIONS.set(run,functions);
     appendEntry(run,'start',{replayKey:clone(replayKey),budget});
+    // An effects ledger handed in is recorded right after start, so a replay starts from the same one.
+    if(o.effects!==undefined)appendEntry(run,'effects',{effects:clone(o.effects)});
     for(const input of inputs)appendEntry(run,'input',clone(input));
     return {ok:true,run};
   }
@@ -697,57 +1119,469 @@
       run.queues[key]=q;
     }
   }
-  function makeRecord(run,ctx,{entity,point,channel,kind,value,observer,rule,inputs,phase,rank=0}){
+  // A record carries its principal when one applies (STATE-SPACE.md, access control): the key is
+  // left out entirely otherwise, so a document with no ACL and no principal records exactly as
+  // before (examples/state, tests/golden stay byte-unchanged).
+  function makeRecord(run,ctx,{entity,point,channel,kind,value,observer,rule,inputs,phase,rank=0,principal}){
     const id=`${TMP}${ctx.tmp++}`;
-    ctx.records.push({phase,rank,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind,form:typeof value==='number'?'continuous':'binary',value,time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none'}});
+    ctx.records.push({round:ctx.round,phase,rank,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind,form:typeof value==='number'?'continuous':'binary',value,time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none',...(principal?{principal}:{})}});
     return id;
   }
   // Emission: one arrival per bound Wire, per direction it carries out of this port, per shared
-  // channel, at t + path delay; never back onto a Wire in `exclude`.
-  function emit(run,ctx,entity,point,channel,value,exclude,from,phase){
+  // channel, at t + path delay; never back onto a Wire in `exclude`. `via` is the wire this value
+  // itself arrived by (null at a source); an emission that crosses a plane is checked under
+  // `principal` and the crossing op (src/07-graph-core.js setLevel, 439-444): a refusal is a level
+  // record (rule refused, level true, the graph core's reason) and that Wire carries nothing this tick.
+  function emit(run,ctx,entity,point,channel,value,exclude,from,phase,principal=null,via=null){
     const ends=indexOf(run).out.get(entity+'\u0000'+point);
     if(!ends)return;
     for(const {wire,to} of walked(run,ends)){
       if(exclude.includes(wire.id)||!wire.channels.includes(channel))continue;
-      const item={kind:'arrival',at:ctx.t+wire.delay,entity:to.entity,point:to.point,channel,value,wire:wire.id,phase,from};
+      const crossing=aclCheck(run,entity,via,wire.id,principal,null);
+      if(!crossing.ok){levelRefusalRecord(run,ctx,{entity,point,channel,principal,reason:crossing.reason});continue}
+      // principal is left out when it is null, so a document with no ACL hashes and records
+      // exactly as before (stateHash spreads a pending item's own keys; see slice 1c below).
+      const item={kind:'arrival',at:ctx.t+wire.delay,entity:to.entity,point:to.point,channel,value,wire:wire.id,phase,from,...(principal?{principal}:{})};
       run.pending.push(item);ctx.fresh.push(item);
     }
   }
   // Merge order: the declared Paths first (in their declared order), the rest by a seeded draw
   // keyed by (seed, tick, entity, port, channel), recorded in the ledger (and, in replay, read from it).
+  // A message arrival is tagged by its Wire and its message id, since one Wire may bring several.
   function mergeOrder(run,ctx,g,merge){
-    const tag=a=>g.arrivals.filter(x=>x.wire===a.wire).length>1?`${a.wire}#${a.phase}`:a.wire;
+    const tag=g.channel===MESSAGE?a=>`${a.wire}#${a.value.id}`:a=>g.arrivals.filter(x=>x.wire===a.wire).length>1?`${a.wire}#${a.phase}`:a.wire;
     const items=g.arrivals.map(a=>({a,id:tag(a)})).sort((x,y)=>cmp(x.id,y.id));
     const declared=merge.order?.kind==='declared'?merge.order.paths:[];
     const first=[];for(const path of declared)for(const item of items)if(item.a.wire===path)first.push(item);
     const rest=items.filter(item=>!declared.includes(item.a.wire));
     let restOrder=rest.map(item=>item.id);
     if(rest.length>1){
-      const paths=restOrder.slice(),drawn=Canonical.drawOrder(run.seed,['merge',ctx.t,g.entity,g.point,g.channel],paths);
+      // A delta round after the first is part of the draw key, and of the recorded draw.
+      const paths=restOrder.slice(),drawn=Canonical.drawOrder(run.seed,ctx.round?['merge',ctx.t,ctx.round,g.entity,g.point,g.channel]:['merge',ctx.t,g.entity,g.point,g.channel],paths);
       if(run.replayDraws){
-        const recorded=run.replayDraws.find(e=>e.body.tick===ctx.t&&e.body.entity===g.entity&&e.body.point===g.point&&e.body.channel===g.channel);
+        const recorded=run.replayDraws.find(e=>e.body.tick===ctx.t&&(e.body.round??0)===ctx.round&&e.body.entity===g.entity&&e.body.point===g.point&&e.body.channel===g.channel);
         if(!recorded||!same(recorded.body.paths,paths)||!same(recorded.body.order,drawn)){
           ctx.diverged={code:'REPLAY_DIVERGED',entry:recorded?recorded.seq:null,message:recorded?`the draw recorded at ledger entry ${recorded.seq} (${g.entity}.${g.point}.${g.channel}, tick ${ctx.t}) does not re-derive from the seed: recorded ${JSON.stringify(recorded.body.order)}, derived ${JSON.stringify(drawn)}`:`no draw is recorded for ${g.entity}.${g.point}.${g.channel} at tick ${ctx.t}`};
           return null;
         }
         restOrder=recorded.body.order.slice();
       }else restOrder=drawn;
-      ctx.draws.push({tick:ctx.t,entity:g.entity,point:g.point,channel:g.channel,paths,order:restOrder.slice()});
+      ctx.draws.push({tick:ctx.t,...(ctx.round?{round:ctx.round}:{}),entity:g.entity,point:g.point,channel:g.channel,paths,order:restOrder.slice()});
     }
     return [...first,...restOrder.map(id=>rest.find(item=>item.id===id))].map(item=>item.a);
   }
   // Update phase for one (entity, port, channel): input, else a device's delayed output, else the
   // merged arrivals (or a queue's head). What loses is recorded with rule `overridden`.
+  // --- Access control (STATE-SPACE.md, GRAPH-MODEL.md): a plane's config.acl, the crossing a value
+  // makes at a boundary point (placement.kind edge) or a plane's own open interior, and the
+  // decision a principal gets there — the same algorithm the graph core specifies and exports
+  // (src/07-graph-core.js aclConfig/aclDecide/crossingAt, 31-55, 99-105), read fresh here over this
+  // run's own document instead of through that module, so a run's behaviour never depends on
+  // whether something else happens to have loaded the graph core (tests/state_space_message_qa.py's
+  // load-order check requires exactly that).
+  const ACL_OPS=['enter','exit','read','write'];
+  function aclConfigOf(c){
+    const a=c?.config?.acl;if(!isObject(a))return null;
+    const list=v=>Array.isArray(v)?v.map(String).filter(x=>ACL_OPS.includes(x)):[];
+    return {default:a.default==='allow'?'allow':'deny',entries:(Array.isArray(a.entries)?a.entries:[]).filter(isObject).map(e=>({principal:String(e.principal??''),allow:list(e.allow),deny:list(e.deny)}))};
+  }
+  function aclPrincipalMatches(pattern,principal){
+    if(principal==null||principal==='')return false;
+    if(pattern==='*')return true;
+    return pattern.endsWith('*')?String(principal).startsWith(pattern.slice(0,-1)):pattern===String(principal);
+  }
+  function aclDecideLocal(plane,principal,op){
+    const acl=plane.acl;if(!acl)return {ok:true};
+    const name=plane.label||plane.id;
+    if(principal==null||principal==='')return {ok:false,reason:`acl: no principal may ${op} ${name} anonymously`};
+    const matching=acl.entries.filter(e=>aclPrincipalMatches(e.principal,principal));
+    if(matching.some(e=>e.deny.includes(op)))return {ok:false,reason:`acl: ${principal} is denied ${op} on ${name}`};
+    if(matching.some(e=>e.allow.includes(op)))return {ok:true};
+    return acl.default==='allow'?{ok:true}:{ok:false,reason:`acl: ${principal} may not ${op} ${name}`};
+  }
+  const ACL_INDEX=new WeakMap();
+  function aclIndexOf(run){
+    let idx=ACL_INDEX.get(run.doc);
+    if(idx)return idx;
+    idx={byId:new Map(run.doc.components.map(c=>[c.id,c])),wireCanvas:new Map(run.doc.wires.map(w=>[w.id,w.canvasId||Data.GLOBAL_CANVAS_ID]))};
+    ACL_INDEX.set(run.doc,idx);
+    return idx;
+  }
+  function aclPlaneInfo(byId,id){
+    const c=byId.get(id);if(!c)return null;
+    return {id:c.id,label:c.config?.label||c.id,acl:aclConfigOf(c),interior:Data.componentCanvasId(c)};
+  }
+  // The plane a value crosses at `entity`, turning from the wire it arrived by (`via`, null at a
+  // source: a source cannot cross) to the one it leaves by (`toWire`): null off a boundary, else
+  // {plane, op: enter|exit}.
+  function aclCrossing(run,entity,via,toWire){
+    if(via==null)return null;
+    const {byId,wireCanvas}=aclIndexOf(run);
+    const n=byId.get(entity);if(!n)return null;
+    const plane=n.placement?.kind==='edge'?aclPlaneInfo(byId,n.placement.hostId):(n.form?.regions?.interior?.state==='open'?aclPlaneInfo(byId,n.id):null);
+    if(!plane)return null;
+    const side=c=>c===plane.interior?'in':'out',a=side(wireCanvas.get(via)),b=side(wireCanvas.get(toWire));
+    return a===b?null:{plane,op:a==='out'?'enter':'exit'};
+  }
+  // {ok:true, crossed} when there is no boundary or the principal clears it; {ok:false, crossed:true,
+  // reason} with the same acl: reason text the graph core gives otherwise. extraOp is the Wire's
+  // own read/write operation, checked after the crossing's enter/exit (messages only; levels pass null).
+  function aclCheck(run,entity,via,toWire,principal,extraOp){
+    const cross=aclCrossing(run,entity,via,toWire);
+    if(!cross)return {ok:true,crossed:false};
+    for(const op of [cross.op,...(extraOp&&extraOp!=='none'?[extraOp]:[])]){
+      const d=aclDecideLocal(cross.plane,principal,op);
+      if(!d.ok)return {ok:false,crossed:true,reason:d.reason};
+    }
+    return {ok:true,crossed:true};
+  }
+  // A level's own crossing refusal: rule refused, level true, the graph core's reason as the
+  // record's value (STATE-SPACE.md), apart from a message's hop refused.
+  function levelRefusalRecord(run,ctx,{entity,point,channel,principal,reason}){
+    const id=`${TMP}${ctx.tmp++}`;
+    ctx.records.push({round:ctx.round,phase:0,rank:0,record:{format:RECORD_FORMAT,id,subject:{entity,point,channel,run:run.id},vantage:'space',observable:'logic.level',kind:'derived',form:'categorical',value:reason,level:true,
+      time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer:'engine:acl',provenance:{rule:'refused',inputs:[]},perturbation:'none',...(principal?{principal}:{})}});
+    return id;
+  }
+  // --- Messages (the graph core's inject, forward and send, src/07-graph-core.js 299-352, 429-454).
+  // Each thing that happens to a message is one record of form message on the message channel: its
+  // value names the message, principal says who it acts for, hop what happened. A message's hops are
+  // its records in sequence order; its lineage is the records that share its root.
+  // A record about a message: observable message with a hop, or (a receipt) its own observable and no hop.
+  function messageRecord(run,ctx,{entity,point,kind='derived',observer,rule,inputs,message,principal,hop,observable='message'}){
+    const id=`${TMP}${ctx.tmp++}`;
+    const record={format:RECORD_FORMAT,id,subject:{entity,point,channel:MESSAGE,run:run.id},vantage:'space',observable,kind,form:'message',value:copy(message),
+      time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer,provenance:{rule,inputs:inputs.slice()},perturbation:'none',principal:principal??null,...(hop?{hop}:{})};
+    // Records at one port sort by delivery (injects, then arrivals in merge order), then by message.
+    ctx.records.push({round:ctx.round,phase:0,rank:0,record,key:[entity,point,MESSAGE,'message',ctx.delivery,message.id,hop?HOP_RANK[hop.event]??4:4]});
+    return id;
+  }
+  // A stateful flow card's working state for this tick: its committed device.state (the pattern's
+  // initial state before the first one), copied once per tick through the undo log. Messages reaching
+  // one card in a tick are handled one after another in delivery order, each seeing the state the one
+  // before it left; what the card holds at the end of the tick is committed as one record.
+  function flowState(run,ctx,entity){
+    const flow=run.components[entity].flow,p=pattern(flow.pattern);
+    if(!p.stateful)return null;
+    if(!ctx.stateTouched.has(entity)){
+      const had=own(run.deviceState,entity),before=had?run.deviceState[entity]:p.initial(flow.parameters);
+      ctx.stateTouched.set(entity,{had,before:Canonical.canonicalize(before),inputs:[],round:ctx.round});
+      put(run.deviceState,ctx.undoState,entity,copy(before));
+    }
+    return run.deviceState[entity];
+  }
+  const stateCause=(ctx,entity,id)=>{const t=ctx.stateTouched.get(entity);if(t){t.inputs.push(id);t.round=ctx.round}};
+  // A message at a component, after it arrived by `via` at `point` (via null for an inject or an
+  // edge), in the graph core's order (src/07-graph-core.js arrive and continueAt, 375-454 at 7b939e3):
+  // a flow card's control Path sets it; an asserted card takes set or toggle as its new level; a flow
+  // card's pattern takes it in (refuse, end, hold it, or pass); then continueAt.
+  function messageAt(run,ctx,entity,point,message,principal,via,from){
+    const component=run.components[entity]||{},flow=component.flow||null,p=flow?pattern(flow.pattern):null;
+    let prev=from;
+    const rec=(event,{reason=null,rule=null,observer=null,observable}={})=>{
+      prev=messageRecord(run,ctx,{entity,point,observer:observer||(flow?`rule:${flow.ref}`:'engine:message'),rule:rule||(flow?flow.ref:event),inputs:[prev],message,principal,hop:{event,...(reason?{reason}:{})},observable});
+      if(flow)stateCause(ctx,entity,prev);
+      return prev;
+    };
+    if(flow&&p.control&&via!==null&&flow.control.includes(via)){
+      p.control(flow.parameters,flowState(run,ctx,entity),message.payload);
+      return rec('controlled');
+    }
+    const asserted=component.asserted;
+    if(asserted&&isObject(message.payload)&&('set' in message.payload||message.payload.toggle)){
+      const id=rec('asserted',{rule:'asserted',observer:'rule:asserted'});
+      const current=asserted.outs.length?levelOf(run.signal[portKey(entity,asserted.outs[0],'main')]):0;
+      const level=message.payload.toggle?LEVEL-current:toLevel(Number(message.payload.set));
+      const value=asserted.kind==='continuous'?level:level>=asserted.threshold;
+      // The new level is written in the next delta round of this tick, like any zero-delay change.
+      for(const out of asserted.outs){const item={kind:'assert',at:ctx.t,entity,point:out,channel:'main',value,from:id};run.pending.push(item);ctx.fresh.push(item)}
+      return;
+    }
+    if(flow&&p.intake){
+      const d=p.intake(flow.parameters,flowState(run,ctx,entity),flow.settings,{value:message,principal:principal??null,via,t:ctx.t});
+      if(d.refuse)return rec('refused',{reason:d.refuse});
+      if(d.end)return rec(d.end,{rule:d.rule});
+      if(d.wait){
+        const id=rec(d.wait);d.item.from=id;d.item.point=point;
+        if(d.release!=null){const item={kind:'release',at:ctx.t+d.release,entity,point,channel:MESSAGE};run.pending.push(item);ctx.fresh.push(item)}
+        if(!d.ready)return;
+        const {parts,taken}=p.take(flow.parameters,run.deviceState[entity],flow.settings);
+        const joined={id:`${message.id}.j`,root:message.root,parent:message.id,channel:message.channel,payload:{parts},origin:message.origin};
+        const jid=messageRecord(run,ctx,{entity,point,observer:`rule:${flow.ref}`,rule:flow.ref,inputs:taken.map(x=>x.from).filter(Boolean),message:joined,principal,hop:{event:'joined'}});
+        stateCause(ctx,entity,jid);
+        return continueAt(run,ctx,entity,point,joined,principal,null,jid);
+      }
+      if(d.receipt)prev=messageRecord(run,ctx,{entity,point,observer:`rule:${flow.ref}`,rule:'receipt',inputs:[prev],message,principal,observable:'receipt'});
+    }
+    // A card with config.behavior.human parks the message for a person (park@1): it waits as
+    // p-<message id> in the run's parked set until a resume names it (src/07-graph-core.js:422-425).
+    const park=component.behavior?.park;
+    if(park){
+      const parkId=behaviorPattern(run,park).parkId(message);
+      const id=messageRecord(run,ctx,{entity,point,observer:`rule:${park.ref}`,rule:park.ref,inputs:[prev],message,principal,hop:{event:'parked',parkId}});
+      const held={id:parkId,entity,point,messageId:message.id,message:copy(message),principal:principal??null,via:via??null,at:ctx.t,prompt:park.prompt,from:id};
+      put(run.parked,ctx.undoParked,parkId,held);ctx.fresh.push(held);
+      return;
+    }
+    return continueAt(run,ctx,entity,point,message,principal,via,prev);
+  }
+  // A behaviour's pattern, through the definition the card's binding names.
+  const behaviorPattern=(run,b)=>pattern(run.definitions[b.ref].pattern);
+  // After intake (the graph core's continueAt, src/07-graph-core.js:427-454 at 7b939e3): effect
+  // mediation, then the handler, then the flow policy. A flow card naming a handler with no handler
+  // behaviour bound (no core.flow pack defines flow.handler@1) refuses `no handler registered`; a
+  // passive card absorbs the message; otherwise forwardAt.
+  function continueAt(run,ctx,entity,point,message,principal,via,from){
+    const component=run.components[entity]||{},flow=component.flow||null,b=component.behavior||{};
+    if(b.effect)return effectAt(run,ctx,entity,point,message,principal,via,from);
+    if(b.handler)return handlerAt(run,ctx,entity,point,message,principal,via,from);
+    const observer=flow?`rule:${flow.ref}`:null;
+    const end=(event,reason)=>{const id=messageRecord(run,ctx,{entity,point,observer:observer||'engine:message',rule:flow?flow.ref:event,inputs:[from],message,principal,hop:reason?{event,reason}:{event}});if(flow)stateCause(ctx,entity,id);return id};
+    if(flow&&flow.settings.handler)return end('refused',`no handler registered: ${flow.settings.handler}`);
+    if(component.passive)return end('absorbed');
+    return forwardAt(run,ctx,entity,point,message,principal,via,from,null);
+  }
+  // A record about a message at a behaviour (observer and rule its definition), its id.
+  function behaviorRecord(run,ctx,entity,point,ref,message,principal,from,hop){
+    const id=messageRecord(run,ctx,{entity,point,observer:`rule:${ref}`,rule:ref,inputs:[from],message,principal,hop});
+    if(run.components[entity]?.flow)stateCause(ctx,entity,id);
+    return id;
+  }
+  // The handler's answer for this message (handler@1): {missing}, {error}, or {result}. A function's
+  // answer is read from the ledger in a replay (never called), else from an answer held from a
+  // refused tick, else the function is called; each is appended as a result entry. A declarative
+  // handler is evaluated. An answer that is not JSON or carries a fraction is a refusal.
+  function handlerAnswer(run,ctx,entity,message,principal,name){
+    const recordedKey=e=>e.body.tick===ctx.t&&e.body.entity===entity&&e.body.messageId===message.id;
+    const asResult=body=>body.error!==undefined?{error:body.error}:{result:body.result};
+    if(run.replayResults){
+      const i=run.replayResults.findIndex(recordedKey);
+      if(i>=0){const body=copy(run.replayResults[i].body);run.replayResults.splice(i,1);ctx.results.push(body);return asResult(body)}
+    }
+    const fn=FUNCTIONS.get(run)?.[name];
+    if(typeof fn==='function'){
+      if(run.replayResults){ctx.diverged={code:'REPLAY_DIVERGED',entry:null,message:`no result is recorded for handler ${name} at ${entity}, message ${message.id}, tick ${ctx.t}; a replay never calls a function`};return {error:'not recorded'}}
+      const key=`${ctx.t}\u0000${entity}\u0000${message.id}`,held=HELD.get(run);
+      let body=held&&held.has(key)?held.get(key):null;
+      if(!body){
+        body={tick:ctx.t,entity,messageId:message.id};
+        try{body.result=takeAnswer(name,fn(copy({...message,principal:principal??null}),{node:entity,tick:ctx.t,ms:ctx.t*run.tickMs}))}
+        catch(e){body.error=String(e?.message||e)}
+      }
+      ctx.results.push(body);ctx.called.set(key,body);
+      return asResult(body);
+    }
+    const spec=own(run.handlers||{},name)?run.handlers[name]:undefined;
+    if(spec===undefined)return {missing:true};
+    const p=pattern(run.definitions[run.components[entity].behavior.handler.ref].pattern);
+    return {result:takeAnswer(name,p.evaluate(spec,{...message,principal:principal??null}))};
+  }
+  function takeAnswer(name,answer){
+    let value;
+    try{value=JSON.parse(JSON.stringify(answer===undefined?null:answer))}catch(_){return {refuse:`handler ${name} answered with a value that is not JSON`}}
+    const fraction=firstFraction(value,'result');
+    return fraction?{refuse:`handler ${name} ${fraction.path} is ${JSON.stringify(fraction.value)}, not a safe integer; a run records no floating point`}:value;
+  }
+  // Runs the card's handler (the graph core's runHandler, 363-372): {refused}, {absorbed}, {error}
+  // or {result}; a refusal or an absorb is recorded here, an error and a result by the caller.
+  function runHandler(run,ctx,entity,point,message,principal,from){
+    const h=run.components[entity].behavior.handler;
+    const a=handlerAnswer(run,ctx,entity,message,principal,h.name);
+    if(a.missing){behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'refused',reason:`no handler registered: ${h.name}`});return {refused:true}}
+    if(a.error!==undefined)return {error:a.error};
+    const r=a.result;
+    if(r==null||r.absorb){behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'absorbed'});return {absorbed:true}}
+    if(r.refuse){behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'refused',reason:String(r.refuse)});return {refused:true}}
+    return {result:r};
+  }
+  // handler@1 at a card with no effect: an error refuses `handler <name> failed: <error>`; a service
+  // gate judges {pass: false}; otherwise the outputs go on (emitOutputs).
+  function handlerAt(run,ctx,entity,point,message,principal,via,from){
+    const component=run.components[entity],h=component.behavior.handler;
+    const out=runHandler(run,ctx,entity,point,message,principal,from);
+    if(out.error!==undefined)return behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'refused',reason:`handler ${h.name} failed: ${out.error}`});
+    if(!out.result)return;
+    const flow=component.flow,judged=flow&&!Array.isArray(out.result)?pattern(flow.pattern).judge?.(flow.parameters,out.result):null;
+    if(judged)return behaviorRecord(run,ctx,entity,point,h.ref,message,principal,from,{event:'refused',reason:judged.refuse});
+    return emitOutputs(run,ctx,entity,point,message,principal,via,from,out.result,h.ref,null);
+  }
+  // The graph core's emitOutputs (353-361): a list fans out, one child per output, <id>.h<i>, with
+  // the output's channel and payload (else the message's), forwarded by the output's port when it
+  // names one; an empty list absorbs the message. `handled` carries the effect key at an effect site.
+  function emitOutputs(run,ctx,entity,point,message,principal,via,from,result,ref,effectKey){
+    const outs=Array.isArray(result)?result:[result];
+    if(!outs.length)return behaviorRecord(run,ctx,entity,point,ref,message,principal,from,{event:'absorbed'});
+    const handled=behaviorRecord(run,ctx,entity,point,ref,message,principal,from,{event:'handled',...(effectKey?{effectKey}:{})});
+    outs.forEach((o,i)=>{
+      if(!isObject(o))return;
+      const child={id:`${message.id}.h${i}`,root:message.root,parent:message.id,channel:o.channel!==undefined?o.channel:message.channel,payload:o.payload!==undefined?copy(o.payload):copy(message.payload),origin:message.origin};
+      forwardAt(run,ctx,entity,point,child,principal,via,handled,typeof o.port==='string'?o.port:null);
+    });
+  }
+  // effect@1 (429-444): the effect key from the message; a confirmed effect is not sent again (the
+  // message ends `replayed`); an ambiguous one refuses until reconciled; otherwise the attempt is
+  // entered in the run's effects ledger and the handler runs: an error leaves the effect ambiguous,
+  // a refusal or an absorb removes the attempt, a result confirms it and its outputs go on.
+  function effectAt(run,ctx,entity,point,message,principal,via,from){
+    const component=run.components[entity],e=component.behavior.effect,h=component.behavior.handler;
+    const id=behaviorPattern(run,e).identity(e,entity,{...message,principal:principal??null});
+    if(id.refuse)return behaviorRecord(run,ctx,entity,point,e.ref,message,principal,from,{event:'refused',reason:id.refuse});
+    const ek=id.key,prior=run.effects[ek];
+    if(prior&&prior.status==='confirmed')return behaviorRecord(run,ctx,entity,point,e.ref,message,principal,from,{event:'replayed',effectKey:ek});
+    if(prior&&prior.status==='ambiguous')return behaviorRecord(run,ctx,entity,point,e.ref,message,principal,from,{event:'refused',reason:`effect ${ek} is ambiguous: reconcile before retrying`});
+    const attempt={key:ek,node:entity,status:'attempted',at:ctx.t,messageId:message.id};
+    put(run.effects,ctx.undoEffects,ek,attempt);
+    const out=h?runHandler(run,ctx,entity,point,message,principal,from):{result:{payload:copy(message.payload)}};
+    if(out.error!==undefined){
+      put(run.effects,ctx.undoEffects,ek,{...attempt,status:'ambiguous',error:out.error});
+      return behaviorRecord(run,ctx,entity,point,e.ref,message,principal,from,{event:'ambiguous',effectKey:ek,reason:out.error});
+    }
+    if(out.refused||out.absorbed){drop(run.effects,ctx.undoEffects,ek);return}
+    put(run.effects,ctx.undoEffects,ek,{...attempt,status:'confirmed',confirmedAt:ctx.t,result:copy(out.result)});
+    return emitOutputs(run,ctx,entity,point,message,principal,via,from,out.result,e.ref,ek);
+  }
+  // The flow policy (the graph core's forward): the message leaves by every carried leg of the
+  // component but `via` (only those from `port` when an output names one) whose Wire accepts its
+  // channel, one child per leg (<id>.<n>, n in leg order), or by the legs the card's flow pattern
+  // chooses among those; with no such leg it is delivered, unless legs exist and all refuse its
+  // channel, when it is refused, never dropped. A leg that crosses a plane is checked under the
+  // message's principal, the crossing op then the Wire's own operation (src/07-graph-core.js send,
+  // 283-297): refused writes a hop refused record with the graph core's reason and that leg is not
+  // taken; admitted writes a crossed hop first.
+  function forwardAt(run,ctx,entity,point,message,principal,via,from,port){
+    const component=run.components[entity]||{},flow=component.flow||null,p=flow?pattern(flow.pattern):null;
+    const observer=flow?`rule:${flow.ref}`:null;
+    const end=(event,reason)=>{const id=messageRecord(run,ctx,{entity,point,observer:observer||'engine:message',rule:flow?flow.ref:event,inputs:[from],message,principal,hop:reason?{event,reason}:{event}});if(flow)stateCause(ctx,entity,id);return id};
+    const legs=(indexOf(run).legs.get(entity)||[]).filter(leg=>leg.wire!==via&&(port===null||leg.point===port));
+    const open=legs.filter(leg=>!message.channel||!leg.accepts||leg.accepts.includes(message.channel));
+    if(!open.length)return legs.length?end('refused',`no end accepts channel ${message.channel}`):end('delivered');
+    let chosen=open.map((_,n)=>n);
+    if(flow&&p.choose){
+      const c=p.choose(flow.parameters,flowState(run,ctx,entity),flow.settings,{value:message,principal:principal??null},open);
+      if(c.refuse)return end('refused',c.refuse);
+      chosen=c.legs;
+    }
+    if(component.principal)principal=component.principal;
+    const rule=flow?flow.ref:'fanout',by=observer||'engine:fanout';
+    const forwarded=messageRecord(run,ctx,{entity,point,observer:by,rule,inputs:[from],message,principal,hop:{event:'forwarded'}});
+    if(flow)stateCause(ctx,entity,forwarded);
+    for(const n of chosen){
+      const leg=open[n];
+      const child={...copy(message),id:`${message.id}.${n}`,parent:message.id};
+      const crossing=aclCheck(run,entity,via,leg.wire,principal,leg.operation);
+      if(!crossing.ok){
+        messageRecord(run,ctx,{entity,point:leg.point,observer:by,rule,inputs:[forwarded],message:child,principal,hop:{event:'sent',wire:leg.wire,to:leg.to.entity}});
+        messageRecord(run,ctx,{entity,point:leg.point,observer:'engine:acl',rule,inputs:[forwarded],message:child,principal,hop:{event:'refused',reason:crossing.reason}});
+        continue;
+      }
+      if(crossing.crossed)messageRecord(run,ctx,{entity,point:leg.point,observer:'engine:acl',rule,inputs:[forwarded],message:child,principal,hop:{event:'crossed',wire:leg.wire,to:leg.to.entity}});
+      const sent=messageRecord(run,ctx,{entity,point:leg.point,observer:by,rule,inputs:[forwarded],message:child,principal,hop:{event:'sent',wire:leg.wire,to:leg.to.entity}});
+      const item={kind:'arrival',at:ctx.t+leg.delay,entity:leg.to.entity,point:leg.to.point,channel:MESSAGE,value:child,principal:principal??null,wire:leg.wire,phase:0,from:sent};
+      run.pending.push(item);ctx.fresh.push(item);
+    }
+  }
+  // A buffer's release (the graph core's release, 455-459): the head of its queue goes on from the
+  // card (continueAt) by the Path it came by; the next release is scheduled while the queue holds more.
+  function releaseAt(run,ctx,entity){
+    const flow=run.components[entity].flow,p=pattern(flow.pattern);
+    const r=p.release(flow.parameters,flowState(run,ctx,entity),flow.settings);
+    if(!r.item)return;
+    if(r.next!=null){const item={kind:'release',at:ctx.t+r.next,entity,point:r.item.point,channel:MESSAGE};run.pending.push(item);ctx.fresh.push(item)}
+    const it=r.item;
+    const id=messageRecord(run,ctx,{entity,point:it.point,observer:`rule:${flow.ref}`,rule:flow.ref,inputs:it.from?[it.from]:[],message:it.message,principal:it.principal,hop:{event:'released'}});
+    stateCause(ctx,entity,id);
+    continueAt(run,ctx,entity,it.point,it.message,it.principal,it.via,id);
+  }
+  // A resume taken up in the tick after it was given (the graph core's resume, 576-584): approve
+  // continues at the card (effect, handler, flow policy) with an object payload laid over an object
+  // message payload (any other payload replaces it); any other decision refuses the message with the
+  // reason given or `rejected at <label or id>`.
+  function resumeAt(run,ctx,item){
+    const park=run.components[item.entity].behavior.park,p=item.park;
+    if(item.decision!=='approve')return behaviorRecord(run,ctx,item.entity,item.point,park.ref,p.message,p.principal,p.from,{event:'refused',reason:item.reason?String(item.reason):`rejected at ${park.label}`});
+    const message=copy(p.message);
+    if(item.payload!==undefined)message.payload=isObject(message.payload)&&isObject(item.payload)?{...message.payload,...copy(item.payload)}:copy(item.payload);
+    const id=behaviorRecord(run,ctx,item.entity,item.point,park.ref,message,p.principal,p.from,{event:'resumed'});
+    continueAt(run,ctx,item.entity,item.point,message,p.principal,p.via,id);
+  }
+  // An edge that starts work (src/07-graph-core.js:469-473 at 7b939e3): a level change on a card whose
+  // config.signal.on matches its polarity starts a message on config.signal.channel, payload {node,
+  // polarity, from, to, at} (at in ms; from and to 0/1 on a binary card, levels on a continuous one),
+  // origin the card and principal the card's own, and it goes on from that card.
+  // A level written at a card's edge port is noted here and its message started at the end of the round.
+  function noteEdge(run,ctx,entity,point,before,after,record){
+    const edge=run.components[entity]?.edge;if(!edge||edge.point!==point)return;
+    const from=levelOf(before),to=levelOf(after);
+    if(from!==to)ctx.edges.push({entity,from,to,record});
+  }
+  function edgeAt(run,ctx,{entity,from,to,record}){
+    const component=run.components[entity],edge=component.edge,polarity=to>from?'+':'-';
+    if(!(edge.on==='±'||edge.on===polarity))return;
+    const scale=x=>edge.kind==='continuous'?x:(x>=LEVEL?1:0);
+    const id=`e-${entity}-${ctx.t}${ctx.round?`-${ctx.round}`:''}`;
+    const message={id,root:id,parent:null,channel:edge.channel,payload:{node:entity,polarity,from:scale(from),to:scale(to),at:ctx.t*run.tickMs},origin:entity};
+    const principal=component.principal??null;
+    const rid=messageRecord(run,ctx,{entity,point:edge.point,observer:'rule:edge',rule:'edge',inputs:[record],message,principal,hop:{event:'edge'}});
+    // An edge message goes on from the card's own continueAt, as the graph core's setLevel hands it
+    // (src/07-graph-core.js:469-473 at 7b939e3): a card never takes its own edge message through its
+    // own intake (control, asserted set or toggle, flow intake, park).
+    continueAt(run,ctx,entity,edge.point,message,principal,null,rid);
+  }
+  // Update phase on the message channel of one port: injects start their messages; arrivals are put in
+  // merge order (the declared Paths first, the rest a draw recorded like any merge) and every one is
+  // delivered in this tick, in that order, as the graph core delivers same-time arrivals. (One per
+  // tick is the level channel's queue merge only.)
+  function messagePort(run,ctx,g){
+    ctx.delivery=0;
+    // A buffer's releases due now come first, then resumes in ledger order, then injects, then arrivals.
+    for(let i=0;i<g.releases.length;i++){ctx.delivery++;releaseAt(run,ctx,g.entity)}
+    for(const item of g.resumes.slice().sort((x,y)=>x.seq-y.seq)){ctx.delivery++;resumeAt(run,ctx,item)}
+    for(const input of g.injects.slice().sort((x,y)=>x.seq-y.seq)){
+      ctx.delivery++;
+      const id=`m-${input.seq}`,message={id,root:id,parent:null,channel:input.value.channel,payload:copy(input.value.payload),origin:g.entity};
+      const at=messageRecord(run,ctx,{entity:g.entity,point:g.point,kind:'registered',observer:'input',rule:'input',inputs:[],message,principal:input.value.principal,hop:{event:'injected'}});
+      messageAt(run,ctx,g.entity,g.point,message,input.value.principal,null,at);
+    }
+    if(!g.arrivals.length)return;
+    const key=portKey(g.entity,g.point,MESSAGE);
+    const ordered=g.arrivals.length>1?mergeOrder(run,ctx,g,run.merges[key]||MESSAGE_MERGE):g.arrivals;if(!ordered)return;
+    for(const item of ordered){
+      ctx.delivery++;
+      const id=messageRecord(run,ctx,{entity:g.entity,point:g.point,observer:`path:${item.wire}`,rule:'merge@1',inputs:[item.from],message:item.value,principal:item.principal??null,hop:{event:'arrived',wire:item.wire}});
+      messageAt(run,ctx,g.entity,g.point,item.value,item.principal??null,item.wire,id);
+    }
+  }
+  // Blocked legs are recorded once, at the first tick, with the graph core's reason.
+  function blockedRecords(run,ctx){
+    for(const b of run.blocked||[]){
+      const id=`${TMP}${ctx.tmp++}`;
+      ctx.records.push({round:0,phase:0,rank:0,key:[b.wire,'','','path.carries',b.reason],record:{format:RECORD_FORMAT,id,subject:{entity:b.wire,run:run.id},vantage:'space',observable:'path.carries',kind:'derived',form:'categorical',value:b.reason,
+        time:{logical:ctx.t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer:'engine:passability',provenance:{rule:'blocked',inputs:[]},perturbation:'none'}});
+    }
+  }
+  // A level record's own principal (STATE-SPACE.md, access control): the node's own, else the
+  // principal of the arrival that set it, the first in wire-id order whose value equals the
+  // winning one (several may share a tick). `source` carries that arrival's wire too, the `via`
+  // an emission is later checked under; a node's own principal does not change it, since the
+  // crossing is about which side of a boundary the value came from, not who speaks for the node.
+  function pickArrivalSource(arrivals,value){
+    const sorted=arrivals.slice().sort((x,y)=>cmp(x.wire,y.wire));
+    const hit=sorted.find(a=>a.value===value);
+    return hit?{wire:hit.wire,principal:hit.principal??null}:null;
+  }
   function updatePort(run,ctx,g){
+    if(g.channel===MESSAGE)return messagePort(run,ctx,g);
     const key=portKey(g.entity,g.point,g.channel),old=run.signal[key]===true,role=run.components[g.entity]?.role;
+    const nodePrincipal=run.components[g.entity]?.principal??null;
     const merge=run.merges[key]||DEFAULT_MERGE,queue=merge.combine==='queue'?ensureQueue(run,ctx,key):null;
     const base={entity:g.entity,point:g.point,channel:g.channel,phase:0};
     let win=null;
-    if(g.input&&g.input.kind==='clock')win={value:g.input.value,kind:'derived',observer:'rule:clock',rule:'clock',inputs:[],always:true,exclude:[]};
-    else if(g.input)win={value:g.input.value,kind:'registered',observer:'input',rule:'input',inputs:[],always:true,exclude:[]};
-    else if(g.output)win={value:g.output.value,kind:'derived',observer:`rule:${g.output.rule}`,rule:g.output.rule,inputs:g.output.inputs,emits:true,exclude:[]};
+    if(g.input&&g.input.kind==='assert')win={value:g.input.value,kind:'derived',observer:'rule:asserted',rule:'asserted',inputs:[g.input.from],emits:true,exclude:[],source:null};
+    else if(g.input&&g.input.kind==='clock')win={value:g.input.value,kind:'derived',observer:'rule:clock',rule:'clock',inputs:[],always:true,exclude:[],source:null};
+    else if(g.input)win={value:g.input.value,kind:'registered',observer:'input',rule:'input',inputs:[],always:true,exclude:[],source:null};
+    else if(g.output)win={value:g.output.value,kind:'derived',observer:`rule:${g.output.rule}`,rule:g.output.rule,inputs:g.output.inputs,emits:true,exclude:[],source:null};
     if(win){
-      for(const a of g.arrivals)makeRecord(run,ctx,{...base,kind:'derived',value:a.value,observer:`path:${a.wire}`,rule:'overridden',inputs:[a.from],rank:a.phase});
+      for(const a of g.arrivals)makeRecord(run,ctx,{...base,kind:'derived',value:a.value,observer:`path:${a.wire}`,rule:'overridden',inputs:[a.from],rank:a.phase,principal:a.principal??null});
     }else{
       const arrived=g.arrivals.map(a=>a.wire);
       const orderFree=['or','and','min','max'].includes(merge.combine);
@@ -755,46 +1589,66 @@
         const sorted=g.arrivals.slice().sort((x,y)=>cmpList([x.wire,x.phase],[y.wire,y.phase]));
         const value=merge.combine==='or'||merge.combine==='max'?sorted.some(a=>a.value):sorted.every(a=>a.value);
         win=sorted.length===1?{value,observer:`path:${sorted[0].wire}`,rule:'path',inputs:[sorted[0].from]}:{value,observer:'engine:merge@1',rule:'merge@1',inputs:sorted.map(a=>a.from)};
+        win.source=pickArrivalSource(sorted,value);
       }else if(queue){
-        if(g.arrivals.length){const ordered=g.arrivals.length>1?mergeOrder(run,ctx,g,merge):g.arrivals;if(!ordered)return;for(const a of ordered)queue.items.push({value:a.value,wire:a.wire,phase:a.phase,from:a.from})}
-        if(queue.items.length>queue.head){const item=queue.items[queue.head++];win={value:item.value,observer:'engine:merge@1',rule:'merge@1',inputs:[item.from]};if(!arrived.includes(item.wire))arrived.push(item.wire)}
+        if(g.arrivals.length){const ordered=g.arrivals.length>1?mergeOrder(run,ctx,g,merge):g.arrivals;if(!ordered)return;for(const a of ordered)queue.items.push({value:a.value,wire:a.wire,phase:a.phase,from:a.from,principal:a.principal??null})}
+        // A queue delivers once per tick, whatever delta round its arrivals come in.
+        if(queue.items.length>queue.head&&!ctx.delivered.has(key)){ctx.delivered.add(key);const item=queue.items[queue.head++];win={value:item.value,observer:'engine:merge@1',rule:'merge@1',inputs:[item.from],source:{wire:item.wire,principal:item.principal??null}};if(!arrived.includes(item.wire))arrived.push(item.wire)}
       }else if(g.arrivals.length===1){
-        const a=g.arrivals[0];win={value:a.value,observer:`path:${a.wire}`,rule:'path',inputs:[a.from]};
+        const a=g.arrivals[0];win={value:a.value,observer:`path:${a.wire}`,rule:'path',inputs:[a.from],source:{wire:a.wire,principal:a.principal??null}};
       }else if(g.arrivals.length){
         const ordered=mergeOrder(run,ctx,g,merge);if(!ordered)return;
         const pick=merge.combine==='first'?ordered[0]:ordered[ordered.length-1];
-        win={value:pick.value,observer:'engine:merge@1',rule:'merge@1',inputs:ordered.map(a=>a.from)};
+        win={value:pick.value,observer:'engine:merge@1',rule:'merge@1',inputs:ordered.map(a=>a.from),source:{wire:pick.wire,principal:pick.principal??null}};
       }
-      if(!win)return;
+      if(!win){if(queue)queue.next=ctx.t+1;return}
       win.kind='derived';win.exclude=arrived;win.emits=role==='point';
     }
     if(queue)queue.next=ctx.t+1;
-    const id=makeRecord(run,ctx,{...base,kind:win.kind,value:win.value,observer:win.observer,rule:win.rule,inputs:win.inputs});
-    put(run.signal,ctx.undoSignal,key,win.value);put(run.lastRecord,ctx.undoLast,key,id);ctx.written.push(key);
+    const principal=nodePrincipal??win.source?.principal??null,via=win.source?win.source.wire:null;
+    const id=makeRecord(run,ctx,{...base,kind:win.kind,value:win.value,observer:win.observer,rule:win.rule,inputs:win.inputs,principal});
+    noteEdge(run,ctx,g.entity,g.point,run.signal[key],win.value,id);
+    put(run.signal,ctx.undoSignal,key,win.value);put(run.lastRecord,ctx.undoLast,key,id);put(run.levelPrincipal,ctx.undoPrincipal,key,principal);ctx.written.push(key);
     const changed=win.value!==old;
     if(changed)ctx.changed.add(key);
-    if(win.always||(changed&&win.emits))emit(run,ctx,g.entity,g.point,g.channel,win.value,win.exclude,id,0);
+    if(win.always||(changed&&win.emits))emit(run,ctx,g.entity,g.point,g.channel,win.value,win.exclude,id,0,principal,via);
   }
   // Evaluate phase: a device whose input port changed reads committed state only.
+  // A combine@1 device's own named input is `<port>:<wireId>` (topology's land): the wire is the
+  // tail after the last colon. A device from a definition carries no such name (its ports are its
+  // own, not one Wire's), so it has no via either, the way an asserted source has none.
+  function deviceWire(name){const i=name.lastIndexOf(':');return i<0?null:name.slice(i+1)}
   function evaluateDevice(run,ctx,entity,committed){
     const component=run.components[entity],definition=run.definitions[component.definition],p=pattern(definition.pattern);
+    const nodePrincipal=component.principal??null;
     const values={},inputs=[];
     for(const name of component.inputs){const key=portKey(entity,name,'main');values[name]=component.combine?committed(key):committed(key)===true;if(run.lastRecord[key])inputs.push(run.lastRecord[key])}
     const out=p.evaluate(definition.parameters,values),delay=definition.delay||0,epsilon=definition.parameters.epsilon||0;
+    // A combine@1 device relays its own Wires into one value, the way a Point's arrivals merge
+    // (STATE-SPACE.md, access control): the node's own principal, else the first input in wire-id
+    // order whose value equals the output, same as `pickArrivalSource`. A device from an authored
+    // definition (truth_table, merge) has no Wire-named ports to pick from and so no via either.
     for(const name of component.outputs){
       const key=portKey(entity,name,'main'),value=out[name];
+      let source=null;
+      if(component.combine){
+        const named=component.inputs.map(n=>({wire:deviceWire(n),principal:run.levelPrincipal[portKey(entity,n,'main')]??null,value:values[n]})).filter(x=>x.wire).sort((x,y)=>cmp(x.wire,y.wire));
+        source=named.find(x=>x.value===value)||null;
+      }
+      const principal=nodePrincipal??source?.principal??null,via=source?source.wire:null;
       if(delay===0){
         if(sameLevel(value,run.signal[key],epsilon))continue;
         ctx.cost++;
-        const id=makeRecord(run,ctx,{entity,point:name,channel:'main',kind:'derived',value,observer:`rule:${component.definition}`,rule:component.definition,inputs,phase:1});
+        const id=makeRecord(run,ctx,{entity,point:name,channel:'main',kind:'derived',value,observer:`rule:${component.definition}`,rule:component.definition,inputs,phase:1,principal});
         if(!ctx.evaluated.has(key))ctx.evaluated.set(key,run.signal[key]);
-        put(run.signal,ctx.undoSignal,key,value);put(run.lastRecord,ctx.undoLast,key,id);ctx.written.push(key);
-        emit(run,ctx,entity,name,'main',value,[],id,1);
+        noteEdge(run,ctx,entity,name,run.signal[key],value,id);
+        put(run.signal,ctx.undoSignal,key,value);put(run.lastRecord,ctx.undoLast,key,id);put(run.levelPrincipal,ctx.undoPrincipal,key,principal);ctx.written.push(key);
+        emit(run,ctx,entity,name,'main',value,[],id,1,principal,via);
       }else{
         // Transport delay: schedule every change from the latest value already on its way.
         let latest=run.signal[key],at=-1;
         for(const item of run.pending)if(item.kind==='output'&&item.entity===entity&&item.point===name&&item.channel==='main'&&item.at>at){at=item.at;latest=item.value}
-        if(!sameLevel(value,latest,epsilon)){const item={kind:'output',at:ctx.t+delay,entity,point:name,channel:'main',value,rule:component.definition,inputs:inputs.slice()};run.pending.push(item);ctx.fresh.push(item)}
+        if(!sameLevel(value,latest,epsilon)){const item={kind:'output',at:ctx.t+delay,entity,point:name,channel:'main',value,rule:component.definition,inputs:inputs.slice(),...(principal?{principal}:{})};run.pending.push(item);ctx.fresh.push(item)}
       }
     }
   }
@@ -804,40 +1658,99 @@
     if(isObject(value)){const out={};for(const [k,v] of Object.entries(value))out[k]=resolveTmp(v,map);return out}
     return value;
   }
+  // Every `from` key of a flow card's state that holds a provisional id, mapped; a message value is left as it is.
+  function resolveFrom(value,map){
+    if(Array.isArray(value))return value.map(x=>resolveFrom(x,map));
+    if(!isObject(value))return value;
+    const out={};
+    for(const [k,v] of Object.entries(value))out[k]=k==='message'?v:k==='from'&&typeof v==='string'&&v.startsWith(TMP)?map.get(v):resolveFrom(v,map);
+    return out;
+  }
+  // A flow card's state without the record ids it keeps: provenance names the past and changes no value.
+  function stripFrom(value){
+    if(Array.isArray(value))return value.map(stripFrom);
+    if(!isObject(value))return value;
+    const out={};for(const [k,v] of Object.entries(value))if(k!=='from')out[k]=k==='message'?v:stripFrom(v);
+    return out;
+  }
   // Writes to signal and lastRecord go through put, which keeps each key's value from before the
   // tick, so a refused tick is undone in place (a key the tick added is removed again).
   const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
   function put(obj,undo,key,value){if(!undo.has(key))undo.set(key,own(obj,key)?[true,obj[key]]:[false]);obj[key]=value}
+  function drop(obj,undo,key){if(!undo.has(key))undo.set(key,own(obj,key)?[true,obj[key]]:[false]);delete obj[key]}
   function undo(obj,log){for(const [key,[had,value]] of log)if(had)obj[key]=value;else delete obj[key]}
+  // A record never precedes its cause: the key-sorted records of one tick, reordered only as far as
+  // needed so that every record comes after the records of this tick it names in provenance.inputs
+  // (always the lowest-keyed record whose causes are placed next; a list already in causal order is
+  // returned as it is). Causes are acyclic, since a record can only name records made before it.
+  function causalOrder(sorted){
+    const at=new Map(sorted.map((x,i)=>[x.record.id,i])),need=new Array(sorted.length).fill(0),next=sorted.map(()=>[]);
+    sorted.forEach((x,i)=>{for(const id of x.record.provenance.inputs){const j=at.get(id);if(j!==undefined&&j!==i){need[i]++;next[j].push(i)}}});
+    const heap=[],push=i=>{heap.push(i);let k=heap.length-1;while(k>0){const p=(k-1)>>1;if(heap[p]<=heap[k])break;[heap[p],heap[k]]=[heap[k],heap[p]];k=p}};
+    const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let k=0;for(;;){const l=2*k+1,r=l+1;let m=k;if(l<heap.length&&heap[l]<heap[m])m=l;if(r<heap.length&&heap[r]<heap[m])m=r;if(m===k)break;[heap[m],heap[k]]=[heap[k],heap[m]];k=m}}return top};
+    need.forEach((n,i)=>{if(!n)push(i)});
+    const out=[];
+    while(heap.length){const i=pop();out.push(sorted[i]);for(const j of next[i])if(--need[j]===0)push(j)}
+    return out;
+  }
+  // A tick runs in delta rounds: round 0 takes what was scheduled for it; what a zero-delay Path or a
+  // delay-0 device output schedules for the same tick is the next round, two-phase like the first,
+  // until nothing more is due at t. A cycle of zero-delay legs is refused at start, so the rounds end;
+  // the budget bounds them besides.
   function processTick(run,t,ctx){
-    const due=run.pending.filter(x=>x.at===t);run.pending=run.pending.filter(x=>x.at!==t);
-    const groups=new Map();
-    const group=(entity,point,channel)=>{const key=portKey(entity,point,channel);if(!groups.has(key))groups.set(key,{entity,point,channel,input:null,output:null,arrivals:[]});return groups.get(key)};
-    for(const item of due){
-      const g=group(item.entity,item.point,item.channel);ctx.cost++;
-      if(item.kind==='input'||item.kind==='clock')g.input=item;else if(item.kind==='output')g.output=item;else g.arrivals.push(item);
-      if(item.kind==='clock'){
-        const source=run.clocks[portKey(item.entity,item.point,item.channel)];
-        const next=source&&(source.clock.wave==='square'?clockEdge(source,run.tickMs,item.value?item.k:item.k+1,!item.value,t):clockEdge(source,run.tickMs,item.k+1,null,t));
-        if(next){run.pending.push(next);ctx.fresh.push(next)}
+    if(run.tick===null)blockedRecords(run,ctx);
+    for(ctx.round=0;;ctx.round++){
+      if(ctx.round>0){ctx.changed=new Set();ctx.evaluated=new Map()}
+      const due=run.pending.filter(x=>x.at===t);run.pending=run.pending.filter(x=>x.at!==t);
+      const groups=new Map();
+      const group=(entity,point,channel)=>{const key=portKey(entity,point,channel);if(!groups.has(key))groups.set(key,{entity,point,channel,input:null,output:null,arrivals:[],injects:[],releases:[],resumes:[]});return groups.get(key)};
+      for(const item of due){
+        const g=group(item.entity,item.point,item.channel);ctx.cost++;
+        if(item.channel===MESSAGE)(item.kind==='input'?g.injects:item.kind==='release'?g.releases:item.kind==='resume'?g.resumes:g.arrivals).push(item);
+        else if(item.kind==='input'||item.kind==='clock'||item.kind==='assert')g.input=item;else if(item.kind==='output')g.output=item;else g.arrivals.push(item);
+        if(item.kind==='clock'){
+          const source=run.clocks[portKey(item.entity,item.point,item.channel)];
+          const next=source&&(source.clock.wave==='square'?clockEdge(source,run.tickMs,item.value?item.k:item.k+1,!item.value,t):clockEdge(source,run.tickMs,item.k+1,null,t));
+          if(next){run.pending.push(next);ctx.fresh.push(next)}
+        }
       }
+      if(ctx.round===0)for(const [key,q] of Object.entries(run.queues))if(q.items.length>q.head&&q.next===t){const [entity,point,channel]=JSON.parse(key);group(entity,point,channel)}
+      // Levels first, in the walk's order; then messages, always in port order, since a flow card's
+      // state threads through the messages it handles and no outcome may depend on the walk.
+      const keys=[...groups.keys()].sort(),levelKeys=keys.filter(k=>groups.get(k).channel!==MESSAGE),messageKeys=keys.filter(k=>groups.get(k).channel===MESSAGE);
+      for(const key of [...walked(run,levelKeys),...messageKeys]){updatePort(run,ctx,groups.get(key));if(ctx.diverged)return {ok:false,...ctx.diverged}}
+      // Committed state is the signal after the update phase: what the evaluate phase overwrites is read from before it.
+      const committed=key=>ctx.evaluated.has(key)?ctx.evaluated.get(key):run.signal[key];
+      const devices=indexOf(run).devices.filter(x=>(t===0&&ctx.round===0)||x.inputs.some(key=>ctx.changed.has(key))).map(x=>x.id);
+      for(const entity of walked(run,devices))evaluateDevice(run,ctx,entity,committed);
+      // Edges noted this round start their messages, by card.
+      const edges=ctx.edges.splice(0).sort((x,y)=>cmp(x.entity,y.entity));
+      for(const edge of edges){ctx.delivery=1e6;edgeAt(run,ctx,edge)}
+      if(!run.pending.some(x=>x.at===t)||run.spent+ctx.cost>run.budget)break;
     }
-    for(const [key,q] of Object.entries(run.queues))if(q.items.length>q.head&&q.next===t){const [entity,point,channel]=JSON.parse(key);group(entity,point,channel)}
-    for(const key of walked(run,[...groups.keys()].sort())){updatePort(run,ctx,groups.get(key));if(ctx.diverged)return {ok:false,...ctx.diverged}}
-    // Committed state is the signal after the update phase: what the evaluate phase overwrites is read from before it.
-    const committed=key=>ctx.evaluated.has(key)?ctx.evaluated.get(key):run.signal[key];
-    const devices=indexOf(run).devices.filter(x=>t===0||x.inputs.some(key=>ctx.changed.has(key))).map(x=>x.id);
-    for(const entity of walked(run,devices))evaluateDevice(run,ctx,entity,committed);
-    // Sequence is assigned after the tick, from stable ids only; then every provisional id is resolved.
+    // Commit: each flow card whose state this tick changed gets one device.state record (vantage point).
+    for(const [entity,touched] of [...ctx.stateTouched].sort((x,y)=>cmp(x[0],y[0]))){
+      const now=run.deviceState[entity];
+      if(Canonical.canonicalize(now)===touched.before){if(!touched.had)delete run.deviceState[entity];continue}
+      const ref=run.components[entity].flow.ref,id=`${TMP}${ctx.tmp++}`;
+      const record={format:RECORD_FORMAT,id,subject:{entity,run:run.id},vantage:'point',observable:'device.state',kind:'derived',form:'state',value:null,
+        time:{logical:t,sequence:0,mode:'observed'},certainty:{kind:'exact'},observer:`rule:${ref}`,provenance:{rule:ref,inputs:touched.inputs.slice()},perturbation:'none'};
+      ctx.stateRecords.push({entity,record});
+      ctx.records.push({round:touched.round,phase:0,rank:0,key:[entity,'￿','device.state'],record});
+    }
+    // Sequence is assigned after the tick, from stable ids only, then put in causal order (no record
+    // before a record it names); then every provisional id is resolved.
     // A provisional id is only ever held by what this tick made: its records, the pending items it
     // scheduled and the lastRecord entries it wrote (queue items come from arrivals of earlier ticks).
-    const sortKey=x=>[x.record.subject.entity,x.record.subject.point,x.record.subject.channel,x.record.observable,x.record.kind,x.phase,x.record.observer,x.rank,x.record.value?1:0];
-    const sorted=ctx.records.map(x=>({x,k:sortKey(x)})).sort((x,y)=>cmpList(x.k,y.k)).map(d=>d.x);
+    const sortKey=x=>[x.round,...(x.key||[x.record.subject.entity,x.record.subject.point,x.record.subject.channel,x.record.observable,x.record.kind,x.phase,x.record.observer,x.rank,x.record.value?1:0])];
+    const sorted=causalOrder(ctx.records.map(x=>({x,k:sortKey(x)})).sort((x,y)=>cmpList(x.k,y.k)).map(d=>d.x));
     const map=new Map();
     for(const x of sorted){const seq=run.sequence++;map.set(x.record.id,`sr-${run.id}-${String(seq).padStart(6,'0')}`);x.record.id=map.get(x.record.id);x.record.time.sequence=seq}
     const records=sorted.map(x=>{x.record.provenance.inputs=resolveTmp(x.record.provenance.inputs,map);return x.record});
     for(const item of ctx.fresh){if(item.from!==undefined)item.from=resolveTmp(item.from,map);if(item.inputs!==undefined)item.inputs=resolveTmp(item.inputs,map)}
     for(const key of ctx.written)put(run.lastRecord,ctx.undoLast,key,resolveTmp(run.lastRecord[key],map));
+    // A flow card's state names the records that put a message in it (`from`): resolved now, then recorded.
+    for(const {entity,record} of ctx.stateRecords){run.deviceState[entity]=resolveFrom(run.deviceState[entity],map);record.value=copy(run.deviceState[entity])}
     // Only the queues this tick touched can hold a fresh (TMP) id or have run dry: resolve just the
     // items this tick appended (never the ones already resolved by an earlier tick), by buffer index.
     for(const [key,entry] of ctx.queueUndo){
@@ -846,7 +1759,7 @@
       if(q.items.length===q.head)delete run.queues[key];
     }
     run.pending=run.pending.map(x=>({x,k:pendingKey(x)})).sort((x,y)=>cmp(x.k,y.k)).map(d=>d.x);
-    ctx.draws.sort((x,y)=>cmpList([x.entity,x.point,x.channel],[y.entity,y.point,y.channel]));
+    ctx.draws.sort((x,y)=>cmpList([x.round??0,x.entity,x.point,x.channel],[y.round??0,y.entity,y.point,y.channel]));
     return {ok:true,cost:ctx.cost,records,draws:ctx.draws};
   }
   // One step is the earliest tick with scheduled work. Signal and lastRecord writes go through an
@@ -860,19 +1773,80 @@
     const t=nextTick(run);
     if(t===null)return {ok:true,tick:null,records:[]};
     const before={pending:run.pending,sequence:run.sequence};
-    const ctx={t,cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null,fresh:[],written:[],evaluated:new Map(),undoSignal:new Map(),undoLast:new Map(),queueUndo:new Map()};
+    const ctx={t,round:0,delivery:0,delivered:new Set(),cost:0,tmp:0,records:[],draws:[],changed:new Set(),diverged:null,fresh:[],written:[],evaluated:new Map(),undoSignal:new Map(),undoLast:new Map(),undoPrincipal:new Map(),queueUndo:new Map(),
+      undoState:new Map(),stateTouched:new Map(),stateRecords:[],edges:[],undoEffects:new Map(),undoParked:new Map(),results:[],called:new Map()};
+    if(!isObject(run.deviceState))run.deviceState={};
+    if(!isObject(run.effects))run.effects={};
+    if(!isObject(run.parked))run.parked={};
+    const replayResults=run.replayResults?run.replayResults.slice():null;
     const result=processTick(run,t,ctx);
     const refused=!result.ok?result:run.spent+result.cost>run.budget?{ok:false,code:'BUDGET_SPENT',tick:t,left:null,message:`processing tick ${t} takes ${result.cost} events; ${run.budget-run.spent} of the budget ${run.budget} remain`}:null;
     if(refused){
-      undo(run.signal,ctx.undoSignal);undo(run.lastRecord,ctx.undoLast);Object.assign(run,before);
+      undo(run.signal,ctx.undoSignal);undo(run.lastRecord,ctx.undoLast);undo(run.levelPrincipal,ctx.undoPrincipal);undo(run.deviceState,ctx.undoState);Object.assign(run,before);
+      undo(run.effects,ctx.undoEffects);undo(run.parked,ctx.undoParked);if(replayResults)run.replayResults=replayResults;
       undoQueues(run,ctx.queueUndo);
+      // A function already called keeps its answer for the retry.
+      if(ctx.called.size){const held=HELD.get(run)||new Map();for(const [k,v] of ctx.called)held.set(k,v);HELD.set(run,held)}
       if(refused.code==='BUDGET_SPENT')refused.left=queuedCount(run);
       return refused;
     }
+    if(ctx.called.size&&HELD.has(run)){const held=HELD.get(run);for(const k of ctx.called.keys())held.delete(k)}
     for(const draw of result.draws)appendEntry(run,'draw',draw);
+    // Each function handler's answer, in the order the tick reached them.
+    for(const body of ctx.results)appendEntry(run,'result',body);
     for(const record of result.records)run.records.push(record);
     run.tick=t;run.spent+=result.cost;
     return {ok:true,tick:t,records:copy(result.records)};
+  }
+  // --- Mid-run ledger entries. Each is appended with `after`, the tick processed before it was
+  // given (null before any), and a replay applies it at that same point.
+  const runRefusal=run=>!isObject(run)||run.runtimeVersion!==RUNTIME_VERSION?{ok:false,code:'RUN_INVALID',message:`not a ${RUNTIME_VERSION} run`}:null;
+  const nextAt=run=>run.tick===null?0:run.tick+1;
+  // addInput(run, input): an input given mid-run, checked as startRun checks one, scheduled at
+  // max(input.at, the next tick); a message input's message is m-<seq> of its ledger entry.
+  function addInput(run,input){
+    const bad=runRefusal(run);if(bad)return bad;
+    const checked=checkInput(run.doc,null,input,run.ledger.length);
+    if(!checked.ok)return checked;
+    const x=checked.input,at=Math.max(x.at,nextAt(run));
+    if(x.channel!==MESSAGE){
+      const bound=run.components[x.entity]?.definition;
+      if(bound&&(run.definitions[bound]?.parameters?.outputs||[]).includes(x.point))return inputRefusal(`input ${run.ledger.length}: ${x.entity}.${x.point} is an output of ${bound}; a device's output is the device's`);
+      if(run.pending.some(p=>p.kind==='input'&&p.at===at&&p.entity===x.entity&&p.point===x.point&&p.channel===x.channel))return inputRefusal(`input ${run.ledger.length}: a second input at (${x.entity}, ${x.point}, ${x.channel}, ${at})`);
+    }
+    const seq=run.ledger.length;
+    appendEntry(run,'input',{...clone(x),after:run.tick});
+    run.pending.push(x.channel===MESSAGE?{kind:'input',...clone(x),at,seq}:{kind:'input',...x,at});
+    return {ok:true,seq,at};
+  }
+  // resume(run, parkId, {decision, payload, reason}): the person's answer to a parked message, taken
+  // up in the next tick (resumeAt). UNKNOWN_PARK when nothing is parked under that id.
+  function resume(run,parkId,options){
+    const bad=runRefusal(run);if(bad)return bad;
+    const o=isObject(options)?options:{},p=isObject(run.parked)?run.parked[parkId]:undefined;
+    if(!p)return {ok:false,code:'UNKNOWN_PARK',message:`Nothing parked as ${parkId}`};
+    const decision=o.decision===undefined?'approve':String(o.decision);
+    if(o.payload!==undefined){const f=fractionRefusal(o.payload,'payload');if(f)return f}
+    const body={after:run.tick,parkId,decision,...(o.payload!==undefined?{payload:clone(o.payload)}:{}),...(o.reason!==undefined&&o.reason!==null?{reason:String(o.reason)}:{})};
+    const seq=run.ledger.length;
+    appendEntry(run,'resume',body);
+    delete run.parked[parkId];
+    run.pending.push({kind:'resume',at:nextAt(run),entity:p.entity,point:p.point,channel:MESSAGE,seq,parkId,decision,park:copy(p),...(body.payload!==undefined?{payload:clone(body.payload)}:{}),...(body.reason!==undefined?{reason:body.reason}:{})});
+    return {ok:true,decision};
+  }
+  // reconcile(run, effectKey, {confirmed, result}): the answer to an ambiguous effect. Confirmed, the
+  // effect is confirmed with the result and is not sent again; not confirmed, it is cleared and the
+  // next attempt sends. NOT_AMBIGUOUS when the effect is not awaiting reconciliation.
+  function reconcile(run,effectKey,options){
+    const bad=runRefusal(run);if(bad)return bad;
+    const o=isObject(options)?options:{},e=isObject(run.effects)?run.effects[effectKey]:undefined;
+    if(!e||e.status!=='ambiguous')return {ok:false,code:'NOT_AMBIGUOUS',message:`Effect ${effectKey} is not awaiting reconciliation`};
+    const confirmed=!!o.confirmed,result=o.result===undefined?null:o.result;
+    if(confirmed){const f=fractionRefusal(result,'result');if(f)return f}
+    appendEntry(run,'reconcile',{after:run.tick,effectKey,confirmed,...(confirmed?{result:clone(result)}:{})});
+    if(confirmed)run.effects[effectKey]={...e,status:'confirmed',confirmedAt:run.tick,result:clone(result),reconciled:true};
+    else delete run.effects[effectKey];
+    return {ok:true,effectKey,status:confirmed?'confirmed':'cleared'};
   }
   function traceOf(run){
     return {format:TRACE_FORMAT,replayKey:copy(run.ledger[0].body.replayKey),documentRevision:run.doc.revision,budget:run.budget,through:run.tick,head:run.ledger[run.ledger.length-1].hash,ledger:copy(run.ledger),records:copy(run.records)};
@@ -908,6 +1882,8 @@
         if(!bad&&e.seq!==i)bad=`seq must be ${i}`;
         if(!bad&&!LEDGER_KINDS.includes(e.kind))bad=`kind must be one of ${LEDGER_KINDS.join(', ')}`;
         if(!bad&&(i===0)!==(e.kind==='start'))bad=i===0?'the first entry must be start':'only the first entry is start';
+        if(!bad&&e.kind==='effects'&&i!==1)bad='an effects entry is only the entry right after start';
+        if(!bad&&['resume','reconcile'].includes(e.kind)&&!(isObject(e.body)&&own(e.body,'after')))bad=`a ${e.kind} entry carries after`;
         if(!bad&&e.prev!==running)bad='prev does not link to the entry before';
         let hash=null;
         if(!bad){try{hash=ledgerHash(e.seq,e.kind,e.body,e.prev)}catch(_){bad='body is not canonical JSON'}}
@@ -931,20 +1907,39 @@
     const trace=o.trace,checked=validateTrace(trace);
     if(!checked.ok)return {ok:false,code:'TRACE_INVALID',entry:checked.entry,errors:checked.errors,message:checked.entry===null?checked.errors[0]:`the trace fails at ledger entry ${checked.entry}: ${checked.errors[0]}`};
     const key=trace.replayKey;
-    const started=startRun({doc:o.doc,packs:o.packs,inputs:key.inputs,seed:key.seed,budget:trace.budget,tickMs:key.tickMs});
+    // The declarative handlers are the caller's to give again (o.handlers); a function's answers are
+    // read from the trace's result entries and the function is never called.
+    const handed=trace.ledger.find(e=>e.kind==='effects');
+    const started=startRun({doc:o.doc,packs:o.packs,inputs:key.inputs,seed:key.seed,budget:trace.budget,tickMs:key.tickMs,handlers:o.handlers,...(handed?{effects:handed.body.effects}:{})});
     if(!started.ok)return started;
     const run=started.run,mine=run.ledger[0].body.replayKey;
     const fields=REPLAY_KEY_FIELDS.filter(field=>(mine[field]!==undefined||key[field]!==undefined)&&!same(mine[field],key[field]));
     if(fields.length)return {ok:false,code:'REPLAY_KEY_MISMATCH',fields,message:`the replay key differs in ${fields.join(', ')}`};
     run.replayDraws=trace.ledger.filter(e=>e.kind==='draw').map(e=>({seq:e.seq,body:e.body}));
+    run.replayResults=trace.ledger.filter(e=>e.kind==='result').map(e=>({seq:e.seq,body:e.body}));
+    // Mid-run entries (an input with `after`, a resume, a reconcile) are applied where they were
+    // given: after the tick they name, before the next one is processed.
+    const mid=trace.ledger.filter(e=>MID_RUN_KINDS.includes(e.kind)&&isObject(e.body)&&own(e.body,'after'));
+    let cursor=0;
+    const apply=()=>{
+      while(cursor<mid.length&&mid[cursor].body.after===run.tick){
+        const e=mid[cursor++],{after,...body}=e.body;
+        if(run.ledger.length!==e.seq)return {ok:false,code:'REPLAY_DIVERGED',entry:e.seq,message:`ledger entry ${e.seq} (${e.kind}) is applied at entry ${run.ledger.length} of the recomputed run`};
+        const r=e.kind==='input'?addInput(run,body):e.kind==='resume'?resume(run,body.parkId,body):reconcile(run,body.effectKey,body);
+        if(!r.ok)return {ok:false,code:'REPLAY_DIVERGED',entry:e.seq,message:`ledger entry ${e.seq} (${e.kind}) does not apply to the recomputed run: ${r.code} ${r.message}`};
+      }
+      return null;
+    };
+    let failed=apply();if(failed)return failed;
     // Exactly the ticks up to `through`.
     while(trace.through!==null){
       const next=nextTick(run);
       if(next===null||next>trace.through)break;
       const r=step(run);
       if(!r.ok){if(r.code==='BUDGET_SPENT')return {ok:false,code:'REPLAY_DIVERGED',tick:r.tick,message:`the trace processed tick ${r.tick}, which the recomputed run cannot within the budget ${trace.budget}`};return r}
+      failed=apply();if(failed)return failed;
     }
-    run.replayDraws=null;
+    run.replayDraws=null;run.replayResults=null;
     if(run.tick!==trace.through)return {ok:false,code:'REPLAY_DIVERGED',tick:run.tick,message:`the recomputed run ends at tick ${run.tick}, the trace at ${trace.through}`};
     const n=Math.max(run.ledger.length,trace.ledger.length);
     for(let i=0;i<n;i++)if(Canonical.canonicalize(run.ledger[i]??null)!==Canonical.canonicalize(trace.ledger[i]??null))return {ok:false,code:'REPLAY_DIVERGED',entry:i,message:`ledger entry ${i} differs from the recomputed run`};
@@ -959,13 +1954,23 @@
   // key absent is false, so only the true keys are listed), the queue buffers and the pending
   // schedule, every time taken relative to that tick. Provenance (record ids) names the past and
   // changes no value, so it is left out; with it no state could ever repeat.
-  function stateHash(t,signal,queues,pending){
+  // Every device.state is part of it, as canonical text without the record ids it keeps (`dev`, '{}' when there is none).
+  function stateHash(t,signal,queues,pending,dev='{}'){
     const q=queues.map(([k,next,items])=>[k,next-t,items.map(x=>[x.value,x.wire,x.phase])]);
     const p=pending.map(x=>{const {from,inputs,at,...rest}=x;rest.at=at-t;return Canonical.canonicalize(rest)}).sort();
-    return Canonical.sha256Hex(Canonical.canonicalize({signal,queues:q,pending:p}));
+    return Canonical.sha256Hex(Canonical.canonicalize({signal,queues:q,pending:p,...(dev!=='{}'?{device:dev}:{})}));
   }
   const trueKeys=signal=>Object.keys(signal).filter(k=>signal[k]===true).sort();
-  function futureHash(run){return stateHash(run.tick,trueKeys(run.signal),Object.keys(run.queues).sort().map(k=>[k,run.queues[k].next,queueItems(run.queues[k])]),run.pending)}
+  // The run's effects ledger and parked messages determine the future too: hashed with the
+  // device state when the run holds any (a run without them hashes exactly as before).
+  const filled=o=>isObject(o)&&Object.keys(o).length>0;
+  const hasState=run=>filled(run.deviceState)||filled(run.effects)||filled(run.parked);
+  const deviceText=run=>{
+    const d=Canonical.canonicalize(stripFrom(isObject(run.deviceState)?run.deviceState:{}));
+    if(!filled(run.effects)&&!filled(run.parked))return d;
+    return Canonical.canonicalize({device:d,effects:filled(run.effects)?run.effects:{},parked:filled(run.parked)?stripFrom(run.parked):{}});
+  };
+  function futureHash(run){return stateHash(run.tick,trueKeys(run.signal),Object.keys(run.queues).sort().map(k=>[k,run.queues[k].next,queueItems(run.queues[k])]),run.pending,deviceText(run))}
   // A cheap 32-bit code (FNV-1a) of a string, and of a pending or queue item's future-determining
   // part, cached per item (items are never changed once scheduled). Codes only decide when the full
   // hash is worth computing; a collision costs a full hash, never a wrong result.
@@ -1014,20 +2019,23 @@
       }
       let pc=0,pa=0,pm=0;
       for(const x of run.pending){const c=pendingCode(x);pc=(pc+c)|0;pa=(pa+x.at-t)|0;pm=(pm+I(c,x.at-t))|0}
-      parts.push(run.pending.length,pc,pa,pm);
+      parts.push(run.pending.length,pc,pa,pm,dev);
       return parts.join('\u0000');
     };
-    const snapshot=t=>({tick:t,hash:null,pending:run.pending,queues:Object.keys(run.queues).sort().map(k=>{const l=logs.get(k);return [k,run.queues[k].next,l.head,l.items.length]}),flips:changes.length});
+    // The flow cards' state, as text, once per processed tick ('{}' with none, so documents without flow cards pay nothing more).
+    let dev='{}';
+    const snapshot=t=>({tick:t,hash:null,pending:run.pending,dev,queues:Object.keys(run.queues).sort().map(k=>{const l=logs.get(k);return [k,run.queues[k].next,l.head,l.items.length]}),flips:changes.length});
     // The signal's true keys at an earlier snapshot: the current ones with every later flip undone.
     const hashOf=entry=>{
       if(entry.hash!==null)return entry.hash;
       const set=new Set(trueKeys(run.signal));
       for(let i=changes.length-1;i>=entry.flips;i--)for(const k of changes[i][2])if(set.has(k))set.delete(k);else set.add(k);
-      entry.hash=stateHash(entry.tick,[...set].sort(),entry.queues.map(([k,next,h,n])=>[k,next,logs.get(k).items.slice(h,n)]),entry.pending);
+      entry.hash=stateHash(entry.tick,[...set].sort(),entry.queues.map(([k,next,h,n])=>[k,next,logs.get(k).items.slice(h,n)]),entry.pending,entry.dev);
       entry.pending=entry.queues=null;
       return entry.hash;
     };
     const visit=t=>{
+      dev=hasState(run)?deviceText(run):'{}';
       const key=summary(t),list=seen.get(key),entry=snapshot(t);
       if(list){
         entry.hash=futureHash(run);
@@ -1164,5 +2172,5 @@
     };
   }
 
-  return {RECORD_FORMAT,PACK_FORMAT,RUNTIME_VERSION,TRACE_FORMAT,RUN_RECEIPT_FORMAT,RUN_OPERATIONS,BUDGET_LIMIT,validateRecord,patterns,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument,startRun,step,settle,query,runReceipt,createRunRegistry,traceOf,replay,validateTrace,queueItems};
+  return {RECORD_FORMAT,PACK_FORMAT,RUNTIME_VERSION,TRACE_FORMAT,RUN_RECEIPT_FORMAT,RUN_OPERATIONS,BUDGET_LIMIT,validateRecord,patterns,flowPatterns,flowBindingOf,pattern,checkDefinition,loadPack,resolveDefinition,contractOf,bindDefinition,applyBind,checkDocument,startRun,addInput,resume,reconcile,behaviorBindingsOf,step,settle,query,runReceipt,createRunRegistry,traceOf,replay,validateTrace,queueItems};
 });

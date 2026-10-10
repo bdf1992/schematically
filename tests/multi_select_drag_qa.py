@@ -20,6 +20,16 @@ SELECTION = "()=>({set:[...selectedComponentIds].sort(),primary:selected})"
 HASH = '()=>SovSchematicData.documentHash(diagram)'
 UNDO_COUNT = '()=>historyState.undo.length'
 HIST = '()=>historyState.undo.map(x=>x.label)'
+HISTORY_LIMIT_MS = 5000
+# True when no history capture is pending and, when a count is given, the undo list holds at least that many entries.
+HISTORY_SETTLED = '(n)=>historyState.timer===null&&(n===null||historyState.undo.length>=n)'
+# The pointer is kept down and still for this long: past the autosave timer (420 ms) and the history timer (320 ms) together.
+HELD_MS = 1500
+
+
+def history_settles(page, entries=None):
+    """Wait, up to HISTORY_LIMIT_MS, until the history has captured; a timeout raises and fails the run."""
+    page.wait_for_function(HISTORY_SETTLED, arg=entries, timeout=HISTORY_LIMIT_MS)
 
 
 def client(page, cid):
@@ -27,7 +37,7 @@ def client(page, cid):
     return page.evaluate(CLIENT, n)
 
 
-def press_and_drag(page, cid, dx, dy):
+def press_and_drag(page, cid, dx, dy, entries=None):
     """Press the Component at its centre and drag it by a screen offset."""
     c = client(page, cid)
     page.mouse.move(c['x'], c['y'])
@@ -36,13 +46,26 @@ def press_and_drag(page, cid, dx, dy):
     page.mouse.move(c['x'] + dx, c['y'] + dy, steps=10)
     page.wait_for_timeout(120)
     page.mouse.up()
-    page.wait_for_timeout(500)  # past the scheduled history capture
+    history_settles(page, entries)
+
+
+def press_hold_and_drag(page, cid, dx, dy, entries):
+    """Press, move half of the way, keep the pointer down and still for HELD_MS, move the rest, release."""
+    c = client(page, cid)
+    page.mouse.move(c['x'], c['y'])
+    page.mouse.down()
+    page.mouse.move(c['x'] + dx / 2, c['y'] + dy / 2, steps=5)
+    page.wait_for_timeout(HELD_MS)
+    page.mouse.move(c['x'] + dx, c['y'] + dy, steps=5)
+    page.wait_for_timeout(120)
+    page.mouse.up()
+    history_settles(page, entries)
 
 
 def click(page, cid):
     c = client(page, cid)
     page.mouse.click(c['x'], c['y'])
-    page.wait_for_timeout(500)
+    history_settles(page)
 
 
 def delta(before, after, cid):
@@ -69,7 +92,7 @@ with sync_playwright() as p:
     # 1. Pressing a member of the selection keeps it; the drag moves both roots by the same offset,
     #    leaves the third where it was, makes the pressed Component the primary, and is one transition.
     before, h0, c0 = page.evaluate(POS), page.evaluate(HASH), page.evaluate(UNDO_COUNT)
-    press_and_drag(page, 'a', 120, 160)
+    press_and_drag(page, 'a', 120, 160, c0 + 1)
     after = page.evaluate(POS)
     da, db = delta(before, after, 'a'), delta(before, after, 'b')
     assert da == db and da[0] >= 80 and da[1] >= 120, ('the group did not move together', da, db)
@@ -86,7 +109,7 @@ with sync_playwright() as p:
     # 2. Pressing an unselected Component selects it alone, and the drag moves only it.
     page.evaluate("()=>{selectNode('a');selectNode('b',{focus:false,additive:true})}")
     before, c1 = page.evaluate(POS), page.evaluate(UNDO_COUNT)
-    press_and_drag(page, 'c', 100, -60)
+    press_and_drag(page, 'c', 100, -60, c1 + 1)
     after = page.evaluate(POS)
     assert delta(before, after, 'c') != [0, 0] and delta(before, after, 'a') == [0, 0] and delta(before, after, 'b') == [0, 0], (before, after)
     assert page.evaluate(SELECTION) == {'set': ['c'], 'primary': 'c'}, page.evaluate(SELECTION)
@@ -113,6 +136,18 @@ with sync_playwright() as p:
     after = page.evaluate(POS)
     assert delta(before, after, 'a') == delta(before, after, 'b') != [0, 0], (before, after)
     assert page.evaluate(SELECTION) == {'set': ['a', 'b'], 'primary': 'b'}, page.evaluate(SELECTION)
+
+    # 5. A drag held still for longer than the autosave timer and the history timer together is still
+    #    one transition: a capture timer that comes due while the pointer is down waits for the
+    #    release. render() arms both timers just before the press.
+    page.evaluate('newSchematic()')
+    page.evaluate("()=>{window.SovSchematicAPI.create('component',{id:'h',symbolId:'act',x:300,y:300});render()}")
+    before, c5 = page.evaluate(POS), page.evaluate(UNDO_COUNT)
+    press_hold_and_drag(page, 'h', 160, 120, c5 + 1)
+    assert delta(before, page.evaluate(POS), 'h') != [0, 0], ('the held drag did not move the Component', before, page.evaluate(POS))
+    assert page.evaluate(UNDO_COUNT) == c5 + 1 and page.evaluate(HIST)[-1] == 'Move Component', ('a held drag is not one history entry', page.evaluate(HIST)[c5:])
+    page.evaluate('()=>SovSchematicAPI.history.undo()')
+    assert page.evaluate(POS) == before, 'one undo does not restore a held drag'
 
     assert not errors, errors
     browser.close()

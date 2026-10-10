@@ -25,17 +25,19 @@ Primary operations:
 - `document.get()` / `document.replace(doc)`
 - `history.list()` / `undo()` / `redo()`
 - `checkpoints.list()` / `create(name)` / `restore(id)`
+- `concerns.list({open})` / `concerns.answer(answers)` — the questions the notation declares, each row answered or open, and the one write that sets or removes answers (`answers: [{concern, target?, answer}]`, all or none, one undo)
 - `selection.copy()` / `paste()` / `duplicate()`
-- `view.setAppearance(mode)` / `setGlobalRate(value)`
+- `view.setAppearance(mode)` / `setGlobalRate(value)` — `setGlobalRate` sets the document's own rate, written to `meta.timeScale` (0 pauses; a refused value is returned and nothing changes); `clock.setSpeed(x)` sets the view's own playback speed instead, never the document's rate
 - `view.legend()` / `view.setLegend(open)` — the legend derived from what the document uses; `render.svg({legend: true})` puts it below a picture
 - `view.narration()` / `view.narrate(i)` — the narration track (`document.narration`, scenario steps with `say`); `render.svg({narration: i})` puts line `i` below a picture
 - `view.colour()` / `view.setColour({theme, palette})` / `view.paletteAudit()` — the colour engine (default palette `okabe-ito`, colour-blind safe) and the palette measured as realised
 - `layout.list()` / `active()` / `switch(id)` / `create({name, from, empty})` / `rename` / `delete` / `setDefault` / `unplaced()` / `move(id, {x, y | dx, dy})` / `place(id, {relation, of, gap})` / `align(ids, {axis})` / `distribute(ids, {axis, gap})` / `route(wireId, {mode, points | via})` / `apply({into, scope})` — arrange for a reader without changing meaning
 - `render.svg(options)` / `render.png(options)` (a promise of a data URL) / `layout.metrics()` / `layout.contrast()` — the picture, its measured quality, and WCAG 2.2 contrast of every label and mark against what is painted beneath it
-- `clock.play()` / `pause()` / `step()` / `advance(ms)` / `toggle(lever)` / `send(node)` / `resume(parkId, decision)` / `state()` / `inspect(what, id)` — the canvas control plane
+- `clock.play()` / `pause()` / `step()` / `advance(ms)` / `setSpeed(x)` / `toggle(lever)` / `send(node)` / `resume(parkId, decision)` / `state()` / `inspect(what, id)` — the canvas control plane; `setSpeed` is the view's own playback speed, not the document's rate
 - `graph.query(verb, args)` / `graph.verbs()` — read-only: junctions, reach, paths, cycles, order, cut, boundary, untyped, blocked, acl, signals, export
-- `sim.set(node, value)` / `at(time, {set|toggle|inject})` / `advance(ms)` / `tick(n)` — time is the driver: clocks, asserted levels and scheduled operations
-- `sim.start({handlers, scenarioId})` / `inject(node, {channel, payload, principal})` / `step(n)` / `run({until})` / `resume(parkId, {decision})` / `reconcile(effectKey, {confirmed})` / `inspect(what, id)` / `scenario(id)` / `scenarios()` / `stop()`
+- `sim.set(node, value)` / `at(time, {set|toggle|inject})` / `advance(ms)` / `tick(n)` — time is the driver: clocks, asserted levels and scheduled operations; `time`, `ms` and every other time argument are milliseconds, carried over the engine's own ticks at the declared `tickMs` (default 1 ms per tick)
+- `sim.start({handlers, scenarioId})` / `inject(node, {channel, payload, principal})` / `step(n)` / `run({until})` / `resume(parkId, {decision})` / `reconcile(effectKey, {confirmed})` / `inspect(what, id)` / `scenario(id)` / `scenarios()` / `stop()` — `step(n)` counts engine ticks, not milliseconds; `until` in `run` is ms, like `advance`
+- `sim.travel()` / `sim.spectrum({fromMs, toMs, stepMs, harmonics, nodes})` — pure reads of the run: each wire's travel time (its declared delay in ticks as the run resolved it, and that in ms), and each node's level spectrum over an elapsed window (mean, energy, harmonics of the node's period with amplitude and phase, rest, Parseval check); `STATE-SPACE.md`, "Reading a run: travel and spectrum"
 
 Resources in 0.1: `component`, `wire`, `reference`. Ports and Wire Parts remain owned nested records.
 
@@ -49,13 +51,16 @@ Additional server tools:
 - `schematic.checkpoint.list`
 - `schematic.checkpoint.create`
 - `schematic.checkpoint.restore`
+- `schematic.concerns` (`{open?}`) — the concern report: one row per question the notation declares for the document, each component and each wire, answered or open; `open: true` returns only the open rows
+- `schematic.concerns.answer` (`{answers: [{concern, target?, answer}], ifRevision?}`) — set or remove answers in one call, all or none, one revision; `target` absent is the document, `answer: null` removes one answer; read `schematic.concerns` after writing and answer what is open
 - `schematic.layout` (`op: list | unplaced | create | rename | delete | set-default | move | place | align | distribute | route | apply`) — layouts and placement; `schematic.render` takes `view` to see a layout
 - `schematic.render` (`format: svg | png`) / `schematic.layout.metrics` — see the diagram as the editor draws it, and measure it: check your layout before you report it done
 - `schematic.graph.query` — read-only graph queries (`GRAPH-MODEL.md` §5)
-- `schematic.sim.set` / `at` / `advance` / `tick` — assert a level, schedule an operation, drive time
-- `schematic.sim.start` / `inject` / `step` / `run` / `resume` / `reconcile` / `inspect` / `scenario` / `scenarios` / `stop` — the message simulation (`GRAPH-MODEL.md` §6). It reads the document and never mutates it; a node naming a handler nobody registered refuses its messages.
+- `schematic.sim.set` / `at` / `advance` / `tick` — assert a level, schedule an operation, drive time; time arguments are milliseconds, carried over the engine's own ticks at the declared `tickMs` (default 1 ms per tick)
+- `schematic.sim.start` / `inject` / `step` / `run` / `resume` / `reconcile` / `inspect` / `scenario` / `scenarios` / `stop` — the message simulation (`GRAPH-MODEL.md` §6, now served over the state-space engine by `src/07-state-surface.js`, `STATE-SPACE.md`). It reads the document and never mutates it; a node naming a handler nobody registered refuses its messages; `step` counts ticks, where `run`'s `until` is ms like `advance`.
+- `schematic.sim.travel` / `schematic.sim.spectrum` (`{fromMs, toMs, stepMs, harmonics, nodes}`) — read the running simulation without changing it: wire travel times from declared delays, and per-node level spectra and energy over a window that has already elapsed; a window that is not a whole number of the node's period gives `harmonics: null` with a `reason`.
 
-HTTP mirrors these: `GET|POST /api/v1/graph/<verb>`, `POST /api/v1/sim/<action>`, `GET /api/v1/sim/inspect?what=…&id=…`.
+HTTP mirrors these: `GET|POST /api/v1/graph/<verb>`, `POST /api/v1/sim/<action>`, `GET /api/v1/sim/inspect?what=…&id=…`, `GET /api/v1/concerns` (`?open=1`), `POST /api/v1/concerns`.
 
 ## Mutation discipline
 

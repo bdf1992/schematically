@@ -166,7 +166,13 @@ What is implemented:
 - **A Point's `self`.** A component `update` (or `create`) on a Point may set `attachmentPoints` to the single entry
   `{id: 'self', flow?, channels}`, checked like a declared port's channels and flow and stored in the clean form, which
   leaves out a `flow` equal to the default `duplex`; loading cleans the placeholder form the same way, so every form of
-  one declaration has one `documentHash`. `CHANNEL_MISMATCH` applies against bound Wires; `self` always stays.
+  one declaration has one `documentHash`. `CHANNEL_MISMATCH` applies against bound Wires; `self` always stays. This is
+  how a boundary Point (G07) passes named channels across a Plane: declaring `self`'s channels there is the same
+  mechanism as a free Point's, carried by `resolveSpec` reading `basePointSpecs` by the Point's own dimension, not by
+  what hosts it, so hosting on an edge needs nothing further. A boundary Point declares the channels it carries
+  across the boundary; an undeclared one carries only `main` (absence is refused, never defaulted - R-02), so a Wire
+  on a named channel is refused with `CHANNEL_MISMATCH` until the Point declares it. `schematic.graph.query`'s
+  `reach` verb takes an optional `channel` and follows only a Wire whose two bound ports share it.
 
 ### The Attached list (landed, contract 0b-2; #21)
 

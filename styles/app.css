@@ -4,6 +4,8 @@
   --line:#d8d8d1; --grid:#EAE8E0; --hover:#f4f4f0; --canvas-tone:#F6F5F0; --canvas-ink:#42423E; --canvas-muted:#73736D; --canvas-halo:#F6F5F0;
   /* Two accents carry meaning, never decoration: amber is out and rising (+), blue is in and falling (−). */
   --accent-out:#C0661F; --accent-in:#2F6FB3; --card-shadow:rgba(40,36,28,.10); --section-wire-solid:#D6D1C4;
+  /* The wave view's one ink (src/68-wave-view.js): quiet, between the canvas and the wires. */
+  --wave-ink:#5F7389;
   --canvas-grid-size:24px;
 }
 *{box-sizing:border-box}
@@ -11,8 +13,17 @@ html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 button,input,textarea{font:inherit}
 button{user-select:none}
-.app{height:100%;display:grid;grid-template-columns:250px minmax(0,1fr) 300px;grid-template-rows:52px 1fr}
-header{grid-column:1/-1;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:10px}
+.app{--palette-w:250px;--inspector-w:300px;--header-h:52px;height:100%;display:grid;grid-template-columns:var(--palette-w) minmax(0,1fr) var(--inspector-w);grid-template-rows:var(--header-h) 1fr}
+.app>.palette{grid-column:1;grid-row:2}
+.app>.workspace-wrap{grid-column:2;grid-row:2}
+.app>.inspector{grid-column:3;grid-row:2}
+.app.hide-palette{--palette-w:0px}
+.app.hide-inspector{--inspector-w:0px}
+.app.hide-header{--header-h:0px}
+.app.hide-palette>.palette,.app.hide-inspector>.inspector,.app.hide-header>header{display:none}
+.panel-restore{position:absolute;top:8px;left:8px;z-index:30;display:flex;gap:6px}
+.panel-restore[hidden],.panel-restore .btn[hidden]{display:none}
+header{grid-column:1/-1;grid-row:1;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:10px}
 .brand{font-weight:800;letter-spacing:.05em}
 .tag,.status{color:var(--muted);font-size:12px}
 .toolbar{margin-left:auto;display:flex;gap:6px;align-items:center;position:relative}
@@ -36,8 +47,23 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .workspace-wrap{position:relative;overflow:hidden;user-select:none;-webkit-user-select:none}
 #workspace{width:100%;height:100%;display:block;touch-action:none;outline:none;
   background-color:var(--canvas-tone,#fbfbf9);
-  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
-  background-size:var(--canvas-grid-size) var(--canvas-grid-size);
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+    linear-gradient(color-mix(in srgb,var(--grid) 40%,transparent) 1px,transparent 1px),
+    linear-gradient(90deg,color-mix(in srgb,var(--grid) 40%,transparent) 1px,transparent 1px);
+  background-size:
+    var(--canvas-grid-major,96px) var(--canvas-grid-major,96px),
+    var(--canvas-grid-major,96px) var(--canvas-grid-major,96px),
+    var(--canvas-grid-size) var(--canvas-grid-size),
+    var(--canvas-grid-size) var(--canvas-grid-size);
+  background-position:var(--canvas-grid-x,0px) var(--canvas-grid-y,0px);
+}
+#workspace.grid-minor-hidden{
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:var(--canvas-grid-major,96px) var(--canvas-grid-major,96px);
 }
 #workspace.grid-hidden{background-image:none}
 #workspace:focus-visible{outline:2px solid #8a8a82;outline-offset:-2px}
@@ -107,7 +133,7 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .wire-section.line{stroke:var(--canvas-ink)}.wire-section.band-solid{stroke:var(--section-wire-solid)}.wire-section.band-space{stroke:var(--canvas-tone)}
 .wire-group.sectioned .wire{stroke:transparent}.wire-group.sectioned .wire-voltage{display:none}
 /* Unplaced in the layout on screen: shown where the default has it, until arranged or moved. */
-.node.unplaced{opacity:.42}.node.unplaced .body{stroke-dasharray:6 4}
+.node.unplaced{opacity:.42}
 #layoutSelect{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 6px;max-width:15em}
 .access-entries{display:grid;gap:6px;margin:6px 0}
 .access-entry{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(0,1fr)) auto;gap:4px;align-items:center}
@@ -136,7 +162,7 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .sim-edge{font:800 13px ui-sans-serif,system-ui,sans-serif;animation:sim-edge-fade .7s ease-out forwards}
 .sim-edge.rise{fill:var(--accent-out)}.sim-edge.fall{fill:var(--accent-in)}
 @keyframes sim-edge-fade{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-6px)}}
-.wire-group.level-high .wire{stroke:var(--accent-out)}
+.wire-group.level-high .wire{stroke:var(--wire-lit,var(--accent-out))}
 .sim-waiting-bg{fill:var(--panel);stroke:var(--accent-in);stroke-width:1.4}
 .sim-waiting-text{font:700 10px ui-sans-serif,system-ui,sans-serif;fill:var(--accent-in)}
 .sim-decide circle{fill:var(--canvas-tone);stroke:var(--canvas-muted);stroke-width:1}
@@ -149,16 +175,31 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .sim-send:hover circle{fill:var(--accent-out)}.sim-send:hover text{fill:var(--panel)}
 /* While the clock runs, levels are the truth on the canvas; the legacy packet animation stands down. */
 #workspace.sim-live .wire-packet{display:none!important}
+/* The wave view (src/68-wave-view.js): a faint wave under the wires while a run is live. One ink; no pointer events. */
+#waveLayer{pointer-events:none}
+.wave-string{fill:none;stroke:var(--wave-ink);stroke-width:1px;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round;opacity:.45}
+.wave-dot{fill:var(--wave-ink);stroke:none;opacity:.45}
+.wave-lane{fill:none;stroke:var(--wave-ink);vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
 .node.selected .body{stroke-width:var(--stroke-structure-selected,2.85px)}
+.group-hit{fill:transparent;stroke:none;pointer-events:all;cursor:default}
+.node.group.selected>.group-hit{stroke:var(--canvas-ink);stroke-width:var(--stroke-structure-selected,2.85px)}
 /* Labels are SVG text in world units while strokes are non-scaling, so text would grow and
    shrink with the camera. `--zoom` is the actual screen scale of #workspace; every label's
    essential text stays at 12 to 16 screen pixels, expressed back in world units.
-   Small endpoint tags retain their separate 8 to 14 pixel hierarchy. */
-#workspace{--zoom:1}
-.node text{font-size:calc(clamp(12px,var(--type-title-size,10px) * var(--zoom,1),16px) / var(--zoom,1));fill:var(--component-text-color,var(--component-boundary-color,var(--component-color,#171715)));font-weight:var(--type-title-weight,600);letter-spacing:.015em;pointer-events:none;user-select:none}
+   Small endpoint tags retain their separate 8 to 14 pixel hierarchy.
+   `--scale` is the document scale (tokens.scale, set by applyNotationTokens). The --stroke-* and
+   --type-* tokens arrive already multiplied by it; a literal size on a class drawn in a picture is
+   multiplied here. The upper bound of each clamp scales, so a scaled label is not capped; the
+   lower bound is screen pixels and does not. Editor feedback (ghosts, previews, drop targets,
+   guides, halos, tethers, handles, selection and hover states) is not drawing and keeps its size.
+   Body text is the one label drawn in world units at its picture size, because its line step and position are world units.
+   --mark-floor is the factor that holds a wire's direction mark at 7 screen px, built from the same --zoom (written by syncLabelScale in src/30-canvas.js) and --scale that clamp the labels, and it is 1 wherever the mark is already that long. */
+#workspace{--zoom:1;--mark-floor:max(1,calc(1 / (var(--scale,1) * var(--zoom,1))))}
+.node text{font-size:calc(clamp(12px,var(--type-title-size,10px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));fill:var(--component-text-color,var(--component-boundary-color,var(--component-color,#171715)));font-weight:var(--type-title-weight,600);letter-spacing:.015em;pointer-events:none;user-select:none}
 .node .glyph{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .component-lead{stroke:var(--component-interior-ink,var(--component-color,#171715));stroke-linecap:round;fill:none;pointer-events:none}
 .node.backdrop-none .component-lead{stroke:var(--canvas-ink)}
+.node .component-lead.shape-lead,.node .body-rim{stroke:var(--component-boundary-color,var(--component-color,#222));stroke-width:var(--stroke-structure,1.5);stroke-linecap:round;fill:none;pointer-events:none}
 .node .custom-graphic{color:var(--component-interior-ink,var(--component-color,#171715));pointer-events:none}
 .node .custom-graphic [fill="currentColor"]{fill:currentColor}
 .node .custom-graphic [stroke="currentColor"]{stroke:currentColor}
@@ -166,11 +207,11 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 /* The interior guide is an editing aid: shown while the container is selected or a card is being dragged, never in a picture. */
 .node.is-container:not(.selected)>.container-guide{opacity:0}#workspace.dragging-node .node.is-container>.container-guide{opacity:.22}
 .node.is-container>.body{stroke-width:var(--stroke-structure-container,1.8px)}
-.node .internal-text{font-size:calc(clamp(12px,var(--type-body-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-body-weight,400);opacity:.86}.node .internal-text .md-strong{font-weight:700}.node .internal-text .md-em{font-style:italic}.node .internal-text .md-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.node .component-subtitle{font-size:calc(clamp(8px,var(--type-subtitle-size,8.5px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-subtitle-weight,400);letter-spacing:0;opacity:.72}
-.node .outside-label{font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600);opacity:.8}
+.node .internal-text{font-size:clamp(12px,var(--type-body-size,9px),calc(16px * var(--scale,1)));text-rendering:geometricPrecision;text-rendering:geometricPrecision;font-weight:var(--type-body-weight,400)}.node .internal-text .md-strong{font-weight:700}.node .internal-text .md-em{font-style:italic}.node .internal-text .md-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.node .component-subtitle{font-size:calc(clamp(8px,var(--type-subtitle-size,8.5px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-subtitle-weight,400);letter-spacing:0}
+.node .outside-label{font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-caption-weight,600)}
 .port-hit{fill:transparent;stroke:none;cursor:pointer;pointer-events:all;touch-action:none}
-.port{fill:var(--panel);stroke:var(--port-color,var(--component-color,var(--canvas-ink)));stroke-width:2;cursor:pointer;opacity:0;transition:opacity .1s,transform .1s;pointer-events:none;transform-box:fill-box;transform-origin:center}
+.port{fill:var(--panel);stroke:var(--port-color,var(--component-color,var(--canvas-ink)));stroke-width:calc(2px * var(--scale,1));cursor:pointer;opacity:0;transition:opacity .1s,transform .1s;pointer-events:none;transform-box:fill-box;transform-origin:center}
 .node:hover .port,.node.wiring-source .port,.node.selected .port{opacity:1}
 /* Unused points are affordances, not structure: hidden at rest, offered while a wire is drawn. */
 #workspace.wiring .port{opacity:.45}
@@ -184,10 +225,13 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .wire-group.dormant{opacity:.46}
 .wire-group.dormant .wire-voltage{opacity:.16}
 .wire{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:var(--stroke-flow,2.25);stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:pointer;transition:stroke-width .1s,opacity .1s}
-.wire-voltage{fill:none;stroke:var(--voltage-ink,var(--wire-ink,var(--canvas-ink)));stroke-width:8;stroke-linecap:round;stroke-linejoin:round;opacity:.10;pointer-events:none}
-.wire-hit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
+.wire-voltage{fill:none;stroke:var(--voltage-ink,var(--wire-ink,var(--canvas-ink)));stroke-width:calc(8px * var(--scale,1));stroke-linecap:round;stroke-linejoin:round;opacity:.10;pointer-events:none}
+.wire-hit{fill:none;stroke:transparent;stroke-width:max(14px,calc(12px / var(--zoom,1)));pointer-events:stroke;cursor:pointer}
 .wire.selected{stroke-width:4}
-.wire-group:hover .wire{stroke-width:3.3}
+.wire-group.wire-hover .wire{stroke-width:max(3.3px,calc(3px / var(--zoom,1)))}
+/* A heavy wire kind: its group's --stroke-flow is twice the token, and selected and hover multiply it by what 4 and 3.3 are to 2.25. */
+.wire-group[data-weight="heavy"] .wire.selected{stroke-width:calc(var(--stroke-flow,4.5px) * 1.7778)}
+.wire-group[data-weight="heavy"].wire-hover .wire{stroke-width:max(calc(var(--stroke-flow,4.5px) * 1.4667),calc(4px / var(--zoom,1)))}
 .wire-packet{
   display:none;
   pointer-events:none;
@@ -197,15 +241,18 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 #workspace.dragging-node .wire-packet{display:none!important}
 .wire-packet-tag{font-size:7px;font-weight:800;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:2px;letter-spacing:.03em}
 .wire-packet-operation{font-size:6.5px;font-weight:900;fill:var(--packet-op-ink,var(--canvas-ink));pointer-events:none;dominant-baseline:middle}
-.endpoint-channel-tag,.port-label-text{font-size:calc(clamp(8px,var(--type-caption-size,9px) * var(--zoom,1),14px) / var(--zoom,1));font-weight:var(--type-caption-weight,600);fill:var(--canvas-muted);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:3px;letter-spacing:.03em;pointer-events:none}
+.endpoint-channel-tag,.port-label-text{font-size:calc(clamp(8px,var(--type-caption-size,9px) * var(--zoom,1),calc(14px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-caption-weight,600);fill:var(--canvas-muted);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:calc(3px * var(--scale,1));letter-spacing:.03em;pointer-events:none}
 .endpoint-channel-tag{font-size:8px}
-.flow-chevron{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;opacity:0}
+.flow-chevron{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:calc(2.4px * var(--scale,1));stroke-linecap:round;stroke-linejoin:round;pointer-events:none;opacity:0}
 #workspace.show-flow .flow-chevron{opacity:1}
 .ghost-flow-chevron{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;opacity:.24;stroke-dasharray:3 3}
 .ghost-route-preview{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;opacity:.10;stroke-dasharray:5 7}
 .move-tether{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:1.5;stroke-linecap:round;pointer-events:none;opacity:.28;stroke-dasharray:4 6}
 .move-anchor{fill:var(--canvas-tone);stroke:var(--wire-ink,var(--canvas-ink));stroke-width:1.6;pointer-events:none;opacity:.55}
 .wire-group.drag-frozen .wire{opacity:.82}
+.wire-travel{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:var(--stroke-flow,2.25);stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.wire-group[data-travel] .wire{stroke-opacity:0}
+.wire-group[data-travel] .flow-chevron{opacity:0}
 
 #workspace .ghost-flow-chevron,
 #workspace .ghost-route-preview{display:none}
@@ -280,6 +327,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .bar-label{width:124px;max-width:160px}
 .bar-marker{width:56px;text-align:center;font-weight:700}
 .bar-select{max-width:140px}
+select option,select optgroup{background-color:var(--panel);color:var(--ink)}
 .marker-summary{max-width:180px;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--muted);white-space:nowrap}
 .readonly-slot{display:inline-block;cursor:default}
 .info-dot{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1px solid var(--line);border-radius:50%;font-size:9px;font-weight:800;font-style:normal;color:var(--muted);background:var(--panel);flex:0 0 auto}
@@ -304,7 +352,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .form-settings>summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;padding:7px 9px;background:var(--panel);font-size:11px}
 .form-settings>summary::-webkit-details-marker{display:none}
 .form-settings>.settings-grid{padding:8px}
-.component-frame-inner{fill:none;stroke:var(--component-boundary-color);stroke-width:2;pointer-events:none;opacity:.9}
+.component-frame-inner{fill:none;stroke:var(--component-boundary-color);stroke-width:calc(2px * var(--scale,1));pointer-events:none;opacity:.9}
 .node.form-shell .component-frame-inner{stroke-dasharray:5 3}
 .settings-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:8px;font-size:10px}
 .settings-head span{font-size:9px;color:var(--muted);text-align:right}
@@ -366,7 +414,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .transform-handle-halo{fill:transparent;stroke:none;pointer-events:all}
 #workspace.transforming-node .wire-packet{display:none!important}
 .port[data-face="internal"]{stroke-dasharray:2 2}
-.port[data-face="both"]{stroke-width:3.2}
+.port[data-face="both"]{stroke-width:calc(3.2px * var(--scale,1))}
 .component-visual-panel textarea{height:72px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .component-visual-panel .visual-check{flex-direction:row;align-items:center;margin-top:14px}
 .visual-wide{margin-top:7px}
@@ -402,10 +450,10 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .node.blank text{font-style:italic}
 .node.blank.selected .body{stroke-dasharray:5 4}
 
-.connection-label{font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),16px) / var(--zoom,1));font-weight:var(--type-caption-weight,600);fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}.reciprocity-mark{font-size:calc(clamp(12px,9px * var(--zoom,1),16px) / var(--zoom,1));font-weight:600;font-style:italic;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:4;pointer-events:none}
+.connection-label{font-size:calc(clamp(12px,var(--type-caption-size,9px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-caption-weight,600);fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:calc(4px * var(--scale,1));pointer-events:none}.reciprocity-mark{font-size:calc(clamp(12px,9px * var(--scale,1) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:600;font-style:italic;fill:var(--canvas-ink);paint-order:stroke;stroke:var(--canvas-halo);stroke-width:calc(4px * var(--scale,1));pointer-events:none}
 
 @media(max-width:900px){
-  .app{grid-template-columns:210px minmax(0,1fr);}
+  .app{--palette-w:210px;--inspector-w:0px}
   .inspector{display:none}
   .tag{display:none}
 }
@@ -477,12 +525,17 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .wire-blank-ghost .plus{stroke:var(--muted);stroke-width:2.6;stroke-linecap:round}
 .wire-blank-ghost text{font-size:calc(clamp(8px,8px * var(--zoom,1),14px) / var(--zoom,1));font-weight:800;fill:var(--muted);letter-spacing:.05em;paint-order:stroke;stroke:var(--panel);stroke-width:2px}
 @keyframes wireBlankGhostIn{to{opacity:.62}}
+.bus-band{pointer-events:none}.bus-band rect{fill:var(--muted);fill-opacity:.06;stroke:var(--muted);stroke-opacity:.3;stroke-width:var(--stroke-structure,1)}
+.bus-label{font-weight:var(--type-caption-weight,600);letter-spacing:.02em}
+.bus-hit{fill:transparent;stroke:transparent;stroke-width:calc(24px / var(--zoom,1));pointer-events:all;cursor:grab}
+.bus-band.selected rect,:root[data-appearance="dark"] .bus-band.selected rect{stroke:var(--canvas-ink);stroke-opacity:1;stroke-width:var(--stroke-structure-selected,2.85px)}
 .file-menu-item:disabled{color:var(--muted);opacity:.52;cursor:not-allowed}
 .file-menu-item:disabled:hover{background:transparent}
 :root[data-appearance="dark"]{
   color-scheme:dark;
   --bg:#111315;--panel:#1C1F21;--ink:#EEEFEA;--muted:#A8AAA4;--line:#3B3F42;--hover:#292D30;--grid:#2B2E31;--canvas-tone:#17191B;--canvas-ink:#E7E8E3;--canvas-muted:#AEB0AA;--canvas-halo:#17191B;
   --accent-out:#E9A15A;--accent-in:#74A9E3;--card-shadow:rgba(0,0,0,.35);--section-wire-solid:#4A4D50;
+  --wave-ink:#A3B6CB;
 }
 :root[data-appearance="dark"] #workspace{background-color:var(--canvas-tone);box-shadow:inset 0 0 0 1px #303438}
 :root[data-appearance="dark"] .port{fill:var(--panel)}
@@ -494,6 +547,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 :root[data-appearance="dark"] .file-menu-item:disabled{color:#858A8C;opacity:.82}
 :root[data-appearance="dark"] .connection-label,:root[data-appearance="dark"] .reciprocity-mark{fill:var(--ink);stroke:var(--canvas-tone)}
 :root[data-appearance="dark"] .settle-host-ghost text{stroke:var(--canvas-tone)}
+:root[data-appearance="dark"] .bus-band rect{fill:var(--canvas-muted);fill-opacity:.07;stroke:var(--canvas-muted);stroke-opacity:.32}
 
 :root[data-appearance="light"]{color-scheme:light}
 :root[data-appearance="light"] #workspace{background-color:var(--canvas-tone)}
@@ -507,9 +561,9 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .node.backdrop-none .component-label,.node.backdrop-none .outside-label,.node.backdrop-none .internal-text{fill:var(--canvas-ink)}
 
 /* Earned dimensional Forms */
-.dimensional-point-body{fill:var(--panel);stroke:var(--component-boundary-color,#555);stroke-width:2;vector-effect:non-scaling-stroke}
+.dimensional-point-body{fill:var(--panel);stroke:var(--component-boundary-color,#555);stroke-width:calc(2px * var(--scale,1));vector-effect:non-scaling-stroke}
 .node .dimensional-point-body.port{opacity:1}
-.node .dimensional-point-body.carries{fill:var(--component-boundary-color,var(--canvas-ink));stroke-width:1.5}
+.node .dimensional-point-body.carries{fill:var(--component-boundary-color,var(--canvas-ink));stroke-width:calc(1.5px * var(--scale,1))}
 .dimensional-point-label{font-size:8px;fill:var(--ink)}
 .dimensional-path-body{stroke:var(--component-boundary-color,#555);stroke-linecap:round;vector-effect:non-scaling-stroke}
 
@@ -528,7 +582,7 @@ textarea{width:100%;height:64px;resize:vertical;border:1px solid var(--line);bor
 .node.dragging .point-grip{cursor:grabbing}
 .node[data-dimension="0"]:hover .port-hit,.node[data-dimension="0"].selected .port-hit{stroke:var(--component-boundary-color,var(--canvas-ink));stroke-width:1;stroke-dasharray:2 3;opacity:.55}
 .node[data-dimension="0"] .port-hit:hover{opacity:1;stroke-dasharray:none}
-.node[data-dimension="0"].nested-child .dimensional-point-body{stroke-width:2.4}
+.node[data-dimension="0"].nested-child .dimensional-point-body{stroke-width:calc(2.4px * var(--scale,1))}
 .settle-host-ghost.path-host rect,.settle-host-ghost.edge-host rect{fill:color-mix(in srgb,var(--canvas-tone) 76%,#6f8fb7 24%);stroke:#6f8fb7}
 .settle-host-ghost.path-host .settle-wire-axis,.settle-host-ghost.edge-host .settle-wire-axis{stroke:#6f8fb7;stroke-width:2;stroke-dasharray:5 3;vector-effect:non-scaling-stroke}
 

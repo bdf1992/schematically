@@ -1,6 +1,23 @@
 'use strict';
 // 0.1 Beta concern: Sanitized Component SVG projection and Wire/packet SVG rendering.
 
+// Both are screen pixels: general is the floor of every canvas label, shrunkTitle the floor of a
+// card title marked data-shrunk.
+const LABEL_FLOORS=Object.freeze({general:12,shrunkTitle:10});
+// Both are screen scales (screen pixels per canvas unit), the one home of the zoom levels at which
+// detail is dropped. Below body, body text (12 canvas units) draws under 7.2 screen px, is not
+// readable and is hidden. secondary is the deep-overview level, below which subtitles and wire
+// labels are hidden; it is set equal to the scale at which a title over its glyph is already
+// hidden, because a fitted view keeps its wire labels and subtitles: measured on 2026-10-09, the
+// review fixture 02-service-circuit fitted to a 1440 wide window sits at 0.459, and at 0.284 on a
+// 768 wide one. Group titles and bus labels are never hidden here. Both values are first settings.
+const DETAIL_FLOORS=Object.freeze({body:.6,secondary:.25});
+// The screen scale the canvas is drawn at: the --zoom style property of #workspace, or 1. It reads
+// the property, never the screen matrix, so a picture (rendered with --zoom at 1) shows everything.
+function detailScreenScale(){
+  return parseFloat(typeof workspace!=='undefined'&&workspace?workspace.style.getPropertyValue('--zoom'):'')||1;
+}
+
 function renderMoveTether(group,from,to){
   if(!from||!to) return;
   if(Math.hypot(to.x-from.x,to.y-from.y)<1) return;
@@ -82,6 +99,30 @@ function appendComponentLeads(g,n){
     lead.setAttribute('stroke-width',String(axis.stroke));g.appendChild(lead);
   }
 }
+// A shaped card's ports stay on its bounding sides. Where the drawn outline is set back from the
+// side (a parallelogram's slanted sides, a cylinder's curves away from the centre), a wired port is
+// joined to the outline by a short lead, straight in from the port.
+function appendShapeLeads(g,n){
+  const geo=componentShapeGeometry(n);if(geo.shape==='rect')return;
+  for(const point of componentAttachmentPoints(n)){
+    const compat=point.compatId;
+    if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
+    const side=physicalPortSide(n,point.id),P=componentPortLocalPosition(n,point.id),E=geo.edge(side,P);
+    if(Math.hypot(E.x-P.x,E.y-P.y)<.5)continue;
+    const lead=document.createElementNS('http://www.w3.org/2000/svg','path');lead.setAttribute('class','component-lead shape-lead');lead.dataset.point=point.id;
+    lead.setAttribute('d',`M${P.x} ${P.y}L${+E.x.toFixed(2)} ${+E.y.toFixed(2)}`);g.appendChild(lead);
+  }
+}
+// A solid shaped body's bevel: the outline's lit half (left and top) and shaded half (right and bottom), inset.
+function appendShapeBevel(g,geo){
+  const d=SovSchematicNotation.tokens(diagram).space.bevel,w=geo.w-d*2,h=geo.h-d*2;if(w<12||h<12)return;
+  const x0=-w/2,y0=-h/2,x1=w/2,y1=h/2;let light,shade;
+  if(geo.shape==='parallelogram'){const s=geo.skew;light=`M${x0} ${y1}L${x0+s} ${y0}L${x1} ${y0}`;shade=`M${x1} ${y0}L${x1-s} ${y1}L${x0} ${y1}`}
+  else{const ry=geo.cap/2;light=`M${x0} ${y1-ry}V${y0+ry}A${x1} ${ry} 0 0 1 ${x1} ${y0+ry}`;shade=`M${x1} ${y0+ry}V${y1-ry}A${x1} ${ry} 0 0 1 ${x0} ${y1-ry}`}
+  for(const [cls,path] of [['light',light],['shade',shade]]){
+    const e=document.createElementNS('http://www.w3.org/2000/svg','path');e.setAttribute('class',`section-bevel raised ${cls}`);e.setAttribute('d',path);g.appendChild(e);
+  }
+}
 // Where a wire meets a card, a short bar on the edge in the point's own colour: amber where
 // work leaves, blue where it arrives, both halves for a two-way point, muted for control.
 function appendTerminalMarks(g,n){
@@ -90,43 +131,139 @@ function appendTerminalMarks(g,n){
     const compat=point.compatId;
     if(!wires.some(x=>(x.a===n.id&&x.aSide===compat)||(x.b===n.id&&x.bSide===compat)))continue;
     const flow=activePortChannel(point.config||{}).flow||'duplex',side=physicalPortSide(n,point.id),P=componentPortLocalPosition(n,point.id);
-    const vertical=side==='left'||side==='right',len=12,th=3.2;
+    const vertical=side==='left'||side==='right',len=TERMINAL_MARK.len*markScale,th=TERMINAL_MARK.th*markScale;
     const parts=flow==='duplex'?[['in',-len/2,len/2],['out',0,len/2]]:[[flow==='control'?'control':flow==='in'?'in':'out',-len/2,len]];
     for(const [cls,off,span] of parts){
       const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('class','terminal-mark '+cls);
       if(vertical){r.setAttribute('x',String(P.x-th/2));r.setAttribute('y',String(P.y+off));r.setAttribute('width',String(th));r.setAttribute('height',String(span))}
       else{r.setAttribute('x',String(P.x+off));r.setAttribute('y',String(P.y-th/2));r.setAttribute('width',String(span));r.setAttribute('height',String(th))}
-      r.setAttribute('rx','1.2');g.appendChild(r);
+      r.setAttribute('rx',String(1.2*markScale));g.appendChild(r);
     }
   }
+}
+// A card's title and subtitle are one block, laid out at the size they are drawn at (after the
+// screen clamp, so the block is laid out again when the zoom changes): the title wraps at word
+// breaks to at most two lines within the card's text width, a line still too long ends in an
+// ellipsis, the subtitle is one line cut the same way, and its top sits space.textGap under the
+// title's last line. The block's foot stays where the title sat (or, below a glyph or the body, its
+// head does). Inside a card the block keeps clear of the glyph and inside the inner edge; when it
+// cannot, the least important line goes first: the subtitle is hidden (data-lod="hidden"), then the
+// title is cut to one line. A cut line sets data-truncated, and the full text goes in a tooltip on
+// the card's group (a <title> child of the .node g), never inside the drawn <text>, so whatever
+// reads a text's contents reads only what is drawn. A line that is one word, with no break to wrap
+// at, may use the card's full inner width (w - 8, section inset ignored) before it is cut.
+// A title drawn outside its card (outside label mode) keeps one line at its own width, uncut, and
+// only its subtitle's place follows space.textGap.
+const SVG_NS='http://www.w3.org/2000/svg';
+function setFittedText(el,lines,x,step){
+  el.textContent='';
+  lines.forEach((line,i)=>{const span=document.createElementNS(SVG_NS,'tspan');span.setAttribute('x',x);span.setAttribute('dy',i?String(step):'0');span.textContent=line;el.appendChild(span)});
 }
 function fitComponentLabels(g,n){
   if(componentForm(n).dimension!==2)return;
-  const size=componentSize(n),max=size.w-12-componentSectionInset(n)*2;
-  for(const t of g.querySelectorAll(':scope > text.component-label,:scope > text.outside-label')){
-    // Fit at the label's base size: the on-screen clamp changes its size with zoom, and a label
-    // must not wrap or cut differently as the reader zooms.
-    const role=t.classList.contains('outside-label')?'caption':'title',base=SovSchematicNotation.drawnSize(SovSchematicNotation.tokens(diagram).type,role);
-    const k=base/(parseFloat(getComputedStyle(t).fontSize)||base),len=()=>t.getComputedTextLength()*k;
-    const full=t.textContent;if(!full||len()<=max)continue;
-    const words=full.split(/\s+/),lines=[''];
-    for(const word of words){
-      const trial=lines.at(-1)?lines.at(-1)+' '+word:word;
-      t.textContent=trial;
-      if(len()<=max||!lines.at(-1))lines[lines.length-1]=trial;else lines.push(word);
+  const t=g.querySelector(':scope > text.component-label,:scope > text.outside-label');if(!t)return;
+  const u=g.querySelector(':scope > text.component-subtitle');
+  // A refit starts from what was authored, never from the last fit.
+  if(t.dataset.full==null)t.dataset.full=t.textContent;
+  if(u&&u.dataset.full==null)u.dataset.full=u.textContent;
+  const full=t.dataset.full,subFull=u?u.dataset.full:'';if(!full)return;
+  // The text keeps to the card's inner rectangle: the whole card, or what a declared shape leaves of it.
+  const full2D=componentSize(n),I=componentInnerRect(n),size={w:I.r-I.l,h:full2D.h},inset=componentSectionInset(n),max=size.w-12-inset*2,x=t.getAttribute('x')||'0';
+  const gap=Number(SovSchematicNotation.tokens(diagram).space?.textGap)||3,down=t.dataset.grow==='down';
+  const y0=t.dataset.y0!=null?Number(t.dataset.y0):Number(t.getAttribute('y'))||0;
+  // A title drawn outside its card (under it) is not held to the card's width: it stays one line.
+  const outside=t.classList.contains('outside-label'),inCard=!outside&&componentBackdropMode(n)!=='none';
+  delete t.dataset.truncated;
+  if(u){delete u.dataset.truncated;delete u.dataset.lod;u.style.visibility=''}
+  const wide=size.w-8,fits=(el,s,limit=max)=>{el.textContent=s;return el.getComputedTextLength()<=limit};
+  const cut=(el,s)=>{const limit=/\s/.test(s.trim())?max:Math.max(max,wide);if(outside||fits(el,s,limit))return s;let c=s;while(c.length>1){c=c.slice(0,-1).trimEnd();if(fits(el,c+'…',limit))return c+'…'}return '…'};
+  const wrap=limit=>{
+    if(outside)return [full];
+    const lines=[];let cur='';
+    for(const w of full.split(/\s+/).filter(Boolean)){const trial=cur?cur+' '+w:w;if(!cur||fits(t,trial))cur=trial;else{lines.push(cur);cur=w}}
+    if(cur)lines.push(cur);
+    const kept=lines.length>limit?[...lines.slice(0,limit-1),lines.slice(limit-1).join(' ')]:lines;
+    return kept.map(l=>cut(t,l));
+  };
+  const innerTop=I.t+inset+2,innerBottom=I.b-inset-2;
+  const graphic=componentConfig(n).presentation?.graphic;
+  let topLimit=innerTop;
+  if(graphic?.kind&&graphic.kind!=='none'){const box=componentInlineGraphicBox(n);if(!down)topLimit=Math.max(topLimit,box.y+box.h+2)}
+  const subLine=u&&subFull?cut(u,subFull):null;
+  const ok=r=>!inCard||(r.top>=topLimit-.01&&r.bottom<=innerBottom+.01);
+  const isCut=r=>r.lines.some(l=>l.endsWith('…'));
+  // Below DETAIL_FLOORS.secondary the subtitle is not shown from the first pass: the title gets the room.
+  const screen=detailScreenScale(),subShown=!!subLine&&screen>=DETAIL_FLOORS.secondary;
+  // The whole layout at the title's current font size: wrap, place, then the least important line
+  // goes first (the subtitle, then the title's second line).
+  const layout=()=>{
+  // Where the title sat on its own: the block's foot (growing up) or head (growing down).
+  t.textContent=full;t.setAttribute('y',String(y0));
+  const b0=t.getBBox();
+  const head=b0.y;let foot=inCard&&!down?Math.min(b0.y+b0.height,innerBottom):b0.y+b0.height;
+  const em=parseFloat(getComputedStyle(t).fontSize)||10;
+  const place=(lines,showSub)=>{
+    setFittedText(t,lines,x,em*1.15);t.setAttribute('y','0');
+    const bt=t.getBBox();let top=bt.y,bottom=bt.y+bt.height;
+    if(u){
+      setFittedText(u,[subLine??''],x,0);u.setAttribute('y','0');
+      // A hidden subtitle keeps its place under the title; only a shown one adds to the block.
+      const bu=u.getBBox();u.setAttribute('y',String(bottom+gap-bu.y));if(showSub&&subLine!=null)bottom=bottom+gap+bu.height;
     }
-    if(lines.length>2)lines.splice(1,lines.length-1,lines.slice(1).join(' '));
-    t.textContent=lines[lines.length-1];
-    while(len()>max&&t.textContent.length>1){t.textContent=t.textContent.slice(0,-2)+'…';t.dataset.truncated='true'}
-    lines[lines.length-1]=t.textContent;
-    const em=parseFloat(getComputedStyle(t).fontSize)||9,x=t.getAttribute('x')||'0',outside=t.classList.contains('outside-label');
-    t.textContent='';
-    lines.forEach((line,i)=>{const span=document.createElementNS('http://www.w3.org/2000/svg','tspan');span.setAttribute('x',x);
-      // Inside the body the block grows upward from its baseline; below the body it grows down.
-      span.setAttribute('dy',i===0?(outside?'0':String(-(lines.length-1)*em*1.15)):String(em*1.15));span.textContent=line;t.appendChild(span)});
-    const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=full;t.appendChild(title);
+    const shift=down?head-top:foot-bottom;
+    t.setAttribute('y',String(shift));
+    if(u)u.setAttribute('y',String((Number(u.getAttribute('y'))||0)+shift));
+    return {top:top+shift,bottom:bottom+shift,lines,showSub};
+  };
+  // A block that does not fit at the lone title's foot may sit lower, down to the inner edge.
+  const fit=(lines,showSub)=>{const base=foot;let r=place(lines,showSub);
+    if(!ok(r)&&inCard&&!down&&base<innerBottom){foot=innerBottom;r=place(lines,showSub);foot=base}
+    return r};
+  let r=fit(wrap(2),subShown);
+  if(!ok(r)&&r.showSub)r=fit(r.lines,false);
+  if(!ok(r)&&r.lines.length>1)r=fit(wrap(1),false);
+  return r};
+  t.style.fontSize='';delete t.dataset.shrunk;
+  let r=layout();
+  // A title inside its card that would be cut may shrink below the 12 px screen floor, down to
+  // 10 px on screen, before an ellipsis is used; it is marked data-shrunk. Only a size that keeps
+  // the title whole is taken; otherwise it stays at its clamped size and is cut.
+  if(inCard&&isCut(r)&&screen>.25){
+    const px0=(parseFloat(getComputedStyle(t).fontSize)||10)*screen;let whole=null;
+    for(let px=Math.floor(px0*2)/2-.5;px>=LABEL_FLOORS.shrunkTitle-1e-9;px-=.5){t.style.fontSize=`${px/screen}px`;const r2=layout();if(!isCut(r2)){whole=r2;break}}
+    if(whole){r=whole;t.dataset.shrunk='true'}else{t.style.fontSize='';r=layout()}
+  }
+  if(u&&(!r.showSub)){u.style.visibility='hidden';u.dataset.lod='hidden'}
+  // Zoomed far out (screen scale 0.25 or less), a title that still runs into its glyph is hidden.
+  delete t.dataset.lod;t.style.visibility='';
+  if(inCard&&graphic?.kind&&graphic.kind!=='none'&&screen<=.25&&r.top<topLimit-.01){t.style.visibility='hidden';t.dataset.lod='hidden'}
+  // Wrapping onto two lines is not a cut; only an ellipsis is.
+  if(r.lines.some(l=>l.endsWith('…')))t.dataset.truncated='true';
+  if(u&&r.showSub&&subLine!==subFull)u.dataset.truncated='true';
+  // Whatever is cut or hidden is read in full from the card's tooltip.
+  g.querySelector(':scope > title.card-text-full')?.remove();
+  if(t.dataset.truncated||t.dataset.lod||(u&&(u.dataset.truncated||u.dataset.lod))){
+    const tip=document.createElementNS(SVG_NS,'title');tip.setAttribute('class','card-text-full');
+    tip.textContent=subFull?`${full}\n${subFull}`:full;g.insertBefore(tip,g.firstChild);
   }
 }
+// The zoom changes the size labels are drawn at, so each card's text block is laid out again on
+// the next frame after it changes, and a waits-on caption follows the block's new foot.
+let componentLabelFitZoom=null,componentLabelFitFrame=0;
+function refitComponentLabels(){
+  componentLabelFitFrame=0;
+  const zoom=workspace.style.getPropertyValue('--zoom');if(zoom===componentLabelFitZoom)return;componentLabelFitZoom=zoom;
+  const byId=new Map(nodes.map(n=>[n.id,n]));
+  for(const g of nodesG.querySelectorAll('.node:not(.group)')){
+    applyBodyTextDetail(g);
+    const n=byId.get(g.dataset.id);if(!n||componentForm(n).dimension!==2)continue;
+    fitComponentLabels(g,n);
+    const waits=g.querySelector(':scope > text.waits-on');if(waits){waits.remove();appendComponentWaitsOn(g,n)}
+  }
+}
+if(typeof MutationObserver==='function'&&typeof workspace!=='undefined'&&workspace)
+  new MutationObserver(()=>{if(workspace.style.getPropertyValue('--zoom')!==componentLabelFitZoom&&!componentLabelFitFrame)componentLabelFitFrame=requestAnimationFrame(refitComponentLabels)})
+    .observe(workspace,{attributes:true,attributeFilter:['style']});
 // A bevel inside a rounded rectangle w x h: raised (lit from the top left) or recessed.
 function appendBevel(g,w,h,rx,mode='raised'){
   const d=SovSchematicNotation.tokens(diagram).space.bevel;w-=d*2;h-=d*2;if(w<12||h<12)return;
@@ -149,16 +286,23 @@ function appendComponentText(g,n,cfg,s){
   if(labelMode!=='none'&&label){
     const t=document.createElementNS('http://www.w3.org/2000/svg','text');
     t.setAttribute('text-anchor','middle');t.setAttribute('class',labelMode==='outside'?'outside-label':'component-label');
+    // An outside label stands on the ground, not on the card: the muted ink, as far as that ground needs.
+    if(labelMode==='outside')t.style.fill=roleInk(componentBackdropMode(n)==='none'?'--canvas-ink':'--muted','#6C6C65',componentFillGround(n));
     if(componentHostedOnWire(n)&&componentBackdropMode(n)==='none'){
       const box=componentInlineGraphicBox(n);t.setAttribute('x','0');t.setAttribute('y',String(box.y+box.h+11));
-    }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(size.h/2-10,24)))}
+    }else if(labelMode==='inside'){t.setAttribute('x','0');t.setAttribute('y',String(Math.min(componentInnerRect(n).b-10,24)))}
     else if(labelMode==='outside'){t.setAttribute('x','0');t.setAttribute('y',String(size.h/2+18))}
     // Inside the innermost line: a label never straddles a section's own boundary.
     // A container's name heads it, under its glyph; a card's sits at its foot.
     else if(componentAcceptsChildren(n)&&((p.graphic?.kind&&p.graphic.kind!=='none')||nodes.some(c=>c.parentId===n.id))){const box=componentInlineGraphicBox(n),glyph=p.graphic?.kind&&p.graphic.kind!=='none';t.setAttribute('x','0');t.setAttribute('y',String(glyph?box.y+box.h+12:box.y+10))}
-    else {const inset=componentSectionInset(n),sec=componentForm(n).section?SovSchematicData.componentSection(n):null,bevel=sec&&(sec.core?.fill||'solid')==='solid';t.setAttribute('x','0');t.setAttribute('y',String(size.h/2-(bevel?15:inset?11:8)-inset))}
+    else {const inset=componentSectionInset(n),sec=componentForm(n).section?SovSchematicData.componentSection(n):null,bevel=sec&&(sec.core?.fill||'solid')==='solid';t.setAttribute('x','0');t.setAttribute('y',String(componentInnerRect(n).b-(bevel?15:inset?11:8)-inset))}
     t.textContent=label;g.appendChild(t);
-    // A subtitle sits under its title; the title steps up a line to make room.
+    // Where the title sits before any subtitle, and which way its block grows from there: up from
+    // the foot of a card, down under a container's glyph, below the body, or under a wire's glyph.
+    {const y0=Number(t.getAttribute('y'))||0;t.dataset.y0=String(y0);
+     t.dataset.grow=labelMode==='outside'||(componentAcceptsChildren(n)&&y0<0)||(componentHostedOnWire(n)&&componentBackdropMode(n)==='none')?'down':'up'}
+    // A subtitle sits under its title; the title steps up a line to make room. On a card the two
+    // are laid out again as one block once drawn (fitComponentLabels).
     const subtitle=String(cfg.subtitle||'').trim();
     if(subtitle&&labelMode!=='none'){
       const u=document.createElementNS('http://www.w3.org/2000/svg','text');u.setAttribute('class','component-subtitle');u.setAttribute('text-anchor','middle');
@@ -194,6 +338,14 @@ function appendMarkdownLite(textEl,source,{x=0,lineHeight=11}={}){
     textEl.appendChild(line);
   });
   return lines.length;
+}
+// Below DETAIL_FLOORS.body a card's body text is too small to read and is hidden
+// (data-lod="hidden"); at or above it the text is shown again.
+function applyBodyTextDetail(g){
+  const hide=detailScreenScale()<DETAIL_FLOORS.body;
+  for(const t of g.querySelectorAll(':scope > text.internal-text')){
+    if(hide){t.style.visibility='hidden';t.dataset.lod='hidden'}else{t.style.visibility='';delete t.dataset.lod}
+  }
 }
 function appendComponentTransformHandles(g,n,cfg){
   const {w,h}=componentSize(n);
@@ -238,16 +390,36 @@ function materialFillColor(base,material){
   if(material==='panel')return mixHex([base,dark?'#3B3E3D':'#d3d4cf'],[.85,.15]);
   return base;
 }
+// The ground this region's fill moves toward its colour from: a card nested on a Component's
+// interior takes that host's own drawn fill (read back from the DOM, since hosts are rendered
+// before their children by nodeDepth), a card that is a member of a coloured group on the global
+// canvas takes that group's region fill, and any other card takes the bare canvas. Each level is
+// then the one above it moved toward its own colour, so nesting reads without a shadow.
+function componentFillGround(n){
+  const surface=n.canvasId||GLOBAL_CANVAS_ID;
+  if(surface.startsWith('canvas:component:')){
+    const host=nodesG.querySelector(`:scope > .node[data-id="${CSS.escape(surface.slice('canvas:component:'.length))}"]`);
+    const hostFill=host?host.style.getPropertyValue('--component-interior-fill').trim():'';
+    if(/^#[0-9a-f]{6}$/i.test(hostFill))return hostFill;
+    return canvasTone();
+  }
+  const group=nodes.find(g=>isGroupComponent(g)&&!isEffectivelyHidden(g)
+    &&Array.isArray(g.config?.members)&&g.config.members.includes(n.id)
+    &&Number.isInteger(g.config?.colorSlot)&&g.config.colorSlot>0);
+  if(group)return componentSurfaceFill(slotColor(group.config.colorSlot),.9);
+  return canvasTone();
+}
 function renderComponentVisual(g,n,cfg,s,signalColor){
   const p=cfg.presentation,size=p.size,form=componentForm(n);
   const boundaryColor=slotColor(cfg.colorSlot),interiorColor=slotColor(p.interiorColorSlot);
   const mixedInterior=colorEngine.diffuse?mixHex([interiorColor,signalColor],[.66,.34]):interiorColor;
+  const ground=componentFillGround(n);
   // A card is a light tint of its slot, so ink and accents carry the picture, not a gray mass;
   // a container is lighter still, a wash that holds its children without competing with them.
-  const materialFill=materialFillColor(componentSurfaceFill(mixedInterior,componentAcceptsChildren(n)?.975:.955),form.body.material);
+  const materialFill=materialFillColor(componentSurfaceFill(mixedInterior,componentAcceptsChildren(n)?.975:.955,ground),form.body.material);
   // A section fills its regions by what they are: solid is the card's material, space is a wash.
-  g.style.setProperty('--section-solid',materialFillColor(componentSurfaceFill(mixedInterior,.86),form.body.material));
-  g.style.setProperty('--section-space',componentSurfaceFill(mixedInterior,.985));
+  g.style.setProperty('--section-solid',materialFillColor(componentSurfaceFill(mixedInterior,.86,ground),form.body.material));
+  g.style.setProperty('--section-space',componentSurfaceFill(mixedInterior,.985,ground));
   g.dataset.material=form.body.material;g.dataset.dimension=String(form.dimension);
   g.style.setProperty('--component-color',boundaryColor);
   g.style.setProperty('--component-boundary-color',boundaryColor);
@@ -255,7 +427,10 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
   g.style.setProperty('--component-interior-fill',materialFill);
   // Text on the card is its colour darkened (or lightened) until it reads: WCAG's 4.5:1 for text,
   // where the outline and glyph only need 3:1.
-  g.style.setProperty('--component-text-color',ensureContrast(boundaryColor,materialFill,4.6));
+  // A faded (status opacity) body shows the fill over what is behind the card, so the ink is judged
+  // on that blend; the text itself is drawn opaque.
+  const fade=statusFade(n),seenFill=fade<1?mixHex([materialFill,ground],[fade,1-fade]):materialFill;
+  g.style.setProperty('--component-text-color',ensureContrast(boundaryColor,seenFill,TEXT_FLOOR));
   const backdrop=componentBackdropMode(n);g.dataset.backdrop=backdrop;
   if(form.dimension===0){
     const pointCfg=componentAttachmentPoint(n,'self')?.config,point=document.createElementNS('http://www.w3.org/2000/svg','circle');
@@ -266,7 +441,7 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     {const pos=componentPlacement(n).kind==='edge'?SovSchematicData.pointSectionPosition(diagram,n.id,'out'):null;
      if(pos&&pos.through!=null){const host=nodes.find(h=>h.id===pos.owner),s=SovSchematicData.componentSection(host),T=s.bands[pos.through]?.thickness||8;
        const cap=document.createElementNS('http://www.w3.org/2000/svg','rect');cap.setAttribute('class','through-mark');cap.setAttribute('x','-4.5');cap.setAttribute('y',String(-T/2-3));cap.setAttribute('width','9');cap.setAttribute('height',String(T+6));cap.setAttribute('rx','4.5');g.appendChild(cap)}}
-    point.setAttribute('class','dimensional-point-body port attachment-point'+(ends?' carries':'')+(ends>=3?' junction':''));point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(ends?(ends>=3?4.5:4):Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
+    point.setAttribute('class','dimensional-point-body port attachment-point'+(ends?' carries':'')+(ends>=3?' junction':''));point.dataset.point='self';point.dataset.port='out';point.dataset.face=pointCfg?.face||'external';point.setAttribute('r',String(ends?(ends>=3?CARRYING_POINT_RADIUS.junction:CARRYING_POINT_RADIUS.end)*markScale:Math.max(5,Math.min(12,5+form.body.thickness*.18))));point.style.setProperty('--port-color',activePortChannel(pointCfg||{}).color);g.appendChild(point);
     const display=String(cfg.label||'').trim()||componentTypeCaption(n,s);
     if(display){
       // A hosted Point inherits its host's angle; its label stays upright and below the point in world space.
@@ -286,11 +461,22 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
     // Depth is elevation, a soft shadow by nesting level (NOTATION-MODEL.md §3), never a second outline.
     const section=SovSchematicData.componentSection(n),T=SovSchematicNotation.tokens(diagram);
     const sectioned=!!(section&&section.lines.length>=2),total=sectioned?section.bands.reduce((a,b)=>a+b.thickness,0):0;
-    const body=document.createElementNS('http://www.w3.org/2000/svg','rect');body.setAttribute('class','body');body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(SovSchematicNotation.cornerRadius(T,{total,inset:0,w:size.w,h:size.h,sectioned})));
+    // The body is a rectangle, or the path of the card's declared shape (a cylinder, a parallelogram).
+    const geo=componentShapeGeometry(n),shaped=geo.shape!=='rect';
+    const body=document.createElementNS('http://www.w3.org/2000/svg',shaped?'path':'rect');body.setAttribute('class','body');
+    if(shaped){body.setAttribute('d',geo.d);body.setAttribute('stroke-linejoin','round');g.dataset.shape=geo.shape}
+    else{body.setAttribute('x',String(-size.w/2));body.setAttribute('y',String(-size.h/2));body.setAttribute('width',String(size.w));body.setAttribute('height',String(size.h));body.setAttribute('rx',String(SovSchematicNotation.cornerRadius(T,{total,inset:0,w:size.w,h:size.h,sectioned})))}
     // A thicker body stands taller: its shadow falls further.
     {const E=SovSchematicNotation.elevation(T,componentElevation(n),surfaceAppearance()),th=Math.max(0,Number(form.body.thickness)||0);
      if(E){const dy=E.dy+Math.min(4,th*.08),blur=E.blur+Math.min(3,th*.06);body.style.filter=`drop-shadow(0 ${+dy.toFixed(2)}px ${+blur.toFixed(2)}px rgba(${surfaceAppearance()==='dark'?'0,0,0':'40,36,28'},${E.opacity}))`;body.dataset.elevation=String(componentElevation(n))}}
+    // A region's outline is drawn as its kind declares (regionDash): an intake plane is an open
+    // region, dashed 6 4 in the muted ink; a plane, a container and a gate are solid, the body as drawn.
+    {const symbol=String(n.symbolId||''),kind=cfg.intake===true&&symbol==='plane'?'intake':symbol==='plane'||symbol==='gate'?symbol:form.regions?.interior?.state==='open'?'container':null,border=kind?regionDash(kind):'solid';
+     if(border==='dashed'){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4';body.style.stroke='var(--muted)'}
+     else if(border==='none')body.style.stroke='none'}
     g.appendChild(body);
+    // A cylinder's top cap: the near half of its rim, a second line in the outline colour.
+    if(geo.rim){const rim=document.createElementNS('http://www.w3.org/2000/svg','path');rim.setAttribute('class','body-rim');rim.setAttribute('d',geo.rim);rim.setAttribute('fill','none');g.appendChild(rim)}
     // A section's lines inside the outline: each line an inset boundary, each region filled as
     // what it is (solid material, or space). The outline is line L0. Corners are concentric.
     if(sectioned){
@@ -307,7 +493,7 @@ function renderComponentVisual(g,n,cfg,s,signalColor){
       body.classList.add(`fill-${section.bands[0]?.fill||'solid'}`);
     }else if(form.section&&section){body.classList.add(`fill-${section.core?.fill||'solid'}`)}
     // A solid core is bevelled, lit from the top left, so a disk reads as a body, not a blank card.
-    if(form.section&&section&&(section.core?.fill||'solid')==='solid'&&!componentAcceptsChildren(n))appendSolidBevel(g,size,section);
+    if(form.section&&section&&(section.core?.fill||'solid')==='solid'&&!componentAcceptsChildren(n)){if(shaped)appendShapeBevel(g,geo);else appendSolidBevel(g,size,section)}
     if(section&&section.lines.length>=2){}else if(form.frame.mode!=='none'||backdrop==='frame'){
       const inset=Math.max(4,Math.min(Math.min(size.w,size.h)/3,form.frame.thickness||12));const frameDepth=Math.min(14,Math.max(0,form.frame.depth*.16));
       if(frameDepth>0)appendBevel(g,size.w-inset*2,size.h-inset*2,SovSchematicNotation.cornerRadius(SovSchematicNotation.tokens(diagram),{total:inset,inset,w:size.w-inset*2,h:size.h-inset*2,sectioned:true}),'recess');
@@ -337,12 +523,19 @@ function renderJunctionDots(){
     let join=at(paths[0],0);const reach=Math.min(...paths.map(p=>p.L));
     for(let d=0;d<=reach;d+=2){const pts=paths.map(p=>at(p,d));if(pts.some(q=>Math.hypot(q.x-pts[0].x,q.y-pts[0].y)>1.2))break;join=pts[0]}
     const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('class','junction-dot');dot.dataset.port=key;
-    dot.setAttribute('cx',String(join.x));dot.setAttribute('cy',String(join.y));dot.setAttribute('r','3.6');layer.appendChild(dot);
+    dot.setAttribute('cx',String(join.x));dot.setAttribute('cy',String(join.y));dot.setAttribute('r',String(JUNCTION_DOT_RADIUS*markScale));layer.appendChild(dot);
   }
 }
 // The notation's stroke tokens, as the CSS custom properties the stylesheet draws with.
+// The tokens arrive already multiplied by the document scale (SovSchematicNotation.resolve); --scale
+// carries the number itself to the stylesheet's literal sizes, and markScale to the marks drawn here
+// (PORT_RADIUS, TERMINAL_MARK, JUNCTION_DOT_RADIUS, CARRYING_POINT_RADIUS, WIRE_HOP_RADIUS, the chevron).
+let markScale=1;
 function applyNotationTokens(){
   const T=SovSchematicNotation.tokens(diagram);
+  markScale=Number(T.scale)||1;
+  workspace.style.setProperty('--scale',String(markScale));
+  if(T.type?.screen?.max!=null)workspace.style.setProperty('--type-screen-max',`${T.type.screen.max}px`);
   for(const [k,v] of Object.entries(T.stroke))workspace.style.setProperty(`--stroke-${k}`,`${v}px`);
   // Derived weights are computed here, not with calc(): a computed calc() is not a length a reader can parse.
   workspace.style.setProperty('--stroke-structure-container',`${+(T.stroke.structure*1.2).toFixed(2)}px`);
@@ -377,8 +570,210 @@ function markerCountEl(){
   }
   return el;
 }
+// Groups (SECTION-MODEL.md "Groups (reading only)"): a region drawn behind every other node and
+// every wire on its canvas. On the global canvas they sit in their own layer just before the wire
+// layer; on a Component's interior, directly after the host, before the wires lifted there and
+// the host's children. A group is not a body: it hosts nothing and has no ports. It is selected by
+// a click on its region (the .group-hit rect, which the title lies over) and takes no drag of its
+// own: a drag from its ground pans the canvas (beginPanGesture, src/30-canvas.js).
+function groupLayer(){
+  let layer=document.getElementById('groupLayer');
+  if(!layer){layer=document.createElementNS('http://www.w3.org/2000/svg','g');layer.setAttribute('id','groupLayer');workspace.insertBefore(layer,wiresG)}
+  return layer;
+}
+function placeGroupRegion(g,n){
+  const R=SovSchematicData.groupRect(diagram,n.id,componentSize);if(!R)return;
+  const title=g.querySelector(':scope > .group-title');
+  for(const rect of g.querySelectorAll(':scope > .group-region,:scope > .group-hit,:scope > .group-outline')){rect.setAttribute('x',String(R.l));rect.setAttribute('y',String(R.t));rect.setAttribute('width',String(Math.max(1,R.w)));rect.setAttribute('height',String(Math.max(1,R.h)))}
+  if(title){title.setAttribute('x',String(R.l+12));title.setAttribute('y',String(R.t+19))}
+  const badge=g.querySelector(':scope > .marker-badge');if(badge)badge.setAttribute('transform',`translate(${R.r} ${R.t})`);
+}
+// Keeps every drawn region on its members while they move (renderWires runs on drag frames).
+function refreshGroupRegions(){
+  for(const g of workspace.querySelectorAll('.node.group')){const n=nodes.find(x=>x.id===g.dataset.id);if(n)placeGroupRegion(g,n)}
+}
+// The inset a group region carries: an inner shadow, offset 1 down and blurred 3 (a CSS blur radius,
+// so a Gaussian deviation of 1.5), at the level-1 elevation opacity of the appearance. A region
+// with no fill of its own has nothing to cast from, so it is drawn with a near-clear fill that the
+// filter lifts to a full mask and then drops; a filled region keeps its fill under the shadow.
+const REGION_INSET_FILLED='region-inset',REGION_INSET_BARE='region-inset-bare';
+function regionInsetDefs(T){
+  const NS='http://www.w3.org/2000/svg',E=SovSchematicNotation.elevation(T,1,surfaceAppearance()),opacity=E?E.opacity:0;
+  const color=surfaceAppearance()==='dark'?'#000000':'#28241C';
+  const defs=document.createElementNS(NS,'defs');
+  const make=(id,keepSource)=>{
+    const f=document.createElementNS(NS,'filter');f.setAttribute('id',id);f.setAttribute('x','0');f.setAttribute('y','0');f.setAttribute('width','1');f.setAttribute('height','1');
+    const add=(tag,attrs,parent=f)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);parent.appendChild(e);return e};
+    // The mask: the region's alpha lifted to 1 wherever it is above a hair, then inverted.
+    const lift=add('feComponentTransfer',{in:'SourceAlpha',result:'mask'});add('feFuncA',{type:'linear',slope:'1000',intercept:'0'},lift);
+    const inv=add('feComponentTransfer',{in:'mask',result:'outside'});add('feFuncA',{type:'table',tableValues:'1 0'},inv);
+    add('feOffset',{in:'outside',dx:'0',dy:'1',result:'shifted'});
+    add('feGaussianBlur',{in:'shifted',stdDeviation:'1.5',result:'soft'});
+    add('feFlood',{'flood-color':color,'flood-opacity':String(opacity),result:'ink'});
+    add('feComposite',{in:'ink',in2:'soft',operator:'in',result:'shadow'});
+    add('feComposite',{in:'shadow',in2:'mask',operator:'in',result:'inset'});
+    const merge=add('feMerge',{});
+    if(keepSource)add('feMergeNode',{in:'SourceGraphic'},merge);
+    add('feMergeNode',{in:'inset'},merge);
+    defs.appendChild(f);
+  };
+  make(REGION_INSET_FILLED,true);make(REGION_INSET_BARE,false);
+  return defs;
+}
+// The dash a region kind's border is drawn in (NOTATION-MODEL.md "Kinds"): none, solid or dashed, read
+// from the region kinds the document's notation declares. The five region kinds are the schematic
+// notation's, so a notation that does not extend it and declares none of its own draws them as it does.
+function regionDash(id){
+  const N=SovSchematicNotation,find=notation=>N.kindsOf(notation,'region').find(k=>k.id===id);
+  return (find(activeNotation())||find(N.BUILTIN.schematic))?.dash||'solid';
+}
+function renderGroups(markers=markersById()){
+  const layer=groupLayer();layer.replaceChildren();
+  const T=SovSchematicNotation.tokens(diagram);
+  layer.appendChild(regionInsetDefs(T));
+  const borders={group:regionDash('group'),intake:regionDash('intake')};
+  for(const n of nodes){
+    if(!isGroupComponent(n)||isEffectivelyHidden(n))continue;
+    const cfg=n.config||{},surface=n.canvasId||GLOBAL_CANVAS_ID,editor=entityEditorState(n);
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','node group'+(selectedComponentIds.has(n.id)?' selected':''));g.dataset.id=n.id;g.dataset.canvasId=surface;g.style.opacity=String(editor.opacity);
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');rect.setAttribute('class','group-region');
+    rect.setAttribute('rx',String(T.radius?.card??10));
+    // Slot 0 is the colour every record is given, so only a chosen slot tints the region.
+    const slot=Number.isInteger(cfg.colorSlot)&&cfg.colorSlot>0?cfg.colorSlot:null;
+    const regionFill=slot!=null?componentSurfaceFill(slotColor(slot),.9):null;
+    rect.style.fill=regionFill??'none';rect.style.fillOpacity='1';
+    // A group is reading only: no outline, a soft inset (an inner shadow, an SVG filter so a picture
+    // carries it). An intake group is an open region: a dashed outline in the muted ink. Which of the
+    // three a region draws is its kind's declared dash (regionDash): group none, intake dashed.
+    rect.style.pointerEvents='none';rect.style.stroke='none';rect.style.strokeWidth='0';
+    if(slot==null){rect.style.fill='#000000';rect.style.fillOpacity='0.004'}
+    rect.style.filter=`url(#${slot!=null?REGION_INSET_FILLED:REGION_INSET_BARE})`;
+    g.appendChild(rect);
+    // The hit area: the region's own rect takes no pointer events, so a rect of its own, styled in
+    // styles/app.css, takes the click that selects the group and draws the selected outline.
+    const hit=document.createElementNS('http://www.w3.org/2000/svg','rect');hit.setAttribute('class','group-hit');hit.setAttribute('rx',String(T.radius?.card??10));
+    g.appendChild(hit);
+    const border=borders[cfg.intake===true?'intake':'group'];
+    if(border!=='none'){
+      const edge=document.createElementNS('http://www.w3.org/2000/svg','rect');edge.setAttribute('class','group-outline');edge.setAttribute('rx',String(T.radius?.card??10));
+      edge.style.fill='none';edge.style.stroke='var(--muted)';edge.style.strokeWidth='var(--stroke-structure)';
+      if(border==='dashed'){edge.style.strokeDasharray='6 4';edge.setAttribute('stroke-dasharray','6 4')}
+      edge.style.pointerEvents='none';
+      g.appendChild(edge);
+    }
+    const label=String(cfg.label||'').trim();
+    if(label){const title=document.createElementNS('http://www.w3.org/2000/svg','text');title.setAttribute('class','group-title');title.dataset.role='title';
+      // The muted ink, darkened (or lightened) only as far as text needs to read on the region: 4.5:1, as card text.
+      const muted=(getComputedStyle(workspace).getPropertyValue('--muted')||'').trim(),ink=/^#[0-9a-f]{6}$/i.test(muted)?muted:'#6C6C65';
+      title.style.fill=ensureContrast(ink,regionFill??canvasTone(),4.6);title.textContent=label;g.appendChild(title)}
+    {const own=markers.get(n.id);if(own)appendMarkerBadge(g,own,0,0)}
+    placeGroupRegion(g,n);
+    const host=surface.startsWith('canvas:component:')?nodesG.querySelector(`:scope > .node[data-id="${CSS.escape(surface.slice('canvas:component:'.length))}"]`):null;
+    if(host){let at=host;while(at.nextElementSibling?.classList.contains('group'))at=at.nextElementSibling;at.after(g)}
+    else layer.appendChild(g);
+  }
+}
+// Status and waits-on (NOTATION-MODEL.md "Statuses"). A record's status is the entry its notation
+// declares under that id; there is no built-in list, so an undeclared one draws nothing (validation
+// reports it). Every style is an attribute or an inline style, so a picture carries it.
+function declaredStatus(record){
+  const id=record?.config?.status;if(typeof id!=='string')return null;
+  return (activeNotation().statuses||[]).find(s=>s&&s.id===id)||null;
+}
+function statusTitle(status){return String(status?.title||status?.id||'')}
+// 'Bdo, rule R-29, decision D1': each entry's label, or else its kind and id.
+function waitsOnList(list){return Array.isArray(list)?list.filter(w=>w&&typeof w==='object').map(w=>String(w.label||'').trim()||`${w.kind} ${w.id}`).join(', '):''}
+const CAPTION_STYLE=`font-size:calc(clamp(${LABEL_FLOORS.general}px,var(--type-caption-size,9px) * var(--zoom,1),calc(16px * var(--scale,1))) / var(--zoom,1));font-weight:var(--type-caption-weight,600)`;
+// A label's ink is its role colour moved (darker in light, lighter in dark) only as far as TEXT_FLOOR
+// against the colour actually behind it: the ground a card stands on, a region's fill, or the canvas.
+const TEXT_FLOOR=4.6;
+function roleInk(name,fallback,ground){const v=(getComputedStyle(workspace).getPropertyValue(name)||'').trim();return ensureContrast(/^#[0-9a-f]{6}$/i.test(v)?v:fallback,ground,TEXT_FLOOR)}
+function statusInk(ground=canvasTone()){return roleInk('--muted','#6C6C65',ground)}
+// The opacity a card's status declares (1 when none): drawn on the card's body, glyph, leads, ports
+// and marks, never on its text.
+function statusFade(n){const st=declaredStatus(n),o=st?.opacity;return typeof o==='number'&&Number.isFinite(o)&&o>=0&&o<1?o:1}
+function applyStatusFade(g,n){
+  const fade=statusFade(n);if(fade>=1||componentForm(n).dimension!==2)return;
+  for(const el of g.children){
+    if(el.localName==='text'||el.classList.contains('status-chip')||el.classList.contains('card-badge'))continue;
+    el.style.opacity=String((parseFloat(getComputedStyle(el).opacity)||1)*fade);
+  }
+}
+// A status chip's ink on a solid tone: near-black or white, whichever has the higher WCAG contrast.
+function statusChipInk(tone){return contrastRatio(tone,'#141414')>=contrastRatio(tone,'#FFFFFF')?'#141414':'#FFFFFF'}
+// A card's status: a chip in its top-right corner, 6 in from both edges, holding the status title in
+// the caption role; a dashed outline and an opacity when the status declares them. A status that
+// declares a tone (safe, alert, danger) is a solid pill in that status tone, its glyph before the title.
+function appendComponentStatus(g,n){
+  const st=declaredStatus(n);if(!st||componentForm(n).dimension!==2)return;
+  // The caption role at its base size: the chip is part of the card and scales with it.
+  const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
+  const cfg=componentConfig(n),edge=g.style.getPropertyValue('--component-boundary-color').trim()||slotColor(cfg.colorSlot),fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
+  // The chip's own fill is its edge colour at .16 over the card fill, itself faded over the ground.
+  const fade=statusFade(n),seen=fade<1?mixHex([fill,componentFillGround(n)],[fade,1-fade]):fill,chipFill=mixHex([edge,seen],[.16,.84]);
+  const tone=['safe','alert','danger'].includes(st.tone)?statusTone(st.tone):null,glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'';
+  const title=statusTitle(st),text=glyph?`${glyph} ${title}`:title,ch=Math.round(px*1.5);
+  // The corner is the inner rectangle's: the card's own, or inside what a declared shape cuts away.
+  const I=componentInnerRect(n),cw=tone?Math.ceil(text.length*px*.6+px*1.4):Math.ceil(title.length*px*.6+px),x=I.r-6-cw,y=I.t+6;
+  const chip=document.createElementNS('http://www.w3.org/2000/svg','g');chip.setAttribute('class','status-chip');chip.dataset.status=st.id;
+  const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  r.setAttribute('x',String(x));r.setAttribute('y',String(y));r.setAttribute('width',String(cw));r.setAttribute('height',String(ch));r.setAttribute('rx',String(ch/2));
+  r.setAttribute('style',tone?`fill:${tone};fill-opacity:1;stroke:none`:`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.dataset.role='caption';
+  t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
+  t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${tone?statusChipInk(tone):ensureContrast(edge,chipFill,TEXT_FLOOR)};stroke:none;pointer-events:none`);t.textContent=text;chip.appendChild(t);
+  g.appendChild(chip);
+  if(st.outline==='dashed')for(const body of g.querySelectorAll(':scope > .body,:scope > .body-rim')){body.setAttribute('stroke-dasharray','6 4');body.style.strokeDasharray='6 4'}
+}
+// A card's badges (DATA-FORMATS.md "Badges"): the status chip's shape without a status's meaning, in a
+// row from the card's top-left corner. A badge that would come within 4 of the status chip or within 6
+// of the card's right edge is not drawn; the last chip drawn then reads +N and lists the rest.
+function appendComponentBadges(g,n){
+  const list=Array.isArray(n?.config?.badges)?n.config.badges.filter(b=>b&&typeof b.label==='string'&&b.label.trim()):[];
+  if(!list.length||componentForm(n).dimension!==2)return;
+  const {w,h}=componentSize(n),T=SovSchematicNotation.tokens(diagram),px=Number(T.type?.caption?.size)||9,weight=T.type?.caption?.weight||600;
+  const I=componentInnerRect(n),ch=Math.round(px*1.5),y=I.t+6,fill=g.style.getPropertyValue('--component-interior-fill').trim()||'#FFFFFF';
+  const widthOf=text=>Math.ceil(text.length*px*.6+px);
+  // The right limit: the card's right edge less 6, or 4 short of the status chip's left edge.
+  let limit=I.r-6;
+  const st=declaredStatus(n);
+  if(st){
+    const tone=['safe','alert','danger'].includes(st.tone),glyph=tone&&typeof st.glyph==='string'?st.glyph.trim():'',title=statusTitle(st);
+    limit=Math.min(limit,I.r-6-(tone?Math.ceil((glyph?`${glyph} ${title}`:title).length*px*.6+px*1.4):widthOf(title))-4);
+  }
+  const labels=list.map(b=>b.label.trim());
+  const place=(count,more)=>{const xs=[];let x=I.l+6;for(let i=0;i<count;i++){const cw=widthOf(i===count-1&&more?`+${labels.length-count+1}`:labels[i]);if(x+cw>limit)return null;xs.push([x,cw]);x+=cw+4}return xs};
+  let shown=labels.length,more=false,spots=place(shown,false);
+  if(!spots){more=true;for(shown=labels.length-1;shown>=1;shown--){spots=place(shown,true);if(spots)break}}
+  if(!spots)return;
+  const svgNS='http://www.w3.org/2000/svg';
+  spots.forEach(([x,cw],i)=>{
+    const isMore=more&&i===shown-1,badge=list[i],edge=slotColor(badge.colorSlot??0),chipFill=mixHex([edge,fill],[.16,.84]);
+    const text=isMore?`+${labels.length-shown+1}`:labels[i];
+    const chip=document.createElementNS(svgNS,'g');chip.setAttribute('class','card-badge');chip.dataset.badgeIndex=String(i);
+    if(isMore){chip.dataset.badgeMore='true';const t=document.createElementNS(svgNS,'title');t.textContent=labels.slice(shown-1).join(', ');chip.appendChild(t)}
+    const r=document.createElementNS(svgNS,'rect');
+    r.setAttribute('x',String(x));r.setAttribute('y',String(y));r.setAttribute('width',String(cw));r.setAttribute('height',String(ch));r.setAttribute('rx',String(ch/2));
+    r.setAttribute('style',`fill:${edge};fill-opacity:.16;stroke:${edge};stroke-width:1`);chip.appendChild(r);
+    const t=document.createElementNS(svgNS,'text');t.dataset.role='caption';
+    t.setAttribute('x',String(x+cw/2));t.setAttribute('y',String(y+ch/2));t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
+    t.setAttribute('style',`font-size:${px}px;font-weight:${weight};fill:${ensureContrast(edge,chipFill,TEXT_FLOOR)};stroke:none;pointer-events:none`);t.textContent=text;chip.appendChild(t);
+    g.appendChild(chip);
+  });
+}
+// What a card waits on, under it and below any outside label: 'Waits on Bdo, rule R-29'.
+function appendComponentWaitsOn(g,n){
+  const list=waitsOnList(n?.config?.waitsOn);if(!list)return;
+  const {h}=componentSize(n);let y=h/2+18;
+  for(const el of g.querySelectorAll(':scope > text.outside-label,:scope > text.component-subtitle')){if(el.dataset.lod==='hidden')continue;try{const b=el.getBBox();if(b.height)y=Math.max(y,b.y+b.height+14)}catch(_){}}
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('class','waits-on');t.dataset.role='caption';
+  t.setAttribute('x','0');t.setAttribute('y',String(y));t.setAttribute('text-anchor','middle');
+  t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk(componentFillGround(n))};stroke:none;pointer-events:none`);t.textContent='Waits on '+list;g.appendChild(t);
+}
 function render(){
   applyNotationTokens();
+  componentLabelFitZoom=workspace.style.getPropertyValue('--zoom'); // the cards drawn below are fitted at this zoom
   if(typeof buildSymbolPalette==='function')buildSymbolPalette();
   syncAllNodeBoundaryContext();
   const signalState=computeSignalState();
@@ -386,15 +781,20 @@ function render(){
   const markers=markersById();
   nodesG.innerHTML='';
   const unplacedIds=new Set(typeof layoutUnplacedIds==='function'?layoutUnplacedIds():[]);
+  let undrawnCards=0;
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
-    if(isEffectivelyHidden(n))return;
+    if(isEffectivelyHidden(n)||isGroupComponent(n))return; // groups are drawn by renderGroups, behind
+    // A card whose drawn position is not finite is not drawn, and is counted. A card hosted on a wire or
+    // a component takes its place from its host, so its stored x and y are not the rule.
+    if(!(Number.isFinite(n.x)&&Number.isFinite(n.y))&&!(componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n))){undrawnCards++;return}
     const s=symbolOf(n.symbolId),cfg=componentConfig(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),editor=entityEditorState(n);
     {const form=componentForm(n),backdrop=componentBackdropMode(n);g.setAttribute('class','node'+(unplacedIds.has(n.id)?' unplaced':'')+(n.symbolId==='blank'?' blank':'')+(selectedComponentIds.has(n.id)?' selected':'')+(componentAcceptsChildren(n)?' is-container':'')+(form.frame.mode==='shell'?' form-shell':'')+(form.frame.mode==='frame'?' form-frame':'')+(n.parentId?' nested-child':'')+(componentHostedOnWire(n)?' wire-hosted':'')+(backdrop==='none'?' backdrop-none':'')+(editor.pinned?' is-pinned':'')+(editor.locked?' is-locked':''));}
-    g.style.opacity=String(editor.opacity);
+    // An unplaced card keeps its fade (.42): the inline opacity would otherwise cover the class's.
+    g.style.opacity=String(unplacedIds.has(n.id)?editor.opacity*.42:editor.opacity);
     g.dataset.id=n.id;if(n.parentId)g.dataset.parentId=n.parentId;
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
-    renderComponentVisual(g,n,cfg,s,signalColor);
+    renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);appendComponentBadges(g,n);
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
@@ -404,7 +804,7 @@ function render(){
       hit.setAttribute('class','port-hit attachment-point-hit');hit.dataset.point=pointId;hit.dataset.side=point.compatId;hit.dataset.canvasIds=portExposedCanvasIds(n,pointId).join(' ');hit.setAttribute('cx',localX);hit.setAttribute('cy',localY);hit.setAttribute('r','16');
       let vis=null;const selfPoint=componentForm(n).dimension===0&&pointId==='self';
       if(selfPoint){vis=g.querySelector('.dimensional-point-body');if(vis){vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}}
-      else{vis=document.createElementNS('http://www.w3.org/2000/svg','circle');vis.setAttribute('class','port attachment-point');vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.setAttribute('cx',localX);vis.setAttribute('cy',localY);vis.setAttribute('r','5');vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}
+      else{vis=document.createElementNS('http://www.w3.org/2000/svg','circle');vis.setAttribute('class','port attachment-point');vis.dataset.point=pointId;vis.dataset.port=point.compatId;vis.dataset.face=pcfg.face||'external';vis.setAttribute('cx',localX);vis.setAttribute('cy',localY);vis.setAttribute('r',String(PORT_RADIUS*markScale));vis.style.setProperty('--port-color',activePortChannel(pcfg).color)}
       {const pos=componentForm(n).dimension===2?SovSchematicData.pointSectionPosition(diagram,n.id,point.compatId):null;
        if(pos&&pos.through!=null){const s=SovSchematicData.componentSection(n),T=s.bands[pos.through]?.thickness||8,side=point.side,vertical=side==='left'||side==='right';
          const cap=document.createElementNS('http://www.w3.org/2000/svg','rect');cap.setAttribute('class','through-mark');
@@ -423,9 +823,13 @@ function render(){
         portLabel.setAttribute('x',localX+offsets.dx);portLabel.setAttribute('y',localY+offsets.dy);portLabel.setAttribute('text-anchor',offsets.anchor);portLabel.textContent=pcfg.label;g.appendChild(portLabel);
       }
     }
-    appendComponentLeads(g,n);appendTerminalMarks(g,n);
-    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n);
+    appendComponentLeads(g,n);appendShapeLeads(g,n);appendTerminalMarks(g,n);
+    bindNode(g,n); nodesG.appendChild(g); fitComponentLabels(g,n); applyBodyTextDetail(g); appendComponentWaitsOn(g,n); applyStatusFade(g,n);
   });
+  if(undrawnCards)workspace.setAttribute('data-undrawn-cards',String(undrawnCards));else workspace.removeAttribute('data-undrawn-cards');
+  renderGroups(markers);
+  // Buses (src/41-buses.js): bands in the group layer, after the group regions, behind every wire.
+  if(typeof renderBuses==='function')renderBuses(groupLayer());
   renderWires(signalState,markers);
   {const total=[...markers.values()].reduce((sum,list)=>sum+list.length,0),countEl=markerCountEl();if(countEl)countEl.textContent=total?`${total} marker${total===1?'':'s'}`:''}
   renderJunctionDots();
@@ -485,56 +889,84 @@ function stableArrowPoint(path,targetD,minD,maxD){
     if(!fallback || bend<fallback.bend) fallback={q,bend};
     if(bend<=8) return q;
   }
-  return fallback?.q||pointAngleAtDistance(path,targetD,3);
+  return fallback?.q||null;
 }
-function appendChevronAt(group,q,reverse=false,className='flow-chevron'){
+// A direction mark: the chevron, or, for a wire kind whose arrowhead is filled, the closed triangle
+// through the chevron's three points, filled with the wire's stroke colour. `scale` multiplies the
+// points of a filled mark only (2 on a heavy wire: 7 by 5 becomes 14 by 10); the chevron keeps its size.
+// The inline transform repeats the attribute's pose and scales the mark about its tip by --mark-floor.
+function appendChevronAt(group,q,reverse=false,className='flow-chevron',filled=false,scale=1){
   const c=document.createElementNS('http://www.w3.org/2000/svg','path');
   c.setAttribute('class',className);
-  c.setAttribute('d','M -7 -5 L 0 0 L -7 5');
+  const m=markScale*(filled?scale:1);
+  c.setAttribute('d',`M ${-7*m} ${-5*m} L 0 0 L ${-7*m} ${5*m}`+(filled?' Z':''));
+  if(filled){c.style.fill='var(--wire-ink,var(--canvas-ink))';c.dataset.arrowhead='filled'}
   c.setAttribute('transform',`translate(${q.x} ${q.y}) rotate(${q.angle+(reverse?180:0)})`);
+  c.style.transform=`translate(${q.x}px,${q.y}px) rotate(${q.angle+(reverse?180:0)}deg) scale(var(--mark-floor,1))`;
   group.appendChild(c);
 }
+// Direction marks are spaced by length: one per ARROW_SPACING of wire, at most ARROW_MAX, each at the
+// middle of a different straight leg (longest first); a leg longer than ARROW_SPACING may hold more.
+const ARROW_SPACING=480,ARROW_MAX=4,ARROW_BEND_CLEAR=8,ARROW_DUPLEX_GAP=34;
+// The straight legs of a drawn path as distance ranges along it; a hop's arc belongs to its leg.
+function arrowLegs(path){
+  const legs=[];let x=0,y=0,dist=0;
+  for(const m of (path.getAttribute('d')||'').matchAll(/([MHVLA])([^MHVLA]*)/g)){
+    const n=m[2].trim().split(/[\s,]+/).filter(Boolean).map(Number),c=m[1];
+    let axis,len;
+    if(c==='M'){x=n[0];y=n[1];continue}
+    if(c==='H'){axis='h';len=Math.abs(n[0]-x);x=n[0]}
+    else if(c==='V'){axis='v';len=Math.abs(n[0]-y);y=n[0]}
+    else if(c==='L'){axis='d';len=Math.hypot(n[0]-x,n[1]-y);x=n[0];y=n[1]}
+    else{axis=legs.at(-1)?.axis||'d';len=Math.PI*n[0];x=n[5];y=n[6]}
+    const last=legs.at(-1);
+    if(last&&axis===last.axis&&axis!=='d')last.e=dist+len;else legs.push({s:dist,e:dist+len,axis});
+    dist+=len;
+  }
+  return legs;
+}
+// Where the marks aim: the middle of each chosen leg, or an even spacing on a leg longer than ARROW_SPACING.
 function adaptiveArrowDistances(path,duplex=false){
   const L=path.getTotalLength();
   // A short directed wire still says which way it runs: one mark at its middle.
   if(L<72) return L>=20?[L/2]:[];
-
-  // Keep arrows away from terminals and scale density with actual wire length.
-  const margin=Math.min(46,Math.max(26,L*.16));
-  const usable=L-margin*2;
-  if(usable<=8) return [];
-
-  let count;
-  if(L<150) count=1;
-  else if(L<310) count=2;
-  else count=Math.min(7,Math.max(2,Math.round(L/165)));
-
-  // Duplex gets the same total visual density, split between directions,
-  // rather than doubling the number of marks.
-  const distances=[];
-  for(let i=0;i<count;i++){
-    distances.push(margin + usable*((i+1)/(count+1)));
+  const need=2*ARROW_BEND_CLEAR+(duplex?ARROW_DUPLEX_GAP:0);
+  const legs=arrowLegs(path).filter(g=>g.e-g.s>=need).sort((p,q)=>(q.e-q.s)-(p.e-p.s)||p.s-q.s);
+  if(!legs.length)return [];
+  // One mark up to 480, and one more for each further 480 that fills (a 520 wire has one, a 1200 wire three).
+  const count=Math.min(ARROW_MAX,Math.max(1,Math.round(L/ARROW_SPACING)));
+  const per=legs.map((g,i)=>i<count?1:0);
+  for(let extra=count-Math.min(count,legs.length),i=0;extra>0&&i<count*legs.length;i++){
+    const g=legs[i%legs.length];if(g.e-g.s>ARROW_SPACING){per[i%legs.length]++;extra--}
   }
-  return distances;
+  const out=[];
+  legs.forEach((g,i)=>{for(let k=1;k<=per[i];k++)out.push(g.s+(g.e-g.s)*k/(per[i]+1))});
+  return out.sort((a,b)=>a-b);
 }
 function arrowPosesForPath(path,duplex=false){
   const L=path.getTotalLength();
   const distances=adaptiveArrowDistances(path,duplex);
   if(!distances.length)return [];
-  const margin=Math.min(L/2,Math.min(46,Math.max(26,L*.16)));
-  const poses=[];
-  distances.forEach((d,i)=>{
-    const q=stableArrowPoint(path,d,margin,L-margin);
-    const reverse=duplex ? (i%2===1) : false;
-    poses.push({q,reverse});
-  });
-
-  // A one-arrow duplex wire still needs to communicate both directions.
-  if(duplex && poses.length===1){
-    poses.push({
-      q:stableArrowPoint(path,Math.min(L-margin,distances[0]+34),margin,L-margin),
-      reverse:true
-    });
+  const legs=arrowLegs(path),poses=[];
+  // A short wire puts its one mark at the middle of its longest leg.
+  if(L<72&&legs.length){const g=legs.reduce((a,b)=>(b.e-b.s)>(a.e-a.s)?b:a);distances[0]=(g.s+g.e)/2}
+  const gap=duplex?ARROW_DUPLEX_GAP:0;
+  for(const t of distances){
+    const g=legs.find(l=>t>=l.s&&t<=l.e);if(!g)continue;
+    const lo=g.s+ARROW_BEND_CLEAR,hi=g.e-ARROW_BEND_CLEAR-gap;if(lo>hi)continue;
+    // Slide along the leg to clear every hop and junction; a leg with no clear place is skipped.
+    const q=stableArrowPoint(path,t-gap/2,lo,hi);if(!q)continue;
+    if(!duplex){poses.push({q,reverse:false});continue}
+    const r=pointAngleAtDistance(path,q.d+gap,3);
+    if(arrowKeepClear.some(c=>Math.hypot(c.x-r.x,c.y-r.y)<ARROW_CROSSING_CLEAR))continue;
+    poses.push({q,reverse:false},{q:r,reverse:true});
+  }
+  // A wire whose legs are all too short or crowded still says which way it runs.
+  if(!poses.length&&L>=20){
+    const margin=Math.min(L/2,Math.min(46,Math.max(26,L*.16)));
+    const at=d=>stableArrowPoint(path,d,margin,L-margin)||pointAngleAtDistance(path,d,3);
+    poses.push({q:at(L/2),reverse:false});
+    if(duplex)poses.push({q:at(Math.min(L-margin,L/2+ARROW_DUPLEX_GAP)),reverse:true});
   }
   return poses;
 }
@@ -573,16 +1005,26 @@ function appendWirePacket(group,motionPath,pathLength,bodyColor,boundaryColor,di
     packet.appendChild(label);
   }
 
-  const duration=packetTravelSeconds(pathLength)/Math.max(.1,Number(rate)||1);
-
-  // Packet skin is identity, not field diffusion.
-  // It stays constant across the trip while the carrier/wire field may blend.
-  const motion=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
-  motion.setAttribute('path',motionPath);
-  motion.setAttribute('dur',`${duration}s`);
-  motion.setAttribute('repeatCount','indefinite');
-  motion.setAttribute('calcMode','linear');
-  packet.appendChild(motion);
+  // A resolved rate of exactly 0 (the document's own rate, issue #40) draws the packet at its
+  // start point and stops there: no animateMotion element, so `Number(rate)||1` - which would
+  // otherwise read 0 as falsy and silently pick 1 - never gets the chance to erase a pause. Any
+  // other rate, including a small positive one, keeps today's duration math and its .1 floor.
+  if(Number(rate)===0){
+    const startPoint=document.createElementNS('http://www.w3.org/2000/svg','path');
+    startPoint.setAttribute('d',motionPath);
+    const start=startPoint.getPointAtLength(0);
+    packet.setAttribute('transform',`translate(${start.x} ${start.y})`);
+  }else{
+    const duration=packetTravelSeconds(pathLength)/Math.max(.1,Number(rate)||1);
+    // Packet skin is identity, not field diffusion.
+    // It stays constant across the trip while the carrier/wire field may blend.
+    const motion=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
+    motion.setAttribute('path',motionPath);
+    motion.setAttribute('dur',`${duration}s`);
+    motion.setAttribute('repeatCount','indefinite');
+    motion.setAttribute('calcMode','linear');
+    packet.appendChild(motion);
+  }
   group.appendChild(packet);
   return packet;
 }
@@ -621,9 +1063,14 @@ function renderPacketsForWire(group,cfg,points,signal,pathLength,w){
 // A route drawn with a hop at each crossing it makes over an earlier wire: a half circle that
 // lifts it over the other line, so a crossing never reads as a junction (NOTATION-MODEL.md).
 const WIRE_HOP_RADIUS=6.5;
+// The marks drawn on cards and wires, at scale 1; each is multiplied by markScale where it is drawn.
+// PORT_RADIUS: the visible port circle. TERMINAL_MARK: the bar where a wire meets a card.
+// JUNCTION_DOT_RADIUS: the dot where wires sharing a point part. CARRYING_POINT_RADIUS: the body of a
+// Point that carries wires (one or two ends; three or more is a junction).
+const PORT_RADIUS=5,TERMINAL_MARK=Object.freeze({len:12,th:3.2}),JUNCTION_DOT_RADIUS=3.6,CARRYING_POINT_RADIUS=Object.freeze({end:4,junction:4.5});
 function pathWithHops(points,hops){
   const pts=normalizePoints(points);if(!hops?.length||pts.length<2)return pathD(pts);
-  const r=WIRE_HOP_RADIUS;let d=`M ${pts[0].x} ${pts[0].y}`;
+  const r=WIRE_HOP_RADIUS*markScale;let d=`M ${pts[0].x} ${pts[0].y}`;
   for(let i=1;i<pts.length;i++){
     const a=pts[i-1],b=pts[i],h=a.y===b.y,dir=h?Math.sign(b.x-a.x):Math.sign(b.y-a.y);
     const along=c=>h?(c.x-a.x)*dir:(c.y-a.y)*dir,len=h?Math.abs(b.x-a.x):Math.abs(b.y-a.y);
@@ -640,8 +1087,8 @@ function pathWithHops(points,hops){
   }
   return d;
 }
-function renderArrowPoses(group,poses,className='flow-chevron'){
-  for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className);
+function renderArrowPoses(group,poses,className='flow-chevron',filled=false,scale=1){
+  for(const pose of poses||[]) appendChevronAt(group,pose.q,pose.reverse,className,filled,scale);
 }
 
 function focusWireVisual(i){
@@ -652,23 +1099,76 @@ function clearWireVisualFocus(){
   document.querySelectorAll('.wire-group').forEach(g=>g.classList.remove('muted'));
   if(!(typeof selected==='string'&&selected.startsWith('wire:'))) clearEndpointFocus();
 }
+// Of the hit paths under the pointer, the wire whose drawn line is nearest it; fallback when none qualifies.
+function nearestWireIndexAt(clientX,clientY,fallback){
+  const p=svgPoint(clientX,clientY);
+  let best=fallback,bestD=Infinity;
+  for(const el of document.elementsFromPoint(clientX,clientY)){
+    if(!el.classList||!el.classList.contains('wire-hit')) continue;
+    const g=el.closest('.wire-group'); if(!g) continue;
+    const idx=Number(g.dataset.wireIndex);
+    const pts=drawnRoutePoints.get(idx); if(!pts||!pts.length) continue;
+    let d=Infinity;
+    if(pts.length===1) d=Math.hypot(p.x-pts[0].x,p.y-pts[0].y);
+    for(let k=0;k+1<pts.length;k++){
+      const a=pts[k],c=pts[k+1],dx=c.x-a.x,dy=c.y-a.y,l2=dx*dx+dy*dy;
+      const t=l2?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/l2)):0;
+      d=Math.min(d,Math.hypot(p.x-(a.x+t*dx),p.y-(a.y+t*dy)));
+    }
+    if(d<bestD){bestD=d;best=idx}
+  }
+  return best;
+}
 // Projection-only geometry: keep the exact points used to paint each path. Label
 // layout never asks the router for another route or writes into the document.
 const wireLabelPaths=new Map();
+// The two lines a caption wraps onto: the word break whose wider line is narrowest, the earlier
+// break on a tie; null when the caption has no word break. The label is left holding the caption.
+function wireLabelLines(label,caption){
+  let best=null;
+  for(const gap of caption.matchAll(/\s+/g)){
+    const first=caption.slice(0,gap.index),second=caption.slice(gap.index+gap[0].length);
+    if(!first||!second)continue;
+    label.textContent=first;let wide=label.getComputedTextLength();
+    label.textContent=second;wide=Math.max(wide,label.getComputedTextLength());
+    if(!best||wide<best.wide-1e-6)best={wide,lines:[first,second]};
+  }
+  label.textContent=caption;
+  return best?best.lines:null;
+}
 function placeWireLabels(){
+  // Below DETAIL_FLOORS.secondary a wire's label is hidden (data-lod="hidden"); bus labels, port
+  // labels, end tags and reciprocity marks stay.
+  {const hide=detailScreenScale()<DETAIL_FLOORS.secondary;
+   for(const label of workspace.querySelectorAll('.connection-label')){
+     if(hide){label.style.visibility='hidden';label.dataset.lod='hidden'}else{label.style.visibility='';delete label.dataset.lod}
+   }}
   const matrix=workspace.getScreenCTM();if(!matrix)return;
-  const inverse=matrix.inverse(),clearance=6;
+  // LAYOUT-MODEL.md "Wire labels": the clearance round a label and the step it slides by, in screen pixels.
+  const inverse=matrix.inverse(),clearance=6,step=12;
   const screen=p=>new DOMPoint(p.x,p.y).matrixTransform(matrix);
+  const shown=new Map();
   const visible=el=>{
-    for(let cur=el;cur&&cur!==workspace;cur=cur.parentElement){
-      const style=getComputedStyle(cur);
-      if(style.display==='none'||style.visibility==='hidden'||Number(style.opacity)===0)return false;
-    }
-    return true;
+    if(!el||el===workspace)return true;
+    if(shown.has(el))return shown.get(el);
+    const style=getComputedStyle(el);
+    const ok=style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0&&visible(el.parentElement);
+    shown.set(el,ok);return ok;
   };
   const rect=el=>{const r=el.getBoundingClientRect();return {l:r.left,r:r.right,t:r.top,b:r.bottom}};
   const intersects=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
-  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.component-label,.outside-label,.internal-text')].filter(visible).map(rect);
+  // What a label must stay clear of: card bodies, status chips, marker badges and every other text
+  // (titles, subtitles, port and bus labels, group titles, end tags). Wire labels join as they are placed.
+  const obstacles=[...workspace.querySelectorAll('.node:not(.is-container)>.body,.node:not(.is-container)>.dimensional-point-body,.node:not(.is-container)>.dimensional-path-body,.node:not(.is-container)>.custom-graphic,.status-chip,.marker-badge,#groupLayer text,#nodes text,#wires text')]
+    .filter(el=>!el.classList.contains('connection-label')&&!el.closest('.wire-packet')&&visible(el)).map(rect).filter(box=>box.r>box.l||box.b>box.t);
+  // A card drawn on a wire has no body shape; its bounds are the body the layout metrics measure.
+  for(const el of workspace.querySelectorAll('.node.wire-hosted:not(.is-container)')){
+    const n=nodes.find(x=>x.id===el.dataset.id);if(!n||componentForm(n).dimension!==2||!visible(el))continue;
+    const R=componentBounds(n),a=screen({x:R.l,y:R.t}),b=screen({x:R.r,y:R.b});
+    obstacles.push({l:Math.min(a.x,b.x),r:Math.max(a.x,b.x),t:Math.min(a.y,b.y),b:Math.max(a.y,b.y)});
+  }
+  // A container is no obstacle, but its border is: a label lies wholly inside it or wholly outside.
+  const frames=[...workspace.querySelectorAll('.node.is-container>.body')].filter(visible).map(rect);
   const entries=[...wireLabelPaths].filter(([path])=>path.isConnected&&visible(path)).map(([path,points])=>({path,points:points.map(screen)}));
   // A slab intersection also handles diagonal carrier segments without sampling.
   const crosses=(box,a,b)=>{
@@ -683,46 +1183,305 @@ function placeWireLabels(){
   for(const entry of entries){
     const {path,points}=entry,label=path.parentElement.querySelector('.connection-label');
     if(!label||!visible(label))continue;
+    // Each pass starts from one line: a wrapped label is put back before anything is measured.
+    const caption=label.dataset.caption??label.textContent;
+    const wrappedAt=label.dataset.wrapped==='true'?[label.getAttribute('x'),label.getAttribute('y')]:null;
+    if(wrappedAt){delete label.dataset.wrapped;label.textContent=caption}
+    // The label as it is drawn now (one line or two) takes a place by the three tiers; the true
+    // overlap at the place it ends at is returned.
+    const settle=()=>{
     const bounds=rect(label),width=bounds.r-bounds.l,height=bounds.b-bounds.t;
     const anchor=screen({x:Number(label.getAttribute('x')),y:Number(label.getAttribute('y'))});
     const offset={x:bounds.l-anchor.x,y:bounds.t-anchor.y};
     const midpoint=screen(path.getPointAtLength(path.getTotalLength()/2)),candidates=[];
-    const beside=(p,a,b)=>{
+    // The wire's straight runs (collinear segments merged): run i goes from runs[i-1] to runs[i].
+    // Every segment is a leg that knows its run, and every place carries the run it stands beside.
+    const runs=[points[0]],legs=[];
+    for(let i=1;i<points.length;i++){
+      const p=points[i],l=runs.at(-1),a=runs.at(-2);
+      if(a&&((Math.abs(a.y-l.y)<.01&&Math.abs(l.y-p.y)<.01)||(Math.abs(a.x-l.x)<.01&&Math.abs(l.x-p.x)<.01)))runs[runs.length-1]=p;else runs.push(p);
+      legs.push({a:points[i-1],b:p,run:runs.length-1});
+    }
+    const beside=(p,a,b,run)=>{
       if(Math.abs(a.y-b.y)<.01){
-        candidates.push({l:p.x-width/2,t:p.y-clearance-height},{l:p.x-width/2,t:p.y+clearance});
+        candidates.push({l:p.x-width/2,t:p.y-clearance-height,run},{l:p.x-width/2,t:p.y+clearance,run});
       }else if(Math.abs(a.x-b.x)<.01){
-        candidates.push({l:p.x-clearance-width,t:p.y-height/2},{l:p.x+clearance,t:p.y-height/2});
+        candidates.push({l:p.x-clearance-width,t:p.y-height/2,run},{l:p.x+clearance,t:p.y-height/2,run});
       }
     };
+    // The wire-midpoint places stand beside the run whose line passes within half a pixel of the
+    // path's midpoint and whose span holds it; with no such run (0) they count every leg.
+    let middle=0;
+    for(let i=1;i<runs.length&&!middle;i++){
+      const a=runs[i-1],b=runs[i],dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy);if(length<1e-9)continue;
+      const along=((midpoint.x-a.x)*dx+(midpoint.y-a.y)*dy)/length;
+      if(Math.abs((midpoint.x-a.x)*dy-(midpoint.y-a.y)*dx)/length<=.5&&along>=0&&along<=length)middle=i;
+    }
     const total=path.getTotalLength(),before=screen(path.getPointAtLength(Math.max(0,total/2-.1))),after=screen(path.getPointAtLength(Math.min(total,total/2+.1)));
-    beside(midpoint,before,after);
-    for(let i=1;i<points.length;i++)beside({x:(points[i-1].x+points[i].x)/2,y:(points[i-1].y+points[i].y)/2},points[i-1],points[i]);
-    let chosen=null,distance=Infinity;
-    for(const candidate of candidates){
-      candidate.r=candidate.l+width;candidate.b=candidate.t+height;
-      const padded={l:candidate.l-clearance,r:candidate.r+clearance,t:candidate.t-clearance,b:candidate.b+clearance};
-      if(obstacles.some(box=>intersects(padded,box)))continue;
-      if(entries.some(other=>other!==entry&&other.points.slice(1).some((p,i)=>crosses(padded,other.points[i],p))))continue;
-      const d=Math.hypot(candidate.l+width/2-midpoint.x,candidate.t+height/2-midpoint.y);
-      if(d<distance-1e-6){chosen=candidate;distance=d}
+    beside(midpoint,before,after,middle);
+    for(let i=1;i<points.length;i++)beside({x:(points[i-1].x+points[i].x)/2,y:(points[i-1].y+points[i].y)/2},points[i-1],points[i],legs[i-1].run);
+    // Slid along the wire: on every straight run with room for the label and its clearance, a place
+    // every step on both sides, outward from the run's middle.
+    const slid=[];
+    for(let i=1;i<runs.length;i++){
+      const a=runs[i-1],b=runs[i],h=Math.abs(a.y-b.y)<.01,v=Math.abs(a.x-b.x)<.01;if(h===v)continue;
+      const room=(h?Math.abs(b.x-a.x):Math.abs(b.y-a.y))-(h?width:height)-2*clearance;if(room<0)continue;
+      const mid=h?(a.x+b.x)/2:(a.y+b.y)/2;
+      for(let k=0;k*step<=room/2+1e-6;k++)for(const side of k?[-1,1]:[1]){
+        const c=mid+side*k*step;
+        if(h)slid.push({l:c-width/2,t:a.y-clearance-height,run:i},{l:c-width/2,t:a.y+clearance,run:i});
+        else slid.push({l:a.x-clearance-width,t:c-height/2,run:i},{l:a.x+clearance,t:c-height/2,run:i});
+      }
+    }
+    // Only what lies within reach of this wire can meet a label beside it.
+    const reach=Math.max(width,height)+3*clearance,xs=points.map(p=>p.x),ys=points.map(p=>p.y);
+    const zone={l:Math.min(...xs)-reach,r:Math.max(...xs)+reach,t:Math.min(...ys)-reach,b:Math.max(...ys)+reach};
+    const solid=obstacles.filter(box=>intersects(zone,box)),borders=frames.filter(box=>intersects(zone,box)),lines=[];
+    for(const other of entries){
+      if(other===entry)continue;
+      for(let i=1;i<other.points.length;i++){
+        const a=other.points[i-1],b=other.points[i];
+        if(Math.max(a.x,b.x)>=zone.l&&Math.min(a.x,b.x)<=zone.r&&Math.max(a.y,b.y)>=zone.t&&Math.min(a.y,b.y)<=zone.b)lines.push([a,b]);
+      }
+    }
+    // How many things a label at this place, padded by pad, would meet; counted no further than the limit.
+    const overlaps=(place,pad,limit)=>{
+      const box={l:place.l-pad,r:place.l+width+pad,t:place.t-pad,b:place.t+height+pad};
+      let n=0;
+      for(const o of solid)if(intersects(box,o)&&++n>=limit)return n;
+      for(const o of borders)if(intersects(box,o)&&!(box.l>o.l&&box.r<o.r&&box.t>o.t&&box.b<o.b)&&++n>=limit)return n;
+      for(const [a,b] of lines)if(crosses(box,a,b)&&++n>=limit)return n;
+      // The label's own wire, all but the run this place stands beside: a leg counts where it enters
+      // the box, taken .01 px inside its edges, so one that only touches a corner or an edge does not.
+      // A label kept where it is (a place with no run named) counts none.
+      if(place.run!==undefined){
+        const inner={l:box.l+.01,r:box.r-.01,t:box.t+.01,b:box.b-.01};
+        for(const leg of legs)if(leg.run!==place.run&&crosses(inner,leg.a,leg.b)&&++n>=limit)return n;
+      }
+      return n;
+    };
+    // Today's places first, then the slid ones; in each, nearest the wire's midpoint first. The first
+    // place clear with the clearance wins; else the first clear with no padding (of those, the one
+    // meeting least with the clearance); else the place of least true overlap, and the label says so.
+    const near=list=>list.map((place,i)=>({place,i,d:Math.round(Math.hypot(place.l+width/2-midpoint.x,place.t+height/2-midpoint.y)*1e4)})).sort((p,q)=>p.d-q.d||p.i-q.i).map(x=>x.place);
+    let chosen=null,bare=Infinity,padded=Infinity;
+    for(const place of [...near(candidates),...near(slid)]){
+      const n=overlaps(place,0,bare+1);if(n>bare)continue;
+      const m=overlaps(place,clearance,n<bare?Infinity:padded);
+      if(n<bare||m<padded){chosen=place;bare=n;padded=m;if(!m)break}
     }
     if(chosen){
-      const position=new DOMPoint(chosen.l-offset.x,chosen.t-offset.y).matrixTransform(inverse);
-      label.setAttribute('x',String(position.x));label.setAttribute('y',String(position.y));
+      // A label already at its place is left alone, so placing twice never drifts.
+      if(Math.abs(chosen.l-bounds.l)>.01||Math.abs(chosen.t-bounds.t)>.01){
+        const position=new DOMPoint(chosen.l-offset.x,chosen.t-offset.y).matrixTransform(inverse);
+        label.setAttribute('x',String(position.x));label.setAttribute('y',String(position.y));
+        for(const line of label.children)line.setAttribute('x',String(position.x)); // a wrapped label's lines follow it
+      }
+    }else bare=overlaps({l:bounds.l,t:bounds.t},0,Infinity); // a wire with no straight run keeps its place
+    return bare;
+    };
+    let bare=settle();
+    // The fourth step: a label with no clear one-line place is set on two lines at a word break and
+    // placed again by the same tiers. It stays wrapped only where the two-line box meets nothing;
+    // otherwise it goes back to one line at the place the one-line tiers gave.
+    const lines=bare>0&&!window.SOV_QA_NO_WIRE_LABEL_WRAP?wireLabelLines(label,caption):null;
+    if(lines){
+      const x=label.getAttribute('x'),y=label.getAttribute('y');
+      setFittedText(label,lines,x,'1.15em');label.dataset.wrapped='true';
+      if(settle()>0){
+        delete label.dataset.wrapped;label.textContent=caption;label.setAttribute('x',x);label.setAttribute('y',y);
+      }else{
+        bare=0;
+        // A wrapped label back at the place it had (within .01 px on screen) keeps its coordinates to
+        // the digit, so placing twice never drifts.
+        const scale=Math.hypot(matrix.a,matrix.b),near=(was,now)=>Math.abs(Number(was)-Number(now))*scale<.01;
+        if(wrappedAt&&near(wrappedAt[0],label.getAttribute('x'))&&near(wrappedAt[1],label.getAttribute('y'))){
+          label.setAttribute('x',wrappedAt[0]);label.setAttribute('y',wrappedAt[1]);
+          for(const line of label.children)line.setAttribute('x',wrappedAt[0]);
+        }
+      }
     }
-    // A crowded path retains its existing label position. Later labels still
-    // avoid that occupied space, and the finite candidate list bounds the work.
+    // Crowded: the label truly overlaps a card, a border, other text or a wire at the place it has.
+    if(bare>0)label.dataset.labelCrowded='true';else delete label.dataset.labelCrowded;
+    // Later labels keep clear of this one; the finite candidate list bounds the work.
     obstacles.push(rect(label));
   }
 }
-function renderWires(signalState=computeSignalState(),markers=markersById()){
+// The signal state reads configuration, wires and placement, never x or y: one value stands from the
+// press of a move until a host is applied or anything else redraws the wires.
+let dragSignalState=null;
+function dropDragSignalState(){dragSignalState=null}
+// A wire that takes a new route when a move settles travels there. The settle pass
+// (settleDraggedRoutes, src/40-routing.js) is the only one that sets wireTravelPass; in it the wire
+// pass records, per wire id, the points a rerouted wire was last drawn with, and draws every group
+// at its final route as always. startWireTravel then moves one added path from the old route to the
+// new one; the drawn document itself never moves.
+let wireTravelPass=false;
+const wireTravelFrom=new Map();
+const WIRE_TRAVEL_MS=180,WIRE_TRAVEL_SAMPLES=32;
+// Whether two routes differ: in their count of points, or by more than 0.5 on any coordinate.
+function wireRouteDiffers(p,q){
+  return p.length!==q.length||p.some((v,k)=>Math.abs(v.x-q[k].x)>.5||Math.abs(v.y-q[k].y)>.5);
+}
+// count points at equal fractions of the length of a polyline, its two ends among them.
+function wireTravelSamples(points,count){
+  const lengths=[0];
+  for(let k=1;k<points.length;k++)lengths.push(lengths[k-1]+Math.hypot(points[k].x-points[k-1].x,points[k].y-points[k-1].y));
+  const total=lengths[lengths.length-1],out=[];
+  let seg=1;
+  for(let n=0;n<count;n++){
+    const at=count>1?total*n/(count-1):0;
+    while(seg<points.length-1&&lengths[seg]<at)seg++;
+    const a=points[Math.max(0,seg-1)],b=points[Math.min(seg,points.length-1)],span=lengths[Math.min(seg,points.length-1)]-lengths[Math.max(0,seg-1)];
+    const f=span>0?Math.min(1,Math.max(0,(at-lengths[seg-1])/span)):0;
+    out.push({x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f});
+  }
+  return out;
+}
+// Path interpolation by resampling: both routes are sampled at equal fractions of their length and
+// each sample moves straight to its partner, over 180 ms from start with a cubic ease out. One frame loop
+// drives every travel started together. A travel whose path left the document (its group was drawn
+// again) is dropped; the wire is then simply at its route.
+function startWireTravel(start){
+  const from=[...wireTravelFrom];wireTravelFrom.clear();
+  if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
+  // The 180 ms count from the settle pass, the moment the line jumped: motion never adds delay
+  // after the change. Where the settle took longer than that to draw, the jump stands.
+  if(performance.now()-start>=WIRE_TRAVEL_MS)return;
+  const line=pts=>pts.map((q,k)=>`${k?'L':'M'}${+q.x.toFixed(2)} ${+q.y.toFixed(2)}`).join(' ');
+  let travels=[];
+  for(const [id,old] of from){
+    const drawn=wireGroupDrawn.get(id);
+    if(!drawn||!drawn.group.isConnected||drawn.group.classList.contains('sectioned'))continue;
+    const now=drawnRoutePoints.get(drawn.index);
+    if(!now||old.length<2||now.length<2||!wireRouteDiffers(old,now))continue;
+    const a=wireTravelSamples(old,WIRE_TRAVEL_SAMPLES),b=wireTravelSamples(now,WIRE_TRAVEL_SAMPLES);
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('class','wire-travel');path.setAttribute('d',line(a));
+    drawn.group.appendChild(path);drawn.group.dataset.travel='true';
+    travels.push({path,group:drawn.group,a,b});
+  }
+  if(!travels.length)return;
+  const frame=time=>{
+    const t=Math.min(1,Math.max(0,(time-start)/WIRE_TRAVEL_MS)),e=1-(1-t)**3;
+    travels=travels.filter(travel=>travel.path.isConnected);
+    for(const {path,group,a,b} of travels){
+      if(t>=1){path.remove();delete group.dataset.travel}
+      else path.setAttribute('d',line(a.map((q,k)=>({x:q.x+(b[k].x-q.x)*e,y:q.y+(b[k].y-q.y)*e}))));
+    }
+    if(t<1&&travels.length)requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+// The wire pass of a move (pointer or keyboard): the held signal state, and the groups whose inputs
+// did not change are kept (renderWires, reuse).
+function renderWiresForDrag(){
+  if(!dragSignalState)dragSignalState=computeSignalState();
+  renderWires(dragSignalState,markersById(),true);
+}
+// What the last wire pass drew: wire id -> its group, the key of everything that group was drawn
+// from, and where it stands. A reuse pass replaces only the groups whose key differs.
+const wireGroupDrawn=new Map();
+// A wire's colours under one signal state, found once per state object.
+const wireSignalHeld=new WeakMap();
+function wireSignalFor(w,signalState){
+  let held=wireSignalHeld.get(signalState);if(!held){held=new Map();wireSignalHeld.set(signalState,held)}
+  let entry=held.get(w);if(!entry){const signal=wireSignalColors(w,signalState);entry={signal,text:JSON.stringify(signal)};held.set(w,entry)}
+  return entry;
+}
+// The node a wire on a Component's interior surface is lifted behind, when that node is drawn.
+function wireLiftHost(w){
+  const surface=w.canvasId||GLOBAL_CANVAS_ID;
+  const hostId=surface.startsWith('canvas:component:')?surface.slice('canvas:component:'.length):null;
+  return hostId?nodesG.querySelector(`:scope > .node[data-id="${hostId}"]`):null;
+}
+// The host's groups sit directly after it, behind its wires: the first wire goes after them.
+function wireLiftAnchor(el){let at=el;while(at.nextElementSibling?.classList.contains('group'))at=at.nextElementSibling;return at}
+// Whether the groups in the document are the ones recorded, each where a pass from nothing would put
+// it: the same wires at the same indexes, in order in the wire layer or behind the same host.
+function wireGroupsStand(routes){
+  if(wireGroupDrawn.size!==routes.size)return false;
+  let last=null,lifted=0;const anchors=new Map();
+  for(const i of routes.keys()){
+    const w=wires[i],drawn=wireGroupDrawn.get(w.id);
+    if(!drawn||drawn.index!==i||!drawn.group.isConnected)return false;
+    const hostEl=wireLiftHost(w);
+    if(hostEl){
+      if((anchors.get(hostEl)||wireLiftAnchor(hostEl)).nextElementSibling!==drawn.group)return false;
+      anchors.set(hostEl,drawn.group);lifted++;
+    }else{
+      if((last?last.nextElementSibling:wiresG.firstElementChild)!==drawn.group)return false;
+      last=drawn.group;
+    }
+  }
+  if(last?last.nextElementSibling:wiresG.firstElementChild)return false;
+  return nodesG.querySelectorAll(':scope > .wire-group').length===lifted;
+}
+// Everything one wire's group is drawn from, as one string. Two passes with the same key draw the
+// same group, so the one in the document is kept. The wire's own config and form are in it whole
+// (label, direction, status, kind, section). What a kind or a status resolves to comes from the
+// notation, which changes only when the document is replaced; that goes through render(), and a
+// pass with reuse false draws every group and records it again.
+function wireDrawKey(i,w,d,points,epA,epB,snapshot,busFallback,cramped,editor,signalText,wireMarkers){
+  const at=q=>`${q.x},${q.y}`;
+  // Direction marks keep clear of every crossing and junction near the path (stableArrowPoint); a
+  // mark may sit on a hop's arc, which stands off the route by the hop's radius.
+  const reach=ARROW_CROSSING_CLEAR+WIRE_HOP_RADIUS*markScale+1;
+  let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
+  for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}
+  l-=reach;r+=reach;t-=reach;b+=reach;
+  const clear=arrowKeepClear.filter(c=>c.x>=l&&c.x<=r&&c.y>=t&&c.y<=b).map(at).join(' ');
+  return [i,w.id,d,points.map(at).join(' '),at(epA.pos),epA.kind,at(epB.pos),epB.kind,
+    snapshot?`${at(snapshot.aPos)} ${at(snapshot.bPos)}`:'',activeNodeDrag||'',busFallback?1:0,routeBlockedAt(i)?1:0,cramped?1:0,
+    selected===`wire:${i}`?1:0,editor.locked?1:0,editor.opacity,markScale,signalText,
+    JSON.stringify(w.config||null),JSON.stringify(w.form||null),
+    (wireMarkers||[]).map(m=>m.message).join('\u0001'),clear].join('\u0002');
+}
+// The order wires are routed in: every index of `wires`, host wires before the wires of the cards
+// they host (a topological order of the host relation), stored order within one depth. A card's host
+// wire is the wire of the first canvas:wire: canvas on the way up its parents. A wire with no hosted
+// end has depth 0; otherwise 1 more than the deepest host wire of its two ends. A loop of hosts ends:
+// a wire met again while its own depth is being computed counts as depth 0.
+function wireRouteOrder(){
+  const prefix='canvas:wire:';
+  const nodeById=new Map(nodes.map(n=>[n.id,n])),wireIndex=new Map(wires.map((w,i)=>[w.id,i]));
+  const hostWireOf=id=>{
+    const seen=new Set();
+    for(let n=nodeById.get(id);n&&!seen.has(n.id);n=nodeById.get(n.parentId)){
+      seen.add(n.id);
+      const canvasId=String(n.canvasId||'');
+      if(canvasId.startsWith(prefix)){const host=wireIndex.get(canvasId.slice(prefix.length));return host===undefined?null:host}
+    }
+    return null;
+  };
+  const depths=new Map(),computing=new Set();
+  const depthOf=i=>{
+    if(depths.has(i))return depths.get(i);
+    if(computing.has(i))return 0;
+    computing.add(i);
+    let depth=0;
+    for(const end of [wires[i].a,wires[i].b]){
+      const host=hostWireOf(end);
+      if(host!==null&&host!==i)depth=Math.max(depth,1+depthOf(host));
+    }
+    computing.delete(i);depths.set(i,depth);
+    return depth;
+  };
+  return wires.map((w,i)=>i).sort((x,y)=>depthOf(x)-depthOf(y)||x-y);
+}
+function renderWiresOnce(signalState,markers,reuse){
+  const hostedMoved=new Set();
   const previousLabels=new Map([...wireLabelPaths.keys()].map(path=>{
     const label=path.parentElement?.querySelector('.connection-label');
-    return [path.parentElement?.dataset.wireId,label?{text:label.textContent,d:path.getAttribute('d'),x:label.getAttribute('x'),y:label.getAttribute('y')}:null];
+    return [path.parentElement?.dataset.wireId,label?{text:label.dataset.caption,d:path.getAttribute('d'),x:label.getAttribute('x'),y:label.getAttribute('y')}:null];
   }));
   wireLabelPaths.clear();
-  wiresG.innerHTML='';
-  nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
+  const emptyWireGroups=()=>{
+    wiresG.innerHTML='';
+    nodesG.querySelectorAll(':scope > .wire-group').forEach(g=>g.remove());
+  };
+  if(!reuse)emptyWireGroups();
+  refreshGroupRegions();
   clearEndpointFocus();
   const occupied=[];
   const dragging=!!activeNodeDrag;
@@ -730,17 +1489,47 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
 
   // Every route first, so each wire knows the crossings it makes: the later wire hops over the
   // earlier one, and neither puts an arrowhead on the crossing. Wires sharing an end never hop.
-  const routes=new Map();
-  wires.forEach((w,i)=>{
+  const routes=new Map(),undrawnWires=new Set();
+  const finitePoint=q=>!!q&&Number.isFinite(q.x)&&Number.isFinite(q.y);
+  // Wires on buses are laid out first, lanes and all, so every auto route keeps clear of them.
+  const busState=typeof busRoutesForRender==='function'?busRoutesForRender():null;
+  if(busState)for(const [id,pts] of busState.routes){const w=wires.find(x=>x.id===id);if(w)occupied.push(...routeSegments(pts,w))}
+  // The bus routes found above stand for the whole pass: each wire reads them, none asks again.
+  const routeEvery=fn=>busState&&typeof withBusRoutes==='function'?withBusRoutes(busState,fn):fn();
+  // Host wires are routed before the wires of the cards they host (wireRouteOrder), so `occupied`
+  // holds a host wire's segments before those wires are routed and no host wire's route is scored
+  // against them. The repeat in renderWires remains because a card's pose comes from the drawn
+  // path, which hops and track nudging still change.
+  routeEvery(()=>wireRouteOrder().forEach(i=>{
+    const w=wires[i];
     if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
+    // An end with no finite position (a card that was never placed) leaves the wire out of the drawing.
+    if(!finitePoint(A)||!finitePoint(B)){undrawnWires.add(i);return}
     const snapshot=dragging&&(w.a===activeNodeDrag||w.b===activeNodeDrag)?dragRouteSnapshots.get(i):null;
     // While moving, the settled route is immutable. We do not rebuild its
     // interior, endpoint leads, arrows, or direction marks on pointer frames.
     const points=snapshot?clonePoints(snapshot.points):stableRouteForWire(i,w,A,B,occupied);
+    if(!points.length||!points.every(finitePoint)){undrawnWires.add(i);return}
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
-    occupied.push(...routes.get(i).segs);
-  });
+    if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
+  }));
+  // Back in stored order: the hop pairs, the track nudging and the drawn points read `routes` by wire index.
+  const routedInStoredOrder=[...routes].sort((p,q)=>p[0]-q[0]);
+  routes.clear();for(const [i,r] of routedInStoredOrder)routes.set(i,r);
+  // Jogs out and close parallels spread a track apart (src/40-routing.js nudgeRoutes); bus lanes and taps stay fixed.
+  const trackCramped=nudgeRoutes(routes,busState?[...busState.routes].flatMap(([id,pts])=>routeSegments(pts,wires.find(x=>x.id===id))):[]);
+  for(const [i,r] of routes)r.segs=routeSegments(r.points,wires[i]);
+  if(wireTravelPass){
+    // A settle pass: where each rerouted wire was last drawn, kept for its travel (startWireTravel).
+    const waiting=wireTravelFrom.size;
+    for(const [i,r] of routes){
+      const was=drawnRoutePoints.get(i);
+      if(was&&wireRouteDiffers(was,r.points)&&!wireTravelFrom.has(wires[i].id))wireTravelFrom.set(wires[i].id,clonePoints(was));
+    }
+    if(!waiting&&wireTravelFrom.size){const at=performance.now();requestAnimationFrame(()=>startWireTravel(at))}
+  }
+  drawnRoutePoints.clear();for(const [i,r] of routes)drawnRoutePoints.set(i,clonePoints(r.points));
   const hops=new Map(),order=[...routes.keys()];arrowKeepClear=[];
   for(let x=0;x<order.length;x++)for(let y=x+1;y<order.length;y++){
     const P=routes.get(order[x]),Q=routes.get(order[y]);
@@ -748,6 +1537,8 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
       if(p.ends&&q.ends&&p.ends.some(e=>q.ends.includes(e)))continue;
       if(!segmentsCross(p.a,p.b,q.a,q.b))continue;
       const c=segmentAxis(p.a,p.b)==='h'?{x:q.a.x,y:p.a.y}:{x:p.a.x,y:q.a.y};
+      // Two wires on one bus cross inside its band where they take their lanes: no hop there.
+      if(busState&&typeof busBandHolds==='function'&&busBandHolds(wires[order[x]],wires[order[y]],c))continue;
       if(!hops.has(order[y]))hops.set(order[y],[]);hops.get(order[y]).push(c);arrowKeepClear.push(c);
     }
   }
@@ -760,18 +1551,50 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
      for(let d=0;d<=reach;d+=2){const q=list.map(p=>at(p,d));if(q.some(v=>Math.hypot(v.x-q[0].x,v.y-q[0].y)>1.2))break;join=q[0]}
      arrowKeepClear.push(join)}}
 
+  // Every route, hop and cache write above is the full pass's. A reuse pass keeps the groups in the
+  // document when they are the recorded ones in their places; otherwise it draws from nothing.
+  const keyed=reuse&&wireGroupsStand(routes);
+  if(reuse&&!keyed)emptyWireGroups();
+  if(!keyed)wireGroupDrawn.clear();
+  // The cards hosted on a wire take their pose from its drawn path.
+  const poseHosted=(w,base)=>{const L=base.getTotalLength();for(const hosted of nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&n.id!==activeNodeDrag)){
+    const placement=componentPlacement(hosted),len=Math.max(1,Math.min(L-1,L*placement.t)),q=base.getPointAtLength(len),angle=pathTangentAngleAtLength(base,len);
+    if(Math.abs(q.x-hosted.x)>.01||Math.abs(q.y-hosted.y)>.01||Math.abs(angle-(wireHostPoseCache.get(hosted.id)?.angle??0))>.01)hostedMoved.add(hosted.id);
+    hosted.x=q.x;hosted.y=q.y;wireHostPoseCache.set(hosted.id,{x:q.x,y:q.y,angle,wireId:w.id,t:placement.t});
+    const el=nodesG.querySelector(`.node[data-id="${hosted.id}"]`);if(el)el.setAttribute('transform',`translate(${hosted.x} ${hosted.y}) rotate(${angle})`)
+  }};
+
+  const wireKinds=SovSchematicNotation.kindsOf(activeNotation(),'wire'),flowStroke=Number(SovSchematicNotation.tokens(diagram).stroke?.flow)||2.25;
   wires.forEach((w,i)=>{
     const editor=entityEditorState(w);const cfg=connectionConfig(w);if(editor.hidden||!carrierIsRenderable(w))return;
     const epA=carrierEndpoint(w,'a'),epB=carrierEndpoint(w,'b'),a=epA.node,b=epB.node;
     const A=epA.pos, B=epB.pos;
+    if(undrawnWires.has(i))return; // no wire-group for it: no path, gradient, label, marker or handle
     const {points,snapshot}=routes.get(i);
     // A multi-line wire is a band, not a line: it does not hop.
     const d=SovSchematicData.normalizeSection(w.form?.section,1)?.lines?.length>=2?pathD(points):pathWithHops(points,hops.get(i));
     const wireMarkers=markers.get(w.id);
 
-    const signal=wireSignalColors(w,signalState);
+    const held=wireSignalFor(w,signalState),signal=held.signal;
+    const key=wireDrawKey(i,w,d,points,epA,epB,snapshot,busState?.fallback.has(w.id),trackCramped.has(i),editor,held.text,wireMarkers);
+    const old=keyed?wireGroupDrawn.get(w.id):null;
+    if(old&&old.key===key){
+      // Kept: what a rebuild would drop (hover and drop-target classes, a lit level, a stale
+      // selection or crowding mark) is dropped here, at the same point of the pass.
+      if(old.group.getAttribute('class')!==old.cls)old.group.setAttribute('class',old.cls);
+      if(old.group.style.cssText!==old.css)old.group.style.cssText=old.css;
+      if(old.base.getAttribute('class')!==old.baseCls)old.base.setAttribute('class',old.baseCls);
+      if(old.label)delete old.label.dataset.labelCrowded;
+      wireLabelPaths.set(old.base,clonePoints(points));
+      poseHosted(w,old.base);
+      if(selected===`wire:${i}`) focusWireVisual(i);
+      return;
+    }
     const group=document.createElementNS('http://www.w3.org/2000/svg','g');
     group.setAttribute('class','wire-group'+(snapshot?' drag-frozen':'')+((!signal.forwardLive && !signal.reverseLive)?' dormant':'')+(editor.locked?' is-locked':'')+((epA.kind==='free'||epB.kind==='free')?' has-free-end':''));group.dataset.wireId=w.id;group.dataset.wireIndex=String(i);group.style.opacity=String(editor.opacity);
+    if(busState?.fallback.has(w.id))group.dataset.busFallback='true';
+    if(routeBlockedAt(i))group.dataset.routeBlocked='true';
+    if(trackCramped.has(i))group.dataset.trackCramped='true';
 
     const gradientId=`wire-gradient-${i}-${renderEpoch++}`;
     const gradient=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
@@ -794,6 +1617,18 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const base=document.createElementNS('http://www.w3.org/2000/svg','path');
     base.setAttribute('d',d);
     base.setAttribute('class','wire'+(selected===`wire:${i}`?' selected':''));
+    const wireStatus=declaredStatus(w);
+    if(wireStatus?.outline==='dashed'){base.setAttribute('stroke-dasharray','6 4');base.style.strokeDasharray='6 4';group.dataset.status=wireStatus.id}
+    else if(wireStatus)group.dataset.status=wireStatus.id;
+    // A wire's kind (NOTATION-MODEL.md "Kinds"): the dash, weight and arrowhead its notation declares
+    // for it, as attributes and inline styles so a picture carries them. Heavy is twice the flow stroke,
+    // set as the group's --stroke-flow, so the selected and hover widths in styles/app.css multiply it.
+    const wireKind=typeof w.config?.kind==='string'?wireKinds.find(k=>k.id===w.config.kind)||null:null;
+    if(wireKind){
+      group.dataset.kind=wireKind.id;
+      if(wireKind.dash==='dashed'){base.setAttribute('stroke-dasharray','6 4');base.style.strokeDasharray='6 4'}
+      if(wireKind.weight==='heavy'){const heavy=+(flowStroke*2).toFixed(4);group.dataset.weight='heavy';group.style.setProperty('--stroke-flow',`${heavy}px`);base.setAttribute('stroke-width',String(heavy))}
+    }
     wireLabelPaths.set(base,clonePoints(points));
 
     const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -815,11 +1650,7 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
       const top=Math.min(...points.map(p=>p.y)),right=Math.max(...points.map(p=>p.x));
       appendMarkerBadge(group,wireMarkers,right,top);
     }
-    {const L=base.getTotalLength();for(const hosted of nodes.filter(n=>(n.canvasId||GLOBAL_CANVAS_ID)===wireCanvas(w).id&&n.id!==activeNodeDrag)){
-      const placement=componentPlacement(hosted),len=Math.max(1,Math.min(L-1,L*placement.t)),q=base.getPointAtLength(len),angle=pathTangentAngleAtLength(base,len);
-      hosted.x=q.x;hosted.y=q.y;wireHostPoseCache.set(hosted.id,{x:q.x,y:q.y,angle,wireId:w.id,t:placement.t});
-      const el=nodesG.querySelector(`.node[data-id="${hosted.id}"]`);if(el)el.setAttribute('transform',`translate(${hosted.x} ${hosted.y}) rotate(${angle})`)
-    }}
+    poseHosted(w,base);
 
     // Discrete packets are real instances, not repeated dash patterns.
     // Path length may alter motion duration but cannot manufacture particles.
@@ -832,7 +1663,10 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     const surface=w.canvasId||GLOBAL_CANVAS_ID;
     const hostId=surface.startsWith('canvas:component:')?surface.slice('canvas:component:'.length):null;
     const hostEl=hostId?nodesG.querySelector(`:scope > .node[data-id="${hostId}"]`):null;
-    if(hostEl){(hostAnchors.get(hostId)||hostEl).after(group);hostAnchors.set(hostId,group)}
+    // The host's groups sit directly after it, behind its wires: the first wire goes after them.
+    // A group whose inputs changed takes the place of the one it replaces.
+    if(old)old.group.replaceWith(group);
+    else if(hostEl){(hostAnchors.get(hostId)||wireLiftAnchor(hostEl)).after(group);hostAnchors.set(hostId,group)}
     else wiresG.appendChild(group);
 
     // Marks have no independent positional truth. Every arrow is regenerated
@@ -840,8 +1674,8 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     // frozen, arrows derive from that frozen line; they can never detach from it.
     const poses=arrowPosesForPath(base,cfg.direction==='duplex');
     if(cfg.direction==='reverse')poses.forEach(p=>p.reverse=!p.reverse);
-    if(cfg.direction==='none')poses.length=0;
-    renderArrowPoses(group,poses,'flow-chevron');
+    if(cfg.direction==='none'||wireKind?.arrowhead==='none')poses.length=0;
+    renderArrowPoses(group,poses,'flow-chevron',wireKind?.arrowhead==='filled',wireKind?.weight==='heavy'?2:1);
 
     if(snapshot){
       // The only geometry outside the frozen line is the exact displacement
@@ -851,7 +1685,13 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     }
 
     // One mark per place: a labelled duplex wire carries ↔ in its label, not stacked above it.
-    if(cfg.direction==='duplex'&&!cfg.label){
+    // A Wire's caption: its label, then its status title, then what it waits on.
+    const waits=waitsOnList(w.config?.waitsOn);
+    // A bus that carries the wire's label says it once for every wire on it; the label stays in the data.
+    const ownLabel=cfg.label&&typeof busLabelsOfWire==='function'&&busLabelsOfWire(w).includes(String(cfg.label))?'':cfg.label;
+    let caption=[ownLabel,wireStatus?statusTitle(wireStatus):''].filter(Boolean).join(' · ');
+    if(waits)caption=caption?`${caption} · waits on ${waits}`:`Waits on ${waits}`;
+    if(cfg.direction==='duplex'&&!caption){
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5);
       const badge=document.createElementNS('http://www.w3.org/2000/svg','text');
       badge.setAttribute('class','net-badge');
@@ -862,12 +1702,12 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
     }
 
     if(cfg.reciprocity!=='none'){const q=pointAngleAtDistance(base,base.getTotalLength()*.5),mark=document.createElementNS('http://www.w3.org/2000/svg','text');mark.setAttribute('class','reciprocity-mark');mark.setAttribute('x',q.x);mark.setAttribute('y',q.y+14);mark.setAttribute('text-anchor','middle');mark.textContent=cfg.reciprocity==='required'?'return required':'return expected';group.appendChild(mark)}
-    if(cfg.label){
+    if(caption){
       // A label keeps the place clearance gave it while its text and route stand (wire-label clearance).
-      const text=(cfg.direction==='duplex'?'↔ ':'')+cfg.label,lift=13+(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0);
+      const text=(cfg.direction==='duplex'?'↔ ':'')+caption,lift=13+(wsec&&wsec.lines.length>=2?wsec.bands.reduce((a,b)=>a+b.thickness,0)/2+1.6:0);
       const q=pointAngleAtDistance(base,base.getTotalLength()*.5),previous=previousLabels.get(w.id),label=document.createElementNS('http://www.w3.org/2000/svg','text');
       const keep=previous?.text===text&&previous.d===d;
-      label.setAttribute('class','connection-label');label.setAttribute('x',keep?previous.x:q.x);label.setAttribute('y',keep?previous.y:q.y-lift);label.setAttribute('text-anchor','middle');label.textContent=text;group.appendChild(label);
+      label.setAttribute('class','connection-label');label.setAttribute('x',keep?previous.x:q.x);label.setAttribute('y',keep?previous.y:q.y-lift);label.setAttribute('text-anchor','middle');label.dataset.caption=text;label.textContent=text;group.appendChild(label);
     }
     // Channel markers belong to bound ends; a free end has no port to mark.
     if(a&&endpointShowsChannelTag(w,'a')){
@@ -897,10 +1737,40 @@ function renderWires(signalState=computeSignalState(),markers=markersById()){
      }}
     // Legacy Wire-owned attachment points are migrated to hosted 0D Components before projection.
 
-    hit.addEventListener('pointerdown',e=>{e.stopPropagation();selectWire(i);focusWireVisual(i)});
-    group.addEventListener('pointerenter',()=>focusWireVisual(i));
-    group.addEventListener('pointerleave',()=>{if(selected!==`wire:${i}`)clearWireVisualFocus()});
+    hit.addEventListener('pointerdown',e=>{e.stopPropagation();const j=nearestWireIndexAt(e.clientX,e.clientY,i);selectWire(j);focusWireVisual(j)});
+    hit.addEventListener('pointermove',e=>{
+      const j=nearestWireIndexAt(e.clientX,e.clientY,i);
+      const gj=[...document.querySelectorAll('.wire-group')].find(g=>Number(g.dataset.wireIndex)===j);
+      if(gj&&gj.classList.contains('wire-hover')) return;
+      document.querySelectorAll('.wire-group.wire-hover').forEach(g=>g.classList.remove('wire-hover'));
+      if(gj) gj.classList.add('wire-hover');
+      focusWireVisual(j);
+    });
+    group.addEventListener('pointerenter',()=>{document.querySelectorAll('.wire-group.wire-hover').forEach(g=>{if(g!==group)g.classList.remove('wire-hover')});group.classList.add('wire-hover');focusWireVisual(i)});
+    group.addEventListener('pointerleave',()=>{document.querySelectorAll('.wire-group.wire-hover').forEach(g=>g.classList.remove('wire-hover'));if(selected!==`wire:${i}`)clearWireVisualFocus()});
+    wireGroupDrawn.set(w.id,{group,base,key,index:i,hostId:hostEl?hostId:null,cls:group.getAttribute('class'),css:group.style.cssText,baseCls:base.getAttribute('class'),label:group.querySelector('.connection-label')});
     if(selected===`wire:${i}`) focusWireVisual(i);
   });
+  if(undrawnWires.size)workspace.setAttribute('data-undrawn-wires',String(undrawnWires.size));else workspace.removeAttribute('data-undrawn-wires');
   placeWireLabels();
+  // Any pass that is not a move's own ends the held signal state: what it stood for may have changed.
+  if(!reuse)dropDragSignalState();
+  return hostedMoved;
+}
+// One wire pass. A card hosted on a wire takes its pose from the host wire's drawn path, which
+// exists only after every route of the pass was found, the card's own wires among them. So when a
+// pass moved a hosted card, the wires that end on it or on a card it carries are routed again from
+// where it now stands and the pass runs once more, keeping the groups that did not change. That
+// repeats while a pass still moves a hosted card, at most 3 more times. Host wires are routed before
+// the wires of the cards they host (wireRouteOrder), so a host wire's route does not depend on them;
+// the repeat remains because a card's pose comes from the drawn path, which hops and track nudging
+// still change.
+function renderWires(signalState=computeSignalState(),markers=markersById(),reuse=false){
+  let moved=renderWiresOnce(signalState,markers,reuse);
+  for(let pass=0;pass<3&&moved.size;pass++){
+    const ids=new Set();
+    for(const id of moved){ids.add(id);for(const n of descendantsOf(id))ids.add(n.id)}
+    wires.forEach((w,i)=>{if(ids.has(w.a)||ids.has(w.b))routeCache.delete(i)});
+    moved=renderWiresOnce(signalState,markers,true);
+  }
 }

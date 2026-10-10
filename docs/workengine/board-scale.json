@@ -1,0 +1,58 @@
+{
+  "frontend": "F0 (SVG DOM), backend B1 (indexed JS arrays) as on dev",
+  "host": {
+    "os": "Windows-11",
+    "python": "3.12.10"
+  },
+  "measured": "2026-10-02",
+  "method": "scripts/board_scale_probe.py: index.html as page content, SovSchematicAPI.document.replace, two animation frames per measured step; pan and zoom are medians of five",
+  "runs": [
+    {
+      "cold_ms": 2420.5,
+      "components": 105,
+      "groups": 5,
+      "heap_mb": 9.5,
+      "pan_frame_max_ms": 34.6,
+      "pan_frame_ms": 33.3,
+      "pieces": 100,
+      "svg_elements": 4524,
+      "wall_s": 2.9,
+      "wires": 99,
+      "zoom_frame_max_ms": 50.8,
+      "zoom_frame_ms": 49.9
+    },
+    {
+      "cold_ms": 245696.8,
+      "components": 1050,
+      "groups": 50,
+      "heap_mb": 18.4,
+      "pan_frame_max_ms": 1523.2,
+      "pan_frame_ms": 1237.1,
+      "pieces": 1000,
+      "svg_elements": 45755,
+      "wall_s": 258.9,
+      "wires": 999,
+      "zoom_frame_max_ms": 1951.2,
+      "zoom_frame_ms": 1613.9
+    },
+    {
+      "cold_ms": 5760638,
+      "components": 4200,
+      "groups": 200,
+      "heap_mb": 87.5,
+      "pan_frame_max_ms": 28459,
+      "pan_frame_ms": 14561.7,
+      "pieces": 4000,
+      "svg_elements": 184752,
+      "wall_s": 5978.2,
+      "wires": 3999,
+      "zoom_frame_max_ms": 35380.4,
+      "zoom_frame_ms": 28129.5
+    }
+  ],
+  "sizes": [
+    100,
+    1000,
+    4000
+  ]
+}

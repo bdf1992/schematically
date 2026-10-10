@@ -153,6 +153,120 @@ is a real surface where those two points meet.
 functions of the Section and the placement. The connection rule, "both ends share an
 exposed surface", does not change.
 
+## Groups (reading only)
+
+Built 2026-10-01. Some regions on a drawing are there for the reader, not for the model:
+"these three are records, these two are surfaces". A Plane is the wrong tool for that. A
+Plane is a boundary, so every relation that leaves it has to be cut into segments through
+boundary Points. A group is a separate kind that collects Components without being a
+boundary.
+
+**The kind.** `symbolId: 'group'` is a 2D Component that collects other Components for
+reading. It is a primitive (no type caption, no legend entry) and is not in the palette:
+it is authored as data. Its preset is
+`{form: {dimension: 2}, attachmentDefaults: 'none', presentation: {graphic: {kind: 'none'}, size: {w: 320, h: 220}}}`.
+Its interior stays closed and it is not a surface: it hosts nothing, it has no ports, and
+no Wire ends on it.
+
+**Membership.** `config.members` is an array of distinct Component ids:
+
+```
+{"id": "records", "symbolId": "group", "canvasId": "canvas:global",
+ "config": {"label": "Records", "members": ["case", "recording", "anchor"]}}
+```
+
+A member stays where it is. It keeps its own canvas, its own ports and its own Wires. A
+Wire between members of different groups, or between a member and a card in no group, is
+one Wire on the canvas they share, joining the two cards directly. No boundary Point is
+involved, because there is no boundary to cross.
+
+**Rules.** The data core (`src/05-data-core.js`) checks them in one place,
+`groupFindings`. `validateDocument` reports each one at load as
+`component <id>: <CODE>: ...`. `create` and `update` refuse an edit that would add one,
+with an Error whose message starts with the code, and the document is left unchanged.
+
+| Code | When |
+| --- | --- |
+| `GROUP_MEMBER_UNKNOWN` | a member names no Component, or `config.members` is not an array |
+| `GROUP_MEMBER_CANVAS` | a member's `canvasId` differs from the group's |
+| `GROUP_MEMBER_HOSTED` | a member rides on a host: placement kind `edge`, `wire` or `path` |
+| `GROUP_MEMBER_GROUP` | a member is itself a group (groups do not nest) |
+| `GROUP_MEMBER_TWICE` | one Component is listed by two groups (or twice by one) |
+| `GROUP_PORTS` | a group carries `config.attachmentPoints`, or `attachmentDefaults: 'standard'` |
+| `GROUP_HOST` | a Component's `placement.hostId` is a group, or its `canvasId` is `canvas:component:<group id>` |
+
+Deleting a Component removes its id from every group's `members` in the same operation.
+
+**Selection.** A click on a group's title or on its ground (any part of its region that no
+card or wire covers) selects the group, and the Inspector shows it. A drag from its ground
+pans the canvas, as a drag from the blank canvas does. The arrow keys do not move a selected
+group, because its region is the union of its members: it follows its cards. QA:
+`tests/group_select_qa.py`.
+
+**Geometry.** A group has no geometry of its own while it has members.
+`groupRect(doc, groupId, sizeOf)` is the union of the members' rectangles (each centred
+on its `x, y`, sized by `sizeOf(component)`), padded `space.regionInset` (24) on each side and `space.regionTitle` (28) more on top
+for the title band; both are tokens of the document's resolved notation (the schematic
+notation declares 24 and 28, `src/03-notation-core.js`). A child that comes closer than
+`regionInset` to its region's edge, or closer than `regionTitle` below its head, is
+reported as `region-inset` (LAYOUT-MODEL.md); the renderer never grows a region to fit. It is returned centred like a Component, `{x, y, w, h}`, with its
+edges `{l, r, t, b}`. A group with no members is its own `x, y` and `presentation.size`.
+
+**Drawing** (`src/55-render.js`). On each canvas, groups are drawn before every other
+node and every wire, so they sit behind them. On the global canvas they are in their own
+layer (`#groupLayer`) just before the wire layer; on a Component's interior they sit
+directly after the host, before the wires drawn there and the host's children. A group is
+`<g class="node group" data-id="<id>">` holding:
+
+- `<rect class="group-region">`: the `groupRect` above with the editor's
+  `componentSize`, corner radius `radius.card`, no stroke, the inset filter (see Borders), and
+  `pointer-events: none`. It is filled with the group's colour slot at 10
+  percent opacity when `config.colorSlot` names a slot other than 0. Slot 0 is the colour
+  every record is given, so it reads as unset and the region has no fill.
+- `<text class="group-title">`: `config.label` in the title text role, 12 in from the
+  left and inside the 28 title band. Its ink is the muted ink, darkened only as far as it
+  needs to reach 4.5:1 on the region, the same rule card text follows.
+
+Nothing in a group carries the class `body`. The region follows its members while they
+are dragged. A group or plane with `config.intake: true` also holds a
+`<rect class="group-outline">` (a group) or draws a dashed body (a plane); see Borders.
+
+**Borders.** What a region's edge is says what the region is, and a picture draws each in one way:
+
+- *No outline, with a soft inset* is grouping only. A group draws no stroke; its region carries an
+  inner shadow (the SVG filter `region-inset`, or `region-inset-bare` when the region has no fill
+  of its own), offset 1 down and blurred 3 (a Gaussian deviation of 1.5) at the level-1 elevation
+  opacity of the appearance. The filter is part of the picture, so an export carries it.
+- *Solid* is a boundary that refuses: a plane, a container and a gate card draw a solid outline.
+- *Dashed* is open or provisional, and means nothing else. A group or plane with
+  `config.intake: true` is an open region and draws its outline dashed `6 4` in the muted ink at the
+  structure stroke width. A card whose status declares `outline: dashed` (a missing or proposed
+  status) keeps its dashed outline. An unplaced card (`.node.unplaced`) is faded to opacity .42 and
+  is not dashed.
+
+These are declared, not written into the renderer: the `schematic` notation's `kinds` list holds five
+region kinds, `group` (dash `none`), `plane`, `container` and `gate` (`solid`) and `intake` (`dashed`,
+open), and the renderer reads the dash of a region's border from them by id (`regionDash` in
+`src/55-render.js`; NOTATION-MODEL.md "Kinds"). A wire kind is declared in the same list.
+
+`config.intake` is a boolean on a group or a plane. Any other value, or intake on any other kind of
+Component, is refused on create and update and reported on load with `INTAKE_INVALID`
+(`intakeProblems`, `src/05-data-core.js`). QA: `tests/region_border_qa.py`.
+
+**Never an obstacle.** Routing (`src/40-routing.js`) leaves groups out of the obstacles
+a route avoids. The layout metrics (`src/57-layout-metrics.js`) leave them out of
+`node-overlap`, `route-through-node`, the text-over-a-node check, cramped labels and route
+wrapping. The group title is still text, so it counts in `text-collision` against other
+text. The layered layout (`src/08-layout-core.js`) does not place groups as cards: it places
+each group's members as one block, laid out on its own and padded as the region is drawn, so
+the group's region is the block (LAYOUT-MODEL.md "What `layered` does").
+
+The invariant from `CANVAS-MODEL.md` is unchanged: there is no implicit reach-through
+across a Component boundary. A group does not weaken it, because a group is not a
+boundary. Real containment still gets a Plane with boundary Points.
+
+Golden example: `examples/work-engine/groups.sov`. QA: `tests/group_region_qa.py`.
+
 ## Ends: how an open Section attaches
 
 The end of a 1-line carrier is a point. It binds as it does today:
@@ -192,6 +306,35 @@ Joins between strips (a T or Y junction of pipes) are **open** and not specified
   `depth` on a band keeps today's `frame.depth` bevel.
 - A 1-line open Section draws exactly as today's Wire. Its `weight` is today's
   `body.thickness`.
+
+### Card shapes
+
+A card whose outline is one line may declare the shape that line is drawn in:
+`config.presentation.shape` is `rect` (the default, also when absent), `cylinder` or `parallelogram`
+(`DATA-FORMATS.md` "Card shape"; `shapeProblems` in `src/05-data-core.js` refuses anything else with
+`SHAPE_INVALID`). The shape belongs to a 2D Component that is not a group and has a closed interior.
+A sectioned Form (two or more lines) keeps the rectangle, as does a card with no backdrop.
+
+The body keeps class `body` and is a `<path>` for the two shapes (`componentShapeGeometry`,
+`src/30-canvas.js`), in the card's frame, w x h its bounding rectangle:
+
+- **cylinder**: the bounding rectangle with its top and bottom replaced by the two halves of an
+  ellipse `cap = min(0.18 h, 18)` tall and w wide. The near half of the top ellipse is drawn as a
+  second line in the outline colour (`<path class="body-rim">`). The inner rectangle is w wide, from
+  `cap` below the top to `cap / 2` above the bottom.
+- **parallelogram**: skew `s = min(0.2 w, 0.25 h, 24)`; the top edge runs from `-w/2 + s` to `w/2`,
+  the bottom edge from `-w/2` to `w/2 - s`. The inner rectangle is `w - 2 s` wide and h tall.
+
+Fill, outline, a status's dashed outline and fade, the elevation shadow and a solid core's bevel
+follow the rectangle's rules. The title, the glyph, the status chip and the badges keep to the inner
+rectangle. A glyph whose terminals are its points keeps the card's own size, because its ports
+follow its scale.
+
+Ports stay on the bounding sides, and routing and every layout metric keep the bounding rectangle
+(`componentBounds`, `componentPortLocalPosition`). Where the drawn outline is set back from the
+bounding side (a parallelogram's slanted sides, a cylinder's curves away from the centre), a wired
+port draws a lead straight in from the port to the outline: `<path class="component-lead shape-lead"
+data-point="<id>">`, in the outline colour at the structure stroke width. QA: `tests/card_shapes_qa.py`.
 
 ## Migration from the current Form
 

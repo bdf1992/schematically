@@ -44,11 +44,24 @@ function legendEntries(doc=diagram){
     const name=Object.keys(presets).filter(k=>SovSchematicData.sectionPreset(k,dim)).find(k=>JSON.stringify(SovSchematicData.normalizeSection(SovSchematicData.sectionPreset(k,dim),dim))===JSON.stringify(SovSchematicData.normalizeSection(sec,dim)));sections.add(name||`${sec.lines?.length||1} lines`)}
   const describe={disk:'Solid, no inside',circle:'A line around space',section:'A skin around space',coated:'A skin around solid','double-wall':'Two skins with a gap',line:'One line',strip:'A solid band',lanes:'Two lines with space between',pipe:'Walls around a bore'};
   for(const s of sections)add({id:`section:${s}`,kind:'section',sample:{section:s},label:sentenceCase(s.replace('-',' ')),meaning:describe[s]||''});
+  // Statuses: each one a visible card or wire names, in the order the notation declares them.
+  const statusesUsed=new Set([...visible,...wires.filter(w=>!entityEditorState(w).hidden)].map(x=>x?.config?.status).filter(s=>typeof s==='string'));
+  for(const st of (Array.isArray(notation.statuses)?notation.statuses:[]))if(st&&statusesUsed.has(st.id))add({id:`status:${st.id}`,kind:'status',sample:{status:st.id,outline:st.outline==='dashed'?'dashed':'solid'},label:String(st.title||st.id),meaning:String(st.meaning||'')});
+  // Wire kinds: each one a visible wire names, in the order the notation declares them.
+  const kindsUsed=new Set(wires.filter(w=>!entityEditorState(w).hidden).map(w=>w?.config?.kind).filter(k=>typeof k==='string'));
+  if(kindsUsed.size)for(const k of SovSchematicNotation.kindsOf(notation,'wire'))if(kindsUsed.has(k.id))add({id:`kind:${k.id}`,kind:'wire-kind',sample:{wireKind:k.id,dash:k.dash,weight:k.weight||'regular',arrowhead:k.arrowhead||'chevron'},label:String(k.title||k.id),meaning:String(k.meaning||'')});
   return out;
 }
 // A sample for an entry, as SVG markup in a 28 x 18 box.
 function legendSampleMarkup(e,{ink='currentColor'}={}){
   const s=e.sample||{};
+  // A status: a small rounded chip, dashed when the status draws its card's outline dashed.
+  if(e.kind==='status')return `<rect x="3" y="4" width="22" height="10" rx="5" style="fill:${ink};fill-opacity:.14;stroke:${ink};stroke-width:1.3${s.outline==='dashed'?';stroke-dasharray:6 4':''}"/>`;
+  // A wire kind: a line 22 long in the kind's dash and weight, its direction mark at the middle.
+  if(e.kind==='wire-kind'){
+    const width=s.weight==='heavy'?4:2,head=s.arrowhead==='none'?'':`<path d="M 12.5 5.5 L 17 9 L 12.5 12.5${s.arrowhead==='filled'?' Z':''}" style="fill:${s.arrowhead==='filled'?ink:'none'};stroke:${ink};stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"/>`;
+    return `<line x1="3" y1="9" x2="25" y2="9" style="stroke:${ink};stroke-width:${width}${s.dash==='dashed'?';stroke-dasharray:6 4':''}"/>${head}`;
+  }
   if(s.glyph)return `<use href="#sym-${s.glyph}" x="0" y="0" width="28" height="18" style="color:${ink}"/>`;
   if(s.colour)return `<rect x="4" y="3" width="20" height="12" rx="3" style="fill:${s.colour}"/>`;
   if(s.mark==='out'||s.mark==='in'||s.mark==='control'){const c=getComputedStyle(document.documentElement).getPropertyValue(s.mark==='out'?'--accent-out':s.mark==='in'?'--accent-in':'--canvas-muted').trim()||ink;return `<line x1="2" y1="9" x2="26" y2="9" style="stroke:${ink};stroke-width:2"/><rect x="12" y="3" width="4" height="12" rx="1.2" style="fill:${c}"/>`}

@@ -13,36 +13,42 @@ deutan and tritan simulation (about two and a half just-noticeable differences).
 | Appearance | Theme | Palette | Min contrast | Floor | Closest pair (normal / protan / deutan / tritan) | Colour-blind distinct | Result |
 |---|---|---|---:|---:|---|---|---|
 | Light | Pastel | okabe-ito | 3.25:1 | 3.25:1 | 0.081 / 0.060 / 0.062 / 0.065 | yes | PASS |
+| Light | Pastel | system-default | 3.26:1 | 3.25:1 | 0.099 / 0.064 / 0.064 / 0.078 | yes | PASS |
 | Light | Pastel | spectrum | 3.26:1 | 3.25:1 | 0.092 / 0.030 / 0.017 / 0.026 | no | PASS (hue family) |
 | Light | Pastel | cool | 3.25:1 | 3.25:1 | 0.030 / 0.013 / 0.011 / 0.016 | no | PASS (hue family) |
 | Light | Pastel | warm | 3.25:1 | 3.25:1 | 0.029 / 0.018 / 0.011 / 0.006 | no | PASS (hue family) |
 | Light | Pastel | earth | 3.26:1 | 3.25:1 | 0.037 / 0.012 / 0.016 / 0.016 | no | PASS (hue family) |
 | Light | Pastel | mono | 6.41:1 | 3.25:1 | 0.036 / 0.036 / 0.036 / 0.036 | n/a (mono) | PASS |
 | Light | Subtle | okabe-ito | 3.51:1 | 3.5:1 | 0.083 / 0.059 / 0.060 / 0.063 | yes | PASS |
+| Light | Subtle | system-default | 3.51:1 | 3.5:1 | 0.091 / 0.073 / 0.087 / 0.088 | yes | PASS |
 | Light | Subtle | spectrum | 3.50:1 | 3.5:1 | 0.088 / 0.030 / 0.015 / 0.037 | no | PASS (hue family) |
 | Light | Subtle | cool | 3.51:1 | 3.5:1 | 0.029 / 0.022 / 0.014 / 0.023 | no | PASS (hue family) |
 | Light | Subtle | warm | 3.51:1 | 3.5:1 | 0.029 / 0.016 / 0.011 / 0.007 | no | PASS (hue family) |
 | Light | Subtle | earth | 3.50:1 | 3.5:1 | 0.036 / 0.019 / 0.011 / 0.019 | no | PASS (hue family) |
 | Light | Subtle | mono | 7.60:1 | 3.5:1 | 0.033 / 0.033 / 0.033 / 0.033 | n/a (mono) | PASS |
 | Light | Reading | okabe-ito | 4.00:1 | 4:1 | 0.090 / 0.063 / 0.060 / 0.059 | yes | PASS |
+| Light | Reading | system-default | 4.01:1 | 4:1 | 0.102 / 0.089 / 0.091 / 0.096 | yes | PASS |
 | Light | Reading | spectrum | 4.00:1 | 4:1 | 0.098 / 0.034 / 0.005 / 0.033 | no | PASS (hue family) |
 | Light | Reading | cool | 4.01:1 | 4:1 | 0.032 / 0.026 / 0.018 / 0.017 | no | PASS (hue family) |
 | Light | Reading | warm | 4.01:1 | 4:1 | 0.030 / 0.019 / 0.011 / 0.013 | no | PASS (hue family) |
 | Light | Reading | earth | 4.01:1 | 4:1 | 0.042 / 0.017 / 0.017 / 0.021 | no | PASS (hue family) |
 | Light | Reading | mono | 9.89:1 | 4:1 | 0.042 / 0.042 / 0.042 / 0.042 | n/a (mono) | PASS |
 | Dark | Pastel | okabe-ito | 6.03:1 | 3.25:1 | 0.132 / 0.076 / 0.075 / 0.075 | yes | PASS |
+| Dark | Pastel | system-default | 6.02:1 | 3.25:1 | 0.074 / 0.064 / 0.067 / 0.074 | yes | PASS |
 | Dark | Pastel | spectrum | 7.45:1 | 3.25:1 | 0.086 / 0.045 / 0.019 / 0.053 | no | PASS (hue family) |
 | Dark | Pastel | cool | 7.26:1 | 3.25:1 | 0.037 / 0.018 / 0.007 / 0.038 | no | PASS (hue family) |
 | Dark | Pastel | warm | 6.64:1 | 3.25:1 | 0.031 / 0.012 / 0.013 / 0.016 | no | PASS (hue family) |
 | Dark | Pastel | earth | 7.20:1 | 3.25:1 | 0.032 / 0.021 / 0.010 / 0.017 | no | PASS (hue family) |
 | Dark | Pastel | mono | 9.24:1 | 3.25:1 | 0.040 / 0.040 / 0.040 / 0.040 | n/a (mono) | PASS |
 | Dark | Subtle | okabe-ito | 6.02:1 | 3.5:1 | 0.122 / 0.074 / 0.074 / 0.075 | yes | PASS |
+| Dark | Subtle | system-default | 6.03:1 | 3.5:1 | 0.071 / 0.062 / 0.066 / 0.075 | yes | PASS |
 | Dark | Subtle | spectrum | 7.14:1 | 3.5:1 | 0.084 / 0.045 / 0.019 / 0.054 | no | PASS (hue family) |
 | Dark | Subtle | cool | 6.99:1 | 3.5:1 | 0.035 / 0.015 / 0.006 / 0.036 | no | PASS (hue family) |
 | Dark | Subtle | warm | 6.38:1 | 3.5:1 | 0.031 / 0.011 / 0.014 / 0.017 | no | PASS (hue family) |
 | Dark | Subtle | earth | 6.93:1 | 3.5:1 | 0.032 / 0.022 / 0.010 / 0.017 | no | PASS (hue family) |
 | Dark | Subtle | mono | 8.84:1 | 3.5:1 | 0.040 / 0.040 / 0.040 / 0.040 | n/a (mono) | PASS |
 | Dark | Reading | okabe-ito | 6.32:1 | 4:1 | 0.125 / 0.076 / 0.075 / 0.075 | yes | PASS |
+| Dark | Reading | system-default | 6.32:1 | 4:1 | 0.074 / 0.065 / 0.066 / 0.072 | yes | PASS |
 | Dark | Reading | spectrum | 7.38:1 | 4:1 | 0.091 / 0.048 / 0.020 / 0.058 | no | PASS (hue family) |
 | Dark | Reading | cool | 7.23:1 | 4:1 | 0.039 / 0.021 / 0.009 / 0.040 | no | PASS (hue family) |
 | Dark | Reading | warm | 6.50:1 | 4:1 | 0.033 / 0.014 / 0.014 / 0.017 | no | PASS (hue family) |
@@ -63,10 +69,11 @@ deutan and tritan simulation (about two and a half just-noticeable differences).
 | 08-gated-service.sov | light | 58 | 0 | 0 |
 | 09-print-ai-proof-run.sov | light | 81 | 0 | 0 |
 | 09-proposed-service-review.sov | light | 37 | 0 | 0 |
+| 09-typed-captions.sov | light | 35 | 0 | 0 |
 | 10-clocked-signals.sov | light | 65 | 0 | 0 |
 | 11-sections.sov | light | 61 | 0 | 0 |
 | 12-membrane.sov | light | 53 | 0 | 0 |
-| 13-half-adder.sov | light | 62 | 0 | 0 |
+| 13-half-adder.sov | light | 60 | 0 | 0 |
 | blank.sov | light | 0 | 0 | 0 |
 | 01-source-hold.sov | dark | 14 | 0 | 0 |
 | 02-duplex-buffer.sov | dark | 17 | 0 | 0 |
@@ -78,10 +85,11 @@ deutan and tritan simulation (about two and a half just-noticeable differences).
 | 08-gated-service.sov | dark | 58 | 0 | 0 |
 | 09-print-ai-proof-run.sov | dark | 81 | 0 | 0 |
 | 09-proposed-service-review.sov | dark | 37 | 0 | 0 |
+| 09-typed-captions.sov | dark | 35 | 0 | 0 |
 | 10-clocked-signals.sov | dark | 65 | 0 | 0 |
 | 11-sections.sov | dark | 61 | 0 | 0 |
 | 12-membrane.sov | dark | 53 | 0 | 0 |
-| 13-half-adder.sov | dark | 62 | 0 | 0 |
+| 13-half-adder.sov | dark | 60 | 0 | 0 |
 | blank.sov | dark | 0 | 0 | 0 |
 
 **Overall: PASS**

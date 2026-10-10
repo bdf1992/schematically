@@ -25,7 +25,47 @@
     },
     "meta": {
       "type": "object",
-      "description": "Document metadata. Beta.24 may include timeScale and persisted checkpoints."
+      "description": "Document metadata. Beta.24 may include timeScale and persisted checkpoints. palette is the document's own palette: a palette name or {custom: [six #RRGGBB hexes]}; it wins over the view's palette when the document opens.",
+      "properties": {
+        "answers": {
+          "$ref": "#/$defs/answers",
+          "description": "The document's answers to the document concerns of its notation (notation.concerns, applies document): concern id to a non-empty string. The built-in schematic notation declares what, why, alternatives and smaller. Absent means nothing is answered. A value that is not a non-empty string is ANSWER_INVALID; a key the notation does not declare is ANSWER_UNKNOWN. An unanswered concern is open, never an error. See NOTATION-MODEL.md 'Concerns'."
+        },
+        "palette": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "okabe-ito",
+                "system-default",
+                "spectrum",
+                "cool",
+                "warm",
+                "earth",
+                "mono"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "custom"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "custom": {
+                  "type": "array",
+                  "minItems": 6,
+                  "maxItems": 6,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
     },
     "canvas": {
       "type": "object"
@@ -55,6 +95,53 @@
                   "$ref": "#/$defs/declaredPort"
                 },
                 "description": "Declared ports: additions under 'standard', the complete list under 'none'."
+              },
+              "members": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true,
+                "description": "On a group (symbolId 'group'): the ids of the Components it collects for reading, all on the group's canvas. A group is not a boundary: it hosts nothing and has no ports, and a Wire between members of different groups is one Wire. See SECTION-MODEL.md 'Groups (reading only)'."
+              },
+              "status": {
+                "$ref": "#/$defs/status",
+                "description": "The Component's status: the id of an entry in the statuses list of the document's notation (notation.statuses). There is no built-in list; a notation that declares no statuses admits none (STATUS_UNDECLARED), and an id it does not declare is STATUS_UNKNOWN. See NOTATION-MODEL.md 'Statuses'."
+              },
+              "waitsOn": {
+                "$ref": "#/$defs/waitsOn",
+                "description": "What the Component waits on: people, rules and decisions, each {kind, id, label?}. Drawn under the card beside the status the notation's statuses list declares; anything else is WAITS_ON_INVALID."
+              },
+              "answers": {
+                "$ref": "#/$defs/answers",
+                "description": "The Component's answers to the component concerns of the document's notation (notation.concerns, applies component): concern id to a non-empty string. There is no built-in component concern; a notation that declares none admits none (ANSWER_UNDECLARED), and a key it does not declare is ANSWER_UNKNOWN. A concern entry is {id, applies, title, question, meaning, symbols}: symbols, on a component concern only, is a non-empty list of symbol ids with no repeats, and the concern is then asked only of Components whose symbolId is in it; an answer to it on any other Component is ANSWER_UNKNOWN. Without symbols the concern is asked of every Component. See NOTATION-MODEL.md 'Concerns'."
+              },
+              "badges": {
+                "type": "array",
+                "maxItems": 4,
+                "description": "Chips drawn in a row from the Component's top-left corner: a status chip's shape without a status's meaning. At most 4; anything else is BADGE_INVALID. See DATA-FORMATS.md 'Badges'.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["label"],
+                  "properties": {
+                    "label": {"type": "string", "minLength": 1, "maxLength": 24, "pattern": "^\\S(?:[\\s\\S]*\\S)?$", "description": "The chip's text as stored: 1 to 24 characters with no whitespace at either end; create and update trim the label they are given."},
+                    "colorSlot": {"type": "integer", "minimum": 0, "maximum": 11, "description": "The palette slot of the chip's colour; absent means 0."}
+                  }
+                }
+              },
+              "presentation": {
+                "type": "object",
+                "properties": {
+                  "shape": {
+                    "enum": ["rect", "cylinder", "parallelogram"],
+                    "description": "The shape a card's body is drawn in; absent means rect. cylinder and parallelogram belong to a 2D Component that is not a group and has a closed interior; any other value, or either shape on any other Component, is SHAPE_INVALID. Ports, routing and layout keep the bounding rectangle. See SECTION-MODEL.md 'Card shapes'."
+                  }
+                }
+              },
+              "intake": {
+                "type": "boolean",
+                "description": "A group or a plane that is an open region: its outline is drawn dashed. On any other kind of Component, or any other value, it is INTAKE_INVALID. See SECTION-MODEL.md 'Borders'."
               }
             }
           }
@@ -72,7 +159,30 @@
           "b",
           "bSide"
         ],
-        "description": "Wire config may include forwardOperation/reverseOperation: none | read | write."
+        "description": "Wire config may include forwardOperation/reverseOperation: none | read | write.",
+        "properties": {
+          "config": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "$ref": "#/$defs/status",
+                "description": "The Wire's status: the id of an entry in the statuses list of the document's notation (notation.statuses). There is no built-in list; a notation that declares no statuses admits none (STATUS_UNDECLARED), and an id it does not declare is STATUS_UNKNOWN. See NOTATION-MODEL.md 'Statuses'."
+              },
+              "waitsOn": {
+                "$ref": "#/$defs/waitsOn",
+                "description": "What the Wire waits on: people, rules and decisions, each {kind, id, label?}. Drawn in the Wire's caption after the status the notation's statuses list declares; anything else is WAITS_ON_INVALID."
+              },
+              "answers": {
+                "$ref": "#/$defs/answers",
+                "description": "The Wire's answers to the wire concerns of the document's notation (notation.concerns, applies wire): concern id to a non-empty string. There is no built-in wire concern; a notation that declares none admits none (ANSWER_UNDECLARED), and a key it does not declare is ANSWER_UNKNOWN. See NOTATION-MODEL.md 'Concerns'."
+              },
+              "kind": {
+                "type": "string",
+                "description": "The Wire's kind: the id of a wire kind in the kinds list of the document's notation (notation.kinds, applies wire), which declares the dash, weight and arrowhead the Wire is drawn in. The built-in schematic notation declares one wire kind, reference; a notation that declares none admits none (KIND_UNDECLARED), and an id it does not declare is KIND_UNKNOWN. A Component takes no kind. See NOTATION-MODEL.md 'Kinds'."
+              }
+            }
+          }
+        }
       }
     },
     "references": {
@@ -90,6 +200,47 @@
   },
   "additionalProperties": true,
   "$defs": {
+    "status": {
+      "type": "string",
+      "description": "An id from the statuses list of the document's notation (notation.statuses); the values are the notation's, never a fixed set."
+    },
+    "answers": {
+      "type": "object",
+      "description": "Answers to the concerns of the document's notation (notation.concerns): each key is a concern id, each value a non-empty string after trimming. The keys are the notation's, never a fixed set.",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "waitsOn": {
+      "type": "array",
+      "description": "Typed references to what a Component or Wire waits on (people, rules and decisions), shown beside the status it takes from the notation's statuses list.",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "person",
+              "rule",
+              "decision"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "declaredPort": {
       "type": "object",
       "required": [

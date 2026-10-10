@@ -64,8 +64,11 @@
       <button class="btn" id="viewBtn" title="View" aria-expanded="false">View</button>
       <div class="editor-menu view-menu" id="viewMenu" hidden>
         <label class="menu-field"><span>Appearance</span><select id="appearanceMode"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-        <label class="menu-field"><span>Global rate</span><select id="globalRate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        <label class="menu-field"><span>Global rate</span><select id="globalRate"><option value="0">Paused</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
         <div class="file-menu-separator"></div>
+        <button class="file-menu-item" id="viewPaletteBtn" type="button" aria-pressed="true"><span>Palette</span><kbd>Ctrl B</kbd></button>
+        <button class="file-menu-item" id="viewInspectorBtn" type="button" aria-pressed="true"><span>Inspector</span><kbd>Ctrl Alt B</kbd></button>
+        <button class="file-menu-item" id="viewHeaderBtn" type="button" aria-pressed="true"><span>Top bar</span><kbd>Ctrl Backslash</kbd></button>
         <button class="file-menu-item" id="viewObjectsBtn" type="button"><span>Objects</span></button>
         <button class="file-menu-item" id="viewFocusBtn" type="button"><span>Focus selection</span><kbd>Enter</kbd></button>
       </div>
@@ -75,6 +78,7 @@
       <b>Shortcuts</b><div><kbd>Ctrl Z</kbd> undo · <kbd>Ctrl Shift Z</kbd> redo · <kbd>Ctrl C/V/D</kbd> copy/paste/duplicate</div>
       <div><kbd>Shift click</kbd> multi-select · <kbd>Shift drag</kbd> marquee · <kbd>double-click</kbd> focus</div>
       <div><kbd>type</kbd> search when nothing is selected · <kbd>?</kbd> this help · <kbd>Esc</kbd> cancel</div>
+      <div><kbd>Ctrl B</kbd> palette · <kbd>Ctrl Alt B</kbd> inspector · <kbd>Ctrl \</kbd> top bar</div>
     </div>
     <div class="toolbar-separator" aria-hidden="true"></div>
     <button class="btn" id="zoomOutBtn" title="Zoom out (−)">−</button>
@@ -96,6 +100,7 @@
       <label class="palette-row"><span>Palette</span>
         <select id="colorPaletteInput">
           <option value="okabe-ito">Okabe–Ito · colour-blind safe</option>
+          <option value="system-default">System default · roles and status tones</option>
           <option value="spectrum">Spectrum</option>
           <option value="cool">Cool</option>
           <option value="warm">Warm</option>
@@ -124,11 +129,11 @@
       <label class="grid-row"><span>Snap on settle</span><input id="gridSnapInput" type="checkbox" checked></label>
       <label class="grid-row"><span>Grid size</span>
         <select id="gridSizeInput">
-          <option value="12">12 px</option>
-          <option value="16">16 px</option>
-          <option value="24" selected>24 px</option>
-          <option value="32">32 px</option>
-          <option value="48">48 px</option>
+          <option value="12">12</option>
+          <option value="16">16</option>
+          <option value="24" selected>24</option>
+          <option value="32">32</option>
+          <option value="48">48</option>
         </select>
       </label>
       <details class="mini-disclosure"><summary><span class="info-dot">i</span> Drag modifiers</summary><div>Shift = half grid · Ctrl/Cmd = double grid · Alt = free.</div></details>
@@ -168,8 +173,13 @@
 </aside>
 
 <main class="workspace-wrap">
+  <div class="panel-restore" id="panelRestore" hidden>
+    <button class="btn" id="showHeaderBtn" type="button" title="Show top bar (Ctrl+\)" hidden>Top bar</button>
+    <button class="btn" id="showPaletteBtn" type="button" title="Show palette (Ctrl+B)" hidden>Palette</button>
+    <button class="btn" id="showInspectorBtn" type="button" title="Show inspector (Ctrl+Alt+B)" hidden>Inspector</button>
+  </div>
   <svg id="workspace" viewBox="0 0 1200 760" preserveAspectRatio="xMidYMid meet" tabindex="0" aria-label="Schematic canvas">
-    <g id="wires"></g>
+    <g id="waveLayer" aria-hidden="true"></g><g id="wires"></g>
     <g id="ghostLayer" aria-hidden="true"></g>
     <g id="paletteDropLayer" aria-hidden="true"></g>
     <g id="nodes"></g>
@@ -511,6 +521,15 @@
       </dl>
       <details class="inline-help"><summary><span class="info-dot">i</span> Wire mapping</summary><div>The Wire maps endpoint connections and concrete packet operations. Port access declares capability; packet R/W declares the concrete operation. Access is not authority.</div></details>
     </div>
+    <div id="busDetail" hidden>
+      <div class="kind-badge">BUS</div>
+      <dl class="kv">
+        <dt>Label</dt><dd id="bLabel"></dd>
+        <dt>Between</dt><dd id="bBetween"></dd>
+        <dt>Lanes</dt><dd id="bLanes"></dd>
+        <dt>Carries</dt><dd id="bWires"></dd>
+      </dl>
+    </div>
   </div>
   <div class="section"><details class="help-disclosure"><summary><b>Reading</b><span class="helper-snippet">exists · carries · resolves</span><span class="info-dot">i</span></summary><div class="help-body"><b>Component</b> exists · <b>Connection</b> carries · <b>Reference</b> resolves · <b>Modifier</b> qualifies.</div></details></div>
 </aside>
@@ -519,9 +538,11 @@
 <script type="application/json" id="sov-packs">[]</script>
 <script src="src/03-canonical.js"></script>
 <script src="src/03-notation-core.js"></script>
+<script src="src/04-signal-model.js"></script>
 <script src="src/06-attachment-core.js"></script>
 <script src="src/05-data-core.js"></script>
 <script src="src/07-state-space.js"></script>
+<script src="src/07-state-surface.js"></script>
 <script src="src/07-graph-core.js"></script>
 <script src="src/08-layout-core.js"></script>
 <script src="src/09-colour-core.js"></script>
@@ -532,6 +553,7 @@
 <script src="src/25-signal.js"></script>
 <script src="src/30-canvas.js"></script>
 <script src="src/40-routing.js"></script>
+<script src="src/41-buses.js"></script>
 <script src="src/50-selection.js"></script>
 <script src="src/55-render.js"></script>
 <script src="src/57-layout-metrics.js"></script>
@@ -544,6 +566,8 @@
 <script src="src/65-sim-control.js"></script>
 <script src="src/66-narration.js"></script>
 <script src="src/67-legend.js"></script>
+<script src="src/68-wave-view.js"></script>
 <script src="src/85-api.js"></script>
+<script src="src/87-live.js"></script>
 </body>
 </html>

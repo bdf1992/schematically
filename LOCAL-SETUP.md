@@ -53,21 +53,64 @@ Note: the read/write-access, wire-host-inline and file-surface suites write thei
 byproducts (screenshots, `saved-test.sov*`) to the run-artifact directory -
 `SCHEMATIC_QA_OUT` when set, else `schematically-qa` under the system temp
 directory - not into `tests/`. No checkout of `tests/` is needed after a run.
-`performance-results.json` is still written into the tree by the performance
-suite; discard it with `git checkout -- tests/performance-results.json` unless
-you intend to re-baseline it.
+
+### Windows: the font-dependent suites in Linux
+
+CI renders text with DejaVu on Ubuntu, which is about 10 percent wider than a
+Windows font, so four suites give different answers on Windows. One command
+runs them in a Linux container on Docker Desktop and prints what CI would:
+
+```bash
+python scripts/qa_linux.py                       # the four suites below, in this order
+python scripts/qa_linux.py --suite tests/svg_export_qa.py   # --suite is repeatable and replaces the four
+python scripts/qa_linux.py --tree C:\path\to\worktree       # another checkout; default is this one
+python scripts/qa_linux.py --print-command       # the docker build and run argv as JSON; calls no docker
+```
+
+The default suites are `tests/layouts_qa.py`, `tests/layout_quality_qa.py`,
+`tests/authoring_review_qa.py` and `tests/golden_rendered_text_qa.py`. Each
+prints `QA PASS path (seconds)` or `QA FAIL path (exit code, seconds)`, then
+`LINUX QA PASS: n suites` or `LINUX QA FAIL: k of n suites`.
+
+Exit codes: 0 every suite passed; 1 a suite or `build.py` failed; 2 the
+container could not run (missing suite path, no playwright pin in the tree's
+`requirements-dev.txt`, Docker engine not reachable, image build failed).
+
+Docker Desktop must be running; the script starts and stops nothing (start it
+with `docker desktop start`). The image `schematically-qa-linux` is built once
+per Dockerfile and requirements-dev.txt content and reused after. The tree is
+mounted read-only and copied inside the container, so a run changes no file on
+the host.
+
+A suite that leaves a tracked file under `tests/` changed after a run has a defect: discard the change with `git checkout -- tests/` and file it.
 
 ## 4. Deployment pattern
 
-Deployment is push-driven and QA-gated:
+Release is tag-driven and QA-gated: one `v*` tag is the one release path.
 
-1. Every push and PR runs `scripts/qa.py` in `schematic-ci`.
-2. On a push to `main` only, the same workflow run — after QA passes — stages
-   `_site/` via `scripts/stage_site.py` (standalone `index.html`, `examples/`,
-   `formats/`, `reference/`) and deploys it to GitHub Pages.
-3. A red QA run deploys nothing; the previously published site stays live.
+1. Every push and PR runs `scripts/qa.py` in `schematic-ci` (`ci.yml`). It
+   deploys nothing.
+2. Pushing a tag `v*` runs `release.yml` on that commit: `verify` (the same
+   `scripts/qa.py`), then `web` (stages `_site/` via `scripts/stage_site.py`:
+   standalone `index.html`, `examples/`, `formats/`, `reference/`, `build.json`;
+   zips it as `schematically-web-<tag>.zip`), `pages` (deploys `_site/` to
+   GitHub Pages), `desktop` (builds the Tauri installers on windows-latest and
+   launches the built exe on a document), and `release` (one GitHub release
+   carrying the web zip, the `.msi` and `-setup.exe` installers and
+   `REVISION.txt`, all from that commit).
+3. A red `verify` deploys and releases nothing; the previously published site
+   stays live.
+4. The revision is named in each artifact: `SOV_BUILD_REVISION` (`<tag> <commit>`)
+   becomes `<meta name="sov-revision">` in the desktop page and the staged
+   `_site/index.html`; `SovSchematicAPI.file.info().build` returns that content
+   (null in a local build) and `_site/build.json` holds `{tag, commit, describe}`.
+   The committed `index.html` never carries the meta.
 
-One-time repository setting: **Settings → Pages → Source: GitHub Actions**.
+One-time repository settings: **Settings → Pages → Source: GitHub Actions**, and
+the `github-pages` environment's deployment rule must allow tags `v*` to deploy.
+
+Out of scope: code signing and a publisher certificate. They cost money and are
+Bdo's; the installers are unsigned until he decides.
 
 ## 5. Local deployment update pattern
 

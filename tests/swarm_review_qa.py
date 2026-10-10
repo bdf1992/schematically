@@ -64,7 +64,8 @@ def main():
                     label_pixels = page.evaluate('''sel=>[...workspace.querySelectorAll(sel)].map(el=>{
                       const m=el.getScreenCTM();return [el.textContent,parseFloat(getComputedStyle(el).fontSize)*Math.hypot(m.a,m.b)];
                     })''', LABELS)
-                    assert all(px >= 11.9 for _, px in label_pixels), label_pixels
+                    general_floor = page.evaluate('()=>LABEL_FLOORS.general')
+                    assert all(px >= general_floor - 0.1 for _, px in label_pixels), label_pixels
                     stem = f'{source.stem}-{width}-{theme}'
                     page.screenshot(path=str(out/(stem+'.png')))
                     for button, suffix in (('#fileSaveBtn', 'sov'), ('#fileExportPakBtn', 'sovpak')):
@@ -77,11 +78,8 @@ def main():
                         reopened = page.evaluate('snapshotDocument()')
                         assert reopened['components'] == admitted['components'], (stem, suffix, 'components')
                         assert reopened['wires'] == admitted['wires'], (stem, suffix, 'wires')
-                        # updatedAt is volatile; timeScale package precedence is a separately
-                        # rate-policy defect (#40), outside this presentation acceptance.
                         for key in raw['meta']:
-                            if key != 'timeScale':
-                                assert reopened['meta'][key] == admitted['meta'][key], (stem, suffix, key)
+                            assert reopened['meta'][key] == admitted['meta'][key], (stem, suffix, key)
                         assert page.locator('.custom-graphic').count() == expected_graphics
                         if suffix == 'sovpak':
                             package = json.loads(saved.read_text(encoding='utf-8'))

@@ -209,48 +209,70 @@ function routeCacheFromCandidate(candidate){
     core:clonePoints(candidate.core),
     score:candidate.score,
     signature:candidate.signature,
-    anchor:{x:candidate.anchor.x,y:candidate.anchor.y}
+    anchor:{x:candidate.anchor.x,y:candidate.anchor.y},
+    blocked:!!candidate.blocked
   };
+}
+const drawnRoutePoints=new Map();
+// A loop that routes every wire while the document stands still asks for the bus routes once and
+// holds that answer for the loop (src/41-buses.js withBusRoutes), the way renderWires does. Asked
+// per wire, each asking reads both ends of every bus wire: wires x wires end readings a loop.
+function withBusRoutesOnce(fn){
+  return typeof busRoutesForRender==='function'&&typeof withBusRoutes==='function'?withBusRoutes(busRoutesForRender(),fn):fn();
 }
 function captureDragSnapshots(nodeId){
   dragRouteSnapshots.clear();
   const occupied=[];
-  wires.forEach((w,i)=>{
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{
     const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
     if(!A||!B) return;
     const points=stableRouteForWire(i,w,A,B,occupied);
     occupied.push(...routeSegments(points,w));
     if(w.a===nodeId || w.b===nodeId){
+      const drawn=drawnRoutePoints.get(i);
+      const useDrawn=!!drawn && drawn.length>=2 &&
+        Math.abs(drawn[0].x-A.x)<=0.01 && Math.abs(drawn[0].y-A.y)<=0.01 &&
+        Math.abs(drawn[drawn.length-1].x-B.x)<=0.01 && Math.abs(drawn[drawn.length-1].y-B.y)<=0.01;
       dragRouteSnapshots.set(i,{
-        points:clonePoints(points),
+        points:clonePoints(useDrawn?drawn:points),
         aPos:{x:A.x,y:A.y},
         bPos:{x:B.x,y:B.y}
       });
     }
-  });
+  }));
+  // The loop above asked for the bus routes, so the lane order held from here is the one at the
+  // press, or at the last settle while held (src/41-buses.js holdBusLanes).
+  if(typeof holdBusLanes==='function')holdBusLanes();
 }
 function settleDraggedRoutes(){
+  // The pointer rests or the move ends: the bus lanes are ordered again, in full.
+  if(typeof dropBusLaneHold==='function')dropBusLaneHold();
   if(!activeNodeDrag) return;
   const occupied=[];
-  wires.forEach((w,i)=>{
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{
     const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
     if(!A||!B) return;
 
-    if(w.a===activeNodeDrag || w.b===activeNodeDrag){
+    // A wire on buses settles onto its buses, not onto a route of its own.
+    if((w.a===activeNodeDrag || w.b===activeNodeDrag) && !(typeof busSpecOf==='function'&&busSpecOf(w))){
       const candidate=routePoints(A,B,w.aSide,w.bSide,w.a,w.b,w.lane??i,occupied,w.id);
       routeCache.set(i,routeCacheFromCandidate(candidate));
-      dragRouteSnapshots.set(i,{
-        points:clonePoints(candidate.points),
-        aPos:{x:A.x,y:A.y},
-        bPos:{x:B.x,y:B.y}
-      });
+      dragRouteSnapshots.delete(i);
       occupied.push(...routeSegments(candidate.points,w));
     }else{
       const points=stableRouteForWire(i,w,A,B,occupied);
+      if(w.a===activeNodeDrag || w.b===activeNodeDrag)dragRouteSnapshots.delete(i);
       occupied.push(...routeSegments(points,w));
     }
+  }));
+  // The settle pass is the one a rerouted wire travels from (wireTravelPass, src/55-render.js).
+  try{wireTravelPass=true;renderWiresForDrag()}finally{wireTravelPass=false}
+  wires.forEach((w,i)=>{
+    if(!(w.a===activeNodeDrag || w.b===activeNodeDrag)) return;
+    const A=carrierEndpointPos(w,'a'), B=carrierEndpointPos(w,'b');
+    if(!A||!B||!drawnRoutePoints.has(i)) return;
+    dragRouteSnapshots.set(i,{points:clonePoints(drawnRoutePoints.get(i)),aPos:{x:A.x,y:A.y},bPos:{x:B.x,y:B.y}});
   });
-  renderWires();
   statusEl.textContent='Settled';
 }
 function scheduleDragSettle(mods=null){
@@ -276,6 +298,113 @@ function scheduleDragSettle(mods=null){
 }
 
 
+// What a route keeps clear of: every visible card that is not a group and not a container holding
+// both ends, padded by the clearance 12, and the wire's own end cards padded 8. A card hosted on
+// the wire itself sits on the line and is not in the way. routePoints and the cached rebuild in
+// stableRouteForWire take this one set, so a rebuild is held to the rule a fresh route is.
+const ROUTE_CLEARANCE=12,ROUTE_END_CLEARANCE=8;
+function routeObstacleSet(sourceNode,targetNode,aSide,bSide,routedWire,wireId){
+  const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
+  const others=nodes
+    .filter(n=>n!==sourceNode && n!==targetNode && n.id!==activeNodeDrag && !isGroupComponent(n) && !isEffectivelyHidden(n) && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
+    .map(n=>rectForNode(n,ROUTE_CLEARANCE));
+  const ownA=endpointNeedsOuterObstacle(sourceNode,aSide,routedWire)?rectForNode(sourceNode,ROUTE_END_CLEARANCE):null;
+  const ownB=endpointNeedsOuterObstacle(targetNode,bSide,routedWire)?rectForNode(targetNode,ROUTE_END_CLEARANCE):null;
+  return {hostCanvasId,others,ownA,ownB,obstacles:[...others,...[ownA,ownB].filter(Boolean)]};
+}
+// An end's lead: the stub from the port P to the lead's end S, and on along the same line. That
+// stub is the one part of a route allowed inside its own card's padding.
+function axisDirection(P,S){
+  if(!P||!S)return null;
+  const dx=S.x-P.x,dy=S.y-P.y;
+  if(Math.abs(dx)>=.5&&Math.abs(dy)<.5)return {dx:Math.sign(dx),dy:0};
+  if(Math.abs(dy)>=.5&&Math.abs(dx)<.5)return {dx:0,dy:Math.sign(dy)};
+  return null;
+}
+function routeLeadRay(P,S,R){
+  const d=R?axisDirection(P,S):null;
+  return d?{S,R,...d}:null;
+}
+function onLeadRay(P,Q,lead){
+  const tol=.05;
+  if(lead.dx)return Math.abs(P.y-lead.S.y)<tol&&Math.abs(Q.y-lead.S.y)<tol&&(P.x-lead.S.x)*lead.dx>=-tol&&(Q.x-lead.S.x)*lead.dx>=-tol;
+  return Math.abs(P.x-lead.S.x)<tol&&Math.abs(Q.x-lead.S.x)<tol&&(P.y-lead.S.y)*lead.dy>=-tol&&(Q.y-lead.S.y)*lead.dy>=-tol;
+}
+function segmentClear(P,Q,obstacles,leads=[]){
+  for(const R of obstacles){
+    if(!segHitsRect(P,Q,R))continue;
+    if(leads.some(l=>l&&l.R===R&&onLeadRay(P,Q,l)))continue;
+    return false;
+  }
+  return true;
+}
+// A route enters no padded obstacle; only each end's lead may sit inside its own card's padding.
+function routeClear(points,obstacles,leads=[]){
+  const pts=normalizePoints(points);
+  for(let i=0;i<pts.length-1;i++)if(!segmentClear(pts[i],pts[i+1],obstacles,leads))return false;
+  return true;
+}
+// What one segment costs against the routes already drawn: the crossing, shared-track and crowding
+// terms of pathScore.
+function occupiedCost(P,Q,occupied,ends){
+  let c=0;
+  for(const seg of occupied){
+    if(segmentsCross(P,Q,seg.a,seg.b))c+=90;
+    c+=sharedLength(P,Q,seg.a,seg.b)*5;
+    if(ends&&seg.ends&&!seg.ends.some(e=>ends.includes(e))){if(onOneTrack(P,Q,seg.a,seg.b))c+=260;else if(runsBeside(P,Q,seg.a,seg.b))c+=70}
+  }
+  return c;
+}
+// Orthogonal connector routing (Wybrow, Marriott and Stuckey, GD 2009; libavoid): A* over the grid
+// of channel lines, from the source lead's end to the target lead's end, along grid edges that enter
+// no padded obstacle. Cost: length + 46 per bend + occupiedCost. Returns the grid points or null.
+const ROUTE_BEND_COST=46;
+function gridRoute(SA,SB,xs,ys,obstacles,leads,fence,occupied,ends,outA,inB){
+  const X=uniqueNumbers([...xs,SA.x,SB.x],.01),Y=uniqueNumbers([...ys,SA.y,SB.y],.01);
+  const ix=v=>{let k=0;for(let i=1;i<X.length;i++)if(Math.abs(X[i]-v)<Math.abs(X[k]-v))k=i;return k};
+  const iy=v=>{let k=0;for(let i=1;i<Y.length;i++)if(Math.abs(Y[i]-v)<Math.abs(Y[k]-v))k=i;return k};
+  const sx=ix(SA.x),sy=iy(SA.y),gx=ix(SB.x),gy=iy(SB.y),NY=Y.length;
+  const pt=(i,j)=>(i===sx&&j===sy)?SA:(i===gx&&j===gy)?SB:{x:X[i],y:Y[j]};
+  const inside=(i,j)=>!fence||(i===sx&&j===sy)||(i===gx&&j===gy)||routeInsideFence([null,{x:X[i],y:Y[j]},null],fence);
+  const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
+  const dirOf=v=>v?DIRS.findIndex(d=>d[0]===v.dx&&d[1]===v.dy):-1;
+  const start=dirOf(outA),finish=dirOf(inB);
+  const key=(i,j,d)=>((i*NY+j)*5)+d+1;
+  const heur=(i,j)=>Math.abs(X[i]-SB.x)+Math.abs(Y[j]-SB.y);
+  const gScore=new Map(),from=new Map(),edgeMemo=new Map(),heap=[];
+  const push=n=>{heap.push(n);let c=heap.length-1;while(c>0){const p=(c-1)>>1;if(heap[p].f<=heap[c].f)break;[heap[p],heap[c]]=[heap[c],heap[p]];c=p}};
+  const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let c=0;for(;;){const l=2*c+1,r=l+1;let m=c;if(l<heap.length&&heap[l].f<heap[m].f)m=l;if(r<heap.length&&heap[r].f<heap[m].f)m=r;if(m===c)break;[heap[m],heap[c]]=[heap[c],heap[m]];c=m}}return top};
+  const k0=key(sx,sy,start);gScore.set(k0,0);push({i:sx,j:sy,d:start,g:0,f:heur(sx,sy),k:k0});
+  let budget=60000;
+  while(heap.length&&budget-->0){
+    const cur=pop();
+    if(!cur.done&&cur.g>(gScore.get(cur.k)??Infinity))continue;
+    if(cur.i===gx&&cur.j===gy){
+      // Arrive heading into the target's lead, or pay for the bend there.
+      const total=cur.g+(finish>=0&&cur.d>=0&&cur.d!==finish?ROUTE_BEND_COST:0);
+      if(!cur.done){push({...cur,g:total,f:total,done:true});continue}
+      const out=[];let k=cur.k,node=cur;
+      while(node){out.push(pt(node.i,node.j));node=from.get(k);k=node?.k}
+      return out.reverse();
+    }
+    if(cur.done)continue;
+    for(let d=0;d<4;d++){
+      const ni=cur.i+DIRS[d][0],nj=cur.j+DIRS[d][1];
+      if(ni<0||nj<0||ni>=X.length||nj>=NY||!inside(ni,nj))continue;
+      const P=pt(cur.i,cur.j),Q=pt(ni,nj);
+      if(Math.abs(P.x-Q.x)>.01&&Math.abs(P.y-Q.y)>.01)continue;
+      const ek=Math.min(cur.i*NY+cur.j,ni*NY+nj)+':'+Math.max(cur.i*NY+cur.j,ni*NY+nj);
+      let edge=edgeMemo.get(ek);
+      if(edge===undefined){edge=segmentClear(P,Q,obstacles,leads)?segmentLength(P,Q)+occupiedCost(P,Q,occupied,ends):null;edgeMemo.set(ek,edge)}
+      if(edge===null)continue;
+      const g=cur.g+edge+(cur.d>=0&&cur.d!==d?ROUTE_BEND_COST:0),k=key(ni,nj,d);
+      if(g>=(gScore.get(k)??Infinity))continue;
+      gScore.set(k,g);from.set(k,cur);push({i:ni,j:nj,d,g,f:g+heur(ni,nj),k});
+    }
+  }
+  return null;
+}
+
 function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSeed=0,occupied=[],wireId=null){
   const sourceNode=nodes.find(n=>n.id===sourceId);
   const targetNode=nodes.find(n=>n.id===targetId);
@@ -287,19 +416,13 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
   // A lead never leaves the fence: a card near the core's edge gets a shorter lead, not a detour.
   const inFence=P=>fence?{x:Math.max(fence.l+2,Math.min(fence.r-2,P.x)),y:Math.max(fence.t+2,Math.min(fence.b-2,P.y))}:P;
   const SA=sourceNode?inFence(routeLead(A,B,aSide,sourceNode,wireEndpointInward(routedWire,sourceNode))):A, SB=targetNode?inFence(routeLead(B,A,bSide,targetNode,wireEndpointInward(routedWire,targetNode))):B;
-  const hostCanvasId=wireId?localCanvasId('wire',wireId):null;
-  const otherRects=nodes
-    .filter(n=>n.id!==sourceId && n.id!==targetId && n.id!==activeNodeDrag && (!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId) && !ignoreContainerObstacle(n,sourceNode,targetNode))
-    .map(n=>rectForNode(n,12));
-
+  // A group is drawn behind everything and is never an obstacle (SECTION-MODEL.md "Groups").
   // Source and target are included after the outward lead. This prevents a path
   // from exiting one side and visually tunneling through either endpoint card.
-  const endpointRects=[];
-  if(endpointNeedsOuterObstacle(sourceNode,aSide,routedWire))endpointRects.push(rectForNode(sourceNode,8));
-  if(endpointNeedsOuterObstacle(targetNode,bSide,routedWire))endpointRects.push(rectForNode(targetNode,8));
-  const obstacles=[...otherRects,...endpointRects];
+  const {hostCanvasId,ownA,ownB,obstacles}=routeObstacleSet(sourceNode,targetNode,aSide,bSide,routedWire,wireId);
+  const leads=[routeLeadRay(A,SA,ownA),routeLeadRay(B,SB,ownB)].filter(Boolean);
 
-  const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
+  const allRects=nodes.filter(n=>n.id!==activeNodeDrag&&!isGroupComponent(n)&&(!hostCanvasId||(n.canvasId||GLOBAL_CANVAS_ID)!==hostCanvasId)&&!ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,16));
   const xs=[SA.x,SB.x,(SA.x+SB.x)/2];
   const ys=[SA.y,SB.y,(SA.y+SB.y)/2];
   if(fence){xs.push(fence.l+14,fence.r-14);ys.push(fence.t+14,fence.b-14)}
@@ -336,7 +459,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
 
   const valid=candidates
     .map(normalizePoints)
-    .filter(points=>pathValid(points,obstacles)&&routeInsideFence(points,fence))
+    .filter(points=>routeClear(points,obstacles,leads)&&routeInsideFence(points,fence))
     .map(points=>({
       points,
       score:pathScore(points,SA,SB,obstacles,occupied,ends),
@@ -345,9 +468,20 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
     }))
     .sort((a,b)=>a.score-b.score);
 
-  let chosen=valid[0]||null;
+  let chosen=valid[0]||null,blocked=false;
 
   if(!chosen){
+    // No simple shape clears: search the channel grid rather than take a route through a card.
+    const found=gridRoute(SA,SB,channelsX,channelsY,obstacles,leads,fence,occupied,ends,axisDirection(A,SA),axisDirection(SB,B));
+    if(found){
+      const points=normalizePoints(found);
+      chosen={points,score:pathScore(points,SA,SB,obstacles,occupied,ends),signature:routeSignature(points),anchor:routeAnchor(points)};
+    }
+  }
+
+  if(!chosen){
+    // The grid has no clear route either: the route is blocked, and drawn round the perimeter.
+    blocked=true;
     // Last resort: a clean perimeter route. Choose the cheapest of four sides; inside a
     // fence the perimeter is the fence's own inner edge, never the world outside it.
     const minL=fence?fence.l+8:Math.min(SA.x,SB.x,...allRects.map(r=>r.l))-36-Math.abs(lane);
@@ -367,8 +501,13 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
        anchor:routeAnchor(points)
      }))
      .sort((a,b)=>a.score-b.score);
-    // Prefer a perimeter that clears every body; only when none does is the cheapest taken.
-    chosen=fallback.find(f=>pathValid(f.points,obstacles))||fallback[0];
+    // Prefer a perimeter that clears every body; when none does, the cheapest that still leaves and
+    // arrives along each port's lead (it never doubles back over a port), and only then the cheapest.
+    const alongLeads=f=>{
+      const p=normalizePoints([A,SA,...f.points.slice(1,-1),SB,B]),same=(u,v)=>!u||(!!v&&u.dx===v.dx&&u.dy===v.dy);
+      return p.length<2||(same(sourceNode&&axisDirection(A,SA),axisDirection(p[0],p[1]))&&same(targetNode&&axisDirection(SB,B),axisDirection(p.at(-2),p.at(-1))));
+    };
+    chosen=fallback.find(f=>routeClear(f.points,obstacles,leads))||fallback.find(alongLeads)||fallback[0];
   }
 
   return {
@@ -377,6 +516,7 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
     score: chosen.score,
     signature: chosen.signature,
     anchor: chosen.anchor,
+    blocked,
     obstacles
   };
 }
@@ -396,11 +536,34 @@ function routeLead(P,Q,portId,node,inward){
   let d=ahead>0?Math.max(4,Math.min(ROUTE_LEAD,ahead/2)):ROUTE_LEAD;
   // Nor into a body in front of it: stop short of the first card the lead would enter.
   for(const other of nodes){
-    if(other.id===node.id||componentForm(other).dimension!==2||isDescendantOf(node.id,other.id)||isEffectivelyHidden(other))continue;
+    if(other.id===node.id||componentForm(other).dimension!==2||isGroupComponent(other)||isDescendantOf(node.id,other.id)||isEffectivelyHidden(other))continue;
     const R=componentBounds(other,10);
     for(let s=2;s<=d;s+=2){const x=P.x+nx*s,y=P.y+ny*s;if(x>R.l&&x<R.r&&y>R.t&&y<R.b){d=Math.max(4,s/2);break}}
   }
   return {x:P.x+nx*d,y:P.y+ny*d};
+}
+// How a declared route joins an end's lead (LAYOUT-MODEL.md "As built: port side"). N is the
+// route's point next to the end, P the port, S the lead's end. Returned: the corners between N and
+// S, in that order, so the route reaches S from outside the stretch between S and the port and the
+// segment touching the port runs along the port's normal. Tried in order: the corner asked for, the
+// other corner, then round the end's own card on its nearer and its farther side; the first that
+// also keeps out of the card's padding is taken. node is the end's card when its body is an
+// obstacle to this wire, else null (the corner asked for is returned). Points closer than eps to
+// one axis line count as aligned and need no corner. Pinned and guided routes (src/58-layouts.js)
+// and bus taps (src/41-buses.js) build their ends with this.
+function leadJoin(N,P,S,node,first=null,eps=.5){
+  const aligned=Math.abs(N.x-S.x)<=eps||Math.abs(N.y-S.y)<=eps,asked=aligned||!first?[]:[first];
+  const d=axisDirection(P,S);
+  if(!d||!node||componentForm(node).dimension!==2||componentHostedOnWire(node))return asked;
+  const R=componentBounds(node,Math.min(ROUTE_END_CLEARANCE,Math.abs(S.x-P.x)+Math.abs(S.y-P.y))),W=componentBounds(node,ROUTE_CLEARANCE),lead={S,R,...d};
+  const nearer=(p,q,at)=>Math.abs(p-at)<=Math.abs(q-at)?[p,q]:[q,p];
+  const options=[asked,...(aligned?[]:[[{x:S.x,y:N.y}],[{x:N.x,y:S.y}]]),
+    ...(d.dx?nearer(W.t,W.b,N.y).map(y=>[{x:N.x,y},{x:S.x,y}]):nearer(W.l,W.r,N.x).map(x=>[{x,y:N.y},{x,y:S.y}]))];
+  const path=mid=>{const out=[{x:N.x,y:N.y}];for(const q of [...mid,S]){const p=out.at(-1);out.push(Math.abs(p.x-q.x)<=eps?{x:p.x,y:q.y}:Math.abs(p.y-q.y)<=eps?{x:q.x,y:p.y}:q)}return normalizePoints(out)};
+  // The point before S is off the lead's line, or on it beyond S: never between S and the port or behind the port.
+  const reaches=mid=>{const pts=path(mid);if(pts.length<2)return true;const M=pts.at(-2),E=pts.at(-1);return Math.abs((M.x-E.x)*d.dy)+Math.abs((M.y-E.y)*d.dx)>=.5||(M.x-E.x)*d.dx+(M.y-E.y)*d.dy>=0};
+  const clear=mid=>{const pts=path(mid);for(let i=0;i<pts.length-1;i++)if(!segmentClear(pts[i],pts[i+1],[R],[lead]))return false;return true};
+  return options.find(o=>reaches(o)&&clear(o))||options.find(reaches)||asked;
 }
 function routeFence(wire){
   const surface=wire?.canvasId||'';
@@ -418,9 +581,21 @@ function routePath(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,laneSe
   return pathD(routePoints(A,B,aSide,bSide,sourceId,targetId,laneSeed,occupied).points);
 }
 function stableRouteForWire(index,w,A,B,occupied=[]){
-  // A route the layout on screen pins or guides is drawn as declared, not re-derived.
+  // A route the layout on screen pins or guides is drawn as declared, not re-derived. A wire on
+  // buses rides them (src/41-buses.js); when that route cannot be built the router takes over.
   const spec=typeof activeRouteSpec==='function'?activeRouteSpec(w.id):null;
-  if(spec){const declared=routeThroughSpec(A,B,w,spec);if(declared)return declared}
+  if(spec?.mode==='bus'){const onBus=typeof busRouteFor==='function'?busRouteFor(w):null;if(onBus)return onBus}
+  else if(spec){const declared=routeThroughSpec(A,B,w,spec);if(declared)return declared}
+  // Two free ends have no normal to meet and no boundary to leave: there is nothing for
+  // orthogonal routing to do, so the carrier is the segment between its own two points -
+  // straight even when the ends are not aligned, the same thing a 1D Form's body is between its
+  // own two boundary points. A pinned, guided or bus route above still wins; this only replaces
+  // the open router's own elbow. The cache is dropped so a route chosen while an end was still
+  // bound cannot survive the unbinding, and binding an end again starts fresh.
+  if(carrierEndpoint(w,'a')?.kind==='free'&&carrierEndpoint(w,'b')?.kind==='free'){
+    routeCache.delete(index);
+    return normalizePoints([A,B]);
+  }
   const candidate=routePoints(A,B,w.aSide,w.bSide,w.a,w.b,w.lane??index,occupied,w.id);
   const cached=routeCache.get(index);
 
@@ -430,7 +605,8 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
       core:candidate.core,
       score:candidate.score,
       signature:candidate.signature,
-      anchor:candidate.anchor
+      anchor:candidate.anchor,
+      blocked:candidate.blocked
     });
     return candidate.points;
   }
@@ -447,30 +623,27 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     const inner=cachedCore.slice(1,-1).map(q=>({x:q.x,y:q.y}));
     rebuilt=normalizePoints([A,SA,...inner,SB,B]);
 
-    // Cached topology may remain readable while endpoints move. We only throw
-    // it away if its interior route now collides with a component.
+    // Cached topology may remain readable while endpoints move. It is thrown away when its
+    // route enters any padded obstacle, the wire's own end cards included; only the leads
+    // may sit inside their own card's padding.
     const routeOnly=normalizePoints([SA,...inner,SB]);
-    const endpointRects=[];
-    const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
-    if(endpointNeedsOuterObstacle(sourceNode,w.aSide,w))endpointRects.push(rectForNode(sourceNode,8));
-    if(endpointNeedsOuterObstacle(targetNode,w.bSide,w))endpointRects.push(rectForNode(targetNode,8));
-    const obstacles=[...otherRects,...endpointRects];
+    const {ownA,ownB,obstacles}=routeObstacleSet(sourceNode,targetNode,w.aSide,w.bSide,w,w.id);
+    const leads=[routeLeadRay(A,SA,ownA),routeLeadRay(B,SB,ownB)].filter(Boolean);
 
-    if(!pathValid(routeOnly,obstacles)||!routeInsideFence(routeOnly,routeFence(w))) rebuilt=null;
+    if(!routeClear(routeOnly,obstacles,leads)||!routeInsideFence(routeOnly,routeFence(w))) rebuilt=null;
   }
 
   if(!rebuilt){
     routeCache.set(index,{
       points:candidate.points,core:candidate.core,score:candidate.score,
-      signature:candidate.signature,anchor:candidate.anchor
+      signature:candidate.signature,anchor:candidate.anchor,blocked:candidate.blocked
     });
     return candidate.points;
   }
 
   const SA=sourceNode?routeLead(A,B,w.aSide,sourceNode,wireEndpointInward(w,sourceNode)):A, SB=targetNode?routeLead(B,A,w.bSide,targetNode,wireEndpointInward(w,targetNode)):B;
   const rebuiltCore=normalizePoints([SA,...rebuilt.slice(2,-2),SB]);
-  const otherRects=nodes.filter(n=>n.id!==w.a && n.id!==w.b && n.id!==activeNodeDrag && (n.canvasId||GLOBAL_CANVAS_ID)!==wireCanvas(w).id && !ignoreContainerObstacle(n,sourceNode,targetNode)).map(n=>rectForNode(n,12));
-  const rebuiltScore=pathScore(rebuiltCore,SA,SB,otherRects,occupied,[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]);
+  const rebuiltScore=pathScore(rebuiltCore,SA,SB,routeObstacleSet(sourceNode,targetNode,w.aSide,w.bSide,w,w.id).others,occupied,[`${w.a}:${w.aSide}`,`${w.b}:${w.bSide}`]);
   const anchor=routeAnchor(rebuiltCore);
 
   const sameFamily = candidate.signature===cached.signature;
@@ -484,7 +657,7 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
   if(sameFamily || (clearlyBetter && movementPastRelease)){
     routeCache.set(index,{
       points:candidate.points,core:candidate.core,score:candidate.score,
-      signature:candidate.signature,anchor:candidate.anchor
+      signature:candidate.signature,anchor:candidate.anchor,blocked:candidate.blocked
     });
     return candidate.points;
   }
@@ -493,10 +666,15 @@ function stableRouteForWire(index,w,A,B,occupied=[]){
     ...cached,
     points:rebuilt,
     score:rebuiltScore,
-    anchor
+    anchor,
+    blocked:false
   });
   return rebuilt;
 }
+
+// Whether the wire at this index is drawn on the perimeter fallback because neither a simple shape
+// nor the grid search found a clear route (the wire group's data-route-blocked).
+function routeBlockedAt(index){return !!routeCache.get(index)?.blocked}
 
 // Segments a later route must keep clear of, tagged with the wire's two ends: wires that
 // share an end (a fan-out, a fan-in) may run together; any others may not run on one track.
@@ -521,6 +699,220 @@ function onOneTrack(A,B,C,D,gap=14){
   if(off>=3)return false;
   const lo1=Math.min(p,q),hi1=Math.max(p,q),lo2=Math.min(r,s),hi2=Math.max(r,s);
   return Math.max(lo1,lo2)-Math.min(hi1,hi2)<gap;
+}
+
+// ---- Track gap (LAYOUT-MODEL.md "As built: track gap") -------------------------------------------
+// Two auto-routed wires whose parallel interior segments overlap for TRACK_STRETCH or more stand at
+// least TRACK_GAP apart; wires sharing an end may instead share one line exactly (a trunk, which the
+// junction dot marks where it parts). TRACK_GAP is the step of a wire's private lane in routePoints.
+// After every route is drawn, jogs (a step under TRACK_JOG between two parallel legs) are taken out,
+// then the segments that share a channel are ordered and spread (the nudging phase of orthogonal
+// connector routing: Wybrow, Marriott and Stuckey, GD 2009; libavoid's nudging and centring; ELK's
+// slot assignment). End leads, pinned and guided routes, bus routes and free/free carriers never
+// move: they are fixed segments the others keep the rule against.
+const TRACK_GAP=10,TRACK_STRETCH=24,TRACK_JOG=10;
+// What one wire's route keeps clear of, the rule routePoints uses, plus the fence of an interior.
+function routeObstaclesForWire(w){
+  const sourceNode=w.a?nodes.find(n=>n.id===w.a)||null:null,targetNode=w.b?nodes.find(n=>n.id===w.b)||null:null;
+  return {...routeObstacleSet(sourceNode,targetNode,w.aSide,w.bSide,w,w.id),fence:routeFence(w)};
+}
+function trackEnds(w){return w?[w.a?`${w.a}:${w.aSide}`:null,w.b?`${w.b}:${w.bSide}`:null].filter(Boolean):[]}
+function trackSeg(P,Q){
+  const h=Math.abs(P.y-Q.y)<.01,v=Math.abs(P.x-Q.x)<.01;if(h===v)return null;
+  return h?{axis:'h',c:P.y,lo:Math.min(P.x,Q.x),hi:Math.max(P.x,Q.x)}:{axis:'v',c:P.x,lo:Math.min(P.y,Q.y),hi:Math.max(P.y,Q.y)};
+}
+// An item is one drawn route; its segments are interior (movable), lead (an end's stub) or fixed.
+function trackItemSegs(it){
+  const p=it.pts,n=p.length,out=[];
+  for(let k=0;k<n-1;k++){const s=trackSeg(p[k],p[k+1]);if(!s)continue;s.item=it;s.k=k;s.kind=!it.movable?'fixed':(k===0||k===n-2)?'lead':'interior';s.ends=it.ends;out.push(s)}
+  return out;
+}
+// How badly a pair breaks the rule: 0 when it keeps it, else TRACK_GAP less the distance.
+function trackPairCost(s,t){
+  if(s.axis!==t.axis||(s.item&&s.item===t.item))return 0;
+  if(s.kind!=='interior'&&t.kind!=='interior')return 0;
+  if(Math.min(s.hi,t.hi)-Math.max(s.lo,t.lo)<TRACK_STRETCH)return 0;
+  const d=Math.abs(s.c-t.c);if(d>=TRACK_GAP)return 0;
+  if(d<.5)return s.ends.some(e=>t.ends.includes(e))?0:TRACK_GAP;
+  return TRACK_GAP-d;
+}
+// Takes out jogs, then orders and spreads the segments that share a channel, changing the points of
+// the movable routes in place. fixed: further segments ({a, b, ends}) that never move (bus lanes and
+// taps). obstacles(wire): what that wire's route keeps clear of. Returns the route keys still closer
+// than TRACK_GAP to a neighbour because the channel has no room.
+function nudgeRoutes(routes,fixed=[],obstacles=routeObstaclesForWire){
+  const cramped=new Set();
+  if(typeof window!=='undefined'&&window.ROUTE_NUDGE===false)return cramped;
+  const items=[];
+  for(const [key,r] of routes){
+    const w=wires[key];if(!w||!r?.points||r.points.length<2)continue;
+    const spec=typeof activeRouteSpec==='function'?activeRouteSpec(w.id):null;
+    const freeFree=carrierEndpoint(w,'a')?.kind==='free'&&carrierEndpoint(w,'b')?.kind==='free';
+    const movable=!r.snapshot&&!spec&&!freeFree;
+    items.push({key,w,r,idx:items.length,movable,ends:trackEnds(w),pts:normalizePoints(r.points)});
+  }
+  const movers=items.filter(it=>it.movable&&it.pts.length>=4);
+  if(!movers.length)return cramped;
+  const fixedSegs=[];
+  for(const f of fixed){const s=f&&f.a&&f.b?trackSeg(f.a,f.b):null;if(!s)continue;s.item=null;s.k=-1;s.kind='fixed';s.ends=Array.isArray(f.ends)?f.ends:[];fixedSegs.push(s)}
+  const segOf=new Map(items.map(it=>[it,trackItemSegs(it)]));
+  let all=null;const allSegs=()=>all||(all=[...fixedSegs,...[...segOf.values()].flat()]);
+  const refresh=list=>{for(const it of list)segOf.set(it,trackItemSegs(it));all=null};
+  // The rule's cost touching the given items, each pair once.
+  const badness=W=>{
+    const set=new Set(W),A=allSegs();let sum=0;
+    for(const it of W)for(const s of segOf.get(it))for(const t of A){
+      if(t.axis!==s.axis||Math.abs(t.c-s.c)>=TRACK_GAP||t.item===it)continue;
+      if(t.item&&set.has(t.item)&&t.item.idx<it.idx)continue;
+      sum+=trackPairCost(s,t);
+    }
+    return sum;
+  };
+  const rulePartners=it=>{const out=new Set();for(const s of segOf.get(it))for(const t of allSegs())if(t.item!==it&&trackPairCost(s,t)>0)out.add(t.item?t.item.idx:-1);return out};
+  // Crossings the given items make with every other route: wires sharing an end may cross once.
+  const crossings=W=>{
+    const set=new Set(W);let sum=0;
+    for(const it of W)for(const o of items){
+      if(o===it||(set.has(o)&&o.idx<it.idx))continue;
+      let c=0;
+      for(let i=1;i<it.pts.length;i++)for(let j=1;j<o.pts.length;j++)if(segmentsCross(it.pts[i-1],it.pts[i],o.pts[j-1],o.pts[j]))c++;
+      sum+=it.ends.some(e=>o.ends.includes(e))?Math.max(0,c-1):c;
+    }
+    return sum;
+  };
+  const obsCache=new Map(),obsOf=it=>{if(!obsCache.has(it))obsCache.set(it,obstacles(it.w));return obsCache.get(it)};
+  // Segments of a route that enter a padded obstacle: the core against every obstacle (leads
+  // excepted on their own ray), each lead against the cards that are not its own.
+  const blockedKeys=(it,pts)=>{
+    const o=obsOf(it),n=pts.length,out=new Set(),key=(P,Q)=>`${P.x},${P.y},${Q.x},${Q.y}`;
+    const leads=[routeLeadRay(pts[0],pts[1],o.ownA),routeLeadRay(pts[n-1],pts[n-2],o.ownB)].filter(Boolean);
+    for(let k=0;k<n-1;k++){
+      const P=pts[k],Q=pts[k+1];if(P.x===Q.x&&P.y===Q.y)continue;
+      const lead=k===0||k===n-2;
+      if(lead?o.others.some(R=>segHitsRect(P,Q,R)):!segmentClear(P,Q,o.obstacles,leads))out.add(key(P,Q));
+    }
+    return out;
+  };
+  // A move keeps every segment's direction, every lead at least as long as 4 (or as it was), enters
+  // no padded obstacle it was not already in, and stays inside an interior's fence.
+  const shapeHolds=(it,before)=>{
+    const after=it.pts,n=after.length;
+    for(let k=0;k<n-1;k++){
+      const d0={x:before[k+1].x-before[k].x,y:before[k+1].y-before[k].y},d1={x:after[k+1].x-after[k].x,y:after[k+1].y-after[k].y};
+      if(d0.x*d1.x<0||d0.y*d1.y<0)return false;
+      if(k===0||k===n-2){const L0=Math.abs(d0.x)+Math.abs(d0.y),L1=Math.abs(d1.x)+Math.abs(d1.y);if(L1<Math.min(4,L0)-.01)return false}
+    }
+    const was=blockedKeys(it,normalizePoints(before));
+    for(const k of blockedKeys(it,normalizePoints(after)))if(!was.has(k))return false;
+    const fence=obsOf(it).fence;
+    return !fence||!routeInsideFence(before,fence)||routeInsideFence(after,fence);
+  };
+  // Try a change to some routes; keep it only when accept(before, after) holds, the routes make no
+  // new crossing and every shape holds.
+  const attempt=(W,apply,accept)=>{
+    const saved=W.map(it=>it.pts.map(p=>({x:p.x,y:p.y})));
+    const before={bad:badness(W),cross:crossings(W),partners:W.map(rulePartners)};
+    apply();refresh(W);
+    const ok=W.every((it,i)=>shapeHolds(it,saved[i]))&&(()=>{const after={bad:badness(W),cross:crossings(W),partners:W.map(rulePartners)};return after.cross<=before.cross&&accept(before,after)})();
+    if(!ok){W.forEach((it,i)=>{it.pts=saved[i]});refresh(W)}
+    return ok;
+  };
+  const setLine=(pts,k,axis,c)=>{if(axis==='h'){pts[k].y=c;pts[k+1].y=c}else{pts[k].x=c;pts[k+1].x=c}};
+
+  // Jogs: the leg that is not an end lead moves onto the other leg's line, when that leaves no new
+  // pair breaking the rule.
+  for(const it of movers){
+    for(let guard=0;guard<it.pts.length;guard++){
+      const p=it.pts,n=p.length;let done=false;
+      for(let k=1;k<=n-3&&!done;k++){
+        const len=segmentLength(p[k],p[k+1]);if(!(len>.01&&len<TRACK_JOG))continue;
+        const legAxis=segmentAxis(p[k],p[k+1])==='v'?'h':'v',coord=q=>legAxis==='h'?q.y:q.x;
+        const options=[];
+        if(k+1<=n-3)options.push({move:k+1,to:coord(p[k]),len:segmentLength(p[k+1],p[k+2])});
+        if(k-1>=1)options.push({move:k-1,to:coord(p[k+1]),len:segmentLength(p[k-1],p[k])});
+        options.sort((x,y)=>x.len-y.len);
+        for(const o of options){
+          if(attempt([it],()=>setLine(it.pts,o.move,legAxis,o.to),(b,a)=>a.bad<=b.bad&&[...a.partners[0]].every(x=>b.partners[0].has(x)))){it.pts=normalizePoints(it.pts);refresh([it]);done=true;break}
+        }
+      }
+      if(!done)break;
+    }
+  }
+
+  // Nudging: channel by channel, order the segments and spread them TRACK_GAP apart.
+  const failed=new Set();
+  for(let pass=0;pass<3;pass++){
+    const A=allSegs(),parent=new Map(),find=s=>{while(parent.get(s)!==s){parent.set(s,parent.get(parent.get(s)));s=parent.get(s)}return s};
+    for(const axis of ['h','v']){
+      const L=A.filter(s=>s.axis===axis).sort((p,q)=>p.c-q.c);
+      for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length&&L[j].c-L[i].c<TRACK_GAP;j++){
+        if(trackPairCost(L[i],L[j])<=0)continue;
+        for(const s of [L[i],L[j]])if(!parent.has(s))parent.set(s,s);
+        const a=find(L[i]),b=find(L[j]);if(a!==b)parent.set(a,b);
+      }
+    }
+    const groups=new Map();for(const s of parent.keys()){const r=find(s);if(!groups.has(r))groups.set(r,[]);groups.get(r).push(s)}
+    let changed=false;
+    for(const members of groups.values()){
+      const sig=members.map(s=>`${s.item?s.item.key:'f'}:${s.k}:${s.c}`).sort().join('|');
+      if(failed.has(sig))continue;
+      const axis=members[0].axis;
+      // Slots: wires on one line that share an end are one trunk and move together.
+      members.sort((p,q)=>p.c-q.c);
+      const slots=[];
+      for(const s of members){const last=slots.at(-1);if(last&&Math.abs(s.c-last.c)<.5&&last.members.some(t=>t.ends.some(e=>s.ends.includes(e)))){last.members.push(s);continue}slots.push({c:s.c,members:[s]})}
+      for(const sl of slots){sl.fixed=sl.members.some(s=>s.kind!=='interior');if(sl.fixed)sl.c=sl.members.find(s=>s.kind!=='interior').c}
+      // Metro-line order: an arm leaving a segment inside the other's span wants its segment on the
+      // side the arm goes, so the arm never crosses the other segment.
+      const arms=s=>{
+        if(!s.item)return [];const p=s.item.pts,out=[];
+        for(const [at,next] of [[s.k,s.k-1],[s.k+1,s.k+2]]){if(next<0||next>=p.length)continue;const d=axis==='h'?Math.sign(p[next].x-p[at].x):Math.sign(p[next].y-p[at].y);const e=axis==='h'?p[at].x:p[at].y;if(d)out.push({e,d})}
+        return out;
+      };
+      const vote=(s,t)=>{let v=0;for(const a of arms(s))if(a.e>t.lo+.01&&a.e<t.hi-.01)v+=a.d;for(const a of arms(t))if(a.e>s.lo+.01&&a.e<s.hi-.01)v-=a.d;return v};
+      const slotVote=(x,y)=>{let v=0;for(const s of x.members)for(const t of y.members)v+=vote(s,t);return v};
+      const free=slots.filter(sl=>!sl.fixed),anchors=slots.filter(sl=>sl.fixed).sort((p,q)=>p.c-q.c);
+      if(!free.length)continue;
+      for(const sl of free){sl.score=free.reduce((a,o)=>o===sl?a:a+slotVote(sl,o),0);sl.region=anchors.filter(F=>{const v=slotVote(sl,F);return v>0||(v===0&&sl.c>=F.c)}).length}
+      free.sort((p,q)=>p.region-q.region||p.score-q.score||p.c-q.c||(p.members[0].item.idx-q.members[0].item.idx));
+      const W=[...new Set(free.flatMap(sl=>sl.members.map(s=>s.item)))];
+      // Each run of free slots between two anchors is spread g apart, centred where it is, kept a
+      // gap from the anchors; with no room it is spread evenly between them.
+      const place=(g,shift)=>{
+        const out=new Map();
+        for(let r=0;r<=anchors.length;r++){
+          const R=free.filter(sl=>sl.region===r);if(!R.length)continue;
+          const lo=r>0?anchors[r-1].c:-Infinity,hi=r<anchors.length?anchors[r].c:Infinity,m=R.length;
+          let step=g,start=R.reduce((a,sl)=>a+sl.c,0)/m-(m-1)/2*g+shift;
+          if(isFinite(lo)&&isFinite(hi)&&hi-lo<(m+1)*g){step=(hi-lo)/(m+1);start=lo+step}
+          else{if(isFinite(lo))start=Math.max(start,lo+g);if(isFinite(hi))start=Math.min(start,hi-g-(m-1)*g)}
+          R.forEach((sl,i)=>out.set(sl,Math.round((start+i*step)*100)/100));
+        }
+        return out;
+      };
+      const tries=[[TRACK_GAP,0],[TRACK_GAP,TRACK_GAP/2],[TRACK_GAP,-TRACK_GAP/2],[TRACK_GAP,TRACK_GAP],[TRACK_GAP,-TRACK_GAP],[TRACK_GAP,2*TRACK_GAP],[TRACK_GAP,-2*TRACK_GAP]];
+      for(let g=TRACK_GAP-1;g>=2;g--)tries.push([g,0]);
+      let moved=false;
+      for(const [g,shift] of tries){
+        const at=place(g,shift);
+        if(attempt(W,()=>{for(const [sl,c] of at)for(const s of sl.members)setLine(s.item.pts,s.k,axis,c)},(b,a)=>a.bad<b.bad-.01)){moved=true;break}
+      }
+      if(moved)changed=true;else failed.add(sig);
+    }
+    for(const it of movers)it.pts=normalizePoints(it.pts);
+    refresh(movers);
+    if(!changed)break;
+  }
+
+  for(const it of movers)it.r.points=it.pts;
+  for(const axis of ['h','v']){
+    const L=allSegs().filter(s=>s.axis===axis).sort((p,q)=>p.c-q.c);
+    for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length&&L[j].c-L[i].c<TRACK_GAP;j++){
+      if(trackPairCost(L[i],L[j])<=0)continue;
+      for(const s of [L[i],L[j]])if(s.kind==='interior')cramped.add(s.item.key);
+    }
+  }
+  return cramped;
 }
 function terminalPointId(nodeId,id){
   const node=nodes.find(n=>n.id===nodeId);

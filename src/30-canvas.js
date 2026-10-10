@@ -248,6 +248,7 @@ function currentZoom(){
   return BASE_VIEW.w / camera.w;
 }
 function syncLabelScale(){
+  syncCanvasGrid();
   // The viewBox is also fitted into the actual workspace between the panels.
   // Nominal camera zoom alone misses this scale, especially on narrow screens.
   const matrix=workspace.getScreenCTM();
@@ -264,11 +265,19 @@ function applyCamera(){
 function setPanMode(active){
   document.querySelector('.workspace-wrap')?.classList.toggle('pan-mode',!!active);
 }
+// The group whose ground a press landed on: its hit rect or its title, never a card or a wire,
+// which are not drawn inside a group's g. A group has no place of its own, so its ground pans
+// the canvas as the blank canvas does, and a press that does not move selects the group.
+function groundGroupId(target){
+  const g=target instanceof Element?target.closest('.node.group'):null;
+  return g?g.dataset.id||null:null;
+}
 function beginPanGesture(e){
-  if(e.button===0&&e.target===workspace&&e.shiftKey&&typeof beginMarqueeGesture==='function'){beginMarqueeGesture(e);return}
+  const groupId=groundGroupId(e.target),onGround=e.target===workspace||groupId!==null;
+  if(e.button===0&&onGround&&e.shiftKey&&typeof beginMarqueeGesture==='function'){beginMarqueeGesture(e);return}
   const wantsMiddle=e.button===1;
   const wantsSpace=e.button===0&&spacePanHeld;
-  const wantsBackground=e.button===0&&e.target===workspace;
+  const wantsBackground=e.button===0&&onGround;
   if(!wantsMiddle&&!wantsSpace&&!wantsBackground)return;
   if(!wantsBackground && isEditableTarget(e.target))return;
 
@@ -286,6 +295,7 @@ function beginPanGesture(e){
     unitsX:camera.w/Math.max(1,rect.width),
     unitsY:camera.h/Math.max(1,rect.height),
     blankTapClear:wantsBackground,
+    groupId,
     moved:false
   };
   document.querySelector('.workspace-wrap')?.classList.add('panning');
@@ -308,11 +318,11 @@ function movePanGesture(e){
 function finishPanGesture(e=null){
   if(!panDrag)return;
   if(e&&e.pointerId!==panDrag.pointerId)return;
-  const shouldClear=panDrag.blankTapClear && !panDrag.moved;
+  const shouldClear=panDrag.blankTapClear && !panDrag.moved,groupId=panDrag.groupId;
   panDrag=null;
   document.querySelector('.workspace-wrap')?.classList.remove('panning');
   statusEl.textContent='Ready';
-  if(shouldClear){selected=null;selectNode(null)}
+  if(shouldClear){if(groupId)selectNode(groupId);else{selected=null;selectNode(null)}}
   restoreSelectionBarAfterGesture();
 }
 
@@ -370,16 +380,20 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   }
   if(!scopedNodes.length&&canvasId===GLOBAL_CANVAS_ID)return null;
   let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
-  for(const n of scopedNodes){const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
+  for(const n of scopedNodes){if(!(Number.isFinite(n.x)&&Number.isFinite(n.y)))continue;const size=componentSize(n);l=Math.min(l,n.x-size.w/2);r=Math.max(r,n.x+size.w/2);t=Math.min(t,n.y-size.h/2);b=Math.max(b,n.y+size.h/2)}
   const wireIds=activeCanvasWireSet(canvasId),occupied=[];
   for(const w of wires)if(nodeIds.has((w.canvasId||'').replace('canvas:component:','')))wireIds.add(w.id);
-  wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B)return;const points=stableRouteForWire(i,w,A,B,occupied);occupied.push(...routeSegments(points,w));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}});
+  // The bus routes are asked for once for the whole loop (src/40-routing.js withBusRoutesOnce).
+  withBusRoutesOnce(()=>wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B||![A,B].every(q=>Number.isFinite(q.x)&&Number.isFinite(q.y)))return;const points=stableRouteForWire(i,w,A,B,occupied);if(!points.every(q=>Number.isFinite(q.x)&&Number.isFinite(q.y)))return;occupied.push(...routeSegments(points,w));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}}));
   // Text and custom graphics can extend beyond a Component's body. Measure their
   // actual projection in workspace coordinates, excluding selection/drag chrome.
   const inverse=workspace.getScreenCTM()?.inverse();
-  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text')){
-    const node=el.closest('.node'),wire=el.closest('[data-wire-id]');
-    if(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId)))continue;
+  // Bus bands and labels (src/41-buses.js renderBuses) are drawn once, for the active layout of the
+  // global canvas, with no canvas filter: they count when the global canvas is the one measured.
+  const busEls=canvasId===GLOBAL_CANVAS_ID&&!window.__boundsLeaveBusOut;
+  if(inverse)for(const el of workspace.querySelectorAll('.node text,.node .custom-graphic,.connection-label,.port-label-text'+(busEls?',text.bus-label,.bus-band rect':''))){
+    const node=el.closest('.node'),wire=el.closest('[data-wire-id]'),bus=el.matches('text.bus-label,.bus-band rect');
+    if(!bus&&(node&&!nodeIds.has(node.dataset.id)||!node&&(!wire||!wireIds.has(wire.dataset.wireId))))continue;
     if(!el.getClientRects().length||getComputedStyle(el).display==='none')continue;
     const rect=el.getBBox(),matrix=inverse.multiply(el.getScreenCTM());
     for(const [x,y] of [[rect.x,rect.y],[rect.x+rect.width,rect.y],[rect.x,rect.y+rect.height],[rect.x+rect.width,rect.y+rect.height]]){
@@ -420,8 +434,23 @@ function snapModeLabel(step){
   if(step===0) return 'free settle';
   return `settles to ${step}`;
 }
+function syncCanvasGrid(){
+  // The grid is a CSS background drawn in world units: minor cell = canvasGridSize,
+  // the unit of the snap step; every fourth line is a major line.
+  const m=workspace.getScreenCTM();
+  if(!m)return;
+  const r=workspace.getBoundingClientRect();
+  const k=Math.hypot(m.a,m.b);
+  const minor=canvasGridSize*k;
+  const major=4*minor;
+  workspace.style.setProperty('--canvas-grid-size',`${minor}px`);
+  workspace.style.setProperty('--canvas-grid-major',`${major}px`);
+  workspace.style.setProperty('--canvas-grid-x',`${m.e-r.left-0.5}px`);
+  workspace.style.setProperty('--canvas-grid-y',`${m.f-r.top-0.5}px`);
+  workspace.classList.toggle('grid-minor-hidden',minor<8);
+}
 function applyGridSettings(){
-  document.documentElement.style.setProperty('--canvas-grid-size',`${canvasGridSize}px`);
+  syncCanvasGrid();
   workspace.classList.toggle('grid-hidden',!canvasGridVisible);
   gridVisibleInput.checked=canvasGridVisible;
   gridSnapInput.checked=canvasSnapEnabled;
@@ -534,6 +563,7 @@ function beginKeyboardMove(node){
   keyboardMoveNodeId=node.id;
   keyboardMoveStart=[node,...descendantsOf(node.id)].map(item=>({node:item,x:item.x,y:item.y}));
   activeNodeDrag=node.id;
+  dropDragSignalState();
   captureDragSnapshots(node.id);
   workspace.classList.add('dragging-node');
 }
@@ -542,6 +572,8 @@ function moveSelectedByArrow(e){
   const node=nodes.find(n=>n.id===selected);
   if(!node) return false;
   if(isEntityLocked(node)||isEntityPinned(node)){statusEl.textContent=isEntityLocked(node)?'Locked · move refused':'Pinned · move refused';return true}
+  // A group's region is the union of its members (groupRect): it has no place of its own to move.
+  if(isGroupComponent(node)){statusEl.textContent='A group follows its cards';return true}
 
   beginKeyboardMove(node);
 
@@ -556,7 +588,7 @@ function moveSelectedByArrow(e){
   if(el) el.setAttribute('transform',`translate(${node.x} ${node.y})`);
 
   statusEl.textContent=`Keyboard move · ${step}px`;
-  renderWires();
+  renderWiresForDrag();
   positionSelectionBar();
 
   if(keyboardSettleTimer) clearTimeout(keyboardSettleTimer);
@@ -569,18 +601,23 @@ function finishKeyboardMove(mods){
 
   // Arrow-key steps are intentionally aligned to the selected grid unless Alt
   // was used. Settling still applies the same rule for consistency.
+  dropDragSignalState();
   settleActiveComponent(mods);
-  const movedNode=nodes.find(n=>n.id===keyboardMoveNodeId),hosted=movedNode?updateContainmentFor(movedNode):null;
+  const movedNode=nodes.find(n=>n.id===keyboardMoveNodeId),hostBefore=movedNode?`${movedNode.canvasId||GLOBAL_CANVAS_ID}|${movedNode.parentId||''}`:'',hosted=movedNode?updateContainmentFor(movedNode):null;
+  // A changed host draws every wire from nothing at the settle below.
+  if(movedNode&&hostBefore!==`${movedNode.canvasId||GLOBAL_CANVAS_ID}|${movedNode.parentId||''}`)wireGroupDrawn.clear();
   // A refused host refuses the move: the Component and what it carries return to where it started.
-  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();render()}
+  if(hosted?.refused){for(const item of keyboardMoveStart||[]){item.node.x=item.x;item.node.y=item.y}routeCache.clear();arrowPoseCache.clear();dropBusLaneHold();render()}
   else settleDraggedRoutes();
 
   keyboardMoveNodeId=null;keyboardMoveStart=null;
   activeNodeDrag=null;
+  dropBusLaneHold(); // the move is over: the lanes are ordered in full again (src/41-buses.js)
   dragRouteSnapshots.clear();
   workspace.classList.remove('dragging-node');
   statusEl.textContent=hosted?.refused||'Select';
-  renderWires();
+  renderWiresForDrag();
+  dropDragSignalState();
   positionSelectionBar();
 }
 
@@ -595,6 +632,56 @@ function componentBounds(n,pad=0){
   const {w,h}=componentSize(n);
   return {l:n.x-w/2-pad,r:n.x+w/2+pad,t:n.y-h/2-pad,b:n.y+h/2+pad};
 }
+// The shape a card's body is drawn in (SECTION-MODEL.md "Card shapes"): its declared
+// config.presentation.shape, on a 2D card with a body, a closed interior and a one-line outline;
+// 'rect' for everything else. Ports, routing and every layout metric keep componentBounds.
+function componentShape(n){
+  if(componentForm(n).dimension!==2||isGroupComponent(n)||componentAcceptsChildren(n)||componentBackdropMode(n)==='none')return 'rect';
+  const shape=SovSchematicData.cardShape(n);if(shape==='rect')return shape;
+  const section=SovSchematicData.componentSection(n);
+  return section&&section.lines.length>=2?'rect':shape;
+}
+// The drawn outline in the card's local frame: its path `d`, the inner rectangle that text, the
+// glyph and chips keep to, and `edge(side,P)`, the outline point straight in from a point P on the
+// bounding side (P itself where the outline is the bounding side).
+//   cylinder: the bounding rectangle with its top and bottom replaced by the two halves of an
+//     ellipse `cap` = min(0.18 h, 18) tall; `rim` is the near half of the top ellipse. The inner
+//     rectangle starts below the cap and ends where the bottom curve leaves the sides.
+//   parallelogram: skew s = min(0.2 w, 0.25 h, 24); the top edge runs from -w/2 + s to w/2, the
+//     bottom from -w/2 to w/2 - s. The inner rectangle is w - 2 s wide.
+function componentShapeGeometry(n){
+  const {w,h}=componentSize(n),shape=componentShape(n),hw=w/2,hh=h/2;
+  if(shape==='parallelogram'){
+    const s=Math.min(w*.2,h*.25,24);
+    return {shape,w,h,skew:s,inner:{l:-hw+s,r:hw-s,t:-hh,b:hh},
+      d:`M${-hw+s} ${-hh}L${hw} ${-hh}L${hw-s} ${hh}L${-hw} ${hh}Z`,
+      edge(side,P){
+        if(side==='left')return {x:-hw+s*(hh-P.y)/h,y:P.y};
+        if(side==='right')return {x:hw-s*(P.y+hh)/h,y:P.y};
+        if(side==='top')return P.x>=-hw+s?{x:P.x,y:-hh}:{x:P.x,y:hh-(P.x+hw)*h/s};
+        if(side==='bottom')return P.x<=hw-s?{x:P.x,y:hh}:{x:P.x,y:(hw-P.x)*h/s-hh};
+        return {x:P.x,y:P.y};
+      }};
+  }
+  if(shape==='cylinder'){
+    const cap=Math.min(h*.18,18),ry=cap/2,yt=-hh+ry,yb=hh-ry;
+    const half=v=>Math.sqrt(Math.max(0,1-v*v));
+    return {shape,w,h,cap,inner:{l:-hw,r:hw,t:-hh+cap,b:yb},
+      d:`M${-hw} ${yt}A${hw} ${ry} 0 0 1 ${hw} ${yt}V${yb}A${hw} ${ry} 0 0 1 ${-hw} ${yb}Z`,
+      rim:`M${-hw} ${yt}A${hw} ${ry} 0 0 0 ${hw} ${yt}`,
+      edge(side,P){
+        if(side==='top')return {x:P.x,y:yt-ry*half(P.x/hw)};
+        if(side==='bottom')return {x:P.x,y:yb+ry*half(P.x/hw)};
+        if(side==='left'||side==='right'){
+          const k=P.y<yt?(yt-P.y)/ry:P.y>yb?(P.y-yb)/ry:0,x=hw*half(k);
+          return {x:side==='left'?-x:x,y:P.y};
+        }
+        return {x:P.x,y:P.y};
+      }};
+  }
+  return {shape:'rect',w,h,inner:{l:-hw,r:hw,t:-hh,b:hh},d:null,edge(side,P){return {x:P.x,y:P.y}}};
+}
+function componentInnerRect(n){return componentShapeGeometry(n).inner}
 function pointInsideComponent(x,y,n,pad=0){
   const R=componentBounds(n,pad);
   return x>R.l&&x<R.r&&y>R.t&&y<R.b;
@@ -672,12 +759,18 @@ function componentInlineGraphicBox(node){
     return {x:-w/2,y:-size.h/2+componentSectionInset(node)+10,w,h};
   }
   // A glyph whose terminals are its points needs room between them: it takes more of the card.
-  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),size,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type}),x=-w/2;
+  // On a shaped card the glyph is sized to the inner rectangle (a cylinder: the band clear of the
+  // cap on both sides of the centre line), so it stays inside it. A glyph whose terminals are its
+  // points keeps the card's own size: its ports follow its scale, and the layout engine reads that
+  // scale from the same card size.
+  const shape=componentShapeGeometry(node),room=shape.shape==='rect'||componentGlyph(node)?.points==='terminals'?size
+    :{w:shape.inner.r-shape.inner.l,h:shape.shape==='cylinder'?size.h-2*shape.cap:size.h};
+  const cfg=componentConfig(node),{w,h}=SovSchematicNotation.glyphBox(componentGlyph(node),room,{subtitle:!!String(cfg.subtitle||'').trim(),title:String(cfg.label||'').trim()||componentTypeCaption(node),type:activeNotation().tokens.type,glyph:activeNotation().tokens.glyph}),x=-w/2;
   if(componentHostedOnWire(node)){
     const axis=componentInlineTerminalY(node);
     return {x,y:axis==null?-h/2:-(axis/64)*h,w,h};
   }
-  let y=-Math.min(size.h*.34,38),hh=h;
+  let y=-Math.min(room.h*.34,38),hh=h;
   {
     // A card's symbol axis is its centre line: side points sit at mid-height for every
     // symbol, so cards aligned by centre are joined by straight wires.

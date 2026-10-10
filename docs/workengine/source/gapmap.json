@@ -1,0 +1,534 @@
+{
+  "meta": {
+    "read_on": "2026-09-27",
+    "package": "C:\\Users\\bdf19\\AppData\\Local\\Temp\\claude\\c--Users-bdf19-workstation-control\\8d673072-b7d5-4e2a-9ccc-a95a5de28cdc\\scratchpad\\workengine\\social-continuity-20260927",
+    "kernel_checked": "C:\\Users\\bdf19\\workstation\\wskernel (working tree on branch claude/main-screen-variations, read 2026-09-27)",
+    "status_rule": "exists = a kernel record/module serves the screen's need as is; partial = a named existing piece covers part of it; missing = not found in wskernel by a bounded read and search (the package's own O18 negative search agrees)",
+    "owner_task_ids": "T00-T20 are the package's development/tasks.json ids (status 'proposed', none admitted to the live queue); W01-W09 are SCALING.md work packages. Workstation task ids are named where the package reuses a queued task.",
+    "latency_note": "Latency classes are the screen's target. The package states no numeric latency and measured none (SCALING.md line 104-110 lists them as to-be-measured).",
+    "coverage_ledger": "development/coverage.json: 86 scenario rows, all 86 status specified_not_verified"
+  },
+  "records": [
+    {
+      "name": "Case",
+      "design_term": "Episode / case (DESIGN 'Mission / case / task'; SOCIAL-ASSET-MATRIX 'Work case / episode')",
+      "meaning": "The envelope around one matter that outlives its sessions and tasks and owns a sketchbook.",
+      "fields": ["id", "title", "basis", "concern", "mission", "repository", "task", "sketchbook", "lifecycle", "opened_by", "opened_at", "last_seen", "closed_at"],
+      "status": "exists",
+      "evidence": "wskernel/models.py:1070 class Episode (basis includes CASE); case.py:192 timeline, :379 learn, :416 lessons; serve.py:265 'episodes' reader. Spot check agrees with DISCOVERY O01. Missing for screens: recording and contribution relations (package adds them, does not rename Episode).",
+      "owner_task": "T07 (adapter), T04 (relations)",
+      "screens": ["live", "topic", "watch", "studio", "profile", "inbox"]
+    },
+    {
+      "name": "Mission",
+      "design_term": "Mission (and proposed Campaign above it, NATIVE-ENGINE.md line 42)",
+      "meaning": "A charged outcome that tasks and cases serve.",
+      "fields": ["id", "lifecycle", "estimate", "quotas", "cases"],
+      "status": "exists",
+      "evidence": "models.py:536 class Mission; serve.py:261 'missions' reader. Campaign record is proposed only (NATIVE-ENGINE.md line 42, INTEGRATION-MAP 'Destination').",
+      "owner_task": "T07, T10, T15",
+      "screens": ["topic", "profile"]
+    },
+    {
+      "name": "Task",
+      "design_term": "Task (execution-sized obligation links a task, DESIGN 'Obligation')",
+      "meaning": "A unit of committed work in a state, with a holder and a disposition.",
+      "fields": ["id", "state", "disposition", "mission", "case", "waiting_on", "serves"],
+      "status": "exists",
+      "evidence": "models.py:587 class Task; serve.py:260 'tasks' reader plus queue.claim/transition/abandon verbs. DISCOVERY O03: record write then event append is not atomic.",
+      "owner_task": "T07",
+      "screens": ["live", "topic", "studio", "inbox"]
+    },
+    {
+      "name": "Session",
+      "design_term": "Invocation / run (DEVELOPMENT-CONTRACTS 'Participant identity, invocation identity and accountable holder remain separate')",
+      "meaning": "One running tool session bound to a task and case; coordination only, never authority.",
+      "fields": ["id", "operator", "seat", "identity.tool", "identity.model", "task", "episode", "actor_kind", "started", "last_seen", "ended", "end_reason"],
+      "status": "exists",
+      "evidence": "models.py:1106 class Session; serve.py:264 'sessions' reader. booth_stream.py:157 card() already reads the session record to name seat and task on the live stream view.",
+      "owner_task": "T03 (principal mapping), T10",
+      "screens": ["live", "profile", "surfaces"]
+    },
+    {
+      "name": "Participant",
+      "design_term": "Participant / principal (DESIGN 'Participant'; MATRIX 'Participation')",
+      "meaning": "A stable human, agent or service identity that survives model changes and sessions and carries a display profile.",
+      "fields": ["principal_id", "kind human|agent|service", "verified host identities", "display profile", "declared capabilities", "enrollment/rotation lineage"],
+      "status": "partial",
+      "evidence": "Existing pieces: Session.operator/seat/identity/actor_kind (models.py:1106), Seat enum (models.py:122), Event.actor/actor_kind (models.py:1494-1529). No record gives one person or agent a stable id across sessions; the package says identity binding is T03 work.",
+      "owner_task": "T03",
+      "screens": ["live", "topic", "watch", "studio", "surfaces", "profile", "inbox"]
+    },
+    {
+      "name": "Agent behavior profile",
+      "design_term": "Behavior profile / behavior core (MATRIX 'Agent participation'; STATE-ENGINE-INTEGRATION item 4)",
+      "meaning": "A versioned description of how an agent seat chooses among permitted actions, bound to a model, which never adds permission.",
+      "fields": ["profile_id", "version/digest", "seat/perspective", "model binding", "skills", "selection trace", "budget", "termination"],
+      "status": "partial",
+      "evidence": "Existing pieces: .claude/agents/*.md (eight perspectives: charge, closure, controller, career, communicator, coordinator, customer, contractor); delivery/host.py:45 ModelBinding (pinned model execution); repos/bdos/cores cited in IMPLEMENTATION-EVIDENCE.md line 15. None is a versioned record with digest and selection trace.",
+      "owner_task": "T10",
+      "screens": ["profile", "surfaces"]
+    },
+    {
+      "name": "Booth session",
+      "design_term": "Booth session (MATRIX 'Booth session'; DESIGN 'Capture and replay')",
+      "meaning": "A named isolated browser or hidden desktop that a session drives, watches and optionally records.",
+      "fields": ["name", "kind web|desktop", "task", "owner", "created", "started_pids", "pid_created", "watch_port", "desktop_name", "opened_ms", "size", "recording", "record_max_mb", "fps"],
+      "status": "partial",
+      "evidence": "booth.py:99 class BoothRecord. Spot check agrees with DISCOVERY O10: task and owner only, no case, session or mission scope, and name is the identity (reusable). Queued fix: workstation-ws-booth-open-records-the-calling-sessio. Booths are not a serve.py reader (serve.py:252-284).",
+      "owner_task": "T08 (reuses workstation-ws-booth-open-records-the-calling-sessio)",
+      "screens": ["live", "surfaces", "watch"]
+    },
+    {
+      "name": "Recording",
+      "design_term": "Recording / capture interval (DESIGN 'Recording')",
+      "meaning": "One captured interval with its own id, time base, tracks, coverage gaps and case link, outliving the booth process.",
+      "fields": ["recording_id", "environment/run/session/case refs", "time base", "track manifest", "coverage intervals", "holes", "policy", "integrity refs"],
+      "status": "partial",
+      "evidence": "Existing pieces: booth_record.py recording home keyed by booth name (booth.py:1908 recording_home) with meta.json, frames/, recording.mp4, segments.json manifest of live segments and the real time each covers (booth_record.py:85-86, 1537), recording.stats.json. No immutable recording id, no case link, no recorded coverage gaps; cap policy can discard older media (DISCOVERY O12).",
+      "owner_task": "T08 / W03",
+      "screens": ["live", "watch", "studio"]
+    },
+    {
+      "name": "Video track",
+      "design_term": "Track: booth video (DESIGN 'Capture and replay')",
+      "meaning": "The frame and encoded video stream of a recording on a real-time base.",
+      "fields": ["track_id", "recording_id", "segments[index, real start/end]", "frames[t_ms]", "thumbs", "fps", "size", "encoder"],
+      "status": "partial",
+      "evidence": "booth_record.py SEGMENTS/MANIFEST/FRAMES/THUMBS/VIDEO (lines 78-86), encode_video (1554); booth_watch.py serves /stream.mjpg, /frames.json, /segments.json, /segments/<i>.mp4, /thumbs (lines 14-27, 308-319). Missing: track id and recording id; addressed only through a booth's loopback port.",
+      "owner_task": "T08",
+      "screens": ["live", "watch", "studio"]
+    },
+    {
+      "name": "Event track",
+      "design_term": "Track: browser event reconstruction and tool/API events",
+      "meaning": "Timed actions and DOM events that can be replayed or drawn as cards without video.",
+      "fields": ["track_id", "t_ms", "verb", "args", "x", "y", "result", "rrweb events", "source sequence"],
+      "status": "partial",
+      "evidence": "booth_record.py:111 LOGGED = goto, click, drag, type, key, upload (read verbs excluded, agrees with O11); append_action (158) writes actions.jsonl with its own writer, not the locked event log; recording.rrweb.jsonl (RRWEB, line 76). Session-level tool calls are Events with input/output digests only (ops/session_ops.py:3132-3133), which cannot reconstruct content (REVIEW 'Contradictions').",
+      "owner_task": "T08",
+      "screens": ["live", "watch", "studio"]
+    },
+    {
+      "name": "Terminal track",
+      "design_term": "Track: terminal output (DESIGN 'Capture and replay'; PRODUCTION 'Terminal activity can become timed visual material')",
+      "meaning": "Timed terminal text output from a run, renderable as a track.",
+      "fields": ["track_id", "recording_id", "t_ms", "stream stdout|stderr", "text", "command ref", "holes"],
+      "status": "missing",
+      "evidence": "Not found as a track. Nearest pieces: a desktop booth can show a console window only as video and refuses unproven console hosts (booth.py:526 CONSOLE_UNPROVEN, :1185 console_host_proven); console_terminal.py is the B-DOS terminal adapter with no capture; hook observations store digests, not text.",
+      "owner_task": "T08",
+      "screens": ["live", "watch", "studio"]
+    },
+    {
+      "name": "Artifact track",
+      "design_term": "Track: artifacts (DESIGN 'Capture and replay'; PRODUCTION P01)",
+      "meaning": "Artifact versions produced during a recording, placed on its timeline.",
+      "fields": ["track_id", "artifact address", "version digest", "t_ms", "producer", "audience"],
+      "status": "partial",
+      "evidence": "Existing pieces: artifacts.py mirror of published claude.ai artifacts (entry.json with version, control/artifacts/mirror/<id>); Handoff.changed_files and VerificationReceipt.evidence (models.py:865, 937); delivery/storage.py:171 resolve() over addressed, digested versions. None is placed on a recording's timeline.",
+      "owner_task": "T08, T12",
+      "screens": ["watch", "studio"]
+    },
+    {
+      "name": "Narration line",
+      "design_term": "Not named in the package (exists in kernel); closest to caption/voiceover track",
+      "meaning": "A line of text a session posts to a booth while it works, shown as a live subtitle.",
+      "fields": ["t_ms", "at_ms", "owner", "text"],
+      "status": "exists",
+      "evidence": "booth_record.py:87 NARRATION narration.jsonl, :206 append_narration (ws booth say); booth_stream.py:111 subtitles merges actions and narration; booth_watch.py /subtitles.json. The package's DISCOVERY does not list it (O11 names actions, rrweb, frames/video, cuts, timing). Not versioned; not a caption track.",
+      "owner_task": "T12 (would fold into voiceover/caption track)",
+      "screens": ["live", "watch"]
+    },
+    {
+      "name": "Anchor",
+      "design_term": "Anchor (recording_id, track_id, source_event_id or source_offset, source_version) (DESIGN 'Capture and replay')",
+      "meaning": "An immutable pointer to a source moment that survives re-cuts.",
+      "fields": ["recording_id", "track_id", "source_event_id | source_offset", "source_version"],
+      "status": "missing",
+      "evidence": "No anchor record. Existing mechanism it would use: booth_record.py:994 cut_time and :1006 real_time map edited time to real time (O12); booth_record.py:604 parse_t reads ?t= deep links in edited-player seconds, which is the fragile form E27 warns against.",
+      "owner_task": "T08",
+      "screens": ["watch", "studio", "inbox"]
+    },
+    {
+      "name": "Contribution",
+      "design_term": "Contribution (DESIGN 'Contribution'; MATRIX 'Prime unit')",
+      "meaning": "A versioned, addressable addition by an author to a scope, with audience, from which publications, messages and comments are composed.",
+      "fields": ["contribution_id", "version_id", "author", "kind", "body/media refs", "audience policy", "work scope", "created", "recorded", "supersedes"],
+      "status": "missing",
+      "evidence": "DISCOVERY O18 bounded negative search; my search of wskernel found no contribution model (models.py class list lines 21-1691).",
+      "owner_task": "T04 / W02",
+      "screens": ["live", "topic", "watch", "studio", "profile", "inbox"]
+    },
+    {
+      "name": "Relationship",
+      "design_term": "Relationship (reply-to, evidences, supersedes, about, addresses, follows, classifies, resolves)",
+      "meaning": "A typed, provenance-carrying link between two references that never confers a grant.",
+      "fields": ["source ref", "target ref", "relation", "provenance", "validity", "visibility", "origin human|declared-rule|model-proposed", "confidence"],
+      "status": "missing",
+      "evidence": "No general typed relation record. Nearest: links.py and control/config/links.json (repository links), Candidate.superseded_by (models.py:835). Neither is a social relation.",
+      "owner_task": "T04",
+      "screens": ["topic", "watch", "studio", "profile"]
+    },
+    {
+      "name": "Comment",
+      "design_term": "Comment (anchored) (DESIGN 'Distinct communication behavior')",
+      "meaning": "A contribution replying to exactly one parent version or source anchor.",
+      "fields": ["contribution fields", "parent version", "anchor", "edit versions", "tombstone state"],
+      "status": "missing",
+      "evidence": "O18; no comment model. Judgement.note (models.py:705) is an owner verdict note on a task/case, not a comment.",
+      "owner_task": "T04, T13 / W06",
+      "screens": ["live", "watch", "studio", "inbox"]
+    },
+    {
+      "name": "Message",
+      "design_term": "Message (DESIGN 'Distinct communication behavior')",
+      "meaning": "A contribution addressed to explicit recipients with delivery states kept apart from read and acknowledged.",
+      "fields": ["contribution fields", "recipients", "conversation", "delivery state sent|delivered|failed|unknown", "read", "acknowledged"],
+      "status": "missing",
+      "evidence": "No message record. Adjacent: delivery/gmail.py:136 feedback_payload turns inbound email into a broker event (ingress only); peer sessions message each other through sketchbook pages and commit ids, which are not records.",
+      "owner_task": "T04, T14 / W06, W08",
+      "screens": ["inbox", "profile"]
+    },
+    {
+      "name": "Reaction",
+      "design_term": "Reaction (DESIGN 'Distinct communication behavior')",
+      "meaning": "One current reaction per actor, target and kind, with history, that grants and settles nothing.",
+      "fields": ["actor", "target version", "kind", "value", "history"],
+      "status": "missing",
+      "evidence": "O18; not found. Judgement verdicts (keep/park/drop/unclear) are owner opinions on work items, a different meaning.",
+      "owner_task": "T04 / W06",
+      "screens": ["live", "watch", "topic"]
+    },
+    {
+      "name": "Publication / edition",
+      "design_term": "Publication; rendered edition (PRODUCTION 'Production model')",
+      "meaning": "A published contribution with audience and lineage back to source and edit versions; an edition is one rendered form of it.",
+      "fields": ["contribution fields", "subjects", "selected intervals", "edit manifest version", "edition kind full|mobile|narrated", "audience", "state draft|published|superseded|withdrawn", "correction lineage"],
+      "status": "missing",
+      "evidence": "Not found as a record. Adjacent: delivery/gmail.py:28 SentEdition (id, subject, thread_id, message_id, sent_at) records mailroom email editions for feedback binding; artifacts.py mirrors published claude.ai artifacts. Neither holds audience, sources or lineage.",
+      "owner_task": "T12 / W06",
+      "screens": ["topic", "watch", "studio", "profile"]
+    },
+    {
+      "name": "Clip",
+      "design_term": "Not a separate term; a publication selecting intervals (DESIGN 'Publication'; H15, H23)",
+      "meaning": "A shareable selected range of one or more recordings with its own id.",
+      "fields": ["clip_id", "source anchors start/end", "title", "author", "audience"],
+      "status": "missing",
+      "evidence": "No clip record. The replay player accepts a start time (booth_record.py:604 parse_t), which is a link, not an addressable clip.",
+      "owner_task": "T12",
+      "screens": ["watch", "topic", "studio"]
+    },
+    {
+      "name": "Edit manifest",
+      "design_term": "Edit manifest / cut (DESIGN 'Capture and replay'; PRODUCTION 'Assemble')",
+      "meaning": "A versioned mapping from presentation time to source intervals across one or more recordings.",
+      "fields": ["manifest_id", "version", "segments[presentation span -> source anchor span]", "sources", "editor", "review binding"],
+      "status": "partial",
+      "evidence": "booth_record.py:924 edit_cut and :675 make_cut write one automatic cut.json per recording from action and frame-change analysis; cut_time/real_time map both ways. Single-source, machine-made, overwritten, not versioned or authored.",
+      "owner_task": "T12 (with T08)",
+      "screens": ["studio", "watch"]
+    },
+    {
+      "name": "Source manifest",
+      "design_term": "Source manifest (PRODUCTION 'Production model')",
+      "meaning": "The recording intervals, event ranges, artifact versions and restrictions an editorial project may draw on.",
+      "fields": ["manifest_id", "recording intervals", "event ranges", "artifact versions", "audience restrictions", "permitted derivatives"],
+      "status": "missing",
+      "evidence": "Not found; no cross-recording selection exists.",
+      "owner_task": "T12",
+      "screens": ["studio"]
+    },
+    {
+      "name": "Voiceover / caption track",
+      "design_term": "Scripts, voiceovers, captions, translations as separate versioned tracks (PRODUCTION)",
+      "meaning": "A versioned narration, audio or caption track aligned to an edit manifest version, marking evidence apart from interpretation.",
+      "fields": ["track_id", "version", "edit manifest version", "lines[start,end,text]", "audio ref", "evidence refs", "interpretation flag", "language", "rights"],
+      "status": "partial",
+      "evidence": "Existing pieces: narration.jsonl (booth_record.py:206) and machine captions per action (booth_record.py:329 caption_for, :311 overlay_for). No versioning, audio, alignment to a cut version, or evidence marking.",
+      "owner_task": "T12",
+      "screens": ["studio", "watch", "live"]
+    },
+    {
+      "name": "Evaluation / review",
+      "design_term": "Review / evaluation (DESIGN 'Review'; MATRIX 'Review / community support')",
+      "meaning": "An assertion-by-assertion result on a frozen subject by an independent reviewer, which can be disputed without being rewritten.",
+      "fields": ["review_id", "subject revision", "assertions", "results", "reviewer", "independence check", "state requested|assigned|reported|settled|disputed", "findings"],
+      "status": "partial",
+      "evidence": "Existing pieces: Candidate frozen identity (models.py:822), VerificationReceipt (865), contract.py audit (O14: runs in task worktree, not a frozen tree; queued fix workstation-audit-runs-in-a-disposable-tree-at-the-committed-revision), Judgement (705, opinion only). Nothing reviews a publication or edition.",
+      "owner_task": "T11 (reuses workstation-audit-runs-in-a-disposable-tree-at-the-committed-revision) / W04",
+      "screens": ["studio", "watch", "inbox", "profile"]
+    },
+    {
+      "name": "Obligation",
+      "design_term": "Obligation / responsibility (DESIGN 'Obligation', 'Responsibility')",
+      "meaning": "An owed outcome with a holder or explicit vacancy, a wake condition and settlement evidence.",
+      "fields": ["obligation_id", "origin ref", "scope", "required outcome", "holder | vacancy", "state proposed|assigned|accepted|fulfilled|released", "wake condition", "settlement evidence"],
+      "status": "partial",
+      "evidence": "Existing pieces: Handoff.residuals as text (models.py:952) and Reception carried/dropped-with-reason (963; reception.py account/receive, O05); Task waiting_on and state. No obligation id, so a comment cannot point at one.",
+      "owner_task": "T04, T07",
+      "screens": ["live", "studio", "inbox", "profile"]
+    },
+    {
+      "name": "Grant / ACL",
+      "design_term": "Grant, policy, audience (MATRIX 'ACL and authority matrix')",
+      "meaning": "An authenticated decision about who may watch, comment, edit, publish, assign or operate on a scope.",
+      "fields": ["grant_id", "principal", "operation", "resource", "scope", "issuer", "delegation parent", "valid interval", "revoked"],
+      "status": "partial",
+      "evidence": "Existing pieces: github/authority.py (permissions per authority, need_within), delivery/storage.py:94 _grants via an injected authorize callback (refuses AUTHORITY_UNCONFIGURED/DENIED), the session write guard (task binding). No audience or read ACL on any record or media.",
+      "owner_task": "T03, T09",
+      "screens": ["live", "watch", "studio", "surfaces", "profile"]
+    },
+    {
+      "name": "Subscription / follow",
+      "design_term": "Subscription (DESIGN 'Subscription': social follow vs workflow trigger)",
+      "meaning": "A participant's versioned selection of what activity reaches them, kept apart from workflow triggers.",
+      "fields": ["subscriber", "selector (profile|topic|mission|case)", "purpose", "delivery preferences", "version"],
+      "status": "partial",
+      "evidence": "delivery/broker.py:11 subscribe(id, topic, workflow, version, actor, now, enabled) stores workflow subscriptions with exact topic match (O06). That is the trigger half; no social follow of a person, topic or mission.",
+      "owner_task": "T15 / W07",
+      "screens": ["topic", "profile", "inbox"]
+    },
+    {
+      "name": "Feed projection",
+      "design_term": "Projection (feed, profile, topic page, inbox) with input cursor and policy version (DESIGN 'Objects and ownership')",
+      "meaning": "A regenerable, access-filtered view with a cursor and a stated reason for each item.",
+      "fields": ["view definition/version", "cursor", "policy binding", "source checkpoint", "items[ref, reason]", "staleness"],
+      "status": "missing",
+      "evidence": "No feed. Adjacent projections that are not access-filtered feeds: ws status (control/generated), judgement_ops.discovery_rows (serve.py:272 'board'), priority rows (serve.py:280), case.timeline scans (O04).",
+      "owner_task": "T15 / W07",
+      "screens": ["live", "topic", "profile", "inbox"]
+    },
+    {
+      "name": "Notification / delivery",
+      "design_term": "Delivery / run (DESIGN 'Delivery / run'); notification states provider-accepted, delivered, read, acknowledged",
+      "meaning": "An admitted delivery with leased, fenced attempts and independent settlement, plus per-person notification states.",
+      "fields": ["delivery_id", "topic", "workflow version", "state PENDING|LEASED|UNRESOLVED|settled", "run_id", "fence", "attempts", "receipts", "channel", "read", "acknowledged"],
+      "status": "partial",
+      "evidence": "delivery/transitions.py:19 claim, :72 report, :109 expire (LEASED to UNRESOLVED), :135 retry (only from UNRESOLVED), :158 settle (COMMITTED|FAILED with evidence); storage.py:13 tables events, subscriptions, deliveries, runs, receipts; one SQLite transaction. Spot check agrees with O06/O07. Missing: outbound notification to a person, channel, read and acknowledged states.",
+      "owner_task": "T06, T14",
+      "screens": ["inbox", "surfaces"]
+    },
+    {
+      "name": "Event",
+      "design_term": "Workstation event (DISCOVERY O02, O03)",
+      "meaning": "One attributed change to a stateful record with scope frozen at write time.",
+      "fields": ["id", "at", "subject_kind", "subject", "actor", "actor_kind", "session", "via", "operation", "from_state", "to_state", "payload", "scope"],
+      "status": "exists",
+      "evidence": "models.py:1506 class Event, scope never recomputed (D-0084); ops/event_ops.py append. Not transactional with the record write (O03).",
+      "owner_task": "T07",
+      "screens": ["live", "profile", "inbox", "topic"]
+    },
+    {
+      "name": "Receipt",
+      "design_term": "Receipt / outbox (DEVELOPMENT-CONTRACTS line 32)",
+      "meaning": "The durable record that an operation ran, with inputs, result and evidence.",
+      "fields": ["id", "operation", "scope", "events", "start", "end", "exit_code", "result", "observed", "changes", "evidence"],
+      "status": "exists",
+      "evidence": "models.py:887 OperationReceipt, :865 VerificationReceipt; delivery/storage.py:122 _receipt inside the broker transaction; serve.py:269 'receipts' reader. The package's act receipt (package/evaluator digests, grants epoch, outbox ids) is a new form on top (T02).",
+      "owner_task": "T02",
+      "screens": ["studio", "surfaces", "profile"]
+    },
+    {
+      "name": "Checkpoint",
+      "design_term": "Checkpoint (NATIVE-ENGINE 'Checkpoints'; T19)",
+      "meaning": "A versioned captured state of a runtime instance tied to a ledger frontier, which never carries a live grant.",
+      "fields": ["format", "instance_id", "package_digest", "ledger_seq", "components[id, codec, persistence, value]", "body_digest"],
+      "status": "partial",
+      "evidence": "Validator only: worktrees/workstation/sandbox-workengi/native/work_engine (include/work_engine.h, src/engine.cpp, tests) checks envelopes; one codec logical-clock/1; returns VALID_REQUIRES_RECONCILIATION; no writer, no restore, not on main (native-implementation/README.md).",
+      "owner_task": "T19 (bound task workstation-sandbox-workengi for the codec)",
+      "screens": ["surfaces"]
+    },
+    {
+      "name": "Render job",
+      "design_term": "Render / speech attempt (PRODUCTION X05; T12, T20 GPU job identity)",
+      "meaning": "A requested render or speech generation with budget, attempt, pinned inputs and admitted output.",
+      "fields": ["job_id", "surface", "inputs (edit manifest, tracks)", "reservation", "attempt/fence", "state", "outputs digests", "measured usage", "uncertain spend"],
+      "status": "missing",
+      "evidence": "No render job record in wskernel. booth_record.py:1554 encode_video is an in-process encode of one booth recording, not a job. Foundry has its own render tooling (repos/Foundry/instrument-render) with no workstation job record; INTEGRATION-MAP 'repos/Foundry: wrap compute operations'.",
+      "owner_task": "T12, T20",
+      "screens": ["studio", "surfaces"]
+    },
+    {
+      "name": "Surface registration",
+      "design_term": "Host adapter / runtime instance / environment capabilities (MATRIX 'Runtime instance'; T20)",
+      "meaning": "A declared engine or tool surface with its capabilities, the tracks it can emit, the state it owns and its health.",
+      "fields": ["surface_id", "kind", "host", "capabilities", "tracks emitted", "authority scope", "input lease holder", "health", "adapter version"],
+      "status": "partial",
+      "evidence": "Existing pieces: registry.json Repository entries (CatalystCoreV2 and Foundry are registered as repositories), Hosting (models.py:785, port), Environment (762, RuntimeAllocation incl. gpu), ProcessRecord (1012), BoothRecord kinds web|desktop. Nothing declares a surface's tracks or owned state.",
+      "owner_task": "T20, T10",
+      "screens": ["surfaces", "live"]
+    },
+    {
+      "name": "Resource reservation",
+      "design_term": "Reservation / usage (DEVELOPMENT-CONTRACTS line 30)",
+      "meaning": "Held capacity (booth, GPU, encoder, tokens) with owner, fence and measured usage.",
+      "fields": ["pool", "quantity/units", "scope/root cause", "reserved max", "attempt/fence", "lease", "measured usage", "uncertain remainder"],
+      "status": "partial",
+      "evidence": "Existing pieces: broker leases and fences (transitions.py:19 claim), booth NameClaim (booth.py:313) and recorded ports, RuntimeAllocation. No capacity ledger.",
+      "owner_task": "T10",
+      "screens": ["surfaces", "studio"]
+    },
+    {
+      "name": "Topic",
+      "design_term": "Topic / theme relation with origin human|declared-rule|model-proposed (DESIGN 'Distinct communication behavior')",
+      "meaning": "A retractable classification relation used for discovery that never widens access.",
+      "fields": ["topic_id", "label", "origin", "confidence", "version", "classified refs"],
+      "status": "missing",
+      "evidence": "Not found. The broker's 'topic' (delivery/broker.py:11) is a delivery routing key, not a discovery topic; missions and quotas group work but are not topics.",
+      "owner_task": "T15 / W07",
+      "screens": ["topic", "profile", "live"]
+    },
+    {
+      "name": "Lesson",
+      "design_term": "Learned correction (H14)",
+      "meaning": "A case-scoped lesson recorded as an event and read by later briefs.",
+      "fields": ["case", "task", "text", "at", "actor"],
+      "status": "exists",
+      "evidence": "case.py:379 learn writes an Event; :416 lessons reads the nearest. Adoption and measured effect (H14) are not recorded.",
+      "owner_task": "T15",
+      "screens": ["topic", "profile"]
+    }
+  ],
+  "surfaces": [
+    {
+      "name": "Unity game engine (CatalystCoreV2)",
+      "kind": "runtime",
+      "tracks": ["video (only if run inside a desktop booth)"],
+      "authority": "Scene and game state inside the Unity project and editor; the repository is registered, the running editor is not.",
+      "status": "missing",
+      "evidence": "control/config/registry.json has the repository only; no surface record or adapter. NATIVE-ENGINE.md line 38: Unity binding is a supported route, not implemented or qualified. Agents may not drive the owner's desktop input (memory: agent OS use must be isolated), so only a hidden-desktop booth could capture it."
+    },
+    {
+      "name": "Foundry render engine",
+      "kind": "render",
+      "tracks": ["artifact (generated assets, sheets)"],
+      "authority": "Generation plans, genbase outputs and its runs/ directory; the engine would own request, budget, attempt and admitted outputs.",
+      "status": "missing",
+      "evidence": "No workstation job or surface record; repos/Foundry/instrument-render exists as tooling. INTEGRATION-MAP row 'repos/Foundry: wrap compute operations' (T12/T20), only assembly operation inspected."
+    },
+    {
+      "name": "Web booth",
+      "kind": "capture",
+      "tracks": ["video", "event (actions.jsonl, rrweb DOM)", "narration"],
+      "authority": "Booth record and recording home under control/runtime/booths/<name>; its private browser profile.",
+      "status": "partial",
+      "evidence": "booth.py BoothKind.WEB, WEB_ACTIONS (1325); booth_record.py Recorder (358), rrweb injection (527); booth_watch.py routes. Missing case/session scope and recording id (O10, T08)."
+    },
+    {
+      "name": "Desktop booth",
+      "kind": "capture",
+      "tracks": ["video", "event (actions.jsonl)", "narration"],
+      "authority": "Hidden Win32 desktop and the processes it started (birth-time checked).",
+      "status": "partial",
+      "evidence": "booth.py BoothKind.DESKTOP, _open_desktop (1106), pid_state/is_ours (238, 251), booth_win32.py. Interaction isolation only, not a VM (O13)."
+    },
+    {
+      "name": "Booth watch/stream worker",
+      "kind": "delivery",
+      "tracks": ["video", "narration", "event"],
+      "authority": "Serves a booth's frames, segments, subtitles and stream view on a loopback port; read-only.",
+      "status": "exists",
+      "evidence": "booth_watch.py lines 14-27 and 308-319; booth_stream.py (stream view with avatar card naming session, task, seat). Loopback only (O16)."
+    },
+    {
+      "name": "Terminal (Claude Code / Codex / B-DOS console)",
+      "kind": "runtime",
+      "tracks": ["event (tool call digests via PostToolUse observe)"],
+      "authority": "The session's own tool calls; transcripts live under ~/.claude, outside the kernel's store.",
+      "status": "partial",
+      "evidence": "ops/session_ops.py:3094 observe records input_digest/output_digest events; console_terminal.py adapter. No text terminal track; Codex/script hook parity unverified (REVIEW 'Cross-host identity')."
+    },
+    {
+      "name": "Owner's Chrome (bridge)",
+      "kind": "runtime",
+      "tracks": [],
+      "authority": "Bdo's signed-in browser tabs in the bridge's tab group; private mode purges records.",
+      "status": "missing",
+      "evidence": "chrome_bridge.py / chrome_mcp.py drive it; nothing records its activity as a track. Not named by the package."
+    },
+    {
+      "name": "Delivery broker",
+      "kind": "delivery",
+      "tracks": [],
+      "authority": "Events, subscriptions, deliveries, runs, receipts and addressed versions in one SQLite DB.",
+      "status": "exists",
+      "evidence": "delivery/storage.py:13, broker.py, transitions.py (O06-O08). Package keeps it as delivery owner (INTEGRATION-MAP row 1, T06)."
+    },
+    {
+      "name": "Gmail / mailroom channel",
+      "kind": "delivery",
+      "tracks": [],
+      "authority": "Inbound feedback on sent mailroom editions; mailroom repo owns outbound briefings.",
+      "status": "partial",
+      "evidence": "delivery/gmail.py GmailIngress (177), MailboxBinding/SentEdition; ingress only in the kernel (O09). Push and mobile: missing (T14)."
+    },
+    {
+      "name": "Workstation control store",
+      "kind": "store",
+      "tracks": ["event (control/events/<day>.jsonl)"],
+      "authority": "Tasks, cases, missions, sessions, handoffs, receptions, receipts as JSON; sole writer for those records.",
+      "status": "exists",
+      "evidence": "models.py records; serve.py:252-284 readers over loopback. Package keeps it authoritative behind a command journal (T07)."
+    },
+    {
+      "name": "Artifact mirror",
+      "kind": "store",
+      "tracks": ["artifact"],
+      "authority": "Local copies of published claude.ai artifacts with version.",
+      "status": "partial",
+      "evidence": "artifacts.py (control/artifacts/mirror/<id>/entry.json). No audience or lineage."
+    },
+    {
+      "name": "Native Work Engine",
+      "kind": "runtime",
+      "tracks": [],
+      "authority": "Proposed: admitted continuity records, ledger, checkpoints. Today: canonical codec and checkpoint envelope validation only.",
+      "status": "partial",
+      "evidence": "worktrees/workstation/sandbox-workengi/native/work_engine; native-implementation/README.md says it is not a runtime, save writer or authority."
+    }
+  ],
+  "queries": [
+    {"screen": "live", "needs": "List live booths now, each with owner session, seat, task, case and mission", "backing": "Booth session, Session, Case", "status": "partial", "latency": "page <300ms"},
+    {"screen": "live", "needs": "Stream the current frame and the newest subtitle lines for one booth", "backing": "Video track, Narration line, Event track", "status": "exists", "latency": "live <1s"},
+    {"screen": "live", "needs": "Show open obligations and waiting-on for the case being worked", "backing": "Obligation, Task", "status": "partial", "latency": "page <300ms"},
+    {"screen": "live", "needs": "Post and read comments and reactions against the live edge", "backing": "Comment, Reaction, Anchor", "status": "missing", "latency": "live <1s"},
+    {"screen": "live", "needs": "Know whether capture is complete or has a gap right now", "backing": "Recording (coverage/holes)", "status": "missing", "latency": "live <1s"},
+    {"screen": "topic", "needs": "List publications, cases and missions classified under a topic, access-filtered, with cursor", "backing": "Topic, Relationship, Feed projection, Publication", "status": "missing", "latency": "page <300ms"},
+    {"screen": "topic", "needs": "Follow or unfollow the topic and see why each item appears", "backing": "Subscription / follow, Feed projection", "status": "missing", "latency": "page <300ms"},
+    {"screen": "watch", "needs": "Load a recording's segments, frames, actions and cut by time range", "backing": "Recording, Video track, Event track, Edit manifest", "status": "partial", "latency": "page <300ms"},
+    {"screen": "watch", "needs": "Resolve a comment's source anchor to the right moment under any cut, or say it is unavailable", "backing": "Anchor, Comment, Edit manifest", "status": "missing", "latency": "page <300ms"},
+    {"screen": "watch", "needs": "Open a clip by id and show its source recordings and audience", "backing": "Clip, Publication, Grant / ACL", "status": "missing", "latency": "page <300ms"},
+    {"screen": "watch", "needs": "Show chapters from actions and page changes", "backing": "Event track (page_marks, actions)", "status": "partial", "latency": "page <300ms"},
+    {"screen": "studio", "needs": "Assemble a source manifest across recordings, terminal and artifacts in one case", "backing": "Source manifest, Recording, Terminal track, Artifact track", "status": "missing", "latency": "page <300ms"},
+    {"screen": "studio", "needs": "Save and list versions of an edit manifest and see which reviews and captions each invalidates", "backing": "Edit manifest, Voiceover / caption track, Evaluation / review", "status": "partial", "latency": "page <300ms"},
+    {"screen": "studio", "needs": "Submit a render or speech job and follow its attempt, spend and outputs", "backing": "Render job, Resource reservation, Notification / delivery", "status": "missing", "latency": "batch"},
+    {"screen": "studio", "needs": "Publish an edition to an audience and record its lineage", "backing": "Publication / edition, Grant / ACL, Receipt", "status": "missing", "latency": "page <300ms"},
+    {"screen": "surfaces", "needs": "List registered surfaces with kind, capabilities, tracks they emit, owned state and health", "backing": "Surface registration", "status": "partial", "latency": "page <300ms"},
+    {"screen": "surfaces", "needs": "See who holds input on each surface and which processes it started", "backing": "Booth session, ProcessRecord, Resource reservation", "status": "partial", "latency": "live <1s"},
+    {"screen": "surfaces", "needs": "Show the render/compute queue per surface", "backing": "Render job, Notification / delivery", "status": "missing", "latency": "page <300ms"},
+    {"screen": "profile", "needs": "Show a participant's attributed contributions and reviews across sessions and models", "backing": "Participant, Contribution, Evaluation / review", "status": "missing", "latency": "page <300ms"},
+    {"screen": "profile", "needs": "Show sessions, seats and events attributed to an operator", "backing": "Session, Event", "status": "exists", "latency": "page <300ms"},
+    {"screen": "profile", "needs": "Show an agent's behavior profile and model binding history", "backing": "Agent behavior profile, Session.identity", "status": "partial", "latency": "page <300ms"},
+    {"screen": "inbox", "needs": "List obligations waiting on me, apart from ranked feed items", "backing": "Obligation, Task (waiting_on), Judgement board rows", "status": "partial", "latency": "page <300ms"},
+    {"screen": "inbox", "needs": "List handoffs I must receive and their residuals", "backing": "Handoff, Reception", "status": "exists", "latency": "page <300ms"},
+    {"screen": "inbox", "needs": "List notifications with delivered, read and acknowledged states and replies to my comments", "backing": "Notification / delivery, Message, Comment", "status": "missing", "latency": "live <1s"}
+  ],
+  "open_decisions": [
+    "D1 canonical storage: whether admitted continuity records move to a transactional SQLite store, which needs a narrow R-29 amendment by Bdo; otherwise a journaled JSON authority (STRATEGY.md line 60; REVIEW.md 'Outstanding decisions' row 1; SCALING.md line 48).",
+    "D2 deployed policy: audiences, recording consent and retention, spend ceilings, autonomous effect classes, channels (PROVING-AND-DELIVERY.md line 70; STRATEGY.md line 62).",
+    "Capture, privacy and retention classes and measured storage rates (REVIEW.md 'Outstanding decisions' row 2; DESIGN.md 'Boundaries that stay visible').",
+    "Which event classes may trigger agents under standing authority, and per-role grants (DESIGN.md 'Boundaries that stay visible'; REVIEW.md row 3).",
+    "Mobile, email and push provider choices and credentials (REVIEW.md row 4; T14).",
+    "Feed ranking preference weights and chronological default; no engagement-only optimisation (DESIGN.md 'Boundaries'; REVIEW.md row 5).",
+    "Execution capacity limits: no supported concurrency number yet (REVIEW.md row 6; SCALING.md line 110).",
+    "Cross-host identity: Codex/Claude/script capture parity and independence enforcement (REVIEW.md row 7).",
+    "Contracts of adjacent systems (Soveraeign authority, mailroom) before cross-repo changes (REVIEW.md row 8; INTEGRATION-MAP.md rows for Soveraeign and mailroom).",
+    "Which outcome judgements stay personal and who may settle them (DESIGN.md 'Boundaries'; STRATEGY.md line 62).",
+    "Authority bootstrap: owner-enrolled root and key rotation procedure (STRATEGY.md line 64; T03).",
+    "Campaign as a new versioned domain record over missions: proposed, not adopted (NATIVE-ENGINE.md line 42; INTEGRATION-MAP.md 'Destination').",
+    "Cross-organisation federation/trust contract left as an extension point (REVIEW.md 'Composition test').",
+    "Unity binding route: supported on paper, not implemented or qualified (NATIVE-ENGINE.md line 38).",
+    "Carried discrepancy: a booth task says 24 fps while source captures at 60 and views at 24 (DISCOVERY.md 'Existing work to retain'; booth_record.py lines 65-66 agree with the source reading)."
+  ]
+}

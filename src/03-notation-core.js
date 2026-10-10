@@ -11,11 +11,21 @@
   const SCHEMATIC={
     id:'schematic',name:'Schematic',version:1,
     tokens:{
+      // The document scale (NOTATION-MODEL.md §3): one number, from 0.5 to 4, that resolve() applies
+      // once to every stroke weight, every text role's size and own min, space.pin and
+      // type.screen.max. The values below are the scale 1 values and stay unscaled here.
+      scale:1,
+      // The glyph's box on every card that has room for it (NOTATION-MODEL.md §3, §4): the box a
+      // 112 x 84 card gives a one-line title. resolve() multiplies it by the scale.
+      glyph:{w:80.64,h:40.4},
       // Offset from inside: the core keeps radius.core, each line outward adds its band.
       radius:{core:6,card:10},
       // World units. Selected and highlighted states multiply these, never replace them.
       stroke:{structure:1.5,section:1.25,flow:2.25,symbol:2.6},
-      space:{labelClear:10,bevel:3.5,pin:14},
+      // textGap: the gap between stacked text lines on a card (a title's last line and its subtitle).
+      // regionInset: the gap a region keeps between its edge and its children; regionTitle: the band
+      // above them for the title or glyph at its head (groupRect pads by both; the layout keeps them).
+      space:{labelClear:10,bevel:3.5,pin:14,textGap:3,regionInset:24,regionTitle:28},
       // Text roles (NOTATION-MODEL.md §4). `size` is the base at zoom 1; on screen every role is
       // clamped to `screen` (a subtitle keeps its own lower floor, so it stays under its title).
       type:{screen:{min:12,max:16},title:{size:10,weight:600},subtitle:{size:8.5,weight:400,min:8},body:{size:9,weight:400},caption:{size:9,weight:600},narration:{size:15,weight:500}},
@@ -24,7 +34,28 @@
         light:[null,{dy:2,blur:3,opacity:.16},{dy:3,blur:5,opacity:.2},{dy:4.5,blur:7,opacity:.22}],
         dark:[null,{dy:2,blur:3.5,opacity:.6},{dy:3.2,blur:5.5,opacity:.66},{dy:4.6,blur:7.5,opacity:.7}]
       }
-    }
+    },
+    // Kinds (NOTATION-MODEL.md "Kinds"): what a region's border is drawn as, by what the region is
+    // (SECTION-MODEL.md "Borders"), and the one wire kind every document may draw: reference, an
+    // undirected relation. A notation that extends this one adds its wire kinds to the list, and may
+    // replace reference by declaring the same applies and id.
+    kinds:[
+      {id:'reference',applies:'wire',title:'Reference',meaning:'One side is listed by the other and nothing moves.',dash:'solid',weight:'regular',arrowhead:'none'},
+      {id:'group',applies:'region',title:'Group',meaning:'Grouping only: no outline, a soft inset.',dash:'none'},
+      {id:'plane',applies:'region',title:'Plane',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
+      {id:'container',applies:'region',title:'Container',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
+      {id:'gate',applies:'region',title:'Gate',meaning:'A boundary that refuses: a solid outline.',dash:'solid'},
+      {id:'intake',applies:'region',title:'Intake',meaning:'An open region: a dashed outline.',dash:'dashed',open:true}
+    ],
+    // Concerns (NOTATION-MODEL.md "Concerns"): the questions a document drawn in this notation should
+    // answer. A notation that extends this one rewords one by declaring the same applies and id, and
+    // adds its own for the document, for Components and for Wires.
+    concerns:[
+      {id:'what',applies:'document',title:'What it is',question:'What is this a schematic of, in one or two sentences?'},
+      {id:'why',applies:'document',title:'Why build it',question:'Why would someone build this or study it?'},
+      {id:'alternatives',applies:'document',title:'Alternatives',question:'What are the alternatives, and why this one over the others?'},
+      {id:'smaller',applies:'document',title:'Smaller first',question:'Can a smaller version be built first, and what is it?'}
+    ]
   };
 
   // Glyphs in a 96 x 64 box. `draw` is the body only: the renderer draws a pin from each
@@ -94,7 +125,167 @@
     if(!cur)return {ok:false,code:'UNKNOWN_NOTATION',message:`No notation "${id}"`,next_operation:`use one of: ${Object.keys(table).join(', ')}`};
     while(cur&&!seen.has(cur.id)){chain.unshift(cur);seen.add(cur.id);cur=cur.extends?table[cur.extends]:null}
     let flat={};for(const n of chain)flat=merge(flat,n);
+    const kinds=joinKinds(chain);if(kinds)flat.kinds=kinds;
+    const concerns=joinKinds(chain,'concerns');if(concerns)flat.concerns=concerns;
+    const sized=checkGlyphSize(flat.tokens);if(!sized.ok)return sized;
+    const scaled=applyScale(flat.tokens);if(!scaled.ok)return scaled;
     flat.id=id;registerPoints(flat);return {ok:true,notation:flat};
+  }
+  // ---- Kinds (NOTATION-MODEL.md "Kinds") --------------------------------------------------------
+  // A notation declares `kinds`, one list for wires and regions: {id, applies: wire | region, title,
+  // meaning, dash, weight, arrowhead, open}. dash is solid or dashed, and for a region also none (no
+  // outline). weight (regular | heavy, absent means regular) and arrowhead (chevron | filled | none,
+  // absent means chevron) belong to a wire kind. open is a boolean, absent means false.
+  //   KIND_INVALID   an entry breaks a rule: an unknown key or value; an id used twice within one
+  //                  applies; dashed without open true, or open true without dashed; a wire kind that
+  //                  is not open and matches another one that is not open in both weight and arrowhead
+  // merge() replaces arrays, so kinds are joined along the extends chain here: a later notation's
+  // entry replaces an earlier notation's entry with the same applies and id, in its place.
+  const KIND_KEYS=['id','applies','title','meaning','dash','weight','arrowhead','open'];
+  const KIND_DASH={wire:['solid','dashed'],region:['none','solid','dashed']},KIND_WEIGHT=['regular','heavy'],KIND_ARROWHEAD=['chevron','filled','none'];
+  // `list` names the list joined: kinds, or concerns (below), which join by the same rule.
+  function joinKinds(chain,list='kinds'){
+    let any=false;const out=[];
+    chain.forEach((n,from)=>{
+      if(!Array.isArray(n?.[list]))return;any=true;
+      for(const entry of n[list]){
+        const at=isObject(entry)?out.findIndex(o=>o.from<from&&isObject(o.entry)&&o.entry.applies===entry.applies&&o.entry.id===entry.id):-1;
+        if(at>=0)out[at]={entry,from};else out.push({entry,from});
+      }
+    });
+    return any?out.map(o=>isObject(o.entry)?{...o.entry}:o.entry):null;
+  }
+  // Each entry of notation.kinds with the rules it breaks (none when it is admitted).
+  function judgeKinds(notation){
+    const list=Array.isArray(notation?.kinds)?notation.kinds:[];
+    const judged=list.map((entry,i)=>{
+      const broken=[],say=v=>JSON.stringify(v);
+      if(!isObject(entry))return {entry,name:`kinds[${i}]`,broken:['an entry is an object {id, applies, dash, ...}']};
+      const name=`${typeof entry.applies==='string'?entry.applies:'kinds['+i+']'} kind ${say(entry.id)}`;
+      const extra=Object.keys(entry).find(k=>!KIND_KEYS.includes(k));
+      if(extra)broken.push(`${extra} is not a field of a kind (${KIND_KEYS.join(', ')})`);
+      if(typeof entry.id!=='string'||!entry.id.trim())broken.push('id must be a non-empty string');
+      for(const key of ['title','meaning'])if(entry[key]!==undefined&&typeof entry[key]!=='string')broken.push(`${key} must be a string`);
+      if(entry.open!==undefined&&typeof entry.open!=='boolean')broken.push(`open must be true or false, not ${say(entry.open)}`);
+      const dashes=KIND_DASH[entry.applies];
+      if(!dashes){broken.push(`applies must be wire or region, not ${say(entry.applies)}`);return {entry,name,broken}}
+      if(!dashes.includes(entry.dash))broken.push(`dash must be one of ${dashes.join(', ')} for a ${entry.applies} kind, not ${say(entry.dash)}`);
+      if(entry.applies==='region'){for(const key of ['weight','arrowhead'])if(entry[key]!==undefined)broken.push(`${key} belongs to a wire kind, not a region kind`)}
+      else{
+        if(entry.weight!==undefined&&!KIND_WEIGHT.includes(entry.weight))broken.push(`weight must be one of ${KIND_WEIGHT.join(', ')}, not ${say(entry.weight)}`);
+        if(entry.arrowhead!==undefined&&!KIND_ARROWHEAD.includes(entry.arrowhead))broken.push(`arrowhead must be one of ${KIND_ARROWHEAD.join(', ')}, not ${say(entry.arrowhead)}`);
+      }
+      if(entry.dash==='dashed'&&entry.open!==true)broken.push('dash dashed needs open true: dashed is reserved for a kind that is open or provisional');
+      if(entry.open===true&&entry.dash!=='dashed')broken.push('open true needs dash dashed');
+      return {entry,name,broken};
+    });
+    // Rules between entries are read over the ones that stand on their own.
+    const sound=judged.filter(j=>!j.broken.length);
+    for(const j of sound)if(sound.some(o=>o!==j&&o.entry.applies===j.entry.applies&&o.entry.id===j.entry.id))j.broken.push(`id is used by more than one ${j.entry.applies} kind`);
+    const closed=sound.filter(j=>!j.broken.length&&j.entry.applies==='wire'&&j.entry.open!==true);
+    const look=e=>`${e.weight||'regular'} ${e.arrowhead||'chevron'}`,same=[];
+    for(const j of closed){const twin=closed.find(o=>o!==j&&look(o.entry)===look(j.entry));if(twin)same.push([j,twin])}
+    for(const [j,twin] of same)j.broken.push(`a wire kind that is not open must differ from every other in weight or arrowhead; ${JSON.stringify(twin.entry.id)} is also ${look(j.entry)}`);
+    return judged;
+  }
+  // One string per broken rule, beginning KIND_INVALID and naming the notation, the entry and the rule.
+  function kindFindings(notation){
+    const out=[];
+    for(const j of judgeKinds(notation))for(const rule of j.broken)out.push(`KIND_INVALID: notation "${notation?.id??'?'}" ${j.name}: ${rule}`);
+    return out;
+  }
+  // The admitted entries for wires or for regions, in declared order. An entry with a finding is not admitted.
+  function kindsOf(notation,applies){
+    return judgeKinds(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry}));
+  }
+  // ---- Concerns (NOTATION-MODEL.md "Concerns") --------------------------------------------------
+  // A notation declares `concerns`, the questions a schematic drawn in it should answer:
+  // {id, applies: document | component | wire, title, question, meaning, symbols}. id and question
+  // are non-empty strings; title and meaning are optional strings. A component concern may name
+  // the symbols it is asked of in `symbols`, a non-empty list of non-empty strings with no repeats;
+  // without it the concern is asked of every Component (src/05-data-core.js concernsAskedOf). A
+  // symbol id is not checked against the notation's glyphs. A document answers them in
+  // meta.answers and config.answers (src/05-data-core.js answerProblems, concernReport).
+  //   CONCERN_INVALID   an entry breaks a rule: not an object; an unknown key; an id or a question
+  //                     that is not a non-empty string; an applies that is not one of the three; a
+  //                     title or meaning that is not a string; an id used twice within one applies;
+  //                     symbols on a document or a wire concern; symbols that is not a non-empty
+  //                     list, or holds a value that is not a non-empty string, or holds a repeat
+  // resolve() joins concerns along the extends chain as it joins kinds (joinKinds): a later
+  // notation's entry replaces an earlier notation's entry with the same applies and id, in its
+  // place and whole, symbols included.
+  const CONCERN_KEYS=['id','applies','title','question','meaning','symbols'],CONCERN_APPLIES=['document','component','wire'];
+  // Each entry of notation.concerns with the rules it breaks (none when it is admitted).
+  function judgeConcerns(notation){
+    const list=Array.isArray(notation?.concerns)?notation.concerns:[];
+    const judged=list.map((entry,i)=>{
+      const broken=[],say=v=>JSON.stringify(v);
+      if(!isObject(entry))return {entry,name:`concerns[${i}]`,broken:['an entry is an object {id, applies, question, ...}']};
+      const name=`${typeof entry.applies==='string'?entry.applies:'concerns['+i+']'} concern ${say(entry.id)}`;
+      const extra=Object.keys(entry).find(k=>!CONCERN_KEYS.includes(k));
+      if(extra)broken.push(`${extra} is not a field of a concern (${CONCERN_KEYS.join(', ')})`);
+      if(typeof entry.id!=='string'||!entry.id.trim())broken.push('id must be a non-empty string');
+      if(!CONCERN_APPLIES.includes(entry.applies))broken.push(`applies must be ${CONCERN_APPLIES.join(', ')}, not ${say(entry.applies)}`);
+      if(typeof entry.question!=='string'||!entry.question.trim())broken.push('question must be a non-empty string');
+      for(const key of ['title','meaning'])if(entry[key]!==undefined&&typeof entry[key]!=='string')broken.push(`${key} must be a string`);
+      if(entry.symbols!==undefined){
+        const list=entry.symbols;
+        if(entry.applies==='document'||entry.applies==='wire')broken.push(`symbols belongs to a component concern, not a ${entry.applies} concern`);
+        else if(!Array.isArray(list)||!list.length)broken.push(`symbols must be a non-empty list of symbol ids, not ${say(list)}`);
+        else{
+          const at=list.findIndex(s=>typeof s!=='string'||!s.trim());
+          if(at>=0)broken.push(`symbols[${at}] must be a non-empty string, not ${say(list[at])}`);
+          const twice=list.find((s,i)=>typeof s==='string'&&list.indexOf(s)!==i);
+          if(twice!==undefined)broken.push(`symbols names ${say(twice)} more than once`);
+        }
+      }
+      return {entry,name,broken};
+    });
+    // The rule between entries is read over the ones that stand on their own.
+    const sound=judged.filter(j=>!j.broken.length);
+    for(const j of sound)if(sound.some(o=>o!==j&&o.entry.applies===j.entry.applies&&o.entry.id===j.entry.id))j.broken.push(`id is used by more than one ${j.entry.applies} concern`);
+    return judged;
+  }
+  // One string per broken rule, beginning CONCERN_INVALID and naming the notation, the entry and the rule.
+  function concernFindings(notation){
+    const out=[];
+    for(const j of judgeConcerns(notation))for(const rule of j.broken)out.push(`CONCERN_INVALID: notation "${notation?.id??'?'}" ${j.name}: ${rule}`);
+    return out;
+  }
+  // The admitted entries for the document, for Components or for Wires, in declared order. An entry
+  // with a finding is not admitted.
+  function concernsOf(notation,applies){
+    return judgeConcerns(notation).filter(j=>!j.broken.length&&j.entry.applies===applies).map(j=>({...j.entry,...(Array.isArray(j.entry.symbols)?{symbols:[...j.entry.symbols]}:{})}));
+  }
+  // The document scale, applied once to the flattened tokens (a fresh object: merge copies), so
+  // every reader of tokens(doc) and resolve(doc).notation.tokens draws scaled with no multiplication
+  // of its own. Scaled: stroke.*, each text role's size and its own min, space.pin, type.screen.max,
+  // glyph.w and glyph.h.
+  // Not scaled: type.screen.min (screen pixels), radius, the other space tokens, elevation.
+  // A scale that is not a number from 0.5 to 4 is refused, never clamped.
+  const SCALE_MIN=.5,SCALE_MAX=4;
+  function applyScale(t){
+    if(!isObject(t)||t.scale===undefined)return {ok:true};
+    const s=t.scale;
+    if(typeof s!=='number'||!Number.isFinite(s)||s<SCALE_MIN||s>SCALE_MAX)return {ok:false,code:'SCALE_INVALID',message:`tokens.scale is ${JSON.stringify(s)}; it must be a number from ${SCALE_MIN} to ${SCALE_MAX}`,next_operation:`set tokens.scale to a number from ${SCALE_MIN} to ${SCALE_MAX}, or remove it to draw at 1`};
+    const by=v=>typeof v==='number'?+(v*s).toFixed(4):v;
+    if(isObject(t.stroke))for(const k of Object.keys(t.stroke))t.stroke[k]=by(t.stroke[k]);
+    if(isObject(t.type))for(const [role,r] of Object.entries(t.type)){
+      if(!isObject(r))continue;
+      if(role==='screen'){if(r.max!==undefined)r.max=by(r.max);continue}
+      if(r.size!==undefined)r.size=by(r.size);if(r.min!==undefined)r.min=by(r.min);
+    }
+    if(isObject(t.space)&&t.space.pin!==undefined)t.space.pin=by(t.space.pin);
+    if(isObject(t.glyph)){t.glyph.w=by(t.glyph.w);t.glyph.h=by(t.glyph.h)}
+    return {ok:true};
+  }
+  // The glyph token is a box {w, h}, each a finite number above 0. Anything else is refused, never
+  // replaced by the built-in size.
+  function checkGlyphSize(t){
+    if(!isObject(t)||t.glyph===undefined)return {ok:true};
+    const g=t.glyph,good=v=>typeof v==='number'&&Number.isFinite(v)&&v>0;
+    if(isObject(g)&&good(g.w)&&good(g.h))return {ok:true};
+    return {ok:false,code:'GLYPH_SIZE_INVALID',message:`tokens.glyph is ${JSON.stringify(g)}; its w and h must each be a finite number above 0`,next_operation:`set tokens.glyph to {w, h} with both above 0, or remove it to draw at ${SCHEMATIC.tokens.glyph.w} by ${SCHEMATIC.tokens.glyph.h}`};
   }
   // Glyphs whose terminals are the card's attachment points (`points: 'terminals'`), by symbol
   // id, filled whenever a notation is resolved. The attachment core reads it, so a gate's two
@@ -147,13 +338,44 @@
   // The glyph leaves the card's foot to its title, and a line more for a subtitle.
   // The glyph leaves the card's foot to its title (one or two lines, from its length at the title
   // size) and a line more for a subtitle. Centred on the axis, so the room is kept on both sides.
-  function glyphBox(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type}={}){
+  // The glyph draws at one size, the glyph token F, on every card that has room for it. With
+  // s = min(F.w/96, F.h/64), the drawn glyph is 96s by 64s. A card has room when 96s is at most 72%
+  // of its width and 64s fits between the feet glyphBox keeps for the text (and, for a lone title
+  // that needs two lines, between the two-line blocks). `need` is the smallest card that has room:
+  // the width for the glyph, and the height for the glyph and the text at the wider of that width and
+  // the card's own. Only the layered layout grows a card to it (src/08-layout-core.js).
+  function glyphRoom(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type,glyph=SCHEMATIC.tokens.glyph}={}){
+    const F=glyph||SCHEMATIC.tokens.glyph,s=Math.min(F.w/96,F.h/64),ts=drawnSize(type,'title'),ss=drawnSize(type,'subtitle'),E=1e-6;
+    const heightAt=w=>{
+      const avail=Math.max(1,w-12),lines=Math.max(1,Math.min(2,Math.ceil(String(title||'').length*ts*.6/avail)));
+      const foot=8+lines*ts*1.15+(subtitle?ss*1.3:0),two=lines===2&&!subtitle&&titleWidth(title)*ts>avail*.85;
+      return 64*s+2*Math.max(foot,two?2.6*ts+4:0);
+    };
+    const needW=96*s/.72;
+    return {ok:96*s<=.72*size.w+E&&heightAt(size.w)<=size.h+E,box:{w:F.w,h:F.h,scale:s},need:{w:needW,h:heightAt(Math.max(size.w,needW))}};
+  }
+  // Where the card has room the box is the fixed one (fixed: true). Where it has not, the box follows
+  // the card as below, the shrink for a lone two-line title included (fixed: false).
+  function glyphBox(g,size,{subtitle=false,title='',type=SCHEMATIC.tokens.type,glyph=SCHEMATIC.tokens.glyph}={}){
+    const fit=glyphRoom(g,size,{subtitle,title,type,glyph});
+    if(fit.ok)return {w:fit.box.w,h:fit.box.h,scale:fit.box.scale,fixed:true};
     const ts=drawnSize(type,'title'),ss=drawnSize(type,'subtitle'),avail=Math.max(1,size.w-12);
     const lines=Math.max(1,Math.min(2,Math.ceil(String(title||'').length*ts*.6/avail)));
     const foot=8+lines*ts*1.15+(subtitle?ss*1.3:0);
-    const many=g?.points==='terminals',w=Math.min(size.w*.72,108),h=Math.max(24,Math.min(size.h*(many?.7:.55),70,size.h-2*foot));
-    return {w,h,scale:Math.min(w/96,h/64)};
+    const many=g?.points==='terminals';let w=Math.min(size.w*.72,108),h=Math.max(24,Math.min(size.h*(many?.7:.55),70,size.h-2*foot));
+    // A lone title that needs a second line gets room for both under the glyph: a two-line block
+    // (a line step of 1.15 and a line box of 1.45 title sizes) and 2 above and below it. The glyph
+    // shrinks to make that room, keeping its aspect, never below 60% of its size; else unchanged.
+    // Whether it needs a second line is judged from per-character advance widths, so the layout
+    // engine (no fonts in Node) and the renderer agree; past 85% of the text width counts, a margin
+    // for fonts up to 15% wider than the table (DejaVu on Linux runs about 10% wider).
+    if(lines===2&&!subtitle&&titleWidth(title)*ts>avail*.85){const room=size.h-2*(2.6*ts+4);if(room<h){const k=Math.max(.6,room/h);w*=k;h*=k}}
+    return {w,h,scale:Math.min(w/96,h/64),fixed:false};
   }
+  // A title's advance width in ems at the title weight (600), from a sans-serif width table in the
+  // manner of a PDF core font's AFM metrics: close enough to tell one line from two.
+  const ADVANCE=[['iljI.,:;!|\'·',.3],['frt ()[]-',.38],['sJ"',.55],['mwMW',.88],['ABCDGHKNOQRUVXY&',.72],['EFLPSTZ',.64]];
+  function titleWidth(title){let em=0;for(const c of String(title||'')){const hit=ADVANCE.find(([cs])=>cs.includes(c));em+=hit?hit[1]:c>='A'&&c<='Z'?.68:.59}return em*.94}
   function glyphAxis(g){
     if(!g)return null;
     if(g.points==='terminals'){const ys=(g.terminals||[]).filter(t=>t.toward==='left'||t.toward==='right').map(t=>t.at[1]);return ys.length?(Math.min(...ys)+Math.max(...ys))/2:null}
@@ -164,5 +386,5 @@
     const {scale}=glyphBox(g,size,opts);return {dx:(t.at[0]-48)*scale,dy:(t.at[1]-axis)*scale};
   }
   function terminal(g,idOrRole){return (g?.terminals||[]).find(t=>t.id===idOrRole)||(g?.terminals||[]).find(t=>t.role===idOrRole)||null}
-  return {BUILTIN,MARGIN,drawnSize,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
+  return {BUILTIN,MARGIN,drawnSize,glyphRoom,glyphBox,glyphAxis,terminalOffset,pointsFor,terminalAttachmentPoints,resolve,kindsOf,kindFindings,concernsOf,concernFindings,tokens,cornerRadius,elevation,merge,glyphOf,glyphDraw,glyphMarkup,terminal,pinEnd};
 });

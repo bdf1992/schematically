@@ -1,13 +1,22 @@
 name: schematic-ci
-on: [push, pull_request]
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
 
 permissions:
   contents: read
 
+# A newer run on the same ref replaces the one in flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # scripts/qa.py took 14 to 18 minutes on 2026-10-04 and grows with every suite added.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,27 +34,22 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Run authoritative RC QA
         run: python scripts/qa.py
-      - name: Stage deployable site
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: python scripts/stage_site.py
-      - name: Upload Pages artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
 
-  deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  # Builds the Tauri shell and launches it on a document: it passes only when the page inside the
+  # built binary reports the document's own component and wire counts (tests/desktop_launch_qa.py).
+  desktop:
     needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: windows-latest
+    timeout-minutes: 45
     steps:
-      - name: Deploy QA-verified build to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the page the shell embeds
+        run: python build.py
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build the desktop shell
+        run: cargo build --release --manifest-path desktop/src-tauri/Cargo.toml
+      - name: Launch the shell on a document
+        run: python tests/desktop_launch_qa.py --binary desktop/src-tauri/target/release/sov-schematic-desktop.exe

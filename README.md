@@ -21,7 +21,7 @@ Semantic undo/redo with gesture compression; named checkpoints persisted in the 
 
 ## Files and formats
 
-One desktop-style **File** menu: New, Open, Save, Save As, Export SVG, Export Package, Restore Recovery. Editable documents are `.sov`; portable packages are `.sovpak`; browser recovery is deliberately separate from file save. Where the File System Access API exists, Save writes back to the file handle; otherwise it falls back to a download.
+One desktop-style **File** menu: New, Open, Save, Save As, Export SVG, Export Package, Restore Recovery. Editable documents are `.sov`; portable packages are `.sovpak`; browser recovery is deliberately separate from file save. Export SVG writes the picture, not the screen: labels are drawn at their base size times the document scale whatever the camera zoom, so the same document exports the same file zoomed in or out. Where the File System Access API exists, Save writes back to the file handle; otherwise it falls back to a download.
 
 - `.sov` → `soveraeign.schematic/document@0.1`
 - `.sovpak` → `soveraeign.schematic/package@0.1`
@@ -56,7 +56,17 @@ Publisher, copyright and version are declared in `desktop/src-tauri/tauri.conf.j
 
 ## Quality practice
 
-`python scripts/qa.py` is the single authoritative gate, identical locally and in CI: static checks, browser interaction suites, API/HTTP/MCP parity and conformance, stress and performance watchers, mutation tests, the golden corpus, and syntax checks. Defects found by hand get an issue and, once fixed, a regression suite inside the gate. Pushes to `main` deploy to GitHub Pages only after the gate passes. `LOCAL-SETUP.md` covers machine setup, the local QA loop, and the green-main update pattern; `docs/BRANCHING.md` covers the release flow.
+`python scripts/qa.py` is the single authoritative gate, identical locally and in CI: static checks, browser interaction suites, API/HTTP/MCP parity and conformance, stress and performance watchers, mutation tests, the golden corpus, and syntax checks. Defects found by hand get an issue and, once fixed, a regression suite inside the gate. Pushing a `v*` release tag deploys GitHub Pages and builds desktop installers only after the gate passes. `LOCAL-SETUP.md` covers machine setup, the local QA loop, and the green-main update pattern; `docs/BRANCHING.md` covers the release flow.
+
+## Code graphs
+
+```
+python scripts/graph_to_sov.py GRAPH --out FILE [--labels FILE] [--label-length N] [--no-layout]
+```
+
+`GRAPH` is a graphify-format `graph.json`, written by graphify or by system-cartographer. The output is a laid-out document with one card per function, class and module, one wire per call or reference marked `EXTRACTED` or `INFERRED` in `config.basis`, and one group per community. From a graphify graph it reads each node's callable flags and `community`; from a system-cartographer graph it reads `kind` and `code_community`. `--labels` is a JSON object from community number to group label; `--no-layout` writes the document without coordinates. The command prints its counts as one line of JSON.
+
+`--level communities` writes FILE with one card per community and one wire per community pair labelled with its edge count, plus `FILE-stem.communities/community-N.sov`, a document of each community's functions that the card's `config.documentRef` names.
 
 ## Direction
 

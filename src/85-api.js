@@ -26,6 +26,28 @@ function runtimeCrud(operation){
   }
   return SovSchematicData.clone(receipt);
 }
+// A write the data core takes as one (a batch, a set of answers) is one history entry and one
+// recovery save, like a single edit: all or none.
+function runtimeWrite(write,label){
+  commitHistoryCapture();
+  const receipt=write();
+  if(receipt.ok){
+    normalizeRuntimeAfterCrud();
+    commitHistoryCapture(label(receipt));
+    try{saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false})}catch(_){ }
+  }
+  return SovSchematicData.clone(receipt);
+}
+function runtimeBatch(batch={}){
+  return runtimeWrite(()=>SovSchematicData.applyBatch(diagram,{...batch,id:batch.id||`browser-batch-${Date.now()}`}),
+    receipt=>`Apply ${receipt.result.applied.length} change${receipt.result.applied.length===1?'':'s'}`);
+}
+// Answers to concerns (DATA-FORMATS.md "Answers"): the data core's answerConcerns decides
+// everything; `answers` is its list, or {answers, ifRevision}.
+function runtimeAnswers(request){
+  const input=Array.isArray(request)?{answers:request}:(request||{});
+  return runtimeWrite(()=>SovSchematicData.answerConcerns(diagram,{...input,id:input.id||`browser-answers-${Date.now()}`}),()=>'Answer concerns');
+}
 // Runs live beside the document, not in it (STATE-SPACE.md "Surfaces"): the page's run registry
 // starts every run from snapshotDocument() and reads packs from the build's sov-packs tag. No run
 // operation captures history, changes the document or its revision, or saves recovery.
@@ -36,9 +58,19 @@ function pagePacks(){
 }
 function pageRuns(){return pageRunRegistry||(pageRunRegistry=SovSchematicStateSpace.createRunRegistry({packs:pagePacks(),document:()=>snapshotDocument()}))}
 // Graph queries and the message simulation read the live document; one session per page.
-const graphSession=SovSchematicGraph.createSession();
+// The simulation side of the session is the sim surface (src/07-state-surface.js, over the
+// state-space engine, contract 09 of the one-runtime plan); schematic.graph.query still reaches
+// src/07-graph-core.js's graph reading.
+const graphSession=SovSchematicSimSurface.createSession();
 function graphCall(name,args={}){return SovSchematicData.clone(graphSession.execute(name,snapshotDocument(),args))}
 function apiOperation(op,resource,resourceId,value,patch,query){return runtimeCrud({schema:SovSchematicData.OPERATION_SCHEMA,id:`browser-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,op,resource,resourceId,value,patch,query})}
+
+// The release build stamps <meta name="sov-revision" content="<tag> <commit>">; a local build has none.
+function buildRevision(){
+  if(typeof document==='undefined'||!document.querySelector)return null;
+  const meta=document.querySelector('meta[name="sov-revision"]');
+  return meta?meta.getAttribute('content'):null;
+}
 
 const SovSchematicAPI={
   version:'0.1',
@@ -50,7 +82,7 @@ const SovSchematicAPI={
     restoreRecovery:()=>restoreRecovery()
   },
   file:{
-    info:()=>({name:currentFileName,format:currentFileFormat,dirty:isFileDirty(),revision:diagram.revision}),
+    info:()=>({name:currentFileName,format:currentFileFormat,dirty:isFileDirty(),revision:diagram.revision,build:buildRevision()}),
     document:()=>snapshotDocument(),
     package:()=>snapshotPackage(),
     svg:(options={})=>snapshotSvg(options),
@@ -63,11 +95,16 @@ const SovSchematicAPI={
   update:(resource,id,patch)=>apiOperation('update',resource,id,null,patch),
   delete:(resource,id)=>apiOperation('delete',resource,id),
   execute:(operation)=>runtimeCrud(operation),
+  apply:(batch)=>runtimeBatch(batch),
+  read:(scope)=>SovSchematicData.readScope(snapshotDocument(),scope),
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
   markers:()=>SovSchematicData.markersFor(diagram),
-  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:colorEngine.palette,palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom']}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;if(palette)colorEngine.palette=palette;applyColorEngine();return {theme:colorEngine.theme,palette:colorEngine.palette}},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{setGlobalTimeScale(value);return globalTimeScale()}},
+  concerns:{list:(options={})=>SovSchematicData.concernReport(snapshotDocument(),options||{}),answer:(answers)=>runtimeAnswers(answers)},
+  view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:effectivePaletteName(),palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom'],source:documentPalette()!==null?'document':'view',viewPalette:colorEngine.palette}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;const picked=palette?pickPalette(palette):null;if(!palette||picked?.ok===false)applyColorEngine();return picked?.ok===false?picked:{theme:colorEngine.theme,palette:effectivePaletteName()}},documentPalette:()=>SovSchematicData.clone(documentPalette()),setDocumentPalette:(value)=>{const admitted=setDocumentPalette(value);return admitted.ok===false?admitted:SovSchematicData.clone(documentPalette())},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()},
+    // The wave view (src/68-wave-view.js): off, string, dots or lanes; the view's own, never the document's.
+    waveStyle:()=>waveStyle(),setWaveStyle:(name)=>setWaveStyle(name)},
   render:{
     svg:(options={})=>renderStandaloneSvg(options),
     png:(options={})=>renderStandalonePng(options)
@@ -86,6 +123,10 @@ const SovSchematicAPI={
     align:(ids,options={})=>SovSchematicData.clone(runLayoutOp('align',{...options,ids},'Align')),
     distribute:(ids,options={})=>SovSchematicData.clone(runLayoutOp('distribute',{...options,ids},'Distribute')),
     route:(wireId,spec=null)=>SovSchematicData.clone(runLayoutOp('route',{wireId,...(spec||{mode:'auto'})},'Route')),
+    // Buses (LAYOUT-MODEL.md "As built: buses"): harness({between:[groupA, groupB], pitch?}) or harness([groupA, groupB], options).
+    harness:(between,options={})=>SovSchematicData.clone(runLayoutOp('harness',Array.isArray(between)?{...options,between}:{...(between||{})},'Harness')),
+    bus:(id,spec={})=>{const a=id&&typeof id==='object'?{...id}:{...(spec||{}),id};return SovSchematicData.clone(runLayoutOp('bus',a,a.remove?'Remove bus':'Bus'))},
+    buses:(options={})=>SovSchematicData.clone(runLayoutOp('buses',options||{})),
     apply:(options={})=>SovSchematicData.clone(runLayoutOp('apply',{engine:'layered',...options},'Arrange layout')),
     metrics:(options={})=>SovSchematicData.clone(options.static===false?layoutMetrics(options):withPictureLabels(()=>layoutMetrics(options))),
     contrast:(options={})=>SovSchematicData.clone(options.static===false?contrastAudit(options):withPictureLabels(()=>contrastAudit(options))),
@@ -115,6 +156,8 @@ const SovSchematicAPI={
     resume:(parkId,options={})=>graphCall('schematic.sim.resume',{...options,parkId}),
     reconcile:(effectKey,options={})=>graphCall('schematic.sim.reconcile',{...options,effectKey}),
     inspect:(what='state',id)=>graphCall('schematic.sim.inspect',{what,id}),
+    travel:()=>graphCall('schematic.sim.travel'),
+    spectrum:(window={})=>graphCall('schematic.sim.spectrum',window),
     scenario:(idOrScenario,handlers)=>graphCall('schematic.sim.scenario',typeof idOrScenario==='string'?{id:idOrScenario,handlers}:{scenario:idOrScenario,handlers}),
     scenarios:()=>graphCall('schematic.sim.scenarios')
   },
@@ -122,6 +165,6 @@ const SovSchematicAPI={
     start:(args)=>pageRuns().start(args),step:(handle)=>pageRuns().step(handle),settle:(handle)=>pageRuns().settle(handle),
     trace:(handle)=>pageRuns().trace(handle),query:(handle,subject)=>pageRuns().query(handle,subject),replay:(trace)=>pageRuns().replay(trace)
   },
-  tools:()=>[...SovSchematicData.operationTools(),...SovSchematicGraph.tools()]
+  tools:()=>[...SovSchematicData.operationTools(),...SovSchematicSimSurface.tools()]
 };
 window.SovSchematicAPI=SovSchematicAPI;
