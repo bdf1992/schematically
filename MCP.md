@@ -94,6 +94,67 @@ The revision a database row reports counts the texts written for that id in this
 first); it is not the revision field inside the document. `--db` needs Node with `node:sqlite` and no
 flag (22.13 or later); a server without `--db` does not need it.
 
+### Remote listener and Cloudflare Access
+
+The server can open a second listener for one public hostname served by a Cloudflare Tunnel behind
+Cloudflare Access. It admits a request only when the request names that hostname and carries an
+Access token signed by the declared team for a declared audience. The check is `mcp/access.mjs`,
+loaded only when the arguments are given; it follows Cloudflare's "Validate JWTs" for an origin
+behind Access and RFC 8725 (the algorithm is fixed to RS256 by the verifier, never read from the
+token).
+
+Five arguments; the first four are given together, and one without the others exits 1:
+
+- `--remote-port <n>`: the second listener's port, an integer from 1 to 65535 that is not `--port`.
+- `--access-hostname <h>`: the public hostname, a bare DNS name. It is the only `Host` admitted.
+- `--access-team <d>`: the Access team domain, a bare DNS name (`<team>.cloudflareaccess.com`).
+  Tokens must be issued by `https://<d>`; its keys are read from `https://<d>/cdn-cgi/access/certs`.
+- `--access-aud <a>`: the audience tag of the Access application, or several separated by commas.
+- `--access-certs-url <u>`: not required; another address for the team's keys, for tests and
+  private deployments.
+
+The remote listener binds `127.0.0.1` only, whatever `--host` says, and is meant to be the service
+of one tunnel ingress rule (`service: http://127.0.0.1:<remote-port>` for that hostname). The first
+listener (`--port`, `--host`) is never given to a tunnel.
+
+Two gates, each run before the request body is read. Both listeners hand an admitted request to the
+same handler, so the routes and answers are the ones described above.
+
+- The first listener refuses, with or without the access arguments, any request that carries a
+  `cf-ray`, `cf-connecting-ip` or `cf-access-jwt-assertion` header: 403 `ACCESS_HOST_REFUSED`,
+  reason `tunnel_mark_on_local_surface`. Every other request is answered as before.
+- The remote listener gives every request, `OPTIONS` included, to the access gate. A refusal
+  answers its status with `{ok: false, code, reason}`, `content-type: application/json;
+  charset=utf-8` and no `access-control` header, and holds neither the token nor any claim. No
+  token and no claim is printed.
+
+The access gate checks in this order and refuses at the first failure:
+
+| Status | Code | Reason | When |
+| --- | --- | --- | --- |
+| 403 | `ACCESS_HOST_REFUSED` | `host_not_remote_hostname` | `Host`, lowercased, is not exactly the hostname |
+| 403 | `ACCESS_HOST_REFUSED` | `origin_refused` | `Origin` is present and is not exactly `https://<hostname>` |
+| 401 | `ACCESS_TOKEN_MISSING` | `token_missing` | `Cf-Access-Jwt-Assertion` is absent or empty |
+| 401 | `ACCESS_TOKEN_INVALID` | `token_unreadable` | not three dot-separated parts whose first two decode from base64url to JSON objects |
+| 401 | `ACCESS_TOKEN_INVALID` | `alg_refused` | the header `alg` is not `RS256` |
+| 401 | `ACCESS_TOKEN_INVALID` | `kid_missing` | the header `kid` is not a non-empty string |
+| 401 | `ACCESS_TOKEN_INVALID` | `kid_unknown` | the team's keys hold no key for that `kid` |
+| 401 | `ACCESS_TOKEN_INVALID` | `jwks_fetch_failed` | no key is held at all and the fetch of the team's keys failed |
+| 401 | `ACCESS_TOKEN_INVALID` | `signature_invalid` | the RS256 signature over the first two parts does not verify |
+| 401 | `ACCESS_TOKEN_INVALID` | `issuer_refused` | `iss` is not exactly `https://<team>` |
+| 401 | `ACCESS_TOKEN_INVALID` | `audience_refused` | `aud`, a string or an array of strings, names none of the declared audiences |
+| 401 | `ACCESS_TOKEN_INVALID` | `token_expired` | `exp` is not a number or is 30 seconds or more in the past |
+| 401 | `ACCESS_TOKEN_INVALID` | `iat_refused` | `iat` is not a number or is more than 30 seconds ahead |
+| 401 | `ACCESS_TOKEN_INVALID` | `not_yet_valid` | `nbf` is present and is more than 30 seconds ahead |
+
+The key cache: a key from a set fetched less than 600 seconds ago is used with no fetch; otherwise
+the keys are fetched at most once in 30 seconds, a fetch that fails or yields no key leaves the last
+set in place, and that set serves for up to 86400 seconds, so a `kid` the team does not publish costs
+one fetch per 30 seconds and is never admitted.
+
+A token says who passed Access; the server maps it to nothing. There is no sign-in page, session or
+cookie here, and `--profile` stays an ownership label.
+
 ## MCP
 
 ```text

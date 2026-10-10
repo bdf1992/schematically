@@ -32,6 +32,23 @@
 // The database rule: the database is the working copy; a mutation under --db never writes the source
 // file; a file changed on disk after its import is read again only by POST /documents/<id>/import;
 // export overwrites the file it names.
+//
+// A second listener for one tunnel hostname behind Cloudflare Access (mcp/access.mjs, loaded only
+// when these are given). The first four are given together:
+//   --remote-port <n>        the second listener's port, 1 to 65535 and not --port. It binds
+//                            127.0.0.1 whatever --host says and is the service of one tunnel ingress rule.
+//   --access-hostname <h>    the public hostname the tunnel serves; the only Host admitted there.
+//   --access-team <d>        the Access team domain; tokens are issued by https://<d> and its keys
+//                            are read from https://<d>/cdn-cgi/access/certs.
+//   --access-aud <a[,a]>     the audience tag of the Access application, or several separated by commas.
+//   --access-certs-url <u>   not required: another address for the team's keys (tests, private deployments).
+// Two gates, each run before the request body is read:
+//   the first listener (--port, --host) refuses, with or without these arguments, a request that
+//     carries a cf-ray, cf-connecting-ip or cf-access-jwt-assertion header: 403 ACCESS_HOST_REFUSED
+//     tunnel_mark_on_local_surface. It is never given to a tunnel.
+//   the remote listener gives every request, OPTIONS included, to the access gate; a refusal
+//     answers its status with {ok:false, code, reason} and no access-control header.
+// Both listeners hand an admitted request to the one handler. No token and no claim is printed.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -67,6 +84,32 @@ const FILE=FILE_ARG?path.resolve(FILE_ARG):(ROOT_DIR?null:path.resolve(path.join
 const HOST=arg('--host','127.0.0.1');
 const DB_ARG=arg('--db',null);
 const PROFILE=arg('--profile','bdo');
+// The remote listener: four arguments given together, checked before anything is opened.
+const fail=line=>{console.error(line);process.exit(1)};
+const REMOTE_NAMES=['--remote-port','--access-hostname','--access-team','--access-aud'];
+const REMOTE_GIVEN=REMOTE_NAMES.some(name=>args.includes(name));
+if(REMOTE_GIVEN&&REMOTE_NAMES.some(name=>arg(name,null)===null))fail('--remote-port, --access-hostname, --access-team and --access-aud are given together');
+// A bare DNS name: at most 253 characters, two or more labels of a-z, 0-9 and hyphen.
+const DNS_NAME=/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+const dnsName=name=>{
+  const value=arg(name,'').toLowerCase();
+  if(!DNS_NAME.test(value))fail(`${name} must be a bare DNS name: two or more labels of a-z, 0-9 and hyphen separated by single dots`);
+  return value;
+};
+let REMOTE_PORT=null,ACCESS_HOSTNAME=null,ACCESS_TEAM=null,gate=null;
+if(REMOTE_GIVEN){
+  const port=arg('--remote-port','');
+  REMOTE_PORT=/^[0-9]{1,5}$/.test(port)?Number(port):0;
+  if(REMOTE_PORT<1||REMOTE_PORT>65535||REMOTE_PORT===PORT)fail('--remote-port must be an integer from 1 to 65535 that is not --port');
+  ACCESS_HOSTNAME=dnsName('--access-hostname');
+  ACCESS_TEAM=dnsName('--access-team');
+  const audiences=arg('--access-aud','').split(',').map(tag=>tag.trim()).filter(tag=>tag!=='');
+  if(audiences.length===0)fail('--access-aud must name one audience tag, or several separated by commas');
+  try{
+    const {createAccessGate}=await import('./access.mjs');
+    gate=createAccessGate({hostname:ACCESS_HOSTNAME,teamDomain:ACCESS_TEAM,audiences,certsUrl:arg('--access-certs-url',null)||undefined});
+  }catch(error){fail(String(error.message||error))}
+}
 const readRepoText=relative=>fs.readFileSync(path.join(HERE,'..',relative),'utf8');
 // The editor is served from this origin so the live link is a same-origin request;
 // opened from file:// the browser has an opaque origin and the push never lands.
@@ -368,7 +411,7 @@ function readBody(req){
   });
 }
 
-const server=http.createServer(async(req,res)=>{
+const handle=async(req,res)=>{
   let body=null;
   try{
     if(req.method!=='GET'&&req.method!=='HEAD'&&req.method!=='OPTIONS')body=await readBody(req);
@@ -420,7 +463,31 @@ const server=http.createServer(async(req,res)=>{
   }catch(error){
     sendJson(res,500,{ok:false,error:String(error.message||error)});
   }
+};
+// The two gates. A refusal reads no body and carries no access-control header.
+function refuseRequest(res,status,code,reason){
+  res.writeHead(status,{'content-type':'application/json; charset=utf-8'});
+  res.end(JSON.stringify({ok:false,code,reason}));
+}
+// The first listener is never given to a tunnel, so a request that carries a mark of one is refused.
+const TUNNEL_MARKS=['cf-ray','cf-connecting-ip','cf-access-jwt-assertion'];
+const server=http.createServer((req,res)=>{
+  if(TUNNEL_MARKS.some(name=>req.headers[name]!==undefined))return refuseRequest(res,403,'ACCESS_HOST_REFUSED','tunnel_mark_on_local_surface');
+  return handle(req,res);
 });
+// The remote listener: loopback only, and every request passes the access gate first.
+if(gate){
+  const remote=http.createServer(async(req,res)=>{
+    const headers={};for(const [k,v] of Object.entries(req.headers))headers[k.toLowerCase()]=v;
+    const verdict=await gate.admit(headers);
+    if(!verdict.ok)return refuseRequest(res,verdict.status,verdict.code,verdict.reason);
+    return handle(req,res);
+  });
+  remote.on('error',error=>fail(String(error.message||error)));
+  remote.listen(REMOTE_PORT,'127.0.0.1',()=>{
+    console.log(`Remote listener http://127.0.0.1:${REMOTE_PORT}, host ${ACCESS_HOSTNAME}, Access team ${ACCESS_TEAM}`);
+  });
+}
 server.listen(PORT,HOST,()=>{
   if(FILE){
     console.log(`Soveraeign Schematic API + MCP http://${HOST}:${PORT} · ${FILE}`);
