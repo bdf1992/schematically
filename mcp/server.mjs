@@ -15,6 +15,23 @@
 //   /documents     GET lists {root, default, documents}; POST {id, file} registers an id to an
 //                  absolute file path (or to <root>/<id>.sov when file is left out). Two ids that
 //                  name one file share one surface.
+//   --db <path>    keep the documents in a node:sqlite database (mcp/store-sqlite.mjs; Node 22.13 or
+//                  later, no flag; loaded only when --db is given). Each document, its revisions and
+//                  the profile that owns it live in the file. The default document (--file) stays a
+//                  file store and is not in the database.
+//   --profile <id> the profile this server creates documents under (default bdo); an ownership label
+//                  only, there is no sign-in. Ignored without --db.
+//   With --db, in addition:
+//   /d/<id>/...                  serves the database document <id>; with --root, <root>/<id>.sov is
+//                                imported once on first use.
+//   GET /documents               {root, default, database, profile, documents}; POST {id, file} creates
+//                                or imports a database document (201 new, 200 same, 409 DOCUMENT_ID_TAKEN).
+//   POST /documents/<id>/import  {file?} reads the file again as a new revision (origin import).
+//   POST /documents/<id>/export  {file} writes the last revision's text to the file.
+//   GET /profiles                {profiles}; GET /profiles/<id>/documents lists that profile's rows.
+// The database rule: the database is the working copy; a mutation under --db never writes the source
+// file; a file changed on disk after its import is read again only by POST /documents/<id>/import;
+// export overwrites the file it names.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -48,6 +65,8 @@ const FILE_ARG=arg('--file',null);
 // The default document: --file, else data/schematic.sov when --root is not given, else none.
 const FILE=FILE_ARG?path.resolve(FILE_ARG):(ROOT_DIR?null:path.resolve(path.join(HERE,'../data/schematic.sov')));
 const HOST=arg('--host','127.0.0.1');
+const DB_ARG=arg('--db',null);
+const PROFILE=arg('--profile','bdo');
 const readRepoText=relative=>fs.readFileSync(path.join(HERE,'..',relative),'utf8');
 // The editor is served from this origin so the live link is a same-origin request;
 // opened from file:// the browser has an opaque origin and the push never lands.
@@ -114,6 +133,50 @@ function resolveId(id){
   return null;
 }
 
+// --db: the database is opened once at start; its module is loaded only then, so a server without
+// --db prints no ExperimentalWarning. One map from id to {id, surface} for its documents.
+let db=null;
+const dbDocs=new Map();
+if(DB_ARG){
+  if(!ID_PATTERN.test(PROFILE)){console.error('--profile must match ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$');process.exit(1)}
+  try{
+    const {openDatabase}=await import('./store-sqlite.mjs');
+    fs.mkdirSync(path.dirname(path.resolve(DB_ARG)),{recursive:true});
+    db=openDatabase(path.resolve(DB_ARG),{profile:PROFILE});
+  }catch(error){console.error(String(error.message||error));process.exit(1)}
+}
+function dbSurface(id){
+  let entry=dbDocs.get(id);
+  if(!entry){
+    entry={id,surface:createSurface({
+      store:db.store(id),
+      packs:packsJson,
+      render,
+      readText:readRepoText,
+      describe:()=>db.get(id).source||id+'.sov',
+      editorHtml,
+      base:'/d/'+encodeURIComponent(id)
+    })};
+    dbDocs.set(id,entry);
+  }
+  return entry.surface;
+}
+const isFileOnDisk=file=>{try{return fs.statSync(file).isFile()}catch(_){return false}};
+const parsesAsJson=text=>{try{JSON.parse(text);return true}catch(_){return false}};
+// A database document by id; with --root, <root>/<id>.sov is imported once when the id is new.
+function resolveDbDocument(id){
+  const row=db.get(id);
+  if(row)return row;
+  if(!ROOT_DIR)return null;
+  const file=path.join(ROOT_DIR,id+'.sov');
+  if(!isFileOnDisk(file))return null;
+  const text=fs.readFileSync(file,'utf8');
+  if(!parsesAsJson(text))return null;
+  db.create(id,file);
+  db.append(id,text,'import');
+  return db.get(id);
+}
+
 const CORS={'access-control-allow-origin':'*'};
 const JSON_HEADERS={'content-type':'application/json; charset=utf-8',...CORS};
 function sendJson(res,status,value){res.writeHead(status,JSON_HEADERS);res.end(JSON.stringify(value))}
@@ -159,6 +222,108 @@ function registerDocument(res,rawBody){
   return sendJson(res,201,{ok:true,id,file:entry.file});
 }
 
+const dbRow=row=>({id:row.id,file:row.source,open:dbDocs.has(row.id),profile:row.profile,revision:row.revision,updated:row.updated});
+function listDbDocuments(){
+  const rows=new Map();
+  for(const row of db.list())rows.set(row.id,dbRow(row));
+  if(ROOT_DIR){
+    let names=[];try{names=fs.readdirSync(ROOT_DIR)}catch(_){}
+    for(const name of names){
+      if(!name.endsWith('.sov'))continue;
+      const id=name.slice(0,-4);
+      const file=path.join(ROOT_DIR,name);
+      if(!ID_PATTERN.test(id)||rows.has(id)||!isFileOnDisk(file))continue;
+      rows.set(id,{id,file:path.resolve(file),open:false,profile:null,revision:null,updated:null});
+    }
+  }
+  return {root:ROOT_DIR,default:FILE,database:path.resolve(DB_ARG),profile:PROFILE,documents:[...rows.values()].sort((x,y)=>x.id<y.id?-1:x.id>y.id?1:0)};
+}
+const ID_MESSAGE='an id matches ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$';
+// The body as a JSON object (empty means {}); answers 400 and returns null otherwise.
+function parseObjectBody(res,rawBody){
+  let input;
+  try{input=rawBody&&rawBody.trim()?JSON.parse(rawBody):{}}catch(_){sendJson(res,400,{ok:false,code:'DOCUMENT_FILE_INVALID',message:'the request body is not JSON'});return null}
+  if(input===null||typeof input!=='object'||Array.isArray(input)){sendJson(res,400,{ok:false,code:'DOCUMENT_FILE_INVALID',message:'the request body must be a JSON object'});return null}
+  return input;
+}
+function registerDbDocument(res,rawBody){
+  const input=parseObjectBody(res,rawBody);
+  if(input===null)return;
+  const id=input.id;
+  if(typeof id!=='string'||!ID_PATTERN.test(id))return sendJson(res,400,{ok:false,code:'DOCUMENT_ID_INVALID',message:ID_MESSAGE});
+  const given=input.file!==undefined&&input.file!==null;
+  if(given&&(typeof input.file!=='string'||!path.isAbsolute(input.file)))return sendJson(res,400,{ok:false,code:'DOCUMENT_FILE_INVALID',message:'file must be an absolute path'});
+  const existing=db.get(id);
+  if(existing){
+    if(given&&(existing.source===null||fileKey(existing.source)!==fileKey(input.file)))return sendJson(res,409,{ok:false,code:'DOCUMENT_ID_TAKEN',message:`id ${id} already names ${existing.source===null?'no file':existing.source}`});
+    return sendJson(res,200,{ok:true,id,file:existing.source,profile:existing.profile,revision:existing.revision});
+  }
+  let file=null;
+  if(given)file=path.resolve(input.file);
+  else if(ROOT_DIR){const candidate=path.join(ROOT_DIR,id+'.sov');if(isFileOnDisk(candidate))file=candidate}
+  if(file!==null&&isFileOnDisk(file)){
+    const text=fs.readFileSync(file,'utf8');
+    if(!parsesAsJson(text))return sendJson(res,400,{ok:false,code:'DOCUMENT_FILE_INVALID',message:`${file} is not JSON`});
+    db.create(id,file);
+    const revision=db.append(id,text,'import');
+    return sendJson(res,201,{ok:true,id,file,profile:PROFILE,revision});
+  }
+  db.create(id,file);
+  return sendJson(res,201,{ok:true,id,file,profile:PROFILE,revision:0});
+}
+// POST /documents/<id>/import and /export. Always answers.
+function transferDbDocument(res,id,kind,rawBody){
+  if(!ID_PATTERN.test(id))return sendJson(res,400,{ok:false,code:'DOCUMENT_ID_INVALID',message:ID_MESSAGE});
+  const row=db.get(id);
+  if(!row)return sendJson(res,404,{ok:false,code:'DOCUMENT_NOT_FOUND',message:`no document in the database under id ${id}`});
+  const input=parseObjectBody(res,rawBody);
+  if(input===null)return;
+  const file=input.file!==undefined&&input.file!==null?input.file:row.source;
+  if(typeof file!=='string'||!path.isAbsolute(file))return sendJson(res,400,{ok:false,code:'DOCUMENT_FILE_INVALID',message:'file must be an absolute path (or the document must have a source)'});
+  if(kind==='import'){
+    if(!isFileOnDisk(file))return sendJson(res,404,{ok:false,code:'DOCUMENT_FILE_MISSING',message:`${file} is not a file on disk`});
+    const text=fs.readFileSync(file,'utf8');
+    if(!parsesAsJson(text))return sendJson(res,400,{ok:false,code:'DOCUMENT_FILE_INVALID',message:`${file} is not JSON`});
+    const revision=db.append(id,text,'import');
+    dbDocs.delete(id);
+    return sendJson(res,200,{ok:true,id,file,revision});
+  }
+  if(row.revision===0)return sendJson(res,409,{ok:false,code:'DOCUMENT_EMPTY',message:`document ${id} has no revision to export`});
+  createFileStore(file).write(db.text(id));
+  return sendJson(res,200,{ok:true,id,file,revision:row.revision});
+}
+function preflight(res){
+  res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','access-control-allow-headers':'content-type,mcp-protocol-version,mcp-method,mcp-name'});
+  return res.end('');
+}
+// The --db routes answered before /d/. Returns true when it answered.
+function handleDbRoute(req,res,pathname,body){
+  if(pathname==='/profiles'){
+    if(req.method==='GET'){sendJson(res,200,{profiles:db.profiles()});return true}
+    if(req.method==='OPTIONS'){preflight(res);return true}
+    return false;
+  }
+  let m=pathname.match(/^\/profiles\/([^/]+)\/documents$/);
+  if(m){
+    if(req.method==='OPTIONS'){preflight(res);return true}
+    if(req.method!=='GET')return false;
+    let id=null;try{id=decodeURIComponent(m[1])}catch(_){}
+    if(id===null||!db.hasProfile(id)){sendJson(res,404,{ok:false,code:'PROFILE_NOT_FOUND',message:`no profile ${m[1]}`});return true}
+    sendJson(res,200,{profile:id,documents:db.list(id).map(dbRow)});
+    return true;
+  }
+  m=pathname.match(/^\/documents\/([^/]+)\/(import|export)$/);
+  if(m){
+    if(req.method==='OPTIONS'){preflight(res);return true}
+    if(req.method!=='POST')return false;
+    let id=null;try{id=decodeURIComponent(m[1])}catch(_){}
+    if(id===null){sendJson(res,400,{ok:false,code:'DOCUMENT_ID_INVALID',message:ID_MESSAGE});return true}
+    transferDbDocument(res,id,m[2],body);
+    return true;
+  }
+  return false;
+}
+
 function readBody(req){
   return new Promise((resolve,reject)=>{
     let chunks='';req.setEncoding('utf8');
@@ -180,9 +345,10 @@ const server=http.createServer(async(req,res)=>{
   const headers={};for(const [k,v] of Object.entries(req.headers))headers[k.toLowerCase()]=v;
   const pathname=url.pathname;
   try{
+    if(db&&handleDbRoute(req,res,pathname,body))return;
     if(pathname==='/documents'){
-      if(req.method==='GET')return sendJson(res,200,listDocuments());
-      if(req.method==='POST')return registerDocument(res,body);
+      if(req.method==='GET')return sendJson(res,200,db?listDbDocuments():listDocuments());
+      if(req.method==='POST')return db?registerDbDocument(res,body):registerDocument(res,body);
       if(req.method==='OPTIONS'){
         res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','access-control-allow-headers':'content-type,mcp-protocol-version,mcp-method,mcp-name'});
         return res.end('');
@@ -196,9 +362,14 @@ const server=http.createServer(async(req,res)=>{
       let id=null;
       try{id=decodeURIComponent(rawId)}catch(_){}
       if(id===null||!ID_PATTERN.test(id))return sendJson(res,400,{ok:false,code:'DOCUMENT_ID_INVALID',message:'an id matches ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'});
-      const entry=resolveId(id);
-      if(!entry)return sendJson(res,404,{ok:false,code:'DOCUMENT_NOT_FOUND',message:`no document is registered or found under id ${id}`});
-      target=surfaceOf(entry,'/d/'+encodeURIComponent(id));
+      if(db){
+        if(!resolveDbDocument(id))return sendJson(res,404,{ok:false,code:'DOCUMENT_NOT_FOUND',message:`no document is in the database or found under id ${id}`});
+        target=dbSurface(id);
+      }else{
+        const entry=resolveId(id);
+        if(!entry)return sendJson(res,404,{ok:false,code:'DOCUMENT_NOT_FOUND',message:`no document is registered or found under id ${id}`});
+        target=surfaceOf(entry,'/d/'+encodeURIComponent(id));
+      }
       innerPath=rest;
     }else if(defaultEntry){
       target=surfaceOf(defaultEntry,'');
@@ -219,5 +390,6 @@ server.listen(PORT,HOST,()=>{
     console.log(`Soveraeign Schematic API + MCP http://${HOST}:${PORT} · ${FILE}`);
     console.log(`Editor http://${HOST}:${PORT}/editor?live=1`);
   }
+  if(db)console.log(`Database ${path.resolve(DB_ARG)} · profile ${PROFILE}`);
   if(ROOT_DIR)console.log(`Documents under ${ROOT_DIR} at http://${HOST}:${PORT}/d/<id>/ · list http://${HOST}:${PORT}/documents`);
 });
