@@ -41,14 +41,18 @@
 //   --access-team <d>        the Access team domain; tokens are issued by https://<d> and its keys
 //                            are read from https://<d>/cdn-cgi/access/certs.
 //   --access-aud <a[,a]>     the audience tag of the Access application, or several separated by commas.
-//   --access-certs-url <u>   not required: another address for the team's keys (tests, private deployments).
+//   --access-certs-url <u>   not required: another address for the team's keys. https, or http on
+//                            127.0.0.1, localhost or [::1] (tests); anything else exits 1.
 // Two gates, each run before the request body is read:
 //   the first listener (--port, --host) refuses, with or without these arguments, a request that
-//     carries a cf-ray, cf-connecting-ip or cf-access-jwt-assertion header: 403 ACCESS_HOST_REFUSED
-//     tunnel_mark_on_local_surface. It is never given to a tunnel.
+//     carries a cf-ray, cf-connecting-ip or cf-access-jwt-assertion header (403 ACCESS_HOST_REFUSED
+//     tunnel_mark_on_local_surface; it is never given to a tunnel) and a request whose Host is not
+//     127.0.0.1:<port>, localhost:<port> or [::1]:<port> (403 LOCAL_HOST_REFUSED host_not_loopback).
 //   the remote listener gives every request, OPTIONS included, to the access gate; a refusal
 //     answers its status with {ok:false, code, reason} and no access-control header.
 // Both listeners hand an admitted request to the one handler. No token and no claim is printed.
+// No request ends the process: a target that is not a path is 400 REQUEST_MALFORMED, an error the
+// handler did not answer is 500 SERVER_ERROR, and an error nothing caught is logged as one line.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -96,18 +100,34 @@ const dnsName=name=>{
   if(!DNS_NAME.test(value))fail(`${name} must be a bare DNS name: two or more labels of a-z, 0-9 and hyphen separated by single dots`);
   return value;
 };
-let REMOTE_PORT=null,ACCESS_HOSTNAME=null,ACCESS_TEAM=null,gate=null;
+// The keys decide whose tokens are admitted, so their address is the trust root: https anywhere,
+// plain http only to this machine (tests), and no user or password in it (it is printed at start).
+// Returns the address as given, or null.
+function certsAddress(text){
+  let url=null;
+  try{url=new URL(text)}catch(_){return null}
+  if(url.username!==''||url.password!=='')return null;
+  if(url.protocol==='https:'&&url.hostname!=='')return text;
+  if(url.protocol==='http:'&&['127.0.0.1','localhost','[::1]'].includes(url.hostname))return text;
+  return null;
+}
+let REMOTE_PORT=null,ACCESS_HOSTNAME=null,ACCESS_TEAM=null,ACCESS_AUDIENCES=null,ACCESS_CERTS_URL=null,gate=null;
 if(REMOTE_GIVEN){
   const port=arg('--remote-port','');
   REMOTE_PORT=/^[0-9]{1,5}$/.test(port)?Number(port):0;
   if(REMOTE_PORT<1||REMOTE_PORT>65535||REMOTE_PORT===PORT)fail('--remote-port must be an integer from 1 to 65535 that is not --port');
   ACCESS_HOSTNAME=dnsName('--access-hostname');
   ACCESS_TEAM=dnsName('--access-team');
-  const audiences=arg('--access-aud','').split(',').map(tag=>tag.trim()).filter(tag=>tag!=='');
-  if(audiences.length===0)fail('--access-aud must name one audience tag, or several separated by commas');
+  ACCESS_AUDIENCES=arg('--access-aud','').split(',').map(tag=>tag.trim()).filter(tag=>tag!=='');
+  if(ACCESS_AUDIENCES.length===0)fail('--access-aud must name one audience tag, or several separated by commas');
+  ACCESS_CERTS_URL=`https://${ACCESS_TEAM}/cdn-cgi/access/certs`;
+  if(args.includes('--access-certs-url')){
+    ACCESS_CERTS_URL=certsAddress(arg('--access-certs-url',''));
+    if(ACCESS_CERTS_URL===null)fail('--access-certs-url must be an https address, or an http address on 127.0.0.1, localhost or [::1], with no user or password');
+  }
   try{
     const {createAccessGate}=await import('./access.mjs');
-    gate=createAccessGate({hostname:ACCESS_HOSTNAME,teamDomain:ACCESS_TEAM,audiences,certsUrl:arg('--access-certs-url',null)||undefined});
+    gate=createAccessGate({hostname:ACCESS_HOSTNAME,teamDomain:ACCESS_TEAM,audiences:ACCESS_AUDIENCES,certsUrl:ACCESS_CERTS_URL});
   }catch(error){fail(String(error.message||error))}
 }
 const readRepoText=relative=>fs.readFileSync(path.join(HERE,'..',relative),'utf8');
@@ -411,18 +431,27 @@ function readBody(req){
   });
 }
 
+// A request that cannot be read: 400 with a message from this file, never the request's own text.
+class Malformed extends Error{}
+// Everything a request can make this function do sits inside the one try, so nothing a request
+// holds ends the process. The target is read as a path: it starts with one slash (`//host/x` and
+// `http://host/x` would name another host to the URL parser, and `//` alone makes it throw), and
+// it is parsed against a fixed base because only its path and query are used.
 const handle=async(req,res)=>{
-  let body=null;
+  let reading=true;
   try{
-    if(req.method!=='GET'&&req.method!=='HEAD'&&req.method!=='OPTIONS')body=await readBody(req);
-  }catch(error){
-    res.writeHead(400,{'content-type':'application/json; charset=utf-8'});return res.end(JSON.stringify({error:String(error.message||error)}));
-  }
-  const url=new URL(req.url||'/',`http://${req.headers.host||HOST}`);
-  const query=Object.fromEntries(url.searchParams.entries());
-  const headers={};for(const [k,v] of Object.entries(req.headers))headers[k.toLowerCase()]=v;
-  const pathname=url.pathname;
-  try{
+    const raw=typeof req.url==='string'?req.url:'';
+    if(!raw.startsWith('/')||raw.startsWith('//'))throw new Malformed('the request target must be a path that starts with one slash');
+    let url=null;
+    try{url=new URL(raw,'http://local.invalid')}catch(_){throw new Malformed('the request target does not parse as a path')}
+    const query=Object.fromEntries(url.searchParams.entries());
+    const headers={};for(const [k,v] of Object.entries(req.headers))headers[k.toLowerCase()]=v;
+    const pathname=url.pathname;
+    let body=null;
+    if(req.method!=='GET'&&req.method!=='HEAD'&&req.method!=='OPTIONS'){
+      try{body=await readBody(req)}catch(error){throw new Malformed(error&&error.message==='request too large'?'request too large':'the request body could not be read')}
+    }
+    reading=false;
     if(handleLifecycleRoute(req,res,pathname))return;
     if(db&&handleDbRoute(req,res,pathname,body))return;
     if(pathname==='/documents'){
@@ -461,6 +490,12 @@ const handle=async(req,res)=>{
     res.writeHead(response.status,response.headers||{});
     res.end(response.body==null?'':response.body);
   }catch(error){
+    // While the request was being read the fault is the request's: 400, with this file's words.
+    // A percent sequence that does not decode, met later, is the request's too.
+    if(reading||error instanceof Malformed||error instanceof URIError){
+      res.writeHead(400,{'content-type':'application/json; charset=utf-8'});
+      return res.end(JSON.stringify({ok:false,code:'REQUEST_MALFORMED',message:error instanceof Malformed?error.message:'the request could not be read'}));
+    }
     sendJson(res,500,{ok:false,error:String(error.message||error)});
   }
 };
@@ -469,25 +504,72 @@ function refuseRequest(res,status,code,reason){
   res.writeHead(status,{'content-type':'application/json; charset=utf-8'});
   res.end(JSON.stringify({ok:false,code,reason}));
 }
+// A listener's callback: whatever the gate or the handler throws or rejects with is answered 500
+// SERVER_ERROR when the response has not started, and the connection is dropped when it has.
+const answering=fn=>(req,res)=>{  (async()=>fn(req,res))().catch(()=>{
+    try{
+      if(!res.headersSent){
+        res.writeHead(500,{'content-type':'application/json; charset=utf-8'});
+        res.end(JSON.stringify({ok:false,code:'SERVER_ERROR'}));
+      }else if(!res.writableEnded)res.destroy();
+    }catch(_){try{res.destroy()}catch(__){}}
+  });
+};
+// Node answers a request with no Host line 400 before any callback; with this the gates below
+// answer it themselves, typed like their other refusals.
+const LISTENER_OPTIONS={requireHostHeader:false};
 // The first listener is never given to a tunnel, so a request that carries a mark of one is refused.
 const TUNNEL_MARKS=['cf-ray','cf-connecting-ip','cf-access-jwt-assertion'];
-const server=http.createServer((req,res)=>{
+// It answers only a request addressed to loopback on its own port: a page on another site whose
+// name was re-pointed at 127.0.0.1 (DNS rebinding), and a forwarder that adds no Cloudflare
+// header, both arrive with their own name in Host. The port is the one the listener holds, so
+// --port 0 works; a client leaves the port out only when it is 80.
+const LOOPBACK_NAMES=['127.0.0.1','localhost','[::1]'];
+function loopbackHost(host,port){
+  if(typeof host!=='string')return false;
+  const given=host.toLowerCase();
+  return LOOPBACK_NAMES.some(name=>given===`${name}:${port}`||(port===80&&given===name));
+}
+const server=http.createServer(LISTENER_OPTIONS,answering((req,res)=>{
   if(TUNNEL_MARKS.some(name=>req.headers[name]!==undefined))return refuseRequest(res,403,'ACCESS_HOST_REFUSED','tunnel_mark_on_local_surface');
+  const address=server.address();
+  if(!loopbackHost(req.headers.host,address&&typeof address==='object'?address.port:PORT))return refuseRequest(res,403,'LOCAL_HOST_REFUSED','host_not_loopback');
   return handle(req,res);
+}));
+// A port that cannot be opened ends the start, as it did before; an error after that is logged.
+server.on('error',error=>{
+  if(!server.listening)fail(String(error.message||error));
+  console.error(`listener error, still serving: ${faultLine(error)}`);
 });
 // The remote listener: loopback only, and every request passes the access gate first.
 if(gate){
-  const remote=http.createServer(async(req,res)=>{
+  const remote=http.createServer(LISTENER_OPTIONS,answering(async(req,res)=>{
     const headers={};for(const [k,v] of Object.entries(req.headers))headers[k.toLowerCase()]=v;
     const verdict=await gate.admit(headers);
     if(!verdict.ok)return refuseRequest(res,verdict.status,verdict.code,verdict.reason);
     return handle(req,res);
+  }));
+  remote.on('error',error=>{
+    if(!remote.listening)fail(String(error.message||error));
+    console.error(`listener error, still serving: ${faultLine(error)}`);
   });
-  remote.on('error',error=>fail(String(error.message||error)));
   remote.listen(REMOTE_PORT,'127.0.0.1',()=>{
-    console.log(`Remote listener http://127.0.0.1:${REMOTE_PORT}, host ${ACCESS_HOSTNAME}, Access team ${ACCESS_TEAM}`);
+    console.log(`Remote listener http://127.0.0.1:${REMOTE_PORT}, host ${ACCESS_HOSTNAME}, Access team ${ACCESS_TEAM}, audiences ${ACCESS_AUDIENCES.join(',')}, keys from ${ACCESS_CERTS_URL}`);
   });
 }
+// From here on nothing ends the process but a signal: an error no request handler caught is
+// logged as one line and the listeners keep serving. The line holds the error's class, its code
+// and the place in this repository's code it was thrown from; an error's message can repeat what a
+// request sent, so it is left out. Installed after every start-up check above, so a start that
+// cannot go on still exits 1.
+function faultLine(error){
+  const name=error&&typeof error.name==='string'?error.name:typeof error;
+  const code=error&&typeof error.code==='string'?' '+error.code:'';
+  const frame=error&&typeof error.stack==='string'?(error.stack.split('\n').find(line=>/^\s+at .*\.m?js:\d+:\d+\)?$/.test(line))||'').trim():'';
+  return `${name}${code}${frame?' '+frame:''}`.replace(/[\r\n]+/g,' ').slice(0,300);
+}
+process.on('unhandledRejection',reason=>{console.error(`unhandledRejection, still serving: ${faultLine(reason)}`)});
+process.on('uncaughtException',error=>{console.error(`uncaughtException, still serving: ${faultLine(error)}`)});
 server.listen(PORT,HOST,()=>{
   if(FILE){
     console.log(`Soveraeign Schematic API + MCP http://${HOST}:${PORT} · ${FILE}`);

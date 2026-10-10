@@ -110,8 +110,14 @@ Five arguments; the first four are given together, and one without the others ex
 - `--access-team <d>`: the Access team domain, a bare DNS name (`<team>.cloudflareaccess.com`).
   Tokens must be issued by `https://<d>`; its keys are read from `https://<d>/cdn-cgi/access/certs`.
 - `--access-aud <a>`: the audience tag of the Access application, or several separated by commas.
-- `--access-certs-url <u>`: not required; another address for the team's keys, for tests and
-  private deployments.
+- `--access-certs-url <u>`: not required; another address for the team's keys. The keys decide
+  whose tokens are admitted, so the address is accepted only as `https://...`, or as `http://...`
+  on `127.0.0.1`, `localhost` or `[::1]` (for tests), and with no user or password in it. Anything
+  else exits 1 with one line.
+
+At start the server prints one line for the remote listener that names what it trusts:
+`Remote listener http://127.0.0.1:<remote-port>, host <hostname>, Access team <team>, audiences
+<a,b>, keys from <certs address>`.
 
 The remote listener binds `127.0.0.1` only, whatever `--host` says, and is meant to be the service
 of one tunnel ingress rule (`service: http://127.0.0.1:<remote-port>` for that hostname). The first
@@ -120,13 +126,22 @@ listener (`--port`, `--host`) is never given to a tunnel.
 Two gates, each run before the request body is read. Both listeners hand an admitted request to the
 same handler, so the routes and answers are the ones described above.
 
-- The first listener refuses, with or without the access arguments, any request that carries a
-  `cf-ray`, `cf-connecting-ip` or `cf-access-jwt-assertion` header: 403 `ACCESS_HOST_REFUSED`,
-  reason `tunnel_mark_on_local_surface`. Every other request is answered as before.
+- The first listener refuses, with or without the access arguments:
+  - any request that carries a `cf-ray`, `cf-connecting-ip` or `cf-access-jwt-assertion` header:
+    403 `ACCESS_HOST_REFUSED`, reason `tunnel_mark_on_local_surface`;
+  - any request whose `Host` is not `127.0.0.1:<port>`, `localhost:<port>` or `[::1]:<port>` for
+    the port it listens on: 403 `LOCAL_HOST_REFUSED`, reason `host_not_loopback`. The comparison
+    ignores case and nothing else: an absent or empty `Host`, a name with a trailing dot, another
+    port and no port are refused (no port is accepted only when the port is 80). This is what
+    stops a page on another site whose name was re-pointed at `127.0.0.1` (DNS rebinding) and a
+    forwarder that adds no Cloudflare header. It follows that a first listener started with a
+    `--host` other than loopback answers only clients that still address it by a loopback name.
+
+  Every other request is answered as before.
 - The remote listener gives every request, `OPTIONS` included, to the access gate. A refusal
   answers its status with `{ok: false, code, reason}`, `content-type: application/json;
   charset=utf-8` and no `access-control` header, and holds neither the token nor any claim. No
-  token and no claim is printed.
+  token and no claim is printed. `OPTIONS` without a token is 401, not 204.
 
 The access gate checks in this order and refuses at the first failure:
 
@@ -134,12 +149,14 @@ The access gate checks in this order and refuses at the first failure:
 | --- | --- | --- | --- |
 | 403 | `ACCESS_HOST_REFUSED` | `host_not_remote_hostname` | `Host`, lowercased, is not exactly the hostname |
 | 403 | `ACCESS_HOST_REFUSED` | `origin_refused` | `Origin` is present and is not exactly `https://<hostname>` |
+| 403 | `ACCESS_HOST_REFUSED` | `cross_site` | `Sec-Fetch-Site` is present and is not `same-origin` or `none` |
 | 401 | `ACCESS_TOKEN_MISSING` | `token_missing` | `Cf-Access-Jwt-Assertion` is absent or empty |
 | 401 | `ACCESS_TOKEN_INVALID` | `token_unreadable` | not three dot-separated parts whose first two decode from base64url to JSON objects |
 | 401 | `ACCESS_TOKEN_INVALID` | `alg_refused` | the header `alg` is not `RS256` |
 | 401 | `ACCESS_TOKEN_INVALID` | `kid_missing` | the header `kid` is not a non-empty string |
-| 401 | `ACCESS_TOKEN_INVALID` | `kid_unknown` | the team's keys hold no key for that `kid` |
 | 401 | `ACCESS_TOKEN_INVALID` | `jwks_fetch_failed` | no key is held at all and the fetch of the team's keys failed |
+| 401 | `ACCESS_TOKEN_INVALID` | `jwks_stale` | the keys held were last fetched 86400 seconds ago or more |
+| 401 | `ACCESS_TOKEN_INVALID` | `kid_unknown` | the team's keys hold no key for that `kid` |
 | 401 | `ACCESS_TOKEN_INVALID` | `signature_invalid` | the RS256 signature over the first two parts does not verify |
 | 401 | `ACCESS_TOKEN_INVALID` | `issuer_refused` | `iss` is not exactly `https://<team>` |
 | 401 | `ACCESS_TOKEN_INVALID` | `audience_refused` | `aud`, a string or an array of strings, names none of the declared audiences |
@@ -147,10 +164,44 @@ The access gate checks in this order and refuses at the first failure:
 | 401 | `ACCESS_TOKEN_INVALID` | `iat_refused` | `iat` is not a number or is more than 30 seconds ahead |
 | 401 | `ACCESS_TOKEN_INVALID` | `not_yet_valid` | `nbf` is present and is more than 30 seconds ahead |
 
-The key cache: a key from a set fetched less than 600 seconds ago is used with no fetch; otherwise
-the keys are fetched at most once in 30 seconds, a fetch that fails or yields no key leaves the last
-set in place, and that set serves for up to 86400 seconds, so a `kid` the team does not publish costs
-one fetch per 30 seconds and is never admitted.
+What is accepted and what is not, where a near form could be mistaken for the exact one:
+
+- `Host` in another case (`DOCS.Example.Test`) is accepted. `Host` with a trailing dot
+  (`docs.example.test.`), with a port (`docs.example.test:443`) or absent is refused.
+- `Origin: null` is refused, as is every `Origin` but `https://<hostname>` exactly.
+- `Sec-Fetch-Site` is what a browser sends to say where a request came from, and it is there even
+  on a request with no `Origin` (a plain `GET` from another site). `cross-site` and `same-site` are
+  refused whether or not an `Origin` came with them; a request without the header (an agent that
+  is not a browser) is not affected. The value is compared in lower case.
+- `iss` with a trailing slash or in another case is refused. `aud` is compared whole: the declared
+  tag plus one character, or a prefix of it, is refused. `exp` and `iat` must be numbers: a string
+  or an absent claim is refused.
+
+The key cache: a key from a set fetched less than 600 seconds ago is used with no fetch. When the
+set is older than that, or lacks the token's `kid`, the keys are fetched again: at most once in 30
+seconds, one fetch at a time, and a fetch that fails or yields no key leaves the last set in place.
+A token whose `kid` the held set has does not wait for that fetch; it is answered from the held set,
+so a slow or failing certs address delays nobody while the set is under 86400 seconds old. A token
+whose `kid` the set lacks waits for the fetch in flight, so a `kid` the team does not publish costs
+one fetch per 30 seconds and is never admitted. After a rotation the first request with the retired
+`kid` that arrives once the set is 600 seconds old can still be answered from the old set; requests
+after that fetch completes are `kid_unknown`. A set last fetched 86400 seconds ago or more admits
+nothing: every token is `jwks_stale` until a fetch succeeds. The age of the set is measured on a
+monotonic clock, so setting the machine's clock neither ages the keys nor makes them young; `exp`,
+`iat` and `nbf` are compared with the wall clock.
+
+No request ends the process, on either listener:
+
+- A request target that is not a path starting with one slash (`//`, `//host/x`, `http://host/x`),
+  or a body that cannot be read, is answered 400 `{ok: false, code: "REQUEST_MALFORMED", message}`.
+  The message is the server's own words and never repeats the target. (`/d/%zz/mcp` stays 400
+  `DOCUMENT_ID_INVALID`; a path that names nothing stays 404.) On the remote listener the gate
+  runs first, so a malformed target without a token is 401.
+- An error the handler did not answer is 500 `{ok: false, code: "SERVER_ERROR"}`.
+- An error nothing caught is logged as one line (`unhandledRejection, still serving: ...` or
+  `uncaughtException, still serving: ...`) holding the error's class, its code and the place in
+  the code it came from, and no part of any request. A port that cannot be opened at start still
+  exits 1.
 
 A token says who passed Access; the server maps it to nothing. There is no sign-in page, session or
 cookie here, and `--profile` stays an ownership label.
