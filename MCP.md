@@ -15,9 +15,11 @@ readText, describe, editorHtml}) -> {handle(request)}`. It imports nothing from 
 strings), headers (lower-case keys), body (a string or null)}`; `handle` resolves to `{status,
 headers, body}` with `body` a string or a `Uint8Array`.
 
-Two stores ship beside it: `mcp/store-file.mjs` (`createFileStore(file)`, the durable `.sov` file
-on disk) and `mcp/store-memory.mjs` (`createMemoryStore(text)`, in-memory with a `writes` counter,
-for a test or a hosted entrypoint with nowhere durable to write).
+Three stores ship beside it: `mcp/store-file.mjs` (`createFileStore(file)`, the durable `.sov` file
+on disk), `mcp/store-memory.mjs` (`createMemoryStore(text)`, in-memory with a `writes` counter,
+for a test or a hosted entrypoint with nowhere durable to write) and `mcp/store-sqlite.mjs`
+(`openDatabase(file, {profile})`, a `node:sqlite` database whose `store(id)` is the same two-function
+interface).
 
 `mcp/server.mjs` is the Node entrypoint: it parses arguments, loads the cores and `guide.mjs` by
 file URL, reads `data/*.pack.json`, builds the spawn-based `render` function and a file store, and
@@ -26,6 +28,49 @@ character limit), calling `handle`, and writing back `status`, `headers` and `bo
 entrypoint for another runtime supplies a store, packs, a transport adapter over `handle`, and
 optionally `render`; render tools and routes answer `RENDERER_UNAVAILABLE` (503 over HTTP) when it
 is absent. No second copy of the request logic exists anywhere in the package.
+
+## Many documents and the database
+
+One server process serves any number of documents.
+
+- `--root <dir>`: `/d/<id>/...` serves `<dir>/<id>.sov` when that file exists; the surface's paths
+  (`/d/<id>/mcp`, `/d/<id>/api/v1`, `/d/<id>/editor`) are the unprefixed ones under the prefix. `--file`
+  is the default document at the unprefixed paths; without `--file` and with `--root` there is none.
+- `GET /documents` lists `{root, default, documents}`. `POST /documents {id, file}` registers an id to
+  an absolute file (or to `<root>/<id>.sov` when `file` is left out): 201 new, 200 the same id and file,
+  409 `DOCUMENT_ID_TAKEN`, 400 `DOCUMENT_ID_INVALID` or `DOCUMENT_FILE_INVALID`. `/d/<id>` answers 404
+  `DOCUMENT_NOT_FOUND` for an unknown id and 400 `DOCUMENT_ID_INVALID` for a malformed one.
+
+`--db <path>` keeps the documents in a `node:sqlite` database instead: every document, its revisions
+(append-only; each keeps the whole text; nothing removes one) and the profile that owns it.
+`--profile <id>` (default `bdo`) is the profile a document created by this server belongs to; it is an
+ownership label, not a sign-in, and a document is served at `/d/<id>` under any profile. The default
+document (`--file`) stays a file and is not in the database. Without `--db` nothing here applies and
+the module is not loaded.
+
+The database rule: the database is the working copy; a mutation under `--db` never writes the source
+file; a file changed on disk after its import is read again only by `POST /documents/<id>/import`;
+export overwrites the file it names.
+
+- `/d/<id>/...` serves the database document; with `--root`, `<root>/<id>.sov` is imported once on
+  first use (404 `DOCUMENT_NOT_FOUND` otherwise, and nothing is created).
+- `GET /documents` answers `{root, default, database, profile, documents}`, a row `{id, file, open,
+  profile, revision, updated}` per document (files under `--root` not yet imported appear with
+  `profile`, `revision` and `updated` null). `POST /documents {id, file}`: a new id with a file is
+  imported (201, revision 1), without one is empty (201, revision 0); the same id again is 200, another
+  file is 409 `DOCUMENT_ID_TAKEN`.
+- `POST /documents/<id>/import {file?}` reads the file (default: the document's source) as a new
+  revision and drops the open surface, so undo history and runs end there: 200, 404
+  `DOCUMENT_NOT_FOUND`, 404 `DOCUMENT_FILE_MISSING`, 400 `DOCUMENT_FILE_INVALID` or
+  `DOCUMENT_ID_INVALID`.
+- `POST /documents/<id>/export {file?}` writes the last revision's text to the file: 200, or 409
+  `DOCUMENT_EMPTY` at revision 0; the other codes are the import route's.
+- `GET /profiles` answers `{profiles: [{id, created, documents}]}`; `GET /profiles/<id>/documents`
+  answers `{profile, documents}`, or 404 `PROFILE_NOT_FOUND`.
+
+The revision a database row reports counts the texts written for that id in this database (1 is the
+first); it is not the revision field inside the document. `--db` needs Node with `node:sqlite` and no
+flag (22.13 or later); a server without `--db` does not need it.
 
 ## MCP
 
