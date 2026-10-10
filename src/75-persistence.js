@@ -350,10 +350,25 @@ function restoreRecovery(){
 // scale, whatever the editor's zoom. The on-screen clamp (app.css, issue #15) is a reading aid for
 // the live editor only: it holds labels at 12 screen px while strokes and marks follow the camera,
 // so a file drawn through it would carry labels several times their size against the same strokes.
+// pictureDrawing is set while a picture is being drawn and cleared afterwards, also when drawing
+// throws. A picture shows the inside of every card: cardInteriorDetail (src/55-render.js) reads the
+// flag and closes nothing while it is set. The canvas is redrawn for the picture and again after
+// it, unless the editor is already at screen scale 1 with no card closed (interiorHidden,
+// src/55-render.js), when what is on screen is the picture.
+let pictureDrawing=false;
 function withPictureLabels(fn){
-  const prev=workspace.style.getPropertyValue('--zoom');if(prev===''||Number(prev)===1)return fn();
-  workspace.style.setProperty('--zoom','1');render();
-  try{return fn()}finally{workspace.style.setProperty('--zoom',prev);render()}
+  if(pictureDrawing)return fn();
+  const prev=workspace.style.getPropertyValue('--zoom'),atOne=prev===''||Number(prev)===1,redraw=!atOne||interiorHidden>0;
+  pictureDrawing=true;
+  try{
+    if(!atOne)workspace.style.setProperty('--zoom','1');
+    if(redraw)render();
+    return fn();
+  }finally{
+    pictureDrawing=false;
+    if(!atOne)workspace.style.setProperty('--zoom',prev);
+    if(redraw)render();
+  }
 }
 function renderStandaloneSvg(opts={}){return withPictureLabels(()=>renderStandaloneSvgNow(opts))}
 // The snapshot (file.svg, File > Export SVG): the same picture render.svg makes, labels at base

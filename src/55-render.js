@@ -14,8 +14,9 @@ const LABEL_FLOORS=Object.freeze({general:12,shrunkTitle:10});
 const DETAIL_FLOORS=Object.freeze({body:.6,secondary:.25});
 // Screen pixels on the shorter side of a card that hosts other cards, and the one home of that
 // level: under it the hosted cards are too small to read, and the card is drawn closed
-// (applyInteriorDetail). It is a first setting.
-const INTERIOR_FLOOR=Object.freeze({px:240});
+// (applyInteriorDetail). At 120 a default Plane, 220 canvas units on its shorter side, stays open
+// down to screen scale 0.55 (120 / 220). It is a first setting.
+const INTERIOR_FLOOR=Object.freeze({px:120});
 // The screen scale the canvas is drawn at: the --zoom style property of #workspace, or 1. It reads
 // the property, never the screen matrix, so a picture (rendered with --zoom at 1) shows everything.
 function detailScreenScale(){
@@ -354,12 +355,13 @@ function applyBodyTextDetail(g){
 }
 // One card that hosts other cards: the shorter side of its body in screen pixels (its size in
 // canvas units times detailScreenScale()), and whether the card is drawn closed, which is when
-// that side is under INTERIOR_FLOOR.px. A picture draws every interior: it is drawn with --zoom
-// at 1 or not set (withPictureLabels, src/75-persistence.js), so at that value no card is closed.
+// that side is under INTERIOR_FLOOR.px. A picture draws every interior: while one is being drawn
+// pictureDrawing is set (withPictureLabels, src/75-persistence.js) and no card is closed. In the
+// editor every screen scale follows the floor, exactly 1 included.
 function cardInteriorDetail(n){
   const {w,h}=componentSize(n),side=Math.min(w,h)*detailScreenScale();
-  const zoom=typeof workspace!=='undefined'&&workspace?workspace.style.getPropertyValue('--zoom'):'';
-  return {side,closed:zoom!==''&&Number(zoom)!==1&&side<INTERIOR_FLOOR.px};
+  const picture=typeof pictureDrawing!=='undefined'&&pictureDrawing;
+  return {side,closed:!picture&&side<INTERIOR_FLOOR.px};
 }
 // A closed card shows its body, its title and the Points on its own boundary, with their labels and
 // the wires outside it that end on them. Everything inside it is hidden (visibility hidden,
@@ -391,13 +393,8 @@ function applyInteriorDetail(){
   const wireInside=w=>surfaceInside(w.canvasId||GLOBAL_CANVAS_ID,0);
   const hiddenCards=new Set(nodes.filter(n=>cardInside(n)).map(n=>n.id)),hiddenWires=new Set(wires.filter(wireInside).map(w=>w.id));
   if(!hiddenCards.size&&!hiddenWires.size&&!interiorHidden)return;
-  // Parts of a card and of a wire set pointer-events in styles/app.css (.port-hit, .wire,
-  // .transform-handle), which visibility does not switch off; one rule switches them off.
-  if(!document.getElementById('interiorDetailStyle')){
-    const style=document.createElement('style');style.id='interiorDetailStyle';
-    style.textContent='#workspace g[data-lod="hidden"],#workspace g[data-lod="hidden"] *{pointer-events:none!important}';
-    document.head.appendChild(style);
-  }
+  // Parts of a card and of a wire set pointer-events (.port-hit, .wire, .transform-handle), which
+  // visibility does not switch off; one rule in styles/app.css switches them off under data-lod="hidden".
   interiorHidden=0;
   const set=(el,hide)=>{
     if(hide){interiorHidden++;if(el.dataset.lod!=='hidden'){el.style.visibility='hidden';el.dataset.lod='hidden'}}

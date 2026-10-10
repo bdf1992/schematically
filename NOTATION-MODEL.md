@@ -220,18 +220,20 @@ the on-screen clamp, so the block is laid out again when the zoom changes):
 - card titles, group titles and bus labels are not hidden by these levels, nor are port labels,
   end tags or reciprocity marks. A picture is drawn at screen scale 1, so it shows all of it
 - the editor draws a card that hosts other cards closed when the shorter side of its body is
-  under `INTERIOR_FLOOR` in `src/55-render.js` (`{px: 240}`, screen pixels: the size in canvas
+  under `INTERIOR_FLOOR` in `src/55-render.js` (`{px: 120}`, screen pixels: the size in canvas
   units times the screen scale), the one home of that level and a first setting. Under it the
-  hosted cards are too small to read
+  hosted cards are too small to read. A default Plane, 220 canvas units on its shorter side,
+  stays open down to screen scale 0.55
 - a closed card shows its body, its title and the Points on its own boundary, with their labels
   and the wires outside it that end on them. Everything inside it carries `data-lod="hidden"`,
   is not drawn and takes no pointer events: every card, Point and group whose parents reach it,
   and every wire on its surface or on the surface of a card inside it
 - the outermost closed card decides: a record stays hidden while any card around it is closed,
   and is drawn again, with `data-lod` removed, when none is
-- a picture draws every interior at every zoom, a card under 240 canvas units on its shorter
-  side included. It is drawn with `--zoom` at 1, so at exactly that screen scale the editor
-  closes no card either
+- a picture draws every interior at every zoom, a card under 120 canvas units on its shorter
+  side included: `withPictureLabels` in `src/75-persistence.js` sets one flag while a picture is
+  being drawn and clears it afterwards, also when drawing throws, and no card is closed while it
+  is set. In the editor every screen scale follows the floor, exactly 1 included
 - a cut line sets `data-truncated`, and the full title (and subtitle) is the card's tooltip: a
   `<title class="card-text-full">` on the card's group, never inside the drawn `<text>`, so a
   text's contents are only what is drawn; the status chip
