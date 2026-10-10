@@ -37,6 +37,7 @@ STATIC=[
     'tests/mcp_surface_qa.py',
     'tests/multi_document_qa.py',
     'tests/database_store_qa.py',
+    'tests/document_reload_qa.py',
     'tests/release_path_qa.py',
     'tests/qa_linux_qa.py',
 ]
