@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "sourceScope": [
+    "build.py",
+    "src/75-persistence.js",
+    "src/85-api.js",
+    "src/89-desktop-mcp.js",
+    "mcp/store-file.mjs",
+    "mcp/surface.mjs",
+    "desktop/src-tauri/src/main.rs",
+    "desktop/src-tauri/src/files.rs",
+    "desktop/src-tauri/src/mcp.rs"
+  ],
+  "profiles": {
+    "routine": { "maximumCases": 250, "maximumSeconds": 180, "minimumExecutableLineCoverage": 75 },
+    "regression": { "maximumCases": 10000, "maximumSeconds": 1200, "minimumExecutableLineCoverage": 75 }
+  },
+  "suiteQueue": [
+    { "id": "native-persistence-browser", "driver": "tests/native_persistence_qa.py", "runner": "python" },
+    { "id": "desktop-mcp-browser", "driver": "tests/desktop_mcp_qa.py", "runner": "python" },
+    { "id": "headless-local", "driver": "tests/headless_local_qa.mjs", "runner": "node" },
+    { "id": "build-local", "driver": "tests/build_local_qa.py", "runner": "pythonCoverage" },
+    { "id": "native-mcp", "driver": "tests/native_mcp_qa.py", "runner": "python" },
+    { "id": "rust-unit", "runner": "rustTestBinary" }
+  ],
+  "regressionQueue": {
+    "inventory": "scripts/qa.py",
+    "lists": ["STATIC", "BROWSER", "TAIL"],
+    "status": "unmet-legacy-case-adapters",
+    "reason": "Legacy script files do not provide reviewed case collection and coverage adapters. They remain required for regression; no suite is counted as an invented single case."
+  },
+  "releaseRequires": ["routine", "regression", "ARCH", "independent-native-qualification"],
+  "command": "python scripts/qualify_local.py --profile routine --prepared <prepared.json> --out <new-evidence-directory>"
+}

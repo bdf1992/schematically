@@ -39,7 +39,9 @@ schematic.markers and schematic.render; run with schematic.run.*.`;
   function loadDocument(){
     const text=store.read();
     if(text===null)return Data.makeDocument({id:'schematic-1'});
-    try{return Data.documentFromFilePayload(JSON.parse(text))}catch(_){return Data.makeDocument({id:'schematic-1'})}
+    try{return Data.documentFromFilePayload(JSON.parse(text))}catch(error){
+      throw new Error(`DOCUMENT_INVALID: ${error.message}`,{cause:error});
+    }
   }
   let documentState=loadDocument();
   // Graph queries and the simulation are read-only over the document; one session per surface.
@@ -82,7 +84,7 @@ schematic.markers and schematic.render; run with schematic.run.*.`;
   function toolPayload(value,isError=false,image=null){
     // A picture goes back as image content so an agent that can see receives it as an image.
     if(image){const {png,...rest}=value;return {content:[{type:'image',data:image,mimeType:'image/png'},{type:'text',text:JSON.stringify(rest,null,2)}],structuredContent:rest,isError}}
-    return {content:[{type:'text',text:JSON.stringify(value,null,2)}],structuredContent:value,isError}}
+    return {content:[{type:'text',text:JSON.stringify(value,null,2)}],structuredContent:typeof value==='object'&&value!==null&&!Array.isArray(value)?value:{value},isError}}
 
   const HANDLE_SCHEMA={type:'string',minLength:1,description:'the run handle (<runId>.<n>) from schematic.run.start'};
   const RUN_TOOLS=[

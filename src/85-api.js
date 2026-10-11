@@ -77,7 +77,14 @@ const SovSchematicAPI={
   formats:()=>({document:SovSchematicData.DOCUMENT_SCHEMA,workspace:SovSchematicData.WORKSPACE_SCHEMA,package:SovSchematicData.PACKAGE_SCHEMA,operation:SovSchematicData.OPERATION_SCHEMA,receipt:SovSchematicData.RECEIPT_SCHEMA}),
   document:{
     get:()=>snapshotDocument(),
-    replace:(doc)=>{const value=replaceRuntimeDocument(doc);saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false});return value},
+    replace:(doc,{history=false}={})=>{
+      if(history)return runtimeWrite(()=>{
+        const replaying=historyState.replaying;
+        historyState.replaying=true;
+        try{return {ok:true,document:replaceRuntimeDocument(doc)}}finally{historyState.replaying=replaying}
+      },()=>'Replace document');
+      const value=replaceRuntimeDocument(doc);saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false});return value;
+    },
     saveRecovery:()=>saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false}),
     restoreRecovery:()=>restoreRecovery()
   },

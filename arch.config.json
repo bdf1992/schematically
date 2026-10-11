@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "sourceScope": [
+    {
+      "directory": "src",
+      "extension": ".js"
+    },
+    {
+      "directory": "mcp",
+      "extension": ".mjs"
+    }
+  ],
+  "maximumSeconds": 180,
+  "maximumFiles": 100,
+  "maximumFileBytes": 1048576,
+  "maximumTotalBytes": 5242880,
+  "browserOrderSource": "index.source.html",
+  "ownershipSource": "MODULES.md",
+  "domFreeCores": [
+    "src/03-canonical.js",
+    "src/03-notation-core.js",
+    "src/04-signal-model.js",
+    "src/05-data-core.js",
+    "src/06-attachment-core.js",
+    "src/07-state-space.js",
+    "src/07-graph-core.js",
+    "src/08-layout-core.js",
+    "src/09-colour-core.js"
+  ],
+  "environmentAdapters": [
+    "src/07-state-surface.js"
+  ],
+  "permittedAdapterEdges": [
+    {
+      "from": "src/07-graph-core.js",
+      "to": "src/07-state-surface.js",
+      "reason": "Existing simulation facade delegates to the environment adapter; graph-core remains DOM-free"
+    },
+    {
+      "from": "mcp/server.mjs",
+      "to": "src/07-state-surface.js",
+      "reason": "Headless server owns Node loading of the shared environment adapter"
+    },
+    {
+      "from": "mcp/surface.mjs",
+      "to": "src/07-state-surface.js",
+      "reason": "Transport-neutral document facade delegates declared runs through the shared environment adapter"
+    }
+  ],
+  "domGlobals": [
+    "document",
+    "window",
+    "HTMLElement",
+    "SVGElement",
+    "DOMParser",
+    "XMLSerializer",
+    "MutationObserver",
+    "ResizeObserver"
+  ],
+  "mcpNodeImportAllowlist": {
+    "mcp/surface.mjs": [],
+    "mcp/store-memory.mjs": [],
+    "mcp/guide.mjs": [],
+    "mcp/store-file.mjs": [
+      "node:fs",
+      "node:path"
+    ],
+    "mcp/store-sqlite.mjs": [
+      "node:sqlite"
+    ],
+    "mcp/server.mjs": [
+      "node:http",
+      "node:fs",
+      "node:path",
+      "node:child_process",
+      "node:url"
+    ]
+  },
+  "interpretation": {
+    "hardFailures": "All error findings require repair or explicit release disposition. No automatic historical baseline acceptance.",
+    "sharedGlobalEdges": "Inferred static reads of shared classic-script bindings and recognized UMD global properties; not proof of runtime execution or complete dynamic dependencies.",
+    "cycles": "Separate import and combined inferred graphs. Existing cycles are signals for agent review, not automatic architectural defects.",
+    "complexity": "Per-function branch count and ESLint complexity warnings are review signals; no universal quality score.",
+    "duplication": "Repeated normalized substantial lines are signals, not semantic clone detection. Generated index.html is excluded.",
+    "knownDebt": "No lint finding is waived. The state-surface pack loader is explicitly owned by an environment adapter, with one declared graph-core simulation delegation. Other core/editor boundary violations remain errors."
+  }
+}

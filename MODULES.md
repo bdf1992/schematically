@@ -4,11 +4,16 @@ Two runtimes load side by side: the state-space runtime (`STATE-SPACE.md`: typed
 ticks, traces, and the one message/level engine) and dev's graph runtime (`GRAPH-MODEL.md`: graph
 queries, access control and the signal model; its simulation API is served by the state-space runtime
 through `07-state-surface.js`, since contract 10 of the one-runtime plan, 2026-10-03).
-Both share `05-data-core.js` and `06-attachment-core.js`. The DOM-free cores load in this order in
+Both share `05-data-core.js` and `06-attachment-core.js`. The cores and environment adapters load in this order in
 `index.source.html` and `mcp/server.mjs` (node tests require only the cores they use, in the same
 relative order): `03-canonical.js`,
 `03-notation-core.js`, `06-attachment-core.js`, `05-data-core.js`, `07-state-space.js`,
-`07-state-surface.js` (page only, for now), `07-graph-core.js`, `08-layout-core.js`, `09-colour-core.js`.
+`07-state-surface.js` (browser and Node), `07-graph-core.js`, `08-layout-core.js`, `09-colour-core.js`.
+
+`07-state-surface.js` is an environment adapter: it obtains packs from Node files
+or the browser's bundled tag. The other cores are DOM-free. Graph-core's specific
+delegation to state-surface supplies its simulation API; it does not permit DOM
+access within graph-core or arbitrary imports of editor adapters.
 
 - `03-canonical.js` — state-space runtime. Canonical JSON encoding (RFC 8785 / JCS), synchronous pure-JS SHA-256, and the seeded draw used by merges and QA. Pure, no dependencies; loads first, after nothing.
 - `03-notation-core.js` — graph runtime (dev). Notations (`NOTATION-MODEL.md`): tokens, colour roles, glyphs with terminals (the logic gates' terminal points), signal shapes. Pure, no dependencies; loads after `03-canonical.js`, before `06-attachment-core.js` and `05-data-core.js`, whose `templatePorts` reads its gate terminal points (registered at load for the built-in notations).
@@ -17,6 +22,8 @@ relative order): `03-canonical.js`,
 - `07-graph-core.js` — graph runtime (dev). Graph queries, signals and clocks, access control (DOM-free; shared with the server); `createSimulation`, `runScenario`, `createSession` and `tools` delegate to `07-state-surface.js`. The discrete-event message engine that used to live here was deleted at contract 10 of the one-runtime plan (2026-10-03; see `docs/residuals/2026-09-26-one-runtime.md`). Requires `05-data-core.js` (and `06-attachment-core.js` under node); loads after `07-state-space.js`, before `08-layout-core.js`.
 
 - `00-state.js` — runtime state and DOM references.
+- `04-signal-model.js` — pure signal configuration, port flow/access, combination rules and default wire latency shared by runtime and editor.
+- `09-colour-core.js` — pure colour parsing, contrast and palette distinctness measurements shared by audits and editor.
 - `05-data-core.js` — transport-neutral documents, packages, validation, CRUD, reachability, primitive template presets, and compact serialization (`compactDocument`).
 - `10-model.js` — Component/Wire/Port semantic normalization.
 - `20-ui.js` — panels, palette/grid UI helpers.
@@ -32,11 +39,15 @@ relative order): `03-canonical.js`,
 - `58-layouts.js` — layouts in the editor: projection of the layout on screen, the canonical document for files and history, the layout menu, route pinning.
 - `57-layout-metrics.js` — measured quality of the rendered projection (`layout.metrics()`); reads the DOM, mutates nothing.
 - `60-interactions.js` — pointer/drag gestures.
+- `59-contrast.js` — read-only contrast measurement of the rendered canvas and its visible labels and marks.
+- `66-narration.js` — presentation of document and scenario narration, synchronized with the runtime clock without changing document semantics.
+- `67-legend.js` — derived explanation of the current document's notation, colours, glyphs and sections for editor and exported pictures.
 - `70-editor-controls.js` — selection/form editing controls.
 - `75-persistence.js` — File lifecycle, `.sov`/`.sovpak`, shared standalone SVG serialization, recovery, rehydration. The headless SVG script delegates here through the browser API. The address parameter named `open` names a relative path on the origin of the page, fetched at start and handed to the same `parseFilePayload` and `applyOpenedPayload` seam, and anything with a scheme, a host, a leading slash, a parent segment in any spelling (two dots, or %2e for either dot), or a resolved path outside the folder of the page is refused in the status line.
 - `80-bootstrap.js` — global controls/keyboard/startup.
 - `85-api.js` — browser API adapter.
 - `87-live.js` — live link: off unless asked (`?live=1`, `?live=<origin>`, or `SovSchematicLive.start()`), publishes a read-only snapshot (file identity, revision, camera, appearance, selection with the selected record, and the in-browser document) to `POST /api/v1/live` on selection and revision change, coalesced and backed off. Mutates nothing; loads last.
+- `89-desktop-mcp.js` — desktop co-working adapter. Publishes bundled consumer documentation and delegates guarded MCP operations into the active editor API. Owns no document, file storage or executable logic engine. Loads after the API and persistence modules; the desktop relay admits requests only after launch persistence completes.
 
 File lifecycle belongs in `75-persistence.js`; no other concern should independently serialize, download, open, or replace schematic files.
 

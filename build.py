@@ -21,6 +21,14 @@ assert source.count(PACKS_TAG)==1,'index.source.html must hold the sov-packs tag
 packs=[json.loads(path.read_text(encoding='utf-8')) for path in sorted((ROOT/'data').glob('*.pack.json'),key=lambda p:p.name)]
 packs_json=json.dumps(packs,ensure_ascii=False,separators=(',',':')).replace('</','<\\/')
 source=source.replace(PACKS_TAG,f'<script type="application/json" id="sov-packs">{packs_json}</script>')
+# Consumer documentation travels with the desktop build and is read through MCP resources.
+# The allowlist is fixed: callers cannot use this interface to read arbitrary local files.
+DOCS_TAG='<script type="application/json" id="sov-docs">{}</script>'
+assert source.count(DOCS_TAG)==1,'index.source.html must hold the sov-docs tag exactly once'
+doc_paths=['docs/local-core/COWORKING.md','API.md','DATA-FORMATS.md','STATE-SPACE.md','MODULES.md']
+docs={f'schematically://docs/{path}':(ROOT/path).read_text(encoding='utf-8') for path in doc_paths}
+docs_json=json.dumps(docs,ensure_ascii=False,separators=(',',':')).replace('</','<\\/')
+source=source.replace(DOCS_TAG,f'<script type="application/json" id="sov-docs">{docs_json}</script>')
 (ROOT/'index.html').write_text(source,encoding='utf-8',newline='\n')
 dist_dir=ROOT/'desktop/dist'
 dist_dir.mkdir(parents=True,exist_ok=True)

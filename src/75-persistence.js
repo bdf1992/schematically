@@ -9,6 +9,9 @@ let currentFileHandle=null;
 let currentFileName='Untitled.sov';
 let currentFileFormat='document';
 let lastFileFingerprint=null;
+// Replacement and history restoration may reuse a document ID and revision.
+// This process-local generation prevents consumers from reusing an older observation.
+let documentLifecycleGeneration=0;
 // The fingerprint of a document the editor made and nobody has touched. Set whenever a
 // document is placed fresh (startup, File -> New); cleared whenever a file is opened,
 // restored or saved, since lastFileFingerprint then carries the comparison instead.
@@ -108,6 +111,7 @@ function replaceRuntimeDocument(input){
   const normalized=SovSchematicData.makeDocument(SovSchematicData.clone(doc));
   const valid=SovSchematicData.validateDocument(normalized);
   if(!valid.ok)throw new Error(valid.errors.join('; '));
+  documentLifecycleGeneration++;
   SovSchematicData.replaceDocument(diagram,normalized);
   if(typeof layoutAfterDocumentLoad==='function')layoutAfterDocumentLoad();
   syncRuntimeAfterDocumentReplace();
@@ -219,11 +223,12 @@ function updateFileReadout(){
   if(fileStateReadout)fileStateReadout.textContent=lastFileFingerprint===null?'Unsaved':dirty?'Modified':`Saved · r${diagram.revision||0}`;
   if(fileBtn){fileBtn.classList.toggle('modified',dirty);fileBtn.title=dirty?'File · unsaved changes':'File'}
 }
-function markFileSaved(name,format,handle=null){
+function markFileSaved(name,format,handle=null,fingerprint=semanticFingerprint()){
+  if(currentFileName!==name||currentFileFormat!==format||currentFileHandle?.token!==handle?.token)documentLifecycleGeneration++;
   currentFileName=name||suggestedFileName(format);
   currentFileFormat=format||'document';
   currentFileHandle=handle||null;
-  lastFileFingerprint=semanticFingerprint();
+  lastFileFingerprint=fingerprint;
   pristineFingerprint=null;
   updateFileReadout();
 }
@@ -238,11 +243,49 @@ async function writeFileHandle(handle,text){
   await writable.write(text);
   await writable.close();
 }
+// Rust holds the path; this facade carries only an opaque association token and a basename.
+function nativeFileHandle(file){
+  const handle={name:file.name,native:true,token:file.token};
+  handle.createWritable=async()=>{
+    let text='';
+    return {
+      write:async value=>{text=String(value)},
+      close:async()=>{
+        const saved=await window.__TAURI__.core.invoke('desktop_save_document',{
+          token:handle.token,text,name:handle.name,format:currentFileFormat,saveAs:false
+        });
+        if(!saved)throw new Error('Native save was cancelled');
+        handle.name=saved.name;handle.token=saved.token;
+      }
+    };
+  };
+  return handle;
+}
+function clearNativeFileAssociation(){
+  if(window.__TAURI__)return window.__TAURI__.core.invoke('desktop_reset_document');
+  return Promise.resolve();
+}
 async function saveSchematicFile({saveAs=false,format=currentFileFormat}={}){
   const targetFormat=format==='package'?'package':'document';
   const text=fileTextForFormat(targetFormat);
   const mime=mimeForFormat(targetFormat);
   const suggested=targetFormat===currentFileFormat?currentFileName:suggestedFileName(targetFormat);
+
+  if(window.__TAURI__){
+    const savedFingerprint=semanticFingerprint(),savedDocumentId=diagram.id,savedGeneration=documentLifecycleGeneration;
+    const reuse=!saveAs&&currentFileHandle?.native&&targetFormat===currentFileFormat;
+    const saved=await window.__TAURI__.core.invoke('desktop_save_document',{
+      token:reuse?currentFileHandle.token:null,text,name:suggested,format:targetFormat,saveAs:!reuse
+    });
+    if(!saved)return {mode:'cancelled'};
+    if(diagram.id!==savedDocumentId||documentLifecycleGeneration!==savedGeneration){
+      await clearNativeFileAssociation();
+      currentFileHandle=null;
+      throw new Error('The active document changed during save; the saved file belongs to the previous document');
+    }
+    markFileSaved(saved.name,targetFormat,nativeFileHandle(saved),savedFingerprint);
+    return {mode:'native',name:currentFileName,format:targetFormat};
+  }
 
   if(!saveAs&&currentFileHandle&&targetFormat===currentFileFormat){
     await writeFileHandle(currentFileHandle,text);
@@ -290,6 +333,7 @@ function applyOpenedPayload(parsed,name='Untitled.sov',handle=null){
   currentFileFormat=format==='package'?'package':'document';
   currentFileName=name||suggestedFileName(currentFileFormat);
   currentFileHandle=handle;
+  if(!handle?.native)clearNativeFileAssociation().catch(error=>console.warn('Native file association reset failed',error));
   lastFileFingerprint=semanticFingerprint();
   pristineFingerprint=null;
   saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false});
@@ -306,6 +350,16 @@ function confirmDiscardIfDirty(action='continue'){
   return window.confirm(`Unsaved changes will be discarded. ${action}?`);
 }
 async function chooseOpenFile(){
+  if(window.__TAURI__){
+    if(!confirmDiscardIfDirty('Open another file'))return;
+    const opened=await window.__TAURI__.core.invoke('desktop_open_document');
+    if(!opened)return;
+    try{
+      applyOpenedPayload(parseFilePayload(opened.text),opened.name,nativeFileHandle(opened));
+      statusEl.textContent=`Opened · ${currentFileName}`;
+    }catch(error){await clearNativeFileAssociation();throw error}
+    return;
+  }
   if(typeof window.showOpenFilePicker==='function'){
     try{
       const [handle]=await window.showOpenFilePicker({
@@ -326,6 +380,7 @@ function newSchematic(){
   const doc=SovSchematicData.makeDocument({id:`schematic-${Date.now()}`,meta:{title:'Untitled'}});
   replaceRuntimeDocument(doc);
   currentFileHandle=null;currentFileName='Untitled.sov';currentFileFormat='document';lastFileFingerprint=null;
+  clearNativeFileAssociation().catch(error=>console.warn('Native file association reset failed',error));
   pristineFingerprint=semanticFingerprint();
   saveWorkspaceToStorage(LOCAL_RECOVERY_KEY,{explicit:false});
   updateFileReadout();
@@ -337,6 +392,7 @@ function restoreRecovery(){
   const raw=localStorage.getItem(LOCAL_RECOVERY_KEY)||localStorage.getItem(LEGACY_LOCAL_SAVE_KEY);if(!raw)throw new Error('No recovery snapshot found');
   applyWorkspace(JSON.parse(raw));
   currentFileHandle=null;currentFileName='Recovered.sov';currentFileFormat='document';lastFileFingerprint=null;
+  clearNativeFileAssociation().catch(error=>console.warn('Native file association reset failed',error));
   pristineFingerprint=null;
   updateFileReadout();
   statusEl.textContent='Recovery restored · save to keep it';
@@ -486,8 +542,8 @@ function setFileMenu(open){
   fileMenu.hidden=!open;fileBtn?.setAttribute('aria-expanded',String(open));
   if(open){
     updateFileReadout();
-    try{if(typeof setPaletteSettings==='function')setPaletteSettings(false)}catch(_){}
-    try{if(typeof setGridSettings==='function')setGridSettings(false)}catch(_){}
+    setPalettePanel(false);
+    setGridPanel(false);
   }
 }
 function initializePersistenceTracking(){
@@ -508,18 +564,23 @@ async function openDesktopLaunchDocument(){
     opened=await tauri.core.invoke('opened_document');
     if(!opened)return;
     const parsed=parseFilePayload(opened.text);
-    const loaded=applyOpenedPayload(parsed,opened.name);
+    const loaded=applyOpenedPayload(parsed,opened.name,opened.token?nativeFileHandle(opened):null);
     statusEl.textContent=`Opened · ${currentFileName}`;
     await report({name:opened.name,components:(loaded?.components||[]).length,wires:(loaded?.wires||[]).length,ok:true,error:null});
   }catch(error){
     console.warn('Desktop launch document failed to open',error);
-    if(opened)await report({name:opened.name||'',components:0,wires:0,ok:false,error:String(error?.message||error)});
+    await clearNativeFileAssociation().catch(()=>{});
+    statusEl.textContent=`Open failed · ${String(error?.message||error)}`;
+    await report({name:opened?.name||'',components:0,wires:0,ok:false,error:String(error?.message||error)});
   }
 }
 // src/65-sim-control.js and later files load after this one, and opening a document reaches them
 // (simClock), so the launch open waits until every script has run.
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',openDesktopLaunchDocument,{once:true});
-else openDesktopLaunchDocument();
+window.SovDesktopPersistenceReady=new Promise(resolve=>{
+  const open=async()=>{try{await openDesktopLaunchDocument()}finally{resolve()}};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',open,{once:true});
+  else open();
+});
 
 // The address parameter open names a relative path on this page's own origin; a link is enough to show
 // a document. Anything with a scheme, a host, a leading slash or a backslash is refused. A parent segment
@@ -591,7 +652,7 @@ else openServedDocument();
 if(fileBtn)fileBtn.addEventListener('click',event=>{event.stopPropagation();setFileMenu(fileMenu.hidden)});
 if(fileMenu)fileMenu.addEventListener('click',event=>event.stopPropagation());
 if(fileNewBtn)fileNewBtn.addEventListener('click',()=>{setFileMenu(false);newSchematic()});
-if(fileOpenBtn)fileOpenBtn.addEventListener('click',()=>{setFileMenu(false);chooseOpenFile()});
+if(fileOpenBtn)fileOpenBtn.addEventListener('click',()=>{setFileMenu(false);chooseOpenFile().catch(error=>statusEl.textContent=`Open failed · ${error?.message||error}`)});
 if(fileOpenInput)fileOpenInput.addEventListener('change',async()=>{
   try{
     const file=fileOpenInput.files?.[0];
@@ -633,7 +694,7 @@ document.addEventListener('keydown',event=>{
     event.preventDefault();
     saveSchematicFile({saveAs:event.shiftKey}).then(result=>{if(result.mode!=='cancelled')statusEl.textContent=`Saved · ${result.name}`}).catch(error=>statusEl.textContent=`Save failed · ${error.message}`);
   }else if(key==='o'){
-    event.preventDefault();chooseOpenFile();
+      event.preventDefault();chooseOpenFile().catch(error=>statusEl.textContent=`Open failed · ${error?.message||error}`);
   }else if(key==='n'){
     event.preventDefault();newSchematic();
   }
