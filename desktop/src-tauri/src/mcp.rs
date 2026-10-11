@@ -69,7 +69,10 @@ impl RelayState {
 }
 
 #[tauri::command]
-pub fn desktop_mcp_ready(state: tauri::State<'_, Arc<RelayState>>) { state.ready.store(true, Ordering::SeqCst); }
+pub fn desktop_mcp_ready(state: tauri::State<'_, Arc<RelayState>>) {
+    state.ready.store(true, Ordering::SeqCst);
+    eprintln!("desktop startup: ready pid={}", std::process::id());
+}
 #[tauri::command]
 pub fn desktop_mcp_info(state: tauri::State<'_, Arc<RelayState>>) -> RelayInfo { state.info.clone() }
 #[tauri::command]

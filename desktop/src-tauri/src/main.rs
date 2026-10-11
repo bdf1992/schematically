@@ -98,12 +98,6 @@ fn report_loaded(
     app.exit(if ok && written.is_ok() { 0 } else { 1 });
 }
 
-#[tauri::command]
-fn desktop_mcp_ready(state: tauri::State<'_, std::sync::Arc<mcp::RelayState>>) {
-    mcp::desktop_mcp_ready(state);
-    eprintln!("desktop startup: ready pid={}", std::process::id());
-}
-
 fn main() -> std::process::ExitCode {
     let builder = tauri::Builder::default().manage(files::FileState::default())
         .setup(|app| {
@@ -145,11 +139,11 @@ fn main() -> std::process::ExitCode {
                 .manage(SmokeReport(path))
                 .invoke_handler(tauri::generate_handler![opened_document, report_loaded,
                     files::desktop_open_document, files::desktop_save_document, files::desktop_reset_document,
-                    desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond])
+                    mcp::desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond])
         }
         None => builder.invoke_handler(tauri::generate_handler![opened_document,
             files::desktop_open_document, files::desktop_save_document, files::desktop_reset_document,
-            desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond]),
+            mcp::desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond]),
     };
     let code = builder
         .build(tauri::generate_context!())
