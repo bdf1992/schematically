@@ -112,7 +112,7 @@ async def main():
         print('CASE PASS native-unreadable-launch-reports-failure')
 
         assert not errors, errors
-        counters=await page.evaluate('globalThis.__coverage__ || {}')
+        counters=json.loads(await page.evaluate('JSON.stringify(globalThis.__coverage__ || {})'))
         (options.coverage_dir/f'native-persistence-{os.getpid()}.json').write_text(json.dumps(counters),encoding='utf-8')
         await browser.close()
     print('PASS native persistence page contract: 8 cases; native disk effects remain separate')

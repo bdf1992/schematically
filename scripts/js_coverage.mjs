@@ -200,7 +200,9 @@ function merge(options) {
     identities.set(original, file);
   }
   if (!keysMatch(initial.coverage, Object.fromEntries(identities))) throw new Error('Initial coverage differs from declared source scope');
-  const map = createCoverageMap(initial.coverage);
+  // Istanbul merges mutate their backing data; validation must retain the
+  // preparation map rather than compare later snapshots with merged maps.
+  const map = createCoverageMap(clone(initial.coverage));
   const directory = fs.realpathSync(path.resolve(options['--coverage-dir']));
   const snapshots = snapshotFiles(directory);
   if (!snapshots.length) throw new Error('No coverage snapshots retained');

@@ -249,7 +249,7 @@ def main() -> int:
                     print(f'CASE FAIL {case_id}: {problem}', flush=True)
         finally:
             try:
-                counters = page.evaluate('globalThis.__coverage__ || {}')
+                counters = json.loads(page.evaluate('JSON.stringify(globalThis.__coverage__ || {})'))
                 destination = options.coverage_dir / f'desktop-mcp-{os.getpid()}-{uuid.uuid4().hex}.json'
                 destination.write_text(json.dumps(counters), encoding='utf-8')
             except Exception as problem:
