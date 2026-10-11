@@ -100,6 +100,7 @@ const SovSchematicAPI={
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
+  virtual:{list:()=>({ok:true,open:virtualView.open,instances:(diagram.virtual?.instances||[]).map(i=>({id:i.id,definitionId:i.definitionId}))}),open:(id)=>openVirtualNode(id),close:()=>{const r=closeVirtualNode();fitDiagram();return r}},
   markers:()=>SovSchematicData.markersFor(diagram),
   concerns:{list:(options={})=>SovSchematicData.concernReport(snapshotDocument(),options||{}),answer:(answers)=>runtimeAnswers(answers)},
   view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:effectivePaletteName(),palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom'],source:documentPalette()!==null?'document':'view',viewPalette:colorEngine.palette}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;const picked=palette?pickPalette(palette):null;if(!palette||picked?.ok===false)applyColorEngine();return picked?.ok===false?picked:{theme:colorEngine.theme,palette:effectivePaletteName()}},documentPalette:()=>SovSchematicData.clone(documentPalette()),setDocumentPalette:(value)=>{const admitted=setDocumentPalette(value);return admitted.ok===false?admitted:SovSchematicData.clone(documentPalette())},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()},
@@ -133,6 +134,7 @@ const SovSchematicAPI={
     rubric:()=>SovSchematicData.clone(LAYOUT_RUBRIC)
   },
   clock:{
+    instance:(id)=>simClock.run?simClock.run.instance(id):{ok:false,code:'NO_SIMULATION',message:'Start the clock to inspect node state'},
     play:()=>simPlay(),pause:()=>simPause(),step:()=>SovSchematicData.clone(simStep()),advance:(ms)=>SovSchematicData.clone(simAdvance(ms)),
     reset:()=>simReset(),setSpeed:(x)=>{simClock.speed=Number(x)||1;const sel=document.getElementById('simSpeed');if(sel)sel.value=String(simClock.speed);return simClock.speed},
     toggle:(id)=>SovSchematicData.clone(simToggleLever(id)),send:(id)=>SovSchematicData.clone(simSend(id)),

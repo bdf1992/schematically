@@ -581,3 +581,11 @@ count and code sum, each queue's length, relative next and positional code sum, 
 relative times); the full hash is computed only when a summary repeats, for that tick and for each earlier tick with
 the same summary (its state rebuilt from the kept pending list, the queue's item log and the later signal flips).
 Equal states have equal summaries, so results are those of hashing every tick.
+
+## Virtual definitions and instances
+
+A document may carry `virtual: {definitions: {definitionId: {components: [], wires: []}}, instances: []}`. Each instance declares `{id, definitionId, x, y, overrides: {components: [], wires: []}, removeComponents: [], removeWires: []}`. Definition record IDs and references use `$node` as the instance placeholder. Component coordinates are local to the instance origin. Overrides replace complete local records; removal lists identify local definition records omitted by that instance.
+
+The data core materializes independent ordinary Components and Wires on load and before execution. Each instance has distinct IDs and independently cloned configuration. It factors those records back into a shared definition and instance overrides on save, preserving edits, additions, removals and movement. Materialization bookkeeping stays out of authored files. Documents and packages retain the same schemas. Generated/authored ID collisions and unknown definitions are rejected.
+
+Definitions are shared authored descriptions. Existing expanded instances do not change when a definition is edited directly in memory; reopening a compact document materializes its definitions and overrides. Node detail is workspace state, not semantic Hidden, and does not suspend execution. This is a logical ownership boundary within one shared runtime, rather than a separate process per instance.

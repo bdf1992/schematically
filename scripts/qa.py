@@ -6,8 +6,11 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 
 ROOT=Path(__file__).resolve().parents[1]
+OUTPUT_LOCK=Lock()
 
 STATIC=[
     'tests/canonical_qa.py',
@@ -178,19 +181,55 @@ TAIL=[
 
 def run(path:str)->float:
     start=time.perf_counter()
-    subprocess.run([sys.executable,str(ROOT/path)],cwd=ROOT,check=True)
+    done=subprocess.run([sys.executable,str(ROOT/path)],cwd=ROOT,capture_output=True,text=True)
     elapsed=time.perf_counter()-start
-    print(f'QA PASS {path} ({elapsed:.2f}s)',flush=True)
+    with OUTPUT_LOCK:
+        print(done.stdout,end='',flush=True)
+        print(done.stderr,end='',file=sys.stderr,flush=True)
+        print(f'QA {"PASS" if done.returncode==0 else "FAIL"} {path} ({elapsed:.2f}s)',flush=True)
+    done.check_returncode()
     return elapsed
+
+def parallel_safe(path:str)->bool:
+    """Only independent page checks overlap; effects and measured timing stay exclusive."""
+    if any(word in path for word in ('performance','_perf','stress','_time_','desktop_launch','sim_parity','run_repaint','wave_view','wire_travel','map_keyboard_move')):
+        return False
+    source=(ROOT/path).read_text(encoding='utf-8')
+    return not any(marker in source for marker in ('subprocess','Popen','write_text','write_bytes','.unlink(','.mkdir(','.save('))
+
+def run_browser(queue:list[str],workers:int)->float:
+    if not 1<=workers<=8:raise ValueError('QA workers must be between one and eight')
+    total=0.0
+    batch=[]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        def flush():
+            nonlocal total
+            futures=[pool.submit(run,path) for path in batch]
+            batch.clear()
+            failures=[]
+            for future in futures:
+                try:total+=future.result()
+                except Exception as error:failures.append(error)
+            if failures:raise failures[0]
+        for path in queue:
+            if workers>1 and parallel_safe(path):batch.append(path)
+            else:
+                flush()
+                total+=run(path)
+        flush()
+    return total
 
 def main()->int:
     parser=argparse.ArgumentParser()
     parser.add_argument('--quick',action='store_true',help='Skip stress/performance browser tests.')
+    parser.add_argument('--workers',type=int,choices=range(1,9),default=1,help='At most eight independent page checks; shared effects and performance checks stay serial.')
     args=parser.parse_args()
     subprocess.run([sys.executable,str(ROOT/'build.py')],cwd=ROOT,check=True)
     browser=BROWSER if not args.quick else [p for p in BROWSER if p not in {'tests/drag_lifecycle_stress_qa.py','tests/performance_regression_qa.py'}]
     total=0.0
-    for path in [*STATIC,*browser,*TAIL]: total+=run(path)
+    for path in STATIC:total+=run(path)
+    total+=run_browser(browser,args.workers)
+    for path in TAIL:total+=run(path)
     # Node syntax is intentionally part of the same local/CI contract.
     js=[*sorted((ROOT/'src').glob('*.js')),*sorted((ROOT/'mcp').glob('*.mjs'))]
     for path in js:

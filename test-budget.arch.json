@@ -1,0 +1,106 @@
+{
+  "version": 2,
+  "gap": "No published supervised adapter was present for this change; this bounded entry point records coverage including the complete affected server source.",
+  "profile": "regression-arch-virtual-cut",
+  "maximumCases": 25,
+  "maximumSeconds": 180,
+  "minimumExecutableLineCoverage": 75,
+  "sourceScope": [
+    "src/00-state.js",
+    "src/05-data-core.js",
+    "src/07-state-surface.js",
+    "src/10-model.js",
+    "src/15-editor-kernel.js",
+    "src/25-signal.js",
+    "src/30-canvas.js",
+    "src/40-routing.js",
+    "src/55-render.js",
+    "src/65-sim-control.js",
+    "src/75-persistence.js",
+    "src/85-api.js",
+    "src/88-kore-execution.js",
+    "mcp/kore-execution.mjs",
+    "mcp/server.mjs",
+    "mcp/surface.mjs"
+  ],
+  "staticScope": [
+    ".gitignore",
+    "index.source.html",
+    "index.html",
+    "styles/app.css",
+    "tests/fixtures/alignment-governance.sov",
+    "tests/fixtures/qa-queue.json",
+    "scripts/budget-job.ps1"
+  ],
+  "suiteQueue": [
+    "virtual_editor_qa.py",
+    "document_compaction_qa.py",
+    "editor_kernel_qa.py",
+    "editor_kernel_extended_qa.py",
+    "file_surface_qa.py",
+    "state_space_surfaces_qa.py",
+    "mcp_surface_qa.py",
+    "boundary_legality_qa.py",
+    "dimensional_form_qa.py",
+    "routing_buses_qa.py",
+    "agent_api_mcp_golden_qa.py",
+    "state_space_contracts_qa.py",
+    "state_space_flow_qa.py",
+    "svg_export_qa.py",
+    "layouts_qa.py",
+    "drag_redraw_parity_qa.py"
+  ],
+  "command": "node scripts/test-arch-supervised.cjs",
+  "profiles": {
+    "runner-lifecycle": {
+      "maximumCases": 25,
+      "maximumSeconds": 180,
+      "minimumExecutableLineCoverage": 75,
+      "sourceScope": [
+        "scripts/budget-process.cjs"
+      ],
+      "staticScope": [
+        ".gitignore",
+        "scripts/budget-job.ps1",
+        "tests/fixtures/qa-queue.json"
+      ],
+      "testNamePattern": "bounded QA schedule",
+      "fixtureContract": "Each owned process may spend at most 30000ms reporting READY; live execution then has 2000ms plus at most 1000ms pipe settlement. Two fixtures total at most 66000ms inside the unchanged 180-second profile. Regular runner deadlines include startup and do not use readiness.",
+      "skipQueue": true,
+      "queue": "Focused launcher cleanup, exact original queue identity and UTF-16 offsets; full application acceptance remains full-qa."
+    },
+    "full-qa": {
+      "maximumCases": 10000,
+      "maximumSeconds": 1200,
+      "minimumExecutableLineCoverage": 75,
+      "queue": "scripts/qa.py unchanged STATIC+BROWSER+TAIL and all JS syntax checks",
+      "sourceScope": [
+        "src/00-state.js",
+        "src/05-data-core.js",
+        "src/07-state-surface.js",
+        "src/10-model.js",
+        "src/15-editor-kernel.js",
+        "src/25-signal.js",
+        "src/30-canvas.js",
+        "src/40-routing.js",
+        "src/55-render.js",
+        "src/65-sim-control.js",
+        "src/75-persistence.js",
+        "src/85-api.js",
+        "src/88-kore-execution.js",
+        "mcp/kore-execution.mjs",
+        "mcp/server.mjs",
+        "mcp/surface.mjs",
+        "scripts/budget-process.cjs"
+      ]
+    },
+    "desktop": {
+      "maximumCases": 2,
+      "maximumSeconds": 300,
+      "minimumExecutableLineCoverage": 75,
+      "coverageAuthority": "Reuse passing full-qa receipt only when all affected JS and static build hashes match. Rust source is unchanged in this cut; launch checks retain its existing behavioral contract."
+    }
+  },
+  "maximumWorkers": 8,
+  "evidenceReserveSeconds": 5
+}

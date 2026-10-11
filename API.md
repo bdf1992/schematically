@@ -165,3 +165,9 @@ up, never under one tick above 0 ms) and `travelMs = delayTicks * tickMs`; a zer
 each node's level every `stepMs` over `[fromMs, toMs)` and gives `{node, periodMs, samples, mean, energy, harmonics:
 [{n, amplitude, phase}], rest, parsevalError, reason}`; the model and refusals (`WINDOW_NOT_ELAPSED`, `WINDOW_STEP`,
 `WINDOW_TOO_LONG`, `UNKNOWN_NODE`) are in `STATE-SPACE.md`, "Reading a run: travel and spectrum".
+
+## Virtual node detail and state
+
+`virtual.list()` returns the instance IDs, shared definition IDs and open instance. `virtual.open(id)` reveals that instance's ordinary nested Components; `virtual.close()` returns to the overview. Opening, closing and camera focus are workspace projection operations: they leave the document and running clock unchanged. The native node's Open 3×3 button and Overview button use these same operations. A package retains the open instance in `workspace.view.virtualOpen`.
+
+`clock.instance(id)` reads the running clock's state for one instance: `{ok,id,time,members,state:{signal,device,queues},records,parked,refusals}`. Signal and queue keys retain their native `[entity,point,channel]` encoding. Records include member Components and internal Wires; state and records are detached copies. The time is shared across instances; mutable state is keyed by their distinct component IDs. Closed contents execute normally. Unknown instances are refused; a stopped clock reports `NO_SIMULATION`.

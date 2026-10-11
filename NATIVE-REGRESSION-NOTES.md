@@ -1,0 +1,20 @@
+# Native regression budget repair
+
+The retained full regression receipt `1791741179261` is an unmet check: 105 cases, 90.05% scoped coverage and 1205.725 seconds elapsed. The 1200-second deadline expired after 94 authoritative suites. Those suites totalled 1160.35 seconds; no behavioral assertion failed before the deadline. The slowest completed suites were ports_panel (109.4 seconds), state_space_perf (64.19), desktop_launch_page (63.23) and sim_parity (62.46).
+
+The authoritative queue still contains all 160 STATIC, BROWSER and TAIL suites in their original declaration order, followed by every existing JavaScript syntax check. The desktop launch workflow remains separate and supervised. No assertion, mutation, source file, coverage requirement or deadline was removed.
+
+The repair addresses execution and evidence overhead:
+
+- Up to eight independent page suites may overlap. Source/file/port effects and performance or timing-sensitive suites run alone, with completed worker batches as barriers. A failed worker remains a failure; all already-started peers settle before the failure leaves the batch. The original default remains one worker outside the declared supervised profile.
+- Browser module sources are discovered and cached immediately after loading the page. Initial precise block coverage is retained separately, and later ranges for the same module identities are collected at close. Evaluated snippets do not require repeated module-source retrieval. Source content still must match the canonical module; unimported production files remain in the coverage denominator.
+- Coverage postprocessing sorts each script's ranges once, rather than sorting again for every executable-line reading. It retains the same innermost-range rule.
+- Mutation workspaces retain all sources, fixtures, tests and mutants. They omit generated `.arch-test-evidence` and Python caches from their copies. The retained evidence directory was 189 MiB; duplicating it for each mutant did not contribute to the mutation checks.
+- V8 offsets are UTF-16 code units. Both source-prefix rebasing and full-module clipping use UTF-16 lengths, including non-BMP characters; the fixture checks a zero-count refusal range and the complete tail.
+- Windows uses PowerShell 7 with an owned non-inherited kill-on-close Job Object. Normal launcher exit removes remaining descendants; a deadline settles even after a leader exits while inherited pipes remain open. POSIX uses an owned process group. Generated evidence is ignored by Git while retained on disk and in workflow uploads.
+
+The first diagnostic routine receipt `1791746253436` is also an unmet check: all 20 cases passed behaviorally within 83.427 seconds, but coverage was only 21.48%. That run falsified a CDP script line/URL filter: native inline modules do not reliably carry those fields. The repair uses actual initial source discovery instead; the incorrect filter was removed.
+
+`tests/fixtures/qa-queue.json` retains the original authoritative queue. The supervised scheduler case checks that identity, bounded overlap, exclusive barriers, failure propagation and the eight-worker ceiling. Final acceptance still requires a passing complete regression receipt under the original 10000-case, 1200-second, 75% profile over all 16 changed production modules.
+
+Focused receipt `1791747895640` passed one case in 7.968 seconds with 96.15% whole-launcher coverage. Each cleanup fixture declares a bounded 30-second READY startup window, then an unchanged two-second execution deadline and one-second maximum pipe settlement. Recorded startup was 971 and 1020 milliseconds. Normal root exit and live-root deadline both removed their descendants. Regular supervisor calls include startup in their original deadline and do not use fixture readiness. Earlier startup-sensitive two-second attempts remain unmet in receipts `1791747057530`, `1791747336708`, `1791747548721` and `1791747748518`; two also exhausted the routine queue deadline under host contention. Their evidence was not removed. The full regression includes the whole launcher in addition to the 16 application modules.

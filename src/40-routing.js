@@ -524,6 +524,13 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
 // across a short gap each lead takes at most half of it. A free 0D Point has no side, so it
 // leaves toward the other end along the dominant axis, with a short lead.
 const ROUTE_LEAD=26,POINT_LEAD=12;
+let routeLeadObstaclePass=null;
+// Measurements stand only for one route collection; the next pass reads moved cards again.
+function withRouteLeadObstacles(fn){
+  const previous=routeLeadObstaclePass;
+  routeLeadObstaclePass=nodes.filter(n=>componentForm(n).dimension===2&&!isGroupComponent(n)&&!isEffectivelyHidden(n)).map(n=>({node:n,rect:componentBounds(n,10)}));
+  try{return fn()}finally{routeLeadObstaclePass=previous}
+}
 function routeLead(P,Q,portId,node,inward){
   const placement=componentPlacement(node);
   if(componentForm(node).dimension===0&&placement.kind!=='edge'&&!componentHostedOnWire(node)){
@@ -535,9 +542,12 @@ function routeLead(P,Q,portId,node,inward){
   const ahead=(Q.x-P.x)*nx+(Q.y-P.y)*ny;
   let d=ahead>0?Math.max(4,Math.min(ROUTE_LEAD,ahead/2)):ROUTE_LEAD;
   // Nor into a body in front of it: stop short of the first card the lead would enter.
-  for(const other of nodes){
-    if(other.id===node.id||componentForm(other).dimension!==2||isGroupComponent(other)||isDescendantOf(node.id,other.id)||isEffectivelyHidden(other))continue;
-    const R=componentBounds(other,10);
+  const candidates=routeLeadObstaclePass||nodes.filter(n=>componentForm(n).dimension===2&&!isGroupComponent(n)&&!isEffectivelyHidden(n)).map(n=>({node:n,rect:componentBounds(n,10)}));
+  for(const {node:other,rect:R} of candidates){
+    if(other.id===node.id)continue;
+    const endX=P.x+nx*d,endY=P.y+ny*d;
+    if(Math.max(P.x,endX)<=R.l||Math.min(P.x,endX)>=R.r||Math.max(P.y,endY)<=R.t||Math.min(P.y,endY)>=R.b)continue;
+    if(isDescendantOf(node.id,other.id))continue;
     for(let s=2;s<=d;s+=2){const x=P.x+nx*s,y=P.y+ny*s;if(x>R.l&&x<R.r&&y>R.t&&y<R.b){d=Math.max(4,s/2);break}}
   }
   return {x:P.x+nx*d,y:P.y+ny*d};

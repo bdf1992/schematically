@@ -39,6 +39,7 @@ import {spawn} from 'node:child_process';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createSurface} from './surface.mjs';
 import {createFileStore} from './store-file.mjs';
+import {createKoreExecutionRoute} from './kore-execution.mjs';
 
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 // Absolute paths are not valid ESM specifiers on Windows; import by file:// URL everywhere.
@@ -67,6 +68,7 @@ const FILE=FILE_ARG?path.resolve(FILE_ARG):(ROOT_DIR?null:path.resolve(path.join
 const HOST=arg('--host','127.0.0.1');
 const DB_ARG=arg('--db',null);
 const PROFILE=arg('--profile','bdo');
+const koreExecutionRoute=createKoreExecutionRoute(arg('--kore-state',null));
 const readRepoText=relative=>fs.readFileSync(path.join(HERE,'..',relative),'utf8');
 // The editor is served from this origin so the live link is a same-origin request;
 // opened from file:// the browser has an opaque origin and the push never lands.
@@ -380,6 +382,7 @@ const server=http.createServer(async(req,res)=>{
   const headers={};for(const [k,v] of Object.entries(req.headers))headers[k.toLowerCase()]=v;
   const pathname=url.pathname;
   try{
+    if(koreExecutionRoute(req,res,pathname))return;
     if(handleLifecycleRoute(req,res,pathname))return;
     if(db&&handleDbRoute(req,res,pathname,body))return;
     if(pathname==='/documents'){

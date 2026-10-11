@@ -71,7 +71,7 @@ schematic.markers and schematic.render; run with schematic.run.*.`;
   function recordHistory(snapshot){historyUndo.push(snapshot);if(historyUndo.length>120)historyUndo.shift();historyRedo=[]}
   function pushHistory(){recordHistory(cloneDoc())}
   function checkpointStore(){documentState.meta=documentState.meta||{};if(!Array.isArray(documentState.meta.checkpoints))documentState.meta.checkpoints=[];return documentState.meta.checkpoints}
-  function saveDocument(){store.write(JSON.stringify(documentState,null,2))}
+  function saveDocument(){store.write(documentState.virtual?JSON.stringify(Data.compactDocument(documentState)):JSON.stringify(documentState,null,2))}
 
   function jsonResponse(status,value,headers={}){
     return {status,headers:{'content-type':'application/json; charset=utf-8','access-control-allow-origin':'*',...headers},body:JSON.stringify(value)};
