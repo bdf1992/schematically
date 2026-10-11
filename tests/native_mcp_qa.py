@@ -136,6 +136,9 @@ def cdp_diagnostic(port, native_pid):
             await session.send('Runtime.enable')
             state = await page.evaluate("""() => ({
                 readyState:document.readyState,title:document.title.slice(0,160),
+                location:location.href.slice(0,240),
+                firstBodyTag:document.body?.firstElementChild?.tagName||'',
+                bodyText:document.body?.innerText?.slice(0,400)||'',
                 status:document.getElementById('status')?.textContent?.slice(0,240)||'',
                 bodyChildren:document.body?.children.length||0,
                 tauri:typeof window.__TAURI__,invoke:typeof window.__TAURI__?.core?.invoke,
@@ -433,7 +436,7 @@ class NativeSuite:
                 self.debug_cleanup_failures.append({'operation':'diagnostic-descendants', 'pid':process.pid})
             raw = self.redact(path.read_bytes()[:32768].decode('utf-8', errors='replace'))
             path.write_text(raw, encoding='utf-8')
-            observation['capture'] = json.loads(raw)
+            observation['capture'] = json.loads(raw.rstrip().rsplit('\n',1)[-1])
         except Exception as problem:
             observation['diagnosticError'] = type(problem).__name__
             if worker_started and 'worker' not in observation:
