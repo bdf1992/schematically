@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
 import uuid
@@ -193,7 +194,10 @@ class NativeSuite:
         self.descriptor_dir = local / config['identifier'] / 'mcp'
         self.work = coverage_dir.resolve().parent / ('native-runtime-' + uuid.uuid4().hex)
         self.work.mkdir()
+        self.webview_profile = self.work / 'webview-profile'
+        self.webview_profile.mkdir()
         self.processes = []
+        self.process_logs = []
         self.tokens = []
         self.results = []
         self.observations = []
@@ -211,7 +215,9 @@ class NativeSuite:
         text = str(value)
         for token in self.tokens:
             text = text.replace(token, '[redacted]')
-        return re.sub(r'Bearer\s+[^\s"\']+', 'Bearer [redacted]', text, flags=re.I)
+        text = re.sub(r'Bearer\s+[^\s"\']+', 'Bearer [redacted]', text, flags=re.I)
+        return re.sub(r'(["\']?token["\']?\s*[:=]\s*)["\']?[^\s,"\'}]+["\']?',
+                      r'\1[redacted]', text, flags=re.I)
 
     def passed(self, case_id):
         check(case_id in CASE_IDS, 'Unknown native case ID')
@@ -225,12 +231,30 @@ class NativeSuite:
         if report is not None:
             arguments += ['--smoke-report', str(report)]
         # Inherits the supervisor's Windows Job and LLVM_PROFILE_FILE; no breakaway.
-        process = subprocess.Popen(arguments, cwd=self.work, stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Retain only a redacted final log. The raw owned temporary handle is deleted
+        # when cleanup closes it; no secret-bearing stdout is printed into evidence.
+        log = tempfile.TemporaryFile(mode='w+b')
+        environment = os.environ.copy()
+        # Microsoft WebView2 environment override: isolate qualification recovery
+        # and cache state; reuse only this suite's profile for its close/reopen checks.
+        environment['WEBVIEW2_USER_DATA_FOLDER'] = str(self.webview_profile)
+        try:
+            process = subprocess.Popen(arguments, cwd=self.work, stdin=subprocess.DEVNULL,
+                                       stdout=log, stderr=subprocess.STDOUT, env=environment)
+        except BaseException:
+            log.close()
+            raise
         self.processes.append(process)
+        self.process_logs.append((process, log))
+        self.observations.append({'operation': 'launch-native', 'pid': process.pid,
+            'buildRevision': self.build, 'elapsedSeconds': time.monotonic() - self.started,
+            'logPath': str(self.work / f'native-{process.pid}.log'),
+            'webviewProfile': str(self.webview_profile),
+            'webviewProfilePresent': self.webview_profile.is_dir(),
+            'smoke': report is not None})
         return process
 
-    def request(self, descriptor, method='POST', raw=None, headers=None, authorize=True):
+    def request(self, descriptor, method='POST', raw=None, headers=None, authorize=True, deadline=None):
         endpoint = urllib.parse.urlsplit(descriptor['endpoint'])
         check(endpoint.scheme == 'http' and endpoint.hostname == '127.0.0.1'
               and endpoint.path == '/mcp' and endpoint.port is not None
@@ -241,8 +265,10 @@ class NativeSuite:
         if authorize:
             outgoing['Authorization'] = 'Bearer ' + descriptor['token']
         outgoing.update(headers or {})
+        limit = 3 if deadline is None else min(3, deadline - time.monotonic())
+        check(limit > 0, 'Native request deadline expired before transport')
         connection = http.client.HTTPConnection(endpoint.hostname, endpoint.port,
-                                                timeout=self.timeout(3))
+                                                timeout=self.timeout(limit))
         try:
             connection.request(method, endpoint.path, body=body, headers=outgoing)
             response = connection.getresponse()
@@ -265,25 +291,85 @@ class NativeSuite:
         return result.get('structuredContent') or json.loads(result['content'][0]['text'])
 
     def ready(self, process):
-        until = time.monotonic() + self.timeout(10)
+        started = time.monotonic()
+        until = started + self.timeout(10)
         path = self.descriptor_dir / f'{process.pid}.json'
-        while time.monotonic() < until:
-            check(process.poll() is None, 'Native process exited before editor readiness')
-            try:
-                descriptor = json.loads(path.read_text(encoding='utf-8'))
+        counts = dict.fromkeys(['descriptorMissing', 'descriptorOSError', 'descriptorInvalid',
+                              'transportOSError', 'http503', 'unexpected', 'ready'], 0)
+        observation = {'operation': 'native-readiness', 'pid': process.pid,
+            'buildRevision': self.build, 'descriptorPath': str(path),
+            'attempts': 0, 'counts': counts, 'lastPhase': 'not-attempted', 'ready': False}
+        self.observations.append(observation)
+        try:
+            while time.monotonic() < until:
+                check(process.poll() is None, 'Native process exited before editor readiness')
+                observation['attempts'] += 1
+                try:
+                    descriptor = json.loads(path.read_text(encoding='utf-8'))
+                except FileNotFoundError:
+                    counts['descriptorMissing'] += 1
+                    observation['lastPhase'] = 'descriptorMissing'
+                    descriptor = None
+                except OSError as problem:
+                    counts['descriptorOSError'] += 1
+                    observation['lastPhase'] = 'descriptorOSError'
+                    observation['lastError'] = {'type': type(problem).__name__,
+                        'errno': problem.errno, 'winerror': getattr(problem, 'winerror', None)}
+                    descriptor = None
+                except json.JSONDecodeError:
+                    counts['descriptorInvalid'] += 1
+                    observation['lastPhase'] = 'descriptorInvalid'
+                    descriptor = None
+                if descriptor is None:
+                    time.sleep(min(0.05, max(0, until - time.monotonic())))
+                    continue
+                check(isinstance(descriptor, dict), 'Native descriptor is not an object')
                 check(descriptor.get('pid') == process.pid, 'Descriptor PID differs from owned process')
                 token = descriptor.get('token')
                 check(isinstance(token, str) and len(token) >= 32, 'Native descriptor secret is absent')
                 if token not in self.tokens:
                     self.tokens.append(token)
-                status, data = self.request(descriptor)
-                if status == 200 and json.loads(data).get('result') == {}:
+                observation['descriptorBuild'] = self.redact(descriptor.get('build'))
+                observation.setdefault('descriptorObservedSeconds', time.monotonic() - started)
+                try:
+                    status, data = self.request(descriptor, deadline=until)
+                except OSError as problem:
+                    counts['transportOSError'] += 1
+                    observation['lastPhase'] = 'transportOSError'
+                    observation['lastError'] = {'type': type(problem).__name__,
+                        'errno': problem.errno, 'winerror': getattr(problem, 'winerror', None)}
+                    time.sleep(min(0.05, max(0, until - time.monotonic())))
+                    continue
+                observation['lastHttpStatus'] = status
+                if time.monotonic() >= until:
+                    observation['lastPhase'] = 'deadline-after-response'
+                    raise TimeoutError('Native readiness response arrived after its ten-second deadline')
+                if status == 503:
+                    counts['http503'] += 1
+                    observation['lastPhase'] = 'http503'
+                    time.sleep(min(0.05, max(0, until - time.monotonic())))
+                    continue
+                try:
+                    answer = json.loads(data)
+                except json.JSONDecodeError:
+                    answer = None
+                if status == 200 and isinstance(answer, dict) and answer.get('result') == {}:
+                    if time.monotonic() >= until:
+                        observation['lastPhase'] = 'deadline-before-accept'
+                        raise TimeoutError('Native readiness exceeded its ten-second deadline before acceptance')
+                    counts['ready'] += 1
+                    observation['lastPhase'] = 'ready'
+                    observation['ready'] = True
                     return path, descriptor
-                check(status == 503, f'Unexpected native readiness status {status}')
-            except (FileNotFoundError, ConnectionError, OSError, json.JSONDecodeError):
-                pass
-            time.sleep(min(0.05, max(0, until - time.monotonic())))
-        raise TimeoutError('Native descriptor/editor did not become ready within ten seconds')
+                counts['unexpected'] += 1
+                observation['lastPhase'] = 'unexpected'
+                raise AssertionError(f'Unexpected native readiness response (HTTP {status})')
+            raise TimeoutError('Native descriptor/editor did not become ready within ten seconds')
+        finally:
+            observation.update({'elapsedSeconds': time.monotonic() - started,
+                'suiteElapsedSeconds': time.monotonic() - self.started,
+                'deadlineReached': time.monotonic() >= until,
+                'descriptorPresent': path.is_file(), 'processPoll': process.poll()})
 
     def close(self, process, descriptor_path):
         check(process.poll() is None, 'Native process exited before graceful close')
@@ -302,7 +388,11 @@ class NativeSuite:
         sdk = subprocess.Popen(command, cwd=self.root, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, encoding='utf-8')
         self.processes.append(sdk)
-        output, _ = sdk.communicate(timeout=self.timeout(12))
+        try:
+            output, _ = sdk.communicate(timeout=self.timeout(12))
+        finally:
+            if sdk.poll() is not None and sdk.stdout is not None:
+                sdk.stdout.close()
         redacted = self.redact(output)
         (self.work / 'sdk-consumer.log').write_text(redacted, encoding='utf-8')
         for line in redacted.splitlines():
@@ -408,6 +498,38 @@ class NativeSuite:
                     process.wait(timeout=max(0.001, until - time.monotonic()))
                 except Exception as problem:
                     failures.append({'pid': process.pid, 'error': self.redact(problem)})
+        # communicate's timeout leaves its pipe owned by this suite; close it
+        # after the cleanup above has stopped that child, including failed runs.
+        for process in self.processes:
+            if process.stdout is not None:
+                if process.poll() is None:
+                    failures.append({'pid': process.pid, 'operation': 'close-sdk-pipe',
+                                     'error': 'Owned child remains live; pipe close cannot safely wait'})
+                    continue
+                try:
+                    process.stdout.close()
+                except Exception as problem:
+                    failures.append({'pid': process.pid, 'operation': 'close-sdk-pipe',
+                                     'error': self.redact(problem)})
+        for process, log in self.process_logs:
+            path = self.work / f'native-{process.pid}.log'
+            try:
+                log.flush()
+                log.seek(0, os.SEEK_END)
+                total_bytes = log.tell()
+                log.seek(0)
+                # Bound diagnostic retention and decoding work even if a child is noisy.
+                content = log.read(1024 * 1024).decode('utf-8', errors='replace')
+                path.write_text(self.redact(content), encoding='utf-8')
+                self.observations.append({'operation': 'native-log', 'pid': process.pid,
+                    'path': str(path), 'rawBytes': total_bytes,
+                    'truncated': total_bytes > 1024 * 1024, 'processPoll': process.poll()})
+            except Exception as problem:
+                failures.append({'pid': process.pid, 'operation': 'retain-native-log',
+                                 'error': self.redact(problem)})
+            finally:
+                log.close()
+        self.process_logs.clear()
         return failures
 
 
@@ -435,12 +557,17 @@ def main():
             suite.results.append({'id': case_id, 'status': 'FAIL', 'error': message})
     finally:
         if suite is not None:
+            effect_elapsed = time.monotonic() - suite.started
+            effect_deadline_reached = time.monotonic() >= suite.deadline
+            failed = failed or effect_deadline_reached
             cleanup_failures = suite.cleanup()
             failed = failed or bool(cleanup_failures)
             evidence = {'suite': 'native-mcp', 'collected': len(CASE_IDS),
                         'results': suite.results, 'observations': suite.observations,
                         'cleanupFailures': cleanup_failures,
                         'remainingGaps': ['Actual Save As chooser interaction is not qualified.'],
+                        'webviewProfile': str(suite.webview_profile),
+                        'webviewProfilePresent': suite.webview_profile.is_dir(),
                         'nativeBinary': str(suite.binary),
                         'nativeBinarySha256': hashlib.sha256(suite.binary.read_bytes()).hexdigest(),
                         'sdkConsumerSha256': hashlib.sha256((suite.root / 'tests/sdk_consumer.mjs').read_bytes()).hexdigest(),
@@ -452,6 +579,10 @@ def main():
                             and process.poll() is not None
                             and (suite.descriptor_dir / f'{process.pid}.json').exists()],
                         'buildRevision': suite.build}
+            evidence['effectElapsedSeconds'] = effect_elapsed
+            evidence['effectDeadlineReached'] = effect_deadline_reached
+            if effect_deadline_reached:
+                evidence['effectDeadlineFailure'] = 'Native effects reached the 55-second limit before cleanup'
             evidence['elapsedSeconds'] = time.monotonic() - suite.started
             if evidence['staleOwnedDescriptors']:
                 failed = True

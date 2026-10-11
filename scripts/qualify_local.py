@@ -319,8 +319,107 @@ class Session:
         return len(seen)
 
     def execute(self):
-        results = []
-        for suite in self.collected:
+        self.results = [{'suite': suite['id'], 'status': 'UNEXECUTED', 'passed': [],
+                         'failed': [], 'skipped': [], 'missingIds': list(suite['cases']),
+                         'extraIds': [], 'duplicateIds': [], 'executedIds': [],
+                         'caseResults': [{'id': case, 'status': 'UNREPORTED'} for case in suite['cases']]}
+                        for suite in self.collected]
+
+        def retain_aborted(record, suite, result, error):
+            result['failure'] = {'type': type(error).__name__, 'message': str(error)}
+            if record is None or record.get('stage') != 'run-' + suite['id']:
+                return
+            result.update(log=record['log'], logSha256=record['logSha256'], exitCode=record['exitCode'])
+            output = Path(record['log']).read_text(encoding='utf-8', errors='replace')
+            if suite['runner'] == 'rustTestBinary':
+                passed = ['rust::' + name for name in re.findall(r'^test (.+?) \.\.\. ok$', output, re.MULTILINE)]
+                failed = ['rust::' + name for name in re.findall(r'^test (.+?) \.\.\. FAILED$', output, re.MULTILINE)]
+                skipped = ['rust::' + name for name in re.findall(r'^test (.+?) \.\.\. ignored(?:,.*)?$', output, re.MULTILINE)]
+            else:
+                passed = re.findall(r'^CASE PASS ([^\r\n]+)$', output, re.MULTILINE)
+                failed = [marker.partition(': ')[0] for marker in re.findall(r'^CASE FAIL ([^\r\n]+)$', output, re.MULTILINE)]
+                skipped = [marker.partition(': ')[0] for marker in re.findall(r'^CASE SKIP ([^\r\n]+)$', output, re.MULTILINE)]
+            markers, collected = Counter([*passed, *failed, *skipped]), set(suite['cases'])
+            result.update(passed=passed, failed=failed, skipped=skipped,
+                          missingIds=sorted(collected - set(markers)), extraIds=sorted(set(markers) - collected),
+                          duplicateIds=sorted(case for case, count in markers.items() if count != 1),
+                          executedIds=sorted(collected.intersection([*passed, *failed])),
+                          caseResults=[{'id': case, 'status': 'UNREPORTED' if case not in markers else
+                                        'AMBIGUOUS' if markers[case] != 1 else 'FAIL' if case in failed else
+                                        'SKIP' if case in skipped else 'PASS'} for case in suite['cases']])
+
+        def require_clean_native_receipt(output, suite, result):
+            # Process containment alone does not establish that the driver
+            # removed its descriptors or met its own shorter queue deadline.
+            summaries = []
+            for line in output.splitlines():
+                try:
+                    value = json.loads(line)
+                except (ValueError, TypeError):
+                    continue
+                if isinstance(value, dict) and value.get('suite') == 'native-mcp':
+                    summaries.append(value)
+            if len(summaries) != 1:
+                raise ValueError('native continuation requires one retained receipt summary')
+            summary = summaries[0]
+            raw_path = summary.get('evidence')
+            if not isinstance(raw_path, str) or not Path(raw_path).is_absolute():
+                raise ValueError('native receipt path must be absolute')
+            owned = self.out.resolve(strict=True)
+            lexical = Path(os.path.abspath(raw_path))
+            path = lexical.resolve(strict=True)
+            if (not lexical.is_relative_to(owned) or not path.is_relative_to(owned)
+                    or lexical != path or path.name != 'native-evidence.json'
+                    or path.parent.parent != owned
+                    or not re.fullmatch(r'native-runtime-[0-9a-f]{32}', path.parent.name)
+                    or not path.is_file()):
+                raise ValueError('native receipt escapes or differs from its owned output')
+            candidates = list(owned.glob('native-runtime-*/native-evidence.json'))
+            if len(candidates) != 1 or candidates[0].resolve(strict=True) != path:
+                raise ValueError('native retained receipt is missing or ambiguous')
+            if path.stat().st_size > 1024 * 1024:
+                raise ValueError('native receipt exceeds 1 MiB ceiling')
+            receipt = load(path)
+            result.update(nativeEvidencePath=str(path), nativeEvidenceSha256=digest(path))
+            revision = self.prepared.get('buildRevision')
+            if (not isinstance(receipt, dict) or receipt.get('suite') != suite['id']
+                    or not isinstance(revision, str) or not revision or revision == 'unversioned'
+                    or receipt.get('buildRevision') != revision
+                    or type(receipt.get('collected')) is not int
+                    or receipt['collected'] != len(suite['cases'])
+                    or file_path(receipt.get('nativeBinary')) != self.paths['nativeBinary']
+                    or receipt.get('nativeBinarySha256') !=
+                        self.prepared['binaryIdentity'][str(self.paths['nativeBinary'])]
+                    or file_path(receipt.get('nodeBinary')) != self.paths['node']
+                    or receipt.get('nodeBinarySha256') !=
+                        self.prepared['artifactIdentity'][str(self.paths['node'])]
+                    or receipt.get('sdkConsumerSha256') != self.prepared['dependencyIdentity'][
+                        str((self.source_root / 'tests/sdk_consumer.mjs').resolve(strict=True))]
+                    or summary.get('passed') is not False):
+                raise ValueError('native receipt suite/build/binary identity is inconsistent')
+            elapsed = receipt.get('elapsedSeconds')
+            effect_elapsed = receipt.get('effectElapsedSeconds')
+            if (type(elapsed) not in (int, float) or not 0 <= elapsed <= 60
+                    or type(effect_elapsed) not in (int, float) or not 0 <= effect_elapsed < 55
+                    or effect_elapsed > elapsed or receipt.get('effectDeadlineReached') is not False
+                    or summary.get('elapsedSeconds') != elapsed
+                    or receipt.get('cleanupFailures') != []
+                    or receipt.get('staleOwnedDescriptors') != []
+                    or 'cleanupFailure' in receipt or 'deadlineFailure' in receipt
+                    or 'effectDeadlineFailure' in receipt):
+                raise ValueError('native receipt has missing/failed cleanup or deadline evidence')
+            reported = receipt.get('results')
+            expected = Counter((case, 'PASS') for case in result['passed'])
+            expected.update((case, 'FAIL') for case in result['failed'])
+            expected.update((case, 'SKIP') for case in result['skipped'])
+            if (not isinstance(reported, list)
+                    or any(not isinstance(item, dict) or not isinstance(item.get('id'), str)
+                           or item.get('status') not in ('PASS', 'FAIL', 'SKIP') for item in reported)
+                    or Counter((item['id'], item['status']) for item in reported) != expected):
+                raise ValueError('native receipt case results differ from retained log')
+            result['nativeEvidenceDisposition'] = 'clean-contained-case-failure'
+
+        for suite, result in zip(self.collected, self.results):
             self.check_time()
             runner = suite['runner']
             if runner == 'rustTestBinary':
@@ -334,22 +433,97 @@ class Session:
                                '--source=' + str(self.source_root)]
                 command = [*prefix, str(self.copy_root / suite['driver']),
                            '--coverage-dir', str(self.js_dir)]
-            output = self.run('run-' + suite['id'], command)
+            label = 'run-' + suite['id']
+            result.update(status='ABORTED', command=command)
+            record_count = len(self.records)
+            exit_failure = None
+            try:
+                output = self.run(label, command)
+            except RuntimeError as error:
+                # Continue only a completed, contained stage's nonzero exit.
+                # A stale record, launch failure, timeout, failed cleanup or
+                # whole-run deadline cannot authorize another suite.
+                record = self.records[-1] if len(self.records) == record_count + 1 else None
+                if (str(error) != 'bounded stage failed: ' + label or record is None
+                        or record['stage'] != label or type(record.get('exitCode')) is not int
+                        or record['exitCode'] == 0 or record.get('timedOut') is not False
+                        or record.get('descendantsStopped') is not True):
+                    retain_aborted(record, suite, result, error)
+                    raise
+                retain_aborted(record, suite, result, error)
+                self.check_time()
+                output = Path(record['log']).read_text(encoding='utf-8', errors='replace')
+                if suite['id'] == 'native-mcp':
+                    try:
+                        require_clean_native_receipt(output, suite, result)
+                    except Exception as receipt_error:
+                        result['nativeEvidenceDisposition'] = 'refused'
+                        result['failure'] = {'type': type(receipt_error).__name__,
+                                             'message': str(receipt_error)}
+                        raise RuntimeError('native continuation refused: ' + str(receipt_error)) from receipt_error
+                    self.check_time()
+                exit_failure = {'type': 'NonzeroExit', 'exitCode': record['exitCode'],
+                                'message': str(error)}
+            except Exception as error:
+                record = self.records[-1] if len(self.records) == record_count + 1 else None
+                retain_aborted(record, suite, result, error)
+                raise
+            stage = self.records[-1]
+            result.update(log=stage['log'], logSha256=stage['logSha256'], exitCode=stage['exitCode'])
+            failures = []
+            if exit_failure:
+                failures.append(exit_failure)
             if runner == 'rustTestBinary':
                 passed = ['rust::' + match.group(1) for match in
                           re.finditer(r'^test (.+?) \.\.\. ok$', output, re.MULTILINE)]
-                summary = re.search(r'test result: ok\. (\d+) passed; (\d+) failed; '
+                failed = ['rust::' + match.group(1) for match in
+                          re.finditer(r'^test (.+?) \.\.\. FAILED$', output, re.MULTILINE)]
+                skipped = ['rust::' + match.group(1) for match in
+                           re.finditer(r'^test (.+?) \.\.\. ignored(?:,.*)?$', output, re.MULTILINE)]
+                summary = re.search(r'test result: (?:ok|FAILED)\. (\d+) passed; (\d+) failed; '
                                     r'(\d+) ignored; (\d+) measured; (\d+) filtered out', output)
-                if not summary or list(map(int, summary.groups())) != [len(suite['cases']), 0, 0, 0, 0]:
-                    raise ValueError('Rust result count mismatch or skipped cases')
+                counts = list(map(int, summary.groups())) if summary else None
+                result['rustSummary'] = counts
+                result['rustSummaryStatus'] = summary.group(0).split('.')[0] if summary else None
+                if counts != [len(passed), len(failed), len(skipped), 0, 0]:
+                    failures.append({'type': 'RustSummaryMismatch',
+                                     'message': 'Rust result summary absent/inconsistent or measured/filtered cases'})
+                if summary and not summary.group(0).startswith('test result: ok.'):
+                    failures.append({'type': 'RustFailedSummary', 'message': 'Rust reported FAILED'})
             else:
                 passed = re.findall(r'^CASE PASS ([^\r\n]+)$', output, re.MULTILINE)
-                if re.search(r'^CASE (?:FAIL|SKIP)\b', output, re.MULTILINE):
-                    raise ValueError('driver reported failed/skipped cases')
+                failed = [marker.partition(': ')[0] for marker in
+                          re.findall(r'^CASE FAIL ([^\r\n]+)$', output, re.MULTILINE)]
+                skipped = [marker.partition(': ')[0] for marker in
+                           re.findall(r'^CASE SKIP ([^\r\n]+)$', output, re.MULTILINE)]
+                if len(re.findall(r'^CASE (?:PASS|FAIL|SKIP)\b', output, re.MULTILINE)) != len(passed) + len(failed) + len(skipped):
+                    failures.append({'type': 'MalformedCaseMarker', 'message': 'Case status line has no readable ID'})
+            markers = Counter([*passed, *failed, *skipped])
+            collected = set(suite['cases'])
+            missing = sorted(collected - set(markers))
+            extra = sorted(set(markers) - collected)
+            duplicates = sorted(case for case, count in markers.items() if count != 1)
+            case_results = []
+            for case in suite['cases']:
+                status = ('UNREPORTED' if case not in markers else
+                          'AMBIGUOUS' if markers[case] != 1 else
+                          'FAIL' if case in failed else 'SKIP' if case in skipped else 'PASS')
+                case_results.append({'id': case, 'status': status})
+            if failed or skipped:
+                failures.append({'type': 'CaseFailureOrSkip', 'failedIds': failed, 'skippedIds': skipped})
             if Counter(passed) != Counter(suite['cases']):
-                raise ValueError('executed case IDs do not equal collected cases: ' + suite['id'])
-            results.append({'suite': suite['id'], 'passed': passed, 'command': command})
-        self.results = results
+                failures.append({'type': 'CaseCountMismatch', 'missingIds': missing,
+                                 'extraIds': extra, 'duplicateIds': duplicates,
+                                 'message': 'PASS marker counts differ from complete collected cases'})
+            if extra or duplicates:
+                failures.append({'type': 'InvalidCaseMarkers', 'extraIds': extra, 'duplicateIds': duplicates})
+            result.update(status='FAIL' if failures else 'PASS', passed=passed, failed=failed,
+                          skipped=skipped, missingIds=missing, extraIds=extra,
+                          duplicateIds=duplicates, caseResults=case_results,
+                          executedIds=sorted(collected.intersection([*passed, *failed])),
+                          failures=failures)
+            self.check_time()
+        return all(result['status'] == 'PASS' for result in self.results)
 
     def coverage(self):
         js_output = self.out / 'js-coverage.json'
@@ -484,14 +658,17 @@ def worker(args):
             evidence['unmetChecks'] = ['legacy-regression-case-adapters']
             raise RuntimeError('required legacy regression queue has no reliable case adapters; retained without execution')
         evidence['collectedCases'] = session.collect()
-        session.execute()
+        suites_passed = session.execute()
         evidence['results'] = session.results
-        evidence['executedCases'] = sum(len(result['passed']) for result in session.results)
+        evidence['executedCases'] = sum(len(result['executedIds']) for result in session.results)
+        evidence['passedCases'] = sum(case['status'] == 'PASS' for result in session.results for case in result['caseResults'])
         evidence['coverage'] = session.coverage()
         evidence['sourceIdentityAfter'] = session.fresh()
         session.check_time()
         if evidence['coverage']['coveragePercent'] < session.profile['minimumExecutableLineCoverage']:
             raise RuntimeError('complete scoped executable-line coverage below required floor')
+        if not suites_passed:
+            raise RuntimeError('one or more suites failed, skipped cases or reported incomplete/inconsistent case evidence')
         evidence['passed'] = True
     except Exception as error:
         evidence['failure'] = {'type': type(error).__name__, 'message': str(error)}
@@ -501,6 +678,12 @@ def worker(args):
         except Exception as freshness_error:
             evidence['freshnessFailure'] = str(freshness_error)
     finally:
+        if hasattr(session, 'results'):
+            evidence['results'] = session.results
+            evidence['executedCases'] = sum(len(result['executedIds']) for result in session.results)
+            evidence['passedCases'] = sum(case['status'] == 'PASS' for result in session.results for case in result['caseResults'])
+            evidence['caseCountBasis'] = 'distinct collected IDs with explicit PASS/FAIL markers; skips and unreported IDs are not counted as executed'
+            evidence['failedSuites'] = [result['suite'] for result in session.results if result['status'] != 'PASS']
         evidence['workerElapsedSeconds'] = time.monotonic() - started
         write(out / 'evidence.json', evidence)
     print(json.dumps({'evidence': str(out / 'evidence.json'), 'passed': evidence['passed'],
