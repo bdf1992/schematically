@@ -117,6 +117,7 @@ def execute(coverage_dir):
             environment = dict(os.environ)
             environment.update(WEBVIEW2_USER_DATA_FOLDER=str(self.webview_profile),
                                SOV_RUNTIME_DIR=str(self.runtime_home))
+            debug_port = self.debug_environment(environment)
             log = tempfile.TemporaryFile(mode='w+b')
             try:
                 process = subprocess.Popen([str(self.binary), str(path)], cwd=self.work,
@@ -125,6 +126,7 @@ def execute(coverage_dir):
                 log.close()
                 raise
             self.processes.append(process)
+            self.debug_ports[process.pid] = debug_port
             self.process_logs.append((process, log))
             self.observations.append({'operation': 'launch-cli-desktop', 'pid': process.pid,
                 'runtimeHome': str(self.runtime_home), 'webviewProfile': str(self.webview_profile)})

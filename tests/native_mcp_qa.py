@@ -18,12 +18,147 @@ import os
 from pathlib import Path
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.parse
 import uuid
+
+
+def owned_debug_listener(port, native_pid):
+    """Prove the TCP listener belongs to an owned native descendant before CDP.
+
+    https://learn.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getextendedtcptable
+    https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/ns-tlhelp32-processentry32w
+    """
+    if os.name != 'nt':
+        raise RuntimeError('Native debug ownership requires Windows')
+    w = wintypes
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    class Entry(ctypes.Structure):
+        _fields_ = [('dwSize', w.DWORD), ('cntUsage', w.DWORD),
+            ('pid', w.DWORD), ('heap', ctypes.c_size_t), ('module', w.DWORD),
+            ('threads', w.DWORD), ('parent', w.DWORD), ('priority', w.LONG),
+            ('flags', w.DWORD), ('name', w.WCHAR * 260)]
+    class Row(ctypes.Structure):
+        _fields_ = [(name, w.DWORD) for name in ['state','address','port','remote','remotePort','pid']]
+    def api(name, args, result=w.BOOL):
+        fn = getattr(kernel, name); fn.argtypes = args; fn.restype = result
+        return fn
+    close = api('CloseHandle', [w.HANDLE])
+    wait = api('WaitForSingleObject', [w.HANDLE, w.DWORD], w.DWORD)
+    open_process = api('OpenProcess', [w.DWORD, w.BOOL, w.DWORD], w.HANDLE)
+    table = ctypes.WinDLL('iphlpapi').GetExtendedTcpTable
+    table.argtypes = [ctypes.c_void_p, ctypes.POINTER(w.DWORD), w.BOOL, w.ULONG, ctypes.c_int, w.ULONG]
+    table.restype = w.DWORD
+    size = w.DWORD()
+    if table(None, ctypes.byref(size), False, 2, 3, 0) != 122 or not 4 <= size.value <= 1024*1024:
+        raise RuntimeError('TCP ownership size unavailable')
+    data = ctypes.create_string_buffer(size.value)
+    if table(data, ctypes.byref(size), False, 2, 3, 0):
+        raise RuntimeError('TCP ownership table unavailable')
+    count = w.DWORD.from_buffer(data).value
+    if count > (size.value - 4) // ctypes.sizeof(Row):
+        raise RuntimeError('TCP ownership table malformed')
+    owners = [row.pid for i in range(count)
+        if (row := Row.from_buffer(data, 4+i*ctypes.sizeof(Row))).state == 2
+        and socket.ntohs(row.port & 65535) == port
+        and row.address == int.from_bytes(socket.inet_aton('127.0.0.1'), 'little')]
+    if len(owners) != 1:
+        raise RuntimeError('Debug listener is not uniquely loopback owned')
+    snapshot = api('CreateToolhelp32Snapshot', [w.DWORD,w.DWORD], w.HANDLE)(2,0)
+    if not snapshot or snapshot == ctypes.c_void_p(-1).value:
+        raise RuntimeError('Process ancestry unavailable')
+    entries = {}
+    try:
+        entry = Entry();entry.dwSize = ctypes.sizeof(Entry)
+        first = api('Process32FirstW',[w.HANDLE,ctypes.POINTER(Entry)])
+        next_entry = api('Process32NextW',[w.HANDLE,ctypes.POINTER(Entry)])
+        more = first(snapshot,ctypes.byref(entry))
+        while more:
+            if len(entries) >= 32768:raise RuntimeError('Process snapshot exceeds bounded inventory')
+            entries[entry.pid] = (entry.parent,entry.name)
+            more = next_entry(snapshot,ctypes.byref(entry))
+    finally:
+        close(snapshot)
+    pid = owners[0];chain=[]
+    for _ in range(16):
+        if pid == native_pid:break
+        if pid in chain or pid not in entries:raise RuntimeError('Debug listener ancestry refused')
+        chain.append(pid);pid = entries[pid][0]
+    if pid != native_pid or not chain or entries[owners[0]][1].casefold() != 'msedgewebview2.exe':
+        raise RuntimeError('Debug listener is not an owned WebView descendant')
+    handles=[]
+    try:
+        for pid in chain+[native_pid]:
+            handle=open_process(0x100000,False,pid)
+            if not handle:raise RuntimeError('Debug owner lifetime unavailable')
+            handles.append(handle)
+            if wait(handle,0)!=258:raise RuntimeError('Debug owner is no longer alive')
+    except BaseException:
+        for handle in handles:close(handle)
+        raise
+    return handles,close,{'listenerPid':owners[0],'nativePid':native_pid,'ancestry':chain}
+
+
+def cdp_diagnostic(port, native_pid):
+    """Read an owned WebView through CDP; the parent contains this worker."""
+    import asyncio
+    from playwright.async_api import async_playwright
+
+    async def inspect():
+        handles, close, ownership = owned_debug_listener(port, native_pid)
+        playwright = None
+        try:
+            playwright = await async_playwright().start()
+            browser = await playwright.chromium.connect_over_cdp(
+                f'http://127.0.0.1:{port}', timeout=600)
+            pages = [page for context in browser.contexts for page in context.pages]
+            if len(pages) != 1:
+                return {'available': False, 'pageCount': len(pages)}
+            page = pages[0]
+            session = await page.context.new_cdp_session(page)
+            events = []
+            def retain(event):
+                if len(events) < 16:
+                    detail = event.get('exceptionDetails', {})
+                    events.append({'type': event.get('type', 'exception'),
+                        'messages': [str(value.get('value', ''))[:240]
+                            for value in event.get('args', [])[:3]
+                            if value.get('type') == 'string'],
+                        'exception': str(detail.get('text', ''))[:160],
+                        'description': str(detail.get('exception', {}).get('description', ''))[:240],
+                        'line': detail.get('lineNumber'), 'column': detail.get('columnNumber')})
+            session.on('Runtime.consoleAPICalled', retain)
+            session.on('Runtime.exceptionThrown', retain)
+            await session.send('Runtime.enable')
+            state = await page.evaluate("""() => ({
+                readyState:document.readyState,title:document.title.slice(0,160),
+                status:document.getElementById('status')?.textContent?.slice(0,240)||'',
+                bodyChildren:document.body?.children.length||0,
+                tauri:typeof window.__TAURI__,invoke:typeof window.__TAURI__?.core?.invoke,
+                eventListen:typeof window.__TAURI__?.event?.listen,
+                persistence:typeof window.SovDesktopPersistenceReady,
+                api:typeof window.SovSchematicAPI,mcp:typeof window.SovDesktopMcp
+            })""")
+            return {'available': True, 'state': state, 'events': events, 'ownership': ownership,
+                    'earlyExceptionsReplayGuaranteed': False}
+        finally:
+            # Disconnect our transport; Browser.close would affect the owned app.
+            try:
+                if playwright is not None:
+                    await playwright.stop()
+            finally:
+                for handle in handles:
+                    close(handle)
+    try:
+        answer = asyncio.run(asyncio.wait_for(inspect(), timeout=0.8))
+    except Exception as problem:
+        answer = {'available': False, 'errorType': type(problem).__name__}
+    print(json.dumps(answer))
+    return 0
 
 EARLY = [
     'native/launch-ready', 'native-http/missing-auth', 'native-http/wrong-auth',
@@ -197,6 +332,8 @@ class NativeSuite:
         self.work.mkdir()
         self.runtime_home = self.work / 'runtime-host'
         self.runtime_home.mkdir()
+        self.debug_ports = {}
+        self.debug_cleanup_failures = []
         self.webview_profile = self.work / 'webview-profile'
         self.webview_profile.mkdir()
         self.processes = []
@@ -246,6 +383,7 @@ class NativeSuite:
         # and cache state; reuse only this suite's profile for its close/reopen checks.
         environment['WEBVIEW2_USER_DATA_FOLDER'] = str(profile)
         environment['SOV_RUNTIME_DIR'] = str(self.runtime_home)
+        debug_port = self.debug_environment(environment)
         try:
             process = subprocess.Popen(arguments, cwd=self.work, stdin=subprocess.DEVNULL,
                                        stdout=log, stderr=subprocess.STDOUT, env=environment)
@@ -253,6 +391,7 @@ class NativeSuite:
             log.close()
             raise
         self.processes.append(process)
+        self.debug_ports[process.pid] = debug_port
         self.process_logs.append((process, log))
         self.observations.append({'operation': 'launch-native', 'pid': process.pid,
             'buildRevision': self.build, 'elapsedSeconds': time.monotonic() - self.started,
@@ -261,6 +400,45 @@ class NativeSuite:
             'webviewProfilePresent': profile.is_dir(),
             'smoke': report is not None})
         return process
+
+    def debug_environment(self, environment):
+        # Child-only WebView flag, grounded in Microsoft's debugging reference.
+        # No registry or installed profile changes. Reserve an ephemeral loopback port.
+        with socket.socket() as reservation:
+            reservation.bind(('127.0.0.1', 0))
+            port = reservation.getsockname()[1]
+        environment['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS'] = (
+            f'--remote-debugging-address=127.0.0.1 --remote-debugging-port={port}')
+        return port
+
+    def diagnose_webview(self, process, until):
+        port = self.debug_ports.get(process.pid)
+        if port is None or until - time.monotonic() < 2:
+            return
+        path = self.work / f'webview-{process.pid}.log'
+        observation = {'operation': 'webview-diagnostic', 'pid': process.pid,
+                       'debugPort': port, 'ownershipRequired': True}
+        self.observations.append(observation)
+        worker_started = False
+        try:
+            source_root = Path(os.environ['SOV_SOURCE_ROOT']).resolve(strict=True)
+            sys.path.insert(0, str(source_root / 'scripts'))
+            from bounded_process import run_bounded
+            worker_started = True
+            observation['worker'] = run_bounded(
+                [sys.executable, str(Path(__file__).resolve()), '--cdp-diagnostic', str(port),
+                 '--cdp-native-pid', str(process.pid)],
+                self.work, os.environ.copy(), path, 1)
+            if observation['worker']['descendantsStopped'] is not True:
+                self.debug_cleanup_failures.append({'operation':'diagnostic-descendants', 'pid':process.pid})
+            raw = self.redact(path.read_bytes()[:32768].decode('utf-8', errors='replace'))
+            path.write_text(raw, encoding='utf-8')
+            observation['capture'] = json.loads(raw)
+        except Exception as problem:
+            observation['diagnosticError'] = type(problem).__name__
+            if worker_started and 'worker' not in observation:
+                self.debug_cleanup_failures.append({'operation':'diagnostic-cleanup-unknown', 'pid':process.pid})
+        observation['readinessDeadlineExceeded'] = time.monotonic() >= until
 
     def request(self, descriptor, method='POST', raw=None, headers=None, authorize=True, deadline=None):
         endpoint = urllib.parse.urlsplit(descriptor['endpoint'])
@@ -308,6 +486,7 @@ class NativeSuite:
             'buildRevision': self.build, 'descriptorPath': str(path),
             'attempts': 0, 'counts': counts, 'lastPhase': 'not-attempted', 'ready': False}
         self.observations.append(observation)
+        diagnostic_attempted = False
         try:
             while time.monotonic() < until:
                 check(process.poll() is None, 'Native process exited before editor readiness')
@@ -355,6 +534,9 @@ class NativeSuite:
                 if status == 503:
                     counts['http503'] += 1
                     observation['lastPhase'] = 'http503'
+                    if not diagnostic_attempted and time.monotonic() - started >= 2:
+                        diagnostic_attempted = True
+                        self.diagnose_webview(process, until)
                     time.sleep(min(0.05, max(0, until - time.monotonic())))
                     continue
                 try:
@@ -506,7 +688,7 @@ class NativeSuite:
 
     def cleanup(self):
         until = time.monotonic() + 5
-        failures = []
+        failures = list(self.debug_cleanup_failures)
         for process in self.processes:
             if process.poll() is not None:
                 continue
@@ -563,10 +745,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--collect', action='store_true')
     parser.add_argument('--coverage-dir', type=Path)
+    parser.add_argument('--cdp-diagnostic', type=int)
+    parser.add_argument('--cdp-native-pid', type=int)
     options = parser.parse_args()
     if options.collect:
         print(json.dumps(CASE_IDS))
         return 0  # No environment reads, fixtures, Windows APIs, processes or network.
+    if options.cdp_diagnostic is not None:
+        if not 1 <= options.cdp_diagnostic <= 65535:
+            parser.error('Invalid loopback diagnostic port')
+        if options.cdp_native_pid is None or options.cdp_native_pid <= 0:
+            parser.error('Owned native PID is required for diagnostics')
+        return cdp_diagnostic(options.cdp_diagnostic, options.cdp_native_pid)
     if options.coverage_dir is None:
         parser.error('--coverage-dir is required for execution')
     suite = None
