@@ -1,5 +1,5 @@
 """Scheduler preserves the queue, bounds overlap and waits before exclusive work."""
-import ast, json, os, runpy, tempfile, threading, time
+import ast, json, os, runpy, tempfile, threading, time, shutil, subprocess, sys
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -56,4 +56,22 @@ with tempfile.TemporaryDirectory() as temporary:
     actual=record['functions'][0]['ranges']
     assert actual[0]['endOffset']==units(source), 'non-BMP tail must not be truncated'
     assert actual[1]['startOffset']==start and actual[1]['count']==0, 'UTF-16 refusal range must retain its exact address'
+collector['coverage_command'].__globals__['ROOT']=ROOT
+canonical=[sys.executable,str(ROOT/'tests/canonical_qa.py')]
+assert collector['coverage_command'](canonical)==[sys.executable,str(ROOT/'tests/arch_browser_coverage.py'),str(Path('tests/canonical_qa.py'))]
+with tempfile.TemporaryDirectory(prefix='owned-access-mutant-') as temporary:
+    clone=Path(temporary)/'repo';clone.mkdir()
+    for folder in ['src','styles','data','examples']:shutil.copytree(ROOT/folder,clone/folder)
+    for file in ['build.py','index.source.html','tests/read_write_access_qa.py','tests/browser_runtime.py']:
+        destination=clone/file;destination.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/file,destination)
+    model=clone/'src/10-model.js';source=model.read_text(encoding='utf-8');old="return access==='read-write'||access===operation;"
+    assert old in source
+    model.write_text(source.replace(old,'return true;',1),encoding='utf-8',newline='\n')
+    subprocess.run([sys.executable,str(clone/'build.py')],cwd=clone,check=True,capture_output=True,text=True)
+    external=[sys.executable,str(clone/'tests/read_write_access_qa.py')]
+    assert collector['coverage_command'](external)==external, 'owned mutant paths remain executable outside canonical root'
+    refused=subprocess.run(collector['coverage_command'](external),cwd=clone,capture_output=True,text=True)
+    assert refused.returncode!=0 and 'AssertionError' in refused.stderr and "'W' not in blocked" in refused.stderr,refused.stdout+refused.stderr
+    print(refused.stderr,end='')
+    print('PASS original access mutant refused by original assertion; external source uninstrumented')
 print('PASS bounded QA scheduling and complete queue identity')

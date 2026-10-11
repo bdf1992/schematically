@@ -6,6 +6,16 @@ from playwright.async_api import Page as AsyncPage, Browser as AsyncBrowser
 
 ROOT=Path(__file__).resolve().parents[1]
 sessions={}
+
+def coverage_command(command):
+    if isinstance(command,list) and len(command)>1 and str(command[1]).endswith('.py') and ('tests' in Path(command[1]).parts or 'golden_run.py' in str(command[1])):
+        try:relative=Path(command[1]).resolve().relative_to(ROOT)
+        except ValueError:
+            # Original mutation checks run in owned temporary repositories.
+            # Preserve their commands; their source cannot cover this root.
+            return command
+        return [command[0],str(Path(__file__)),str(relative),*command[2:]]
+    return command
 def utf16_length(text):
     return len(text.encode('utf-16-le','surrogatepass'))//2
 def save(result,sources):
@@ -75,10 +85,7 @@ def main():
         mode=sys.argv[1]
         original_run=subprocess.run
         def supervised_child(command,*args,**kwargs):
-            if isinstance(command,list) and len(command)>1 and str(command[1]).endswith('.py') and ('tests' in Path(command[1]).parts or 'golden_run.py' in str(command[1])):
-                relative=Path(command[1]).resolve().relative_to(ROOT)
-                command=[command[0],str(Path(__file__)),str(relative),*command[2:]]
-            return original_run(command,*args,**kwargs)
+            return original_run(coverage_command(command),*args,**kwargs)
         subprocess.run=supervised_child
         workers=int(os.environ.get('ARCH_QA_WORKERS','1'))
         if mode=='--full-qa':
@@ -86,6 +93,7 @@ def main():
             runpy.run_path(sys.argv[0],run_name='__main__')
         else:
             policy=json.loads((ROOT/'test-budget.arch.json').read_text(encoding='utf-8'))
+            policy={**policy,**policy.get('profiles',{}).get(os.environ.get('ARCH_TEST_PROFILE'),{})}
             qa=runpy.run_path(str(ROOT/'scripts/qa.py'),run_name='arch_routine')
             qa['run_browser'](['tests/'+path for path in policy['suiteQueue']],workers)
     else:

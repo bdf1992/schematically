@@ -239,10 +239,10 @@ killed=[]
 for mutant in MUTANTS:
     with tempfile.TemporaryDirectory(prefix='sov-mutant-') as tmp:
         dst=Path(tmp)/'repo'
-        # Generated supervision evidence is not a mutation input. Keep every
-        # source, fixture, assertion and mutant while avoiding repeated copies
-        # of earlier coverage payloads (189 MiB in the retained timeout run).
-        shutil.copytree(ROOT,dst,ignore=shutil.ignore_patterns('.arch-test-evidence','__pycache__'))
+        # Generated evidence and checkout-owned CI dependency caches are not
+        # mutation inputs. Keep every source, fixture, assertion and mutant;
+        # omit only those generated directories from each temporary copy.
+        shutil.copytree(ROOT,dst,ignore=shutil.ignore_patterns('.arch-test-evidence','__pycache__','.ci-venv','.ci-browsers','.ci-pip-cache','.ci-cargo'))
         fp=dst/mutant['file']
         text=fp.read_text(encoding='utf-8')
         if mutant['old'] not in text:

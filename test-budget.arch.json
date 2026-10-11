@@ -30,7 +30,9 @@
     "styles/app.css",
     "tests/fixtures/alignment-governance.sov",
     "tests/fixtures/qa-queue.json",
-    "scripts/budget-job.ps1"
+    "scripts/budget-job.ps1",
+    ".github/workflows/ci.yml",
+    "scripts/qa_linux.Dockerfile"
   ],
   "suiteQueue": [
     "virtual_editor_qa.py",
@@ -52,20 +54,42 @@
   ],
   "command": "node scripts/test-arch-supervised.cjs",
   "profiles": {
+    "golden-layout": {
+      "maximumCases": 25,
+      "maximumSeconds": 180,
+      "minimumExecutableLineCoverage": 75,
+      "sourceScope": [
+        "src/00-state.js",
+        "src/30-canvas.js",
+        "src/55-render.js"
+      ],
+      "staticScope": [
+        "index.source.html",
+        "index.html",
+        "tests/golden-rendered-text.json"
+      ],
+      "suiteQueue": [
+        "golden_rendered_text_qa.py"
+      ],
+      "queue": "Diagnose unchanged rendered-text golden against whole camera and rendering sources; missing coverage remains unmet and full-qa is still required."
+    },
     "runner-lifecycle": {
       "maximumCases": 25,
       "maximumSeconds": 180,
       "minimumExecutableLineCoverage": 75,
       "sourceScope": [
-        "scripts/budget-process.cjs"
+        "scripts/budget-process.cjs",
+        "scripts/test-arch-container.cjs",
+        "scripts/arch-receipt.cjs"
       ],
       "staticScope": [
         ".gitignore",
         "scripts/budget-job.ps1",
-        "tests/fixtures/qa-queue.json"
+        "tests/fixtures/qa-queue.json",
+        "tests/arch_browser_coverage.py"
       ],
       "testNamePattern": "bounded QA schedule",
-      "fixtureContract": "Each owned process may spend at most 30000ms reporting READY; live execution then has 2000ms plus at most 1000ms pipe settlement. Two fixtures total at most 66000ms inside the unchanged 180-second profile. Regular runner deadlines include startup and do not use readiness.",
+      "fixtureContract": "Each owned process may spend at most 30000ms reporting READY; live execution then has 2000ms plus at most 1000ms pipe settlement. Three fixtures total at most 99000ms inside the unchanged 180-second profile. Clean-root status must be exactly zero; exited-root and live-root fixtures record both owned PIDs and verify disappearance. Regular runner deadlines include startup and do not use readiness.",
       "skipQueue": true,
       "queue": "Focused launcher cleanup, exact original queue identity and UTF-16 offsets; full application acceptance remains full-qa."
     },
@@ -91,8 +115,11 @@
         "mcp/kore-execution.mjs",
         "mcp/server.mjs",
         "mcp/surface.mjs",
-        "scripts/budget-process.cjs"
-      ]
+        "scripts/budget-process.cjs",
+        "scripts/test-arch-container.cjs",
+        "scripts/arch-receipt.cjs"
+      ],
+      "expectedNodeCases": 9
     },
     "desktop": {
       "maximumCases": 2,

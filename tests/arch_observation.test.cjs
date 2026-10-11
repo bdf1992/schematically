@@ -1,19 +1,77 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),os=require('node:os'),cp=require('node:child_process');
 test('bounded QA schedule retains checks, exact Unicode ranges and process-tree deadlines',async()=>{
-  cp.execFileSync('python',['tests/qa_scheduler_qa.py'],{cwd:path.resolve(__dirname,'..'),stdio:'pipe'});
+  console.log(cp.execFileSync('python',['tests/qa_scheduler_qa.py'],{cwd:path.resolve(__dirname,'..'),stdio:'pipe',encoding:'utf8'}).trim());
   const {spawnBounded}=require('../scripts/budget-process.cjs');
   const readiness={token:'READY ',maximumStartupMs:30000};
-  const result=await spawnBounded(process.execPath,['-e',"const c=require('node:child_process').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'inherit'});console.log('READY '+c.pid);c.unref()"],{stdio:['ignore','pipe','pipe'],env:process.env,timeout:2000,readiness});
+  const gone=async(pid)=>{const started=Date.now();for(;;){try{process.kill(pid,0)}catch(error){assert.equal(error.code,'ESRCH');return Date.now()-started}assert.ok(Date.now()-started<1000,'owned PID '+pid+' must disappear within cleanup settlement');await new Promise(resolve=>setTimeout(resolve,10))}};
+  const readyPids=result=>JSON.parse(result.stdout.match(/^READY (.+)$/m)[1]);
+  const clean=await spawnBounded(process.execPath,['-e',"console.log('READY '+JSON.stringify({root:process.pid}))"],{stdio:['ignore','pipe','pipe'],env:process.env,timeout:2000,readiness});
+  assert.equal(clean.status,0,'a clean short root returns its actual successful status');assert.equal(clean.error,null);const cleanPids=readyPids(clean);assert.ok(cleanPids.root>0);const cleanCleanup=await gone(cleanPids.root);
+  const result=await spawnBounded(process.execPath,['-e',"const c=require('node:child_process').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'inherit'});console.log('READY '+JSON.stringify({root:process.pid,child:c.pid}));c.unref()"],{stdio:['ignore','pipe','pipe'],env:process.env,timeout:2000,readiness});
   // Windows closes its owned Job on normal root exit; POSIX waits for the
   // deadline to close pipes retained by descendants. Both must clean up.
   if(result.error)assert.match(result.error.message,/process-tree deadline/);
   else assert.equal(result.status,0);
-  const child=Number(result.stdout.trim().replace('READY ',''));assert.ok(child>0,'descendant was started');assert.throws(()=>process.kill(child,0),'deadline leaves no child outside supervision');
-  const hanging=await spawnBounded(process.execPath,['-e',"const c=require('node:child_process').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'inherit'});console.log('READY '+c.pid);setInterval(()=>{},1000)"],{stdio:['ignore','pipe','pipe'],env:process.env,timeout:2000,readiness});
+  const orphanPids=readyPids(result);assert.ok(orphanPids.root>0&&orphanPids.child>0,'owned root and descendant were started');const orphanCleanup=Math.max(await gone(orphanPids.root),await gone(orphanPids.child));
+  const hanging=await spawnBounded(process.execPath,['-e',"const c=require('node:child_process').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'inherit'});console.log('READY '+JSON.stringify({root:process.pid,child:c.pid}));setInterval(()=>{},1000)"],{stdio:['ignore','pipe','pipe'],env:process.env,timeout:2000,readiness});
   assert.match(hanging.error?.message||'',/process-tree deadline/);assert.notEqual(hanging.status,0);
-  const descendant=Number(hanging.stdout.trim().replace('READY ',''));assert.ok(descendant>0,'live-root descendant was started');assert.throws(()=>process.kill(descendant,0),'deadline removes live-root descendants');
+  const livePids=readyPids(hanging);assert.ok(livePids.root>0&&livePids.child>0,'live owned root and descendant were started');const liveCleanup=Math.max(await gone(livePids.root),await gone(livePids.child));
   assert.ok(hanging.elapsedMilliseconds-hanging.startupMilliseconds<=3000,'ready work and pipe cleanup stay within two-second deadline plus one-second settlement');
-  console.log(JSON.stringify({lifecycleStartupMilliseconds:[result.startupMilliseconds,hanging.startupMilliseconds],liveDeadlineMilliseconds:2000,cleanupSettlementMilliseconds:1000}));
+  assert.ok(hanging.elapsedMilliseconds-hanging.startupMilliseconds+liveCleanup<=3000,'deadline and disappearance proof share the one-second cleanup allowance');
+  console.log(JSON.stringify({lifecycle:[{kind:'clean',pids:cleanPids,status:clean.status,error:clean.error,startupMilliseconds:clean.startupMilliseconds,cleanupMilliseconds:cleanCleanup},{kind:'exited-root',pids:orphanPids,status:result.status,error:result.error?.message||null,startupMilliseconds:result.startupMilliseconds,cleanupMilliseconds:orphanCleanup},{kind:'live-root',pids:livePids,status:hanging.status,error:hanging.error.message,startupMilliseconds:hanging.startupMilliseconds,cleanupMilliseconds:liveCleanup}],liveDeadlineMilliseconds:2000,cleanupSettlementMilliseconds:1000}));
+  const {superviseContainer}=require('../scripts/test-arch-container.cjs');
+  for(const failed of [null,'create','start','stop','cp','rm']){
+    const seen=[];
+    const evidence=await superviseContainer({name:'owned-fixture',image:'declared-fixture',bundle:'/fixture/cut.bundle',out:'/fixture/evidence',revision:'fixture',profile:'full-qa',maximumMs:180000,invoke:async(args,remaining)=>{seen.push(args[0]);assert.ok(remaining>0&&remaining<=180000);return {status:args[0]===failed?1:0,stdout:'retained output',stderr:''}}});
+    assert.equal(evidence.passed,failed===null);
+    assert.equal(seen.at(-1),'rm','daemon-owned container cleanup is attempted after every failure');
+    assert.ok(seen.indexOf('stop')<seen.indexOf('cp'),'stop work before retaining its evidence');
+    assert.equal(evidence.commands.find(c=>c.args[0]==='create').stdout,'retained output');
+  }
+  let reading=0;
+  const exhausted=await superviseContainer({name:'owned-fixture',image:'declared',bundle:'bundle',out:'out',revision:'fixture',profile:'full-qa',maximumMs:180000,now:()=>reading++?200000:0,invoke:async()=>assert.fail('expired lifecycle must not start a Docker command')});
+  assert.equal(exhausted.passed,false);assert.match(exhausted.error,/budget exhausted/);
+  const {main}=require('../scripts/test-arch-container.cjs'),fixture=fs.mkdtempSync(path.join(os.tmpdir(),'arch-container-admission-'));
+  fs.mkdirSync(path.join(fixture,'scripts'));
+  fs.writeFileSync(path.join(fixture,'test-budget.arch.json'),JSON.stringify({profiles:{'full-qa':{maximumSeconds:180}}}));
+  fs.writeFileSync(path.join(fixture,'scripts/qa_linux.Dockerfile'),'declared image');fs.writeFileSync(path.join(fixture,'requirements-dev.txt'),'declared requirements');
+  const deps={root:fixture,readGit:args=>args[0]==='status'?'':'frozen-head',bundleGit:filename=>fs.writeFileSync(filename,'frozen bundle'),invoke:async()=>({status:0,stdout:'image-identity'})};
+  try{
+    const evidence=await main(deps);assert.equal(evidence.passed,false,'missing copied receipt cannot authorize the cut');process.exitCode=0;assert.equal(evidence.revision,'frozen-head');assert.equal(evidence.imageIdentity,'image-identity');
+    await assert.rejects(main({...deps,argv:['node','entry','--profile','undeclared']}),/Unknown declared/);
+    await assert.rejects(main({...deps,readGit:()=> 'dirty'}),/clean committed/);
+    await assert.rejects(main({...deps,invoke:async()=>({status:1})}),/Prepare the declared pinned Linux image/);
+  }finally{fs.rmSync(fixture,{recursive:true,force:true});}
+  // Constructed receipts exercise admission in memory or temporary controlled
+  // copy fixtures; they never authorize an actual desktop build.
+  const {admitFullQaReceipt,harnessFiles,parseQueueOutput}=require('../scripts/arch-receipt.cjs'),crypto=require('node:crypto'),root=path.resolve(__dirname,'..');
+  const base=JSON.parse(fs.readFileSync(path.join(root,'test-budget.arch.json'))),policy={...base,...base.profiles['full-qa'],profile:'full-qa'};
+  const identity=file=>({file,sha256:crypto.createHash('sha256').update(fs.readFileSync(path.join(root,file))).digest('hex')});
+  const declared=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/qa-queue.json'))),queue=[...declared.STATIC,...declared.BROWSER,...declared.TAIL];
+  const syntaxCases=['src','mcp'].reduce((n,folder)=>n+fs.readdirSync(path.join(root,folder)).filter(file=>file.endsWith(folder==='src'?'.js':'.mjs')).length,0);
+  const candidate={command:['/usr/bin/node','--test','--test-concurrency=1','tests/arch_observation.test.cjs'],environment:{platform:'linux',node:process.version,ARCH_TEST_PROFILE:'full-qa',ARCH_QA_WORKERS:String(policy.maximumWorkers)},formatVersion:1,passed:true,status:0,error:null,staticRegistration:true,policy,nodeCases:9,cases:9+queue.length+syntaxCases,elapsedSeconds:100,coveragePercent:100,files:policy.sourceScope.map(file=>{const total=fs.readFileSync(path.join(root,file),'utf8').split('\n').filter(line=>line.trim()&&!line.trim().startsWith('//')).length;return {...identity(file),total,covered:total,imported:true}}),staticFiles:policy.staticScope.map(identity),queueResults:[{command:['python','tests/arch_browser_coverage.py','--full-qa'],candidate:'--full-qa',status:0,error:null,syntaxCases,suiteSummary:queue.length,actualCases:queue.length+syntaxCases,timings:queue.map(candidate=>({candidate,status:'PASS',seconds:1}))}],dependencyIdentity:{builtins:process.version,localFiles:harnessFiles(root).map(identity)}};
+  assert.equal(admitFullQaReceipt(candidate,root,base),true,'complete matching receipt is admissible');
+  const mutations=[r=>r.environment.platform='win32',r=>delete r.environment,r=>r.environment.ARCH_TEST_PROFILE='routine',r=>r.environment.ARCH_QA_WORKERS='9',r=>r.command.push('--test-name-pattern=one'),r=>r.queueResults[0].command.push('--quick'),r=>r.dependencyIdentity.builtins='different',r=>delete r.formatVersion,r=>r.passed=false,r=>r.status=1,r=>r.error='deadline',r=>r.staticRegistration=false,r=>r.policy.maximumSeconds++,r=>r.policy.sourceScope.pop(),r=>r.policy.staticScope.pop(),r=>r.files=[],r=>r.files.pop(),r=>r.files.push(r.files[0]),r=>r.files[0].file='extra.js',r=>r.files[0].sha256='incorrect',r=>r.staticFiles=[],r=>r.staticFiles.push(r.staticFiles[0]),r=>r.staticFiles[0].sha256='incorrect',r=>r.files[0].total++,r=>r.files[0].covered=-1,r=>r.files[0].covered++,r=>r.files[0].imported=false,r=>r.coveragePercent=NaN,r=>r.coveragePercent=74,r=>r.elapsedSeconds=1201,r=>r.elapsedSeconds=-1,r=>r.nodeCases=8,r=>r.queueResults=[],r=>r.queueResults[0].candidate='--routine-qa',r=>r.queueResults[0].status=1,r=>r.queueResults[0].syntaxCases--,r=>r.queueResults[0].suiteSummary--,r=>r.queueResults[0].actualCases--,r=>r.queueResults[0].timings.pop(),r=>r.queueResults[0].timings[0].status='FAIL',r=>r.queueResults[0].timings[0].seconds=-1,r=>r.queueResults[0].timings[0].candidate=r.queueResults[0].timings[1].candidate,r=>r.cases--,r=>r.dependencyIdentity.localFiles=[],r=>r.dependencyIdentity.localFiles.pop(),r=>r.dependencyIdentity.localFiles.push(r.dependencyIdentity.localFiles[0]),r=>r.dependencyIdentity.localFiles[0].sha256='incorrect'];
+  for(const [number,change] of mutations.entries()){const altered=structuredClone(candidate);change(altered);assert.equal(admitFullQaReceipt(altered,root,base),false,'invalid receipt variant '+number+' is refused');}
+  assert.equal(admitFullQaReceipt(null,root,base),false,'unreadable evidence is refused');
+  const windowsNames=structuredClone(candidate);windowsNames.dependencyIdentity.localFiles.forEach(file=>file.file=file.file.replace(/\//g,'\\'));assert.equal(admitFullQaReceipt(windowsNames,root,base),true,'cross-platform path separators preserve exact byte identity');
+  const parsed=parseQueueOutput('CONTRAST QA PASS ignored\nCONCERNS QA FAIL ignored\nQA PASS tests/a.py (1.20s)\r\nQA FAIL tests/b.py (2.30s)\nRC QA PASS: 2 suites + 41 JS syntax checks (3.50s test time)\n');assert.equal(parsed.actualCases,43);assert.equal(parsed.timings.length,2);assert.equal(parsed.suiteSummary,2);assert.equal(parsed.timings[1].status,'FAIL');
+  const copiedFixture=fs.mkdtempSync(path.join(os.tmpdir(),'arch-copied-authority-'));
+  try{
+    for(const file of new Set([...policy.sourceScope,...policy.staticScope,...harnessFiles(root)])){const destination=path.join(copiedFixture,file);fs.mkdirSync(path.dirname(destination),{recursive:true});fs.copyFileSync(path.join(root,file),destination);}
+    for(const mode of ['valid','missing','malformed','unmet']){
+      const evidence=await main({root:copiedFixture,argv:['node','entry','--profile','full-qa'],readGit:args=>args[0]==='status'?'':'frozen-head',bundleGit:filename=>fs.writeFileSync(filename,'controlled bundle'),invoke:async args=>{
+        if(args[0]==='cp'&&mode!=='missing'){const folder=path.join(args[2],'.arch-test-evidence','1');fs.mkdirSync(folder,{recursive:true});fs.writeFileSync(path.join(folder,'evidence.json'),mode==='malformed'?'invalid':JSON.stringify({...candidate,passed:mode==='valid'}));}
+        return {status:0,stdout:'controlled-image-identity'};
+      }});
+      process.exitCode=0;
+      assert.equal(evidence.passed,mode==='valid','copied '+mode+' receipt controls outer admission');
+      if(mode==='valid'){assert.equal(evidence.innerReceipt.sha256,crypto.createHash('sha256').update(JSON.stringify(candidate)).digest('hex'));assert.match(evidence.innerReceipt.file,/1\/evidence.json$/);}
+      else assert.equal(evidence.innerReceipt,undefined);
+      assert.equal(evidence.removed,true,'failed evidence admission retains completed container cleanup');
+    }
+  }finally{fs.rmSync(copiedFixture,{recursive:true,force:true});}
+  console.log(JSON.stringify({receiptAdmissionVariants:mutations.length+3,requiredNodeCases:9,requiredSuites:queue.length,requiredSyntaxChecks:syntaxCases,sourceFiles:policy.sourceScope.length,staticFiles:policy.staticScope.length}));
 });
 test('virtual definition editing, validation and package round trips',()=>require('./virtual_instances_core_qa.cjs'));
 test('virtual instances own mutable state in one clock',()=>require('./virtual_instance_state_qa.cjs'));
