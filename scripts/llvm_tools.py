@@ -307,7 +307,7 @@ def normalize_export(export, scope):
     if len({_identity(path) for path in paths}) != len(paths):
         raise ValueError('duplicate scoped Rust source')
     if (not isinstance(export, dict) or export.get('type') != 'llvm.coverage.json.export'
-            or not str(export.get('version', '')).startswith('2.')
+            or export.get('version') not in ('2.0.1', '3.0.1')
             or not isinstance(export.get('data'), list) or not export['data']):
         raise ValueError('unsupported LLVM JSON export')
     wanted = {_identity(path) for path in paths}
