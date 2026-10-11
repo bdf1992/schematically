@@ -1,0 +1,20 @@
+Command: python control/sketchbooks/ep-kernel-drift-map/tools/fraktal_run.py
+Executed during consolidation on 2026-10-10 America/Chicago. Exit code 0.
+
+ok   four requests along five Knodes all come home done
+ok   a request's effect comes before its echo is home, and it is called done only then  [record entries 23 and 25 of 26]
+ok   each Knode steps Before, Start, Now, After, Stop in that order
+ok   the refused request comes home refused and the other done
+ok   the only refusal in the record is at Now, at the grant Knode  [[(('+1', '0'), 'Now')]]
+ok   a refused request never reaches the Knodes past the gate
+ok   a diagonal route and a route joining the two ends are refused before they start
+ok   at some moment three or more Knodes each hold a different request  [most at once: 5]
+ok   six requests take less time than one after another would  [0.62s against 1.50s]
+ok   with two lanes every request comes home, forward lane backed up or not  [8 of 8 home]
+ok   bite: without the gate the forbidden request goes through
+ok   bite: with one shared lane the run jams and requests do not come home  [0 of 8 home]
+0 failures
+
+Limit: local asyncio simulation. These results do not establish production service
+behavior, caller authentication, cross-scale routing, crash durability or live
+browser/server synchronization. Timing is one local run, not a performance SLA.

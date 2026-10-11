@@ -1,0 +1,61 @@
+{
+  "generator": "44a7a59bc938",
+  "moves": {
+    "cut": {
+      "does": "add one binary distinction; cells double; Pascal's row advances",
+      "dsl": "dsl/floor/cuts.book.md -- the | primitive (the floor's generative law)"
+    },
+    "bundle": {
+      "does": "wrap four cuts into one 16-ary slot (the nibble); base changes, cell count does not -- rank over the register = address bits / 4",
+      "dsl": "dsl/frame/frame.book.md -- {} (cut into addressable typed units)"
+    },
+    "sign": {
+      "does": "the value alphabet: lean - crease - lean; a comparison's three outputs; the crease IS the open cut (gray, the enumerated-over slot)",
+      "dsl": "dsl/floor/floor.py MINUS/REST/PLUS -- imported here, not rebuilt"
+    }
+  },
+  "limits": {
+    "values": "what sits IN the cells is a measurement -- watched or nothing; the recipe grows the muffin tin, never the muffins",
+    "coupling_law": "an array becomes a tensor only under a lawful re-basing (dsl/relation/tensor.book.md is that shelf); not granted by growth",
+    "crossing_operator_values": "OPEN -- the 16x16 field measured over real register data is the named next instrument, not this one"
+  },
+  "ladder": [
+    {
+      "rank": 0,
+      "cells": 1,
+      "address_bits": 0,
+      "binary_rank": 0,
+      "note": "the atom 0|1 -- one cell, no questions"
+    },
+    {
+      "rank": 1,
+      "cells": 16,
+      "address_bits": 4,
+      "binary_rank": 4,
+      "note": "the register word -- 16 cells, one per domain; 4 bits name a domain"
+    },
+    {
+      "rank": 2,
+      "cells": 256,
+      "address_bits": 8,
+      "binary_rank": 8,
+      "note": "the crossing operator -- 256 cells; bdo's '256 bits', one per ordered domain pair"
+    },
+    {
+      "rank": 3,
+      "cells": 4096,
+      "address_bits": 12,
+      "binary_rank": 12,
+      "note": "the incidence grain -- 4,096 cells; pair-talk modulated by a third slot"
+    },
+    {
+      "rank": 4,
+      "cells": 65536,
+      "address_bits": 16,
+      "binary_rank": 16,
+      "note": "the crossing cabinet -- 65,536 cells; one per 16-bit word (states become addresses)"
+    }
+  ],
+  "embedded_all_pass": true,
+  "limit": "Embedded historical watch results extracted, not independently reproduced."
+}

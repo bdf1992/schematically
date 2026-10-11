@@ -1,0 +1,7 @@
+# Preserve imported bytes and their source hashes.
+* -text whitespace=cr-at-eol
+reference/** -text -diff
+model/fraktal.py -text
+model/fraktal_run.py -text
+diagrams/** -text
+evidence/** -text

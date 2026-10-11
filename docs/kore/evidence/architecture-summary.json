@@ -1,0 +1,16 @@
+{
+  "command": "python scripts/ws.py arch summary --json",
+  "exit_code": 0,
+  "summary": {
+    "modules": 692,
+    "largest_loop": 46,
+    "loops": 3,
+    "forbidden_imports": 23,
+    "decisions_owed": 228,
+    "review": 946,
+    "errors": 1,
+    "unclassified": 1,
+    "digest": "3362d33760b13b8e7344524b52c340808ae41c691a21e32f28830747b5c78538"
+  },
+  "limit": "Summary only. No passing architecture gate is claimed."
+}

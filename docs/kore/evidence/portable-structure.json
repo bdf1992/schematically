@@ -1,0 +1,89 @@
+{
+  "bites": {
+    "R1": [
+      "R1"
+    ],
+    "R2": [
+      "R2"
+    ],
+    "R3": [
+      "R3"
+    ],
+    "R4": [
+      "R4"
+    ],
+    "R5": [
+      "R5"
+    ],
+    "R7": [
+      "R7"
+    ],
+    "R8": [
+      "R8"
+    ],
+    "R9": [
+      "R9"
+    ]
+  },
+  "knodes": 27,
+  "limits": {
+    "R1": "Form means the eight ports and which Knodes each reaches. Whether the nine behave as one Knode (one move, one gate) is not tested here; tools/fraktal_run.py runs a move.",
+    "R2": "Counts and positions only. That three layers and three sides are the right number is taken as given.",
+    "R3": "Ports are matched by direction and strand. What travels through a port, and whether two Knodes agree on its content, is not modelled.",
+    "R4": "A strand exists if one link says so. Nothing checks that a real line, call or record stands behind the link.",
+    "R5": "It reads links between Knodes only; what a Korner is for is not modelled, so nothing is checked at one.",
+    "R7": "Distance is counted on the three by three. A link between levels, from a Knode to one inside another, cannot be written, so it is not checked.",
+    "R8": "Order only. No move is executed and no refusal exists in the model, so 'only Now may refuse' is not tested.",
+    "R9": "The shell is compared with the Knode's ports by kind; no link joins an outer port to an inner one."
+  },
+  "requirements": {
+    "R1": [],
+    "R2": [],
+    "R3": [],
+    "R4": [],
+    "R5": [],
+    "R7": [],
+    "R8": [],
+    "R9": []
+  },
+  "survivors": {
+    "a Knode filed under another's key": [
+      "R2"
+    ],
+    "a Korner moved to another Korner's position": [
+      "R2"
+    ],
+    "a link from a Knode to itself": [
+      "R4"
+    ],
+    "a link listed twice": [
+      "R4"
+    ],
+    "a link on a strand no port has": [
+      "R4"
+    ],
+    "an extra drive link running west": [
+      "R4"
+    ],
+    "an outer port reaching one Knode three times": [
+      "R1"
+    ],
+    "an outer port reaching the wrong three": [
+      "R1"
+    ],
+    "every Knode cut to four ports": [
+      "R1",
+      "R3"
+    ],
+    "every link deleted": [
+      "R4"
+    ],
+    "every link reversed": [
+      "R4"
+    ],
+    "no Knodes, Kords or Korners": [
+      "R1",
+      "R2"
+    ]
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "date_local": "2026-10-10",
+  "timezone": "America/Chicago",
+  "workstation_head": "2506b684c6bfc6086cfc355f4450260e7531f302",
+  "sources": [
+    {
+      "path": "reference/fraktal.sovpak",
+      "bytes": 454333,
+      "sha256": "47a9ca92e2c977c57c07da52389cd9bc9c74315cdc687c9967136a821c780127"
+    },
+    {
+      "path": "reference/SESSION-HANDOFF-2026-10-11.md",
+      "bytes": 20533,
+      "sha256": "1b2ea165b656a9ef2bfa623946e451e8bbe44960a730879e2eb9a8d5852fdb29"
+    },
+    {
+      "path": "reference/tensor_recipe.html",
+      "bytes": 2259157,
+      "sha256": "f53c4fc44dde7eab4b99aeea626191e63b3f8dcb627e8338dced2e65e6e70608"
+    },
+    {
+      "path": "reference/vocabulary.png",
+      "bytes": 54146,
+      "sha256": "35f47e8559dffc14e969f8f8d2a1b35008ef5ef0618b7a2523f37e42d2c7e697"
+    },
+    {
+      "path": "wskernel/weigh.py",
+      "sha256": "5c0cda5b018a1f969e2acb4ec104ef4dcdc72e965de07db4b282c26b7934ea5b"
+    },
+    {
+      "path": "wskernel/commands/weigh.py",
+      "sha256": "36f8027f6d788db8ef65ce26289e13af06317ef8021da5c97cd8164e272715d5"
+    },
+    {
+      "path": "wskernel/ops/queue_ops.py",
+      "sha256": "b849444a15c228bced7d0bedc9cb9d0c98c6b3d4ce43c87ac529eefec668953a"
+    },
+    {
+      "path": "wskernel/task/records.py",
+      "sha256": "ae23216e2a5f791fa7f5bc1fee9460fd10b284cb69ce8498af115c2f1228b4b3"
+    },
+    {
+      "path": "control/config/architecture.json",
+      "sha256": "41f57384dc25a70b561b16cb4f208ef6c2e2e584dd6c00095f03d33a7ca958dc"
+    },
+    {
+      "path": "control/sketchbooks/ep-kernel-drift-map/tools/fraktal.py",
+      "sha256": "3ad26f67036682408ac37200fe9b6cda5355cf041be120af3d55d96f972caf8f"
+    },
+    {
+      "path": "control/sketchbooks/ep-kernel-drift-map/tools/fraktal_run.py",
+      "sha256": "3190027795f71da950ac78a7a2a34a4da7c5bfb4df67dd1876678fe9c8f87ecd"
+    },
+    {
+      "path": "control/sketchbooks/ep-kernel-drift-map/CHECKLIST.md",
+      "sha256": "b179136d3d3ef2caf358e8af0f0c84bb05393b73d7e13ba5b3b649f7daa44edb"
+    },
+    {
+      "path": "control/sketchbooks/ep-kernel-drift-map/REWRITE-LOG.md",
+      "sha256": "a6159d6427b81b4852277cfbe806042915470e79f430663fd8b344cb409f3d82"
+    }
+  ]
+}
