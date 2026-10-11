@@ -4,3 +4,10 @@ _site/
 tests/journey/
 .venv/
 review/
+.arch-test-evidence/
+
+# Checkout-owned CI dependencies and caches are not schematic inputs.
+.ci-venv/
+.ci-browsers/
+.ci-pip-cache/
+.ci-cargo/

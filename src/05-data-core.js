@@ -116,6 +116,120 @@
     }
     return prefix+(max+1);
   }
+  // Virtual definitions are authored once; their ordinary records are a per-instance projection.
+  // The materialization marker travels with runtime clones, but never with authored serialization.
+  function virtualRecords(records,instance,toLocal=false){
+    const rewrite=value=>{
+      if(typeof value==='string'){
+        if(!toLocal)return value.replaceAll('$node',instance.id);
+        const prefix=value.startsWith('canvas:component:')?'canvas:component:':value.startsWith('canvas:wire:')?'canvas:wire:':'';
+        const tail=prefix?value.slice(prefix.length):value;
+        return tail===instance.id||tail.startsWith(instance.id+'-')?prefix+'$node'+tail.slice(instance.id.length):value;
+      }
+      if(Array.isArray(value))return value.map(rewrite);
+      if(isObject(value))return Object.fromEntries(Object.entries(value).map(([key,v])=>[key,rewrite(v)]));
+      return value;
+    };
+    const dx=(Number(instance.x)||0)*(toLocal?-1:1),dy=(Number(instance.y)||0)*(toLocal?-1:1);
+    return records.map(record=>{
+      const out=rewrite(record);
+      const move=value=>{if(!isObject(value))return;if(typeof value.x==='number')value.x+=dx;if(typeof value.y==='number')value.y+=dy};
+      move(out);if(out.placement?.kind==='surface')move(out.placement);
+      for(const key of ['aAttachment','bAttachment'])if(out[key]?.kind==='free')move(out[key]);
+      return out;
+    });
+  }
+  function virtualPlan(doc){
+    const v=doc.virtual;
+    if(v===undefined)return [];
+    if(!isObject(v)||!isObject(v.definitions)||!Array.isArray(v.instances))throw new Error('VIRTUAL_INVALID: virtual needs definitions and instances');
+    const instances=new Set(),generated={components:new Set(),wires:new Set()};
+    const unique=(records,label)=>{
+      if(!Array.isArray(records))throw new Error(`VIRTUAL_INVALID: ${label} must be an array`);
+      const ids=new Set();for(const r of records){if(!isObject(r)||typeof r.id!=='string'||!r.id)throw new Error(`VIRTUAL_INVALID: ${label} record needs id`);if(ids.has(r.id))throw new Error(`VIRTUAL_DUPLICATE: ${label} ${r.id}`);ids.add(r.id)}
+    };
+    for(const kind of ['components','wires'])unique(doc[kind]||[],kind);
+    return v.instances.map(instance=>{
+      if(!isObject(instance)||typeof instance.id!=='string'||!instance.id||instances.has(instance.id))throw new Error('VIRTUAL_DUPLICATE: each instance needs a unique id');
+      instances.add(instance.id);
+      const definition=v.definitions[instance.definitionId];
+      if(!isObject(definition))throw new Error(`VIRTUAL_DEFINITION_UNKNOWN: ${instance.definitionId}`);
+      if(instance.x!==undefined&&!Number.isFinite(instance.x)||instance.y!==undefined&&!Number.isFinite(instance.y))throw new Error(`VIRTUAL_INVALID: ${instance.id} position must be finite`);
+      const plan={instance,definition};
+      for(const kind of ['components','wires']){
+        unique(definition[kind],`definition ${instance.definitionId}.${kind}`);
+        const overrides=instance.overrides?.[kind]||[],extra=instance[kind]||[];
+        unique(overrides,`${instance.id}.overrides.${kind}`);unique(extra,`${instance.id}.${kind}`);
+        const removed=instance[kind==='components'?'removeComponents':'removeWires']||[];
+        if(!Array.isArray(removed)||removed.some(id=>typeof id!=='string'))throw new Error(`VIRTUAL_INVALID: ${instance.id} removals must be ids`);
+        const records=new Map(definition[kind].map(r=>[r.id,clone(r)]));
+        for(const r of extra){if(records.has(r.id))throw new Error(`VIRTUAL_DUPLICATE: ${instance.id}.${r.id}`);records.set(r.id,clone(r))}
+        for(const r of overrides)records.set(r.id,clone(r));
+        for(const id of removed)records.delete(id);
+        plan[kind]=virtualRecords([...records.values()],instance);
+        for(const r of plan[kind]){if(generated[kind].has(r.id))throw new Error(`VIRTUAL_DUPLICATE: generated ${kind} ${r.id}`);generated[kind].add(r.id)}
+      }
+      return plan;
+    });
+  }
+  function instanceMembers(doc,id){
+    const instance=doc.virtual?.instances?.find(i=>i.id===id);
+    if(!instance)return {components:[],wires:[]};
+    const plan=virtualPlan(doc).find(p=>p.instance.id===id),ids=new Set(plan.components.map(c=>c.id));
+    ids.add(id);
+    let grew=true;while(grew){grew=false;for(const c of doc.components||[])if(!ids.has(c.id)&&ids.has(c.parentId)){ids.add(c.id);grew=true}}
+    const wireIds=new Set(plan.wires.map(w=>w.id));
+    return {components:(doc.components||[]).filter(c=>ids.has(c.id)),wires:(doc.wires||[]).filter(w=>wireIds.has(w.id)||ids.has(w.a)&&ids.has(w.b))};
+  }
+  function materializeVirtual(doc){
+    const plans=virtualPlan(doc);if(!plans.length)return doc;
+    const v=doc.virtual,done=new Set(v._materializedInstances||[]),origins=v._origins||{};
+    // Authored records cannot claim an instance's generated identity. Check every new
+    // instance before appending any records, so a rejected expansion stays atomic.
+    for(const p of plans)if(!done.has(p.instance.id))for(const kind of ['components','wires']){
+      const present=new Set(doc[kind].map(r=>r.id));
+      for(const r of p[kind])if(present.has(r.id))throw new Error(`VIRTUAL_DUPLICATE: authored ${kind} id collides with generated id ${r.id}`);
+    }
+    for(const p of plans){
+      const i=p.instance,origin=origins[i.id];
+      if(done.has(i.id)){
+        if(origin&&((i.x||0)!==origin.x||(i.y||0)!==origin.y)){
+          const members=instanceMembers(doc,i.id),delta={id:'$node',x:(i.x||0)-origin.x,y:(i.y||0)-origin.y};
+          for(const kind of ['components','wires']){
+            const moved=virtualRecords(members[kind],delta);
+            members[kind].forEach((r,n)=>Object.assign(r,moved[n]));
+          }
+        }
+      }else{
+        for(const kind of ['components','wires']){const present=new Set(doc[kind].map(r=>r.id));for(const r of p[kind])if(!present.has(r.id)){doc[kind].push(r);present.add(r.id)}}
+        done.add(i.id);
+      }
+      origins[i.id]={x:i.x||0,y:i.y||0};
+    }
+    v._materializedInstances=[...done];v._origins=origins;
+    return doc;
+  }
+  function compactVirtual(doc){
+    const plans=virtualPlan(doc);if(!plans.length){if(doc.virtual){delete doc.virtual._materializedInstances;delete doc.virtual._origins}return}
+    const all={components:new Set(),wires:new Set()};
+    for(const p of plans){
+      const i=p.instance,members=instanceMembers(doc,i.id),shell=members.components.find(c=>c.id===i.id),templateShell=p.definition.components.find(c=>c.id==='$node');
+      if(shell&&templateShell){i.x=shell.x-(templateShell.x||0);i.y=shell.y-(templateShell.y||0)}
+      const baseline=normalizeDocument({components:virtualRecords(p.definition.components,i),wires:virtualRecords(p.definition.wires,i),references:[]});
+      i.overrides={components:[],wires:[]};
+      for(const kind of ['components','wires']){
+        const compact=kind==='components'?compactComponent:compactWire;
+        const bases=virtualRecords(baseline[kind].map(compact),i,true),baseById=new Map(bases.map(r=>[r.id,r]));
+        const records=virtualRecords(members[kind].map(compact),i,true),present=new Set(records.map(r=>r.id));
+        for(const r of records)if(!baseById.has(r.id)||Canonical.canonicalize(r)!==Canonical.canonicalize(baseById.get(r.id)))i.overrides[kind].push(r);
+        i[kind==='components'?'removeComponents':'removeWires']=bases.filter(r=>!present.has(r.id)).map(r=>r.id);
+        for(const r of members[kind])all[kind].add(r.id);
+        delete i[kind];
+      }
+    }
+    for(const kind of ['components','wires'])doc[kind]=doc[kind].filter(r=>!all[kind].has(r.id));
+    delete doc.virtual._materializedInstances;delete doc.virtual._origins;
+  }
   function makeDocument(input={}){
     const doc={
       schema:DOCUMENT_SCHEMA,
@@ -128,6 +242,7 @@
       references:Array.isArray(input.references)?clone(input.references):[],
       layout:isObject(input.layout)?clone(input.layout):{}
     };
+    if(input.virtual!==undefined)doc.virtual=clone(input.virtual);
     // Presentation the document carries (NOTATION-MODEL.md): which notation it is drawn in, its
     // narration track and its legend choices. Absent means the default, and is not written.
     if(typeof input.notation==='string'&&input.notation.trim())doc.notation=input.notation.trim();
@@ -149,6 +264,7 @@
     if(!Array.isArray(doc.wires))doc.wires=Array.isArray(doc.connections)?doc.connections:[];
     if(!Array.isArray(doc.references))doc.references=[];
     if(!isObject(doc.layout))doc.layout={};
+    materializeVirtual(doc);
     // Resolving the notation registers the glyphs whose terminals are points, before any
     // component's points are read.
     {const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(N)N.resolve(doc)}
@@ -186,7 +302,8 @@
     return doc;
   }
   function makePackage(input={}){
-    const document=makeDocument(clone(input.document||input.workspace?.document||{}));
+    let document=makeDocument(clone(input.document||input.workspace?.document||{}));
+    if(document.virtual)document=compactDocument(document);
     const view=isObject(input.workspace?.view)?clone(input.workspace.view):isObject(input.view)?clone(input.view):{};
     const manifest=isObject(input.manifest)?clone(input.manifest):{};
     const timestamp=nowIso();
@@ -1110,6 +1227,7 @@
   }
   function compactDocument(input){
     const doc=clone(input);
+    if(doc.virtual){materializeVirtual(doc);compactVirtual(doc)}
     delete doc.canvas;
     doc.components=(doc.components||[]).map(compactComponent);
     doc.wires=(doc.wires||[]).map(compactWire);
@@ -1609,12 +1727,30 @@
     wires.splice(0,wires.length,...incoming.wires);
     references.splice(0,references.length,...incoming.references);
     target.schema=DOCUMENT_SCHEMA;target.id=incoming.id;target.revision=incoming.revision;target.meta=incoming.meta;target.canvas=incoming.canvas;target.layout=incoming.layout;
-    for(const k of ['notation','narration','legend']){if(incoming[k]===undefined)delete target[k];else target[k]=incoming[k]}
+    for(const k of ['notation','narration','legend','virtual']){if(incoming[k]===undefined)delete target[k];else target[k]=incoming[k]}
     return target;
   }
   function validateDocument(input){
     const errors=[];
     if(!isObject(input))return {ok:false,errors:['document must be an object']};
+    try{
+      virtualPlan(input);
+      if(input.virtual){
+        input=materializeVirtual(clone(input));
+        // Stored instance records omit derived port and canvas state. Reconstruct it
+        // on a separate copy, while keeping authored values for semantic validation.
+        const realized=normalizeDocument(clone(input));
+        for(let n=0;n<input.components.length;n++){
+          const c=input.components[n],r=realized.components[n];
+          if(!c.canvas)c.canvas=r.canvas;
+          if(!c.boundary)c.boundary=r.boundary;
+          if(!c.parts)c.parts=r.parts;
+          if(!c.config)c.config={};
+          if(!c.config.attachmentPoints)c.config.attachmentPoints=r.config?.attachmentPoints;
+          if(!c.config.ports)c.config.ports=r.config?.ports;
+        }
+      }
+    }catch(error){return {ok:false,errors:[String(error.message||error)]}}
     if(input.schema!==DOCUMENT_SCHEMA)errors.push(`schema must equal ${DOCUMENT_SCHEMA}`);
     if(!Array.isArray(input.components))errors.push('components must be an array');
     if(!Array.isArray(input.wires))errors.push('wires must be an array');
@@ -1696,5 +1832,5 @@
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,notationConcerns,answerProblems,concernReport,answerConcerns,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {instanceMembers,materializeVirtual,admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,notationConcerns,answerProblems,concernReport,answerConcerns,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });

@@ -12,44 +12,129 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: powershell
+
+env:
+  PYTHONUTF8: "1"
+  PIP_CACHE_DIR: ${{ github.workspace }}/.ci-pip-cache
+  CARGO_HOME: ${{ github.workspace }}/.ci-cargo
+  PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ci-browsers
+
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ws-arch-cut, Windows]
     # scripts/qa.py took 14 to 18 minutes on 2026-10-04 and grows with every suite added.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install browser QA runtime
+      - name: Restore exact committed source bytes
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
-          python -m playwright install --with-deps chromium
+          git config --local core.autocrlf false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force .arch-test-evidence | Out-Null
+          $restoreArchive = Join-Path '.arch-test-evidence' ('ci-source-' + [guid]::NewGuid().ToString('N') + '.tar')
+          git archive --format=tar --output=$restoreArchive HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          tar -xf $restoreArchive --directory .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git checkout-index --all --force --index
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git update-index --refresh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prepare checkout-local Python and owned launcher
+        run: |
+          python -m venv .ci-venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          (Join-Path $env:GITHUB_WORKSPACE '.ci-venv/Scripts') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $launcher = Get-Command pwsh -ErrorAction SilentlyContinue
+          if ($launcher) { $launcherPath = $launcher.Source } else { $launcherPath = Join-Path $env:USERPROFILE '.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell/pwsh.exe' }
+          if (!(Test-Path -LiteralPath $launcherPath)) { throw 'PowerShell 7 is required for owned native processes' }
+          & $launcherPath -NoProfile -Command 'if ($PSVersionTable.PSVersion.Major -lt 7) { exit 1 }'
+          if ($LASTEXITCODE -ne 0) { throw 'PowerShell 7 admission failed' }
+          (Split-Path -Parent $launcherPath) | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          node --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prepare the pinned Linux QA image
+        run: |
+          $image = python -c "import runpy; from pathlib import Path; m=runpy.run_path('scripts/qa_linux.py'); print(m['IMAGE']+':'+m['image_tag'](Path.cwd()))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $pin = python -c "import runpy; from pathlib import Path; m=runpy.run_path('scripts/qa_linux.py'); print(m['playwright_pin'](Path.cwd()))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          docker image inspect $image | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            $contextPath = Join-Path $env:GITHUB_WORKSPACE '.arch-test-evidence/image-context'
+            New-Item -ItemType Directory -Force $contextPath | Out-Null
+            Copy-Item -LiteralPath scripts/qa_linux.Dockerfile -Destination (Join-Path $contextPath 'Dockerfile')
+            Copy-Item -LiteralPath requirements-dev.txt -Destination $contextPath
+            $env:ARCH_QA_IMAGE = $image
+            $env:ARCH_QA_PIN = $pin
+            $env:ARCH_QA_CONTEXT = $contextPath
+            node -e "const {spawnBounded}=require('./scripts/budget-process.cjs'); spawnBounded('docker',['build','--build-arg','PLAYWRIGHT_VERSION='+process.env.ARCH_QA_PIN,'-t',process.env.ARCH_QA_IMAGE,process.env.ARCH_QA_CONTEXT],{cwd:process.cwd(),env:process.env,timeout:900000}).then(r=>{process.stdout.write(r.stdout);process.stderr.write(r.stderr);process.exitCode=r.status===0?0:1})"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - name: Run authoritative RC QA
-        run: python scripts/qa.py
+        run: node scripts/test-arch-container.cjs --profile full-qa
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-budget-evidence
+          path: |
+            .arch-test-evidence/**/evidence.json
+            .arch-test-evidence/**/container-evidence.json
+            .arch-test-evidence/**/*.stdout.txt
+            .arch-test-evidence/**/*.stderr.txt
+          include-hidden-files: true
 
   # Builds the Tauri shell and launches it on a document: it passes only when the page inside the
   # built binary reports the document's own component and wire counts (tests/desktop_launch_qa.py).
   desktop:
     needs: verify
-    runs-on: windows-latest
+    runs-on: [self-hosted, ws-arch-cut, Windows]
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Restore exact committed source bytes
+        run: |
+          git config --local core.autocrlf false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force .arch-test-evidence | Out-Null
+          $restoreArchive = Join-Path '.arch-test-evidence' ('ci-source-' + [guid]::NewGuid().ToString('N') + '.tar')
+          git archive --format=tar --output=$restoreArchive HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          tar -xf $restoreArchive --directory .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git checkout-index --all --force --index
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git update-index --refresh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/download-artifact@v4
         with:
-          python-version: '3.12'
+          name: native-budget-evidence
+          path: verify-evidence
+      - name: Prepare checkout-local Python and owned launcher
+        run: |
+          python -m venv .ci-venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          (Join-Path $env:GITHUB_WORKSPACE '.ci-venv/Scripts') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $launcher = Get-Command pwsh -ErrorAction SilentlyContinue
+          if ($launcher) { $launcherPath = $launcher.Source } else { $launcherPath = Join-Path $env:USERPROFILE '.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell/pwsh.exe' }
+          if (!(Test-Path -LiteralPath $launcherPath)) { throw 'PowerShell 7 is required for owned native processes' }
+          & $launcherPath -NoProfile -Command 'if ($PSVersionTable.PSVersion.Major -lt 7) { exit 1 }'
+          if ($LASTEXITCODE -ne 0) { throw 'PowerShell 7 admission failed' }
+          (Split-Path -Parent $launcherPath) | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          node --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build the page the shell embeds
         run: python build.py
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Check installed Rust toolchain
+        run: |
+          rustc --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build the desktop shell
         run: cargo build --release --manifest-path desktop/src-tauri/Cargo.toml
       - name: Launch the shell on a document
-        run: python tests/desktop_launch_qa.py --binary desktop/src-tauri/target/release/sov-schematic-desktop.exe
+        run: node scripts/test-arch-supervised.cjs --profile desktop --binary desktop/src-tauri/target/release/sov-schematic-desktop.exe --coverage-evidence verify-evidence

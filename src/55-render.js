@@ -633,7 +633,7 @@ function renderGroups(markers=markersById()){
   layer.appendChild(regionInsetDefs(T));
   const borders={group:regionDash('group'),intake:regionDash('intake')};
   for(const n of nodes){
-    if(!isGroupComponent(n)||isEffectivelyHidden(n))continue;
+    if(!isGroupComponent(n)||isEffectivelyHidden(n)||!virtualNodeVisible(n))continue;
     const cfg=n.config||{},surface=n.canvasId||GLOBAL_CANVAS_ID,editor=entityEditorState(n);
     const g=document.createElementNS('http://www.w3.org/2000/svg','g');
     g.setAttribute('class','node group'+(selectedComponentIds.has(n.id)?' selected':''));g.dataset.id=n.id;g.dataset.canvasId=surface;g.style.opacity=String(editor.opacity);
@@ -772,6 +772,7 @@ function appendComponentWaitsOn(g,n){
   t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk(componentFillGround(n))};stroke:none;pointer-events:none`);t.textContent='Waits on '+list;g.appendChild(t);
 }
 function render(){
+  refreshVirtualProjection();
   applyNotationTokens();
   componentLabelFitZoom=workspace.style.getPropertyValue('--zoom'); // the cards drawn below are fitted at this zoom
   if(typeof buildSymbolPalette==='function')buildSymbolPalette();
@@ -783,7 +784,7 @@ function render(){
   const unplacedIds=new Set(typeof layoutUnplacedIds==='function'?layoutUnplacedIds():[]);
   let undrawnCards=0;
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
-    if(isEffectivelyHidden(n)||isGroupComponent(n))return; // groups are drawn by renderGroups, behind
+    if(isEffectivelyHidden(n)||!virtualNodeVisible(n)||isGroupComponent(n))return; // groups are drawn by renderGroups, behind
     // A card whose drawn position is not finite is not drawn, and is counted. A card hosted on a wire or
     // a component takes its place from its host, so its stored x and y are not the rule.
     if(!(Number.isFinite(n.x)&&Number.isFinite(n.y))&&!(componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n))){undrawnCards++;return}
@@ -795,6 +796,12 @@ function render(){
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
     renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);appendComponentBadges(g,n);
+    if(diagram.virtual?.instances?.some(i=>i.id===n.id)&&virtualView.open!==n.id){
+      const button=document.createElementNS('http://www.w3.org/2000/svg','g');button.setAttribute('role','button');button.setAttribute('aria-label',`Open ${n.id} 3×3`);button.setAttribute('class','virtual-open');button.style.cursor='pointer';
+      const hit=document.createElementNS('http://www.w3.org/2000/svg','rect');hit.setAttribute('x','-180');hit.setAttribute('y','-24');hit.setAttribute('width','360');hit.setAttribute('height','40');hit.setAttribute('fill','transparent');hit.style.pointerEvents='all';button.appendChild(hit);
+      const text=document.createElementNS('http://www.w3.org/2000/svg','text');text.setAttribute('text-anchor','middle');text.style.pointerEvents='all';text.textContent='Open 3×3 · separate node state';button.appendChild(text);
+      button.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault()});button.addEventListener('click',e=>{e.stopPropagation();openVirtualNode(n.id)});button.addEventListener('dblclick',e=>e.stopPropagation());g.appendChild(button);
+    }
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
@@ -1500,7 +1507,7 @@ function renderWiresOnce(signalState,markers,reuse){
   // holds a host wire's segments before those wires are routed and no host wire's route is scored
   // against them. The repeat in renderWires remains because a card's pose comes from the drawn
   // path, which hops and track nudging still change.
-  routeEvery(()=>wireRouteOrder().forEach(i=>{
+  withRouteLeadObstacles(()=>routeEvery(()=>wireRouteOrder().forEach(i=>{
     const w=wires[i];
     if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
@@ -1513,7 +1520,7 @@ function renderWiresOnce(signalState,markers,reuse){
     if(!points.length||!points.every(finitePoint)){undrawnWires.add(i);return}
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
     if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
-  }));
+  })));
   // Back in stored order: the hop pairs, the track nudging and the drawn points read `routes` by wire index.
   const routedInStoredOrder=[...routes].sort((p,q)=>p[0]-q[0]);
   routes.clear();for(const [i,r] of routedInStoredOrder)routes.set(i,r);

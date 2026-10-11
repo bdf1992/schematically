@@ -94,6 +94,7 @@
     if(restored)run=clone(o.restore.run);
     else{const r=start();if(!r.ok)return r;run=r.run}
     const TICK=run.tickMs;
+    const instanceScopes=new Map();
     const tickAt=ms=>ceilDiv(ms,TICK);
 
     // One input: before the first tick it joins the start inputs (the run is started again); after
@@ -366,6 +367,15 @@
         if(!r.ok)return r;
         internal.add(`m-${r.seq}`);cache=null;
         return {ok:true,at:tickAt(t)*TICK};
+      },
+      instance(id){
+        if(!doc.virtual?.instances?.some(i=>i.id===id))return refusal('UNKNOWN_INSTANCE',`No virtual node ${id}`);
+        if(!instanceScopes.has(id)){const own=Data.instanceMembers(run.doc,id);instanceScopes.set(id,{components:new Set(own.components.map(c=>c.id)),wires:new Set(own.wires.map(w=>w.id))})}
+        const scope=instanceScopes.get(id),members=scope.components;
+        const owns=key=>{if(members.has(key))return true;try{return members.has(JSON.parse(key)[0])}catch(_){return false}};
+        const pick=map=>Object.fromEntries(Object.entries(map||{}).filter(([key])=>owns(key)).map(([key,value])=>[key,clone(value)]));
+        const records=run.records.filter(r=>members.has(r.subject?.entity)||scope.wires.has(r.subject?.entity)||members.has(r.entity));
+        return {ok:true,id,time,members:[...members],state:{signal:pick(run.signal),device:pick(run.deviceState),queues:pick(run.queues)},records:clone(records),parked:this.parked().filter(p=>members.has(p.node)),refusals:this.refusals().filter(r=>members.has(r.node)||members.has(r.entity))};
       },
       levels(){const lv=views().level;return Object.fromEntries(run.doc.components.map(c=>[c.id,{value:lv[c.id]??0,kind:kindOf(c.id),mode:modeOf(c.id)}]))},
       edges({node=null,since=null}={}){return {ok:true,edges:views().edges.filter(e=>(!node||e.node===node)&&(since==null||e.at>=since)).map(clone)}},
