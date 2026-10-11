@@ -15,6 +15,52 @@ const SMOKE_REPORT_FLAG: &str = "--smoke-report";
 const SMOKE_SILENCE_LIMIT: Duration = Duration::from_secs(30);
 const SMOKE_SILENT_EXIT_CODE: i32 = 2;
 
+struct ObservedAssets {
+    inner: std::sync::Arc<std::sync::OnceLock<Box<dyn tauri::Assets<tauri::Wry>>>>,
+    calls: std::sync::atomic::AtomicUsize,
+}
+
+impl ObservedAssets {
+    fn provider(&self) -> &dyn tauri::Assets<tauri::Wry> {
+        self.inner.get().expect("Asset provider initialized before build").as_ref()
+    }
+}
+
+impl tauri::Assets<tauri::Wry> for ObservedAssets {
+    fn setup(&self, app: &tauri::App<tauri::Wry>) {
+        self.provider().setup(app);
+    }
+
+    fn get(&self, key: &tauri::utils::assets::AssetKey) -> Option<std::borrow::Cow<'_, [u8]>> {
+        let started = std::time::Instant::now();
+        let content = self.provider().get(key);
+        let elapsed = started.elapsed();
+        let label = match key.as_ref() {
+            "" | "/" => Some("root"),
+            "index.html" | "/index.html" => Some("index"),
+            _ => None,
+        };
+        if let Some(label) = label {
+            let call = self.calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if call < 8 {
+                eprintln!("desktop asset: label={label} call={} elapsed-ms={} decoded-bytes={} present={}",
+                    call + 1, elapsed.as_millis(), content.as_ref().map_or(0, |bytes| bytes.len()), content.is_some());
+            }
+        }
+        content
+    }
+
+    fn iter(&self) -> Box<tauri::utils::assets::AssetsIter<'_>> {
+        self.provider().iter()
+    }
+
+    fn csp_hashes(&self, html_path: &tauri::utils::assets::AssetKey)
+        -> Box<dyn Iterator<Item = tauri::utils::assets::CspHash<'_>> + '_>
+    {
+        self.provider().csp_hashes(html_path)
+    }
+}
+
 /// Where a smoke run writes the page's load report: the value after `--smoke-report`.
 struct SmokeReport(PathBuf);
 
@@ -158,8 +204,15 @@ fn main() -> std::process::ExitCode {
     };
     let requested_code = std::rc::Rc::new(std::cell::Cell::new(None));
     let captured_code = requested_code.clone();
+    let mut context = tauri::generate_context!();
+    let assets = std::sync::Arc::new(std::sync::OnceLock::new());
+    let previous = context.set_assets(Box::new(ObservedAssets {
+        inner: assets.clone(),
+        calls: std::sync::atomic::AtomicUsize::new(0),
+    }));
+    assert!(assets.set(previous).is_ok(), "Asset provider registered once");
     let runtime_code = builder
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building SOV Schematic desktop shell")
         .run_return(move |app, event| {
             // Wry emits the requested code but currently exits its loop with zero.

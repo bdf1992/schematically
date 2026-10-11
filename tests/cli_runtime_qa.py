@@ -21,7 +21,7 @@ import uuid
 CASE_IDS = tuple('cli/' + name for name in (
     'provider-list', 'missing-grant', 'expired-grant', 'stale-document',
     'stale-code', 'changed-executable', 'real-node-output', 'request-replay',
-    'changed-replay-refused', 'consumed-grant', 'timeout-descendants',
+    'changed-replay-refused', 'consumed-grant', 'timeout-before-effects', 'timeout-descendants',
     'cancel-descendants', 'output-overflow', 'durable-results-reopen',
     'no-automatic-document-mutation', 'app-close-descendants',
     'corrupt-output-recovery-refused', 'terminal-recording-failure-held',
@@ -69,10 +69,12 @@ def execute(coverage_dir):
             self.grants = []
             self.attempts = []
             self.markers = []
+            self.preflight_marker = self.work / 'preflight-effect.json'
             self.document = json.loads(self.fixture.read_text(encoding='utf-8'))
             self.authored = self.document.get('document', self.document)
             self.document_id = self.authored['id']
             self.sources = {'success': 'let text="";for await(const part of process.stdin)text+=part;const value=JSON.parse(text);process.stdout.write(JSON.stringify({answer:value.value+1}));',
+                            'preflight': 'import fs from "node:fs";fs.writeFileSync(' + json.dumps(str(self.preflight_marker)) + ',"effect-ran");process.stdout.write("effect-ran");',
                             'overflow': 'process.stdout.write("x".repeat(16384));',
                             'record-failure': 'import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";const receipt=path.join(path.dirname(fileURLToPath(import.meta.url)),"receipt.json");fs.unlinkSync(receipt);fs.mkdirSync(receipt);process.stdout.write("record-failure");'}
             for kind in ('timeout', 'cancel', 'shutdown'):
@@ -296,8 +298,26 @@ def execute(coverage_dir):
             consumed = self.runtime_home / 'consumed' / sha(args['grantId'].encode())
             check(consumed.is_file(), 'Successful granted execution did not retain grant consumption')
             self.passed(self.current)
+            self.case('timeout-before-effects')
+            self.provider['limits']['timeoutMs'] = 1
+            self.registry()
+            preflight = self.request_args(descriptor, 'preflight-expiry', kind='preflight')
+            self.grant(preflight)
+            self.start(descriptor, preflight)
+            receipt = self.terminal(descriptor, 'preflight-expiry', 'timed-out')
+            check(receipt.get('pid') is None
+                  and receipt.get('assignedBeforeResume') is not True,
+                  'Preflight expiry recorded a process-launch identity')
+            check(receipt['stdout'] == '' and receipt['stderr'] == ''
+                  and not self.preflight_marker.exists(),
+                  'Preflight expiry admitted authored execution effects')
+            self.observations.append({'operation':'preflight-expiry', 'pid':receipt.get('pid'),
+                'pidFieldPresent':'pid' in receipt,
+                'markerAbsent':True, 'timeoutMs':1,
+                'timingDeterminismGuaranteed':False})
+            self.passed(self.current)
             self.case('timeout-descendants')
-            self.provider['limits']['timeoutMs'] = 600
+            self.provider['limits']['timeoutMs'] = 3000
             self.registry()
             timed = self.request_args(descriptor, 'timeout', kind='timeout')
             self.grant(timed)
