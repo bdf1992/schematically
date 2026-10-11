@@ -25,3 +25,7 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 [[bin]]
 name = "sov-schematic-desktop"
 path = "src/main.rs"
+
+# Executable identity checks remain inside the whole job deadline in dev builds.
+[profile.dev.package.sha2]
+opt-level = 3

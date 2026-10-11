@@ -1134,6 +1134,25 @@ mod windows {
         entries.sort_by_key(|value| value.to_ascii_uppercase());
         let environment: Vec<u16> = (entries.join("\0") + "\0\0").encode_utf16().collect();
         let mut info = PROCESS_INFORMATION::default();
+        // Preflight is part of the provider deadline. Never create a process after
+        // that allowance, even though the later suspended-resume gate also checks it.
+        if Instant::now() >= deadline
+            || attempt.cancel.load(Ordering::SeqCst)
+            || stopping.load(Ordering::SeqCst)
+        {
+            return Ok(Execution {
+                outcome: if Instant::now() >= deadline {
+                    "timed-out"
+                } else {
+                    "cancelled"
+                },
+                exit_code: None,
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+                stopped: true,
+                error: None,
+            });
+        }
         checked(
             CreateProcessW(
                 executable_name.as_ptr(),

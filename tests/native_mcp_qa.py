@@ -687,7 +687,7 @@ class NativeSuite:
         self.smoke_failure(self.work / 'Missing.sov', 'native/missing-launch-report')
 
     def cleanup(self):
-        until = time.monotonic() + 5
+        until = min(time.monotonic() + 5, self.deadline + 5)
         failures = list(self.debug_cleanup_failures)
         for process in self.processes:
             if process.poll() is not None:
@@ -696,14 +696,23 @@ class NativeSuite:
                 # Attempt WM_CLOSE only for our native PID; SDK is a console child.
                 if Path(process.args[0]).resolve() == self.binary:
                     post_close(process.pid, self.window_title, self.observations, 'cleanup', deadline=until)
-                    process.wait(timeout=max(0.001, min(1, until - time.monotonic())))
+                    remaining = until - time.monotonic()
+                    check(remaining > 0, 'Native graceful cleanup deadline exhausted')
+                    process.wait(timeout=remaining)
                 else:
                     process.terminate()
-                    process.wait(timeout=max(0.001, min(1, until - time.monotonic())))
-            except Exception:
+                    remaining = until - time.monotonic()
+                    check(remaining > 0, 'Console cleanup deadline exhausted')
+                    process.wait(timeout=remaining)
+            except Exception as graceful_problem:
+                failures.append({'pid': process.pid, 'operation': 'graceful-cleanup',
+                                 'error': self.redact(graceful_problem)})
                 try:
+                    check(until - time.monotonic() > 0, 'Forced cleanup deadline exhausted; supervisor retains containment')
                     process.kill()  # Only this Popen-owned PID; never a name/process-tree kill.
-                    process.wait(timeout=max(0.001, until - time.monotonic()))
+                    remaining = until - time.monotonic()
+                    check(remaining > 0, 'Forced cleanup wait deadline exhausted')
+                    process.wait(timeout=remaining)
                 except Exception as problem:
                     failures.append({'pid': process.pid, 'error': self.redact(problem)})
         # communicate's timeout leaves its pipe owned by this suite; close it

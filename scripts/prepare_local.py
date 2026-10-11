@@ -52,8 +52,10 @@ def main():
     base=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     stamp=f'local-core {base} source:{digest}'
     env=dict(os.environ)
+    # Encoded flags override RUSTFLAGS; retain one explicit coverage authority.
+    env.pop('CARGO_ENCODED_RUSTFLAGS',None)
     env.update(SOV_BUILD_REVISION=stamp,RUSTUP_TOOLCHAIN='stable-x86_64-pc-windows-msvc',
-               RUSTFLAGS='-C instrument-coverage -C opt-level=0 -C debuginfo=2')
+               RUSTFLAGS='-C instrument-coverage -C debuginfo=2')
     # instrument-coverage includes unused functions by default. link-dead-code
     # additionally pulls unused Windows foreign imports into the executable,
     # including API sets unavailable on this host, and is not required for maps.
@@ -80,8 +82,11 @@ def main():
     for line in (output/'build-native.log').read_text(encoding='utf-8',errors='replace').splitlines():
         try:value=json.loads(line)
         except json.JSONDecodeError:continue
-        if value.get('reason')=='compiler-artifact' and value.get('executable'):
+        if value.get('reason')=='compiler-artifact':
             artifacts.append(value)
+    compiler_profiles=[{'target':value['target']['name'],'optLevel':value['profile']['opt_level'],'test':value['profile']['test']} for value in artifacts if value['target']['name'] in ['sov-schematic-desktop','sha2']]
+    if not compiler_profiles or any(value['optLevel']!=('3' if value['target']=='sha2' else '0') for value in compiler_profiles) or not any(value['target']=='sha2' for value in compiler_profiles):
+        raise ValueError('Required unoptimized production and optimized SHA2 compiler profiles were not retained')
     native=[value['executable'] for value in artifacts if not value['profile']['test'] and value['target']['name']=='sov-schematic-desktop']
     tests=[value['executable'] for value in artifacts if value['profile']['test'] and value['target']['name']=='sov-schematic-desktop']
     if len(native)!=1 or len(tests)!=1:raise ValueError('Native and test artifacts are not uniquely identified')
@@ -111,7 +116,7 @@ def main():
         (output/'changed-inputs.json').write_text(json.dumps({'added':sorted(set(dependency_after)-set(dependency_before)),'removed':sorted(set(dependency_before)-set(dependency_after)),'changed':[path for path in dependency_before if path in dependency_after and dependency_after[path]!=dependency_before[path]]},indent=2))
         raise ValueError('Product dependencies or qualification harness changed during preparation')
     result={'schemaVersion':1,'preparedAt':datetime.now(timezone.utc).isoformat(),'sourceRoot':str(ROOT),'testCopyRoot':str(copy_root),
-            'sourceIdentity':identity,'baseCommit':base,'buildRevision':stamp,'environment':{'RUSTFLAGS':env['RUSTFLAGS'],'RUSTUP_TOOLCHAIN':env['RUSTUP_TOOLCHAIN'],'SOV_BUILD_REVISION':stamp},
+            'sourceIdentity':identity,'baseCommit':base,'buildRevision':stamp,'compilerProfiles':compiler_profiles,'environment':{'RUSTFLAGS':env['RUSTFLAGS'],'RUSTUP_TOOLCHAIN':env['RUSTUP_TOOLCHAIN'],'SOV_BUILD_REVISION':stamp},
             'python':sys.executable,'node':node,'rustTestBinary':tests[0],'nativeBinary':native[0],
             'llvmProfdata':llvm['tools']['llvm-profdata.exe']['path'],'llvmCov':llvm['tools']['llvm-cov.exe']['path'],
             'jsInitial':str(copy_root/'.js-coverage-initial.json'),'browserExecutable':str(browser),'dependencyFiles':dependency_files,
