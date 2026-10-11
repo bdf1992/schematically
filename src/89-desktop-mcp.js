@@ -7,7 +7,9 @@
   const schema=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
   const resource={type:'string',enum:['component','wire','reference']};
   const text={type:'string'};
-  const guarded=new Set(['schematic.create','schematic.update','schematic.delete','schematic.document.replace','schematic.apply','schematic.file.save','schematic.history.undo','schematic.history.redo','schematic.concerns.answer','schematic.checkpoint.create','schematic.checkpoint.restore','schematic.layout.apply']);
+  const guarded=new Set(['schematic.create','schematic.update','schematic.delete','schematic.document.replace','schematic.apply','schematic.file.save','schematic.history.undo','schematic.history.redo','schematic.concerns.answer','schematic.checkpoint.create','schematic.checkpoint.restore','schematic.layout.apply','schematic.runtime.start','schematic.runtime.cancel']);
+  const requestId={type:'string',pattern:'^[A-Za-z0-9_-]{1,64}$'};
+  const codeHash={type:'string',pattern:'^[a-f0-9]{64}$'};
   const extra=[
     ['schematic.file.info','Read active file identity, revision, dirty state and build.',empty],
     ['schematic.file.save','Durably save the active native file; opens Save As when unassociated.',schema({saveAs:{type:'boolean'}})],
@@ -31,6 +33,11 @@
     ['schematic.run.trace','Read a local run trace.',schema({handle:text},['handle'])],
     ['schematic.state.query','Read records matching a local run subject.',schema({handle:text,entity:text,point:text,channel:text,observable:text},['handle','entity','observable'])],
     ['schematic.run.replay','Replay a trace against the active document.',schema({trace:{type:'object'}},['trace'])],
+    ['schematic.runtime.providers','List host-registered CLI providers; registration does not grant execution.',empty],
+    ['schematic.runtime.start','Start one host-granted CLI attempt from a frozen code reference. Results remain separate from the document.',schema({requestId,providerId:text,providerVersion:text,grantId:text,referenceId:text,codeHash,input:{}},['requestId','providerId','providerVersion','grantId','referenceId','codeHash','input'])],
+    ['schematic.runtime.status','Read a CLI attempt belonging to the active document.',schema({requestId,documentId:text},['requestId','documentId'])],
+    ['schematic.runtime.cancel','Cancel a CLI attempt belonging to the active document.',schema({requestId},['requestId'])],
+    ['schematic.runtime.results','Read a recorded terminal CLI receipt without editing the document.',schema({requestId,documentId:text},['requestId','documentId'])],
     ['schematic.documentation','Read bundled consumer documentation.',schema({uri:text},['uri'])]
   ].map(([name,description,inputSchema])=>({name,description,inputSchema}));
   function tools(){
@@ -84,11 +91,21 @@
     const tool=tools().find(value=>value.name===name);
     if(!tool)throw new Error(`TOOL_NOT_SUPPORTED: ${name}`);
     admittedArgs(tool,args);identityGuard(name,args);
+    if(name.startsWith('schematic.runtime.'))return runtimeCall(name,args);
     const writes={
       'schematic.list':'list','schematic.get':'read','schematic.create':'create','schematic.update':'update','schematic.delete':'delete'
     };
     if(writes[name])return api.execute({schema:data.OPERATION_SCHEMA,id:`desktop-${Date.now()}`,op:writes[name],resource:args.resource,resourceId:args.id??null,value:args.value??null,patch:args.patch??null,query:args.query??{},ifRevision:args.ifRevision});
-    if(name==='schematic.document.get')return api.document.get();
+    const direct={
+      'schematic.document.get':()=>api.document.get(),
+      'schematic.markers':()=>api.markers(),
+      'schematic.history.list':()=>api.history.list(),
+      'schematic.history.undo':()=>api.history.undo(),
+      'schematic.history.redo':()=>api.history.redo(),
+      'schematic.checkpoint.list':()=>api.checkpoints.list(),
+      'schematic.render.svg':()=>({svg:api.render.svg(args.options)})
+    };
+    if(direct[name])return direct[name]();
     if(name==='schematic.document.replace'){
       const incoming=data.makeDocument(data.clone(args.document)),check=data.validateDocument(incoming);
       if(!check.ok)throw new Error(`DOCUMENT_INVALID: ${check.errors.join('; ')}`);
@@ -98,13 +115,8 @@
     if(name==='schematic.file.save')return saveSchematicFile({saveAs:args.saveAs===true});
     if(name==='schematic.read')return api.read({ids:args.ids,area:args.area});
     if(name==='schematic.apply')return api.apply({operations:args.operations,ifRevision:args.ifRevision});
-    if(name==='schematic.markers')return api.markers();
     if(name==='schematic.concerns')return api.concerns.list(args);
     if(name==='schematic.concerns.answer')return api.concerns.answer({answers:args.answers,ifRevision:args.ifRevision});
-    if(name==='schematic.history.list')return api.history.list();
-    if(name==='schematic.history.undo')return api.history.undo();
-    if(name==='schematic.history.redo')return api.history.redo();
-    if(name==='schematic.checkpoint.list')return api.checkpoints.list();
     if(name==='schematic.checkpoint.create')return api.checkpoints.create(args.name);
     if(name==='schematic.checkpoint.restore')return api.checkpoints.restore(args.id);
     if(name==='schematic.layout.apply'){
@@ -112,7 +124,6 @@
       return api.layout.apply(options);
     }
     if(name==='schematic.graph.query')return api.graph.query(args.verb,args.args);
-    if(name==='schematic.render.svg')return {svg:api.render.svg(args.options)};
     if(name==='schematic.run.start')return api.run.start(args);
     if(name==='schematic.run.step')return api.run.step(args.handle);
     if(name==='schematic.run.settle')return api.run.settle(args.handle);
@@ -121,6 +132,30 @@
     if(name==='schematic.run.replay')return api.run.replay(args.trace);
     if(name==='schematic.documentation')return readResource(args.uri);
     throw new Error(`TOOL_NOT_SUPPORTED: ${name}`);
+  }
+  async function runtimeCall(name,args){
+    const invoke=window.__TAURI__?.core?.invoke;
+    if(typeof invoke!=='function')throw new Error('RUNTIME_UNAVAILABLE: native host required');
+    const native=async(command,parameters)=>{
+      try{return await invoke(command,parameters)}
+      catch(problem){throw new Error(typeof problem==='string'?problem:problem?.message||'Native runtime request failed')}
+    };
+    if(name==='schematic.runtime.providers')return native('desktop_runtime_providers');
+    const doc=api.document.get();
+    if(args.documentId!==doc.id)throw new Error('DOCUMENT_CHANGED: read the active document identity before accessing a runtime attempt');
+    if(name!=='schematic.runtime.start'){
+      const command={'schematic.runtime.status':'desktop_runtime_status','schematic.runtime.cancel':'desktop_runtime_cancel','schematic.runtime.results':'desktop_runtime_results'}[name];
+      return native(command,{requestId:args.requestId,documentId:args.documentId});
+    }
+    const reference=doc.references.find(record=>record.id===args.referenceId);
+    const code=reference?.data;
+    if(reference?.kind!=='code'||code?.schema!=='schematically.code@1'||code.language!=='javascript'||typeof code.source!=='string')throw new Error('CODE_REFERENCE_INVALID: a declared JavaScript code reference is required');
+    const sourceHash=window.SovSchematicCanonical.sha256Hex(code.source);
+    if(code.sha256!==sourceHash||args.codeHash!==sourceHash)throw new Error('CODE_CHANGED: code reference hash does not match the requested source');
+    const inputJson=JSON.stringify(args.input);
+    if(typeof inputJson!=='string')throw new Error('INPUT_INVALID: JSON input is required');
+    const request={requestId:args.requestId,providerId:args.providerId,providerVersion:args.providerVersion,grantId:args.grantId,documentId:doc.id,revision:args.ifRevision,stateToken:args.stateToken,referenceId:reference.id,source:code.source,sourceHash,inputJson,inputHash:window.SovSchematicCanonical.sha256Hex(inputJson)};
+    return native('desktop_runtime_start',{request});
   }
   async function rpc(request){
     const id=request?.id??null;

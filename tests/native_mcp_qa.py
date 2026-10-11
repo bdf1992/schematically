@@ -195,6 +195,8 @@ class NativeSuite:
         self.descriptor_dir = local / config['identifier'] / 'mcp'
         self.work = coverage_dir.resolve().parent / ('native-runtime-' + uuid.uuid4().hex)
         self.work.mkdir()
+        self.runtime_home = self.work / 'runtime-host'
+        self.runtime_home.mkdir()
         self.webview_profile = self.work / 'webview-profile'
         self.webview_profile.mkdir()
         self.processes = []
@@ -243,6 +245,7 @@ class NativeSuite:
         # Microsoft WebView2 environment override: isolate qualification recovery
         # and cache state; reuse only this suite's profile for its close/reopen checks.
         environment['WEBVIEW2_USER_DATA_FOLDER'] = str(profile)
+        environment['SOV_RUNTIME_DIR'] = str(self.runtime_home)
         try:
             process = subprocess.Popen(arguments, cwd=self.work, stdin=subprocess.DEVNULL,
                                        stdout=log, stderr=subprocess.STDOUT, env=environment)
@@ -590,6 +593,7 @@ def main():
                         'cleanupFailures': cleanup_failures,
                         'remainingGaps': ['Actual Save As chooser interaction is not qualified.'],
                         'webviewProfile': str(suite.webview_profile),
+                        'runtimeHome': str(suite.runtime_home),
                         'webviewProfilePresent': suite.webview_profile.is_dir(),
                         'nativeBinary': str(suite.binary),
                         'nativeBinarySha256': hashlib.sha256(suite.binary.read_bytes()).hexdigest(),

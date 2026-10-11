@@ -8,6 +8,7 @@ use tauri::Manager;
 
 mod files;
 mod mcp;
+mod runtime;
 
 const SMOKE_REPORT_FLAG: &str = "--smoke-report";
 // A smoke run that hears nothing from the page by then exits with SMOKE_SILENT_EXIT_CODE.
@@ -113,6 +114,14 @@ fn main() -> std::process::ExitCode {
                 return Err(std::io::Error::other("Desktop relay state was already registered").into());
             }
             eprintln!("desktop startup: relay-registered pid={}", std::process::id());
+            let runtime = match runtime::RuntimeState::new(app.handle()) {
+                Ok(runtime) => runtime,
+                Err(problem) => { relay.stop(); return Err(std::io::Error::other(problem).into()); }
+            };
+            if !app.manage(runtime) {
+                relay.stop();
+                return Err(std::io::Error::other("Desktop runtime state already registered").into());
+            }
             // Navigation cannot begin before commands can resolve the relay state.
             let window = tauri::WebviewWindowBuilder::from_config(app.handle(), &window_config)
                 .and_then(|builder| builder.build());
@@ -139,11 +148,13 @@ fn main() -> std::process::ExitCode {
                 .manage(SmokeReport(path))
                 .invoke_handler(tauri::generate_handler![opened_document, report_loaded,
                     files::desktop_open_document, files::desktop_save_document, files::desktop_reset_document,
-                    mcp::desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond])
+                    mcp::desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond,
+                    runtime::desktop_runtime_providers, runtime::desktop_runtime_start, runtime::desktop_runtime_status, runtime::desktop_runtime_cancel, runtime::desktop_runtime_results])
         }
         None => builder.invoke_handler(tauri::generate_handler![opened_document,
             files::desktop_open_document, files::desktop_save_document, files::desktop_reset_document,
-            mcp::desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond]),
+            mcp::desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond,
+            runtime::desktop_runtime_providers, runtime::desktop_runtime_start, runtime::desktop_runtime_status, runtime::desktop_runtime_cancel, runtime::desktop_runtime_results]),
     };
     let requested_code = std::rc::Rc::new(std::cell::Cell::new(None));
     let captured_code = requested_code.clone();
@@ -157,6 +168,12 @@ fn main() -> std::process::ExitCode {
                 captured_code.set(Some(*code));
             }
             if matches!(event, tauri::RunEvent::Exit) {
+                if let Some(runtime) = app.try_state::<std::sync::Arc<runtime::RuntimeState>>() {
+                    if let Err(problem) = runtime.stop() {
+                        eprintln!("desktop runtime shutdown failed: {problem}");
+                        captured_code.set(Some(1));
+                    }
+                }
                 if let Some(relay) = app.try_state::<std::sync::Arc<mcp::RelayState>>() { relay.stop(); }
             }
         });

@@ -25,7 +25,9 @@ for deterministic stamped build checks. The runner retains hashes and safe envir
 settings, actual Python package versions, and executable version output.
 
 The queue contains native persistence/browser MCP, headless store/surface, Python
-build, native MCP, and Rust unit suites. Each driver must collect without executing
+build, native MCP, CLI runtime, and Rust unit suites. The CLI driver has a separate
+30-second stage ceiling, including five seconds reserved for cleanup, within the
+unchanged whole-run profile. Each driver must collect without executing
 tests: `--collect` prints one JSON case-ID array, or a consistent
 `{suite,cases,count}` envelope. IDs must be globally unique. Execution receives
 `--coverage-dir <JS-snapshot-directory>`; the copy root comes from the driver's
@@ -62,7 +64,7 @@ and merges exported snapshots. Python's coverage API analyzes original `build.py
 using compiled executable lines, including unexecuted source; coverage exclusions
 fail. The build driver runs original `build.py` under coverage in-process or in a
 child `coverage run` sharing `COVERAGE_FILE`. Generated HTML may be rewritten;
-the nine frozen production sources must remain identical. LLVM merges
+all ten frozen production sources must remain identical. LLVM merges
 raw profiles from native and unit binaries and exports all function/file maps.
 `llvm_tools.normalize_export` preserves missed functions, normalizes executable
 line sets, and rejects absent scoped maps or disagreement with LLVM summaries.
@@ -72,7 +74,7 @@ without entering production coverage. This avoids counting inline `cfg(test)`
 modules as production code and requires no textual source exclusions.
 Developer checks and test harnesses are identity inputs, not production denominator.
 
-`coverage.json` includes all nine production files, source hashes, executable/hit
+`coverage.json` includes all ten production files, source hashes, executable/hit
 lines and aggregate coverage. `evidence.json` retains policy, environment, queue,
 case outcomes, logs and input identities. `supervision.json` records the outer
 deadline/containment result. A pass requires both evidence and supervision passes;

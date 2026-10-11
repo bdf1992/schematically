@@ -65,9 +65,65 @@ architecture review and qualification before a rebuilt application is used.
 
 The required stable core also includes modular declared runtime hosting: a
 runtime may be hosted locally as a CLI process or by Schematically itself, or
-delegate to a declared external provider. This candidate does not yet implement
-that execution interface. Provider admission, limits, cancellation and durable
-results must qualify before these operations are advertised to consumers.
+delegate to a declared external provider. The first increment implements one
+Node CLI provider. It remains under qualification; provider admission, limits,
+cancellation and durable results must pass before a release is accepted.
+
+### Node CLI provider
+
+The desktop host reads `providers.json` beneath its local application data
+`runtime` directory. A host may select an absolute directory through
+`SOV_RUNTIME_DIR`, including an isolated qualification directory. MCP tools cannot
+change this configuration. Missing configuration admits no execution.
+
+Configuration uses schema `schematically.cli-host@1`. The admitted provider is
+`node-cli`, version `1`. A provider has `id`,
+`version`, `language: "javascript"`, an absolute canonical `executable`, its
+`executableSha256`, and `limits`: `timeoutMs`, `maxOutputBytes`, `maxProcesses`,
+and `maxMemoryBytes`. The executable is the host's trusted Node runtime. Its
+arguments are fixed: `--unhandled-rejections=strict` and the frozen module path.
+Limits restrict process lifetime, combined captured stdout/stderr, process count
+and committed memory. Job containment does not isolate filesystem or network
+access; a grant authorizes trusted code under the local user's account.
+
+A separate grant has `id`, `providerId`, `providerVersion`, `documentId`, exact
+`sourceHash`, `requestId` and `expiresAtUnixMs`. It admits one matching attempt.
+MCP authentication and provider registration supply no grant. The host retains
+grant consumption before execution. Repeating the same request and frozen
+identities reads its retained attempt; changing them refuses. An interrupted
+attempt with unknown completion is never executed automatically again.
+
+Create a reference with `kind: "code"` and this `data`:
+
+```json
+{
+  "schema": "schematically.code@1",
+  "language": "javascript",
+  "source": "import fs from 'node:fs'; const input = JSON.parse(fs.readFileSync(0, 'utf8')); console.log(JSON.stringify({value: input.value + 1}));",
+  "sha256": "<SHA-256 of the exact UTF-8 source>"
+}
+```
+
+The module receives serialized JSON input on stdin. stdout and stderr are retained
+separately within one output limit; output is data, without an automatic document
+edit. `schematic.runtime.providers` lists registered identities and limits.
+`schematic.runtime.start` takes `requestId`, `providerId`, `providerVersion`,
+`grantId`, `referenceId`, `codeHash`, `input` and the current `documentId`,
+`ifRevision` and `stateToken` from `schematic.file.info`. It freezes the reference
+source and input, verifies their hashes and returns an attempt receipt promptly.
+
+`schematic.runtime.status` and `schematic.runtime.results` take `requestId` and
+the active `documentId`. Results require a recorded terminal receipt with verified
+descendant cleanup. `schematic.runtime.cancel` additionally takes current revision
+and state guards. Receipts retain document/revision/state, reference/code/input,
+provider/executable/grant identities, outcome, exit code, output hashes and cleanup
+evidence. A later ordinary guarded document edit can accept a result.
+
+The host runs one active attempt and retains at most 64 attempts. It records intent
+before creating a suspended process, assigns a kill-on-close Windows Job Object
+before resume, and refuses containment failure. Timeout, cancellation, output
+overflow and application shutdown terminate the job and check descendants before
+recording completion. A recording or cleanup failure remains an unresolved result.
 
 Knode and Kord integrations should record the selected desktop build, document
 identity, observed revision, operation, receipt and resulting saved state.

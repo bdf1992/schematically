@@ -9,7 +9,8 @@
     "mcp/surface.mjs",
     "desktop/src-tauri/src/main.rs",
     "desktop/src-tauri/src/files.rs",
-    "desktop/src-tauri/src/mcp.rs"
+    "desktop/src-tauri/src/mcp.rs",
+    "desktop/src-tauri/src/runtime.rs"
   ],
   "profiles": {
     "routine": { "maximumCases": 250, "maximumSeconds": 180, "minimumExecutableLineCoverage": 75 },
@@ -21,6 +22,7 @@
     { "id": "headless-local", "driver": "tests/headless_local_qa.mjs", "runner": "node" },
     { "id": "build-local", "driver": "tests/build_local_qa.py", "runner": "pythonCoverage" },
     { "id": "native-mcp", "driver": "tests/native_mcp_qa.py", "runner": "python" },
+    { "id": "cli-runtime", "driver": "tests/cli_runtime_qa.py", "runner": "python" },
     { "id": "rust-unit", "runner": "rustTestBinary" }
   ],
   "regressionQueue": {

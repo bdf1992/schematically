@@ -93,7 +93,7 @@ fn authorized(headers:&HeaderMap,token:&str,host:&str)->bool {
 }
 fn error(status: StatusCode, message: &str) -> Response { (status, Json(json!({"error":message}))).into_response() }
 #[cfg(windows)]
-fn protect_descriptor_path(path: &std::path::Path) -> Result<(), String> {
+pub(crate) fn protect_descriptor_path(path: &std::path::Path) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::{Foundation::LocalFree, Security::{
         Authorization::{ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1},

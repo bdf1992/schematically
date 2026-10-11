@@ -27,6 +27,7 @@ SCOPE = [
     'build.py', 'src/75-persistence.js', 'src/85-api.js', 'src/89-desktop-mcp.js',
     'mcp/store-file.mjs', 'mcp/surface.mjs', 'desktop/src-tauri/src/main.rs',
     'desktop/src-tauri/src/files.rs', 'desktop/src-tauri/src/mcp.rs',
+    'desktop/src-tauri/src/runtime.rs',
 ]
 SUITE_QUEUE = [
     {'id': 'native-persistence-browser', 'driver': 'tests/native_persistence_qa.py', 'runner': 'python'},
@@ -34,6 +35,7 @@ SUITE_QUEUE = [
     {'id': 'headless-local', 'driver': 'tests/headless_local_qa.mjs', 'runner': 'node'},
     {'id': 'build-local', 'driver': 'tests/build_local_qa.py', 'runner': 'pythonCoverage'},
     {'id': 'native-mcp', 'driver': 'tests/native_mcp_qa.py', 'runner': 'python'},
+    {'id': 'cli-runtime', 'driver': 'tests/cli_runtime_qa.py', 'runner': 'python'},
     {'id': 'rust-unit', 'runner': 'rustTestBinary'},
 ]
 
@@ -46,7 +48,7 @@ def validate_policy(policy):
     if policy.get('sourceScope') != SCOPE or policy.get('profiles') != expected:
         raise ValueError('policy differs from bound source scope or resource/coverage limits')
     if policy.get('suiteQueue') != SUITE_QUEUE:
-        raise ValueError('policy differs from the complete bound six-suite queue')
+        raise ValueError('policy differs from the complete bound suite queue')
 
 
 def digest(path):
@@ -178,6 +180,8 @@ class Session:
         remaining = self.deadline - time.monotonic() - 5
         if remaining <= 0:
             raise TimeoutError('no command allowance remains after cleanup reserve')
+        if label == 'run-cli-runtime':
+            remaining = min(remaining, 30)
         env = {**self.env, **(extra_env or {})}
         path = self.out / f'{len(self.records):02d}-{label}.log'
         result = run_bounded(argv, cwd or self.copy_root, env, path, remaining)
@@ -185,6 +189,8 @@ class Session:
                   'log': str(path), 'logSha256': digest(path), **result}
         self.records.append(record)
         self.check_time()
+        if label == 'run-cli-runtime' and result['elapsedSeconds'] > 30:
+            raise RuntimeError('CLI stage exceeded its complete 30-second allowance')
         if result['exitCode'] != 0 or result['timedOut'] or not result['descendantsStopped']:
             raise RuntimeError('bounded stage failed: ' + label)
         return path.read_text(encoding='utf-8', errors='replace')
@@ -348,7 +354,7 @@ class Session:
                                         'AMBIGUOUS' if markers[case] != 1 else 'FAIL' if case in failed else
                                         'SKIP' if case in skipped else 'PASS'} for case in suite['cases']])
 
-        def require_clean_native_receipt(output, suite, result):
+        def require_clean_native_receipt(output, suite, result, expected_pass=False):
             # Process containment alone does not establish that the driver
             # removed its descriptors or met its own shorter queue deadline.
             summaries = []
@@ -357,7 +363,7 @@ class Session:
                     value = json.loads(line)
                 except (ValueError, TypeError):
                     continue
-                if isinstance(value, dict) and value.get('suite') == 'native-mcp':
+                if isinstance(value, dict) and value.get('suite') == suite['id']:
                     summaries.append(value)
             if len(summaries) != 1:
                 raise ValueError('native continuation requires one retained receipt summary')
@@ -369,12 +375,12 @@ class Session:
             lexical = Path(os.path.abspath(raw_path))
             path = lexical.resolve(strict=True)
             if (not lexical.is_relative_to(owned) or not path.is_relative_to(owned)
-                    or lexical != path or path.name != 'native-evidence.json'
+                    or lexical != path or path.name != ('cli-evidence.json' if suite['id'] == 'cli-runtime' else 'native-evidence.json')
                     or path.parent.parent != owned
                     or not re.fullmatch(r'native-runtime-[0-9a-f]{32}', path.parent.name)
                     or not path.is_file()):
                 raise ValueError('native receipt escapes or differs from its owned output')
-            candidates = list(owned.glob('native-runtime-*/native-evidence.json'))
+            candidates = list(owned.glob('native-runtime-*/' + path.name))
             if len(candidates) != 1 or candidates[0].resolve(strict=True) != path:
                 raise ValueError('native retained receipt is missing or ambiguous')
             if path.stat().st_size > 1024 * 1024:
@@ -393,14 +399,17 @@ class Session:
                     or file_path(receipt.get('nodeBinary')) != self.paths['node']
                     or receipt.get('nodeBinarySha256') !=
                         self.prepared['artifactIdentity'][str(self.paths['node'])]
-                    or receipt.get('sdkConsumerSha256') != self.prepared['dependencyIdentity'][
-                        str((self.source_root / 'tests/sdk_consumer.mjs').resolve(strict=True))]
-                    or summary.get('passed') is not False):
+                    or receipt.get('driverSha256' if suite['id'] == 'cli-runtime' else 'sdkConsumerSha256') != self.prepared['dependencyIdentity'][
+                        str((self.source_root / ('tests/cli_runtime_qa.py' if suite['id'] == 'cli-runtime' else 'tests/sdk_consumer.mjs')).resolve(strict=True))]
+                    or summary.get('passed') is not expected_pass):
                 raise ValueError('native receipt suite/build/binary identity is inconsistent')
             elapsed = receipt.get('elapsedSeconds')
             effect_elapsed = receipt.get('effectElapsedSeconds')
-            if (type(elapsed) not in (int, float) or not 0 <= elapsed <= 60
-                    or type(effect_elapsed) not in (int, float) or not 0 <= effect_elapsed < 55
+            maximum = 30 if suite['id'] == 'cli-runtime' else 60
+            if suite['id'] == 'cli-runtime' and receipt.get('limits') != {'effectSeconds': 25, 'totalSeconds': 30}:
+                raise ValueError('CLI receipt does not retain its exact queue budget')
+            if (type(elapsed) not in (int, float) or not 0 <= elapsed <= maximum
+                    or type(effect_elapsed) not in (int, float) or not 0 <= effect_elapsed < maximum - 5
                     or effect_elapsed > elapsed or receipt.get('effectDeadlineReached') is not False
                     or summary.get('elapsedSeconds') != elapsed
                     or receipt.get('cleanupFailures') != []
@@ -417,7 +426,7 @@ class Session:
                            or item.get('status') not in ('PASS', 'FAIL', 'SKIP') for item in reported)
                     or Counter((item['id'], item['status']) for item in reported) != expected):
                 raise ValueError('native receipt case results differ from retained log')
-            result['nativeEvidenceDisposition'] = 'clean-contained-case-failure'
+            result['nativeEvidenceDisposition'] = 'clean-contained-suite' if expected_pass else 'clean-contained-case-failure'
 
         for suite, result in zip(self.collected, self.results):
             self.check_time()
@@ -453,7 +462,7 @@ class Session:
                 retain_aborted(record, suite, result, error)
                 self.check_time()
                 output = Path(record['log']).read_text(encoding='utf-8', errors='replace')
-                if suite['id'] == 'native-mcp':
+                if suite['id'] in ('native-mcp', 'cli-runtime'):
                     try:
                         require_clean_native_receipt(output, suite, result)
                     except Exception as receipt_error:
@@ -522,6 +531,13 @@ class Session:
                           duplicateIds=duplicates, caseResults=case_results,
                           executedIds=sorted(collected.intersection([*passed, *failed])),
                           failures=failures)
+            if suite['id'] == 'cli-runtime' and stage['exitCode'] == 0:
+                try:
+                    require_clean_native_receipt(output, suite, result, expected_pass=True)
+                except Exception as receipt_error:
+                    result.update(status='ABORTED', nativeEvidenceDisposition='refused',
+                                  failure={'type': type(receipt_error).__name__, 'message': str(receipt_error)})
+                    raise RuntimeError('CLI receipt refused: ' + str(receipt_error)) from receipt_error
             self.check_time()
         return all(result['status'] == 'PASS' for result in self.results)
 

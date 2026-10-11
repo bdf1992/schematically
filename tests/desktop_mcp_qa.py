@@ -21,6 +21,8 @@ CASE_NAMES = (
     "required-arguments", "nested-batch-schema", "read-markers", "concerns-answer",
     "checkpoint", "layout-graph-svg", "run-start-step", "run-settle-trace-query-replay",
     "run-refusals", "no-external-execution", "native-save-success",
+    "runtime-native-unavailable", "runtime-code-invalid", "runtime-code-hash",
+    "runtime-frozen-input", "runtime-identity-guards", "runtime-status-results", "runtime-cancel",
     "native-save-cancel", "native-save-failure", "native-save-edited-during-await",
     "relay-expired-request", "all-tools-exercised",
 )
@@ -166,7 +168,44 @@ SCENARIO = r"""async ({id,runDoc,expectedDocs})=>{
   }else if(id==='no-external-execution'){
     await rejected('schematic.run.start',{handlers:{run:'globalThis.__externalExecuted=true'}},'ARGUMENT_UNKNOWN');
     check(!window.__externalExecuted,'External action executed');
-    check(!(await rpc('tools/list')).result.tools.some(t=>/shell|exec|provider/i.test(t.name)),'External execution tool advertised');
+    check(!(await rpc('tools/list')).result.tools.some(t=>/shell|exec/i.test(t.name)),'Arbitrary shell execution tool advertised');
+  }else if(id.startsWith('runtime-')){
+    const source='process.stdout.write("qualification")',hash=window.SovSchematicCanonical.sha256Hex(source);
+    const ref={id:'qa-code',kind:'code',data:{schema:'schematically.code@1',language:'javascript',source,sha256:hash}};
+    await guarded('schematic.create',{resource:'reference',value:ref});
+    const current=await info(),args={requestId:'qa-runtime',providerId:'node-cli',providerVersion:'1',grantId:'qa-grant',referenceId:ref.id,codeHash:hash,input:{message:'before'},documentId:current.documentId,ifRevision:current.revision,stateToken:current.stateToken};
+    const before=JSON.stringify(API.document.get());let calls=[];
+    if(id==='runtime-native-unavailable')await rejected('schematic.runtime.providers',{},'RUNTIME_UNAVAILABLE');
+    else{
+      window.__TAURI__={core:{invoke:async(command,value)=>{calls.push({command,value:clone(value||{})});return command==='desktop_runtime_providers'?{providers:[{id:'node-cli',version:'1'}]}:{requestId:'qa-runtime',phase:command==='desktop_runtime_start'?'running':'terminal',outcome:command==='desktop_runtime_cancel'?'cancelled':'succeeded',stdout:'qualification',descendantsStopped:true}}}};
+      try{
+        if(id==='runtime-code-invalid')await rejected('schematic.runtime.start',{...args,referenceId:'missing'},'CODE_REFERENCE_INVALID');
+        else if(id==='runtime-code-hash')await rejected('schematic.runtime.start',{...args,codeHash:'0'.repeat(64)},'CODE_CHANGED');
+        else if(id==='runtime-identity-guards'){
+          await rejected('schematic.runtime.start',{...args,documentId:'wrong'});
+          await rejected('schematic.runtime.start',{...args,ifRevision:current.revision+1});
+          await rejected('schematic.runtime.start',{...args,stateToken:'wrong'});
+          check(calls.length===0,'Refused identity reached native execution');
+        }else if(id==='runtime-frozen-input'){
+          const pending=ok('schematic.runtime.start',args);args.input.message='after';await pending;
+          check(calls.length===1&&calls[0].command==='desktop_runtime_start','Start did not use declared native bridge');
+          const request=calls[0].value.request;
+          check(request.source===source&&request.sourceHash===hash&&request.referenceId===ref.id,'Source freeze/hash lost');
+          check(request.inputJson==='{"message":"before"}'&&request.inputHash===window.SovSchematicCanonical.sha256Hex(request.inputJson),'Input identity was not frozen');
+          check(request.documentId===current.documentId&&request.revision===current.revision&&request.stateToken===current.stateToken,'Guard identities missing at native boundary');
+        }else if(id==='runtime-status-results'){
+          check((await ok('schematic.runtime.providers')).providers[0].id==='node-cli','Provider receipt decoding');
+          for(const name of ['schematic.runtime.status','schematic.runtime.results']){
+            const receipt=await ok(name,{requestId:args.requestId,documentId:current.documentId});check(receipt.stdout==='qualification','Runtime receipt decoding');
+            await rejected(name,{requestId:args.requestId,documentId:'wrong'},'DOCUMENT_CHANGED');
+          }
+        }else if(id==='runtime-cancel'){
+          const receipt=await ok('schematic.runtime.cancel',{requestId:args.requestId,documentId:current.documentId,stateToken:current.stateToken,ifRevision:current.revision});
+          check(receipt.outcome==='cancelled'&&calls[0].command==='desktop_runtime_cancel','Cancel bridge mismatch');
+        }else throw new Error('Unknown runtime adapter case');
+        check(JSON.stringify(API.document.get())===before,'Runtime result automatically mutated live document');
+      }finally{delete window.__TAURI__}
+    }
   }else if(id.startsWith('native-save-')){
     await create();check((await info()).dirty,'Expected unsaved edit');
     let written=null;
