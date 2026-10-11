@@ -843,7 +843,7 @@ mod windows {
         Foundation::*,
         Security::SECURITY_ATTRIBUTES,
         Storage::FileSystem::*,
-        System::{JobObjects::*, Pipes::*, Threading::*, IO::*},
+        System::{JobObjects::*, Pipes::*, Threading::*},
     };
     struct Handle(HANDLE);
     impl Drop for Handle {
