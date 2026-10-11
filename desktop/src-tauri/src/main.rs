@@ -145,14 +145,22 @@ fn main() -> std::process::ExitCode {
             files::desktop_open_document, files::desktop_save_document, files::desktop_reset_document,
             mcp::desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond]),
     };
-    let code = builder
+    let requested_code = std::rc::Rc::new(std::cell::Cell::new(None));
+    let captured_code = requested_code.clone();
+    let runtime_code = builder
         .build(tauri::generate_context!())
         .expect("error while building SOV Schematic desktop shell")
-        .run_return(|app, event| {
+        .run_return(move |app, event| {
+            // Wry emits the requested code but currently exits its loop with zero.
+            // Retain explicit requests; ordinary last-window close has no code.
+            if let tauri::RunEvent::ExitRequested { code: Some(code), .. } = &event {
+                captured_code.set(Some(*code));
+            }
             if matches!(event, tauri::RunEvent::Exit) {
                 if let Some(relay) = app.try_state::<std::sync::Arc<mcp::RelayState>>() { relay.stop(); }
             }
         });
+    let code = requested_code.get().unwrap_or(runtime_code);
     match u8::try_from(code) {
         Ok(code) => std::process::ExitCode::from(code),
         Err(_) => {
