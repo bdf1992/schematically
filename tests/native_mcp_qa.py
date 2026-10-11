@@ -105,16 +105,43 @@ def owned_debug_listener(port, native_pid):
 
 def cdp_diagnostic(port, native_pid):
     """Read an owned WebView through CDP; the parent contains this worker."""
-    import asyncio
-    from playwright.async_api import async_playwright
+    deadline = time.monotonic() + 2.5
+    handles = []
+    close = None
+    def emit(value):
+        print(json.dumps(value, ensure_ascii=False), flush=True)
+    def endpoint_json(path):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('Diagnostic deadline exhausted before target discovery')
+        connection = http.client.HTTPConnection('127.0.0.1', port, timeout=min(0.35, remaining))
+        try:
+            connection.request('GET', path)
+            response = connection.getresponse()
+            if response.status != 200:
+                raise RuntimeError('Owned debug endpoint refused target discovery')
+            raw = response.read(32769)
+            if len(raw) > 32768:
+                raise RuntimeError('Owned debug endpoint exceeds bounded target JSON')
+            return json.loads(raw)
+        finally:
+            connection.close()
+    def owned_websocket(value, prefix):
+        if not isinstance(value, str) or len(value) > 512:
+            raise RuntimeError('Owned debug websocket URL malformed')
+        parsed = urllib.parse.urlsplit(value)
+        if (parsed.scheme != 'ws' or parsed.hostname != '127.0.0.1'
+                or parsed.port != port or parsed.username or parsed.password
+                or not parsed.path.startswith(prefix) or parsed.query or parsed.fragment):
+            raise RuntimeError('Owned debug websocket URL escaped loopback instance')
+        return value
 
     async def inspect():
-        handles, close, ownership = owned_debug_listener(port, native_pid)
         playwright = None
         try:
             playwright = await async_playwright().start()
             browser = await playwright.chromium.connect_over_cdp(
-                f'http://127.0.0.1:{port}', timeout=600)
+                websocket, timeout=1800)
             pages = [page for context in browser.contexts for page in context.pages]
             if len(pages) != 1:
                 return {'available': False, 'pageCount': len(pages)}
@@ -150,17 +177,43 @@ def cdp_diagnostic(port, native_pid):
                     'earlyExceptionsReplayGuaranteed': False}
         finally:
             # Disconnect our transport; Browser.close would affect the owned app.
-            try:
-                if playwright is not None:
-                    await playwright.stop()
-            finally:
-                for handle in handles:
-                    close(handle)
+            if playwright is not None:
+                await playwright.stop()
     try:
-        answer = asyncio.run(asyncio.wait_for(inspect(), timeout=0.8))
+        handles, close, ownership = owned_debug_listener(port, native_pid)
+        emit({'phase':'ownership', 'available':False, 'ownership':ownership})
+        targets = endpoint_json('/json/list')
+        if not isinstance(targets, list) or len(targets) > 16:
+            raise RuntimeError('Owned target list malformed or excessive')
+        retained = []
+        for target in targets:
+            if not isinstance(target, dict):
+                raise RuntimeError('Owned target entry malformed')
+            if target.get('type') != 'page':
+                continue
+            owned_websocket(target.get('webSocketDebuggerUrl'), '/devtools/page/')
+            if not isinstance(target.get('url'), str) or not isinstance(target.get('title'), str):
+                raise RuntimeError('Owned target URL/title absent')
+            retained.append({'type':'page', 'url':target['url'][:240], 'title':target['title'][:160]})
+        emit({'phase':'targets', 'available':False, 'ownership':ownership, 'targets':retained})
+        version = endpoint_json('/json/version')
+        if not isinstance(version, dict):
+            raise RuntimeError('Owned browser endpoint malformed')
+        websocket = owned_websocket(version.get('webSocketDebuggerUrl'), '/devtools/browser/')
+        # Target identity is already flushed before importing or starting Playwright.
+        import asyncio
+        from playwright.async_api import async_playwright
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('Diagnostic startup exhausted capture allowance')
+        answer = asyncio.run(asyncio.wait_for(inspect(), timeout=remaining))
     except Exception as problem:
         answer = {'available': False, 'errorType': type(problem).__name__}
-    print(json.dumps(answer))
+    finally:
+        if close is not None:
+            for handle in handles:
+                close(handle)
+    emit(answer)
     return 0
 
 EARLY = [
@@ -416,11 +469,11 @@ class NativeSuite:
 
     def diagnose_webview(self, process, until):
         port = self.debug_ports.get(process.pid)
-        if port is None or until - time.monotonic() < 2:
+        if port is None or until - time.monotonic() < 4:
             return
         path = self.work / f'webview-{process.pid}.log'
         observation = {'operation': 'webview-diagnostic', 'pid': process.pid,
-                       'debugPort': port, 'ownershipRequired': True}
+                       'debugPort': port, 'ownershipRequired': True, 'workerLimitSeconds':3}
         self.observations.append(observation)
         worker_started = False
         try:
@@ -431,12 +484,22 @@ class NativeSuite:
             observation['worker'] = run_bounded(
                 [sys.executable, str(Path(__file__).resolve()), '--cdp-diagnostic', str(port),
                  '--cdp-native-pid', str(process.pid)],
-                self.work, os.environ.copy(), path, 1)
+                self.work, os.environ.copy(), path, 3, cleanup_deadline=until - 0.2)
             if observation['worker']['descendantsStopped'] is not True:
                 self.debug_cleanup_failures.append({'operation':'diagnostic-descendants', 'pid':process.pid})
             raw = self.redact(path.read_bytes()[:32768].decode('utf-8', errors='replace'))
             path.write_text(raw, encoding='utf-8')
-            observation['capture'] = json.loads(raw.rstrip().rsplit('\n',1)[-1])
+            captures = []
+            for line in raw.splitlines():
+                try:
+                    value = json.loads(line)
+                    if isinstance(value, dict):
+                        captures.append(value)
+                except json.JSONDecodeError:
+                    continue
+            observation['captures'] = captures[:4]
+            if captures:
+                observation['capture'] = captures[-1]
         except Exception as problem:
             observation['diagnosticError'] = type(problem).__name__
             if worker_started and 'worker' not in observation:

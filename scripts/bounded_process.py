@@ -7,6 +7,7 @@ themselves from that group are outside this POSIX containment mechanism.
 
 The execution deadline includes setup. Cleanup has a separate maximum five-second
 grace, included in elapsedSeconds; callers must charge it to their total budget.
+An optional absolute monotonic cleanup_deadline caps that grace for nested work.
 This helper does not admit a command, select suites, or establish test coverage.
 
 Win32 reference: https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects
@@ -116,7 +117,7 @@ def supervised_parent(expected_pid):
             close(handle)
 
 
-def _windows(argv, cwd, env, log, deadline):
+def _windows(argv, cwd, env, log, deadline, cleanup_deadline=None):
     from ctypes import wintypes as w
     k = ctypes.WinDLL('kernel32', use_last_error=True)
     size = ctypes.c_size_t
@@ -264,9 +265,13 @@ def _windows(argv, cwd, env, log, deadline):
             checked(get_exit(process.hProcess, ctypes.byref(code)), 'GetExitCodeProcess')
         # On both normal exit and timeout, stop background descendants before returning.
         checked(terminate_job(job, 124 if timed_out else 0), 'TerminateJobObject')
-        cleanup_deadline = time.monotonic() + 5
+        cleanup_until = time.monotonic() + 5
+        if cleanup_deadline is not None:
+            cleanup_until = min(cleanup_until, cleanup_deadline)
         stopped = False
         while True:
+            if time.monotonic() >= cleanup_until:
+                break
             accounting = Accounting()
             checked(query_job(job, 1, ctypes.byref(accounting),
                               ctypes.sizeof(accounting), None),
@@ -274,9 +279,9 @@ def _windows(argv, cwd, env, log, deadline):
             if accounting.ActiveProcesses == 0:
                 stopped = True
                 break
-            if time.monotonic() >= cleanup_deadline:
+            if time.monotonic() >= cleanup_until:
                 break
-            time.sleep(0.01)
+            time.sleep(min(0.01, max(0, cleanup_until - time.monotonic())))
         return {'exitCode': 124 if timed_out else code.value,
                 'timedOut': timed_out, 'descendantsStopped': stopped}
     finally:
@@ -284,7 +289,9 @@ def _windows(argv, cwd, env, log, deadline):
         # Closing the job kills any assigned processes, including on Python exceptions.
         if created and not assigned:
             terminate_process(process.hProcess, 125)
-            wait(process.hProcess, 5000)
+            wait_ms = 5000 if cleanup_deadline is None else min(
+                5000, max(0, math.floor((cleanup_deadline - time.monotonic()) * 1000)))
+            wait(process.hProcess, wait_ms)
         if job:
             close(job)
         if created:
@@ -296,7 +303,7 @@ def _windows(argv, cwd, env, log, deadline):
             close(handle)
 
 
-def _posix(argv, cwd, env, log, deadline):
+def _posix(argv, cwd, env, log, deadline, cleanup_deadline=None):
     with open(log, 'wb') as output:
         process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                                    stdout=output, stderr=subprocess.STDOUT,
@@ -308,7 +315,9 @@ def _posix(argv, cwd, env, log, deadline):
             except subprocess.TimeoutExpired:
                 timed_out = True
         finally:
-            cleanup_deadline = time.monotonic() + 5
+            cleanup_until = time.monotonic() + 5
+            if cleanup_deadline is not None:
+                cleanup_until = min(cleanup_until, cleanup_deadline)
             try:
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
@@ -316,24 +325,26 @@ def _posix(argv, cwd, env, log, deadline):
             # Always reap the immediate child. Group existence may include zombies;
             # conservatively retain descendantsStopped=False until the group vanishes.
             try:
-                process.wait(timeout=max(0, cleanup_deadline - time.monotonic()))
+                process.wait(timeout=max(0, cleanup_until - time.monotonic()))
             except subprocess.TimeoutExpired:
                 pass
         stopped = False
         while True:
+            if time.monotonic() >= cleanup_until:
+                break
             try:
                 os.killpg(process.pid, 0)
             except ProcessLookupError:
                 stopped = True
                 break
-            if time.monotonic() >= cleanup_deadline:
+            if time.monotonic() >= cleanup_until:
                 break
-            time.sleep(0.01)
+            time.sleep(min(0.01, max(0, cleanup_until - time.monotonic())))
         return {'exitCode': 124 if timed_out else process.returncode,
                 'timedOut': timed_out, 'descendantsStopped': stopped}
 
 
-def run_bounded(argv, cwd, env, log_path, seconds) -> dict:
+def run_bounded(argv, cwd, env, log_path, seconds, cleanup_deadline=None) -> dict:
     """Run an executable argv (no implicit shell); refuse invalid/unsupported setup.
 
     env is a complete child environment, or None to inherit a snapshot. Logs are
@@ -343,6 +354,9 @@ def run_bounded(argv, cwd, env, log_path, seconds) -> dict:
     started = time.monotonic()
     if not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
         raise ValueError('seconds must be finite and positive')
+    if cleanup_deadline is not None and (type(cleanup_deadline) not in (int, float)
+            or not math.isfinite(cleanup_deadline) or cleanup_deadline <= started):
+        raise ValueError('cleanup_deadline must be a finite future monotonic timestamp')
     if isinstance(argv, (str, bytes)) or not argv:
         raise ValueError('argv must be a nonempty executable argument sequence')
     argv = [os.fspath(arg) for arg in argv]
@@ -372,10 +386,12 @@ def run_bounded(argv, cwd, env, log_path, seconds) -> dict:
     log = Path(log_path).absolute()
     log.parent.mkdir(parents=True, exist_ok=True)
     deadline = started + seconds
+    if cleanup_deadline is not None:
+        deadline = min(deadline, cleanup_deadline)
     if os.name == 'nt':
-        result = _windows(argv, cwd, child_env, log, deadline)
+        result = _windows(argv, cwd, child_env, log, deadline, cleanup_deadline)
     elif os.name == 'posix':
-        result = _posix(argv, cwd, child_env, log, deadline)
+        result = _posix(argv, cwd, child_env, log, deadline, cleanup_deadline)
     else:
         raise RuntimeError('unsupported process containment platform: ' + os.name)
     result['elapsedSeconds'] = time.monotonic() - started
