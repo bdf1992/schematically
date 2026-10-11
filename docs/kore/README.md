@@ -67,6 +67,9 @@ synchronization still needs its own implementation contract.
 ## Open and run
 
 - [Original semantic package](reference/fraktal.sovpak): preserved supplied source.
+- [Original nine-tile drawing](diagrams/cell.sov): preserved from sketchbook
+  `ep-root-20261009`, file revision `76255d4`; the model and derived drawing add
+  structure beyond these original lines.
 - [Fraktal schematic](diagrams/fraktal.sov) and [preview](diagrams/fraktal.png).
 - [Nested kernel tile schematic](diagrams/kernel-tiles.sov) and [preview](diagrams/kernel-tiles.png).
 - [ARCH specification](ARCH-SPEC.md): vocabulary, code mapping and ranked remodel work.

@@ -16,6 +16,11 @@
       "sha256": "6a87112e9fd35b14e20bc462886c252fe85f84aa9f851745419f0e94ed92419b"
     },
     {
+      "path": "diagrams/cell.sov",
+      "bytes": 336184,
+      "sha256": "bec7eb473c549d78733ba53a9dee255d2b621a74f1fe423bcc11e45cc77971ed"
+    },
+    {
       "path": "diagrams/fraktal.png",
       "bytes": 840583,
       "sha256": "8f98df7657cf4d643b5212f8db4129533602d35af43e30e8e7d4316f064dd927"
@@ -102,8 +107,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 5910,
-      "sha256": "0409d758acda2df6d8dabfbc12185585447e03aaa55e644794fa52be3200277f"
+      "bytes": 6109,
+      "sha256": "79e0d74b51ad79532b27c96c795643c0b17a10a3a72fc8faecae28ddcb4a0389"
     },
     {
       "path": "reference/CRADLE-SPEC.md",
@@ -129,6 +134,13 @@
       "path": "reference/vocabulary.png",
       "bytes": 54146,
       "sha256": "35f47e8559dffc14e969f8f8d2a1b35008ef5ef0618b7a2523f37e42d2c7e697"
+    }
+  ],
+  "additional_sources": [
+    {
+      "path": "diagrams/cell.sov",
+      "origin": "ep-root-20261009/cell.sov",
+      "commit": "76255d4"
     }
   ]
 }
