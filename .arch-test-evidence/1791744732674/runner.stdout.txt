@@ -1,0 +1,14 @@
+✔ authored governed diagram expands separate nine-cell owners and explicit boundaries (33.3182ms)
+✔ operator-configured route is read-only, fixed and reports unavailable snapshots (42.5051ms)
+✔ file registrations and lifecycle preserve document routing (264.4569ms)
+✔ SQLite imports, exports, profiles and lifecycle retain working-copy ownership (909.8869ms)
+✔ projection shows actual owned cells, governed lineage and recorded rejection without writes (3.1086ms)
+✔ native server routes configured snapshots, documents and editor (288.001ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1673.2772

@@ -1,0 +1,13 @@
+✔ operator-configured route is read-only, fixed and reports unavailable snapshots (7.4959ms)
+✔ file registrations and lifecycle preserve document routing (401.4094ms)
+✔ SQLite imports, exports, profiles and lifecycle retain working-copy ownership (310.5217ms)
+✔ projection shows actual owned cells, governed lineage and recorded rejection without writes (7.5248ms)
+✔ native server routes configured snapshots, documents and editor (249.396ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1100.5658

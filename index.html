@@ -233,6 +233,8 @@ h2{font-size:12px;font-weight:600;letter-spacing:.01em;margin:0 0 8px;color:var(
 .wire-group.dormant .wire-voltage{opacity:.16}
 .wire{fill:none;stroke:var(--wire-ink,var(--canvas-ink));stroke-width:var(--stroke-flow,2.25);stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:pointer;transition:stroke-width .1s,opacity .1s}
 .wire-voltage{fill:none;stroke:var(--voltage-ink,var(--wire-ink,var(--canvas-ink)));stroke-width:calc(8px * var(--scale,1));stroke-linecap:round;stroke-linejoin:round;opacity:.10;pointer-events:none}
+.virtual-overview .wire{vector-effect:non-scaling-stroke;stroke-width:1.2px}
+.virtual-overview .wire-voltage{vector-effect:non-scaling-stroke;stroke-width:2px}
 .wire-hit{fill:none;stroke:transparent;stroke-width:max(14px,calc(12px / var(--zoom,1)));pointer-events:stroke;cursor:pointer}
 .wire.selected{stroke-width:4}
 .wire-group.wire-hover .wire{stroke-width:max(3.3px,calc(3px / var(--zoom,1)))}
@@ -2058,6 +2060,120 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     }
     return prefix+(max+1);
   }
+  // Virtual definitions are authored once; their ordinary records are a per-instance projection.
+  // The materialization marker travels with runtime clones, but never with authored serialization.
+  function virtualRecords(records,instance,toLocal=false){
+    const rewrite=value=>{
+      if(typeof value==='string'){
+        if(!toLocal)return value.replaceAll('$node',instance.id);
+        const prefix=value.startsWith('canvas:component:')?'canvas:component:':value.startsWith('canvas:wire:')?'canvas:wire:':'';
+        const tail=prefix?value.slice(prefix.length):value;
+        return tail===instance.id||tail.startsWith(instance.id+'-')?prefix+'$node'+tail.slice(instance.id.length):value;
+      }
+      if(Array.isArray(value))return value.map(rewrite);
+      if(isObject(value))return Object.fromEntries(Object.entries(value).map(([key,v])=>[key,rewrite(v)]));
+      return value;
+    };
+    const dx=(Number(instance.x)||0)*(toLocal?-1:1),dy=(Number(instance.y)||0)*(toLocal?-1:1);
+    return records.map(record=>{
+      const out=rewrite(record);
+      const move=value=>{if(!isObject(value))return;if(typeof value.x==='number')value.x+=dx;if(typeof value.y==='number')value.y+=dy};
+      move(out);if(out.placement?.kind==='surface')move(out.placement);
+      for(const key of ['aAttachment','bAttachment'])if(out[key]?.kind==='free')move(out[key]);
+      return out;
+    });
+  }
+  function virtualPlan(doc){
+    const v=doc.virtual;
+    if(v===undefined)return [];
+    if(!isObject(v)||!isObject(v.definitions)||!Array.isArray(v.instances))throw new Error('VIRTUAL_INVALID: virtual needs definitions and instances');
+    const instances=new Set(),generated={components:new Set(),wires:new Set()};
+    const unique=(records,label)=>{
+      if(!Array.isArray(records))throw new Error(`VIRTUAL_INVALID: ${label} must be an array`);
+      const ids=new Set();for(const r of records){if(!isObject(r)||typeof r.id!=='string'||!r.id)throw new Error(`VIRTUAL_INVALID: ${label} record needs id`);if(ids.has(r.id))throw new Error(`VIRTUAL_DUPLICATE: ${label} ${r.id}`);ids.add(r.id)}
+    };
+    for(const kind of ['components','wires'])unique(doc[kind]||[],kind);
+    return v.instances.map(instance=>{
+      if(!isObject(instance)||typeof instance.id!=='string'||!instance.id||instances.has(instance.id))throw new Error('VIRTUAL_DUPLICATE: each instance needs a unique id');
+      instances.add(instance.id);
+      const definition=v.definitions[instance.definitionId];
+      if(!isObject(definition))throw new Error(`VIRTUAL_DEFINITION_UNKNOWN: ${instance.definitionId}`);
+      if(instance.x!==undefined&&!Number.isFinite(instance.x)||instance.y!==undefined&&!Number.isFinite(instance.y))throw new Error(`VIRTUAL_INVALID: ${instance.id} position must be finite`);
+      const plan={instance,definition};
+      for(const kind of ['components','wires']){
+        unique(definition[kind],`definition ${instance.definitionId}.${kind}`);
+        const overrides=instance.overrides?.[kind]||[],extra=instance[kind]||[];
+        unique(overrides,`${instance.id}.overrides.${kind}`);unique(extra,`${instance.id}.${kind}`);
+        const removed=instance[kind==='components'?'removeComponents':'removeWires']||[];
+        if(!Array.isArray(removed)||removed.some(id=>typeof id!=='string'))throw new Error(`VIRTUAL_INVALID: ${instance.id} removals must be ids`);
+        const records=new Map(definition[kind].map(r=>[r.id,clone(r)]));
+        for(const r of extra){if(records.has(r.id))throw new Error(`VIRTUAL_DUPLICATE: ${instance.id}.${r.id}`);records.set(r.id,clone(r))}
+        for(const r of overrides)records.set(r.id,clone(r));
+        for(const id of removed)records.delete(id);
+        plan[kind]=virtualRecords([...records.values()],instance);
+        for(const r of plan[kind]){if(generated[kind].has(r.id))throw new Error(`VIRTUAL_DUPLICATE: generated ${kind} ${r.id}`);generated[kind].add(r.id)}
+      }
+      return plan;
+    });
+  }
+  function instanceMembers(doc,id){
+    const instance=doc.virtual?.instances?.find(i=>i.id===id);
+    if(!instance)return {components:[],wires:[]};
+    const plan=virtualPlan(doc).find(p=>p.instance.id===id),ids=new Set(plan.components.map(c=>c.id));
+    ids.add(id);
+    let grew=true;while(grew){grew=false;for(const c of doc.components||[])if(!ids.has(c.id)&&ids.has(c.parentId)){ids.add(c.id);grew=true}}
+    const wireIds=new Set(plan.wires.map(w=>w.id));
+    return {components:(doc.components||[]).filter(c=>ids.has(c.id)),wires:(doc.wires||[]).filter(w=>wireIds.has(w.id)||ids.has(w.a)&&ids.has(w.b))};
+  }
+  function materializeVirtual(doc){
+    const plans=virtualPlan(doc);if(!plans.length)return doc;
+    const v=doc.virtual,done=new Set(v._materializedInstances||[]),origins=v._origins||{};
+    // Authored records cannot claim an instance's generated identity. Check every new
+    // instance before appending any records, so a rejected expansion stays atomic.
+    for(const p of plans)if(!done.has(p.instance.id))for(const kind of ['components','wires']){
+      const present=new Set(doc[kind].map(r=>r.id));
+      for(const r of p[kind])if(present.has(r.id))throw new Error(`VIRTUAL_DUPLICATE: authored ${kind} id collides with generated id ${r.id}`);
+    }
+    for(const p of plans){
+      const i=p.instance,origin=origins[i.id];
+      if(done.has(i.id)){
+        if(origin&&((i.x||0)!==origin.x||(i.y||0)!==origin.y)){
+          const members=instanceMembers(doc,i.id),delta={id:'$node',x:(i.x||0)-origin.x,y:(i.y||0)-origin.y};
+          for(const kind of ['components','wires']){
+            const moved=virtualRecords(members[kind],delta);
+            members[kind].forEach((r,n)=>Object.assign(r,moved[n]));
+          }
+        }
+      }else{
+        for(const kind of ['components','wires']){const present=new Set(doc[kind].map(r=>r.id));for(const r of p[kind])if(!present.has(r.id)){doc[kind].push(r);present.add(r.id)}}
+        done.add(i.id);
+      }
+      origins[i.id]={x:i.x||0,y:i.y||0};
+    }
+    v._materializedInstances=[...done];v._origins=origins;
+    return doc;
+  }
+  function compactVirtual(doc){
+    const plans=virtualPlan(doc);if(!plans.length){if(doc.virtual){delete doc.virtual._materializedInstances;delete doc.virtual._origins}return}
+    const all={components:new Set(),wires:new Set()};
+    for(const p of plans){
+      const i=p.instance,members=instanceMembers(doc,i.id),shell=members.components.find(c=>c.id===i.id),templateShell=p.definition.components.find(c=>c.id==='$node');
+      if(shell&&templateShell){i.x=shell.x-(templateShell.x||0);i.y=shell.y-(templateShell.y||0)}
+      const baseline=normalizeDocument({components:virtualRecords(p.definition.components,i),wires:virtualRecords(p.definition.wires,i),references:[]});
+      i.overrides={components:[],wires:[]};
+      for(const kind of ['components','wires']){
+        const compact=kind==='components'?compactComponent:compactWire;
+        const bases=virtualRecords(baseline[kind].map(compact),i,true),baseById=new Map(bases.map(r=>[r.id,r]));
+        const records=virtualRecords(members[kind].map(compact),i,true),present=new Set(records.map(r=>r.id));
+        for(const r of records)if(!baseById.has(r.id)||Canonical.canonicalize(r)!==Canonical.canonicalize(baseById.get(r.id)))i.overrides[kind].push(r);
+        i[kind==='components'?'removeComponents':'removeWires']=bases.filter(r=>!present.has(r.id)).map(r=>r.id);
+        for(const r of members[kind])all[kind].add(r.id);
+        delete i[kind];
+      }
+    }
+    for(const kind of ['components','wires'])doc[kind]=doc[kind].filter(r=>!all[kind].has(r.id));
+    delete doc.virtual._materializedInstances;delete doc.virtual._origins;
+  }
   function makeDocument(input={}){
     const doc={
       schema:DOCUMENT_SCHEMA,
@@ -2070,6 +2186,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
       references:Array.isArray(input.references)?clone(input.references):[],
       layout:isObject(input.layout)?clone(input.layout):{}
     };
+    if(input.virtual!==undefined)doc.virtual=clone(input.virtual);
     // Presentation the document carries (NOTATION-MODEL.md): which notation it is drawn in, its
     // narration track and its legend choices. Absent means the default, and is not written.
     if(typeof input.notation==='string'&&input.notation.trim())doc.notation=input.notation.trim();
@@ -2091,6 +2208,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     if(!Array.isArray(doc.wires))doc.wires=Array.isArray(doc.connections)?doc.connections:[];
     if(!Array.isArray(doc.references))doc.references=[];
     if(!isObject(doc.layout))doc.layout={};
+    materializeVirtual(doc);
     // Resolving the notation registers the glyphs whose terminals are points, before any
     // component's points are read.
     {const N=(typeof globalThis!=='undefined'?globalThis:{}).SovSchematicNotation;if(N)N.resolve(doc)}
@@ -2128,7 +2246,8 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     return doc;
   }
   function makePackage(input={}){
-    const document=makeDocument(clone(input.document||input.workspace?.document||{}));
+    let document=makeDocument(clone(input.document||input.workspace?.document||{}));
+    if(document.virtual)document=compactDocument(document);
     const view=isObject(input.workspace?.view)?clone(input.workspace.view):isObject(input.view)?clone(input.view):{};
     const manifest=isObject(input.manifest)?clone(input.manifest):{};
     const timestamp=nowIso();
@@ -3052,6 +3171,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
   }
   function compactDocument(input){
     const doc=clone(input);
+    if(doc.virtual){materializeVirtual(doc);compactVirtual(doc)}
     delete doc.canvas;
     doc.components=(doc.components||[]).map(compactComponent);
     doc.wires=(doc.wires||[]).map(compactWire);
@@ -3551,12 +3671,30 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     wires.splice(0,wires.length,...incoming.wires);
     references.splice(0,references.length,...incoming.references);
     target.schema=DOCUMENT_SCHEMA;target.id=incoming.id;target.revision=incoming.revision;target.meta=incoming.meta;target.canvas=incoming.canvas;target.layout=incoming.layout;
-    for(const k of ['notation','narration','legend']){if(incoming[k]===undefined)delete target[k];else target[k]=incoming[k]}
+    for(const k of ['notation','narration','legend','virtual']){if(incoming[k]===undefined)delete target[k];else target[k]=incoming[k]}
     return target;
   }
   function validateDocument(input){
     const errors=[];
     if(!isObject(input))return {ok:false,errors:['document must be an object']};
+    try{
+      virtualPlan(input);
+      if(input.virtual){
+        input=materializeVirtual(clone(input));
+        // Stored instance records omit derived port and canvas state. Reconstruct it
+        // on a separate copy, while keeping authored values for semantic validation.
+        const realized=normalizeDocument(clone(input));
+        for(let n=0;n<input.components.length;n++){
+          const c=input.components[n],r=realized.components[n];
+          if(!c.canvas)c.canvas=r.canvas;
+          if(!c.boundary)c.boundary=r.boundary;
+          if(!c.parts)c.parts=r.parts;
+          if(!c.config)c.config={};
+          if(!c.config.attachmentPoints)c.config.attachmentPoints=r.config?.attachmentPoints;
+          if(!c.config.ports)c.config.ports=r.config?.ports;
+        }
+      }
+    }catch(error){return {ok:false,errors:[String(error.message||error)]}}
     if(input.schema!==DOCUMENT_SCHEMA)errors.push(`schema must equal ${DOCUMENT_SCHEMA}`);
     if(!Array.isArray(input.components))errors.push('components must be an array');
     if(!Array.isArray(input.wires))errors.push('wires must be an array');
@@ -3638,7 +3776,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     ];
   }
   Attachment.useTemplatePorts(symbolId=>templatePorts(symbolId));
-  return {admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,notationConcerns,answerProblems,concernReport,answerConcerns,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
+  return {instanceMembers,materializeVirtual,admitTimeScale,PALETTE_NAMES,admitPalette,statusProblems,notationStatuses,notationConcerns,answerProblems,concernReport,answerConcerns,WAITS_ON_KINDS,groupRect,groupFindings,isGroup,validateMerge,cleanStoredPorts,assertWiresSurviveEdit,assertDefinitionPortsKept,templatePorts,defaultAttachmentMode,normalizeDeclaredPorts,setDeclaredPorts,sharedChannelIds,DOCUMENT_SCHEMA,WORKSPACE_SCHEMA,PACKAGE_SCHEMA,OPERATION_SCHEMA,RECEIPT_SCHEMA,GLOBAL_CANVAS_ID,RESOURCE_KEYS,clone,makeDocument,normalizeDocument,compactDocument,compactComponent,compactWire,documentHash,validateDocument,makePackage,validatePackage,documentFromFilePayload,replaceDocument,makeComponent,makeWire,makeReference,applySymbol,normalizeSymbolId,templatePreset,isPrimitiveSymbol,defaultLabelMode,effectiveLabelMode,adoptLabelMode,isFreeEndpoint,wireEndBound,normalizeWireEndpoints,carrierCanvasId,bindWireEndpoint,freeWireEndpoint,componentCanvasId,containingCanvasId,canonicalAttachmentPointIdsForComponent,canonicalAttachmentPointDescriptors,canonicalPortIdsForComponent,canonicalPortIdForComponent,reconcileComponentWirePorts,attachmentPointConfig,attachmentHostSurfaces,portExposedCanvasIds,connectionReachability,migrateLegacyWirePointAttachments,list,read,create,update,remove,applyOperation,applyBatch,readScope,symbolIds,applyBinding,effectiveDimension:Attachment.effectiveDimension,operationTools,touch,normalizePresentationSize,CARD_SHAPES,shapeProblems,cardShape,markersFor,sectionPosition,sectionRegionsTouched,pointSectionPosition,projectSection,SECTION_PRESETS,sectionPreset,componentSection,normalizeSection};
 });
 /* END src/05-data-core.js */
 </script>
@@ -5920,6 +6058,7 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     if(restored)run=clone(o.restore.run);
     else{const r=start();if(!r.ok)return r;run=r.run}
     const TICK=run.tickMs;
+    const instanceScopes=new Map();
     const tickAt=ms=>ceilDiv(ms,TICK);
 
     // One input: before the first tick it joins the start inputs (the run is started again); after
@@ -6192,6 +6331,15 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
         if(!r.ok)return r;
         internal.add(`m-${r.seq}`);cache=null;
         return {ok:true,at:tickAt(t)*TICK};
+      },
+      instance(id){
+        if(!doc.virtual?.instances?.some(i=>i.id===id))return refusal('UNKNOWN_INSTANCE',`No virtual node ${id}`);
+        if(!instanceScopes.has(id)){const own=Data.instanceMembers(run.doc,id);instanceScopes.set(id,{components:new Set(own.components.map(c=>c.id)),wires:new Set(own.wires.map(w=>w.id))})}
+        const scope=instanceScopes.get(id),members=scope.components;
+        const owns=key=>{if(members.has(key))return true;try{return members.has(JSON.parse(key)[0])}catch(_){return false}};
+        const pick=map=>Object.fromEntries(Object.entries(map||{}).filter(([key])=>owns(key)).map(([key,value])=>[key,clone(value)]));
+        const records=run.records.filter(r=>members.has(r.subject?.entity)||scope.wires.has(r.subject?.entity)||members.has(r.entity));
+        return {ok:true,id,time,members:[...members],state:{signal:pick(run.signal),device:pick(run.deviceState),queues:pick(run.queues)},records:clone(records),parked:this.parked().filter(p=>members.has(p.node)),refusals:this.refusals().filter(r=>members.has(r.node)||members.has(r.entity))};
       },
       levels(){const lv=views().level;return Object.fromEntries(run.doc.components.map(c=>[c.id,{value:lv[c.id]??0,kind:kindOf(c.id),mode:modeOf(c.id)}]))},
       edges({node=null,since=null}={}){return {ok:true,edges:views().edges.filter(e=>(!node||e.node===node)&&(since==null||e.at>=since)).map(clone)}},
@@ -7699,7 +7847,7 @@ let selected=null,seq=1;
 let wireDrag=null;
 const BASE_VIEW = {x:0,y:0,w:1200,h:760};
 let camera = {...BASE_VIEW};
-const MIN_ZOOM = .28;
+const MIN_ZOOM = .04;
 const MAX_ZOOM = 4.0;
 let showFlow=true;
 const ROUTE_SWITCH_MARGIN = 72;      // alternative must beat latched route by this much
@@ -8192,7 +8340,7 @@ function carrierEndpoint(w,end){
 function carrierEndpointPos(w,end){return carrierEndpoint(w,end)?.pos||null}
 function carrierEndBound(w,end){return carrierEndpoint(w,end)?.kind==='bound'}
 function carrierIsRenderable(w){
-  for(const end of ['a','b']){const ep=carrierEndpoint(w,end);if(!ep)return false;if(ep.kind==='bound'&&isEffectivelyHidden(ep.node))return false}
+  for(const end of ['a','b']){const ep=carrierEndpoint(w,end);if(!ep)return false;if(ep.kind==='bound'&&(isEffectivelyHidden(ep.node)||!virtualNodeVisible(ep.node)))return false}
   return true;
 }
 function endpointPortConfig(w,end){return endpointAttachmentPoint(w,end)?.config||null}
@@ -8750,8 +8898,33 @@ function duplicateSelection(){if(!copySelection())return [];return pasteClipboar
 function updateEditMenuState(){const p=document.getElementById('editPasteBtn');if(p)p.disabled=!semanticClipboard}
 
 // --- Focus / search / objects ---------------------------------------------
+// Virtual detail is a workspace projection. It never changes editor.hidden or the run.
+const virtualView={open:null,owners:new Map()};
+function refreshVirtualProjection(){
+  virtualView.owners.clear();
+  const instances=diagram.virtual?.instances||[],byId=new Map(nodes.map(n=>[n.id,n]));
+  const roots=new Set(instances.map(i=>i.id));
+  if(!roots.has(virtualView.open))virtualView.open=null;
+  for(const n of nodes){let p=n,seen=new Set();while(p&&!seen.has(p.id)){if(roots.has(p.id)){virtualView.owners.set(n.id,p.id);break}seen.add(p.id);p=byId.get(p.parentId)}}
+  let back=document.getElementById('virtualOverviewBtn');
+  if(!back){back=document.createElement('button');back.id='virtualOverviewBtn';back.textContent='Overview';back.title='Close node detail; keep the clock running';back.addEventListener('click',()=>{closeVirtualNode();fitDiagram()});document.getElementById('fitBtn')?.before(back)}
+  back.hidden=!instances.length||!virtualView.open;
+  workspace.classList.toggle('virtual-overview',instances.length>0&&!virtualView.open);
+}
+function virtualNodeVisible(n){
+  const owner=virtualView.owners.get(n.id);if(!owner||owner===virtualView.open||n.id===owner)return true;
+  return n.placement?.kind==='edge'&&n.placement.hostId===owner;
+}
+function openVirtualNode(id){
+  const instance=diagram.virtual?.instances?.find(i=>i.id===id);if(!instance)return {ok:false,message:`No virtual node ${id}`};
+  virtualView.open=id;routeCache.clear();arrowPoseCache.clear();render();focusComponent(nodes.find(n=>n.id===id));
+  return {ok:true,id};
+}
+function closeVirtualNode(){virtualView.open=null;routeCache.clear();arrowPoseCache.clear();render();return {ok:true}}
 function focusComponent(node){
-  if(!node)return;const size=componentSize(node),wrap=workspace.getBoundingClientRect(),aspect=(wrap.width||1)/(wrap.height||1);let w=Math.max(220,size.w*2.4),h=Math.max(170,size.h*2.4);if(w/h>aspect)h=w/aspect;else w=h*aspect;const z=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,BASE_VIEW.w/w));camera={x:node.x-(BASE_VIEW.w/z)/2,y:node.y-(BASE_VIEW.h/z)/2,w:BASE_VIEW.w/z,h:BASE_VIEW.h/z};applyCamera();selectNode(node.id,{focus:false});statusEl.textContent=`Focus · ${componentDisplayName(node)}`;
+  const owner=node&&virtualView.owners.get(node.id);
+  if(owner&&virtualView.open!==owner){virtualView.open=owner;routeCache.clear();arrowPoseCache.clear();render()}
+  if(!node)return;const size=componentSize(node),wrap=workspace.getBoundingClientRect(),aspect=(wrap.width||1)/(wrap.height||1);const margin=owner?1.15:2.4;let w=Math.max(220,size.w*margin),h=Math.max(170,size.h*margin);if(w/h>aspect)h=w/aspect;else w=h*aspect;const z=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,BASE_VIEW.w/w));camera={x:node.x-(BASE_VIEW.w/z)/2,y:node.y-(BASE_VIEW.h/z)/2,w:BASE_VIEW.w/z,h:BASE_VIEW.h/z};applyCamera();selectNode(node.id,{focus:false});statusEl.textContent=`Focus · ${componentDisplayName(node)}`;
 }
 function openQuickSearch(seed=''){
   const overlay=document.getElementById('quickSearch'),input=document.getElementById('quickSearchInput');if(!overlay||!input)return;
@@ -8772,7 +8945,7 @@ function updateQuickSearch(query=''){
 }
 function renderObjectsPanel(){
   const list=document.getElementById('objectsList');if(!list)return;list.replaceChildren();
-  const sorted=[...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)||String(a.id).localeCompare(String(b.id)));
+  const sorted=nodes.filter(virtualNodeVisible).sort((a,b)=>nodeDepth(a)-nodeDepth(b)||String(a.id).localeCompare(String(b.id)));
   for(const n of sorted){const st=entityEditorState(n),row=document.createElement('button');row.type='button';row.className='object-row'+(st.hidden?' is-hidden':'')+(st.locked?' is-locked':'')+(st.pinned?' is-pinned':'');row.style.paddingLeft=`${8+nodeDepth(n)*14}px`;row.innerHTML=`<span>${escapeXML(componentDisplayName(n))}</span><small>${st.pinned?'◆ ':''}${st.locked?'🔒 ':''}${st.hidden?'hidden':n.symbolId}</small>`;row.addEventListener('click',()=>{if(st.hidden){st.hidden=false;setHistoryHint('Show object');render();scheduleHistoryCapture()}selectNode(n.id)});row.addEventListener('dblclick',()=>focusComponent(n));list.appendChild(row)}
   const hiddenCount=nodes.filter(n=>entityEditorState(n).hidden).length;const count=document.getElementById('hiddenObjectCount');if(count)count.textContent=hiddenCount?String(hiddenCount):'';
   if(!list.children.length){const e=document.createElement('div');e.className='empty-mini';e.textContent='No objects';list.appendChild(e)}
@@ -9439,6 +9612,7 @@ function incomingSignals(componentId,signalState){
     }
   }
   for(const w of wires){
+    if(w.a!==componentId && w.b!==componentId)continue;
     const cfg=connectionConfig(w);
     if(cfg.direction==='forward' && w.b===componentId && wireDirectionActive(w,'forward',signalState)) colors.push(signalState.colors.get(w.a));
     else if(cfg.direction==='reverse' && w.a===componentId && wireDirectionActive(w,'reverse',signalState)) colors.push(signalState.colors.get(w.b));
@@ -9913,7 +10087,7 @@ function diagramBounds(canvasId=selectedCanvasContextId()){
   const wireIds=activeCanvasWireSet(canvasId),occupied=[];
   for(const w of wires)if(nodeIds.has((w.canvasId||'').replace('canvas:component:','')))wireIds.add(w.id);
   // The bus routes are asked for once for the whole loop (src/40-routing.js withBusRoutesOnce).
-  withBusRoutesOnce(()=>wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B||![A,B].every(q=>Number.isFinite(q.x)&&Number.isFinite(q.y)))return;const points=stableRouteForWire(i,w,A,B,occupied);if(!points.every(q=>Number.isFinite(q.x)&&Number.isFinite(q.y)))return;occupied.push(...routeSegments(points,w));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}}));
+  withRouteLeadObstacles(()=>withBusRoutesOnce(()=>wires.forEach((w,i)=>{if(!wireIds.has(w.id))return;const A=carrierEndpointPos(w,'a'),B=carrierEndpointPos(w,'b');if(!A||!B||![A,B].every(q=>Number.isFinite(q.x)&&Number.isFinite(q.y)))return;const points=stableRouteForWire(i,w,A,B,occupied);if(!points.every(q=>Number.isFinite(q.x)&&Number.isFinite(q.y)))return;occupied.push(...routeSegments(points,w));for(const q of points){l=Math.min(l,q.x);r=Math.max(r,q.x);t=Math.min(t,q.y);b=Math.max(b,q.y)}})));
   // Text and custom graphics can extend beyond a Component's body. Measure their
   // actual projection in workspace coordinates, excluding selection/drag chrome.
   const inverse=workspace.getScreenCTM()?.inverse();
@@ -11043,6 +11217,13 @@ function routePoints(A,B,aSide='out',bSide='in',sourceId=null,targetId=null,lane
 // across a short gap each lead takes at most half of it. A free 0D Point has no side, so it
 // leaves toward the other end along the dominant axis, with a short lead.
 const ROUTE_LEAD=26,POINT_LEAD=12;
+let routeLeadObstaclePass=null;
+// Measurements stand only for one route collection; the next pass reads moved cards again.
+function withRouteLeadObstacles(fn){
+  const previous=routeLeadObstaclePass;
+  routeLeadObstaclePass=nodes.filter(n=>componentForm(n).dimension===2&&!isGroupComponent(n)&&!isEffectivelyHidden(n)).map(n=>({node:n,rect:componentBounds(n,10)}));
+  try{return fn()}finally{routeLeadObstaclePass=previous}
+}
 function routeLead(P,Q,portId,node,inward){
   const placement=componentPlacement(node);
   if(componentForm(node).dimension===0&&placement.kind!=='edge'&&!componentHostedOnWire(node)){
@@ -11054,9 +11235,12 @@ function routeLead(P,Q,portId,node,inward){
   const ahead=(Q.x-P.x)*nx+(Q.y-P.y)*ny;
   let d=ahead>0?Math.max(4,Math.min(ROUTE_LEAD,ahead/2)):ROUTE_LEAD;
   // Nor into a body in front of it: stop short of the first card the lead would enter.
-  for(const other of nodes){
-    if(other.id===node.id||componentForm(other).dimension!==2||isGroupComponent(other)||isDescendantOf(node.id,other.id)||isEffectivelyHidden(other))continue;
-    const R=componentBounds(other,10);
+  const candidates=routeLeadObstaclePass||nodes.filter(n=>componentForm(n).dimension===2&&!isGroupComponent(n)&&!isEffectivelyHidden(n)).map(n=>({node:n,rect:componentBounds(n,10)}));
+  for(const {node:other,rect:R} of candidates){
+    if(other.id===node.id)continue;
+    const endX=P.x+nx*d,endY=P.y+ny*d;
+    if(Math.max(P.x,endX)<=R.l||Math.min(P.x,endX)>=R.r||Math.max(P.y,endY)<=R.t||Math.min(P.y,endY)>=R.b)continue;
+    if(isDescendantOf(node.id,other.id))continue;
     for(let s=2;s<=d;s+=2){const x=P.x+nx*s,y=P.y+ny*s;if(x>R.l&&x<R.r&&y>R.t&&y<R.b){d=Math.max(4,s/2);break}}
   }
   return {x:P.x+nx*d,y:P.y+ny*d};
@@ -12605,7 +12789,7 @@ function renderGroups(markers=markersById()){
   layer.appendChild(regionInsetDefs(T));
   const borders={group:regionDash('group'),intake:regionDash('intake')};
   for(const n of nodes){
-    if(!isGroupComponent(n)||isEffectivelyHidden(n))continue;
+    if(!isGroupComponent(n)||isEffectivelyHidden(n)||!virtualNodeVisible(n))continue;
     const cfg=n.config||{},surface=n.canvasId||GLOBAL_CANVAS_ID,editor=entityEditorState(n);
     const g=document.createElementNS('http://www.w3.org/2000/svg','g');
     g.setAttribute('class','node group'+(selectedComponentIds.has(n.id)?' selected':''));g.dataset.id=n.id;g.dataset.canvasId=surface;g.style.opacity=String(editor.opacity);
@@ -12744,6 +12928,7 @@ function appendComponentWaitsOn(g,n){
   t.setAttribute('style',`${CAPTION_STYLE};fill:${statusInk(componentFillGround(n))};stroke:none;pointer-events:none`);t.textContent='Waits on '+list;g.appendChild(t);
 }
 function render(){
+  refreshVirtualProjection();
   applyNotationTokens();
   componentLabelFitZoom=workspace.style.getPropertyValue('--zoom'); // the cards drawn below are fitted at this zoom
   if(typeof buildSymbolPalette==='function')buildSymbolPalette();
@@ -12755,7 +12940,7 @@ function render(){
   const unplacedIds=new Set(typeof layoutUnplacedIds==='function'?layoutUnplacedIds():[]);
   let undrawnCards=0;
   [...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)).forEach(n=>{
-    if(isEffectivelyHidden(n)||isGroupComponent(n))return; // groups are drawn by renderGroups, behind
+    if(isEffectivelyHidden(n)||!virtualNodeVisible(n)||isGroupComponent(n))return; // groups are drawn by renderGroups, behind
     // A card whose drawn position is not finite is not drawn, and is counted. A card hosted on a wire or
     // a component takes its place from its host, so its stored x and y are not the rule.
     if(!(Number.isFinite(n.x)&&Number.isFinite(n.y))&&!(componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n))){undrawnCards++;return}
@@ -12767,6 +12952,12 @@ function render(){
     const signalColor=componentSignals.get(n.id)||cfg.color;
     {const angle=componentHostAngle(n),attached=componentHostedOnWire(n)||componentHostedOnComponentPath(n)||componentHostedOnComponentEdge(n);g.setAttribute('transform',`translate(${n.x} ${n.y})${attached?` rotate(${angle})`:''}`)}
     renderComponentVisual(g,n,cfg,s,signalColor);appendComponentStatus(g,n);appendComponentBadges(g,n);
+    if(diagram.virtual?.instances?.some(i=>i.id===n.id)&&virtualView.open!==n.id){
+      const button=document.createElementNS('http://www.w3.org/2000/svg','g');button.setAttribute('role','button');button.setAttribute('aria-label',`Open ${n.id} 3×3`);button.setAttribute('class','virtual-open');button.style.cursor='pointer';
+      const hit=document.createElementNS('http://www.w3.org/2000/svg','rect');hit.setAttribute('x','-180');hit.setAttribute('y','-24');hit.setAttribute('width','360');hit.setAttribute('height','40');hit.setAttribute('fill','transparent');hit.style.pointerEvents='all';button.appendChild(hit);
+      const text=document.createElementNS('http://www.w3.org/2000/svg','text');text.setAttribute('text-anchor','middle');text.style.pointerEvents='all';text.textContent='Open 3×3 · separate node state';button.appendChild(text);
+      button.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault()});button.addEventListener('click',e=>{e.stopPropagation();openVirtualNode(n.id)});button.addEventListener('dblclick',e=>e.stopPropagation());g.appendChild(button);
+    }
     if(!editor.pinned&&!editor.locked&&componentForm(n).dimension===2)appendComponentTransformHandles(g,n,cfg);
     {const nodeMarkers=markers.get(n.id);if(nodeMarkers){const size=componentSize(n);appendMarkerBadge(g,nodeMarkers,size.w/2,-size.h/2)}}
     const renderedPoints=componentAttachmentPoints(n);for(const point of renderedPoints){
@@ -13472,7 +13663,7 @@ function renderWiresOnce(signalState,markers,reuse){
   // holds a host wire's segments before those wires are routed and no host wire's route is scored
   // against them. The repeat in renderWires remains because a card's pose comes from the drawn
   // path, which hops and track nudging still change.
-  routeEvery(()=>wireRouteOrder().forEach(i=>{
+  withRouteLeadObstacles(()=>routeEvery(()=>wireRouteOrder().forEach(i=>{
     const w=wires[i];
     if(entityEditorState(w).hidden||!carrierIsRenderable(w))return;
     const A=carrierEndpoint(w,'a').pos,B=carrierEndpoint(w,'b').pos;
@@ -13485,7 +13676,7 @@ function renderWiresOnce(signalState,markers,reuse){
     if(!points.length||!points.every(finitePoint)){undrawnWires.add(i);return}
     routes.set(i,{points,snapshot,segs:routeSegments(points,w)});
     if(!busState?.routes.has(w.id))occupied.push(...routes.get(i).segs);
-  }));
+  })));
   // Back in stored order: the hop pairs, the track nudging and the drawn points read `routes` by wire index.
   const routedInStoredOrder=[...routes].sort((p,q)=>p[0]-q[0]);
   routes.clear();for(const [i,r] of routedInStoredOrder)routes.set(i,r);
@@ -15568,7 +15759,8 @@ function captureWorkspace(){
       playbackSpeed:simClock.speed,
       // The wave view's style (src/68-wave-view.js) is the view's alone: never in the document.
       waveStyle:typeof waveStyle==='function'?waveStyle():'off',
-      layout:typeof activeLayoutId==='function'?activeLayoutId():null
+      layout:typeof activeLayoutId==='function'?activeLayoutId():null,
+      virtualOpen:virtualView.open
     }
   };
 }
@@ -15625,6 +15817,7 @@ function syncRuntimeAfterDocumentReplace(){
   render();selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
 }
 function replaceRuntimeDocument(input){
+  virtualView.open=null;
   const doc=input?.schema===SovSchematicData.WORKSPACE_SCHEMA?input.document:input;
   const normalized=SovSchematicData.makeDocument(SovSchematicData.clone(doc));
   const valid=SovSchematicData.validateDocument(normalized);
@@ -15638,6 +15831,7 @@ function applyWorkspace(bundle){
   if(!bundle||bundle.schema!==SovSchematicData.WORKSPACE_SCHEMA)return replaceRuntimeDocument(bundle);
   replaceRuntimeDocument(bundle.document);
   const view=bundle.view||{};
+  if(view.virtualOpen)openVirtualNode(view.virtualOpen);
   if(view.camera){camera={...BASE_VIEW,...view.camera};applyCamera()}
   if(view.grid){
     canvasGridVisible=view.grid.visible!==false;canvasSnapEnabled=view.grid.snap!==false;
@@ -15691,7 +15885,7 @@ function preferredExtension(format=currentFileFormat){return format==='package'?
 function suggestedFileName(format=currentFileFormat){return `${fileBaseName()}${preferredExtension(format)}`}
 function documentFileText(){
   commitDocumentRevisionIfChanged();
-  return JSON.stringify(snapshotDocument(),null,2);
+  const doc=snapshotDocument();return JSON.stringify(doc,null,doc.virtual?0:2);
 }
 function collectPackageTemplates(){
   return [...(GROUPS.Primitives||[]),...(GROUPS.Components||[])].map(symbolId=>{
@@ -15730,7 +15924,7 @@ function snapshotPackage(){
     manifest:{title:workspace.document.meta?.title||fileBaseName()}
   });
 }
-function packageFileText(){return JSON.stringify(snapshotPackage(),null,2)}
+function packageFileText(){const bundle=snapshotPackage();return JSON.stringify(bundle,null,bundle.document.virtual?0:2)}
 function fileTextForFormat(format){return format==='package'?packageFileText():documentFileText()}
 function mimeForFormat(format){return format==='package'?'application/vnd.soveraeign.schematic-package+json':'application/vnd.soveraeign.schematic+json'}
 function isFileDirty(){return lastFileFingerprint===null?semanticFingerprint()!==pristineFingerprint:semanticFingerprint()!==lastFileFingerprint}
@@ -16526,6 +16720,7 @@ function simFrame(now){
   const key=simPaintKey(),painted=simClock.painted;
   if(!painted||simClock.canvasMoved||key.steady!==painted.steady||(key.continuous!==painted.continuous&&now-simClock.paintedAt>=SIM_CONTINUOUS_MS)){simClock.paintedAt=now;paintSim({frame:true,key})}
   else if(typeof paintWaves==='function')paintWaves();
+  if(virtualView.open&&now-virtualStatePaintedAt>=100){paintVirtualState();virtualStatePaintedAt=now}
   updateSimReadout();
   simClock.frame=requestAnimationFrame(simFrame);
 }
@@ -16555,6 +16750,19 @@ function updateSimReadout(){
   play.textContent=simClock.playing?'❚❚':'▶';play.title=simClock.playing?'Pause the clock':'Run the clock';play.classList.toggle('active',simClock.playing);
 }
 
+let virtualStatePaintedAt=0;
+function paintVirtualState(){
+  const run=simClock.run;
+  let statePanel=document.getElementById('virtualStatePanel');
+  if(!statePanel){statePanel=document.createElement('pre');statePanel.id='virtualStatePanel';statePanel.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;font-size:12px';document.getElementById('objectsList')?.before(statePanel)}
+  statePanel.hidden=!virtualView.open;
+  if(virtualView.open){
+    const local=run?run.instance(virtualView.open):null;
+    const latest=local?.records?.findLast(r=>r.observable==='message'&&r.value?.payload);
+    statePanel.textContent=local?.ok?`${local.id} · node state\nShared clock: ${Math.round(local.time)} ms\nLocal records: ${local.records.length}\nWaiting: ${local.parked.length}\n${latest?`Latest packet · ${latest.value.channel}\n${JSON.stringify(latest.value.payload,null,2)}\n`:''}${JSON.stringify({device:local.state.device,queues:local.state.queues},null,2)}`:`${virtualView.open} · separate node state\nStart the clock to inspect activity.`;
+  }
+}
+
 const SVGNS='http://www.w3.org/2000/svg';
 function simEl(tag,attrs,cls){const e=document.createElementNS(SVGNS,tag);if(cls)e.setAttribute('class',cls);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e}
 // Paint the engine's state over the rendered canvas. Called after every render, after every clock
@@ -16576,6 +16784,7 @@ function paintSim(paint){
   if(typeof paintWaves==='function')paintWaves();
   workspace.classList.toggle('sim-live',!!simClock.run);
   const run=simClock.run,levels=run?run.levels():{};
+  paintVirtualState();
   // A wire is lit while its source end is high. A source in a role or status slot (6-11) lights it in
   // that slot's own tone (litTone); any other source keeps the output accent. Only a group whose lit
   // state, level or tone differs from what it carries is written.
@@ -16595,7 +16804,7 @@ function paintSim(paint){
   const wired=new Set(wires.flatMap(w=>[w.a,w.b]));
   for(const n of nodes){
     // A level is shown where it can matter: on a wired node, or one that declares a signal.
-    if(isEffectivelyHidden(n)||!(wired.has(n.id)||componentConfig(n).signal))continue;const L=levels[n.id];if(!L)continue;
+    if(isEffectivelyHidden(n)||!virtualNodeVisible(n)||!(wired.has(n.id)||componentConfig(n).signal))continue;const L=levels[n.id];if(!L)continue;
     const dim=componentForm(n).dimension,size=componentSize(n);
     if(dim===2){
       const x=n.x+size.w/2-10,y=n.y-size.h/2+10;
@@ -16611,23 +16820,24 @@ function paintSim(paint){
   }
   // An entry node (wires out, none in) can send work: the payload its saved scenario injects, if any.
   for(const n of nodes){
-    if(isEffectivelyHidden(n)||componentForm(n).dimension!==2||!wires.some(w=>w.a===n.id)||wires.some(w=>w.b===n.id))continue;
-    const size=componentSize(n),send=simEl('g',{transform:`translate(${n.x-size.w/2-4} ${n.y+size.h/2+4})`},'sim-send');
+    if(isEffectivelyHidden(n)||!virtualNodeVisible(n)||componentForm(n).dimension!==2||!wires.some(w=>w.a===n.id)||wires.some(w=>w.b===n.id))continue;
+    const size=componentSize(n),send=simEl('g',{transform:`translate(${n.x-size.w/2-4} ${n.y+size.h/2+4})`,role:'button','aria-label':`Send ${componentConfig(n).label||n.id}`,tabindex:0},'sim-send');
     send.appendChild(simEl('circle',{r:8}));const tt=simEl('text',{y:4,'text-anchor':'middle'});tt.textContent='➤';send.appendChild(tt);
     const title=simEl('title',{});title.textContent=`Send a message from ${componentConfig(n).label||n.id}`;send.appendChild(title);
     send.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();simSend(n.id)});simLayer.appendChild(send);
+    send.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.stopPropagation();e.preventDefault();simSend(n.id)}});
   }
   // New edges flash + or − beside their node.
   const edges=run.edges().edges;
   for(const e of edges.slice(simClock.edgeMark)){
-    const n=nodes.find(x=>x.id===e.node);if(!n)continue;const size=componentSize(n);
+    const n=nodes.find(x=>x.id===e.node);if(!n||!virtualNodeVisible(n))continue;const size=componentSize(n);
     const t=simEl('text',{x:n.x-size.w/2+4,y:n.y-size.h/2-6,'text-anchor':'start'},'sim-edge '+(e.polarity==='+'?'rise':'fall'));t.textContent=e.polarity==='+'?'+':'−';
     simLayer.appendChild(t);setTimeout(()=>t.remove(),700);
   }
   simClock.edgeMark=edges.length;
   // A step waiting on a person shows its decision in place.
   for(const p of run.parked()){
-    const n=nodes.find(x=>x.id===p.node);if(!n)continue;const size=componentSize(n),x=n.x,y=n.y+size.h/2+14;
+    const n=nodes.find(x=>x.id===p.node);if(!n||!virtualNodeVisible(n))continue;const size=componentSize(n),x=n.x,y=n.y+size.h/2+14;
     const chip=simEl('g',{transform:`translate(${x} ${y})`},'sim-waiting');
     chip.appendChild(simEl('rect',{x:-58,y:-10,width:116,height:20,rx:10},'sim-waiting-bg'));
     const label=simEl('text',{x:-48,y:4},'sim-waiting-text');label.textContent='waiting';chip.appendChild(label);
@@ -17113,6 +17323,7 @@ const SovSchematicAPI={
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
   selection:{components:()=>[...selectedComponentIds],copy:()=>copySelection(),paste:()=>pasteClipboard(),duplicate:()=>duplicateSelection()},
+  virtual:{list:()=>({ok:true,open:virtualView.open,instances:(diagram.virtual?.instances||[]).map(i=>({id:i.id,definitionId:i.definitionId}))}),open:(id)=>openVirtualNode(id),close:()=>{const r=closeVirtualNode();fitDiagram();return r}},
   markers:()=>SovSchematicData.markersFor(diagram),
   concerns:{list:(options={})=>SovSchematicData.concernReport(snapshotDocument(),options||{}),answer:(answers)=>runtimeAnswers(answers)},
   view:{legend:()=>({ok:true,open:legendState.open,entries:SovSchematicData.clone(legendEntries())}),setLegend:(open=true)=>({ok:true,open:setLegendOpen(open)}),narration:()=>({ok:true,index:narrationState.index,lines:SovSchematicData.clone(narrationLines())}),narrate:(i=null)=>SovSchematicData.clone(showNarration(i==null?null:Number(i))),colour:()=>({theme:colorEngine.theme,palette:effectivePaletteName(),palettes:['okabe-ito',...Object.keys(BASE_PALETTES).filter(k=>k!=='okabe-ito'),'mono','custom'],source:documentPalette()!==null?'document':'view',viewPalette:colorEngine.palette}),setColour:({theme,palette}={})=>{if(theme)colorEngine.theme=theme;const picked=palette?pickPalette(palette):null;if(!palette||picked?.ok===false)applyColorEngine();return picked?.ok===false?picked:{theme:colorEngine.theme,palette:effectivePaletteName()}},documentPalette:()=>SovSchematicData.clone(documentPalette()),setDocumentPalette:(value)=>{const admitted=setDocumentPalette(value);return admitted.ok===false?admitted:SovSchematicData.clone(documentPalette())},paletteAudit:()=>SovSchematicData.clone(paletteAudit()),appearance:()=>appearanceMode,setAppearance:(mode)=>{appearanceMode=mode;applyAppearanceMode();return appearanceMode},globalRate:()=>globalTimeScale(),setGlobalRate:(value)=>{const admitted=setGlobalTimeScale(value);return admitted.ok===false?admitted:globalTimeScale()},
@@ -17146,6 +17357,7 @@ const SovSchematicAPI={
     rubric:()=>SovSchematicData.clone(LAYOUT_RUBRIC)
   },
   clock:{
+    instance:(id)=>simClock.run?simClock.run.instance(id):{ok:false,code:'NO_SIMULATION',message:'Start the clock to inspect node state'},
     play:()=>simPlay(),pause:()=>simPause(),step:()=>SovSchematicData.clone(simStep()),advance:(ms)=>SovSchematicData.clone(simAdvance(ms)),
     reset:()=>simReset(),setSpeed:(x)=>{simClock.speed=Number(x)||1;const sel=document.getElementById('simSpeed');if(sel)sel.value=String(simClock.speed);return simClock.speed},
     toggle:(id)=>SovSchematicData.clone(simToggleLever(id)),send:(id)=>SovSchematicData.clone(simSend(id)),
@@ -17430,6 +17642,142 @@ window.SovSchematicLive=SovSchematicLive;
   if(requested)liveStart(requested);
 })();
 /* END src/87-live.js */
+</script>
+<script data-beta-module="src/88-kore-execution.js">
+/* BEGIN src/88-kore-execution.js */
+'use strict';
+// Read-only projection of the Python Knode runtime. Opening a virtual node is
+// still an editor view operation. No execution or inferred Kord lives here.
+const koreObservation={snapshot:null,error:null,busy:false,bound:false,observedAt:null,inspection:null,lastSelection:null,recordsOpen:false};
+function koreBinding(){return diagram.meta?.koreExecution||null}
+function koreCopy(value){return value==null?null:JSON.parse(JSON.stringify(value))}
+function koreInspect(node,cell=null){
+  const state=koreObservation.snapshot?.nodes?.[node];
+  if(!state||(cell&&!state.cells?.[cell]))return {ok:false,message:'Unknown observed address'};
+  const shell=Object.keys(koreBinding()?.nodes||{}).find(key=>koreBinding().nodes[key]===node);
+  if(shell&&typeof openVirtualNode==='function')openVirtualNode(shell);
+  koreObservation.inspection={node,cell};koreProject();return {ok:true,node,cell};
+}
+function koreDetails(lines,state,accepted=false){
+  lines.push('Phase '+state.phase+' / '+state.phase_count+' · position '+state.phase+'/'+state.phase_count,'Work · '+(state.work||'none'),'Waiting · '+(state.waiting||'none'));
+  if(state.owner)lines.push('Owner · '+state.owner+' · '+(state.role||'')+' · '+state.row+'/'+state.column);
+  if(state.state!=null)lines.push('Attributed local state · '+Object.keys(state.state).length+' fields · expand execution records');
+  for(const [label,key] of [['Pending candidates','candidates'],[accepted?'Accepted results':'Returned outcomes / envelopes','results'],['Failures','failures'],['Evidence receipts','receipts']])if(state[key]!=null)lines.push(label+' · '+state[key].length);
+  if(state.results?.length)lines.push('Latest return · '+koreOutcome(state.results.at(-1)));
+  if(state.failures?.length)lines.push('Latest failure · '+koreOutcome(state.failures.at(-1)));
+  if(state.last_check)lines.push('Last check · '+koreOutcome(state.last_check));
+  if(!accepted&&state.results?.some(result=>result.semantic_acceptance===false||result.value?.semantic_acceptance===false))lines.push('Candidate envelope · semantic acceptance false · caller verification is required.');
+  if(state.gate!=null)lines.push('Gate · '+JSON.stringify(state.gate));
+  if(state.authority_version!=null)lines.push('Authority version · '+state.authority_version+' · locked '+!!state.locked);
+}
+function koreOutcome(outcome){
+  const value=outcome.value||outcome;
+  return [outcome.status||outcome.decision||outcome.name,value.code||outcome.code,value.action||value.candidate?.action||(typeof value.candidate==='string'?value.candidate:null),value.escalation_holder||outcome.escalation_holder].filter(Boolean).join(' · ')||'recorded';
+}
+function koreButton(panel,label,action){const button=document.createElement('button');button.textContent=label;button.onclick=action;panel.appendChild(button)}
+function koreProject(){
+  const binding=koreBinding(),bound=!!binding;
+  koreObservation.bound=bound;
+  for(const id of ['simPlayBtn','simStepBtn','simResetBtn','simSpeed']){
+    const el=document.getElementById(id);
+    if(el){el.disabled=bound;if(bound)el.title='Observed Python execution; fixture clock is disabled'}
+  }
+  let panel=document.getElementById('koreExecutionPanel');
+  if(!panel){panel=document.createElement('div');panel.id='koreExecutionPanel';panel.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;font-size:12px';document.getElementById('objectsList')?.before(panel)}
+  panel.hidden=!bound;
+  const fixturePanel=document.getElementById('virtualStatePanel');
+  if(fixturePanel&&bound)fixturePanel.hidden=true;
+  const fixtureLayer=document.getElementById('simLayer');
+  if(fixtureLayer)fixtureLayer.style.display=bound?'none':'';
+  if(!bound)return;
+  if(typeof simClock!=='undefined'&&simClock.playing)simPause();
+  const snapshot=koreObservation.snapshot;
+  const lines=['Observed Python execution · shared runtime'];
+  if(koreObservation.error)lines.push('Observation unavailable · '+koreObservation.error);
+  if(koreObservation.error&&snapshot)lines.push('Retained last reading · '+koreObservation.observedAt+' · current activity unknown');
+  if(!snapshot){panel.textContent=lines.join('\n');return}
+  const missing=[],contracts=Array.isArray(snapshot.contracts)?snapshot.contracts:[];
+  for(const node of Object.values(binding.nodes||{}))if(!snapshot.nodes[node])missing.push(node);
+  for(const address of Object.values(binding.cells||{}))if(!snapshot.nodes[address.node]?.cells?.[address.cell])missing.push(address.node+'/cells/'+address.cell);
+  for(const kord of Object.keys(binding.kords||{}))if(!contracts.some(contract=>contract.id===kord))missing.push('Kord '+kord);
+  if(binding.contractId&&snapshot.contract_id!==binding.contractId)missing.push('contract '+binding.contractId);
+  if(binding.contractVersion&&snapshot.contract_version!==binding.contractVersion)missing.push('contract version '+binding.contractVersion);
+  if(missing.length)lines.push('Binding incomplete · '+missing.length+' missing addresses or declarations · expand execution records','This endpoint reading does not establish execution of the displayed governed topology.');
+  const map=binding.nodes||{};
+  if(typeof selected!=='undefined'&&selected!==koreObservation.lastSelection){
+    koreObservation.lastSelection=selected;
+    const address=binding.cells?.[selected];
+    if(address&&snapshot.nodes[address.node]?.cells?.[address.cell])koreObservation.inspection={node:address.node,cell:address.cell};
+    else if(map[selected])koreObservation.inspection={node:map[selected],cell:null};
+  }
+  const open=virtualView.open;
+  const inspection=koreObservation.inspection;
+  const id=open?(map[open]||open):inspection?.node;
+  if(inspection&&inspection.node!==id)koreObservation.inspection=null;
+  const state=id?snapshot.nodes?.[id]:null;
+  if(state){
+    lines.push(id+' · separate node state');koreDetails(lines,state);
+    if(state.parent!=null)lines.push('Declared parent · '+JSON.stringify(state.parent));
+    if(state.parent_cell!=null)lines.push('Parent cell · '+JSON.stringify(state.parent_cell));
+    for(const [cell,value] of Object.entries(state.cells||{}))lines.push(cell+' · phase '+value.phase+'/'+value.phase_count+' · '+(value.gate||'no gate reading')+' · '+(value.work||'idle'));
+    const cell=koreObservation.inspection?.cell,local=cell?state.cells?.[cell]:null;
+    if(local){lines.push('\nInspecting '+id+'/cells/'+cell+' · owned state');koreDetails(lines,local,true)}
+    const request=state.work?snapshot.requests?.[state.work]:null;
+    if(request)lines.push('Return address · '+JSON.stringify(request.return_address||[]));
+  }else lines.push('Open a node to inspect its 3×3 and local state.');
+  if(snapshot.contracts)lines.push('Declared typed Kords · '+contracts.length);
+  if(snapshot.contract_id)lines.push('Contract · '+snapshot.contract_id+' · version '+snapshot.contract_version);
+  const gate=[...(snapshot.gates||[])].reverse().find(event=>(!id||event.node===id)&&event.gate);
+  if(gate)lines.push('Last named gate · '+gate.gate+' · '+gate.node+'/'+gate.cell);
+  const receipt=[...(snapshot.receipts||[])].reverse().find(event=>!id||event.node===id);
+  if(receipt)lines.push('Last recorded decision · '+koreOutcome(receipt));
+  if(snapshot.attempts)lines.push('Bounded attempts · '+snapshot.attempts.length);
+  const events=snapshot.events||[],last=events.at(-1);
+  if(last)lines.push('Latest · '+last.kind+' · '+(last.request_id||'')+' · '+(last.node||''));
+  const handoff=[...events].reverse().find(e=>e.kind==='handoff');
+  if(handoff)lines.push('Last recorded traversal · '+handoff.kord+' · '+handoff.request_id);
+  for(const [requestId,request] of Object.entries(snapshot.requests||{}))if(request.outcome)lines.push('Completed · '+requestId+' · '+koreOutcome(request.outcome));
+  panel.textContent='';
+  for(const node of Object.keys(snapshot.nodes))koreButton(panel,'Open '+node,()=>koreInspect(node));
+  for(const cell of Object.keys(state?.cells||{}))koreButton(panel,'Inspect '+cell,()=>koreInspect(id,cell));
+  if(state?.parent&&snapshot.nodes[state.parent])koreButton(panel,'Open parent '+state.parent,()=>koreInspect(state.parent));
+  for(const contract of contracts){
+    if(contract.source===id&&(!koreObservation.inspection?.cell||contract.source_cell===koreObservation.inspection.cell)&&snapshot.nodes[contract.target])koreButton(panel,'Open Kord '+contract.id+' → '+contract.target,()=>koreInspect(contract.target));
+  }
+  const reading=document.createElement('pre');reading.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0';reading.textContent=lines.join('\n');panel.appendChild(reading);
+  const records=document.createElement('details'),summary=document.createElement('summary'),raw=document.createElement('pre');
+  records.open=koreObservation.recordsOpen;records.ontoggle=()=>{koreObservation.recordsOpen=records.open};
+  summary.textContent='Execution records · full states, checks, contracts and return history';
+  raw.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px';raw.textContent=JSON.stringify({missingBindings:missing,...snapshot},null,2);
+  records.appendChild(summary);records.appendChild(raw);panel.appendChild(records);
+  for(const el of document.querySelectorAll('.node[data-id]')){
+    const address=binding.cells?.[el.dataset.id];
+    const node=address?snapshot.nodes?.[address.node]?.cells?.[address.cell]:snapshot.nodes?.[map[el.dataset.id]||el.dataset.id];
+    if(node){el.dataset.korePhase=String(node.phase);el.dataset.koreWaiting=String(!!node.waiting);el.style.setProperty('--kore-phase',String(node.phase/node.phase_count));el.style.filter=node.work?'drop-shadow(0 0 5px #268bd2)':''}
+  }
+  for(const el of document.querySelectorAll('.wire-group')){
+    const active=handoff&&!snapshot.requests?.[handoff.request_id]?.outcome&&el.dataset.wireId===(binding.kords?.[handoff.kord]||handoff.kord);
+    el.dataset.koreTraversal=String(!!active);el.style.filter=active?'drop-shadow(0 0 4px #268bd2)':'';
+  }
+}
+async function korePoll(){
+  koreProject();
+  if(!koreBinding()||koreObservation.busy)return;
+  koreObservation.busy=true;
+  try{
+    // A fixed same-origin endpoint; metadata never grants local file access.
+    const response=await fetch('/kore/execution',{cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const snapshot=await response.json();
+    if(!snapshot.nodes||!snapshot.requests||!Array.isArray(snapshot.events))throw new Error('Invalid Knode snapshot');
+    koreObservation.snapshot=snapshot;koreObservation.error=null;koreObservation.observedAt=new Date().toISOString();
+  }catch(error){koreObservation.error=String(error.message)}
+  finally{koreObservation.busy=false;koreProject()}
+}
+window.SovKoreExecution={state:()=>koreCopy(koreObservation.snapshot),status:()=>({bound:!!koreBinding(),error:koreObservation.error}),inspect:koreInspect,refresh:korePoll};
+setInterval(korePoll,500);
+korePoll();
+/* END src/88-kore-execution.js */
 </script>
 </body>
 </html>

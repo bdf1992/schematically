@@ -241,7 +241,7 @@ function carrierEndpoint(w,end){
 function carrierEndpointPos(w,end){return carrierEndpoint(w,end)?.pos||null}
 function carrierEndBound(w,end){return carrierEndpoint(w,end)?.kind==='bound'}
 function carrierIsRenderable(w){
-  for(const end of ['a','b']){const ep=carrierEndpoint(w,end);if(!ep)return false;if(ep.kind==='bound'&&isEffectivelyHidden(ep.node))return false}
+  for(const end of ['a','b']){const ep=carrierEndpoint(w,end);if(!ep)return false;if(ep.kind==='bound'&&(isEffectivelyHidden(ep.node)||!virtualNodeVisible(ep.node)))return false}
   return true;
 }
 function endpointPortConfig(w,end){return endpointAttachmentPoint(w,end)?.config||null}

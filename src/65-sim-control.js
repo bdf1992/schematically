@@ -66,6 +66,7 @@ function simFrame(now){
   const key=simPaintKey(),painted=simClock.painted;
   if(!painted||simClock.canvasMoved||key.steady!==painted.steady||(key.continuous!==painted.continuous&&now-simClock.paintedAt>=SIM_CONTINUOUS_MS)){simClock.paintedAt=now;paintSim({frame:true,key})}
   else if(typeof paintWaves==='function')paintWaves();
+  if(virtualView.open&&now-virtualStatePaintedAt>=100){paintVirtualState();virtualStatePaintedAt=now}
   updateSimReadout();
   simClock.frame=requestAnimationFrame(simFrame);
 }
@@ -95,6 +96,19 @@ function updateSimReadout(){
   play.textContent=simClock.playing?'❚❚':'▶';play.title=simClock.playing?'Pause the clock':'Run the clock';play.classList.toggle('active',simClock.playing);
 }
 
+let virtualStatePaintedAt=0;
+function paintVirtualState(){
+  const run=simClock.run;
+  let statePanel=document.getElementById('virtualStatePanel');
+  if(!statePanel){statePanel=document.createElement('pre');statePanel.id='virtualStatePanel';statePanel.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;font-size:12px';document.getElementById('objectsList')?.before(statePanel)}
+  statePanel.hidden=!virtualView.open;
+  if(virtualView.open){
+    const local=run?run.instance(virtualView.open):null;
+    const latest=local?.records?.findLast(r=>r.observable==='message'&&r.value?.payload);
+    statePanel.textContent=local?.ok?`${local.id} · node state\nShared clock: ${Math.round(local.time)} ms\nLocal records: ${local.records.length}\nWaiting: ${local.parked.length}\n${latest?`Latest packet · ${latest.value.channel}\n${JSON.stringify(latest.value.payload,null,2)}\n`:''}${JSON.stringify({device:local.state.device,queues:local.state.queues},null,2)}`:`${virtualView.open} · separate node state\nStart the clock to inspect activity.`;
+  }
+}
+
 const SVGNS='http://www.w3.org/2000/svg';
 function simEl(tag,attrs,cls){const e=document.createElementNS(SVGNS,tag);if(cls)e.setAttribute('class',cls);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e}
 // Paint the engine's state over the rendered canvas. Called after every render, after every clock
@@ -116,6 +130,7 @@ function paintSim(paint){
   if(typeof paintWaves==='function')paintWaves();
   workspace.classList.toggle('sim-live',!!simClock.run);
   const run=simClock.run,levels=run?run.levels():{};
+  paintVirtualState();
   // A wire is lit while its source end is high. A source in a role or status slot (6-11) lights it in
   // that slot's own tone (litTone); any other source keeps the output accent. Only a group whose lit
   // state, level or tone differs from what it carries is written.
@@ -135,7 +150,7 @@ function paintSim(paint){
   const wired=new Set(wires.flatMap(w=>[w.a,w.b]));
   for(const n of nodes){
     // A level is shown where it can matter: on a wired node, or one that declares a signal.
-    if(isEffectivelyHidden(n)||!(wired.has(n.id)||componentConfig(n).signal))continue;const L=levels[n.id];if(!L)continue;
+    if(isEffectivelyHidden(n)||!virtualNodeVisible(n)||!(wired.has(n.id)||componentConfig(n).signal))continue;const L=levels[n.id];if(!L)continue;
     const dim=componentForm(n).dimension,size=componentSize(n);
     if(dim===2){
       const x=n.x+size.w/2-10,y=n.y-size.h/2+10;
@@ -151,23 +166,24 @@ function paintSim(paint){
   }
   // An entry node (wires out, none in) can send work: the payload its saved scenario injects, if any.
   for(const n of nodes){
-    if(isEffectivelyHidden(n)||componentForm(n).dimension!==2||!wires.some(w=>w.a===n.id)||wires.some(w=>w.b===n.id))continue;
-    const size=componentSize(n),send=simEl('g',{transform:`translate(${n.x-size.w/2-4} ${n.y+size.h/2+4})`},'sim-send');
+    if(isEffectivelyHidden(n)||!virtualNodeVisible(n)||componentForm(n).dimension!==2||!wires.some(w=>w.a===n.id)||wires.some(w=>w.b===n.id))continue;
+    const size=componentSize(n),send=simEl('g',{transform:`translate(${n.x-size.w/2-4} ${n.y+size.h/2+4})`,role:'button','aria-label':`Send ${componentConfig(n).label||n.id}`,tabindex:0},'sim-send');
     send.appendChild(simEl('circle',{r:8}));const tt=simEl('text',{y:4,'text-anchor':'middle'});tt.textContent='➤';send.appendChild(tt);
     const title=simEl('title',{});title.textContent=`Send a message from ${componentConfig(n).label||n.id}`;send.appendChild(title);
     send.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();simSend(n.id)});simLayer.appendChild(send);
+    send.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.stopPropagation();e.preventDefault();simSend(n.id)}});
   }
   // New edges flash + or − beside their node.
   const edges=run.edges().edges;
   for(const e of edges.slice(simClock.edgeMark)){
-    const n=nodes.find(x=>x.id===e.node);if(!n)continue;const size=componentSize(n);
+    const n=nodes.find(x=>x.id===e.node);if(!n||!virtualNodeVisible(n))continue;const size=componentSize(n);
     const t=simEl('text',{x:n.x-size.w/2+4,y:n.y-size.h/2-6,'text-anchor':'start'},'sim-edge '+(e.polarity==='+'?'rise':'fall'));t.textContent=e.polarity==='+'?'+':'−';
     simLayer.appendChild(t);setTimeout(()=>t.remove(),700);
   }
   simClock.edgeMark=edges.length;
   // A step waiting on a person shows its decision in place.
   for(const p of run.parked()){
-    const n=nodes.find(x=>x.id===p.node);if(!n)continue;const size=componentSize(n),x=n.x,y=n.y+size.h/2+14;
+    const n=nodes.find(x=>x.id===p.node);if(!n||!virtualNodeVisible(n))continue;const size=componentSize(n),x=n.x,y=n.y+size.h/2+14;
     const chip=simEl('g',{transform:`translate(${x} ${y})`},'sim-waiting');
     chip.appendChild(simEl('rect',{x:-58,y:-10,width:116,height:20,rx:10},'sim-waiting-bg'));
     const label=simEl('text',{x:-48,y:4},'sim-waiting-text');label.textContent='waiting';chip.appendChild(label);

@@ -11,6 +11,7 @@ function incomingSignals(componentId,signalState){
     }
   }
   for(const w of wires){
+    if(w.a!==componentId && w.b!==componentId)continue;
     const cfg=connectionConfig(w);
     if(cfg.direction==='forward' && w.b===componentId && wireDirectionActive(w,'forward',signalState)) colors.push(signalState.colors.get(w.a));
     else if(cfg.direction==='reverse' && w.a===componentId && wireDirectionActive(w,'reverse',signalState)) colors.push(signalState.colors.get(w.b));

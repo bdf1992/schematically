@@ -1,0 +1,13 @@
+✔ operator-configured route is read-only, fixed and reports unavailable snapshots (3.9607ms)
+✔ file registrations and lifecycle preserve document routing (178.6183ms)
+✔ SQLite imports, exports, profiles and lifecycle retain working-copy ownership (229.9214ms)
+✔ projection reads Python state, preserves it and handles observation errors (2.348ms)
+✔ native server routes configured snapshots, documents and editor (186.6087ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 686.8598

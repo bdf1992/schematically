@@ -1,0 +1,134 @@
+{
+  "policy": {
+    "version": 1,
+    "gap": "No published supervised adapter was present for this change; this bounded entry point records coverage including the complete affected server source.",
+    "profile": "routine-arch-observation",
+    "maximumCases": 25,
+    "maximumSeconds": 180,
+    "minimumExecutableLineCoverage": 75,
+    "sourceScope": [
+      "src/88-kore-execution.js",
+      "mcp/kore-execution.mjs",
+      "mcp/server.mjs"
+    ],
+    "staticScope": [
+      "index.source.html"
+    ],
+    "command": "node scripts/test-arch-supervised.cjs"
+  },
+  "command": [
+    "C:\\Program Files\\nodejs\\node.exe",
+    "--test",
+    "--test-concurrency=1",
+    "tests/arch_observation.test.cjs"
+  ],
+  "environment": {
+    "node": "v24.11.1",
+    "platform": "win32",
+    "NODE_V8_COVERAGE": "C:\\Users\\bdf19\\workstation\\repos\\schematically\\.arch-test-evidence\\1791744543750\\coverage"
+  },
+  "dependencyIdentity": {
+    "builtins": "v24.11.1",
+    "localFiles": [
+      {
+        "file": "mcp\\guide.mjs",
+        "sha256": "6fb3478cf4d716c661f43990cfa6a548b66cc655b7a884e57c1943eacdef7cd2"
+      },
+      {
+        "file": "mcp\\kore-execution.mjs",
+        "sha256": "be8041e41c7bb578d059dc4aa4506cb76d4b6e62e60a215c15bd742a55f2a0b2"
+      },
+      {
+        "file": "mcp\\server.mjs",
+        "sha256": "05e5df5debe71e6257fa0dfd577dadb9a668d149d52ca4d9640c3b261474c0cf"
+      },
+      {
+        "file": "mcp\\store-file.mjs",
+        "sha256": "7ec4a93af57ad6f9b6c36dc4370c56923e7f1591a1ab60b59d248ea6c6576d5e"
+      },
+      {
+        "file": "mcp\\store-sqlite.mjs",
+        "sha256": "a9e996d6b5a58887e08b4bb6d13dd68a7e08c66640e6d8f7fea991ad67dadb01"
+      },
+      {
+        "file": "mcp\\surface.mjs",
+        "sha256": "f21125d2d2e51c410d8c713440a2d1ecc44264e20444e3f90fceb61efaa1ba2c"
+      },
+      {
+        "file": "src\\03-canonical.js",
+        "sha256": "02b02d6306897f03ee4fa915b3bd6f51b6d683d13267bcd2717facd6b30910d6"
+      },
+      {
+        "file": "src\\03-notation-core.js",
+        "sha256": "3a69bab3e36df12eef22dd1a4592df8c963f804c27440c099b61b6dbee96b498"
+      },
+      {
+        "file": "src\\04-signal-model.js",
+        "sha256": "83c2f520514bc321e7e9df64c978f302b20f189fe6e9b7c50e8ea8732669a23d"
+      },
+      {
+        "file": "src\\05-data-core.js",
+        "sha256": "8826d7098489e0f0d65dbd34a1ce3013be6ab7d7ab15f1d3a23bdfb481e19fb1"
+      },
+      {
+        "file": "src\\06-attachment-core.js",
+        "sha256": "a2e650cc4d0a2f7bdc47e3d355d31f40b4bd49d398d4620a0aafbc5a9ee9f949"
+      },
+      {
+        "file": "src\\07-graph-core.js",
+        "sha256": "2de80cbec71c56af9be1b758ee28627f421d20268b77a424e399173d93474d2f"
+      },
+      {
+        "file": "src\\07-state-space.js",
+        "sha256": "01d19f07b63895ef101defabc6dc355bb2d54dac3fe9ffef0dea67f4aa383cac"
+      },
+      {
+        "file": "src\\07-state-surface.js",
+        "sha256": "aa2a44799f6c270e851beadf5e2e932169d553cec3309be4f63b4ca2a4ab1cca"
+      },
+      {
+        "file": "src\\08-layout-core.js",
+        "sha256": "ddcba962be2ed513562e8ce3c8b54081a57853401b16f61e5ad5a9a62ba65e17"
+      },
+      {
+        "file": "src\\88-kore-execution.js",
+        "sha256": "d251e1bef5da6c818c1d7975edd2b3be41f8cd002c4db1cc9f1e7acf17ad504b"
+      },
+      {
+        "file": "tests\\arch_observation.test.cjs",
+        "sha256": "75093302018f149e1d48a4fce9def6ebaaa5273b520c815e43ec4f93caa20ace"
+      }
+    ]
+  },
+  "coverageMeasure": "Conservative executable-line approximation: all nonblank non-line-comment source lines, innermost V8 range at first code character; uncovered files remain in denominator",
+  "elapsedSeconds": 1.222,
+  "cases": 5,
+  "files": [
+    {
+      "file": "src/88-kore-execution.js",
+      "sha256": "d251e1bef5da6c818c1d7975edd2b3be41f8cd002c4db1cc9f1e7acf17ad504b",
+      "total": 105,
+      "covered": 104,
+      "imported": true
+    },
+    {
+      "file": "mcp/kore-execution.mjs",
+      "sha256": "be8041e41c7bb578d059dc4aa4506cb76d4b6e62e60a215c15bd742a55f2a0b2",
+      "total": 18,
+      "covered": 18,
+      "imported": true
+    },
+    {
+      "file": "mcp/server.mjs",
+      "sha256": "05e5df5debe71e6257fa0dfd577dadb9a668d149d52ca4d9640c3b261474c0cf",
+      "total": 368,
+      "covered": 352,
+      "imported": true
+    }
+  ],
+  "coveragePercent": 96.5376782077393,
+  "status": 0,
+  "error": null,
+  "staticRegistration": true,
+  "passed": true
+}

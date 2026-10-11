@@ -126,7 +126,7 @@ let selected=null,seq=1;
 let wireDrag=null;
 const BASE_VIEW = {x:0,y:0,w:1200,h:760};
 let camera = {...BASE_VIEW};
-const MIN_ZOOM = .28;
+const MIN_ZOOM = .04;
 const MAX_ZOOM = 4.0;
 let showFlow=true;
 const ROUTE_SWITCH_MARGIN = 72;      // alternative must beat latched route by this much

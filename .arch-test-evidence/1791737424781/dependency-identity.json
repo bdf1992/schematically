@@ -1,0 +1,179 @@
+{
+  "registration": {
+    "sha256": "3F7AA38232673E88DE50DAF2C4BDF391AA2ACA21A8A15A3C40A4871F22B88C16",
+    "file": "index.source.html"
+  },
+  "coverageMeasure": "Conservative executable-line approximation: all nonblank non-line-comment source lines; innermost V8 range at first code character",
+  "nodeVersion": "v24.11.1",
+  "sourceEvidence": ".arch-test-evidence/1791737424781/evidence.json",
+  "localDependencyManifest": [
+    {
+      "sha256": "BB331AF8354A2D3F80A8758797204E404DB715AD609E8255D10B0829B33F5E92",
+      "file": "mcp\\tools.json"
+    },
+    {
+      "sha256": "F21125D2D2E51C410D8C713440A2D1ECC44264E20444E3F90FCEB61EFAA1BA2C",
+      "file": "mcp\\surface.mjs"
+    },
+    {
+      "sha256": "A9E996D6B5A58887E08B4BB6D13DD68A7E08C66640E6D8F7FEA991AD67DADB01",
+      "file": "mcp\\store-sqlite.mjs"
+    },
+    {
+      "sha256": "3C051EFC533C3363ECF95DF8B234940CEFA4BD5974DFD314CAB531CE63101FF6",
+      "file": "mcp\\store-memory.mjs"
+    },
+    {
+      "sha256": "7EC4A93AF57AD6F9B6C36DC4370C56923E7F1591A1AB60B59D248EA6C6576D5E",
+      "file": "mcp\\store-file.mjs"
+    },
+    {
+      "sha256": "05E5DF5DEBE71E6257FA0DFD577DADB9A668D149D52CA4D9640C3B261474C0CF",
+      "file": "mcp\\server.mjs"
+    },
+    {
+      "sha256": "BE8041E41C7BB578D059DC4AA4506CB76D4B6E62E60A215C15BD742A55F2A0B2",
+      "file": "mcp\\kore-execution.mjs"
+    },
+    {
+      "sha256": "6FB3478CF4D716C661F43990CFA6A548B66CC655B7A884E57C1943EACDEF7CD2",
+      "file": "mcp\\guide.mjs"
+    },
+    {
+      "sha256": "67DFE3CF8310A63E56C59C5E2B5CD6317DFFBBF550D402D311BA693CCF446B77",
+      "file": "src\\88-kore-execution.js"
+    },
+    {
+      "sha256": "56769561C7DDA92A851032FE629B7B843554D104AEB320F0EF278F0206FFE3A2",
+      "file": "src\\87-live.js"
+    },
+    {
+      "sha256": "A5CB9548C4C812D39D733F8348D4EAEE9E938EC763A54D06BC57D4289ABA2A73",
+      "file": "src\\85-api.js"
+    },
+    {
+      "sha256": "F535BC2103DD0E4704125A450FA83D03F5A0A3E230490F1489F4DDC662095848",
+      "file": "src\\80-bootstrap.js"
+    },
+    {
+      "sha256": "1BDCFE76ACB26F39AE0AECF393B977EF098412A403C67BF5F0C3612E93BC6F9F",
+      "file": "src\\75-persistence.js"
+    },
+    {
+      "sha256": "2936FDCD0EBEDC1E4200F3AF4C458418A0EA766381293CEBA53A1AA798F36F68",
+      "file": "src\\70-editor-controls.js"
+    },
+    {
+      "sha256": "132829551324EADCD4F0C926DA200129D434DEA336AB2A190C541F9220F119E6",
+      "file": "src\\68-wave-view.js"
+    },
+    {
+      "sha256": "11CBD1DB54E714F842DFFFCB428FA9ECE6E272497F854B4FFF193955E319FDCA",
+      "file": "src\\67-legend.js"
+    },
+    {
+      "sha256": "D89968375B6BFCD3BA240C4D841C40861DA8332738FCD10A29021069C7085212",
+      "file": "src\\66-narration.js"
+    },
+    {
+      "sha256": "5C6984AD0CA5CEE577588DD511D5DFAA8F1DF5EE9322FB131AB2040000E2D2E8",
+      "file": "src\\65-sim-control.js"
+    },
+    {
+      "sha256": "531082BB6F1104547A3EDA52F92E43FA440A2CD69B71332989A894369E14A026",
+      "file": "src\\60-interactions.js"
+    },
+    {
+      "sha256": "14E9B599BFA77EEA959F05068FE06EB35908C254D4DC1B093FA1D9A73303ED51",
+      "file": "src\\59-contrast.js"
+    },
+    {
+      "sha256": "4AFF1759C1CD7D95FEA625967A336A4FF2AF23A864CEEE539FFCBC4A8B009FD1",
+      "file": "src\\58-layouts.js"
+    },
+    {
+      "sha256": "96FDCFA87CCEAD1A7FBB61A94C246754B1E423B955FD7FF5FBD0BCD41D4144A4",
+      "file": "src\\57-layout-metrics.js"
+    },
+    {
+      "sha256": "F620AADDE2D2A924397E95AA445F82E010DEA28D322E3DBEAF7D5B0B7E6202C9",
+      "file": "src\\55-render.js"
+    },
+    {
+      "sha256": "99D25348637C711BA7EABF39309A8840636E25B220D176272BD8C7530E1ECC1A",
+      "file": "src\\50-selection.js"
+    },
+    {
+      "sha256": "711DC99C94762D3D8BDBCDCA4BD3C8B5E659A0878D9FF205EBBA94FE4A5E95FC",
+      "file": "src\\41-buses.js"
+    },
+    {
+      "sha256": "11ED5270D67C2465BEB078A1BE150789644E7A74762117329F5888CEFF875F79",
+      "file": "src\\40-routing.js"
+    },
+    {
+      "sha256": "B634E2645617358231BE098D243AB7E6A8FDBB065CF96CC65206DE88A89A7576",
+      "file": "src\\30-canvas.js"
+    },
+    {
+      "sha256": "74080B5E37CA6DAC49BDE350C449B1ECAB30181AFCD57ABEA619459B705B7CD9",
+      "file": "src\\25-signal.js"
+    },
+    {
+      "sha256": "597B395979EEE99A052906A10BDC58A7DCFF5E0487BEB7146FFF4247CF46A293",
+      "file": "src\\20-ui.js"
+    },
+    {
+      "sha256": "07A5DE517ABAAD2548C79DAF9768A7F6704CB69AB92C1DFEDCABD5181236A5C2",
+      "file": "src\\15-editor-kernel.js"
+    },
+    {
+      "sha256": "A5FEB1E2384A18E403A062CB4140FBB49B968E85D2B79BD902B713A4C7437474",
+      "file": "src\\10-model.js"
+    },
+    {
+      "sha256": "4A51A6F79FEB173E30367B2E7AA98C90C73D1A37464654A8E41763ADA3DDE110",
+      "file": "src\\09-colour-core.js"
+    },
+    {
+      "sha256": "DDCBA962BE2ED513562E8CE3C8B54081A57853401B16F61E5AD5A9A62BA65E17",
+      "file": "src\\08-layout-core.js"
+    },
+    {
+      "sha256": "AA2A44799F6C270E851BEADF5E2E932169D553CEC3309BE4F63B4CA2A4AB1CCA",
+      "file": "src\\07-state-surface.js"
+    },
+    {
+      "sha256": "01D19F07B63895EF101DEFABC6DC355BB2D54DAC3FE9FFEF0DEA67F4AA383CAC",
+      "file": "src\\07-state-space.js"
+    },
+    {
+      "sha256": "2DE80CBEC71C56AF9BE1B758EE28627F421D20268B77A424E399173D93474D2F",
+      "file": "src\\07-graph-core.js"
+    },
+    {
+      "sha256": "A2E650CC4D0A2F7BDC47E3D355D31F40B4BD49D398D4620A0AAFBC5A9EE9F949",
+      "file": "src\\06-attachment-core.js"
+    },
+    {
+      "sha256": "8826D7098489E0F0D65DBD34A1CE3013BE6AB7D7AB15F1D3A23BDFB481E19FB1",
+      "file": "src\\05-data-core.js"
+    },
+    {
+      "sha256": "83C2F520514BC321E7E9DF64C978F302B20F189FE6E9B7C50E8EA8732669A23D",
+      "file": "src\\04-signal-model.js"
+    },
+    {
+      "sha256": "3A69BAB3E36DF12EEF22DD1A4592DF8C963F804C27440C099B61B6DBEE96B498",
+      "file": "src\\03-notation-core.js"
+    },
+    {
+      "sha256": "02B02D6306897F03EE4FA915B3BD6F51B6D683D13267BCD2717FACD6B30910D6",
+      "file": "src\\03-canonical.js"
+    },
+    {
+      "sha256": "016BA1B44E585F164D8A3D02576EB0B86A5841F04CA169C8AEE37E310604BB9C",
+      "file": "src\\00-state.js"
+    }
+  ]
+}

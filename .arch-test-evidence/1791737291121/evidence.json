@@ -1,0 +1,61 @@
+{
+  "policy": {
+    "version": 1,
+    "gap": "No published supervised adapter was present for this change; this bounded entry point records coverage including the complete affected server source.",
+    "profile": "routine-arch-observation",
+    "maximumCases": 25,
+    "maximumSeconds": 180,
+    "minimumExecutableLineCoverage": 75,
+    "sourceScope": [
+      "src/88-kore-execution.js",
+      "mcp/kore-execution.mjs",
+      "mcp/server.mjs"
+    ],
+    "staticScope": [
+      "index.source.html"
+    ],
+    "command": "node scripts/test-arch-supervised.cjs"
+  },
+  "command": [
+    "C:\\Program Files\\nodejs\\node.exe",
+    "--test",
+    "--test-concurrency=1",
+    "tests/arch_observation.test.cjs"
+  ],
+  "environment": {
+    "node": "v24.11.1",
+    "platform": "win32",
+    "NODE_V8_COVERAGE": "C:\\Users\\bdf19\\workstation\\repos\\schematically\\.arch-test-evidence\\1791737291121\\coverage"
+  },
+  "dependencyIdentity": "Node built-ins; no third-party imports",
+  "elapsedSeconds": 0.511,
+  "cases": 0,
+  "files": [
+    {
+      "file": "src/88-kore-execution.js",
+      "sha256": "9f6a689573b2e1a95fb6d03e91d6ca8744252785360b9c8dea5da38be1d648aa",
+      "total": 60,
+      "covered": 60,
+      "imported": true
+    },
+    {
+      "file": "mcp/kore-execution.mjs",
+      "sha256": "be8041e41c7bb578d059dc4aa4506cb76d4b6e62e60a215c15bd742a55f2a0b2",
+      "total": 18,
+      "covered": 18,
+      "imported": true
+    },
+    {
+      "file": "mcp/server.mjs",
+      "sha256": "05e5df5debe71e6257fa0dfd577dadb9a668d149d52ca4d9640c3b261474c0cf",
+      "total": 368,
+      "covered": 131,
+      "imported": true
+    }
+  ],
+  "coveragePercent": 46.860986547085204,
+  "status": 0,
+  "error": null,
+  "staticRegistration": true,
+  "passed": false
+}

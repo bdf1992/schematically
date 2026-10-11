@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "gap": "No published supervised adapter was present for this change; this bounded entry point records coverage including the complete affected server source.",
+  "profile": "routine-arch-observation",
+  "maximumCases": 25,
+  "maximumSeconds": 180,
+  "minimumExecutableLineCoverage": 75,
+  "sourceScope": ["src/88-kore-execution.js", "mcp/kore-execution.mjs", "mcp/server.mjs"],
+  "staticScope": ["index.source.html", "index.html", "tests/fixtures/alignment-governance.sov"],
+  "command": "node scripts/test-arch-supervised.cjs"
+}

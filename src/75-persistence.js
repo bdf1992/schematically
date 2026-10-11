@@ -47,7 +47,8 @@ function captureWorkspace(){
       playbackSpeed:simClock.speed,
       // The wave view's style (src/68-wave-view.js) is the view's alone: never in the document.
       waveStyle:typeof waveStyle==='function'?waveStyle():'off',
-      layout:typeof activeLayoutId==='function'?activeLayoutId():null
+      layout:typeof activeLayoutId==='function'?activeLayoutId():null,
+      virtualOpen:virtualView.open
     }
   };
 }
@@ -104,6 +105,7 @@ function syncRuntimeAfterDocumentReplace(){
   render();selectNode(null);if(typeof initializeHistory==='function'&&!historyState.replaying)initializeHistory();
 }
 function replaceRuntimeDocument(input){
+  virtualView.open=null;
   const doc=input?.schema===SovSchematicData.WORKSPACE_SCHEMA?input.document:input;
   const normalized=SovSchematicData.makeDocument(SovSchematicData.clone(doc));
   const valid=SovSchematicData.validateDocument(normalized);
@@ -117,6 +119,7 @@ function applyWorkspace(bundle){
   if(!bundle||bundle.schema!==SovSchematicData.WORKSPACE_SCHEMA)return replaceRuntimeDocument(bundle);
   replaceRuntimeDocument(bundle.document);
   const view=bundle.view||{};
+  if(view.virtualOpen)openVirtualNode(view.virtualOpen);
   if(view.camera){camera={...BASE_VIEW,...view.camera};applyCamera()}
   if(view.grid){
     canvasGridVisible=view.grid.visible!==false;canvasSnapEnabled=view.grid.snap!==false;
@@ -170,7 +173,7 @@ function preferredExtension(format=currentFileFormat){return format==='package'?
 function suggestedFileName(format=currentFileFormat){return `${fileBaseName()}${preferredExtension(format)}`}
 function documentFileText(){
   commitDocumentRevisionIfChanged();
-  return JSON.stringify(snapshotDocument(),null,2);
+  const doc=snapshotDocument();return JSON.stringify(doc,null,doc.virtual?0:2);
 }
 function collectPackageTemplates(){
   return [...(GROUPS.Primitives||[]),...(GROUPS.Components||[])].map(symbolId=>{
@@ -209,7 +212,7 @@ function snapshotPackage(){
     manifest:{title:workspace.document.meta?.title||fileBaseName()}
   });
 }
-function packageFileText(){return JSON.stringify(snapshotPackage(),null,2)}
+function packageFileText(){const bundle=snapshotPackage();return JSON.stringify(bundle,null,bundle.document.virtual?0:2)}
 function fileTextForFormat(format){return format==='package'?packageFileText():documentFileText()}
 function mimeForFormat(format){return format==='package'?'application/vnd.soveraeign.schematic-package+json':'application/vnd.soveraeign.schematic+json'}
 function isFileDirty(){return lastFileFingerprint===null?semanticFingerprint()!==pristineFingerprint:semanticFingerprint()!==lastFileFingerprint}

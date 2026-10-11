@@ -193,8 +193,33 @@ function duplicateSelection(){if(!copySelection())return [];return pasteClipboar
 function updateEditMenuState(){const p=document.getElementById('editPasteBtn');if(p)p.disabled=!semanticClipboard}
 
 // --- Focus / search / objects ---------------------------------------------
+// Virtual detail is a workspace projection. It never changes editor.hidden or the run.
+const virtualView={open:null,owners:new Map()};
+function refreshVirtualProjection(){
+  virtualView.owners.clear();
+  const instances=diagram.virtual?.instances||[],byId=new Map(nodes.map(n=>[n.id,n]));
+  const roots=new Set(instances.map(i=>i.id));
+  if(!roots.has(virtualView.open))virtualView.open=null;
+  for(const n of nodes){let p=n,seen=new Set();while(p&&!seen.has(p.id)){if(roots.has(p.id)){virtualView.owners.set(n.id,p.id);break}seen.add(p.id);p=byId.get(p.parentId)}}
+  let back=document.getElementById('virtualOverviewBtn');
+  if(!back){back=document.createElement('button');back.id='virtualOverviewBtn';back.textContent='Overview';back.title='Close node detail; keep the clock running';back.addEventListener('click',()=>{closeVirtualNode();fitDiagram()});document.getElementById('fitBtn')?.before(back)}
+  back.hidden=!instances.length||!virtualView.open;
+  workspace.classList.toggle('virtual-overview',instances.length>0&&!virtualView.open);
+}
+function virtualNodeVisible(n){
+  const owner=virtualView.owners.get(n.id);if(!owner||owner===virtualView.open||n.id===owner)return true;
+  return n.placement?.kind==='edge'&&n.placement.hostId===owner;
+}
+function openVirtualNode(id){
+  const instance=diagram.virtual?.instances?.find(i=>i.id===id);if(!instance)return {ok:false,message:`No virtual node ${id}`};
+  virtualView.open=id;routeCache.clear();arrowPoseCache.clear();render();focusComponent(nodes.find(n=>n.id===id));
+  return {ok:true,id};
+}
+function closeVirtualNode(){virtualView.open=null;routeCache.clear();arrowPoseCache.clear();render();return {ok:true}}
 function focusComponent(node){
-  if(!node)return;const size=componentSize(node),wrap=workspace.getBoundingClientRect(),aspect=(wrap.width||1)/(wrap.height||1);let w=Math.max(220,size.w*2.4),h=Math.max(170,size.h*2.4);if(w/h>aspect)h=w/aspect;else w=h*aspect;const z=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,BASE_VIEW.w/w));camera={x:node.x-(BASE_VIEW.w/z)/2,y:node.y-(BASE_VIEW.h/z)/2,w:BASE_VIEW.w/z,h:BASE_VIEW.h/z};applyCamera();selectNode(node.id,{focus:false});statusEl.textContent=`Focus · ${componentDisplayName(node)}`;
+  const owner=node&&virtualView.owners.get(node.id);
+  if(owner&&virtualView.open!==owner){virtualView.open=owner;routeCache.clear();arrowPoseCache.clear();render()}
+  if(!node)return;const size=componentSize(node),wrap=workspace.getBoundingClientRect(),aspect=(wrap.width||1)/(wrap.height||1);const margin=owner?1.15:2.4;let w=Math.max(220,size.w*margin),h=Math.max(170,size.h*margin);if(w/h>aspect)h=w/aspect;else w=h*aspect;const z=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,BASE_VIEW.w/w));camera={x:node.x-(BASE_VIEW.w/z)/2,y:node.y-(BASE_VIEW.h/z)/2,w:BASE_VIEW.w/z,h:BASE_VIEW.h/z};applyCamera();selectNode(node.id,{focus:false});statusEl.textContent=`Focus · ${componentDisplayName(node)}`;
 }
 function openQuickSearch(seed=''){
   const overlay=document.getElementById('quickSearch'),input=document.getElementById('quickSearchInput');if(!overlay||!input)return;
@@ -215,7 +240,7 @@ function updateQuickSearch(query=''){
 }
 function renderObjectsPanel(){
   const list=document.getElementById('objectsList');if(!list)return;list.replaceChildren();
-  const sorted=[...nodes].sort((a,b)=>nodeDepth(a)-nodeDepth(b)||String(a.id).localeCompare(String(b.id)));
+  const sorted=nodes.filter(virtualNodeVisible).sort((a,b)=>nodeDepth(a)-nodeDepth(b)||String(a.id).localeCompare(String(b.id)));
   for(const n of sorted){const st=entityEditorState(n),row=document.createElement('button');row.type='button';row.className='object-row'+(st.hidden?' is-hidden':'')+(st.locked?' is-locked':'')+(st.pinned?' is-pinned':'');row.style.paddingLeft=`${8+nodeDepth(n)*14}px`;row.innerHTML=`<span>${escapeXML(componentDisplayName(n))}</span><small>${st.pinned?'◆ ':''}${st.locked?'🔒 ':''}${st.hidden?'hidden':n.symbolId}</small>`;row.addEventListener('click',()=>{if(st.hidden){st.hidden=false;setHistoryHint('Show object');render();scheduleHistoryCapture()}selectNode(n.id)});row.addEventListener('dblclick',()=>focusComponent(n));list.appendChild(row)}
   const hiddenCount=nodes.filter(n=>entityEditorState(n).hidden).length;const count=document.getElementById('hiddenObjectCount');if(count)count.textContent=hiddenCount?String(hiddenCount):'';
   if(!list.children.length){const e=document.createElement('div');e.className='empty-mini';e.textContent='No objects';list.appendChild(e)}
