@@ -33,7 +33,15 @@ jobs:
         run: |
           git config --local core.autocrlf false
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git checkout-index --all --force
+          New-Item -ItemType Directory -Force .arch-test-evidence | Out-Null
+          $restoreArchive = Join-Path '.arch-test-evidence' ('ci-source-' + [guid]::NewGuid().ToString('N') + '.tar')
+          git archive --format=tar --output=$restoreArchive HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          tar -xf $restoreArchive --directory .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git checkout-index --all --force --index
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git update-index --refresh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Prepare checkout-local Python and owned launcher
         run: |
@@ -91,7 +99,15 @@ jobs:
         run: |
           git config --local core.autocrlf false
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git checkout-index --all --force
+          New-Item -ItemType Directory -Force .arch-test-evidence | Out-Null
+          $restoreArchive = Join-Path '.arch-test-evidence' ('ci-source-' + [guid]::NewGuid().ToString('N') + '.tar')
+          git archive --format=tar --output=$restoreArchive HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          tar -xf $restoreArchive --directory .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git checkout-index --all --force --index
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git update-index --refresh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/download-artifact@v4
         with:
