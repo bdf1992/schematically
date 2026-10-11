@@ -1,0 +1,81 @@
+{
+  "command": "runpy: check(build(depth=3)), bites(), survivors(); no experiment builders executed",
+  "structural_breaks": {
+    "R1": [],
+    "R2": [],
+    "R3": [],
+    "R4": [],
+    "R5": [],
+    "R7": [],
+    "R8": [],
+    "R9": []
+  },
+  "isolated_break_cases": {
+    "R1": [
+      "R1"
+    ],
+    "R2": [
+      "R2"
+    ],
+    "R3": [
+      "R3"
+    ],
+    "R4": [
+      "R4"
+    ],
+    "R5": [
+      "R5"
+    ],
+    "R7": [
+      "R7"
+    ],
+    "R8": [
+      "R8"
+    ],
+    "R9": [
+      "R9"
+    ]
+  },
+  "review_regressions": {
+    "every link deleted": [
+      "R4"
+    ],
+    "every link reversed": [
+      "R4"
+    ],
+    "no Knodes, Kords or Korners": [
+      "R1",
+      "R2"
+    ],
+    "every Knode cut to four ports": [
+      "R1",
+      "R3"
+    ],
+    "an outer port reaching one Knode three times": [
+      "R1"
+    ],
+    "an outer port reaching the wrong three": [
+      "R1"
+    ],
+    "an extra drive link running west": [
+      "R4"
+    ],
+    "a link from a Knode to itself": [
+      "R4"
+    ],
+    "a link listed twice": [
+      "R4"
+    ],
+    "a link on a strand no port has": [
+      "R4"
+    ],
+    "a Korner moved to another Korner's position": [
+      "R2"
+    ],
+    "a Knode filed under another's key": [
+      "R2"
+    ]
+  },
+  "passed": true,
+  "limit": "Structural model only; no runtime authority, cross-scale messages, or production port semantics proven."
+}

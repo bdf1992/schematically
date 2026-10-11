@@ -1,0 +1,134 @@
+{
+  "date_local": "2026-10-10",
+  "timezone": "America/Chicago",
+  "source_repository": "workstation sketchbook ep-kernel-drift-map",
+  "source_commit": "6c7b8f2",
+  "standing": "Promoted source snapshot; historical evidence retains its original limits",
+  "artifacts": [
+    {
+      "path": ".gitattributes",
+      "bytes": 191,
+      "sha256": "87755f3b2c45010afa74345bbcac7753f9e42e7f56246ffa2099c57ead0cf2e9"
+    },
+    {
+      "path": "ARCH-SPEC.md",
+      "bytes": 16971,
+      "sha256": "6a87112e9fd35b14e20bc462886c252fe85f84aa9f851745419f0e94ed92419b"
+    },
+    {
+      "path": "diagrams/fraktal.png",
+      "bytes": 840583,
+      "sha256": "8f98df7657cf4d643b5212f8db4129533602d35af43e30e8e7d4316f064dd927"
+    },
+    {
+      "path": "diagrams/fraktal.sov",
+      "bytes": 130067,
+      "sha256": "581d4a1f1ad9e191aae5c50de42c7a00ccf71c36e17f8f329fb37004f3fdf048"
+    },
+    {
+      "path": "diagrams/kernel-tiles.png",
+      "bytes": 1065146,
+      "sha256": "fb2b604b01ded943aa6c78b654cabcf41539ec58cc728c220d95ccf24da25e68"
+    },
+    {
+      "path": "diagrams/kernel-tiles.sov",
+      "bytes": 292699,
+      "sha256": "d2cd3c78a2017b99ef23ab98dac90eb0f7bd0b6bc9b9be3d7f2429b88e335c49"
+    },
+    {
+      "path": "evidence/architecture-summary.json",
+      "bytes": 439,
+      "sha256": "d20062c41abae6fbf26d0d561aea7182166d73da3ac520ad38b1b888c5450682"
+    },
+    {
+      "path": "evidence/fraktal-run.txt",
+      "bytes": 1372,
+      "sha256": "9218495920eca7145f85d8439c2ef171d23a0eaf48affb05043fbab2d32d1324"
+    },
+    {
+      "path": "evidence/fraktal-structure.json",
+      "bytes": 1484,
+      "sha256": "f68a4ffb9ca7fe4ec1b8a1584cae59369da2171c26992ec7cb23d363fd716f2c"
+    },
+    {
+      "path": "evidence/peer-review.md",
+      "bytes": 1188,
+      "sha256": "96d7f6ebcd1bc936fcf7fedab421d37049448ab9ad7b7fb076a01bd458cee76c"
+    },
+    {
+      "path": "evidence/portable-review.md",
+      "bytes": 1178,
+      "sha256": "333a87f8ae069c22d7c5973f1f213147e0d8cbb040b5b7e9d68052f2a88f82da"
+    },
+    {
+      "path": "evidence/portable-run.txt",
+      "bytes": 990,
+      "sha256": "2abf7079f9c411462c8c2a50eb034afce1aafde626c1aadc503c9e453fa1fb00"
+    },
+    {
+      "path": "evidence/portable-structure.json",
+      "bytes": 2333,
+      "sha256": "10e9000a458cc0a42f32073904644cba8d5b4a5c5d55b276ff11c549eeb4b320"
+    },
+    {
+      "path": "evidence/record-square-before.json",
+      "bytes": 2143,
+      "sha256": "b3e7c26af55ca0f4a657128acfde2ec1e47fb28e65edcdaa27c835313b6b0690"
+    },
+    {
+      "path": "evidence/source-manifest.json",
+      "bytes": 2248,
+      "sha256": "b798ad98c037bc4e68f74389ff9e4555489a42dea06b64a81dddef7739c99b36"
+    },
+    {
+      "path": "evidence/tensor-summary.json",
+      "bytes": 2288,
+      "sha256": "74ff0bdec4f2ad6f53fcbfc24fb6ea9672c9330169458afab338fecc0c0fa55b"
+    },
+    {
+      "path": "model/check_structure.py",
+      "bytes": 958,
+      "sha256": "a6081e8981331af848fcb9ceb6f2a3546d289db61ab7b20eeb5ee4b14217e741"
+    },
+    {
+      "path": "model/fraktal_run.py",
+      "bytes": 10588,
+      "sha256": "3190027795f71da950ac78a7a2a34a4da7c5bfb4df67dd1876678fe9c8f87ecd"
+    },
+    {
+      "path": "model/fraktal.py",
+      "bytes": 23734,
+      "sha256": "3ad26f67036682408ac37200fe9b6cda5355cf041be120af3d55d96f972caf8f"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5910,
+      "sha256": "0409d758acda2df6d8dabfbc12185585447e03aaa55e644794fa52be3200277f"
+    },
+    {
+      "path": "reference/CRADLE-SPEC.md",
+      "bytes": 35614,
+      "sha256": "cdac03470d8644f5a7be62897c77f4ccdba9b34d708428e4600691ee4efd420d"
+    },
+    {
+      "path": "reference/fraktal.sovpak",
+      "bytes": 454333,
+      "sha256": "47a9ca92e2c977c57c07da52389cd9bc9c74315cdc687c9967136a821c780127"
+    },
+    {
+      "path": "reference/SESSION-HANDOFF-2026-10-11.md",
+      "bytes": 20533,
+      "sha256": "1b2ea165b656a9ef2bfa623946e451e8bbe44960a730879e2eb9a8d5852fdb29"
+    },
+    {
+      "path": "reference/tensor_recipe.html",
+      "bytes": 2259157,
+      "sha256": "f53c4fc44dde7eab4b99aeea626191e63b3f8dcb627e8338dced2e65e6e70608"
+    },
+    {
+      "path": "reference/vocabulary.png",
+      "bytes": 54146,
+      "sha256": "35f47e8559dffc14e969f8f8d2a1b35008ef5ef0618b7a2523f37e42d2c7e697"
+    }
+  ]
+}

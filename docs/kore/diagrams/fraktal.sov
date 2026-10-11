@@ -1,0 +1,7117 @@
+{
+ "schema": "soveraeign.schematic/document@0.1",
+ "id": "workstation-fraktal",
+ "revision": 0,
+ "notation": "fraktal",
+ "meta": {
+  "title": "The fraktal: nine Knodes, twelve Kords, four Korners, one shell",
+  "description": "A solid edge is in your tile drawing. A dashed edge is something the model adds or only partly finds there: the shell, the four buses, the nine inside the Kore, and 6 of the 12 Kords, which lack a strand you have not drawn. A faded dashed edge is open: what a Korner is for. Blue, pink and olive are the three layers; teal is a Kord or a bus. Each Knode says what it holds in your words and how much kernel code is filed there today. Positions run −1, −0, 0, +0, +1 on both axes: Knodes sit at −1, 0, +1 and Kords at the seams −0 and +0. Generated from tools/fraktal.py, where 8 of 8 requirements hold on the model; three of them are checked only in part (see exports/fraktal-check.md)."
+ },
+ "legend": {
+  "names": {
+   "C1": "Layer +1 Purpose",
+   "C2": "Layer 0 Dynamics",
+   "C3": "Layer −1 Foundation",
+   "C4": "Kord or bus",
+   "C5": "Korner"
+  }
+ },
+ "components": [
+  {
+   "id": "fraktal",
+   "symbolId": "plane",
+   "x": 1000,
+   "y": 680,
+   "config": {
+    "label": "One Knode, opened: the nine inside show its eight ports",
+    "status": "added",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 3450.0,
+      "h": 2470.0
+     }
+    }
+   }
+  },
+  {
+   "id": "k00",
+   "symbolId": "plane",
+   "x": 0,
+   "y": 0,
+   "config": {
+    "label": "(+1, −1) Purpose · user",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 620,
+      "h": 340
+     }
+    },
+    "colorSlot": 6
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "k00-wd",
+   "symbolId": "point",
+   "x": -310.0,
+   "y": -80,
+   "canvasId": "canvas:component:k00",
+   "parentId": "k00",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k00",
+    "side": "left",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k00-we",
+   "symbolId": "point",
+   "x": -310.0,
+   "y": 80,
+   "canvasId": "canvas:component:k00",
+   "parentId": "k00",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k00",
+    "side": "left",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k00-ed",
+   "symbolId": "point",
+   "x": 310.0,
+   "y": -80,
+   "canvasId": "canvas:component:k00",
+   "parentId": "k00",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k00",
+    "side": "right",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k00-ee",
+   "symbolId": "point",
+   "x": 310.0,
+   "y": 80,
+   "canvasId": "canvas:component:k00",
+   "parentId": "k00",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k00",
+    "side": "right",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k00-nd",
+   "symbolId": "point",
+   "x": -170,
+   "y": -170.0,
+   "canvasId": "canvas:component:k00",
+   "parentId": "k00",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k00",
+    "side": "top",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opened",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k00-ne",
+   "symbolId": "point",
+   "x": 170,
+   "y": -170.0,
+   "canvasId": "canvas:component:k00",
+   "parentId": "k00",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k00",
+    "side": "top",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "reports",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k00-sd",
+   "symbolId": "point",
+   "x": -170,
+   "y": 170.0,
+   "canvasId": "canvas:component:k00",
+   "parentId": "k00",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k00",
+    "side": "bottom",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opens",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k00-se",
+   "symbolId": "point",
+   "x": 170,
+   "y": 170.0,
+   "canvasId": "canvas:component:k00",
+   "parentId": "k00",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k00",
+    "side": "bottom",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "report",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k00-holds",
+   "symbolId": "hold",
+   "x": 0,
+   "y": 15,
+   "canvasId": "canvas:component:k00",
+   "parentId": "k00",
+   "config": {
+    "label": "User · Intake interfaces",
+    "subtitle": "43 kernel files · 20,138 lines today",
+    "colorSlot": 6,
+    "status": "drawn",
+    "presentation": {
+     "size": {
+      "w": 420,
+      "h": 110
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "k01",
+   "symbolId": "plane",
+   "x": 1000,
+   "y": 0,
+   "config": {
+    "label": "(+1, 0) Purpose · external",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 620,
+      "h": 340
+     }
+    },
+    "colorSlot": 6
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "k01-wd",
+   "symbolId": "point",
+   "x": 690.0,
+   "y": -80,
+   "canvasId": "canvas:component:k01",
+   "parentId": "k01",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k01",
+    "side": "left",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k01-we",
+   "symbolId": "point",
+   "x": 690.0,
+   "y": 80,
+   "canvasId": "canvas:component:k01",
+   "parentId": "k01",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k01",
+    "side": "left",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k01-ed",
+   "symbolId": "point",
+   "x": 1310.0,
+   "y": -80,
+   "canvasId": "canvas:component:k01",
+   "parentId": "k01",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k01",
+    "side": "right",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k01-ee",
+   "symbolId": "point",
+   "x": 1310.0,
+   "y": 80,
+   "canvasId": "canvas:component:k01",
+   "parentId": "k01",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k01",
+    "side": "right",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k01-nd",
+   "symbolId": "point",
+   "x": 830,
+   "y": -170.0,
+   "canvasId": "canvas:component:k01",
+   "parentId": "k01",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k01",
+    "side": "top",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opened",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k01-ne",
+   "symbolId": "point",
+   "x": 1170,
+   "y": -170.0,
+   "canvasId": "canvas:component:k01",
+   "parentId": "k01",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k01",
+    "side": "top",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "reports",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k01-sd",
+   "symbolId": "point",
+   "x": 830,
+   "y": 170.0,
+   "canvasId": "canvas:component:k01",
+   "parentId": "k01",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k01",
+    "side": "bottom",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opens",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k01-se",
+   "symbolId": "point",
+   "x": 1170,
+   "y": 170.0,
+   "canvasId": "canvas:component:k01",
+   "parentId": "k01",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k01",
+    "side": "bottom",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "report",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k01-holds",
+   "symbolId": "hold",
+   "x": 1000,
+   "y": 15,
+   "canvasId": "canvas:component:k01",
+   "parentId": "k01",
+   "config": {
+    "label": "Responsibility · Grant",
+    "subtitle": "23 kernel files · 6,880 lines today",
+    "colorSlot": 6,
+    "status": "drawn",
+    "presentation": {
+     "size": {
+      "w": 420,
+      "h": 110
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "k02",
+   "symbolId": "plane",
+   "x": 2000,
+   "y": 0,
+   "config": {
+    "label": "(+1, +1) Purpose · internal",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 620,
+      "h": 340
+     }
+    },
+    "colorSlot": 6
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "k02-wd",
+   "symbolId": "point",
+   "x": 1690.0,
+   "y": -80,
+   "canvasId": "canvas:component:k02",
+   "parentId": "k02",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k02",
+    "side": "left",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k02-we",
+   "symbolId": "point",
+   "x": 1690.0,
+   "y": 80,
+   "canvasId": "canvas:component:k02",
+   "parentId": "k02",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k02",
+    "side": "left",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k02-ed",
+   "symbolId": "point",
+   "x": 2310.0,
+   "y": -80,
+   "canvasId": "canvas:component:k02",
+   "parentId": "k02",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k02",
+    "side": "right",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k02-ee",
+   "symbolId": "point",
+   "x": 2310.0,
+   "y": 80,
+   "canvasId": "canvas:component:k02",
+   "parentId": "k02",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k02",
+    "side": "right",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k02-nd",
+   "symbolId": "point",
+   "x": 1830,
+   "y": -170.0,
+   "canvasId": "canvas:component:k02",
+   "parentId": "k02",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k02",
+    "side": "top",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opened",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k02-ne",
+   "symbolId": "point",
+   "x": 2170,
+   "y": -170.0,
+   "canvasId": "canvas:component:k02",
+   "parentId": "k02",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k02",
+    "side": "top",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "reports",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k02-sd",
+   "symbolId": "point",
+   "x": 1830,
+   "y": 170.0,
+   "canvasId": "canvas:component:k02",
+   "parentId": "k02",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k02",
+    "side": "bottom",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opens",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k02-se",
+   "symbolId": "point",
+   "x": 2170,
+   "y": 170.0,
+   "canvasId": "canvas:component:k02",
+   "parentId": "k02",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k02",
+    "side": "bottom",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "report",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k02-holds",
+   "symbolId": "hold",
+   "x": 2000,
+   "y": 15,
+   "canvasId": "canvas:component:k02",
+   "parentId": "k02",
+   "config": {
+    "label": "Tasks",
+    "subtitle": "20 kernel files · 9,037 lines today",
+    "colorSlot": 6,
+    "status": "drawn",
+    "presentation": {
+     "size": {
+      "w": 420,
+      "h": 110
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "k10",
+   "symbolId": "plane",
+   "x": 0,
+   "y": 680,
+   "config": {
+    "label": "(0, −1) Dynamics · user",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 620,
+      "h": 340
+     }
+    },
+    "colorSlot": 7
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "k10-wd",
+   "symbolId": "point",
+   "x": -310.0,
+   "y": 600,
+   "canvasId": "canvas:component:k10",
+   "parentId": "k10",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k10",
+    "side": "left",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k10-we",
+   "symbolId": "point",
+   "x": -310.0,
+   "y": 760,
+   "canvasId": "canvas:component:k10",
+   "parentId": "k10",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k10",
+    "side": "left",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k10-ed",
+   "symbolId": "point",
+   "x": 310.0,
+   "y": 600,
+   "canvasId": "canvas:component:k10",
+   "parentId": "k10",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k10",
+    "side": "right",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k10-ee",
+   "symbolId": "point",
+   "x": 310.0,
+   "y": 760,
+   "canvasId": "canvas:component:k10",
+   "parentId": "k10",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k10",
+    "side": "right",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k10-nd",
+   "symbolId": "point",
+   "x": -170,
+   "y": 510.0,
+   "canvasId": "canvas:component:k10",
+   "parentId": "k10",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k10",
+    "side": "top",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opened",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k10-ne",
+   "symbolId": "point",
+   "x": 170,
+   "y": 510.0,
+   "canvasId": "canvas:component:k10",
+   "parentId": "k10",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k10",
+    "side": "top",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "reports",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k10-sd",
+   "symbolId": "point",
+   "x": -170,
+   "y": 850.0,
+   "canvasId": "canvas:component:k10",
+   "parentId": "k10",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k10",
+    "side": "bottom",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opens",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k10-se",
+   "symbolId": "point",
+   "x": 170,
+   "y": 850.0,
+   "canvasId": "canvas:component:k10",
+   "parentId": "k10",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k10",
+    "side": "bottom",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "report",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k10-holds",
+   "symbolId": "hold",
+   "x": 0,
+   "y": 695,
+   "canvasId": "canvas:component:k10",
+   "parentId": "k10",
+   "config": {
+    "label": "The user's agents",
+    "subtitle": "7 kernel files · 4,137 lines today",
+    "colorSlot": 7,
+    "status": "drawn",
+    "presentation": {
+     "size": {
+      "w": 420,
+      "h": 110
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "k11",
+   "symbolId": "plane",
+   "x": 1000,
+   "y": 680,
+   "config": {
+    "label": "(0, 0) Dynamics · external · the Kore, opened · holds External agents",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 620,
+      "h": 340
+     }
+    },
+    "colorSlot": 7
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "k11-wd",
+   "symbolId": "point",
+   "x": 690.0,
+   "y": 600,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k11",
+    "side": "left",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k11-we",
+   "symbolId": "point",
+   "x": 690.0,
+   "y": 760,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k11",
+    "side": "left",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k11-ed",
+   "symbolId": "point",
+   "x": 1310.0,
+   "y": 600,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k11",
+    "side": "right",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k11-ee",
+   "symbolId": "point",
+   "x": 1310.0,
+   "y": 760,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k11",
+    "side": "right",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k11-nd",
+   "symbolId": "point",
+   "x": 830,
+   "y": 510.0,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k11",
+    "side": "top",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opened",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k11-ne",
+   "symbolId": "point",
+   "x": 1170,
+   "y": 510.0,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k11",
+    "side": "top",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "reports",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k11-sd",
+   "symbolId": "point",
+   "x": 830,
+   "y": 850.0,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k11",
+    "side": "bottom",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opens",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k11-se",
+   "symbolId": "point",
+   "x": 1170,
+   "y": 850.0,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k11",
+    "side": "bottom",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "report",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kore-00",
+   "symbolId": "hold",
+   "x": 840,
+   "y": 620,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "config": {
+    "label": "(+1, −1)",
+    "colorSlot": 6,
+    "status": "added",
+    "presentation": {
+     "size": {
+      "w": 130,
+      "h": 60
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "kore-01",
+   "symbolId": "hold",
+   "x": 1000,
+   "y": 620,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "config": {
+    "label": "(+1, 0)",
+    "colorSlot": 6,
+    "status": "added",
+    "presentation": {
+     "size": {
+      "w": 130,
+      "h": 60
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "kore-02",
+   "symbolId": "hold",
+   "x": 1160,
+   "y": 620,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "config": {
+    "label": "(+1, +1)",
+    "colorSlot": 6,
+    "status": "added",
+    "presentation": {
+     "size": {
+      "w": 130,
+      "h": 60
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "kore-10",
+   "symbolId": "hold",
+   "x": 840,
+   "y": 700,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "config": {
+    "label": "(0, −1)",
+    "colorSlot": 7,
+    "status": "added",
+    "presentation": {
+     "size": {
+      "w": 130,
+      "h": 60
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "kore-11",
+   "symbolId": "hold",
+   "x": 1000,
+   "y": 700,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "config": {
+    "label": "(0, 0)",
+    "colorSlot": 7,
+    "status": "added",
+    "presentation": {
+     "size": {
+      "w": 130,
+      "h": 60
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "kore-12",
+   "symbolId": "hold",
+   "x": 1160,
+   "y": 700,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "config": {
+    "label": "(0, +1)",
+    "colorSlot": 7,
+    "status": "added",
+    "presentation": {
+     "size": {
+      "w": 130,
+      "h": 60
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "kore-20",
+   "symbolId": "hold",
+   "x": 840,
+   "y": 780,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "config": {
+    "label": "(−1, −1)",
+    "colorSlot": 8,
+    "status": "added",
+    "presentation": {
+     "size": {
+      "w": 130,
+      "h": 60
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "kore-21",
+   "symbolId": "hold",
+   "x": 1000,
+   "y": 780,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "config": {
+    "label": "(−1, 0)",
+    "colorSlot": 8,
+    "status": "added",
+    "presentation": {
+     "size": {
+      "w": 130,
+      "h": 60
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "kore-22",
+   "symbolId": "hold",
+   "x": 1160,
+   "y": 780,
+   "canvasId": "canvas:component:k11",
+   "parentId": "k11",
+   "config": {
+    "label": "(−1, +1)",
+    "colorSlot": 8,
+    "status": "added",
+    "presentation": {
+     "size": {
+      "w": 130,
+      "h": 60
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "k12",
+   "symbolId": "plane",
+   "x": 2000,
+   "y": 680,
+   "config": {
+    "label": "(0, +1) Dynamics · internal",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 620,
+      "h": 340
+     }
+    },
+    "colorSlot": 7
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "k12-wd",
+   "symbolId": "point",
+   "x": 1690.0,
+   "y": 600,
+   "canvasId": "canvas:component:k12",
+   "parentId": "k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k12",
+    "side": "left",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k12-we",
+   "symbolId": "point",
+   "x": 1690.0,
+   "y": 760,
+   "canvasId": "canvas:component:k12",
+   "parentId": "k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k12",
+    "side": "left",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k12-ed",
+   "symbolId": "point",
+   "x": 2310.0,
+   "y": 600,
+   "canvasId": "canvas:component:k12",
+   "parentId": "k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k12",
+    "side": "right",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k12-ee",
+   "symbolId": "point",
+   "x": 2310.0,
+   "y": 760,
+   "canvasId": "canvas:component:k12",
+   "parentId": "k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k12",
+    "side": "right",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k12-nd",
+   "symbolId": "point",
+   "x": 1830,
+   "y": 510.0,
+   "canvasId": "canvas:component:k12",
+   "parentId": "k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k12",
+    "side": "top",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opened",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k12-ne",
+   "symbolId": "point",
+   "x": 2170,
+   "y": 510.0,
+   "canvasId": "canvas:component:k12",
+   "parentId": "k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k12",
+    "side": "top",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "reports",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k12-sd",
+   "symbolId": "point",
+   "x": 1830,
+   "y": 850.0,
+   "canvasId": "canvas:component:k12",
+   "parentId": "k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k12",
+    "side": "bottom",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opens",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k12-se",
+   "symbolId": "point",
+   "x": 2170,
+   "y": 850.0,
+   "canvasId": "canvas:component:k12",
+   "parentId": "k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k12",
+    "side": "bottom",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "report",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k12-holds",
+   "symbolId": "hold",
+   "x": 2000,
+   "y": 695,
+   "canvasId": "canvas:component:k12",
+   "parentId": "k12",
+   "config": {
+    "label": "Internal agents",
+    "subtitle": "4 kernel files · 2,066 lines today",
+    "colorSlot": 7,
+    "status": "drawn",
+    "presentation": {
+     "size": {
+      "w": 420,
+      "h": 110
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "k20",
+   "symbolId": "plane",
+   "x": 0,
+   "y": 1360,
+   "config": {
+    "label": "(−1, −1) Foundation · user",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 620,
+      "h": 340
+     }
+    },
+    "colorSlot": 8
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "k20-wd",
+   "symbolId": "point",
+   "x": -310.0,
+   "y": 1280,
+   "canvasId": "canvas:component:k20",
+   "parentId": "k20",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k20",
+    "side": "left",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k20-we",
+   "symbolId": "point",
+   "x": -310.0,
+   "y": 1440,
+   "canvasId": "canvas:component:k20",
+   "parentId": "k20",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k20",
+    "side": "left",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k20-ed",
+   "symbolId": "point",
+   "x": 310.0,
+   "y": 1280,
+   "canvasId": "canvas:component:k20",
+   "parentId": "k20",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k20",
+    "side": "right",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k20-ee",
+   "symbolId": "point",
+   "x": 310.0,
+   "y": 1440,
+   "canvasId": "canvas:component:k20",
+   "parentId": "k20",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k20",
+    "side": "right",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k20-nd",
+   "symbolId": "point",
+   "x": -170,
+   "y": 1190.0,
+   "canvasId": "canvas:component:k20",
+   "parentId": "k20",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k20",
+    "side": "top",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opened",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k20-ne",
+   "symbolId": "point",
+   "x": 170,
+   "y": 1190.0,
+   "canvasId": "canvas:component:k20",
+   "parentId": "k20",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k20",
+    "side": "top",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "reports",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k20-sd",
+   "symbolId": "point",
+   "x": -170,
+   "y": 1530.0,
+   "canvasId": "canvas:component:k20",
+   "parentId": "k20",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k20",
+    "side": "bottom",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opens",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k20-se",
+   "symbolId": "point",
+   "x": 170,
+   "y": 1530.0,
+   "canvasId": "canvas:component:k20",
+   "parentId": "k20",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k20",
+    "side": "bottom",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "report",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k20-holds",
+   "symbolId": "hold",
+   "x": 0,
+   "y": 1375,
+   "canvasId": "canvas:component:k20",
+   "parentId": "k20",
+   "config": {
+    "label": "Systems",
+    "subtitle": "52 kernel files · 17,214 lines today",
+    "colorSlot": 8,
+    "status": "drawn",
+    "presentation": {
+     "size": {
+      "w": 420,
+      "h": 110
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "k21",
+   "symbolId": "plane",
+   "x": 1000,
+   "y": 1360,
+   "config": {
+    "label": "(−1, 0) Foundation · external",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 620,
+      "h": 340
+     }
+    },
+    "colorSlot": 8
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "k21-wd",
+   "symbolId": "point",
+   "x": 690.0,
+   "y": 1280,
+   "canvasId": "canvas:component:k21",
+   "parentId": "k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k21",
+    "side": "left",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k21-we",
+   "symbolId": "point",
+   "x": 690.0,
+   "y": 1440,
+   "canvasId": "canvas:component:k21",
+   "parentId": "k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k21",
+    "side": "left",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k21-ed",
+   "symbolId": "point",
+   "x": 1310.0,
+   "y": 1280,
+   "canvasId": "canvas:component:k21",
+   "parentId": "k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k21",
+    "side": "right",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k21-ee",
+   "symbolId": "point",
+   "x": 1310.0,
+   "y": 1440,
+   "canvasId": "canvas:component:k21",
+   "parentId": "k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k21",
+    "side": "right",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k21-nd",
+   "symbolId": "point",
+   "x": 830,
+   "y": 1190.0,
+   "canvasId": "canvas:component:k21",
+   "parentId": "k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k21",
+    "side": "top",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opened",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k21-ne",
+   "symbolId": "point",
+   "x": 1170,
+   "y": 1190.0,
+   "canvasId": "canvas:component:k21",
+   "parentId": "k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k21",
+    "side": "top",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "reports",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k21-sd",
+   "symbolId": "point",
+   "x": 830,
+   "y": 1530.0,
+   "canvasId": "canvas:component:k21",
+   "parentId": "k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k21",
+    "side": "bottom",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opens",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k21-se",
+   "symbolId": "point",
+   "x": 1170,
+   "y": 1530.0,
+   "canvasId": "canvas:component:k21",
+   "parentId": "k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k21",
+    "side": "bottom",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "report",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k21-holds",
+   "symbolId": "hold",
+   "x": 1000,
+   "y": 1375,
+   "canvasId": "canvas:component:k21",
+   "parentId": "k21",
+   "config": {
+    "label": "Selection · Source pins · Freshness",
+    "subtitle": "73 kernel files · 19,338 lines today",
+    "colorSlot": 8,
+    "status": "drawn",
+    "presentation": {
+     "size": {
+      "w": 420,
+      "h": 110
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "k22",
+   "symbolId": "plane",
+   "x": 2000,
+   "y": 1360,
+   "config": {
+    "label": "(−1, +1) Foundation · internal",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 620,
+      "h": 340
+     }
+    },
+    "colorSlot": 8
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "k22-wd",
+   "symbolId": "point",
+   "x": 1690.0,
+   "y": 1280,
+   "canvasId": "canvas:component:k22",
+   "parentId": "k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k22",
+    "side": "left",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k22-we",
+   "symbolId": "point",
+   "x": 1690.0,
+   "y": 1440,
+   "canvasId": "canvas:component:k22",
+   "parentId": "k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k22",
+    "side": "left",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k22-ed",
+   "symbolId": "point",
+   "x": 2310.0,
+   "y": 1280,
+   "canvasId": "canvas:component:k22",
+   "parentId": "k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k22",
+    "side": "right",
+    "t": 0.2647058823529412
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k22-ee",
+   "symbolId": "point",
+   "x": 2310.0,
+   "y": 1440,
+   "canvasId": "canvas:component:k22",
+   "parentId": "k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k22",
+    "side": "right",
+    "t": 0.7352941176470589
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k22-nd",
+   "symbolId": "point",
+   "x": 1830,
+   "y": 1190.0,
+   "canvasId": "canvas:component:k22",
+   "parentId": "k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k22",
+    "side": "top",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opened",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k22-ne",
+   "symbolId": "point",
+   "x": 2170,
+   "y": 1190.0,
+   "canvasId": "canvas:component:k22",
+   "parentId": "k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k22",
+    "side": "top",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "reports",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k22-sd",
+   "symbolId": "point",
+   "x": 1830,
+   "y": 1530.0,
+   "canvasId": "canvas:component:k22",
+   "parentId": "k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k22",
+    "side": "bottom",
+    "t": 0.22580645161290322
+   },
+   "config": {
+    "label": "opens",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k22-se",
+   "symbolId": "point",
+   "x": 2170,
+   "y": 1530.0,
+   "canvasId": "canvas:component:k22",
+   "parentId": "k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "k22",
+    "side": "bottom",
+    "t": 0.7741935483870968
+   },
+   "config": {
+    "label": "report",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "k22-holds",
+   "symbolId": "hold",
+   "x": 2000,
+   "y": 1375,
+   "canvasId": "canvas:component:k22",
+   "parentId": "k22",
+   "config": {
+    "label": "Code · History · Procedures",
+    "subtitle": "132 kernel files · 38,424 lines today",
+    "colorSlot": 8,
+    "status": "drawn",
+    "presentation": {
+     "size": {
+      "w": 420,
+      "h": 110
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "kord-k00-k01",
+   "symbolId": "plane",
+   "x": 500.0,
+   "y": 0.0,
+   "config": {
+    "label": "(+1, −0) Kord",
+    "status": "partial",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 250,
+      "h": 300
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "kord-k00-k01-wd",
+   "symbolId": "point",
+   "x": 375.0,
+   "y": -80.0,
+   "canvasId": "canvas:component:kord-k00-k01",
+   "parentId": "kord-k00-k01",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k00-k01",
+    "side": "left",
+    "t": 0.23333333333333334
+   },
+   "config": {
+    "label": "drive",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k00-k01-ed",
+   "symbolId": "point",
+   "x": 625.0,
+   "y": -80.0,
+   "canvasId": "canvas:component:kord-k00-k01",
+   "parentId": "kord-k00-k01",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k00-k01",
+    "side": "right",
+    "t": 0.23333333333333334
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k00-k01-we",
+   "symbolId": "point",
+   "x": 375.0,
+   "y": 80.0,
+   "canvasId": "canvas:component:kord-k00-k01",
+   "parentId": "kord-k00-k01",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k00-k01",
+    "side": "left",
+    "t": 0.7666666666666667
+   },
+   "config": {
+    "label": "echo",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k00-k01-ee",
+   "symbolId": "point",
+   "x": 625.0,
+   "y": 80.0,
+   "canvasId": "canvas:component:kord-k00-k01",
+   "parentId": "kord-k00-k01",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k00-k01",
+    "side": "right",
+    "t": 0.7666666666666667
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k00-k10",
+   "symbolId": "plane",
+   "x": 0.0,
+   "y": 340.0,
+   "config": {
+    "label": "(+0, −1) Kord · drive and echo",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 560,
+      "h": 160
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "kord-k00-k10-nd",
+   "symbolId": "point",
+   "x": -170.0,
+   "y": 260.0,
+   "canvasId": "canvas:component:kord-k00-k10",
+   "parentId": "kord-k00-k10",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k00-k10",
+    "side": "top",
+    "t": 0.19642857142857142
+   },
+   "config": {
+    "label": "drive",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k00-k10-sd",
+   "symbolId": "point",
+   "x": -170.0,
+   "y": 420.0,
+   "canvasId": "canvas:component:kord-k00-k10",
+   "parentId": "kord-k00-k10",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k00-k10",
+    "side": "bottom",
+    "t": 0.19642857142857142
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k00-k10-ne",
+   "symbolId": "point",
+   "x": 170.0,
+   "y": 260.0,
+   "canvasId": "canvas:component:kord-k00-k10",
+   "parentId": "kord-k00-k10",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k00-k10",
+    "side": "top",
+    "t": 0.8035714285714286
+   },
+   "config": {
+    "label": "echo",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k00-k10-se",
+   "symbolId": "point",
+   "x": 170.0,
+   "y": 420.0,
+   "canvasId": "canvas:component:kord-k00-k10",
+   "parentId": "kord-k00-k10",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k00-k10",
+    "side": "bottom",
+    "t": 0.8035714285714286
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k01-k02",
+   "symbolId": "plane",
+   "x": 1500.0,
+   "y": 0.0,
+   "config": {
+    "label": "(+1, +0) Kord",
+    "status": "added",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 250,
+      "h": 300
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "kord-k01-k02-wd",
+   "symbolId": "point",
+   "x": 1375.0,
+   "y": -80.0,
+   "canvasId": "canvas:component:kord-k01-k02",
+   "parentId": "kord-k01-k02",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k01-k02",
+    "side": "left",
+    "t": 0.23333333333333334
+   },
+   "config": {
+    "label": "drive",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k01-k02-ed",
+   "symbolId": "point",
+   "x": 1625.0,
+   "y": -80.0,
+   "canvasId": "canvas:component:kord-k01-k02",
+   "parentId": "kord-k01-k02",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k01-k02",
+    "side": "right",
+    "t": 0.23333333333333334
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k01-k02-we",
+   "symbolId": "point",
+   "x": 1375.0,
+   "y": 80.0,
+   "canvasId": "canvas:component:kord-k01-k02",
+   "parentId": "kord-k01-k02",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k01-k02",
+    "side": "left",
+    "t": 0.7666666666666667
+   },
+   "config": {
+    "label": "echo",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k01-k02-ee",
+   "symbolId": "point",
+   "x": 1625.0,
+   "y": 80.0,
+   "canvasId": "canvas:component:kord-k01-k02",
+   "parentId": "kord-k01-k02",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k01-k02",
+    "side": "right",
+    "t": 0.7666666666666667
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k01-k11",
+   "symbolId": "plane",
+   "x": 1000.0,
+   "y": 340.0,
+   "config": {
+    "label": "(+0, 0) Kord · drive and echo",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 560,
+      "h": 160
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "kord-k01-k11-nd",
+   "symbolId": "point",
+   "x": 830.0,
+   "y": 260.0,
+   "canvasId": "canvas:component:kord-k01-k11",
+   "parentId": "kord-k01-k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k01-k11",
+    "side": "top",
+    "t": 0.19642857142857142
+   },
+   "config": {
+    "label": "drive",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k01-k11-sd",
+   "symbolId": "point",
+   "x": 830.0,
+   "y": 420.0,
+   "canvasId": "canvas:component:kord-k01-k11",
+   "parentId": "kord-k01-k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k01-k11",
+    "side": "bottom",
+    "t": 0.19642857142857142
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k01-k11-ne",
+   "symbolId": "point",
+   "x": 1170.0,
+   "y": 260.0,
+   "canvasId": "canvas:component:kord-k01-k11",
+   "parentId": "kord-k01-k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k01-k11",
+    "side": "top",
+    "t": 0.8035714285714286
+   },
+   "config": {
+    "label": "echo",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k01-k11-se",
+   "symbolId": "point",
+   "x": 1170.0,
+   "y": 420.0,
+   "canvasId": "canvas:component:kord-k01-k11",
+   "parentId": "kord-k01-k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k01-k11",
+    "side": "bottom",
+    "t": 0.8035714285714286
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k02-k12",
+   "symbolId": "plane",
+   "x": 2000.0,
+   "y": 340.0,
+   "config": {
+    "label": "(+0, +1) Kord · drive and echo",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 560,
+      "h": 160
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "kord-k02-k12-nd",
+   "symbolId": "point",
+   "x": 1830.0,
+   "y": 260.0,
+   "canvasId": "canvas:component:kord-k02-k12",
+   "parentId": "kord-k02-k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k02-k12",
+    "side": "top",
+    "t": 0.19642857142857142
+   },
+   "config": {
+    "label": "drive",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k02-k12-sd",
+   "symbolId": "point",
+   "x": 1830.0,
+   "y": 420.0,
+   "canvasId": "canvas:component:kord-k02-k12",
+   "parentId": "kord-k02-k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k02-k12",
+    "side": "bottom",
+    "t": 0.19642857142857142
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k02-k12-ne",
+   "symbolId": "point",
+   "x": 2170.0,
+   "y": 260.0,
+   "canvasId": "canvas:component:kord-k02-k12",
+   "parentId": "kord-k02-k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k02-k12",
+    "side": "top",
+    "t": 0.8035714285714286
+   },
+   "config": {
+    "label": "echo",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k02-k12-se",
+   "symbolId": "point",
+   "x": 2170.0,
+   "y": 420.0,
+   "canvasId": "canvas:component:kord-k02-k12",
+   "parentId": "kord-k02-k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k02-k12",
+    "side": "bottom",
+    "t": 0.8035714285714286
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k10-k11",
+   "symbolId": "plane",
+   "x": 500.0,
+   "y": 680.0,
+   "config": {
+    "label": "(0, −0) Kord",
+    "status": "added",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 250,
+      "h": 300
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "kord-k10-k11-wd",
+   "symbolId": "point",
+   "x": 375.0,
+   "y": 600.0,
+   "canvasId": "canvas:component:kord-k10-k11",
+   "parentId": "kord-k10-k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k10-k11",
+    "side": "left",
+    "t": 0.23333333333333334
+   },
+   "config": {
+    "label": "drive",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k10-k11-ed",
+   "symbolId": "point",
+   "x": 625.0,
+   "y": 600.0,
+   "canvasId": "canvas:component:kord-k10-k11",
+   "parentId": "kord-k10-k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k10-k11",
+    "side": "right",
+    "t": 0.23333333333333334
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k10-k11-we",
+   "symbolId": "point",
+   "x": 375.0,
+   "y": 760.0,
+   "canvasId": "canvas:component:kord-k10-k11",
+   "parentId": "kord-k10-k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k10-k11",
+    "side": "left",
+    "t": 0.7666666666666667
+   },
+   "config": {
+    "label": "echo",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k10-k11-ee",
+   "symbolId": "point",
+   "x": 625.0,
+   "y": 760.0,
+   "canvasId": "canvas:component:kord-k10-k11",
+   "parentId": "kord-k10-k11",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k10-k11",
+    "side": "right",
+    "t": 0.7666666666666667
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k10-k20",
+   "symbolId": "plane",
+   "x": 0.0,
+   "y": 1020.0,
+   "config": {
+    "label": "(−0, −1) Kord · drive and echo",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 560,
+      "h": 160
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "kord-k10-k20-nd",
+   "symbolId": "point",
+   "x": -170.0,
+   "y": 940.0,
+   "canvasId": "canvas:component:kord-k10-k20",
+   "parentId": "kord-k10-k20",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k10-k20",
+    "side": "top",
+    "t": 0.19642857142857142
+   },
+   "config": {
+    "label": "drive",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k10-k20-sd",
+   "symbolId": "point",
+   "x": -170.0,
+   "y": 1100.0,
+   "canvasId": "canvas:component:kord-k10-k20",
+   "parentId": "kord-k10-k20",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k10-k20",
+    "side": "bottom",
+    "t": 0.19642857142857142
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k10-k20-ne",
+   "symbolId": "point",
+   "x": 170.0,
+   "y": 940.0,
+   "canvasId": "canvas:component:kord-k10-k20",
+   "parentId": "kord-k10-k20",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k10-k20",
+    "side": "top",
+    "t": 0.8035714285714286
+   },
+   "config": {
+    "label": "echo",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k10-k20-se",
+   "symbolId": "point",
+   "x": 170.0,
+   "y": 1100.0,
+   "canvasId": "canvas:component:kord-k10-k20",
+   "parentId": "kord-k10-k20",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k10-k20",
+    "side": "bottom",
+    "t": 0.8035714285714286
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k11-k12",
+   "symbolId": "plane",
+   "x": 1500.0,
+   "y": 680.0,
+   "config": {
+    "label": "(0, +0) Kord",
+    "status": "partial",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 250,
+      "h": 300
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "kord-k11-k12-wd",
+   "symbolId": "point",
+   "x": 1375.0,
+   "y": 600.0,
+   "canvasId": "canvas:component:kord-k11-k12",
+   "parentId": "kord-k11-k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k11-k12",
+    "side": "left",
+    "t": 0.23333333333333334
+   },
+   "config": {
+    "label": "drive",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k11-k12-ed",
+   "symbolId": "point",
+   "x": 1625.0,
+   "y": 600.0,
+   "canvasId": "canvas:component:kord-k11-k12",
+   "parentId": "kord-k11-k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k11-k12",
+    "side": "right",
+    "t": 0.23333333333333334
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k11-k12-we",
+   "symbolId": "point",
+   "x": 1375.0,
+   "y": 760.0,
+   "canvasId": "canvas:component:kord-k11-k12",
+   "parentId": "kord-k11-k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k11-k12",
+    "side": "left",
+    "t": 0.7666666666666667
+   },
+   "config": {
+    "label": "echo",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k11-k12-ee",
+   "symbolId": "point",
+   "x": 1625.0,
+   "y": 760.0,
+   "canvasId": "canvas:component:kord-k11-k12",
+   "parentId": "kord-k11-k12",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k11-k12",
+    "side": "right",
+    "t": 0.7666666666666667
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k11-k21",
+   "symbolId": "plane",
+   "x": 1000.0,
+   "y": 1020.0,
+   "config": {
+    "label": "(−0, 0) Kord · drive and echo",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 560,
+      "h": 160
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "kord-k11-k21-nd",
+   "symbolId": "point",
+   "x": 830.0,
+   "y": 940.0,
+   "canvasId": "canvas:component:kord-k11-k21",
+   "parentId": "kord-k11-k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k11-k21",
+    "side": "top",
+    "t": 0.19642857142857142
+   },
+   "config": {
+    "label": "drive",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k11-k21-sd",
+   "symbolId": "point",
+   "x": 830.0,
+   "y": 1100.0,
+   "canvasId": "canvas:component:kord-k11-k21",
+   "parentId": "kord-k11-k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k11-k21",
+    "side": "bottom",
+    "t": 0.19642857142857142
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k11-k21-ne",
+   "symbolId": "point",
+   "x": 1170.0,
+   "y": 940.0,
+   "canvasId": "canvas:component:kord-k11-k21",
+   "parentId": "kord-k11-k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k11-k21",
+    "side": "top",
+    "t": 0.8035714285714286
+   },
+   "config": {
+    "label": "echo",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k11-k21-se",
+   "symbolId": "point",
+   "x": 1170.0,
+   "y": 1100.0,
+   "canvasId": "canvas:component:kord-k11-k21",
+   "parentId": "kord-k11-k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k11-k21",
+    "side": "bottom",
+    "t": 0.8035714285714286
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k12-k22",
+   "symbolId": "plane",
+   "x": 2000.0,
+   "y": 1020.0,
+   "config": {
+    "label": "(−0, +1) Kord · drive and echo",
+    "status": "drawn",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 560,
+      "h": 160
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "kord-k12-k22-nd",
+   "symbolId": "point",
+   "x": 1830.0,
+   "y": 940.0,
+   "canvasId": "canvas:component:kord-k12-k22",
+   "parentId": "kord-k12-k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k12-k22",
+    "side": "top",
+    "t": 0.19642857142857142
+   },
+   "config": {
+    "label": "drive",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k12-k22-sd",
+   "symbolId": "point",
+   "x": 1830.0,
+   "y": 1100.0,
+   "canvasId": "canvas:component:kord-k12-k22",
+   "parentId": "kord-k12-k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k12-k22",
+    "side": "bottom",
+    "t": 0.19642857142857142
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k12-k22-ne",
+   "symbolId": "point",
+   "x": 2170.0,
+   "y": 940.0,
+   "canvasId": "canvas:component:kord-k12-k22",
+   "parentId": "kord-k12-k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k12-k22",
+    "side": "top",
+    "t": 0.8035714285714286
+   },
+   "config": {
+    "label": "echo",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k12-k22-se",
+   "symbolId": "point",
+   "x": 2170.0,
+   "y": 1100.0,
+   "canvasId": "canvas:component:kord-k12-k22",
+   "parentId": "kord-k12-k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k12-k22",
+    "side": "bottom",
+    "t": 0.8035714285714286
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k20-k21",
+   "symbolId": "plane",
+   "x": 500.0,
+   "y": 1360.0,
+   "config": {
+    "label": "(−1, −0) Kord",
+    "status": "partial",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 250,
+      "h": 300
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "kord-k20-k21-wd",
+   "symbolId": "point",
+   "x": 375.0,
+   "y": 1280.0,
+   "canvasId": "canvas:component:kord-k20-k21",
+   "parentId": "kord-k20-k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k20-k21",
+    "side": "left",
+    "t": 0.23333333333333334
+   },
+   "config": {
+    "label": "drive",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k20-k21-ed",
+   "symbolId": "point",
+   "x": 625.0,
+   "y": 1280.0,
+   "canvasId": "canvas:component:kord-k20-k21",
+   "parentId": "kord-k20-k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k20-k21",
+    "side": "right",
+    "t": 0.23333333333333334
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k20-k21-we",
+   "symbolId": "point",
+   "x": 375.0,
+   "y": 1440.0,
+   "canvasId": "canvas:component:kord-k20-k21",
+   "parentId": "kord-k20-k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k20-k21",
+    "side": "left",
+    "t": 0.7666666666666667
+   },
+   "config": {
+    "label": "echo",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k20-k21-ee",
+   "symbolId": "point",
+   "x": 625.0,
+   "y": 1440.0,
+   "canvasId": "canvas:component:kord-k20-k21",
+   "parentId": "kord-k20-k21",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k20-k21",
+    "side": "right",
+    "t": 0.7666666666666667
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k21-k22",
+   "symbolId": "plane",
+   "x": 1500.0,
+   "y": 1360.0,
+   "config": {
+    "label": "(−1, +0) Kord",
+    "status": "partial",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 250,
+      "h": 300
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "kord-k21-k22-wd",
+   "symbolId": "point",
+   "x": 1375.0,
+   "y": 1280.0,
+   "canvasId": "canvas:component:kord-k21-k22",
+   "parentId": "kord-k21-k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k21-k22",
+    "side": "left",
+    "t": 0.23333333333333334
+   },
+   "config": {
+    "label": "drive",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k21-k22-ed",
+   "symbolId": "point",
+   "x": 1625.0,
+   "y": 1280.0,
+   "canvasId": "canvas:component:kord-k21-k22",
+   "parentId": "kord-k21-k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k21-k22",
+    "side": "right",
+    "t": 0.23333333333333334
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k21-k22-we",
+   "symbolId": "point",
+   "x": 1375.0,
+   "y": 1440.0,
+   "canvasId": "canvas:component:kord-k21-k22",
+   "parentId": "kord-k21-k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k21-k22",
+    "side": "left",
+    "t": 0.7666666666666667
+   },
+   "config": {
+    "label": "echo",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "kord-k21-k22-ee",
+   "symbolId": "point",
+   "x": 1625.0,
+   "y": 1440.0,
+   "canvasId": "canvas:component:kord-k21-k22",
+   "parentId": "kord-k21-k22",
+   "placement": {
+    "kind": "edge",
+    "hostId": "kord-k21-k22",
+    "side": "right",
+    "t": 0.7666666666666667
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "korner00",
+   "symbolId": "ground",
+   "x": 500.0,
+   "y": 340.0,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "config": {
+    "label": "(+0, −0) Korner",
+    "subtitle": "four meet · nothing passes",
+    "colorSlot": 10,
+    "status": "open",
+    "presentation": {
+     "size": {
+      "w": 240,
+      "h": 120
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "korner01",
+   "symbolId": "ground",
+   "x": 1500.0,
+   "y": 340.0,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "config": {
+    "label": "(+0, +0) Korner",
+    "subtitle": "four meet · nothing passes",
+    "colorSlot": 10,
+    "status": "open",
+    "presentation": {
+     "size": {
+      "w": 240,
+      "h": 120
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "korner10",
+   "symbolId": "ground",
+   "x": 500.0,
+   "y": 1020.0,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "config": {
+    "label": "(−0, −0) Korner",
+    "subtitle": "four meet · nothing passes",
+    "colorSlot": 10,
+    "status": "open",
+    "presentation": {
+     "size": {
+      "w": 240,
+      "h": 120
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "korner11",
+   "symbolId": "ground",
+   "x": 1500.0,
+   "y": 1020.0,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "config": {
+    "label": "(−0, +0) Korner",
+    "subtitle": "four meet · nothing passes",
+    "colorSlot": 10,
+    "status": "open",
+    "presentation": {
+     "size": {
+      "w": 240,
+      "h": 120
+     },
+     "graphic": {
+      "kind": "none"
+     }
+    }
+   }
+  },
+  {
+   "id": "bus-west",
+   "symbolId": "plane",
+   "x": -480.0,
+   "y": 680,
+   "config": {
+    "label": "bus",
+    "status": "added",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 150,
+      "h": 1700
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "fraktal-wd",
+   "symbolId": "point",
+   "x": -725.0,
+   "y": 600,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "placement": {
+    "kind": "edge",
+    "hostId": "fraktal",
+    "side": "left",
+    "t": 0.4676113360323887
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-west-od",
+   "symbolId": "point",
+   "x": -555.0,
+   "y": 600,
+   "canvasId": "canvas:component:bus-west",
+   "parentId": "bus-west",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-west",
+    "side": "left",
+    "t": 0.45294117647058824
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-west-k00d",
+   "symbolId": "point",
+   "x": -405.0,
+   "y": -80,
+   "canvasId": "canvas:component:bus-west",
+   "parentId": "bus-west",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-west",
+    "side": "right",
+    "t": 0.052941176470588235
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-west-k10d",
+   "symbolId": "point",
+   "x": -405.0,
+   "y": 600,
+   "canvasId": "canvas:component:bus-west",
+   "parentId": "bus-west",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-west",
+    "side": "right",
+    "t": 0.45294117647058824
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-west-k20d",
+   "symbolId": "point",
+   "x": -405.0,
+   "y": 1280,
+   "canvasId": "canvas:component:bus-west",
+   "parentId": "bus-west",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-west",
+    "side": "right",
+    "t": 0.8529411764705882
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "fraktal-we",
+   "symbolId": "point",
+   "x": -725.0,
+   "y": 760,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "placement": {
+    "kind": "edge",
+    "hostId": "fraktal",
+    "side": "left",
+    "t": 0.5323886639676113
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-west-oe",
+   "symbolId": "point",
+   "x": -555.0,
+   "y": 760,
+   "canvasId": "canvas:component:bus-west",
+   "parentId": "bus-west",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-west",
+    "side": "left",
+    "t": 0.5470588235294118
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-west-k00e",
+   "symbolId": "point",
+   "x": -405.0,
+   "y": 80,
+   "canvasId": "canvas:component:bus-west",
+   "parentId": "bus-west",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-west",
+    "side": "right",
+    "t": 0.14705882352941177
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-west-k10e",
+   "symbolId": "point",
+   "x": -405.0,
+   "y": 760,
+   "canvasId": "canvas:component:bus-west",
+   "parentId": "bus-west",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-west",
+    "side": "right",
+    "t": 0.5470588235294118
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-west-k20e",
+   "symbolId": "point",
+   "x": -405.0,
+   "y": 1440,
+   "canvasId": "canvas:component:bus-west",
+   "parentId": "bus-west",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-west",
+    "side": "right",
+    "t": 0.9470588235294117
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-east",
+   "symbolId": "plane",
+   "x": 2480.0,
+   "y": 680,
+   "config": {
+    "label": "bus",
+    "status": "added",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 150,
+      "h": 1700
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "fraktal-ed",
+   "symbolId": "point",
+   "x": 2725.0,
+   "y": 600,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "placement": {
+    "kind": "edge",
+    "hostId": "fraktal",
+    "side": "right",
+    "t": 0.4676113360323887
+   },
+   "config": {
+    "label": "out",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-east-od",
+   "symbolId": "point",
+   "x": 2555.0,
+   "y": 600,
+   "canvasId": "canvas:component:bus-east",
+   "parentId": "bus-east",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-east",
+    "side": "right",
+    "t": 0.45294117647058824
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-east-k02d",
+   "symbolId": "point",
+   "x": 2405.0,
+   "y": -80,
+   "canvasId": "canvas:component:bus-east",
+   "parentId": "bus-east",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-east",
+    "side": "left",
+    "t": 0.052941176470588235
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-east-k12d",
+   "symbolId": "point",
+   "x": 2405.0,
+   "y": 600,
+   "canvasId": "canvas:component:bus-east",
+   "parentId": "bus-east",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-east",
+    "side": "left",
+    "t": 0.45294117647058824
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-east-k22d",
+   "symbolId": "point",
+   "x": 2405.0,
+   "y": 1280,
+   "canvasId": "canvas:component:bus-east",
+   "parentId": "bus-east",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-east",
+    "side": "left",
+    "t": 0.8529411764705882
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "fraktal-ee",
+   "symbolId": "point",
+   "x": 2725.0,
+   "y": 760,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "placement": {
+    "kind": "edge",
+    "hostId": "fraktal",
+    "side": "right",
+    "t": 0.5323886639676113
+   },
+   "config": {
+    "label": "in",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-east-oe",
+   "symbolId": "point",
+   "x": 2555.0,
+   "y": 760,
+   "canvasId": "canvas:component:bus-east",
+   "parentId": "bus-east",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-east",
+    "side": "right",
+    "t": 0.5470588235294118
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-east-k02e",
+   "symbolId": "point",
+   "x": 2405.0,
+   "y": 80,
+   "canvasId": "canvas:component:bus-east",
+   "parentId": "bus-east",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-east",
+    "side": "left",
+    "t": 0.14705882352941177
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-east-k12e",
+   "symbolId": "point",
+   "x": 2405.0,
+   "y": 760,
+   "canvasId": "canvas:component:bus-east",
+   "parentId": "bus-east",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-east",
+    "side": "left",
+    "t": 0.5470588235294118
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-east-k22e",
+   "symbolId": "point",
+   "x": 2405.0,
+   "y": 1440,
+   "canvasId": "canvas:component:bus-east",
+   "parentId": "bus-east",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-east",
+    "side": "left",
+    "t": 0.9470588235294117
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-north",
+   "symbolId": "plane",
+   "x": 1000,
+   "y": -340.0,
+   "config": {
+    "label": "north bus",
+    "status": "added",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 2620,
+      "h": 90
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "fraktal-nd",
+   "symbolId": "point",
+   "x": 830,
+   "y": -555.0,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "placement": {
+    "kind": "edge",
+    "hostId": "fraktal",
+    "side": "top",
+    "t": 0.45072463768115945
+   },
+   "config": {
+    "label": "opened",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-north-od",
+   "symbolId": "point",
+   "x": 830,
+   "y": -385.0,
+   "canvasId": "canvas:component:bus-north",
+   "parentId": "bus-north",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-north",
+    "side": "top",
+    "t": 0.4351145038167939
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-north-k00d",
+   "symbolId": "point",
+   "x": -170,
+   "y": -295.0,
+   "canvasId": "canvas:component:bus-north",
+   "parentId": "bus-north",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-north",
+    "side": "bottom",
+    "t": 0.05343511450381679
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-north-k01d",
+   "symbolId": "point",
+   "x": 830,
+   "y": -295.0,
+   "canvasId": "canvas:component:bus-north",
+   "parentId": "bus-north",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-north",
+    "side": "bottom",
+    "t": 0.4351145038167939
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-north-k02d",
+   "symbolId": "point",
+   "x": 1830,
+   "y": -295.0,
+   "canvasId": "canvas:component:bus-north",
+   "parentId": "bus-north",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-north",
+    "side": "bottom",
+    "t": 0.816793893129771
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "fraktal-ne",
+   "symbolId": "point",
+   "x": 1170,
+   "y": -555.0,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "placement": {
+    "kind": "edge",
+    "hostId": "fraktal",
+    "side": "top",
+    "t": 0.5492753623188406
+   },
+   "config": {
+    "label": "reports",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-north-oe",
+   "symbolId": "point",
+   "x": 1170,
+   "y": -385.0,
+   "canvasId": "canvas:component:bus-north",
+   "parentId": "bus-north",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-north",
+    "side": "top",
+    "t": 0.5648854961832062
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-north-k00e",
+   "symbolId": "point",
+   "x": 170,
+   "y": -295.0,
+   "canvasId": "canvas:component:bus-north",
+   "parentId": "bus-north",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-north",
+    "side": "bottom",
+    "t": 0.183206106870229
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-north-k01e",
+   "symbolId": "point",
+   "x": 1170,
+   "y": -295.0,
+   "canvasId": "canvas:component:bus-north",
+   "parentId": "bus-north",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-north",
+    "side": "bottom",
+    "t": 0.5648854961832062
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-north-k02e",
+   "symbolId": "point",
+   "x": 2170,
+   "y": -295.0,
+   "canvasId": "canvas:component:bus-north",
+   "parentId": "bus-north",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-north",
+    "side": "bottom",
+    "t": 0.9465648854961832
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-south",
+   "symbolId": "plane",
+   "x": 1000,
+   "y": 1700.0,
+   "config": {
+    "label": "south bus",
+    "status": "added",
+    "attachmentDefaults": "none",
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "size": {
+      "w": 2620,
+      "h": 90
+     }
+    },
+    "colorSlot": 9
+   },
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal"
+  },
+  {
+   "id": "fraktal-sd",
+   "symbolId": "point",
+   "x": 830,
+   "y": 1915.0,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "placement": {
+    "kind": "edge",
+    "hostId": "fraktal",
+    "side": "bottom",
+    "t": 0.45072463768115945
+   },
+   "config": {
+    "label": "opens",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-south-od",
+   "symbolId": "point",
+   "x": 830,
+   "y": 1745.0,
+   "canvasId": "canvas:component:bus-south",
+   "parentId": "bus-south",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-south",
+    "side": "bottom",
+    "t": 0.4351145038167939
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-south-k20d",
+   "symbolId": "point",
+   "x": -170,
+   "y": 1655.0,
+   "canvasId": "canvas:component:bus-south",
+   "parentId": "bus-south",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-south",
+    "side": "top",
+    "t": 0.05343511450381679
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-south-k21d",
+   "symbolId": "point",
+   "x": 830,
+   "y": 1655.0,
+   "canvasId": "canvas:component:bus-south",
+   "parentId": "bus-south",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-south",
+    "side": "top",
+    "t": 0.4351145038167939
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-south-k22d",
+   "symbolId": "point",
+   "x": 1830,
+   "y": 1655.0,
+   "canvasId": "canvas:component:bus-south",
+   "parentId": "bus-south",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-south",
+    "side": "top",
+    "t": 0.816793893129771
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "fraktal-se",
+   "symbolId": "point",
+   "x": 1170,
+   "y": 1915.0,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "placement": {
+    "kind": "edge",
+    "hostId": "fraktal",
+    "side": "bottom",
+    "t": 0.5492753623188406
+   },
+   "config": {
+    "label": "report",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-south-oe",
+   "symbolId": "point",
+   "x": 1170,
+   "y": 1745.0,
+   "canvasId": "canvas:component:bus-south",
+   "parentId": "bus-south",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-south",
+    "side": "bottom",
+    "t": 0.5648854961832062
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-south-k20e",
+   "symbolId": "point",
+   "x": 170,
+   "y": 1655.0,
+   "canvasId": "canvas:component:bus-south",
+   "parentId": "bus-south",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-south",
+    "side": "top",
+    "t": 0.183206106870229
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-south-k21e",
+   "symbolId": "point",
+   "x": 1170,
+   "y": 1655.0,
+   "canvasId": "canvas:component:bus-south",
+   "parentId": "bus-south",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-south",
+    "side": "top",
+    "t": 0.5648854961832062
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "bus-south-k22e",
+   "symbolId": "point",
+   "x": 2170,
+   "y": 1655.0,
+   "canvasId": "canvas:component:bus-south",
+   "parentId": "bus-south",
+   "placement": {
+    "kind": "edge",
+    "hostId": "bus-south",
+    "side": "top",
+    "t": 0.9465648854961832
+   },
+   "config": {
+    "label": "",
+    "signalMode": "relay",
+    "ports": {
+     "out": {
+      "face": "both",
+      "side": "point",
+      "access": "read-write"
+     }
+    },
+    "presentation": {
+     "graphic": {
+      "kind": "none"
+     },
+     "backdrop": "none"
+    }
+   }
+  },
+  {
+   "id": "row0",
+   "symbolId": "group",
+   "x": 1000,
+   "y": 0,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "config": {
+    "label": "Layer +1 · Purpose",
+    "members": [
+     "k00",
+     "k01",
+     "k02"
+    ]
+   }
+  },
+  {
+   "id": "row1",
+   "symbolId": "group",
+   "x": 1000,
+   "y": 680,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "config": {
+    "label": "Layer 0 · Dynamics",
+    "members": [
+     "k10",
+     "k11",
+     "k12"
+    ]
+   }
+  },
+  {
+   "id": "row2",
+   "symbolId": "group",
+   "x": 1000,
+   "y": 1360,
+   "canvasId": "canvas:component:fraktal",
+   "parentId": "fraktal",
+   "config": {
+    "label": "Layer −1 · Foundation",
+    "members": [
+     "k20",
+     "k21",
+     "k22"
+    ]
+   }
+  }
+ ],
+ "wires": [
+  {
+   "id": "w0",
+   "a": "k00-ed",
+   "aSide": "out",
+   "b": "kord-k00-k01-wd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w1",
+   "a": "kord-k00-k01-wd",
+   "aSide": "out",
+   "b": "kord-k00-k01-ed",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k00-k01",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "drive"
+   }
+  },
+  {
+   "id": "w2",
+   "a": "kord-k00-k01-ed",
+   "aSide": "out",
+   "b": "k01-wd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w3",
+   "a": "k00-sd",
+   "aSide": "out",
+   "b": "kord-k00-k10-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w4",
+   "a": "kord-k00-k10-nd",
+   "aSide": "out",
+   "b": "kord-k00-k10-sd",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k00-k10",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "drive"
+   }
+  },
+  {
+   "id": "w5",
+   "a": "kord-k00-k10-sd",
+   "aSide": "out",
+   "b": "k10-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w6",
+   "a": "k10-ne",
+   "aSide": "out",
+   "b": "kord-k00-k10-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w7",
+   "a": "kord-k00-k10-se",
+   "aSide": "out",
+   "b": "kord-k00-k10-ne",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k00-k10",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "echo"
+   }
+  },
+  {
+   "id": "w8",
+   "a": "kord-k00-k10-ne",
+   "aSide": "out",
+   "b": "k00-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w9",
+   "a": "k01-sd",
+   "aSide": "out",
+   "b": "kord-k01-k11-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w10",
+   "a": "kord-k01-k11-nd",
+   "aSide": "out",
+   "b": "kord-k01-k11-sd",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k01-k11",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "drive"
+   }
+  },
+  {
+   "id": "w11",
+   "a": "kord-k01-k11-sd",
+   "aSide": "out",
+   "b": "k11-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w12",
+   "a": "k11-ne",
+   "aSide": "out",
+   "b": "kord-k01-k11-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w13",
+   "a": "kord-k01-k11-se",
+   "aSide": "out",
+   "b": "kord-k01-k11-ne",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k01-k11",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "echo"
+   }
+  },
+  {
+   "id": "w14",
+   "a": "kord-k01-k11-ne",
+   "aSide": "out",
+   "b": "k01-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w15",
+   "a": "k02-sd",
+   "aSide": "out",
+   "b": "kord-k02-k12-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w16",
+   "a": "kord-k02-k12-nd",
+   "aSide": "out",
+   "b": "kord-k02-k12-sd",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k02-k12",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "drive"
+   }
+  },
+  {
+   "id": "w17",
+   "a": "kord-k02-k12-sd",
+   "aSide": "out",
+   "b": "k12-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w18",
+   "a": "k12-ne",
+   "aSide": "out",
+   "b": "kord-k02-k12-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w19",
+   "a": "kord-k02-k12-se",
+   "aSide": "out",
+   "b": "kord-k02-k12-ne",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k02-k12",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "echo"
+   }
+  },
+  {
+   "id": "w20",
+   "a": "kord-k02-k12-ne",
+   "aSide": "out",
+   "b": "k02-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w21",
+   "a": "k10-sd",
+   "aSide": "out",
+   "b": "kord-k10-k20-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w22",
+   "a": "kord-k10-k20-nd",
+   "aSide": "out",
+   "b": "kord-k10-k20-sd",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k10-k20",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "drive"
+   }
+  },
+  {
+   "id": "w23",
+   "a": "kord-k10-k20-sd",
+   "aSide": "out",
+   "b": "k20-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w24",
+   "a": "k20-ne",
+   "aSide": "out",
+   "b": "kord-k10-k20-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w25",
+   "a": "kord-k10-k20-se",
+   "aSide": "out",
+   "b": "kord-k10-k20-ne",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k10-k20",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "echo"
+   }
+  },
+  {
+   "id": "w26",
+   "a": "kord-k10-k20-ne",
+   "aSide": "out",
+   "b": "k10-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w27",
+   "a": "k11-ed",
+   "aSide": "out",
+   "b": "kord-k11-k12-wd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w28",
+   "a": "kord-k11-k12-wd",
+   "aSide": "out",
+   "b": "kord-k11-k12-ed",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k11-k12",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "drive"
+   }
+  },
+  {
+   "id": "w29",
+   "a": "kord-k11-k12-ed",
+   "aSide": "out",
+   "b": "k12-wd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w30",
+   "a": "k11-sd",
+   "aSide": "out",
+   "b": "kord-k11-k21-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w31",
+   "a": "kord-k11-k21-nd",
+   "aSide": "out",
+   "b": "kord-k11-k21-sd",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k11-k21",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "drive"
+   }
+  },
+  {
+   "id": "w32",
+   "a": "kord-k11-k21-sd",
+   "aSide": "out",
+   "b": "k21-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w33",
+   "a": "k21-ne",
+   "aSide": "out",
+   "b": "kord-k11-k21-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w34",
+   "a": "kord-k11-k21-se",
+   "aSide": "out",
+   "b": "kord-k11-k21-ne",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k11-k21",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "echo"
+   }
+  },
+  {
+   "id": "w35",
+   "a": "kord-k11-k21-ne",
+   "aSide": "out",
+   "b": "k11-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w36",
+   "a": "k12-sd",
+   "aSide": "out",
+   "b": "kord-k12-k22-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w37",
+   "a": "kord-k12-k22-nd",
+   "aSide": "out",
+   "b": "kord-k12-k22-sd",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k12-k22",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "drive"
+   }
+  },
+  {
+   "id": "w38",
+   "a": "kord-k12-k22-sd",
+   "aSide": "out",
+   "b": "k22-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w39",
+   "a": "k22-ne",
+   "aSide": "out",
+   "b": "kord-k12-k22-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w40",
+   "a": "kord-k12-k22-se",
+   "aSide": "out",
+   "b": "kord-k12-k22-ne",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k12-k22",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "echo"
+   }
+  },
+  {
+   "id": "w41",
+   "a": "kord-k12-k22-ne",
+   "aSide": "out",
+   "b": "k12-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w42",
+   "a": "k21-we",
+   "aSide": "out",
+   "b": "kord-k20-k21-ee",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w43",
+   "a": "kord-k20-k21-ee",
+   "aSide": "out",
+   "b": "kord-k20-k21-we",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k20-k21",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "echo"
+   }
+  },
+  {
+   "id": "w44",
+   "a": "kord-k20-k21-we",
+   "aSide": "out",
+   "b": "k20-ee",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w45",
+   "a": "k22-we",
+   "aSide": "out",
+   "b": "kord-k21-k22-ee",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w46",
+   "a": "kord-k21-k22-ee",
+   "aSide": "out",
+   "b": "kord-k21-k22-we",
+   "bSide": "out",
+   "canvasId": "canvas:component:kord-k21-k22",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none",
+    "label": "echo"
+   }
+  },
+  {
+   "id": "w47",
+   "a": "kord-k21-k22-we",
+   "aSide": "out",
+   "b": "k21-ee",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w48",
+   "a": "fraktal-wd",
+   "aSide": "out",
+   "b": "bus-west-od",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w49",
+   "a": "bus-west-k00d",
+   "aSide": "out",
+   "b": "k00-wd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w50",
+   "a": "bus-west-k10d",
+   "aSide": "out",
+   "b": "k10-wd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w51",
+   "a": "bus-west-k20d",
+   "aSide": "out",
+   "b": "k20-wd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w52",
+   "a": "bus-west-oe",
+   "aSide": "out",
+   "b": "fraktal-we",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w53",
+   "a": "k00-we",
+   "aSide": "out",
+   "b": "bus-west-k00e",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w54",
+   "a": "k10-we",
+   "aSide": "out",
+   "b": "bus-west-k10e",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w55",
+   "a": "k20-we",
+   "aSide": "out",
+   "b": "bus-west-k20e",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w56",
+   "a": "bus-east-od",
+   "aSide": "out",
+   "b": "fraktal-ed",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w57",
+   "a": "k02-ed",
+   "aSide": "out",
+   "b": "bus-east-k02d",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w58",
+   "a": "k12-ed",
+   "aSide": "out",
+   "b": "bus-east-k12d",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w59",
+   "a": "k22-ed",
+   "aSide": "out",
+   "b": "bus-east-k22d",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w60",
+   "a": "fraktal-ee",
+   "aSide": "out",
+   "b": "bus-east-oe",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w61",
+   "a": "bus-east-k02e",
+   "aSide": "out",
+   "b": "k02-ee",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w62",
+   "a": "bus-east-k12e",
+   "aSide": "out",
+   "b": "k12-ee",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w63",
+   "a": "bus-east-k22e",
+   "aSide": "out",
+   "b": "k22-ee",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w64",
+   "a": "fraktal-nd",
+   "aSide": "out",
+   "b": "bus-north-od",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w65",
+   "a": "bus-north-k00d",
+   "aSide": "out",
+   "b": "k00-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w66",
+   "a": "bus-north-k01d",
+   "aSide": "out",
+   "b": "k01-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w67",
+   "a": "bus-north-k02d",
+   "aSide": "out",
+   "b": "k02-nd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w68",
+   "a": "bus-north-oe",
+   "aSide": "out",
+   "b": "fraktal-ne",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w69",
+   "a": "k00-ne",
+   "aSide": "out",
+   "b": "bus-north-k00e",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w70",
+   "a": "k01-ne",
+   "aSide": "out",
+   "b": "bus-north-k01e",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w71",
+   "a": "k02-ne",
+   "aSide": "out",
+   "b": "bus-north-k02e",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w72",
+   "a": "bus-south-od",
+   "aSide": "out",
+   "b": "fraktal-sd",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w73",
+   "a": "k20-sd",
+   "aSide": "out",
+   "b": "bus-south-k20d",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w74",
+   "a": "k21-sd",
+   "aSide": "out",
+   "b": "bus-south-k21d",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w75",
+   "a": "k22-sd",
+   "aSide": "out",
+   "b": "bus-south-k22d",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w76",
+   "a": "fraktal-se",
+   "aSide": "out",
+   "b": "bus-south-oe",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w77",
+   "a": "bus-south-k20e",
+   "aSide": "out",
+   "b": "k20-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w78",
+   "a": "bus-south-k21e",
+   "aSide": "out",
+   "b": "k21-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  },
+  {
+   "id": "w79",
+   "a": "bus-south-k22e",
+   "aSide": "out",
+   "b": "k22-se",
+   "bSide": "out",
+   "canvasId": "canvas:component:fraktal",
+   "config": {
+    "forwardOperation": "none",
+    "reverseOperation": "none"
+   }
+  }
+ ],
+ "references": [
+  {
+   "id": "notation-fraktal",
+   "kind": "notation",
+   "label": "Fraktal",
+   "data": {
+    "id": "fraktal",
+    "name": "Fraktal",
+    "version": 1,
+    "extends": "schematic",
+    "source": "Statuses for the fraktal drawing, 2026-10-10",
+    "statuses": [
+     {
+      "id": "drawn",
+      "title": "Drawn",
+      "meaning": "In Bdo's tile drawing, cell.sov.",
+      "outline": "solid"
+     },
+     {
+      "id": "partial",
+      "title": "Partly drawn",
+      "meaning": "One of its two strands is in his drawing.",
+      "outline": "dashed"
+     },
+     {
+      "id": "added",
+      "title": "Added",
+      "meaning": "In the model, not in his drawing.",
+      "outline": "dashed"
+     },
+     {
+      "id": "open",
+      "title": "Open",
+      "meaning": "What it is for is not settled.",
+      "outline": "dashed",
+      "opacity": 0.6
+     }
+    ]
+   }
+  }
+ ]
+}

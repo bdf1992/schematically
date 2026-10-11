@@ -77,3 +77,10 @@ The current line stabilizes primitives so future work adds definitions and rules
 - prompt/instruction compilation and richer agent authoring.
 
 Historical acceptance records (`BETA-0.1.md`, `QA-0.1.md`, `RC-0.1.md`, `RC-FINISH-LINE.md`, `PUBLIC-BETA-FREEZE.md`, `MODULE-QA.md`, `contrast-audit.md`) document how past lines were tested and remain as records rather than living documentation.
+
+## Kore design context
+
+[Kore schematic context](docs/kore/README.md) holds the signed coordinates,
+Knode/Kord/Korner/Kradle design, original package, tileable diagrams and portable
+model checks for cloud sessions. It distinguishes available code from proposed
+runtime behavior and historical cloud work that has not been recovered.
