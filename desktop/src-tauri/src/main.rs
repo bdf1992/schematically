@@ -148,6 +148,7 @@ fn report_loaded(
 fn main() -> std::process::ExitCode {
     let builder = tauri::Builder::default().manage(files::FileState::default())
         .setup(|app| {
+            let setup_started = std::time::Instant::now();
             eprintln!("desktop startup: setup pid={}", std::process::id());
             let configured = &app.config().app.windows;
             if configured.len() != 1 || configured[0].create || configured[0].label != "main" {
@@ -169,8 +170,41 @@ fn main() -> std::process::ExitCode {
                 return Err(std::io::Error::other("Desktop runtime state already registered").into());
             }
             // Navigation cannot begin before commands can resolve the relay state.
+            let response_calls = std::sync::atomic::AtomicUsize::new(0);
+            let page_calls = std::sync::atomic::AtomicUsize::new(0);
             let window = tauri::WebviewWindowBuilder::from_config(app.handle(), &window_config)
-                .and_then(|builder| builder.build());
+                .and_then(|builder| builder
+                    .on_web_resource_request(move |request, response| {
+                        let label = match request.uri().path() {
+                            "/" => Some("root"),
+                            "/index.html" | "index.html" => Some("index"),
+                            _ => None,
+                        };
+                        if let Some(label) = label {
+                            let call = response_calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            if call < 8 {
+                                eprintln!("desktop response: label={label} call={} status={} body-bytes={} setup-elapsed-ms={}",
+                                    call + 1, response.status().as_u16(), response.body().len(), setup_started.elapsed().as_millis());
+                            }
+                        }
+                    })
+                    .on_page_load(move |_window, payload| {
+                        let call = page_calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if call < 8 {
+                            let label = if payload.url().scheme() == "about" && payload.url().path() == "blank" {
+                                "aboutblank"
+                            } else if matches!(payload.url().path(), "/" | "/index.html" | "index.html") {
+                                "root"
+                            } else { "other" };
+                            let event = match payload.event() {
+                                tauri::webview::PageLoadEvent::Started => "started",
+                                tauri::webview::PageLoadEvent::Finished => "finished",
+                            };
+                            eprintln!("desktop page: label={label} event={event} call={} setup-elapsed-ms={}",
+                                call + 1, setup_started.elapsed().as_millis());
+                        }
+                    })
+                    .build());
             if let Err(problem) = window {
                 relay.stop();
                 eprintln!("desktop startup: window-create-failed pid={}", std::process::id());
