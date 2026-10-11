@@ -34,7 +34,8 @@ EARLY = [
 SDK_IDS = ['native-sdk/connect', 'native-sdk/tools', 'native-sdk/docs',
            'native-sdk/live-read', 'native-sdk/guarded-edit', 'native-sdk/save-durable']
 LATE = ['native/graceful-close-descriptor', 'native/reopen-saved',
-        'native/reopen-graceful-close-descriptor', 'native/malformed-launch-report',
+        'native/reopen-graceful-close-descriptor', 'native/cold-profile-one-read-close',
+        'native/cold-profile-two-read-close', 'native/malformed-launch-report',
         'native/missing-launch-report']
 CASE_IDS = EARLY + SDK_IDS + LATE
 
@@ -225,8 +226,12 @@ class NativeSuite:
         self.results.append({'id': case_id, 'status': 'PASS'})
         print('CASE PASS ' + case_id, flush=True)
 
-    def launch(self, path, report=None):
+    def launch(self, path, report=None, profile=None):
         self.timeout(10)
+        profile = self.webview_profile if profile is None else profile
+        profile = profile.resolve(strict=True)
+        check(profile.is_dir() and profile.is_relative_to(self.work.resolve(strict=True))
+              and profile != self.work.resolve(strict=True), 'Native test profile must remain under owned work')
         arguments = [str(self.binary), str(path)]
         if report is not None:
             arguments += ['--smoke-report', str(report)]
@@ -237,7 +242,7 @@ class NativeSuite:
         environment = os.environ.copy()
         # Microsoft WebView2 environment override: isolate qualification recovery
         # and cache state; reuse only this suite's profile for its close/reopen checks.
-        environment['WEBVIEW2_USER_DATA_FOLDER'] = str(self.webview_profile)
+        environment['WEBVIEW2_USER_DATA_FOLDER'] = str(profile)
         try:
             process = subprocess.Popen(arguments, cwd=self.work, stdin=subprocess.DEVNULL,
                                        stdout=log, stderr=subprocess.STDOUT, env=environment)
@@ -249,8 +254,8 @@ class NativeSuite:
         self.observations.append({'operation': 'launch-native', 'pid': process.pid,
             'buildRevision': self.build, 'elapsedSeconds': time.monotonic() - self.started,
             'logPath': str(self.work / f'native-{process.pid}.log'),
-            'webviewProfile': str(self.webview_profile),
-            'webviewProfilePresent': self.webview_profile.is_dir(),
+            'webviewProfile': str(profile),
+            'webviewProfilePresent': profile.is_dir(),
             'smoke': report is not None})
         return process
 
@@ -373,9 +378,11 @@ class NativeSuite:
 
     def close(self, process, descriptor_path):
         check(process.poll() is None, 'Native process exited before graceful close')
-        self.timeout(4)
-        windows = post_close(process.pid, self.window_title, self.observations, deadline=self.deadline)
-        process.wait(timeout=self.timeout(4))
+        close_until = time.monotonic() + self.timeout(4)
+        windows = post_close(process.pid, self.window_title, self.observations, deadline=close_until)
+        remaining = close_until - time.monotonic()
+        check(remaining > 0, 'Native close deadline exhausted before process wait')
+        process.wait(timeout=remaining)
         check(process.returncode == 0, 'Graceful native close had a nonzero exit')
         check(not descriptor_path.exists(), 'Graceful native close retained its MCP descriptor')
         self.observations.append({'pid': process.pid, 'closeWindows': windows,
@@ -473,6 +480,22 @@ class NativeSuite:
         self.current = 'native/reopen-graceful-close-descriptor'
         self.close(reopened, reopened_path)
         self.passed(self.current)
+        for suffix in ('one', 'two'):
+            self.current = f'native/cold-profile-{suffix}-read-close'
+            profile = self.work / f'webview-cold-{suffix}-{uuid.uuid4().hex}'
+            profile.mkdir()
+            cold = self.launch(self.fixture, profile=profile)
+            cold_path, cold_descriptor = self.ready(cold)
+            cold_document = self.tool(cold_descriptor, 'schematic.document.get')
+            cold_info = self.tool(cold_descriptor, 'schematic.file.info')
+            check(cold_document['id'] == fixture['id']
+                  and any(component['id'] == created_id for component in cold_document['components']),
+                  'Cold-profile editor did not reopen the durable fixture mutation')
+            check(cold_info['name'] == self.fixture.name and cold_info['dirty'] is False
+                  and cold_info['build'] == self.build,
+                  'Cold-profile editor file identity, durable state or build differs')
+            self.close(cold, cold_path)
+            self.passed(self.current)
         malformed = self.work / 'Malformed.sov'
         malformed.write_text('{broken', encoding='utf-8')
         self.smoke_failure(malformed, 'native/malformed-launch-report')

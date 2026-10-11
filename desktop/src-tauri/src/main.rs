@@ -70,8 +70,7 @@ fn opened_document(state: tauri::State<'_, files::FileState>) -> Result<Option<f
 
 /// Registered only in a smoke run. Writes what the page loaded to the report path and ends the
 /// process: 0 when the document loaded, 1 when it did not or the report could not be written.
-/// `std::process::exit` rather than `AppHandle::exit`, so the exit code a CI job reads does not
-/// depend on how the event loop forwards it.
+/// Requests event-loop exit after retaining the report, allowing normal main/CRT cleanup.
 #[tauri::command]
 fn report_loaded(
     app: tauri::AppHandle,
@@ -96,13 +95,39 @@ fn report_loaded(
         eprintln!("smoke report could not be written to {}: {problem}", report.0.display());
     }
     if let Some(relay) = app.try_state::<std::sync::Arc<mcp::RelayState>>() { relay.stop(); }
-    std::process::exit(if ok && written.is_ok() { 0 } else { 1 });
+    app.exit(if ok && written.is_ok() { 0 } else { 1 });
 }
 
-fn main() {
+#[tauri::command]
+fn desktop_mcp_ready(state: tauri::State<'_, std::sync::Arc<mcp::RelayState>>) {
+    mcp::desktop_mcp_ready(state);
+    eprintln!("desktop startup: ready pid={}", std::process::id());
+}
+
+fn main() -> std::process::ExitCode {
     let builder = tauri::Builder::default().manage(files::FileState::default())
         .setup(|app| {
+            eprintln!("desktop startup: setup pid={}", std::process::id());
+            let configured = &app.config().app.windows;
+            if configured.len() != 1 || configured[0].create || configured[0].label != "main" {
+                return Err(std::io::Error::other("Desktop requires one explicitly created main window").into());
+            }
+            let window_config = configured[0].clone();
             let relay = mcp::start(app.handle()).map_err(std::io::Error::other)?;
+            if !app.manage(relay.clone()) {
+                relay.stop();
+                return Err(std::io::Error::other("Desktop relay state was already registered").into());
+            }
+            eprintln!("desktop startup: relay-registered pid={}", std::process::id());
+            // Navigation cannot begin before commands can resolve the relay state.
+            let window = tauri::WebviewWindowBuilder::from_config(app.handle(), &window_config)
+                .and_then(|builder| builder.build());
+            if let Err(problem) = window {
+                relay.stop();
+                eprintln!("desktop startup: window-create-failed pid={}", std::process::id());
+                return Err(problem.into());
+            }
+            eprintln!("desktop startup: window-created pid={}", std::process::id());
             if smoke_report_path().is_some() {
                 let watchdog_relay=relay.clone();
                 std::thread::spawn(move || {
@@ -112,7 +137,6 @@ fn main() {
                     std::process::exit(SMOKE_SILENT_EXIT_CODE);
                 });
             }
-            app.manage(relay);
             Ok(())
         });
     let builder = match smoke_report_path() {
@@ -121,18 +145,25 @@ fn main() {
                 .manage(SmokeReport(path))
                 .invoke_handler(tauri::generate_handler![opened_document, report_loaded,
                     files::desktop_open_document, files::desktop_save_document, files::desktop_reset_document,
-                    mcp::desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond])
+                    desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond])
         }
         None => builder.invoke_handler(tauri::generate_handler![opened_document,
             files::desktop_open_document, files::desktop_save_document, files::desktop_reset_document,
-            mcp::desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond]),
+            desktop_mcp_ready, mcp::desktop_mcp_info, mcp::desktop_mcp_begin, mcp::desktop_mcp_respond]),
     };
-    builder
+    let code = builder
         .build(tauri::generate_context!())
         .expect("error while building SOV Schematic desktop shell")
-        .run(|app, event| {
+        .run_return(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 if let Some(relay) = app.try_state::<std::sync::Arc<mcp::RelayState>>() { relay.stop(); }
             }
         });
+    match u8::try_from(code) {
+        Ok(code) => std::process::ExitCode::from(code),
+        Err(_) => {
+            eprintln!("desktop exit: unsupported event-loop code {code}");
+            std::process::ExitCode::FAILURE
+        }
+    }
 }

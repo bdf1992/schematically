@@ -260,14 +260,18 @@ def _lines(segments, line_count):
     if not isinstance(segments, list) or not segments:
         raise ValueError('scoped file has no LLVM segments')
     previous = (0, 0)
+    previous_has_count = True
     for segment in segments:
         if (not isinstance(segment, list) or len(segment) != 6
                 or any(type(value) is not int or value < 0 for value in segment[:3])
                 or segment[0] < 1 or segment[1] < 1
                 or any(type(value) is not bool for value in segment[3:])
-                or tuple(segment[:2]) <= previous or segment[0] > line_count + 1):
+                or tuple(segment[:2]) < previous
+                or (tuple(segment[:2]) == previous and previous_has_count)
+                or segment[0] > line_count + 1):
             raise ValueError('malformed/unsorted/out-of-source LLVM segment')
         previous = tuple(segment[:2])
+        previous_has_count = segment[3]
     executable, hits = set(), set()
     wrapped = None
     index = 0
@@ -290,6 +294,126 @@ def _lines(segments, line_count):
         if current:
             wrapped = current[-1]
     return executable, hits
+
+
+def _region_segments(regions):
+    """LLVM21 CoverageMapping.cpp SegmentBuilder, for independent summaries.
+
+    Regions are the full exported eight-field CountedRegion arrays. This
+    reconstructs the producer's segments rather than inferring executable
+    lines from source text or counting an enclosing function's entire span.
+    """
+    ordered = sorted((list(region) for region in regions),
+                     key=lambda r: (r[0], r[1], -r[2], -r[3], r[7]))
+    combined = []
+    for region in ordered:
+        if combined and combined[-1][:4] == region[:4]:
+            if combined[-1][7] == region[7]:
+                combined[-1][4] += region[4]
+        else:
+            combined.append(region)
+    segments, active = [], []
+
+    def start(region, loc, entry, skipped=False):
+        has_count = not skipped and region[7] != 2
+        if segments and not entry and not skipped:
+            last = segments[-1]
+            if last[3] == has_count and last[2] == region[4] and not last[4]:
+                return
+        segments.append([*loc, region[4] if has_count else 0,
+                         has_count, entry, has_count and region[7] == 3])
+
+    def complete(loc, first):
+        active[first:] = sorted(active[first:], key=lambda r: tuple(r[2:4]))
+        for index in range(first + 1, len(active)):
+            current, previous = active[index], active[index - 1]
+            end = tuple(previous[2:4])
+            if loc is not None and end == loc:
+                break
+            if end == tuple(current[2:4]):
+                continue
+            for later in active[index + 1:]:
+                if current[2:4] == later[2:4]:
+                    current = later
+            start(current, end, False)
+        last = active[-1]
+        if first and tuple(last[2:4]) != loc:
+            start(active[first - 1], tuple(last[2:4]), False)
+        elif not first and (loc is None or loc != tuple(last[2:4])):
+            start(last, tuple(last[2:4]), False, True)
+        del active[first:]
+
+    for index, region in enumerate(combined):
+        loc = tuple(region[:2])
+        remaining = [r for r in active if tuple(r[2:4]) > loc]
+        completed = [r for r in active if tuple(r[2:4]) <= loc]
+        active[:] = remaining + completed
+        if completed:
+            complete(loc, len(remaining))
+        gap = region[7] == 3
+        if loc == tuple(region[2:4]):
+            skipped = index + 1 == len(combined) or region[7] == 2
+            start(active[-1] if active else region, loc, not gap, skipped)
+            if skipped and active:
+                start(active[-1], loc, False)
+            continue
+        if index + 1 == len(combined) or loc != tuple(combined[index + 1][:2]):
+            start(region, loc, not gap)
+        active.append(region)
+    if active:
+        complete(None, 0)
+    return segments
+
+
+def _function_summary(unit, filename, line_count):
+    """Rebuild LLVM file summary's summed instantiation-group line measure.
+
+    CoverageReport::prepareSingleFileReport sums function groups, so overlapping
+    functions count a source line more than once. That is a different measure
+    from the unique file segments used by our executable-line denominator.
+    """
+    groups, file_regions = {}, []
+    for function in unit['functions']:
+        filenames = function.get('filenames')
+        if not isinstance(filenames, list) or filename not in filenames:
+            continue
+        regions = function.get('regions')
+        if (not filenames or any(not isinstance(name, str) for name in filenames)
+                or not isinstance(regions, list) or not regions
+                or type(function.get('count')) is not int or function['count'] < 0):
+            raise ValueError('malformed scoped LLVM function/region map')
+        for region in regions:
+            if (not isinstance(region, list) or len(region) != 8
+                    or any(type(value) is not int or value < 0 for value in region)
+                    or any(value < 1 for value in region[:4])
+                    or tuple(region[:2]) > tuple(region[2:4])
+                    or region[5] >= len(filenames) or region[6] >= len(filenames)
+                    or region[7] not in (0, 1, 2, 3)):
+                raise ValueError('malformed/unsupported scoped LLVM counted region')
+        file_ids = {i for i, name in enumerate(filenames) if name == filename}
+        file_regions.extend(r for r in regions if r[5] in file_ids)
+        expanded = {r[6] for r in regions if r[7] == 1}
+        main_ids = set(range(len(filenames))) - expanded
+        if not main_ids:
+            continue
+        main_id = min(main_ids)
+        if filenames[main_id] != filename:
+            continue
+        main_regions = [r for r in regions if r[5] == main_id]
+        if not main_regions:
+            raise ValueError('LLVM function main view has no region')
+        executable, hits = _lines(_region_segments(main_regions), line_count)
+        group = tuple(main_regions[0][:2])
+        previous = groups.get(group, (0, 0, 0))
+        groups[group] = (max(previous[0], len(executable)),
+                         max(previous[1], len(hits)), previous[2] + function['count'])
+    if not groups or not file_regions:
+        raise ValueError('missing scoped LLVM instantiation groups')
+    return {'count': sum(value[0] for value in groups.values()),
+            'covered': sum(value[1] for value in groups.values()),
+            'functions': len(groups),
+            'coveredFunctions': sum(value[2] > 0 for value in groups.values()),
+            'segments': _region_segments(file_regions)}
 
 
 def normalize_export(export, scope):
@@ -323,7 +447,7 @@ def normalize_export(export, scope):
             # Unrelated dependency/macros may name source unavailable on this host.
             key = os.path.normcase(str(Path(filename).resolve()))
             if key in wanted:
-                records[key].append(record)
+                records[key].append((record, unit))
         for function in unit['functions']:
             filenames = function.get('filenames', [])
             for filename in set(filenames):
@@ -343,11 +467,24 @@ def normalize_export(export, scope):
         source = path.read_bytes()
         line_count = len(source.decode('utf-8').splitlines())
         all_lines, hit_lines = set(), set()
-        for record in records[key]:
+        reported_summaries = []
+        for record, unit in records[key]:
             executable, hits = _lines(record.get('segments'), line_count)
             summary = record.get('summary', {}).get('lines', {})
-            if summary.get('count') != len(executable) or summary.get('covered') != len(hits):
-                raise ValueError('normalized lines disagree with LLVM summary: ' + str(path))
+            reconstructed = _function_summary(unit, record['filename'], line_count)
+            if reconstructed['segments'] != record['segments']:
+                raise ValueError('full function regions disagree with LLVM file segments: ' + str(path))
+            function_summary = record.get('summary', {}).get('functions', {})
+            if (type(summary.get('count')) is not int or type(summary.get('covered')) is not int
+                    or type(function_summary.get('count')) is not int
+                    or type(function_summary.get('covered')) is not int
+                    or summary['count'] != reconstructed['count']
+                    or summary['covered'] != reconstructed['covered']
+                    or function_summary.get('count') != reconstructed['functions']
+                    or function_summary.get('covered') != reconstructed['coveredFunctions']):
+                raise ValueError('reconstructed function groups disagree with LLVM summary: ' + str(path))
+            reported_summaries.append({'count': summary['count'], 'covered': summary['covered'],
+                'basis': 'LLVM sum of function instantiation-group line counts; source lines may repeat'})
             all_lines.update(executable)
             hit_lines.update(hits)
         if not all_lines:
@@ -355,11 +492,12 @@ def normalize_export(export, scope):
         files.append({'file': str(path), 'sourceHash': hashlib.sha256(source).hexdigest(),
                       'executableLines': sorted(all_lines), 'hitLines': sorted(hit_lines),
                       'missedFunctions': [f for f in functions[key] if f['count'] == 0],
+                      'llvmReportedLineSummaries': reported_summaries,
                       'functionMapCount': len(functions[key])})
     total = sum(len(file['executableLines']) for file in files)
     covered = sum(len(file['hitLines']) for file in files)
     return {'schema': 'schematically-llvm-coverage@1', 'language': 'Rust',
-            'measure': 'LLVM21 source-based LineCoverageStats; checked against LLVM summaries',
+            'measure': 'LLVM21 unique file LineCoverageStats; full regions and function-group summaries checked independently',
             'exportVersion': export['version'], 'files': files,
             'executableLineCount': total, 'hitLineCount': covered,
             'coveragePercent': covered * 100 / total}
