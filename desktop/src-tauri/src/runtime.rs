@@ -208,6 +208,18 @@ fn directory(path: &Path) -> Result<(), String> {
     private(path)
 }
 fn write_private(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    // tempfile's Windows rename passes raw paths to MoveFileExW. Preserve the
+    // canonical parent's extended-length prefix for both sides of that rename.
+    #[cfg(windows)]
+    let destination = path
+        .parent()
+        .ok_or("Output has no parent")?
+        .canonicalize()
+        .map_err(|e| e.to_string())?
+        .join(path.file_name().ok_or("Output has no file name")?);
+    #[cfg(not(windows))]
+    let destination = path.to_path_buf();
+    let path = destination.as_path();
     let parent = path.parent().ok_or("Output has no parent")?;
     let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
     private(temporary.path())?;
