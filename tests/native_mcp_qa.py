@@ -226,7 +226,9 @@ SDK_IDS = ['native-sdk/connect', 'native-sdk/tools', 'native-sdk/docs',
            'native-sdk/live-read', 'native-sdk/guarded-edit', 'native-sdk/save-durable']
 LATE = ['native/graceful-close-descriptor', 'native/reopen-saved',
         'native/reopen-graceful-close-descriptor', 'native/cold-profile-one-read-close',
-        'native/cold-profile-two-read-close', 'native/malformed-launch-report',
+        'native/cold-profile-two-read-close'] + [
+            f'native/isolated-saved-reopen-{number}' for number in range(1, 9)
+        ] + ['native/malformed-launch-report',
         'native/missing-launch-report']
 CASE_IDS = EARLY + SDK_IDS + LATE
 
@@ -746,6 +748,30 @@ class NativeSuite:
                   and cold_info['build'] == self.build,
                   'Cold-profile editor file identity, durable state or build differs')
             self.close(cold, cold_path)
+            self.passed(self.current)
+        durable_bytes = self.fixture.read_bytes()
+        for number in range(1, 9):
+            self.current = f'native/isolated-saved-reopen-{number}'
+            copied_fixture = self.work / f'Saved-reopen-{number}.sov'
+            copied_fixture.write_bytes(durable_bytes)
+            profile = self.work / f'webview-saved-reopen-{number}-{uuid.uuid4().hex}'
+            profile.mkdir()
+            isolated = self.launch(copied_fixture, profile=profile)
+            isolated_path, isolated_descriptor = self.ready(isolated)
+            isolated_document = self.tool(isolated_descriptor, 'schematic.document.get')
+            isolated_info = self.tool(isolated_descriptor, 'schematic.file.info')
+            check(isolated_document['id'] == fixture['id']
+                  and any(component['id'] == created_id for component in isolated_document['components']),
+                  'Isolated editor did not load the cloned SDK-saved mutation')
+            check(isolated_info['name'] == copied_fixture.name and isolated_info['dirty'] is False
+                  and isolated_info['build'] == self.build,
+                  'Isolated editor file identity, clean state or build differs')
+            self.close(isolated, isolated_path)
+            check(copied_fixture.read_bytes() == durable_bytes,
+                  'Isolated read and graceful close changed the durable fixture bytes')
+            self.observations.append({'operation':'isolated-saved-reopen', 'pid':isolated.pid,
+                'fixture':str(copied_fixture), 'profile':str(profile),
+                'fixtureSha256':hashlib.sha256(durable_bytes).hexdigest(), 'unchanged':True})
             self.passed(self.current)
         malformed = self.work / 'Malformed.sov'
         malformed.write_text('{broken', encoding='utf-8')
