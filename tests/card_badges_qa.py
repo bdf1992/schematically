@@ -50,6 +50,8 @@ def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch(**chromium_launch_kwargs(disable_gpu=True))
         page = browser.new_page(viewport={'width': 1400, 'height': 900})
+        from coverage_capture import start as start_coverage, finish as finish_coverage
+        coverage = start_coverage(page)
         errors: list[str] = []
         page.on('pageerror', lambda e: errors.append(str(e)))
         page.on('console', lambda m: errors.append(m.text) if m.type == 'error' else None)
@@ -75,6 +77,7 @@ def main() -> None:
         assert apart(chips[0]['rect'], chips[1]['rect']), chips
         assert m['status'] and all(apart(c['rect'], m['status']) for c in chips), ('a chip overlaps the status chip', chips, m['status'])
         assert chips[0]['stroke'] != chips[1]['stroke'], 'colorSlot 7 differs from the default slot 0'
+        print('QA_CASE layout')
 
         # Refusals: the document is unchanged.
         before = page.evaluate('()=>JSON.stringify(SovSchematicAPI.file.document())')
@@ -102,6 +105,7 @@ def main() -> None:
             if name in ('empty label', 'unknown key', 'slot high'):
                 assert 'config.badges[0]' in msg, msg
             assert page.evaluate('()=>JSON.stringify(SovSchematicAPI.file.document())') == before, f'a refused {name} badge list changed the document'
+        print('QA_CASE refusals')
 
         # A narrow card with three badges and a status draws a +N chip.
         r = page.evaluate('(b)=>SovSchematicAPI.update("component","recording",{config:{badges:b,presentation:{size:{w:132}}}})',
@@ -118,12 +122,14 @@ def main() -> None:
         for c in n['chips']:
             assert apart(c['rect'], n['status'], 4 * n['zoom'] - 1.5), ('a chip comes within 4 of the status chip', c, n['status'])
             assert c['rect']['r'] <= nb['r'] - 6 * n['zoom'] + 1.5, ('a chip comes within 6 of the right edge', c, nb)
+        print('QA_CASE overflow')
 
         # A file carrying an invalid badge loads and reports BADGE_INVALID.
         doc = json.loads(text)
         doc['components'][0]['config']['badges'] = [{'label': ''}]
         errs = page.evaluate('''(t)=>SovSchematicData.validateDocument(SovSchematicData.makeDocument(JSON.parse(t))).errors''', json.dumps(doc))
         assert any('BADGE_INVALID' in e and 'config.badges[0].label' in e and e.startswith('component web-booth') for e in errs), errs
+        print('QA_CASE load')
 
         # Valid badges: validate_sov passes, light and dark carry no text-contrast finding, and save/open keeps them.
         doc = json.loads(text)
@@ -148,8 +154,10 @@ def main() -> None:
         page.evaluate('(t)=>SovSchematicAPI.file.open(t,"again.sov")', saved); page.wait_for_timeout(150)
         again = page.evaluate('()=>SovSchematicAPI.file.document().components.map(c=>[c.id,c.config.badges||null])')
         assert dict(again)['web-booth'] == BADGES and dict(again)['case'] == [{'label': 'Queue', 'colorSlot': 3}], again
+        print('QA_CASE persistence-and-contrast')
 
         assert not errors, errors
+        finish_coverage(coverage, page)
         browser.close()
     print('card badges: order, geometry, +N, refusals, load report, contrast in light and dark, save and open')
 

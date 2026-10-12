@@ -150,18 +150,22 @@ def main() -> None:
     assert r['sha_abc'] == 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad', r['sha_abc']
     assert r['sha_448'] == '248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1', r['sha_448']
     assert r['sha_million_a'] == 'cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0', r['sha_million_a']
+    print('QA_CASE nist-sha256')
 
     # SHA-256 against node's crypto, for >=200 random strings including non-BMP characters.
     assert r['shaMismatches'] == 0, r
     assert r['nonBmpCovered'] >= 30, r['nonBmpCovered']
+    print('QA_CASE node-crypto-parity')
 
     # canonicalize against the RFC 8785 examples for key ordering and number forms.
     assert r['rfcNumbers'] == '{"extra":"x","literals":[null,true,false],"numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27]}', r['rfcNumbers']
     assert r['unicodeKeyOrder'] == ['\r', '1', '\u0080', 'ö', '€', '\U0001F600', 'דּ'], r['unicodeKeyOrder']
+    print('QA_CASE rfc8785')
 
     # Each unsupported value throws CANONICAL_UNSUPPORTED.
     for key in ('nan', 'posInf', 'negInf', 'undef', 'fn', 'sym', 'bigint', 'date', 'map', 'nested'):
         assert r['codes'][key] == 'CANONICAL_UNSUPPORTED', (key, r['codes'])
+    print('QA_CASE unsupported-values')
 
     # drawOrder: a permutation, identical for the same (seed, keyParts) whatever the input
     # order, differs across key tuples, and near-uniform over the six 3-item orders.
@@ -171,6 +175,7 @@ def main() -> None:
     assert r['drawOrderKeys'] == 6, r['drawOrderKeys']
     for key, count in r['drawCounts'].items():
         assert 9500 <= count <= 10500, (key, count, r['drawCounts'])
+    print('QA_CASE draw-order')
 
     # documentHash: identical across revision/updatedAt/savedAt/checkpoints, differs on content,
     # never mutates its input, and is identical across two independent loads of every example.
@@ -182,6 +187,7 @@ def main() -> None:
     assert r['hashLabelChanged']['before'] != r['hashLabelChanged']['after'], r['hashLabelChanged']
     for file, pair in r['perExample'].items():
         assert pair['a'] == pair['b'], (file, pair)
+    print('QA_CASE document-hash-and-examples')
 
     print('PASS canonical QA')
 

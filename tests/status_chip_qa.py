@@ -90,6 +90,8 @@ def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch(**chromium_launch_kwargs(disable_gpu=True))
         page = browser.new_page(viewport={'width': 1400, 'height': 900})
+        from coverage_capture import start as start_coverage, finish as finish_coverage
+        coverage = start_coverage(page)
         errors: list[str] = []
         page.on('pageerror', lambda e: errors.append(str(e)))
         page.set_content((ROOT / 'index.html').read_text(encoding='utf-8'), wait_until='load')
@@ -107,17 +109,20 @@ def main() -> None:
                     assert hexv.lower() in svg.lower() or f'rgb({r}, {g}, {b})' in svg, (where, 'render.svg lost the tone', tone, hexv)
                 for sid, (_, glyph, title) in DECLARED.items():
                     assert f'{glyph} {title}<' in svg, (where, 'render.svg lost the glyph', sid)
+        print('QA_CASE palettes')
         # A status with no tone draws today's chip: a faint fill of the card's colour, the title alone.
         page.evaluate('()=>{SovSchematicAPI.view.setAppearance("light");SovSchematicAPI.view.setColour({theme:"pastel",palette:"okabe-ito"})}')
         page.evaluate('(t)=>{SovSchematicAPI.file.open(t,"status-plain.sov");fitDiagram()}', plain_text)
         page.wait_for_timeout(120)
         chips = page.evaluate(CHIPS)
+        finish_coverage(coverage, page)
         browser.close()
     case = chips['case']
     assert abs(case['fillOpacity'] - .16) < 1e-6 and case['text'] == 'Exists', ('a status with no tone draws as before', case)
     assert case['fill'] not in TONES.values(), case
     assert chips['recording']['text'] == '◷ Partial' and chips['recording']['fillOpacity'] == 1, chips['recording']
     assert not errors, errors
+    print('QA_CASE plain-status-compatibility')
     print('chip inks (tone, ink, contrast):', sorted(inks))
     print("no tone: 'case' draws", case['text'], 'at fill-opacity', case['fillOpacity'])
     print('PASS status chip QA')

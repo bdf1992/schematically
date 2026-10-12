@@ -1,0 +1,68 @@
+{
+  "version": 2,
+  "task": "schematically-a-document-declares-axes-a-card-stores-its-values",
+  "authority": "Bdo authorized local repairs and supervised tests on 2026-10-12. No push, PR edit, merge, release or deployment is admitted.",
+  "sharedContract": {
+    "path": "docs/kore/alignment/SHARED-CONTRACT.md",
+    "effective": "2026-10-11",
+    "sha256": "7EF02579CA08373175C7069390CEAC39076A8303EC72B564AC06325B44271652"
+  },
+  "profile": {
+    "name": "routine",
+    "maximumCases": 250,
+    "maximumSeconds": 180,
+    "minimumExecutableLineCoverage": 75,
+    "caseMarkers": {
+      "declared-axes": ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"],
+      "card-badges": ["layout", "refusals", "overflow", "load", "persistence-and-contrast"],
+      "status-chip": ["palettes", "plain-status-compatibility"],
+      "canonical": ["nist-sha256", "node-crypto-parity", "rfc8785", "unsupported-values", "draw-order", "document-hash-and-examples"]
+    }
+  },
+  "commands": [
+    ["python", "build.py"],
+    ["python", "tests/declared_axes_qa.py"],
+    ["python", "tests/card_badges_qa.py"],
+    ["python", "tests/status_chip_qa.py"],
+    ["python", "tests/canonical_qa.py"]
+  ],
+  "sourceScope": [
+    "src/05-data-core.js",
+    "src/85-api.js",
+    "mcp/surface.mjs"
+  ],
+  "staticScope": [
+    "index.source.html",
+    "index.html",
+    "styles/app.css",
+    "build.py",
+    "scripts/qa.py",
+    "formats/schematic.document.schema.json",
+    "mcp/tools.json",
+    "API.md",
+    "DATA-FORMATS.md",
+    "MCP.md",
+    "test-budget.json",
+    "tests/browser_runtime.py",
+    "scripts/validate_sov.mjs",
+    "examples"
+  ],
+  "dependencyScope": ["src", "mcp", "data", "styles", "requirements-dev.txt"],
+  "harnessScope": [
+    "scripts/qualify_axes.py",
+    "scripts/bounded_process.py",
+    "tests/coverage_capture.py",
+    "tests/coverage_exit_hook.cjs",
+    "tests/declared_axes_qa.py",
+    "tests/card_badges_qa.py",
+    "tests/status_chip_qa.py",
+    "tests/canonical_qa.py"
+  ],
+  "regressionQueue": {
+    "profile": "repository-suite-queue",
+    "command": "python scripts/qa.py --quick",
+    "status": "not-run-in-routine-profile",
+    "reason": "The task contract limits this work to a measured routine profile; broader regression remains in the repository suite queue."
+  },
+  "evidenceRoot": "%LOCALAPPDATA%/Schematically/test-evidence/schematically-a-document-declares-axes-a-card-stores-its-values"
+}

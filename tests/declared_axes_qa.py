@@ -448,8 +448,10 @@ class Server:
             s.bind(('127.0.0.1', 0))
             self.port = s.getsockname()[1]
         self.base = f'http://127.0.0.1:{self.port}'
-        self.proc = subprocess.Popen(['node', str(ROOT / 'mcp/server.mjs'), '--port', str(self.port), '--file', str(file)],
-                                     cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        self.proc = subprocess.Popen(['node', '-r', str(ROOT / 'tests/coverage_exit_hook.cjs'),
+                                      str(ROOT / 'mcp/server.mjs'), '--port', str(self.port), '--file', str(file)],
+                                     cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT, text=True)
 
     def __enter__(self) -> str:
         for _ in range(100):
@@ -462,11 +464,19 @@ class Server:
         raise AssertionError('server did not start')
 
     def __exit__(self, *exc) -> None:
-        self.proc.terminate()
+        if self.proc.stdin is not None:
+            self.proc.stdin.write('SOV_TEST_STOP\n')
+            self.proc.stdin.flush()
+            self.proc.stdin.close()
         try:
             self.proc.wait(timeout=3)
         except subprocess.TimeoutExpired:
-            self.proc.kill()
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait(timeout=1)
 
 
 def server_part() -> None:
@@ -651,6 +661,8 @@ def browser_part() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch(**chromium_launch_kwargs(disable_gpu=True))
         page = browser.new_page(viewport={'width': 1400, 'height': 900})
+        from coverage_capture import start as start_coverage, finish as finish_coverage
+        coverage = start_coverage(page)
         errors: list[str] = []
         page.on('pageerror', lambda exc: errors.append(str(exc)))
         page.on('console', lambda m: errors.append(m.text) if m.type == 'error' else None)
@@ -658,6 +670,7 @@ def browser_part() -> None:
         page.wait_for_timeout(200)
         r = page.evaluate(PAGE, [DOC, BAD_AXIS, AXES])
         page.wait_for_timeout(100)
+        finish_coverage(coverage, page)
         browser.close()
     assert r['list'] == NAMED, ('SovSchematicAPI.axes.list()', r['list'])
     assert r['set']['ok'], r['set']['message']
