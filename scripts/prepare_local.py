@@ -75,8 +75,10 @@ def main():
     started=time.monotonic()
     run([sys.executable,str(ROOT/'build.py')],30,'build-html')
     # Compilation is separately admitted preparation; cargo build does not run tests.
+    # Native/test macro expansion shares compressed codegen files; serialize compilation
+    # so one artifact cannot read a file before the other finishes writing it.
     run([cargo,'+stable-x86_64-pc-windows-msvc','build','--manifest-path',str(ROOT/'desktop/src-tauri/Cargo.toml'),
-         '--locked','--bins','--tests','--target','x86_64-pc-windows-msvc','-j','4','--message-format=json-render-diagnostics'],
+         '--locked','--bins','--tests','--target','x86_64-pc-windows-msvc','-j','1','--message-format=json-render-diagnostics'],
          options.build_seconds,'build-native')
     artifacts=[]
     for line in (output/'build-native.log').read_text(encoding='utf-8',errors='replace').splitlines():
