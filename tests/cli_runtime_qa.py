@@ -1,4 +1,4 @@
-"""Real granted Node execution through the desktop MCP, supervised only.
+"""Real granted Node and Python execution through the desktop MCP, supervised only.
 
 The test owns its fixture, host registry, grants, WebView profile and markers.
 The runtime owns execution containment; this driver verifies its real effects.
@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -25,6 +26,7 @@ CASE_IDS = tuple('cli/' + name for name in (
     'cancel-descendants', 'output-overflow', 'durable-results-reopen',
     'no-automatic-document-mutation', 'app-close-descendants',
     'corrupt-output-recovery-refused', 'terminal-recording-failure-held',
+    'python-output', 'python-language-refused',
 ))
 
 
@@ -62,6 +64,8 @@ def execute(coverage_dir):
             self.node = Path(self.node).resolve(strict=True)
             self.current = CASE_IDS[0]
             self.node_hash = sha(self.node.read_bytes())
+            self.python = Path(sys.executable).resolve(strict=True)
+            self.python_hash = sha(self.python.read_bytes())
             self.provider = {'id': 'node-cli', 'version': '1', 'language': 'javascript',
                 'executable': str(self.node), 'executableSha256': self.node_hash,
                 'limits': {'timeoutMs': 5000, 'maxOutputBytes': 4096,
@@ -74,10 +78,12 @@ def execute(coverage_dir):
             self.authored = self.document.get('document', self.document)
             self.document_id = self.authored['id']
             self.sources = {'success': 'let text="";for await(const part of process.stdin)text+=part;const value=JSON.parse(text);process.stdout.write(JSON.stringify({answer:value.value+1}));',
+                            'python-output': 'import json,sys\nvalue=json.load(sys.stdin)\nprint(json.dumps({"answer":value["value"]+1},separators=(",",":")))\n',
                             'preflight': 'import fs from "node:fs";fs.writeFileSync(' + json.dumps(str(self.preflight_marker)) + ',"effect-ran");process.stdout.write("effect-ran");',
                             'overflow': 'process.stdout.write("x".repeat(16384));',
                             'record-failure': 'import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";const receipt=path.join(path.dirname(fileURLToPath(import.meta.url)),"receipt.json");fs.unlinkSync(receipt);fs.mkdirSync(receipt);process.stdout.write("record-failure");'}
             for kind in ('timeout', 'cancel', 'shutdown'):
+                # Python shares this fixture while retaining its declared language.
                 marker = self.work / (kind + '-children.json')
                 self.markers.append(marker)
                 self.sources[kind] = ('import {spawn} from "node:child_process";import fs from "node:fs";'
@@ -85,9 +91,10 @@ def execute(coverage_dir):
                     'fs.writeFileSync(' + json.dumps(str(marker)) + ',JSON.stringify({parentPid:process.pid,childPid:child.pid}));'
                     'setInterval(()=>{},1000);')
             for kind, source in self.sources.items():
+                language = 'python' if kind == 'python-output' else 'javascript'
                 self.authored.setdefault('references', []).append({'id': 'cli-code-' + kind,
                     'kind': 'code', 'data': {'schema': 'schematically.code@1',
-                    'language': 'javascript', 'source': source, 'sha256': sha(source.encode())}})
+                    'language': language, 'source': source, 'sha256': sha(source.encode())}})
             self.fixture.write_text(json.dumps(self.document), encoding='utf-8')
 
         def timeout(self, maximum):
@@ -150,16 +157,16 @@ def execute(coverage_dir):
         def info(self, descriptor):
             return self.call(descriptor, 'schematic.file.info')
 
-        def request_args(self, descriptor, request_id, kind='success', grant_id=None, value=41):
+        def request_args(self, descriptor, request_id, kind='success', grant_id=None, value=41, provider_id='node-cli'):
             info = self.info(descriptor)
-            return {'requestId': request_id, 'providerId': 'node-cli', 'providerVersion': '1',
+            return {'requestId': request_id, 'providerId': provider_id, 'providerVersion': '1',
                 'grantId': grant_id or ('grant-' + request_id), 'referenceId': 'cli-code-' + kind,
                 'codeHash': sha(self.sources[kind].encode()), 'input': {'value': value},
                 'documentId': info['documentId'], 'ifRevision': info['revision'],
                 'stateToken': info['stateToken']}
 
         def grant(self, args, expired=False):
-            self.grants.append({'id': args['grantId'], 'providerId': 'node-cli',
+            self.grants.append({'id': args['grantId'], 'providerId': args['providerId'],
                 'providerVersion': '1', 'documentId': args['documentId'],
                 'sourceHash': args['codeHash'], 'requestId': args['requestId'],
                 'expiresAtUnixMs': int(time.time() * 1000) + (-1000 if expired else 60000)})
@@ -191,7 +198,8 @@ def execute(coverage_dir):
                           'Runtime receipt lost exact frozen request identities')
                     check(receipt.get('requestHash') == sha(json.dumps(expected, separators=(',', ':'), ensure_ascii=False).encode()),
                           'Runtime request hash differs from frozen identities')
-                    check(receipt.get('provider', {}).get('executableSha256') == self.node_hash,
+                    expected_executable_hash = self.python_hash if args['providerId'] == 'python-cli' else self.node_hash
+                    check(receipt.get('provider', {}).get('executableSha256') == expected_executable_hash,
                           'Runtime receipt lost executable identity')
                     stdout, stderr = receipt.get('stdout'), receipt.get('stderr')
                     check(isinstance(stdout, str) and isinstance(stderr, str), 'Runtime output missing')
@@ -245,7 +253,7 @@ def execute(coverage_dir):
             check(self.call(descriptor, 'schematic.runtime.providers') == {'providers': []},
                   'Unregistered native runtime did not default to denied')
             self.call(descriptor, 'schematic.runtime.start', self.request_args(descriptor, 'unregistered'),
-                      refuse=True, reason='No host runtime registration')
+                      refuse=True, reason='PROVIDER_UNAVAILABLE')
             check(not (self.runtime_home / 'attempts' / sha(b'unregistered')).exists(),
                   'Unregistered runtime created an execution attempt')
             self.registry()
@@ -416,6 +424,36 @@ def execute(coverage_dir):
                       refuse=True, reason='admission held')
             self.close_held(process, descriptor_path)
             self.passed(self.current)
+
+            self.case('python-output')
+            node_provider = self.provider
+            self.runtime_home = self.work / 'python-host'
+            self.runtime_home.mkdir()
+            self.grants = []
+            self.provider = {'id': 'python-cli', 'version': '1', 'language': 'python',
+                'executable': str(self.python), 'executableSha256': self.python_hash,
+                'limits': {'timeoutMs': 5000, 'maxOutputBytes': 4096,
+                           'maxProcesses': 4, 'maxMemoryBytes': 536870912}}
+            self.registry()
+            process = self.launch(self.fixture)
+            descriptor_path, descriptor = self.ready(process)
+            args = self.request_args(descriptor, 'python-output', kind='python-output', provider_id='python-cli')
+            self.grant(args)
+            self.start(descriptor, args)
+            python_result = self.terminal(descriptor, 'python-output', 'succeeded')
+            check(json.loads(python_result['stdout']) == {'answer': 42},
+                  'Granted Python execution did not produce the expected output')
+            self.passed(self.current)
+            self.case('python-language-refused')
+            mismatch = self.request_args(descriptor, 'python-language-refused', kind='success', provider_id='python-cli')
+            self.call(descriptor, 'schematic.runtime.start', mismatch, refuse=True,
+                      reason='PROVIDER_LANGUAGE_MISMATCH')
+            check(not (self.runtime_home / 'attempts' / sha(b'python-language-refused')).exists(),
+                  'Language mismatch created an execution attempt')
+            self.passed(self.current)
+            self.close(process, descriptor_path)
+            self.provider = node_provider
+
             self.case('terminal-recording-failure-held')
             self.runtime_home = self.work / 'recording-failure-host'
             self.runtime_home.mkdir()

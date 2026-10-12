@@ -177,7 +177,7 @@ SCENARIO = r"""async ({id,runDoc,expectedDocs})=>{
     const before=JSON.stringify(API.document.get());let calls=[];
     if(id==='runtime-native-unavailable')await rejected('schematic.runtime.providers',{},'RUNTIME_UNAVAILABLE');
     else{
-      window.__TAURI__={core:{invoke:async(command,value)=>{calls.push({command,value:clone(value||{})});return command==='desktop_runtime_providers'?{providers:[{id:'node-cli',version:'1'}]}:{requestId:'qa-runtime',phase:command==='desktop_runtime_start'?'running':'terminal',outcome:command==='desktop_runtime_cancel'?'cancelled':'succeeded',stdout:'qualification',descendantsStopped:true}}}};
+      window.__TAURI__={core:{invoke:async(command,value)=>{calls.push({command,value:clone(value||{})});return command==='desktop_runtime_providers'?{providers:[{id:'node-cli',version:'1',language:'javascript'}]}:{requestId:'qa-runtime',phase:command==='desktop_runtime_start'?'running':'terminal',outcome:command==='desktop_runtime_cancel'?'cancelled':'succeeded',stdout:'qualification',descendantsStopped:true}}}};
       try{
         if(id==='runtime-code-invalid')await rejected('schematic.runtime.start',{...args,referenceId:'missing'},'CODE_REFERENCE_INVALID');
         else if(id==='runtime-code-hash')await rejected('schematic.runtime.start',{...args,codeHash:'0'.repeat(64)},'CODE_CHANGED');
@@ -188,8 +188,9 @@ SCENARIO = r"""async ({id,runDoc,expectedDocs})=>{
           check(calls.length===0,'Refused identity reached native execution');
         }else if(id==='runtime-frozen-input'){
           const pending=ok('schematic.runtime.start',args);args.input.message='after';await pending;
-          check(calls.length===1&&calls[0].command==='desktop_runtime_start','Start did not use declared native bridge');
-          const request=calls[0].value.request;
+          const startIndex=calls.findIndex(call=>call.command==='desktop_runtime_start');
+          check(startIndex>0&&calls.slice(0,startIndex).some(call=>call.command==='desktop_runtime_providers'),'Start did not check provider registration before native execution');
+          const request=calls[startIndex].value.request;
           check(request.source===source&&request.sourceHash===hash&&request.referenceId===ref.id,'Source freeze/hash lost');
           check(request.inputJson==='{"message":"before"}'&&request.inputHash===window.SovSchematicCanonical.sha256Hex(request.inputJson),'Input identity was not frozen');
           check(request.documentId===current.documentId&&request.revision===current.revision&&request.stateToken===current.stateToken,'Guard identities missing at native boundary');
@@ -242,6 +243,18 @@ SCENARIO = r"""async ({id,runDoc,expectedDocs})=>{
     await Promise.resolve();await Promise.resolve();check(JSON.stringify(API.document.get())===before&&!responded,'Expired queued mutation executed');
     delete window.__TAURI__;element.remove();
   }else if(id==='all-tools-exercised'){
+    await guarded('schematic.cowork.register',{operationId:'qa-register-a',agentId:'qa-agent-a',label:'QA Agent A'});
+    await guarded('schematic.cowork.register',{operationId:'qa-register-b',agentId:'qa-agent-b',label:'QA Agent B'});
+    const posted=await guarded('schematic.cowork.post',{operationId:'qa-post-a-b',agentId:'qa-agent-a',to:'qa-agent-b',text:'bounded fixture message'});
+    const docInfo=await info();
+    const cowork=await ok('schematic.cowork.read',{documentId:docInfo.documentId});
+    check(cowork.agents.length===2&&cowork.messages.some(message=>message.id===posted.record.id),'Cowork records were not readable');
+    const polled=await ok('schematic.cowork.poll',{documentId:docInfo.documentId,agentId:'qa-agent-b'});
+    check(polled.wake&&polled.messages.some(message=>message.id===posted.record.id),'Targeted cowork message was not delivered');
+    await guarded('schematic.cowork.trace',{operationId:'qa-trace-b',agentId:'qa-agent-b',state:'working',text:'reading fixture'});
+    await guarded('schematic.cowork.ack',{operationId:'qa-ack-b',agentId:'qa-agent-b',messageId:posted.record.id});
+    const afterAck=await ok('schematic.cowork.poll',{documentId:docInfo.documentId,agentId:'qa-agent-b'});
+    check(!afterAck.wake&&afterAck.latestState?.state==='working','Cowork acknowledgement or trace was not retained');
     const names=(await rpc('tools/list')).result.tools.map(t=>t.name);const missing=names.filter(name=>!seen.has(name));check(missing.length===0,`Unexercised advertised tools: ${missing.join(', ')}`);
   }else throw new Error(`Unknown case ${id}`);
   return {id,ok:true};

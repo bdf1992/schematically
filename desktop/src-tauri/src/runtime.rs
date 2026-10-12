@@ -157,9 +157,7 @@ fn validate_limits(limit: &Limits) -> Result<(), String> {
     Ok(())
 }
 fn validate_provider(provider: &Provider) -> Result<(), String> {
-    if provider.id != "node-cli"
-        || provider.version != "1"
-        || provider.language != "javascript"
+    if !supported_provider(provider)
         || !valid_hash(&provider.executable_sha256)
     {
         return Err("Unsupported provider declaration".into());
@@ -172,6 +170,10 @@ fn validate_provider(provider: &Provider) -> Result<(), String> {
         return Err("Provider executable must be a canonical absolute file".into());
     }
     Ok(())
+}
+fn supported_provider(provider: &Provider) -> bool {
+    provider.version == "1" && matches!((provider.id.as_str(), provider.language.as_str()),
+        ("node-cli", "javascript") | ("python-cli", "python"))
 }
 fn canonical(path: &Path) -> Result<PathBuf, String> {
     let resolved = path.canonicalize().map_err(|e| e.to_string())?;
@@ -327,11 +329,9 @@ fn verify_terminal(path: &Path, receipt: &Value, request: &StartRequest) -> Resu
     validate_limits(&provider.limits)?;
     if !valid_hash(&provider.executable_sha256)
         || !provider.executable.is_absolute()
-        || provider.id != "node-cli"
-        || provider.version != "1"
+        || !supported_provider(&provider)
         || provider.id != request.provider_id
         || provider.version != request.provider_version
-        || provider.language != "javascript"
         || !matches!(
             receipt.get("outcome").and_then(Value::as_str),
             Some(
@@ -1017,7 +1017,7 @@ mod windows {
         stopping: &AtomicBool,
     ) -> Result<Execution, String> {
         let deadline = Instant::now() + Duration::from_millis(provider.limits.timeout_ms);
-        let module = attempt.directory.join("code.mjs");
+        let module = attempt.directory.join(if provider.id == "python-cli" { "code.py" } else { "code.mjs" });
         let input = attempt.directory.join("input.json");
         write_private(&module, attempt.request.source.as_bytes())?;
         write_private(&input, attempt.request.input_json.as_bytes())?;
@@ -1128,8 +1128,9 @@ mod windows {
         startup.StartupInfo.hStdError = stderr_write.0;
         startup.lpAttributeList = attrs.pointer();
         let command = format!(
-            "{} --unhandled-rejections=strict {}",
+            "{} {} {}",
             quote(&provider.executable.to_string_lossy()),
+            if provider.id == "python-cli" { "-I -u" } else { "--unhandled-rejections=strict" },
             quote(&module.to_string_lossy())
         );
         let mut command: Vec<u16> = command.encode_utf16().chain(Some(0)).collect();

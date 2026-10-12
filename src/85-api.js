@@ -48,6 +48,56 @@ function runtimeAnswers(request){
   const input=Array.isArray(request)?{answers:request}:(request||{});
   return runtimeWrite(()=>SovSchematicData.answerConcerns(diagram,{...input,id:input.id||`browser-answers-${Date.now()}`}),()=>'Answer concerns');
 }
+// Coworking is an append-only document log; consumers supply their own polling loop.
+function coworkRead({documentId}={}){
+  const doc=snapshotDocument();
+  if(documentId!==undefined&&documentId!==doc.id)throw new Error('DOCUMENT_CHANGED: cowork document differs');
+  const records=doc.references.filter(ref=>ref.kind==='cowork'&&ref.data?.schema==='schematically.cowork@1'&&ref.data.documentId===doc.id);
+  const agents={},latestStates={};
+  for(const ref of records){
+    if(ref.data.kind==='register')agents[ref.data.agentId]={agentId:ref.data.agentId,label:ref.data.label,mailbox:ref.data.agentId};
+    if(ref.data.kind==='trace')latestStates[ref.data.agentId]={state:ref.data.state,text:ref.data.text,at:ref.data.at,recordId:ref.id};
+  }
+  return SovSchematicData.clone({schema:'schematically.cowork@1',documentId:doc.id,records,agents:Object.values(agents),messages:records.filter(ref=>ref.data.kind==='post'),traces:records.filter(ref=>ref.data.kind==='trace'),latestStates});
+}
+function coworkId(value){if(typeof value!=='string'||! /^[A-Za-z0-9_-]{1,64}$/.test(value))throw new Error('COWORK_INVALID: bounded id required');return value}
+function coworkText(value,max){if(typeof value!=='string'||value.length>max)throw new Error('COWORK_INVALID: bounded text required');return value}
+function coworkPoll({documentId,agentId}={}){
+  coworkId(agentId);const view=coworkRead({documentId});
+  if(!view.agents.some(agent=>agent.agentId===agentId))throw new Error('COWORK_INVALID: agent mailbox unregistered');
+  const acked=new Set(view.records.filter(ref=>ref.data.kind==='ack'&&ref.data.agentId===agentId).map(ref=>ref.data.messageId));
+  const messages=view.messages.filter(ref=>(ref.data.to==='*'||ref.data.to===agentId)&&!acked.has(ref.id));
+  return {documentId:view.documentId,agentId,wake:messages.length>0,messages,latestState:view.latestStates[agentId]||null};
+}
+function coworkWrite(kind,args={}){
+  const {operationId,documentId,agentId,ifRevision}=args;
+  coworkId(operationId);coworkId(agentId);
+  const view=coworkRead({documentId});
+  if(documentId!==view.documentId)throw new Error('DOCUMENT_CHANGED: cowork write requires active document');
+  const request={kind,documentId,agentId};
+  if(kind==='register')request.label=coworkText(args.label,120);
+  else{
+    if(!view.agents.some(agent=>agent.agentId===agentId))throw new Error('COWORK_INVALID: agent unregistered');
+    if(kind==='post'){
+      request.to=args.to==='*'?'*':coworkId(args.to);
+      if(request.to!=='*'&&!view.agents.some(agent=>agent.agentId===request.to))throw new Error('COWORK_INVALID: target mailbox unregistered');
+      request.text=coworkText(args.text,2048);
+    }else if(kind==='trace'){request.state=coworkText(args.state,32);request.text=coworkText(args.text,2048)}
+    else if(kind==='ack'){
+      request.messageId=coworkText(args.messageId,80);
+      if(!view.messages.some(ref=>ref.id===request.messageId&&(ref.data.to==='*'||ref.data.to===agentId)))throw new Error('COWORK_INVALID: message outside mailbox');
+    }
+  }
+  const id=`cowork-${operationId}`,existing=snapshotDocument().references.find(ref=>ref.id===id);
+  if(existing){
+    if(existing.kind!=='cowork'||JSON.stringify(existing.data?.request)!==JSON.stringify(request))throw new Error('COWORK_DUPLICATE: operation identity differs');
+    return {ok:true,duplicate:true,record:SovSchematicData.clone(existing)};
+  }
+  if(view.records.length>=512)throw new Error('COWORK_LIMIT: document log is full');
+  const record={id,kind:'cowork',data:{schema:'schematically.cowork@1',operationId,...request,request,at:new Date().toISOString()}};
+  const receipt=runtimeBatch({id:`cowork-${operationId}`,ifRevision,operations:[{op:'create',resource:'reference',value:record}]});
+  return {...receipt,record:receipt.ok?SovSchematicData.clone(record):null};
+}
 // Runs live beside the document, not in it (STATE-SPACE.md "Surfaces"): the page's run registry
 // starts every run from snapshotDocument() and reads packs from the build's sov-packs tag. No run
 // operation captures history, changes the document or its revision, or saves recovery.
@@ -103,6 +153,7 @@ const SovSchematicAPI={
   delete:(resource,id)=>apiOperation('delete',resource,id),
   execute:(operation)=>runtimeCrud(operation),
   apply:(batch)=>runtimeBatch(batch),
+  cowork:{read:coworkRead,register:args=>coworkWrite('register',args),post:args=>coworkWrite('post',args),trace:args=>coworkWrite('trace',args),poll:coworkPoll,ack:args=>coworkWrite('ack',args)},
   read:(scope)=>SovSchematicData.readScope(snapshotDocument(),scope),
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},

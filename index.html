@@ -34,6 +34,13 @@ header{grid-column:1/-1;grid-row:1;background:var(--panel);border-bottom:1px sol
 .brand{font-weight:800;letter-spacing:.05em}
 .tag,.status{color:var(--muted);font-size:12px}
 .toolbar{margin-left:auto;display:flex;gap:6px;align-items:center;position:relative}
+.toolbar-disclosure{position:relative;flex:none}
+.toolbar-disclosure>summary{list-style:none;cursor:pointer}
+.toolbar-disclosure>summary::-webkit-details-marker{display:none}
+.toolbar-disclosure>summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.toolbar-disclosure-content{position:absolute;right:0;top:calc(100% + 8px);z-index:40;display:flex;align-items:center;gap:6px;padding:10px;background:var(--panel);border:1px solid var(--line);border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-width:calc(100vw - 28px);overflow:visible}
+.toolbar-disclosure:not([open])>.toolbar-disclosure-content{display:none}
+.toolbar-disclosure-content>.palette-settings,.toolbar-disclosure-content>.grid-settings{top:calc(100% + 6px);z-index:41}
 .toolbar-separator{width:1px;height:22px;background:var(--line);margin:0 1px}
 .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 10px;border-radius:7px;cursor:pointer}
 .btn:hover,.btn.active{background:var(--hover);border-color:#999}
@@ -693,6 +700,9 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
     <button class="btn zoom-readout" id="zoomReadout" title="Current zoom">100%</button>
     <button class="btn" id="zoomInBtn" title="Zoom in (+)">+</button>
     <button class="btn" id="fitBtn" title="Fit diagram (Home)">Fit</button>
+    <details class="toolbar-disclosure" id="canvasControls">
+      <summary class="btn">Canvas</summary>
+      <div class="toolbar-disclosure-content">
     <select id="layoutSelect" title="Layout: one diagram, arranged for each reader" aria-label="Layout"></select>
     <button class="btn" id="resetZoomBtn" title="Reset zoom (Shift+Home or 0)">Reset</button>
     <button class="btn" id="paletteBtn" title="Palette and color theme" aria-expanded="false">Palette</button>
@@ -747,7 +757,12 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
       <details class="mini-disclosure"><summary><span class="info-dot">i</span> Drag modifiers</summary><div>Shift = half grid · Ctrl/Cmd = double grid · Alt = free.</div></details>
     </div>
     <button class="btn active" id="flowBtn" title="Show circuit direction">Flow</button>
+      </div>
+    </details>
     <div class="toolbar-separator" aria-hidden="true"></div>
+    <details class="toolbar-disclosure" id="runControls">
+      <summary class="btn">Run</summary>
+      <div class="toolbar-disclosure-content">
     <div class="sim-transport" role="group" aria-label="Simulation clock">
       <button class="btn" id="legendBtn" title="Show what the marks, colours, glyphs and shapes mean">Legend</button>
       <button class="btn" id="simPlayBtn" title="Run the clock">▶</button>
@@ -756,6 +771,8 @@ select option,select optgroup{background-color:var(--panel);color:var(--ink)}
       <select id="simSpeed" title="Clock speed" aria-label="Clock speed"><option value="0.25">¼×</option><option value="1" selected>1×</option><option value="4">4×</option><option value="16">16×</option></select>
       <output id="simTime" aria-live="polite">clock stopped</output>
     </div>
+      </div>
+    </details>
   </div>
 </header>
 
@@ -17123,6 +17140,56 @@ function runtimeAnswers(request){
   const input=Array.isArray(request)?{answers:request}:(request||{});
   return runtimeWrite(()=>SovSchematicData.answerConcerns(diagram,{...input,id:input.id||`browser-answers-${Date.now()}`}),()=>'Answer concerns');
 }
+// Coworking is an append-only document log; consumers supply their own polling loop.
+function coworkRead({documentId}={}){
+  const doc=snapshotDocument();
+  if(documentId!==undefined&&documentId!==doc.id)throw new Error('DOCUMENT_CHANGED: cowork document differs');
+  const records=doc.references.filter(ref=>ref.kind==='cowork'&&ref.data?.schema==='schematically.cowork@1'&&ref.data.documentId===doc.id);
+  const agents={},latestStates={};
+  for(const ref of records){
+    if(ref.data.kind==='register')agents[ref.data.agentId]={agentId:ref.data.agentId,label:ref.data.label,mailbox:ref.data.agentId};
+    if(ref.data.kind==='trace')latestStates[ref.data.agentId]={state:ref.data.state,text:ref.data.text,at:ref.data.at,recordId:ref.id};
+  }
+  return SovSchematicData.clone({schema:'schematically.cowork@1',documentId:doc.id,records,agents:Object.values(agents),messages:records.filter(ref=>ref.data.kind==='post'),traces:records.filter(ref=>ref.data.kind==='trace'),latestStates});
+}
+function coworkId(value){if(typeof value!=='string'||! /^[A-Za-z0-9_-]{1,64}$/.test(value))throw new Error('COWORK_INVALID: bounded id required');return value}
+function coworkText(value,max){if(typeof value!=='string'||value.length>max)throw new Error('COWORK_INVALID: bounded text required');return value}
+function coworkPoll({documentId,agentId}={}){
+  coworkId(agentId);const view=coworkRead({documentId});
+  if(!view.agents.some(agent=>agent.agentId===agentId))throw new Error('COWORK_INVALID: agent mailbox unregistered');
+  const acked=new Set(view.records.filter(ref=>ref.data.kind==='ack'&&ref.data.agentId===agentId).map(ref=>ref.data.messageId));
+  const messages=view.messages.filter(ref=>(ref.data.to==='*'||ref.data.to===agentId)&&!acked.has(ref.id));
+  return {documentId:view.documentId,agentId,wake:messages.length>0,messages,latestState:view.latestStates[agentId]||null};
+}
+function coworkWrite(kind,args={}){
+  const {operationId,documentId,agentId,ifRevision}=args;
+  coworkId(operationId);coworkId(agentId);
+  const view=coworkRead({documentId});
+  if(documentId!==view.documentId)throw new Error('DOCUMENT_CHANGED: cowork write requires active document');
+  const request={kind,documentId,agentId};
+  if(kind==='register')request.label=coworkText(args.label,120);
+  else{
+    if(!view.agents.some(agent=>agent.agentId===agentId))throw new Error('COWORK_INVALID: agent unregistered');
+    if(kind==='post'){
+      request.to=args.to==='*'?'*':coworkId(args.to);
+      if(request.to!=='*'&&!view.agents.some(agent=>agent.agentId===request.to))throw new Error('COWORK_INVALID: target mailbox unregistered');
+      request.text=coworkText(args.text,2048);
+    }else if(kind==='trace'){request.state=coworkText(args.state,32);request.text=coworkText(args.text,2048)}
+    else if(kind==='ack'){
+      request.messageId=coworkText(args.messageId,80);
+      if(!view.messages.some(ref=>ref.id===request.messageId&&(ref.data.to==='*'||ref.data.to===agentId)))throw new Error('COWORK_INVALID: message outside mailbox');
+    }
+  }
+  const id=`cowork-${operationId}`,existing=snapshotDocument().references.find(ref=>ref.id===id);
+  if(existing){
+    if(existing.kind!=='cowork'||JSON.stringify(existing.data?.request)!==JSON.stringify(request))throw new Error('COWORK_DUPLICATE: operation identity differs');
+    return {ok:true,duplicate:true,record:SovSchematicData.clone(existing)};
+  }
+  if(view.records.length>=512)throw new Error('COWORK_LIMIT: document log is full');
+  const record={id,kind:'cowork',data:{schema:'schematically.cowork@1',operationId,...request,request,at:new Date().toISOString()}};
+  const receipt=runtimeBatch({id:`cowork-${operationId}`,ifRevision,operations:[{op:'create',resource:'reference',value:record}]});
+  return {...receipt,record:receipt.ok?SovSchematicData.clone(record):null};
+}
 // Runs live beside the document, not in it (STATE-SPACE.md "Surfaces"): the page's run registry
 // starts every run from snapshotDocument() and reads packs from the build's sov-packs tag. No run
 // operation captures history, changes the document or its revision, or saves recovery.
@@ -17178,6 +17245,7 @@ const SovSchematicAPI={
   delete:(resource,id)=>apiOperation('delete',resource,id),
   execute:(operation)=>runtimeCrud(operation),
   apply:(batch)=>runtimeBatch(batch),
+  cowork:{read:coworkRead,register:args=>coworkWrite('register',args),post:args=>coworkWrite('post',args),trace:args=>coworkWrite('trace',args),poll:coworkPoll,ack:args=>coworkWrite('ack',args)},
   read:(scope)=>SovSchematicData.readScope(snapshotDocument(),scope),
   history:{list:()=>historyList(),undo:()=>undoHistory(),redo:()=>redoHistory()},
   checkpoints:{list:()=>listCheckpoints(),create:(name)=>createCheckpoint(name),restore:(id)=>restoreCheckpoint(id)},
@@ -17514,7 +17582,14 @@ window.SovSchematicLive=SovSchematicLive;
   const guarded=new Set(['schematic.create','schematic.update','schematic.delete','schematic.document.replace','schematic.apply','schematic.file.save','schematic.history.undo','schematic.history.redo','schematic.concerns.answer','schematic.checkpoint.create','schematic.checkpoint.restore','schematic.layout.apply','schematic.runtime.start','schematic.runtime.cancel']);
   const requestId={type:'string',pattern:'^[A-Za-z0-9_-]{1,64}$'};
   const codeHash={type:'string',pattern:'^[a-f0-9]{64}$'};
+  for(const verb of ['register','post','trace','ack'])guarded.add(`schematic.cowork.${verb}`);
   const extra=[
+    ['schematic.cowork.read','Read document-bound coworking agents, messages and traces.',schema({documentId:text},['documentId'])],
+    ['schematic.cowork.poll','Read unacknowledged targeted and broadcast messages; consumer supplies wake handling.',schema({documentId:text,agentId:text},['documentId','agentId'])],
+    ['schematic.cowork.register','Append an attributed agent mailbox registration.',schema({operationId:text,agentId:text,label:text},['operationId','agentId','label'])],
+    ['schematic.cowork.post','Append a targeted or broadcast message.',schema({operationId:text,agentId:text,to:text,text},['operationId','agentId','to','text'])],
+    ['schematic.cowork.trace','Append an attributed agent state and log entry.',schema({operationId:text,agentId:text,state:text,text},['operationId','agentId','state','text'])],
+    ['schematic.cowork.ack','Append an agent acknowledgement without rewriting the message.',schema({operationId:text,agentId:text,messageId:text},['operationId','agentId','messageId'])],
     ['schematic.file.info','Read active file identity, revision, dirty state and build.',empty],
     ['schematic.file.save','Durably save the active native file; opens Save As when unassociated.',schema({saveAs:{type:'boolean'}})],
     ['schematic.read','Read a scoped slice of the active document.',schema({ids:{type:'array',items:text},area:{type:'object'}})],
@@ -17595,6 +17670,7 @@ window.SovSchematicLive=SovSchematicLive;
     const tool=tools().find(value=>value.name===name);
     if(!tool)throw new Error(`TOOL_NOT_SUPPORTED: ${name}`);
     admittedArgs(tool,args);identityGuard(name,args);
+    if(name.startsWith('schematic.cowork.'))return api.cowork[name.split('.').at(-1)](args);
     if(name.startsWith('schematic.runtime.'))return runtimeCall(name,args);
     const writes={
       'schematic.list':'list','schematic.get':'read','schematic.create':'create','schematic.update':'update','schematic.delete':'delete'
@@ -17645,20 +17721,25 @@ window.SovSchematicLive=SovSchematicLive;
       catch(problem){throw new Error(typeof problem==='string'?problem:problem?.message||'Native runtime request failed')}
     };
     if(name==='schematic.runtime.providers')return native('desktop_runtime_providers');
+    const startArgs={...args};
     const doc=api.document.get();
-    if(args.documentId!==doc.id)throw new Error('DOCUMENT_CHANGED: read the active document identity before accessing a runtime attempt');
+    if(startArgs.documentId!==doc.id)throw new Error('DOCUMENT_CHANGED: read the active document identity before accessing a runtime attempt');
     if(name!=='schematic.runtime.start'){
       const command={'schematic.runtime.status':'desktop_runtime_status','schematic.runtime.cancel':'desktop_runtime_cancel','schematic.runtime.results':'desktop_runtime_results'}[name];
-      return native(command,{requestId:args.requestId,documentId:args.documentId});
+      return native(command,{requestId:startArgs.requestId,documentId:startArgs.documentId});
     }
-    const reference=doc.references.find(record=>record.id===args.referenceId);
-    const code=reference?.data;
-    if(reference?.kind!=='code'||code?.schema!=='schematically.code@1'||code.language!=='javascript'||typeof code.source!=='string')throw new Error('CODE_REFERENCE_INVALID: a declared JavaScript code reference is required');
-    const sourceHash=window.SovSchematicCanonical.sha256Hex(code.source);
-    if(code.sha256!==sourceHash||args.codeHash!==sourceHash)throw new Error('CODE_CHANGED: code reference hash does not match the requested source');
-    const inputJson=JSON.stringify(args.input);
+    const inputJson=JSON.stringify(startArgs.input);
     if(typeof inputJson!=='string')throw new Error('INPUT_INVALID: JSON input is required');
-    const request={requestId:args.requestId,providerId:args.providerId,providerVersion:args.providerVersion,grantId:args.grantId,documentId:doc.id,revision:args.ifRevision,stateToken:args.stateToken,referenceId:reference.id,source:code.source,sourceHash,inputJson,inputHash:window.SovSchematicCanonical.sha256Hex(inputJson)};
+    const providers=await native('desktop_runtime_providers');
+    const provider=providers?.providers?.find(record=>record.id===startArgs.providerId&&record.version===startArgs.providerVersion);
+    if(!provider)throw new Error('PROVIDER_UNAVAILABLE: selected host provider is not registered');
+    const reference=doc.references.find(record=>record.id===startArgs.referenceId);
+    const code=reference?.data;
+    if(reference?.kind!=='code'||code?.schema!=='schematically.code@1'||typeof code.source!=='string')throw new Error('CODE_REFERENCE_INVALID: a declared code reference is required');
+    if(code.language!==provider.language)throw new Error('PROVIDER_LANGUAGE_MISMATCH: code reference language does not match the selected host provider');
+    const sourceHash=window.SovSchematicCanonical.sha256Hex(code.source);
+    if(code.sha256!==sourceHash||startArgs.codeHash!==sourceHash)throw new Error('CODE_CHANGED: code reference hash does not match the requested source');
+    const request={requestId:startArgs.requestId,providerId:startArgs.providerId,providerVersion:startArgs.providerVersion,grantId:startArgs.grantId,documentId:doc.id,revision:startArgs.ifRevision,stateToken:startArgs.stateToken,referenceId:reference.id,source:code.source,sourceHash,inputJson,inputHash:window.SovSchematicCanonical.sha256Hex(inputJson)};
     return native('desktop_runtime_start',{request});
   }
   async function rpc(request){

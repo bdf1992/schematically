@@ -10,7 +10,14 @@
   const guarded=new Set(['schematic.create','schematic.update','schematic.delete','schematic.document.replace','schematic.apply','schematic.file.save','schematic.history.undo','schematic.history.redo','schematic.concerns.answer','schematic.checkpoint.create','schematic.checkpoint.restore','schematic.layout.apply','schematic.runtime.start','schematic.runtime.cancel']);
   const requestId={type:'string',pattern:'^[A-Za-z0-9_-]{1,64}$'};
   const codeHash={type:'string',pattern:'^[a-f0-9]{64}$'};
+  for(const verb of ['register','post','trace','ack'])guarded.add(`schematic.cowork.${verb}`);
   const extra=[
+    ['schematic.cowork.read','Read document-bound coworking agents, messages and traces.',schema({documentId:text},['documentId'])],
+    ['schematic.cowork.poll','Read unacknowledged targeted and broadcast messages; consumer supplies wake handling.',schema({documentId:text,agentId:text},['documentId','agentId'])],
+    ['schematic.cowork.register','Append an attributed agent mailbox registration.',schema({operationId:text,agentId:text,label:text},['operationId','agentId','label'])],
+    ['schematic.cowork.post','Append a targeted or broadcast message.',schema({operationId:text,agentId:text,to:text,text},['operationId','agentId','to','text'])],
+    ['schematic.cowork.trace','Append an attributed agent state and log entry.',schema({operationId:text,agentId:text,state:text,text},['operationId','agentId','state','text'])],
+    ['schematic.cowork.ack','Append an agent acknowledgement without rewriting the message.',schema({operationId:text,agentId:text,messageId:text},['operationId','agentId','messageId'])],
     ['schematic.file.info','Read active file identity, revision, dirty state and build.',empty],
     ['schematic.file.save','Durably save the active native file; opens Save As when unassociated.',schema({saveAs:{type:'boolean'}})],
     ['schematic.read','Read a scoped slice of the active document.',schema({ids:{type:'array',items:text},area:{type:'object'}})],
@@ -91,6 +98,7 @@
     const tool=tools().find(value=>value.name===name);
     if(!tool)throw new Error(`TOOL_NOT_SUPPORTED: ${name}`);
     admittedArgs(tool,args);identityGuard(name,args);
+    if(name.startsWith('schematic.cowork.'))return api.cowork[name.split('.').at(-1)](args);
     if(name.startsWith('schematic.runtime.'))return runtimeCall(name,args);
     const writes={
       'schematic.list':'list','schematic.get':'read','schematic.create':'create','schematic.update':'update','schematic.delete':'delete'
@@ -141,20 +149,25 @@
       catch(problem){throw new Error(typeof problem==='string'?problem:problem?.message||'Native runtime request failed')}
     };
     if(name==='schematic.runtime.providers')return native('desktop_runtime_providers');
+    const startArgs={...args};
     const doc=api.document.get();
-    if(args.documentId!==doc.id)throw new Error('DOCUMENT_CHANGED: read the active document identity before accessing a runtime attempt');
+    if(startArgs.documentId!==doc.id)throw new Error('DOCUMENT_CHANGED: read the active document identity before accessing a runtime attempt');
     if(name!=='schematic.runtime.start'){
       const command={'schematic.runtime.status':'desktop_runtime_status','schematic.runtime.cancel':'desktop_runtime_cancel','schematic.runtime.results':'desktop_runtime_results'}[name];
-      return native(command,{requestId:args.requestId,documentId:args.documentId});
+      return native(command,{requestId:startArgs.requestId,documentId:startArgs.documentId});
     }
-    const reference=doc.references.find(record=>record.id===args.referenceId);
-    const code=reference?.data;
-    if(reference?.kind!=='code'||code?.schema!=='schematically.code@1'||code.language!=='javascript'||typeof code.source!=='string')throw new Error('CODE_REFERENCE_INVALID: a declared JavaScript code reference is required');
-    const sourceHash=window.SovSchematicCanonical.sha256Hex(code.source);
-    if(code.sha256!==sourceHash||args.codeHash!==sourceHash)throw new Error('CODE_CHANGED: code reference hash does not match the requested source');
-    const inputJson=JSON.stringify(args.input);
+    const inputJson=JSON.stringify(startArgs.input);
     if(typeof inputJson!=='string')throw new Error('INPUT_INVALID: JSON input is required');
-    const request={requestId:args.requestId,providerId:args.providerId,providerVersion:args.providerVersion,grantId:args.grantId,documentId:doc.id,revision:args.ifRevision,stateToken:args.stateToken,referenceId:reference.id,source:code.source,sourceHash,inputJson,inputHash:window.SovSchematicCanonical.sha256Hex(inputJson)};
+    const providers=await native('desktop_runtime_providers');
+    const provider=providers?.providers?.find(record=>record.id===startArgs.providerId&&record.version===startArgs.providerVersion);
+    if(!provider)throw new Error('PROVIDER_UNAVAILABLE: selected host provider is not registered');
+    const reference=doc.references.find(record=>record.id===startArgs.referenceId);
+    const code=reference?.data;
+    if(reference?.kind!=='code'||code?.schema!=='schematically.code@1'||typeof code.source!=='string')throw new Error('CODE_REFERENCE_INVALID: a declared code reference is required');
+    if(code.language!==provider.language)throw new Error('PROVIDER_LANGUAGE_MISMATCH: code reference language does not match the selected host provider');
+    const sourceHash=window.SovSchematicCanonical.sha256Hex(code.source);
+    if(code.sha256!==sourceHash||startArgs.codeHash!==sourceHash)throw new Error('CODE_CHANGED: code reference hash does not match the requested source');
+    const request={requestId:startArgs.requestId,providerId:startArgs.providerId,providerVersion:startArgs.providerVersion,grantId:startArgs.grantId,documentId:doc.id,revision:startArgs.ifRevision,stateToken:startArgs.stateToken,referenceId:reference.id,source:code.source,sourceHash,inputJson,inputHash:window.SovSchematicCanonical.sha256Hex(inputJson)};
     return native('desktop_runtime_start',{request});
   }
   async function rpc(request){
