@@ -27,6 +27,13 @@ header{grid-column:1/-1;grid-row:1;background:var(--panel);border-bottom:1px sol
 .brand{font-weight:800;letter-spacing:.05em}
 .tag,.status{color:var(--muted);font-size:12px}
 .toolbar{margin-left:auto;display:flex;gap:6px;align-items:center;position:relative}
+.toolbar-disclosure{position:relative;flex:none}
+.toolbar-disclosure>summary{list-style:none;cursor:pointer}
+.toolbar-disclosure>summary::-webkit-details-marker{display:none}
+.toolbar-disclosure>summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.toolbar-disclosure-content{position:absolute;right:0;top:calc(100% + 8px);z-index:40;display:flex;align-items:center;gap:6px;padding:10px;background:var(--panel);border:1px solid var(--line);border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-width:calc(100vw - 28px);overflow:visible}
+.toolbar-disclosure:not([open])>.toolbar-disclosure-content{display:none}
+.toolbar-disclosure-content>.palette-settings,.toolbar-disclosure-content>.grid-settings{top:calc(100% + 6px);z-index:41}
 .toolbar-separator{width:1px;height:22px;background:var(--line);margin:0 1px}
 .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 10px;border-radius:7px;cursor:pointer}
 .btn:hover,.btn.active{background:var(--hover);border-color:#999}

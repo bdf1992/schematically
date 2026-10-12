@@ -14,7 +14,7 @@ from playwright.async_api import async_playwright
 from browser_runtime import chromium_launch_kwargs
 
 ROOT = Path(__file__).resolve().parents[1]
-CASE_IDS=['native-launch-handle','native-save-current','native-save-failure-stays-dirty','native-save-cancel-stays-dirty','native-format-change-save-as','native-new-clears-association','native-api-open-clears-association','native-unreadable-launch-reports-failure']
+CASE_IDS=['header-canvas-disclosure','header-grid-edit-close','header-run-disclosure','header-no-overflow-1280','native-launch-handle','native-save-current','native-save-failure-stays-dirty','native-save-cancel-stays-dirty','native-format-change-save-as','native-new-clears-association','native-api-open-clears-association','native-unreadable-launch-reports-failure']
 if '--collect' in sys.argv:
     print(json.dumps(CASE_IDS))
     raise SystemExit(0)
@@ -58,6 +58,33 @@ async def main():
         await page.add_init_script('window.__launchDocument=' + json.dumps(launch) + ';' + MOCK)
         await page.goto((ROOT / 'index.html').as_uri(), wait_until='load')
         await page.evaluate('window.SovDesktopPersistenceReady')
+        assert not await page.locator('#canvasControls').evaluate('(node)=>node.open')
+        assert not await page.locator('#gridBtn').is_visible()
+        await page.locator('#canvasControls>summary').focus()
+        await page.keyboard.press('Enter')
+        assert await page.locator('#gridBtn').is_visible()
+        print('CASE PASS header-canvas-disclosure')
+        await page.locator('#gridBtn').click()
+        assert await page.locator('#gridSettings').is_visible()
+        original_grid = await page.locator('#gridSizeInput').input_value()
+        await page.locator('#gridSizeInput').select_option('32')
+        assert await page.evaluate('canvasGridSize') == 32
+        await page.locator('#gridSizeInput').select_option(original_grid)
+        await page.locator('#gridBtn').click()
+        assert not await page.locator('#gridSettings').is_visible()
+        await page.locator('#canvasControls>summary').click()
+        print('CASE PASS header-grid-edit-close')
+        assert not await page.locator('#runControls').evaluate('(node)=>node.open')
+        assert not await page.locator('#simPlayBtn').is_visible()
+        await page.locator('#runControls>summary').focus()
+        await page.keyboard.press('Enter')
+        assert await page.locator('#simPlayBtn').is_visible()
+        await page.keyboard.press('Enter')
+        assert not await page.locator('#simPlayBtn').is_visible()
+        print('CASE PASS header-run-disclosure')
+        await page.set_viewport_size({'width':1280,'height':800})
+        assert await page.evaluate('document.documentElement.scrollWidth<=1280 && [...document.querySelectorAll("header .toolbar>button,header .toolbar>details>summary")].every(node=>{const rect=node.getBoundingClientRect();return rect.left>=0&&rect.right<=1280})')
+        print('CASE PASS header-no-overflow-1280')
         assert await page.evaluate('currentFileHandle.native&&currentFileHandle.token') == 'launch-token'
         assert await page.evaluate('SovSchematicAPI.file.info().name') == 'Native.sov'
         print('CASE PASS native-launch-handle')
@@ -115,7 +142,7 @@ async def main():
         counters=json.loads(await page.evaluate('JSON.stringify(globalThis.__coverage__ || {})'))
         (options.coverage_dir/f'native-persistence-{os.getpid()}.json').write_text(json.dumps(counters),encoding='utf-8')
         await browser.close()
-    print('PASS native persistence page contract: 8 cases; native disk effects remain separate')
+    print('PASS native persistence page contract: 12 cases; native disk effects remain separate')
 
 
 if __name__ == '__main__':

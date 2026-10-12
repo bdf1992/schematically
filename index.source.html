@@ -85,6 +85,9 @@
     <button class="btn zoom-readout" id="zoomReadout" title="Current zoom">100%</button>
     <button class="btn" id="zoomInBtn" title="Zoom in (+)">+</button>
     <button class="btn" id="fitBtn" title="Fit diagram (Home)">Fit</button>
+    <details class="toolbar-disclosure" id="canvasControls">
+      <summary class="btn">Canvas</summary>
+      <div class="toolbar-disclosure-content">
     <select id="layoutSelect" title="Layout: one diagram, arranged for each reader" aria-label="Layout"></select>
     <button class="btn" id="resetZoomBtn" title="Reset zoom (Shift+Home or 0)">Reset</button>
     <button class="btn" id="paletteBtn" title="Palette and color theme" aria-expanded="false">Palette</button>
@@ -139,7 +142,12 @@
       <details class="mini-disclosure"><summary><span class="info-dot">i</span> Drag modifiers</summary><div>Shift = half grid · Ctrl/Cmd = double grid · Alt = free.</div></details>
     </div>
     <button class="btn active" id="flowBtn" title="Show circuit direction">Flow</button>
+      </div>
+    </details>
     <div class="toolbar-separator" aria-hidden="true"></div>
+    <details class="toolbar-disclosure" id="runControls">
+      <summary class="btn">Run</summary>
+      <div class="toolbar-disclosure-content">
     <div class="sim-transport" role="group" aria-label="Simulation clock">
       <button class="btn" id="legendBtn" title="Show what the marks, colours, glyphs and shapes mean">Legend</button>
       <button class="btn" id="simPlayBtn" title="Run the clock">▶</button>
@@ -148,6 +156,8 @@
       <select id="simSpeed" title="Clock speed" aria-label="Clock speed"><option value="0.25">¼×</option><option value="1" selected>1×</option><option value="4">4×</option><option value="16">16×</option></select>
       <output id="simTime" aria-live="polite">clock stopped</output>
     </div>
+      </div>
+    </details>
   </div>
 </header>
 
