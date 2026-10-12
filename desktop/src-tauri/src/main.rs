@@ -146,8 +146,11 @@ fn report_loaded(
 }
 
 fn main() -> std::process::ExitCode {
+    let lifecycle_started = std::time::Instant::now();
+    let lifecycle_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let window_lifecycle_calls = lifecycle_calls.clone();
     let builder = tauri::Builder::default().manage(files::FileState::default())
-        .setup(|app| {
+        .setup(move |app| {
             let setup_started = std::time::Instant::now();
             eprintln!("desktop startup: setup pid={}", std::process::id());
             let configured = &app.config().app.windows;
@@ -205,11 +208,39 @@ fn main() -> std::process::ExitCode {
                         }
                     })
                     .build());
-            if let Err(problem) = window {
+            let window = match window {
+                Ok(window) => window,
+                Err(problem) => {
                 relay.stop();
                 eprintln!("desktop startup: window-create-failed pid={}", std::process::id());
                 return Err(problem.into());
+                }
+            };
+            #[cfg(windows)]
+            match window.hwnd() {
+                Ok(handle) => {
+                    use windows_sys::Win32::UI::WindowsAndMessaging::{IsWindow, IsWindowVisible, GetWindowThreadProcessId};
+                    let mut owner_pid = 0;
+                    let native = handle.0 as windows_sys::Win32::Foundation::HWND;
+                    let (valid, visible, thread_id) = unsafe {
+                        (IsWindow(native) != 0, IsWindowVisible(native) != 0, GetWindowThreadProcessId(native, &mut owner_pid))
+                    };
+                    eprintln!("desktop native-window: hwnd={} valid={valid} visible={visible} owner-pid={owner_pid} owner-matches={} thread-id={thread_id} elapsed-ms={}",
+                        native as usize, owner_pid == std::process::id(), lifecycle_started.elapsed().as_millis());
+                }
+                Err(_) => eprintln!("desktop native-window: hwnd-unavailable elapsed-ms={}", lifecycle_started.elapsed().as_millis()),
             }
+            window.on_window_event(move |event| {
+                let label = match event {
+                    tauri::WindowEvent::CloseRequested { .. } => Some("main-close-requested"),
+                    tauri::WindowEvent::Destroyed => Some("main-destroyed"),
+                    _ => None,
+                };
+                if let Some(label) = label {
+                    let call = window_lifecycle_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    if call < 8 { eprintln!("desktop lifecycle: event={label} order={} elapsed-ms={}", call + 1, lifecycle_started.elapsed().as_millis()); }
+                }
+            });
             eprintln!("desktop startup: window-created pid={}", std::process::id());
             if smoke_report_path().is_some() {
                 let watchdog_relay=relay.clone();
@@ -249,6 +280,15 @@ fn main() -> std::process::ExitCode {
         .build(context)
         .expect("error while building SOV Schematic desktop shell")
         .run_return(move |app, event| {
+            let label = match &event {
+                tauri::RunEvent::Ready => Some("app-ready"),
+                tauri::RunEvent::Exit => Some("app-exit"),
+                _ => None,
+            };
+            if let Some(label) = label {
+                let call = lifecycle_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                if call < 8 { eprintln!("desktop lifecycle: event={label} order={} elapsed-ms={}", call + 1, lifecycle_started.elapsed().as_millis()); }
+            }
             // Wry emits the requested code but currently exits its loop with zero.
             // Retain explicit requests; ordinary last-window close has no code.
             if let tauri::RunEvent::ExitRequested { code: Some(code), .. } = &event {
