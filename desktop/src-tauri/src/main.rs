@@ -148,7 +148,6 @@ fn report_loaded(
 fn main() -> std::process::ExitCode {
     let lifecycle_started = std::time::Instant::now();
     let lifecycle_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let window_lifecycle_calls = lifecycle_calls.clone();
     let builder = tauri::Builder::default().manage(files::FileState::default())
         .setup(move |app| {
             let setup_started = std::time::Instant::now();
@@ -230,17 +229,6 @@ fn main() -> std::process::ExitCode {
                 }
                 Err(_) => eprintln!("desktop native-window: hwnd-unavailable elapsed-ms={}", lifecycle_started.elapsed().as_millis()),
             }
-            window.on_window_event(move |event| {
-                let label = match event {
-                    tauri::WindowEvent::CloseRequested { .. } => Some("main-close-requested"),
-                    tauri::WindowEvent::Destroyed => Some("main-destroyed"),
-                    _ => None,
-                };
-                if let Some(label) = label {
-                    let call = window_lifecycle_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                    if call < 8 { eprintln!("desktop lifecycle: event={label} order={} elapsed-ms={}", call + 1, lifecycle_started.elapsed().as_millis()); }
-                }
-            });
             eprintln!("desktop startup: window-created pid={}", std::process::id());
             if smoke_report_path().is_some() {
                 let watchdog_relay=relay.clone();
@@ -283,6 +271,11 @@ fn main() -> std::process::ExitCode {
             let label = match &event {
                 tauri::RunEvent::Ready => Some("app-ready"),
                 tauri::RunEvent::Exit => Some("app-exit"),
+                tauri::RunEvent::WindowEvent { label, event, .. } if label == "main" => match event {
+                    tauri::WindowEvent::CloseRequested { .. } => Some("main-close-requested"),
+                    tauri::WindowEvent::Destroyed => Some("main-destroyed"),
+                    _ => None,
+                },
                 _ => None,
             };
             if let Some(label) = label {
