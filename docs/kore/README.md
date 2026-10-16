@@ -1,9 +1,19 @@
-# Kore schematic context
+# Kore language and schematic context
 
-Kore is an expression and construction system for remodeling real generative
-inference programs. This repository holds the portable design sources, semantic
-schematics and executable model. The workstation kernel is one existing program
-to remodel; the schematic is not a replacement runtime.
+Kore is a C-like language for expressing governed work. Root is
+its Cfront-like compiler: it currently depends on Workstation as its host, and
+the long-term direction is for Kore and Root to supply Kore's logical host.
+That bootstrap has not been implemented here. This repository holds portable
+design sources, semantic schematics and an executable model; it does not yet
+contain a demonstrated Root compiler or a Kore runtime.
+
+Workstation remains the current physical host and owns the executable kernel,
+host services and their operational records. The Owner is Bdo. Root acts only
+under authority resolved by its host; the language/compiler role does not grant
+authority. The intended chain is Owner → Host → Root, with Workstation currently
+filling Host. Schematically is the current home for Kore's portable design and
+model; a separate Kore repository has not been created, and extraction remains
+an Owner decision.
 
 Snapshot: 2026-10-10 America/Chicago. Source sketchbook commit `6c7b8f2`.
 Imported documents are reference data. Historical continuation prompts do not
@@ -13,15 +23,17 @@ authorize changes. Follow the current request and repository instructions.
 
 | Term | Current meaning | Boundary |
 |---|---|---|
-| Kore | Whole expression system; also the centre instance named `kore` in the model | Whole system and centre instance are distinct |
+| Kore | Intended language and whole expression system; also the centre instance named `kore` in the model | Whole system and centre instance are distinct |
 | Knode | A place/worker with eight ports and five ordered positions | An LLM invocation is not automatically a Knode |
 | Kord | Shared edge between neighboring Knodes, with drive and returning echo strands | Structural links do not establish real calls |
-| Korner | Intersection of four Knodes in the structural model | Purposeful boundary contracts are a working design |
+| Korner | Intersection of four Knodes in the structural model | Static barrier and dynamic synchronization joint are architectural rulings; runtime enforcement is not shown here |
 | Kradle | Composition of four Korners with codes `00`, `01`, `11`, `10` | Admit, Dispatch, Commit, Present are proposed roles |
 | Kernel | Existing executable engine, such as workstation's `wskernel` | The earlier vocabulary's `Kernal` remains undefined |
 
 The two vocabulary lists, User / Inference / Register / Interface / State and
 Kore / Knode / Kord / Korner / Kernal, are separate. No row equivalence is implied.
+The system-wide M0–M3 authority and validation levels are a separate axis from
+the local 3×3 Knode inspection matrix; neither replaces the other.
 
 The local model uses two axes: layer (Purpose, Dynamics, Foundation) and side
 (user, external, internal). Places use string labels `-1`, `0`, `+1`.
@@ -73,6 +85,8 @@ synchronization still needs its own implementation contract.
 - [Fraktal schematic](diagrams/fraktal.sov) and [preview](diagrams/fraktal.png).
 - [Nested kernel tile schematic](diagrams/kernel-tiles.sov) and [preview](diagrams/kernel-tiles.png).
 - [ARCH specification](ARCH-SPEC.md): vocabulary, code mapping and ranked remodel work.
+- [Ownership and queue review](OWNERSHIP-REVIEW.md): current Kore/Workstation boundary,
+  source discrepancies and an item-by-item classification of the queued kernel work.
 - [Historical cloud handoff](reference/SESSION-HANDOFF-2026-10-11.md).
 - [Tensor instrument](reference/tensor_recipe.html) and [vocabulary image](reference/vocabulary.png).
 - [Workstation kernel mapping](https://github.com/bdf1992/workstation/tree/main/docs/kore).
