@@ -1,0 +1,34 @@
+{
+  "version": "remote-access-routine-1",
+  "profile": "routine",
+  "runner": "scripts/qualify_remote_access.py",
+  "source_scope": ["mcp/access.mjs", "mcp/server.mjs"],
+  "input_scope": ["mcp/*.mjs", "mcp/*.json", "tests/access_gate_*.mjs", "tests/access_gate_qa.py", "tests/multi_document_qa.py", "tests/database_store_qa.py", "tests/document_reload_qa.py", "tests/mcp_surface_qa.py", "tests/revision_guard_qa.py", "tests/served_editor_qa.py", "tests/qa_linux_qa.py", "scripts/golden_run.py", "scripts/bounded_process.py", "scripts/qualify_remote_access.py", "scripts/remote-access-test-budget.json", "examples/*.sov", "requirements-dev.txt"],
+  "max_cases": 250,
+  "max_seconds": 180,
+  "minimum_line_coverage_percent": 75,
+  "minimum_cases_by_suite": {
+    "access-gate": 77,
+    "multi-document": 6,
+    "database-store": 9,
+    "document-reload": 8,
+    "mcp-surface": 2,
+    "revision-guard": 2,
+    "served-editor": 4,
+    "qa-linux": 30,
+    "golden": 17
+  },
+  "commands": [
+    ["node", "--check", "mcp/server.mjs"],
+    ["node", "--check", "mcp/access.mjs"],
+    ["python", "tests/access_gate_qa.py"],
+    ["python", "tests/multi_document_qa.py"],
+    ["python", "tests/database_store_qa.py"],
+    ["python", "tests/document_reload_qa.py"],
+    ["python", "tests/mcp_surface_qa.py"],
+    ["python", "tests/revision_guard_qa.py"],
+    ["python", "tests/served_editor_qa.py"],
+    ["python", "tests/qa_linux_qa.py"],
+    ["python", "scripts/golden_run.py"]
+  ]
+}

@@ -18,10 +18,13 @@ root_ns = {'__file__': str(Path(Path(ROOT.anchor) / 'qa_linux.py')), '__name__':
 exec(compile((ROOT / 'scripts/qa_linux.py').read_text(encoding='utf-8'), 'qa_linux.py', 'exec'), root_ns)
 assert callable(root_ns['inside_half']), 'imports with the script at the filesystem root'
 checks.append(('imports at the filesystem root', True))
+print('CASE PASS qa-linux/imports-at-the-filesystem-root')
 
 
 def check(name, cond):
     checks.append((name, bool(cond)))
+    case_id = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+    print(('CASE PASS ' if cond else 'CASE FAIL ') + 'qa-linux/' + case_id)
     if not cond:
         raise AssertionError(name)
 

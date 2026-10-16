@@ -121,6 +121,7 @@ async def main():
             # (e)
             assert not record['errors'], record['errors']
             print('(a) status:', status, 'counts:', counts, 'want:', want, 'requests:', len(record['urls']))
+            print('CASE PASS served-editor/served-file')
             await context.close()
 
             # Blank build stays reachable through /index.html.
@@ -129,6 +130,7 @@ async def main():
             assert blank != want, (blank, want)
             assert not record['errors'], record['errors']
             print('(b) /index.html counts:', blank)
+            print('CASE PASS served-editor/blank-index')
             await context.close()
 
             # (d) an explicit open parameter wins over the served document.
@@ -137,6 +139,7 @@ async def main():
             status, counts = await status_and_counts(page)
             assert counts != want, (counts, want)
             print('(d) status:', status, 'counts:', counts)
+            print('CASE PASS served-editor/open-parameter')
             await context.close()
 
             # (c) a label that closes a script tag and opens another cannot end the element.
@@ -163,6 +166,7 @@ async def main():
             assert not record['errors'], record['errors']
             assert not [m for m in record['logs'] if m[0] == 'error'], record['logs']
             print('(c) injected:', injected, 'labels:', labels)
+            print('CASE PASS served-editor/hostile-label')
             await context.close()
 
             await browser.close()
