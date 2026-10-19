@@ -11,8 +11,10 @@ out when you gave no coordinates, and writes one `.html` file the reader opens f
 or newer is the only requirement.
 
 ```
-node <this skill's directory>/bin/schematically.mjs deliver diagram.sov --open --json
+node <skill>/bin/schematically.mjs deliver diagram.sov --open --json
 ```
+
+`<skill>` is the folder this SKILL.md is in. On Windows pass Windows paths (`C:\...`) to `node`.
 
 ## Steps
 
@@ -20,8 +22,10 @@ node <this skill's directory>/bin/schematically.mjs deliver diagram.sov --open -
    follow first, then what feeds or watches it. Eight to twelve cards is a good first diagram.
 2. Write `<name>.sov` in the user's working directory in the form below. Leave out `x` and `y`:
    the layout engine places cards left to right along the wires.
-3. Run `deliver` with `--json`. On `{"ok": true}` tell the user the `target` path; `--open` has
-   opened it.
+3. Run `deliver` with `--json`, and with `--open` when the user is at this machine's screen.
+   The `.html` is written beside the `.sov` unless you name another path after it. On
+   `{"ok": true}` tell the user the `target` path (it opens from disk in any browser) and what
+   the diagram shows; `laidOut` says the layout engine placed the cards.
 4. On `{"ok": false}` read each diagnostic's `code`, `subject` (the record id) and `message`,
    repair that record, and run again. After two failed rounds, stop and show the user the
    diagnostics rather than guessing further.
@@ -61,8 +65,16 @@ node <this skill's directory>/bin/schematically.mjs deliver diagram.sov --open -
   wire runs from `a`/`aSide` to `b`/`bSide`. Feed permission or configuration into `control`.
   Tracing downstream does not follow control wires.
 - Wire `config`: `label`; `direction` (`forward` default, `reverse`, `duplex`); `forwardOperation`
-  (`read` or `write`) when the wire represents one. Direction and access describe; they never grant.
-- Mark a starting card with `"signalMode": "source"`.
+  `read` when the `a` card reads from the `b` card, `write` when it writes to it. Direction and
+  access describe; they never grant.
+- Draw each wire the way the request or data travels. A reply may be a wire back to the caller;
+  cycles are fine. Draw one wire per pair of cards: two wires between the same two cards are drawn
+  on top of each other, so fold them into one label ("read, fill on miss") or route one through
+  another card.
+- A decision (cache hit or miss, approved or refused) is a `gate` card with one wire out per
+  outcome, each labelled with its outcome (`"hit"`, `"miss"`).
+- Mark the card where the story starts with `"signalMode": "source"`.
+- `revision` stays `0` and `references` stays `[]`; both are for the editor.
 
 ## Card types (`symbolId`)
 
