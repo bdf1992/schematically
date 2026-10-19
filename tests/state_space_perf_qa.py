@@ -27,8 +27,19 @@ ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / 'examples/state'
 LIMIT_S = 2.0
 RUNS = 3
-GROW_LIMIT_S = 3.0
 GROW_BUDGET = 100000
+# grow.sov's stepping time is held as a multiple of tests/reference_workload.js timed in the same
+# process (GROW_TIMED), because GitHub's hosted runners differ by about 2x in raw speed and the CI
+# container is slower again: the absolute 3.0 s it replaced passed at 2.3 s and failed at 3.5 s on
+# the same engine. The multiple measured on 2026-10-19 (median of three processes):
+#   this host (node 24)                       12.6 to 13.8
+#   hosted, AMD EPYC 9V74 (node 22)           13.6 to 13.7   (grow.sov 0.99 s)
+#   hosted, AMD EPYC 7763 (node 22)           14.9 to 15.7   (grow.sov 1.45 to 1.53 s)
+#   hosted CI container, full QA (node 22)    15.75          (grow.sov 3.08 s)
+# 20 is the worst of those times 1.27. With a busy-wait in step() adding about 50% to stepping here,
+# the multiple measured 21.5 and the test failed; at about +33% it measured 17.5 and passed.
+REF = ROOT / 'tests/reference_workload.js'
+GROW_RATIO_LIMIT = 20.0
 
 SETUP = r"""
 const S=require(process.argv[1]),D=globalThis.SovSchematicData,C=globalThis.SovSchematicCanonical,fs=require('fs');
@@ -90,13 +101,19 @@ process.stdout.write(JSON.stringify({same:bytes===storedGrow,length:bytes.length
 """
 
 # Linear: stepping alone (no traceOf, no canonicalize) to a budget the queue keeps growing under.
+# tests/reference_workload.js (REF) is timed in the same process, once untimed, twice before and twice
+# after stepping; the middle two of the four are averaged, and grow_ms / ref_ms is what the test holds:
+# it measures the engine, not the runner or the load beside it.
 GROW_TIMED = GROW_SETUP + r"""
+const R=require(process.argv[4]),refs=[];R.time();for(let i=0;i<2;i++)refs.push(R.time());
 const doc=load();
 const t0=process.hrtime.bigint();
 const s=S.startRun({doc,packs,budget:""" + str(GROW_BUDGET) + r"""});if(!s.ok)throw new Error(JSON.stringify(s));
 const run=s.run;let last;for(;;){last=S.step(run);if(!last.ok||last.tick===null)break}
 const ms=Number(process.hrtime.bigint()-t0)/1e6;
-process.stdout.write(JSON.stringify({ms,last:{ok:last.ok,code:last.code||null,tick:last.tick},through:run.tick}));
+for(let i=0;i<2;i++)refs.push(R.time());
+refs.sort((a,b)=>a-b);const ref=(refs[1]+refs[2])/2;
+process.stdout.write(JSON.stringify({ms,ref,refs,ratio:ms/ref,last:{ok:last.ok,code:last.code||null,tick:last.tick},through:run.tick}));
 """
 
 # A refused tick part-way through the growing queue leaves the run exactly as it was, twice over.
@@ -159,13 +176,18 @@ def main() -> None:
     gt = node(GROW_TRACE)
     assert gt['same'], f"the grow trace differs from examples/state/grow.sovtrace ({gt['length']} bytes)"
     assert gt['last'] == {'ok': False, 'code': 'BUDGET_SPENT'}, gt
-    grow_runs = [node(GROW_TIMED) for _ in range(RUNS)]
+    grow_runs = [node(GROW_TIMED, str(REF)) for _ in range(RUNS)]
     for r in grow_runs:
         assert r['last']['ok'] is False and r['last']['code'] == 'BUDGET_SPENT', r
     grow_median_s = statistics.median(r['ms'] for r in grow_runs) / 1000
+    ref_median_s = statistics.median(r['ref'] for r in grow_runs) / 1000
+    ratio = statistics.median(r['ratio'] for r in grow_runs)
     grow_times = ', '.join('%.3f' % (r['ms'] / 1000) for r in grow_runs)
-    print(f'grow.sov: {grow_times} s; median {grow_median_s:.3f} s (limit {GROW_LIMIT_S} s), through tick {grow_runs[-1]["through"]}')
-    assert grow_median_s <= GROW_LIMIT_S, f'stepping grow.sov to budget {GROW_BUDGET} took a median {grow_median_s:.3f} s, over {GROW_LIMIT_S} s'
+    ratios = ', '.join('%.2f' % r['ratio'] for r in grow_runs)
+    print(f'grow.sov: {grow_times} s; median {grow_median_s:.3f} s, through tick {grow_runs[-1]["through"]}')
+    print(f'grow.sov / reference ({ref_median_s:.3f} s): {ratios}; median {ratio:.2f} (limit {GROW_RATIO_LIMIT})')
+    assert ratio <= GROW_RATIO_LIMIT, (f'stepping grow.sov to budget {GROW_BUDGET} took a median {ratio:.2f} times the reference '
+                                       f'workload ({grow_median_s:.3f} s against {ref_median_s:.3f} s), over {GROW_RATIO_LIMIT}')
     gc = node(GROW_CHECKS)
     gb = gc['budget']
     assert gb['last'] == {'ok': False, 'code': 'BUDGET_SPENT'} and gb['again'] and gb['exact'] and gb['canon'] and gb['sameAsLastCommit'], gb
