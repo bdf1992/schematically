@@ -9,46 +9,67 @@
      editor's own render.svg; the arcs are SovSchematicGraph.build's. Nothing here is fetched. -->
 <style>
 :root{
-  --bg:#f6f6f3;--panel:rgba(255,255,255,.86);--ink:#171715;--muted:#5d5d57;--line:rgba(23,23,21,.12);
-  --accent:#2f6fde;--accent-ink:#fff;--up:#a1531b;--route:#1d7f55;--shadow:0 8px 28px rgba(0,0,0,.10);
+  --bg:#f6f6f3;--panel:rgba(255,255,255,.78);--ink:#171715;--muted:#5d5d57;--line:rgba(23,23,21,.12);
+  --accent:#2f6fde;--accent-ink:#fff;--up:#a1531b;--route:#1d7f55;--lens-a:#d9622b;--lens-b:#2b7fd9;
+  --shadow:0 6px 24px rgba(0,0,0,.10);--page:var(--picture-bg,#f6f6f3);
   color-scheme:light;
 }
 :root[data-theme="dark"]{
-  --bg:#111214;--panel:rgba(28,29,33,.82);--ink:#ececea;--muted:#a3a39d;--line:rgba(236,236,234,.12);
-  --accent:#7aa5ff;--accent-ink:#0d1222;--up:#f0a36b;--route:#5fd3a0;--shadow:0 8px 28px rgba(0,0,0,.45);
+  --bg:#111214;--panel:rgba(26,27,31,.74);--ink:#ececea;--muted:#a3a39d;--line:rgba(236,236,234,.13);
+  --accent:#7aa5ff;--accent-ink:#0d1222;--up:#f0a36b;--route:#5fd3a0;--lens-a:#ff8a50;--lens-b:#62a8ff;
+  --shadow:0 6px 24px rgba(0,0,0,.45);
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+html,body{margin:0;height:100%;background:var(--page);color:var(--ink);
   font:14px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-body{display:grid;grid-template-rows:auto 1fr auto;overflow:hidden}
-header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);
-  background:var(--panel);backdrop-filter:blur(10px);z-index:2}
-h1{font-size:15px;font-weight:600;margin:0 12px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40ch}
-.grow{flex:1}
-input[type=search]{width:min(260px,100%);padding:6px 10px;border:1px solid var(--line);border-radius:8px;
+body{overflow:hidden}
+.pill{position:absolute;z-index:3;display:flex;gap:6px;align-items:center;padding:6px;border:1px solid var(--line);
+  border-radius:12px;background:var(--panel);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px);
+  box-shadow:var(--shadow)}
+#top{top:12px;left:12px;right:12px;justify-content:space-between;padding:0;border:0;background:none;box-shadow:none;
+  backdrop-filter:none;-webkit-backdrop-filter:none;pointer-events:none;flex-wrap:wrap}
+#top>.pill{position:static;pointer-events:auto;max-width:100%}
+h1{font-size:15px;font-weight:600;margin:0 6px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42ch}
+input[type=search]{width:min(220px,40vw);padding:5px 10px;border:1px solid var(--line);border-radius:8px;
   background:transparent;color:var(--ink);font:inherit}
-button{font:inherit;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:8px;
-  padding:5px 10px;cursor:pointer}
-button:hover{border-color:var(--muted)}
+button{font:inherit;color:var(--ink);background:transparent;border:1px solid transparent;border-radius:8px;
+  padding:5px 10px;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--line);background:rgba(127,127,127,.08)}
 button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-button:disabled{opacity:.4;cursor:default}
-main{position:relative;overflow:hidden;min-height:0}
-#stage{position:absolute;inset:0;touch-action:none;cursor:grab}
+button:disabled{opacity:.38;cursor:default;background:transparent;border-color:transparent}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sep{width:1px;height:20px;background:var(--line);flex:none}
+#zoomPct{min-width:4.2em;text-align:center;font-variant-numeric:tabular-nums;color:var(--muted)}
+#tools{right:12px;bottom:12px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 24px)}
+#status{left:50%;transform:translateX(-50%);top:62px;padding:5px 12px;font-size:13px;color:var(--muted);
+  max-width:min(720px,calc(100% - 24px));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#status:empty{display:none}
+main{position:fixed;inset:0}
+#stage{position:absolute;inset:0;touch-action:none;cursor:grab;background-color:var(--page)}
 #stage.panning{cursor:grabbing}
 #stage>svg{width:100%;height:100%;display:block}
-#stage g.node{cursor:pointer}
-#stage g.node:focus{outline:none}
-#stage g.node:focus-visible>*:first-child{outline:2px solid var(--accent)}
-#stage svg.dim g.node:not(.hit):not(.ctx),#stage svg.dim g.wire-group:not(.hit){opacity:.12!important}
-#stage svg.dim g.node.ctx{opacity:.45!important}
-#stage g.node.sel{filter:drop-shadow(0 0 6px var(--accent))}
-#stage svg.mode-up g.node.sel{filter:drop-shadow(0 0 6px var(--up))}
-#stage svg.mode-route g.node.hit{filter:drop-shadow(0 0 4px var(--route))}
-@media (prefers-reduced-motion:no-preference){#stage g.node,#stage g.wire-group{transition:opacity .18s}}
-aside{position:absolute;top:12px;right:12px;width:min(320px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;
-  background:var(--panel);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);
-  padding:14px 16px;z-index:1}
+.menu{position:absolute;z-index:5;min-width:220px;padding:6px;border:1px solid var(--line);border-radius:12px;
+  background:var(--panel);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:var(--shadow)}
+.menu[hidden]{display:none}
+.menu button{display:flex;flex-direction:column;align-items:flex-start;width:100%;text-align:left;padding:7px 10px}
+.menu button small{color:var(--muted);font-size:12px}
+.menu button[aria-checked="true"]{background:rgba(127,127,127,.14)}
+.menu h4{margin:6px 10px 4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.menu .chips{display:flex;flex-wrap:wrap;gap:6px;padding:4px 6px 6px}
+.menu .chips button{display:inline-flex;flex-direction:row;width:auto;gap:6px;border:1px solid var(--line);padding:4px 10px}
+.menu .chips button i{font-style:normal;color:var(--muted);font-size:12px}
+.menu .chips button[data-slot="a"]{border-color:var(--lens-a);box-shadow:inset 0 0 0 1px var(--lens-a)}
+.menu .chips button[data-slot="b"]{border-color:var(--lens-b);box-shadow:inset 0 0 0 1px var(--lens-b)}
+.menu p{margin:4px 10px 6px;color:var(--muted);font-size:12px;max-width:280px}
+.menu kbd,#deck kbd{font:11px ui-monospace,Consolas,monospace;border:1px solid var(--line);border-radius:4px;padding:0 4px}
+#map{left:12px;bottom:12px;padding:0;overflow:hidden;cursor:pointer;touch-action:none}
+#map[hidden]{display:none}
+#map svg{display:block;width:100%;height:100%;pointer-events:none}
+#map .vp{position:absolute;border:1.5px solid var(--accent);background:rgba(127,160,255,.10);border-radius:3px;pointer-events:none}
+aside{position:absolute;top:64px;right:12px;width:min(320px,calc(100% - 24px));max-height:calc(100% - 140px);overflow:auto;
+  background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);
+  border-radius:12px;box-shadow:var(--shadow);padding:14px 16px;z-index:4}
 aside[hidden]{display:none}
 aside h2{font-size:16px;margin:0 0 2px}
 aside .id{color:var(--muted);font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
@@ -58,51 +79,184 @@ aside li{padding:2px 0}
 aside a{color:var(--accent);text-decoration:none;cursor:pointer}
 aside a:hover{text-decoration:underline}
 aside .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-aside .row button{flex:1 1 auto}
+aside .row button{flex:1 1 auto;border-color:var(--line)}
 aside .close{position:absolute;top:8px;right:8px;border:none;font-size:18px;line-height:1;padding:4px 8px}
 aside p.note{margin:8px 0 0;color:var(--muted)}
-footer{display:flex;gap:12px;align-items:center;padding:6px 16px;border-top:1px solid var(--line);color:var(--muted);
-  font-size:12px;background:var(--panel)}
-footer kbd{font:11px ui-monospace,Consolas,monospace;border:1px solid var(--line);border-radius:4px;padding:0 4px}
-.sep{width:1px;height:20px;background:var(--line)}
+#deck{left:50%;transform:translateX(-50%);bottom:18px;width:min(760px,calc(100% - 24px));display:none;
+  flex-direction:column;align-items:stretch;gap:4px;padding:14px 18px}
+#deck .kicker{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+#deck h2{margin:0;font-size:22px;font-weight:600}
+#deck p{margin:0;color:var(--muted)}
+#deck .nav{display:flex;gap:6px;align-items:center;margin-top:6px}
+#deck .nav span{flex:1;color:var(--muted);font-size:12px}
+:root.presenting #top,:root.presenting #tools,:root.presenting #status,:root.presenting #map,:root.presenting aside{display:none!important}
+:root.presenting #deck{display:flex}
+
+/* The picture. Every rule that styles it starts at svg.pic, so a PNG or a share card carries the
+   same rules verbatim: the classes and the custom properties live on the svg element itself. */
+svg.pic g.node{cursor:pointer}
+svg.pic g.node:focus{outline:none}
+svg.pic g.node:focus-visible>*:first-child{outline:2px solid var(--accent)}
+svg.pic.dim g.node:not(.hit):not(.ctx),svg.pic.dim g.wire-group:not(.hit){opacity:.12!important}
+svg.pic.dim g.node.ctx{opacity:.45!important}
+svg.pic.dim g.wire-group.near{opacity:.42!important}
+svg.pic g.node.sel{filter:drop-shadow(0 0 6px var(--accent))}
+svg.pic.mode-up g.node.sel{filter:drop-shadow(0 0 6px var(--up))}
+svg.pic.mode-route g.node.hit{filter:drop-shadow(0 0 4px var(--route))}
+svg.pic g.node.lens-a{filter:drop-shadow(0 0 5px var(--lens-a)) drop-shadow(0 0 1px var(--lens-a))}
+svg.pic g.node.lens-b{filter:drop-shadow(0 0 5px var(--lens-b)) drop-shadow(0 0 1px var(--lens-b))}
+@media (prefers-reduced-motion:no-preference){svg.pic g.node,svg.pic g.wire-group{transition:opacity .18s}}
+
+/* Notes: pen on paper, hand lettering, highlighter under every wire. */
+svg.pic.s-notes{--ink:#26345c;--card:rgba(255,253,245,.92);--halo:#fbf8f0;--hand:"Segoe Print","Bradley Hand","Noteworthy","Chalkboard SE","Comic Sans MS",cursive}
+svg.pic.s-notes.t-dark{--ink:#ebe5d3;--card:rgba(40,45,50,.94);--halo:#22272b}
+svg.pic.s-notes g.node>rect.body{fill:var(--card)!important;stroke:var(--ink)!important;stroke-width:1.5px!important;filter:url(#sov-rough)!important}
+svg.pic.s-notes g.node.is-container>rect.body{fill:none!important;stroke-dasharray:7 5!important}
+svg.pic.s-notes text{font-family:var(--hand)!important;letter-spacing:0!important}
+svg.pic.s-notes text.outside-label,svg.pic.s-notes text.component-label{fill:var(--ink)!important}
+svg.pic.s-notes text.connection-label{stroke:var(--halo)!important;fill:var(--ink)!important}
+svg.pic.s-notes .custom-graphic,svg.pic.s-notes .glyph{stroke:var(--ink)!important;color:var(--ink)!important}
+svg.pic.s-notes .glyph-pin,svg.pic.s-notes .terminal-mark{stroke:var(--ink)!important}
+svg.pic.s-notes circle.port{fill:var(--card)!important;stroke:var(--ink)!important}
+svg.pic.s-notes path.wire,svg.pic.s-notes path.flow-chevron{stroke-width:2px!important;filter:url(#sov-rough)}
+svg.pic.s-notes path.wire-voltage{opacity:.30!important;stroke-width:10px!important;stroke-linecap:butt!important;filter:url(#sov-rough)}
+
+/* Glass: the concept projected on a clean pane, light where it carries something. */
+svg.pic.s-glass{--ink:#d8edff;--edge:rgba(140,210,255,.78);--card:rgba(120,190,255,.07);--glow:rgba(70,170,255,.42);--halo:#08111b;
+  --type:"Segoe UI Variable Display","SF Pro Display",ui-sans-serif,system-ui,sans-serif}
+svg.pic.s-glass.t-light{--ink:#14304d;--edge:rgba(30,110,190,.55);--card:rgba(255,255,255,.62);--glow:rgba(40,120,200,.22);--halo:#e8f0f8}
+svg.pic.s-glass g.node>rect.body{fill:var(--card)!important;stroke:var(--edge)!important;stroke-width:1.2px!important;filter:drop-shadow(0 0 9px var(--glow))!important}
+svg.pic.s-glass g.node.is-container>rect.body{fill:rgba(127,190,255,.035)!important;stroke-dasharray:none!important;stroke-opacity:.55}
+svg.pic.s-glass text{font-family:var(--type)!important;letter-spacing:.05em!important;font-weight:500!important}
+svg.pic.s-glass text.outside-label,svg.pic.s-glass text.component-label{fill:var(--ink)!important}
+svg.pic.s-glass text.connection-label{stroke:var(--halo)!important;fill:var(--ink)!important;opacity:.85}
+svg.pic.s-glass .custom-graphic,svg.pic.s-glass .glyph{stroke:var(--ink)!important;color:var(--ink)!important}
+svg.pic.s-glass circle.port{fill:var(--halo)!important;stroke:var(--edge)!important}
+svg.pic.s-glass path.wire{stroke-width:1.6px!important}
+svg.pic.s-glass path.wire-voltage{opacity:.55!important;stroke-width:7px!important;filter:blur(3px)}
+
+/* Circuit: a classic signal-flow sheet, ink on white, square cards, monospace lettering. */
+svg.pic.s-circuit{--ink:#141414;--halo:#ffffff;--mono:ui-monospace,"Cascadia Mono","SF Mono",Consolas,monospace}
+svg.pic.s-circuit.t-dark{--ink:#e3e6e0;--halo:#0f1316}
+svg.pic.s-circuit g.node>rect.body{fill:var(--halo)!important;stroke:var(--ink)!important;stroke-width:1.4px!important;rx:1px;ry:1px;filter:none!important}
+svg.pic.s-circuit g.node.is-container>rect.body{fill:none!important;stroke-dasharray:8 4 2 4!important;stroke-width:1px!important}
+svg.pic.s-circuit text{font-family:var(--mono)!important;letter-spacing:0!important;font-weight:500!important}
+svg.pic.s-circuit text.outside-label,svg.pic.s-circuit text.component-label,svg.pic.s-circuit text.connection-label{fill:var(--ink)!important}
+svg.pic.s-circuit text.connection-label{stroke:var(--halo)!important}
+svg.pic.s-circuit .custom-graphic,svg.pic.s-circuit .glyph{stroke:var(--ink)!important;color:var(--ink)!important}
+svg.pic.s-circuit .glyph-pin,svg.pic.s-circuit .terminal-mark{stroke:var(--ink)!important}
+svg.pic.s-circuit circle.port{fill:var(--halo)!important;stroke:var(--ink)!important;stroke-width:1.2px!important}
+svg.pic.s-circuit path.wire,svg.pic.s-circuit path.flow-chevron{stroke:var(--ink)!important;stroke-width:1.4px!important}
+svg.pic.s-circuit path.wire-voltage{display:none}
+svg.pic.s-circuit.dim g.wire-group.hit path.wire,svg.pic.s-circuit.dim g.wire-group.hit path.flow-chevron{stroke:var(--accent)!important;stroke-width:2.2px!important}
+
+/* The page under each style. The grid moves and scales with the drawing (--gs, --gx, --gy). */
+:root[data-style="notes"]{--page:#fbf8f0}
+:root[data-style="notes"][data-theme="dark"]{--page:#22272b}
+:root[data-style="notes"] #stage{background-image:radial-gradient(circle,rgba(60,70,120,.20) 1px,transparent 1.3px);
+  background-size:var(--gs) var(--gs);background-position:var(--gx) var(--gy)}
+:root[data-style="notes"][data-theme="dark"] #stage{background-image:radial-gradient(circle,rgba(235,229,211,.14) 1px,transparent 1.3px)}
+:root[data-style="glass"]{--page:#e8f0f8}
+:root[data-style="glass"][data-theme="dark"]{--page:#060b12}
+:root[data-style="glass"] #stage{background-image:linear-gradient(rgba(40,110,190,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(40,110,190,.07) 1px,transparent 1px),
+  radial-gradient(ellipse at 50% 45%,#f7fbff 0%,#dfe9f3 75%);
+  background-size:var(--gs) var(--gs),var(--gs) var(--gs),100% 100%;background-position:var(--gx) var(--gy),var(--gx) var(--gy),0 0}
+:root[data-style="glass"][data-theme="dark"] #stage{background-image:linear-gradient(rgba(120,190,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(120,190,255,.055) 1px,transparent 1px),
+  radial-gradient(ellipse at 50% 42%,#11263b 0%,#060b12 72%)}
+:root[data-style="circuit"]{--page:#ffffff}
+:root[data-style="circuit"][data-theme="dark"]{--page:#0f1316}
+:root[data-style="circuit"] #stage{background-image:linear-gradient(rgba(40,90,160,.10) 1px,transparent 1px),linear-gradient(90deg,rgba(40,90,160,.10) 1px,transparent 1px);
+  background-size:var(--gs) var(--gs);background-position:var(--gx) var(--gy)}
+:root[data-style="circuit"][data-theme="dark"] #stage{background-image:linear-gradient(rgba(140,180,220,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(140,180,220,.08) 1px,transparent 1px)}
+
 @media (max-width:640px){
-  header{padding:8px 16px}
-  h1{max-width:100%;flex-basis:100%}
-  aside{top:auto;bottom:12px;max-height:45%}
-  footer .keys{display:none}
+  #top{gap:6px}
+  #top>.pill{flex:1 1 auto;padding:4px}
+  #top>.pill:first-child{min-width:0}
+  h1{max-width:none;flex:1 1 auto;min-width:0;font-size:14px}
+  input[type=search]{width:96px}
+  button{padding:5px 8px}
+  #status{top:auto;bottom:62px;font-size:12px}
+  #tools{left:12px;right:12px;padding:4px;justify-content:space-between}
+  #map{display:none!important}
+  aside{top:auto;bottom:62px;max-height:45%}
+  .hide-narrow,#tools .trace{display:none}
 }
 @media print{
-  header,footer,aside{display:none!important}
-  body{display:block;height:auto;background:#fff}
+  .pill,aside,.menu{display:none!important}
+  html,body{height:auto;background:#fff}
   main{position:static;height:100vh}
 }
 </style>
 </head>
 <body>
-<header>
-  <h1 id="title"></h1>
-  <input id="search" type="search" placeholder="Find a card  ( / )" list="cards" aria-label="Find a card" autocomplete="off">
-  <datalist id="cards"></datalist>
-  <span class="sep" aria-hidden="true"></span>
-  <button id="bDown" title="What this card reaches (d)" aria-pressed="false" disabled>Downstream</button>
-  <button id="bUp" title="What reaches this card (u)" aria-pressed="false" disabled>Upstream</button>
-  <button id="bRoute" title="Route from this card to another (r)" aria-pressed="false" disabled>Route to…</button>
-  <span class="grow"></span>
-  <button id="bFit" title="Fit the drawing (f)">Fit</button>
-  <button id="bTheme" title="Light, dark or system (t)">Theme: system</button>
-  <button id="bPng" title="Save the current view as PNG">PNG</button>
-  <button id="bPrint" title="Print or save as PDF">Print</button>
-  <button id="bLink" title="Copy a link to this view">Copy link</button>
-</header>
 <main>
   <div id="stage" aria-label="Schematic drawing"></div>
   <aside id="panel" hidden aria-live="polite"></aside>
 </main>
-<footer>
-  <span id="status" role="status"></span>
-  <span class="grow"></span>
-  <span class="keys"><kbd>/</kbd> find · <kbd>d</kbd> <kbd>u</kbd> <kbd>r</kbd> trace · <kbd>Esc</kbd> clear · scroll to zoom, drag to pan</span>
-</footer>
+<div id="top" class="pill">
+  <div class="pill">
+    <h1 id="title"></h1>
+    <input id="search" type="search" placeholder="Find a card  ( / )" list="cards" aria-label="Find a card" autocomplete="off">
+    <datalist id="cards"></datalist>
+  </div>
+  <div class="pill">
+    <button id="bStyle" title="Style (s)" aria-haspopup="true" aria-expanded="false"><span class="hide-narrow">Style: </span><span id="styleName">Clean</span></button>
+    <button id="bTheme" title="Light, dark or system (t)"><span class="hide-narrow">Theme: </span><span id="themeName">system</span></button>
+    <button id="bPresent" title="Present the diagram card by card (p)">Present</button>
+    <button id="bShare" title="Save, print or share this view" aria-haspopup="true" aria-expanded="false">Share</button>
+    <button id="bHelp" title="Keys" aria-haspopup="true" aria-expanded="false" class="hide-narrow">?</button>
+  </div>
+</div>
+<div id="status" class="pill" role="status"></div>
+<div id="tools" class="pill">
+  <button id="bDown" title="What this card reaches (d)" aria-pressed="false" disabled class="trace">Downstream</button>
+  <button id="bUp" title="What reaches this card (u)" aria-pressed="false" disabled class="trace">Upstream</button>
+  <button id="bRoute" title="Route from this card to another (r)" aria-pressed="false" disabled class="trace">Route to…</button>
+  <span class="sep trace" aria-hidden="true"></span>
+  <button id="bLens" title="Compare card types (l)" aria-pressed="false" aria-haspopup="true" aria-expanded="false">Lens</button>
+  <button id="bMap" title="Overview map (m)" aria-pressed="false" class="hide-narrow">Map</button>
+  <span class="sep" aria-hidden="true"></span>
+  <button id="bOut" title="Zoom out (-)" aria-label="Zoom out">−</button>
+  <span id="zoomPct" aria-live="off"></span>
+  <button id="bIn" title="Zoom in (+)" aria-label="Zoom in">+</button>
+  <button id="bFit" title="Fit the drawing (f)">Fit</button>
+</div>
+<div id="map" class="pill" hidden aria-label="Overview map"><div class="vp"></div></div>
+<div id="deck" class="pill" aria-live="polite">
+  <div class="kicker" id="deckKicker"></div>
+  <h2 id="deckTitle"></h2>
+  <p id="deckText"></p>
+  <div class="nav">
+    <button id="bPrev" aria-label="Previous card">←</button>
+    <button id="bNext" aria-label="Next card">→</button>
+    <span id="deckCount"></span>
+    <button id="bExit" title="Leave the presentation (Esc)">Exit</button>
+  </div>
+</div>
+<div id="menuStyle" class="menu" hidden role="menu" aria-label="Style">
+  <button role="menuitemradio" data-style="clean">Clean<small>The editor's own drawing</small></button>
+  <button role="menuitemradio" data-style="notes">Notes<small>Pen on paper, hand lettering</small></button>
+  <button role="menuitemradio" data-style="glass">Glass<small>A clean projection, light where it carries</small></button>
+  <button role="menuitemradio" data-style="circuit">Circuit<small>Classic signal-flow sheet</small></button>
+</div>
+<div id="menuShare" class="menu" hidden role="menu" aria-label="Share">
+  <button role="menuitem" id="bCardRoute" disabled>Route share card<small>1200×630 PNG of the traced route</small></button>
+  <button role="menuitem" id="bCardReach" disabled>Reach share card<small>1200×630 PNG of the traced reach</small></button>
+  <button role="menuitem" id="bPng">PNG<small>This view, at twice its size</small></button>
+  <button role="menuitem" id="bPrint">Print<small>Or save as PDF</small></button>
+  <button role="menuitem" id="bLink">Copy link<small>Opens on this view: focus, trace, lens, style</small></button>
+</div>
+<div id="menuLens" class="menu" hidden role="dialog" aria-label="Lens">
+  <h4>Compare card types</h4>
+  <div class="chips" id="lensChips"></div>
+  <p id="lensNote">Pick one type to pick it out, or two to see what joins them.</p>
+</div>
+<div id="menuHelp" class="menu" hidden role="dialog" aria-label="Keys">
+  <p><kbd>/</kbd> find · <kbd>d</kbd> <kbd>u</kbd> <kbd>r</kbd> trace · <kbd>l</kbd> lens · <kbd>m</kbd> map<br>
+  <kbd>s</kbd> style · <kbd>t</kbd> theme · <kbd>p</kbd> present · <kbd>f</kbd> fit · <kbd>+</kbd> <kbd>−</kbd> zoom<br>
+  <kbd>Esc</kbd> clear · scroll to zoom, drag to pan</p>
+</div>
 <script id="viewer-data" type="application/json">/*__VIEWER_DATA__*/null</script>
 <script id="viewer-editor" type="application/octet-stream">/*__VIEWER_EDITOR__*/</script>
 <script>
@@ -154,7 +308,8 @@ if(RAW&&RAW.svg)start(RAW);
 else drawHere(RAW).then(start,err=>{statusEl0.textContent='This diagram could not be drawn: '+(err&&err.message||err);console.error(err)});
 function start(D){
 const $=id=>document.getElementById(id);
-const stage=$('stage'),panel=$('panel'),statusEl=$('status'),search=$('search');
+const root=document.documentElement;
+const stage=$('stage'),panel=$('panel'),statusEl=$('status'),search=$('search'),mapEl=$('map');
 const nodes=new Map(D.nodes.map(n=>[n.id,n]));
 const wires=new Map(D.wires.map(w=>[w.id,w]));
 const out=new Map(),inc=new Map();
@@ -163,6 +318,11 @@ for(const a of D.arcs){if(out.has(a.from))out.get(a.from).push(a);if(inc.has(a.t
 const children=new Map();
 for(const n of D.nodes)if(n.parentId){if(!children.has(n.parentId))children.set(n.parentId,[]);children.get(n.parentId).push(n.id)}
 const label=id=>(nodes.get(id)||{}).label||id;
+const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
+const STYLES={clean:'Clean',notes:'Notes',glass:'Glass',circuit:'Circuit'};
+// A card's type is its symbol; the lens names it the way the notation core titles it.
+const typeName=t=>t?t.replace(/[-_]+/g,' ').replace(/^./,c=>c.toUpperCase()):'Untyped';
+const types=(()=>{const m=new Map();for(const n of D.nodes){const t=n.symbolId||'';m.set(t,(m.get(t)||0)+1)}return [...m].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))})();
 
 // Downstream is the graph core's reach (src/07-graph-core.js): breadth first along arcs, never
 // through a control arc. Upstream is the same walk against the arcs' direction.
@@ -183,68 +343,168 @@ function route(a,b){
   const ns=[b],ws=[];for(let arc=prev.get(b);arc;arc=prev.get(arc.from)){ws.unshift(arc.wire);ns.unshift(arc.from)}
   return {nodes:ns,wires:ws};
 }
+// The lens picks out the cards of one or two types; a wire is lit when both its ends are picked
+// out, half lit when one is.
+function lensSet(){
+  if(!state.lens.length)return null;
+  const slot=new Map();for(const n of D.nodes){const i=state.lens.indexOf(n.symbolId||'');if(i>=0)slot.set(n.id,i?'b':'a')}
+  const joined=[],near=[];
+  for(const w of D.wires){const a=slot.has(w.a),b=slot.has(w.b);if(a&&b)joined.push(w.id);else if(a||b)near.push(w.id)}
+  const between=state.lens.length===2?joined.filter(id=>{const w=wires.get(id);return slot.get(w.a)!==slot.get(w.b)}):joined;
+  return {nodes:[...slot.keys()],slot,wires:joined,near,between,lens:true};
+}
 
-const state={focus:null,mode:null,to:null,picking:false,theme:'system'};
-let svg=null,view=null,home=null;
+const state={focus:null,mode:null,to:null,picking:false,theme:'system',style:'clean',lens:[],map:null,present:false,step:0};
+let svg=null,mapSvg=null,view=null,home=null,size=null,tourIds=null,enteredFullscreen=false;
 
 function resolvedTheme(){return state.theme==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):state.theme}
+// The pen's wobble. Its region is absolute: a straight wire's box has no height, and a region
+// measured from the box would draw nothing.
+const ROUGH='<defs><filter id="sov-rough" filterUnits="userSpaceOnUse" x="-50000" y="-50000" width="100000" height="100000"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="2.6"/></filter></defs>';
 function mount(){
   const theme=resolvedTheme();
-  document.documentElement.dataset.theme=theme;
+  root.dataset.theme=theme;root.dataset.style=state.style;
   stage.innerHTML=D.svg[theme];
   svg=stage.querySelector('svg');
   svg.removeAttribute('id');
-  document.documentElement.style.setProperty('--bg',svg.style.backgroundColor||'');
+  root.style.setProperty('--picture-bg',svg.style.backgroundColor||'');
+  svg.style.backgroundColor='transparent';
+  svg.insertAdjacentHTML('afterbegin',ROUGH);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  const rs=getComputedStyle(root);
+  for(const name of ['accent','up','route','lens-a','lens-b'])svg.style.setProperty('--'+name,rs.getPropertyValue('--'+name).trim());
+  svg.setAttribute('class',`pic s-${state.style} t-${theme}`);
   const vb=svg.viewBox.baseVal;home={x:vb.x,y:vb.y,w:vb.width,h:vb.height};
-  if(!view)view={...home};
-  setView(view);
   for(const g of svg.querySelectorAll('g.node[data-id]')){
     g.setAttribute('tabindex','0');g.setAttribute('role','button');g.setAttribute('aria-label',label(g.dataset.id));
   }
-  $('bTheme').textContent='Theme: '+state.theme;
+  mountMap();
+  placeStatus();
+  size=stageSize();
+  setView(view||fitBox(home));
+  $('themeName').textContent=state.theme;
+  $('styleName').textContent=STYLES[state.style];
+  for(const b of document.querySelectorAll('#menuStyle [data-style]'))b.setAttribute('aria-checked',String(b.dataset.style===state.style));
   paint();
 }
-function setView(v){view=v;svg.setAttribute('viewBox',`${v.x} ${v.y} ${v.w} ${v.h}`)}
+function mountMap(){
+  mapEl.querySelectorAll('svg').forEach(s=>s.remove());
+  mapSvg=svg.cloneNode(true);
+  for(const g of mapSvg.querySelectorAll('[tabindex]')){g.removeAttribute('tabindex');g.removeAttribute('role');g.removeAttribute('aria-label')}
+  mapSvg.setAttribute('aria-hidden','true');
+  const w=home.w>=home.h?200:Math.max(90,200*home.w/home.h),h=Math.min(160,Math.max(70,w*home.h/home.w));
+  mapEl.style.width=w+'px';mapEl.style.height=h+'px';
+  mapEl.insertBefore(mapSvg,mapEl.firstChild);
+  if(state.map===null)state.map=D.nodes.length>=12&&innerWidth>640;
+  mapEl.hidden=!state.map;$('bMap').setAttribute('aria-pressed',String(state.map));
+}
+
+// ---- view: the viewBox always has the stage's own shape, so the picture fills the window and
+// the floating controls are kept clear by fitting into the stage less its insets.
+function placeStatus(){if(innerWidth>640)statusEl.style.top=$('top').getBoundingClientRect().bottom+8+'px';else statusEl.style.top=''}
+function stageSize(){const r=stage.getBoundingClientRect();return {w:Math.max(r.width,1),h:Math.max(r.height,1)}}
+// Insets come from where the controls actually sit, so a small window or a wrapped bar still
+// leaves the picture clear of them.
+function insets(){
+  if(state.present)return {t:28,r:28,b:(($('deck').offsetHeight)||140)+36,l:28};
+  const H=innerHeight,edge=el=>{const r=el.getBoundingClientRect();return r.height?r:null};
+  let t=12,b=12;
+  for(const el of document.querySelectorAll('#top>.pill,#status,#tools')){const r=edge(el);if(!r)continue;
+    if(r.top+r.height/2<H/2)t=Math.max(t,r.bottom+12);else b=Math.max(b,H-r.top+12)}
+  return {t,r:16,b,l:16};
+}
+function fitBox(box,maxUp=1.75){
+  const s0=stageSize(),ins=insets(),iw=Math.max(s0.w-ins.l-ins.r,80),ih=Math.max(s0.h-ins.t-ins.b,80);
+  const k=Math.max(box.w/iw,box.h/ih,1/maxUp);
+  const cx=box.x+box.w/2,cy=box.y+box.h/2;
+  return {x:cx-(ins.l+iw/2)*k,y:cy-(ins.t+ih/2)*k,w:s0.w*k,h:s0.h*k};
+}
+function setView(v){
+  view=v;svg.setAttribute('viewBox',`${v.x} ${v.y} ${v.w} ${v.h}`);
+  const k=size.w/v.w;
+  let gs=24*k;while(gs<10)gs*=2;while(gs>80)gs/=2;
+  stage.style.setProperty('--gs',gs+'px');
+  stage.style.setProperty('--gx',(-v.x*k)%gs+'px');stage.style.setProperty('--gy',(-v.y*k)%gs+'px');
+  $('zoomPct').textContent=Math.round(k*100)+'%';
+  drawMapViewport();
+}
+function drawMapViewport(){
+  if(!mapSvg||mapEl.hidden)return;
+  const mw=mapEl.clientWidth,mh=mapEl.clientHeight,sc=Math.min(mw/home.w,mh/home.h);
+  const ox=(mw-home.w*sc)/2,oy=(mh-home.h*sc)/2,vp=mapEl.querySelector('.vp');
+  vp.style.left=ox+(view.x-home.x)*sc+'px';vp.style.top=oy+(view.y-home.y)*sc+'px';
+  vp.style.width=view.w*sc+'px';vp.style.height=view.h*sc+'px';
+}
 function toSvg(cx,cy){const r=stage.getBoundingClientRect(),s=Math.max(view.w/r.width,view.h/r.height);
   return {x:view.x+(cx-r.left-(r.width-view.w/s)/2)*s,y:view.y+(cy-r.top-(r.height-view.h/s)/2)*s,s}}
 function zoomAt(cx,cy,f){const p=toSvg(cx,cy),w=Math.min(Math.max(view.w*f,home.w/40),home.w*8),k=w/view.w;
   setView({x:p.x-(p.x-view.x)*k,y:p.y-(p.y-view.y)*k,w,h:view.h*k})}
+const nodeEl=id=>svg.querySelector(`g.node[data-id="${CSS.escape(id)}"]`);
+function boxOf(ids){
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const id of ids){const g=nodeEl(id);if(!g)continue;const r=g.getBoundingClientRect(),a=toSvg(r.left,r.top),b=toSvg(r.right,r.bottom);
+    x0=Math.min(x0,a.x);y0=Math.min(y0,a.y);x1=Math.max(x1,b.x);y1=Math.max(y1,b.y)}
+  if(!isFinite(x0))return {...home};
+  const p=Math.max(x1-x0,y1-y0)*0.12+24;return {x:x0-p,y:y0-p,w:x1-x0+2*p,h:y1-y0+2*p};
+}
+let anim=0;
+function animateTo(t,ms=480){
+  cancelAnimationFrame(anim);
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){setView(t);return}
+  const f={...view},t0=performance.now();
+  const tick=now=>{const k=Math.min(1,(now-t0)/ms),e=1-Math.pow(1-k,3);
+    setView({x:f.x+(t.x-f.x)*e,y:f.y+(t.y-f.y)*e,w:f.w+(t.w-f.w)*e,h:f.h+(t.h-f.h)*e});if(k<1)anim=requestAnimationFrame(tick)};
+  anim=requestAnimationFrame(tick);
+}
+function fit(){animateTo(fitBox(home))}
 function centerOn(id){
-  const g=svg.querySelector(`g.node[data-id="${CSS.escape(id)}"]`);if(!g)return;
+  const g=nodeEl(id);if(!g)return;
   const r=g.getBoundingClientRect(),c=toSvg(r.left+r.width/2,r.top+r.height/2);
-  setView({...view,x:c.x-view.w/2,y:c.y-view.h/2});
+  animateTo({...view,x:c.x-view.w/2,y:c.y-view.h/2},320);
 }
 
 function highlight(){
-  if(!state.focus)return null;
+  if(!state.focus)return lensSet();
   if(state.mode==='down')return downstream(state.focus);
   if(state.mode==='up')return upstream(state.focus);
   if(state.mode==='route'&&state.to)return route(state.focus,state.to)||{nodes:[],wires:[],none:true};
   return {nodes:[],wires:[...(out.get(state.focus)||[]),...(inc.get(state.focus)||[])].map(a=>a.wire)};
 }
+function paintOne(target,h){
+  for(const el of target.querySelectorAll('.hit,.ctx,.sel,.near,.lens-a,.lens-b'))el.classList.remove('hit','ctx','sel','near','lens-a','lens-b');
+  target.classList.toggle('dim',!!h);
+  target.classList.remove('mode-down','mode-up','mode-route');
+  if(state.focus&&state.mode)target.classList.add('mode-'+state.mode);
+  if(!h)return;
+  const hitNodes=new Set(h.lens?h.nodes:[state.focus,...h.nodes]),ctx=new Set();
+  for(const id of hitNodes)for(let p=(nodes.get(id)||{}).parentId;p;p=(nodes.get(p)||{}).parentId)if(!hitNodes.has(p))ctx.add(p);
+  for(const g of target.querySelectorAll('g.node[data-id]')){const id=g.dataset.id;
+    if(hitNodes.has(id))g.classList.add('hit');else if(ctx.has(id))g.classList.add('ctx');
+    if(id===state.focus)g.classList.add('sel');
+    if(h.lens&&h.slot.has(id))g.classList.add('lens-'+h.slot.get(id))}
+  const hw=new Set(h.wires),nw=new Set(h.near||[]);
+  for(const g of target.querySelectorAll('g.wire-group[data-wire-id]')){if(hw.has(g.dataset.wireId))g.classList.add('hit');else if(nw.has(g.dataset.wireId))g.classList.add('near')}
+}
 function paint(){
   if(!svg)return;
   const h=highlight();
-  for(const el of svg.querySelectorAll('.hit,.ctx,.sel'))el.classList.remove('hit','ctx','sel');
-  svg.classList.toggle('dim',!!h);
-  svg.classList.remove('mode-down','mode-up','mode-route');
-  if(state.mode)svg.classList.add('mode-'+state.mode);
-  if(h){
-    const hitNodes=new Set([state.focus,...h.nodes]),ctx=new Set();
-    for(const id of hitNodes)for(let p=(nodes.get(id)||{}).parentId;p;p=(nodes.get(p)||{}).parentId)if(!hitNodes.has(p))ctx.add(p);
-    for(const g of svg.querySelectorAll('g.node[data-id]')){const id=g.dataset.id;
-      if(hitNodes.has(id))g.classList.add('hit');else if(ctx.has(id))g.classList.add('ctx');if(id===state.focus)g.classList.add('sel')}
-    const hw=new Set(h.wires);
-    for(const g of svg.querySelectorAll('g.wire-group[data-wire-id]'))if(hw.has(g.dataset.wireId))g.classList.add('hit');
-  }
+  for(const t of [svg,mapSvg])if(t)paintOne(t,h);
   for(const [b,m] of [['bDown','down'],['bUp','up'],['bRoute','route']]){$(b).disabled=!state.focus;$(b).setAttribute('aria-pressed',String(state.mode===m))}
+  $('bLens').setAttribute('aria-pressed',String(state.lens.length>0));
+  $('bCardRoute').disabled=!(state.focus&&state.mode==='route'&&state.to&&h&&!h.none);
+  $('bCardReach').disabled=!(state.focus&&(state.mode==='down'||state.mode==='up')&&h&&h.nodes.length);
+  renderLensChips(h);
   statusEl.textContent=describe(h);
   renderPanel(h);
+  if(state.present)renderDeck(h);
   writeHash();
 }
 function describe(h){
-  const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
-  if(!state.focus)return `${plural(D.nodes.length,'card')}, ${plural(D.wires.length,'wire')}${D.blocked.length?`, ${plural(D.blocked.length,'blocked wire leg')}`:''}. Click a card to trace it.`;
+  if(!state.focus){
+    if(h&&h.lens){const names=state.lens.map(t=>`${typeName(t)} (${types.find(x=>x[0]===t)?.[1]||0})`).join(' and ');
+      return state.lens.length===2?`Lens: ${names}; ${plural(h.between.length,'wire')} join${h.between.length===1?'s':''} them.`:`Lens: ${names}; ${plural(h.wires.length,'wire')} between them.`}
+    return `${plural(D.nodes.length,'card')}, ${plural(D.wires.length,'wire')}${D.blocked.length?`, ${plural(D.blocked.length,'blocked wire leg')}`:''}. Click a card to trace it.`;
+  }
   const f=label(state.focus);
   if(state.mode==='down')return `${f} reaches ${plural(h.nodes.length,'card')} over ${plural(h.wires.length,'wire')}.`;
   if(state.mode==='up')return `${plural(h.nodes.length,'card')} reach ${f} over ${plural(h.wires.length,'wire')}.`;
@@ -260,7 +520,7 @@ const link=id=>`<a data-go="${esc(id)}">${esc(label(id))}</a>`;
 function arcLine(a,dir){const w=wires.get(a.wire),name=w&&w.label?` <span class="id">${esc(w.label)}</span>`:'';
   return `<li>${dir==='out'?'→ '+link(a.to):'← '+link(a.from)}${name}${a.control?' <span class="id">(control)</span>':''}</li>`}
 function renderPanel(h){
-  if(!state.focus){panel.hidden=true;panel.innerHTML='';return}
+  if(!state.focus||state.present){panel.hidden=true;panel.innerHTML='';return}
   const n=nodes.get(state.focus),o=out.get(n.id)||[],i=inc.get(n.id)||[],kids=children.get(n.id)||[];
   const blocked=D.blocked.filter(b=>{const w=wires.get(b.wire);return w&&(w.a===n.id||w.b===n.id)});
   let html=`<button class="close" data-act="clear" aria-label="Close">×</button><h2>${esc(n.label)}</h2><div class="id">${esc(n.id)}${n.symbolId?' · '+esc(n.symbolId):''}</div>`;
@@ -274,9 +534,15 @@ function renderPanel(h){
   html+=`<div class="row"><button data-act="down">Downstream</button><button data-act="up">Upstream</button><button data-act="route">Route to…</button><button data-act="center">Center</button></div>`;
   panel.innerHTML=html;panel.hidden=false;
 }
+function renderLensChips(h){
+  $('lensChips').innerHTML=types.map(([t,n])=>{const i=state.lens.indexOf(t);
+    return `<button data-type="${esc(t)}" aria-pressed="${i>=0}"${i>=0?` data-slot="${i?'b':'a'}"`:''}>${esc(typeName(t))} <i>${n}</i></button>`}).join('');
+  $('lensNote').textContent=h&&h.lens&&!state.focus?describe(h):state.focus?'Clear the trace (Esc) to see the lens.':'Pick one type to pick it out, or two to see what joins them.';
+}
 
 function select(id){
   if(!nodes.has(id))return false;
+  if(state.present&&tourIds){const i=tourIds.indexOf(id);if(i>=0){goStep(i+1);return true}}
   if(state.picking&&state.focus&&id!==state.focus){state.to=id;state.picking=false;paint();return true}
   if(state.focus!==id){state.focus=id;state.to=null;state.picking=false;if(state.mode==='route')state.mode=null}
   paint();return true;
@@ -289,24 +555,85 @@ function setMode(m){
 }
 function clear(){state.focus=null;state.mode=null;state.to=null;state.picking=false;paint()}
 function setTheme(t){state.theme=t;mount()}
+function setStyle(s){if(!STYLES[s])return;state.style=s;mount()}
+function setLens(list){state.lens=[...new Set(list)].filter(t=>types.some(x=>x[0]===t)).slice(-2);paint()}
+function toggleLensType(t){const i=state.lens.indexOf(t);setLens(i>=0?state.lens.filter(x=>x!==t):[...state.lens,t])}
+function setMap(on){state.map=on;mapEl.hidden=!on;$('bMap').setAttribute('aria-pressed',String(on));drawMapViewport()}
+
+// ---- presentation: the whole drawing first, then each card in the order its wires lead from
+// the document's first card, each framed with what it touches; a card no wire reaches starts the
+// next run, in document order. Opened on a trace, it presents that trace alone.
+function tour(){
+  const leaves=D.nodes.filter(n=>!children.has(n.id)).map(n=>n.id),order=[],seen=new Set();
+  for(const start of leaves){
+    const queue=[start];
+    while(queue.length){const id=queue.shift();if(seen.has(id))continue;seen.add(id);if(!children.has(id))order.push(id);
+      for(const a of out.get(id)||[])if(!a.control&&!seen.has(a.to))queue.push(a.to)}
+  }
+  return order;
+}
+function present(on){
+  if(on===state.present)return;
+  state.present=on;root.classList.toggle('presenting',on);
+  closeMenus();
+  if(on){
+    tourIds=state.focus&&state.mode?null:tour();
+    if(root.requestFullscreen&&!document.fullscreenElement)root.requestFullscreen().then(()=>{enteredFullscreen=true},()=>{});
+    if(tourIds){state.step=0;state.lens=[];goStep(0)}else{paint();requestAnimationFrame(()=>animateTo(fitBox(boxOf([state.focus,...highlight().nodes]),2.2)))}
+  }else{
+    tourIds=null;
+    if(enteredFullscreen&&document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+    enteredFullscreen=false;paint();requestAnimationFrame(fit);
+  }
+}
+function goStep(i){
+  if(!tourIds)return;
+  state.step=Math.max(0,Math.min(i,tourIds.length));
+  const id=state.step?tourIds[state.step-1]:null;
+  state.focus=id;state.mode=null;state.to=null;state.picking=false;
+  paint();
+  requestAnimationFrame(()=>{
+    if(!id){animateTo(fitBox(home));return}
+    const near=[id,...(out.get(id)||[]).map(a=>a.to),...(inc.get(id)||[]).map(a=>a.from)];
+    animateTo(fitBox(boxOf(near),2.2));
+  });
+}
+function renderDeck(h){
+  const n=state.focus&&nodes.get(state.focus);
+  $('bPrev').disabled=!tourIds||state.step===0;$('bNext').disabled=!tourIds||state.step>=tourIds.length;
+  $('deckCount').textContent=tourIds?`${state.step} / ${tourIds.length}  ·  ← → to move, Esc to leave`:'Esc to leave';
+  if(!tourIds){$('deckKicker').textContent=D.title;$('deckTitle').textContent=label(state.focus);$('deckText').textContent=describe(h);return}
+  if(!n){$('deckKicker').textContent='Overview';$('deckTitle').textContent=D.title;
+    $('deckText').textContent=`${plural(D.nodes.length,'card')} and ${plural(D.wires.length,'wire')}. ${tourIds.length?'Next: '+label(tourIds[0])+'.':''}`;return}
+  const to=[...new Set((out.get(n.id)||[]).filter(a=>!a.control).map(a=>label(a.to)))],from=[...new Set((inc.get(n.id)||[]).filter(a=>!a.control).map(a=>label(a.from)))];
+  $('deckKicker').textContent=typeName(n.symbolId)+(n.parentId?' · inside '+label(n.parentId):'');
+  $('deckTitle').textContent=n.label;
+  $('deckText').textContent=[n.note,from.length?'Fed by '+from.join(', ')+'.':'',to.length?'Leads to '+to.join(', ')+'.':''].filter(Boolean).join(' ');
+}
 
 function writeHash(){
   const p=new URLSearchParams();
-  if(state.focus)p.set('focus',state.focus);
+  if(state.focus&&!(state.present&&tourIds))p.set('focus',state.focus);
   if(state.mode&&!state.picking)p.set('mode',state.mode);
   if(state.to)p.set('to',state.to);
+  if(state.lens.length)p.set('lens',state.lens.join('~'));
+  if(state.style!=='clean')p.set('style',state.style);
   if(state.theme!=='system')p.set('theme',state.theme);
-  const h=p.toString();
+  if(state.present)p.set('present','1');
+  const h=p.toString().replace(/%7E/g,'~');
   if(location.hash.slice(1)!==h)history.replaceState(null,'',h?'#'+h:location.pathname+location.search);
 }
 function readHash(){
   const p=new URLSearchParams(location.hash.slice(1));
   const theme=p.get('theme');state.theme=['light','dark'].includes(theme)?theme:'system';
+  const style=p.get('style');state.style=STYLES[style]?style:'clean';
   const f=p.get('focus');state.focus=nodes.has(f)?f:null;
   const m=p.get('mode');state.mode=state.focus&&['down','up','route'].includes(m)?m:null;
   const t=p.get('to');state.to=state.mode==='route'&&nodes.has(t)?t:null;
   if(state.mode==='route'&&!state.to)state.mode=null;
+  state.lens=(p.get('lens')||'').split('~').filter(x=>types.some(y=>y[0]===x)).slice(0,2);
   state.picking=false;
+  return p.get('present')==='1';
 }
 
 function find(q){
@@ -315,56 +642,128 @@ function find(q){
   return (all.find(n=>n.label.toLowerCase()===q||n.id.toLowerCase()===q)||all.find(n=>n.label.toLowerCase().startsWith(q))||all.find(n=>n.label.toLowerCase().includes(q)||n.id.toLowerCase().includes(q))||{}).id||null;
 }
 
-function savePng(){
-  const clone=svg.cloneNode(true),r=stage.getBoundingClientRect(),scale=2;
-  const bg=getComputedStyle(document.body).backgroundColor;
-  const css=[...document.styleSheets[0].cssRules].map(r=>r.cssText).filter(t=>t.includes('svg.dim')||t.includes('.sel')).join('\n').replace(/#stage /g,'');
-  const st=document.createElementNS('http://www.w3.org/2000/svg','style');const root=getComputedStyle(document.documentElement);st.textContent=css.replace(/var\(--(accent|up|route)\)/g,(_,name)=>root.getPropertyValue('--'+name));
-  clone.insertBefore(st,clone.firstChild);
-  clone.setAttribute('width',r.width);clone.setAttribute('height',r.height);
-  const img=new Image(),url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));
-  img.onload=()=>{const c=document.createElement('canvas');c.width=r.width*scale;c.height=r.height*scale;const x=c.getContext('2d');
-    x.fillStyle=bg;x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);
-    c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(D.source||'schematic').replace(/\.sov$/,'')+(state.focus?'-'+state.focus:'')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)},'image/png')};
-  img.src=url;
+// ---- pictures out: the svg with the rules that style it, drawn onto a canvas.
+const fileBase=()=>(D.source||D.id||'schematic').replace(/\.sov$/,'');
+function pictureImage(vb,w,h){
+  const clone=svg.cloneNode(true);
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  clone.setAttribute('viewBox',`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);clone.setAttribute('width',w);clone.setAttribute('height',h);
+  const css=[...document.styleSheets[0].cssRules].filter(r=>r.selectorText&&r.selectorText.includes('svg.pic')).map(r=>r.cssText).join('\n');
+  const st=document.createElementNS('http://www.w3.org/2000/svg','style');st.textContent=css;clone.insertBefore(st,clone.firstChild);
+  const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));
+  return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{URL.revokeObjectURL(url);res(img)};img.onerror=rej;img.src=url});
+}
+function download(canvas,name){canvas.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)},'image/png')}
+async function savePng(){
+  const r=stage.getBoundingClientRect(),scale=2,img=await pictureImage(view,r.width,r.height);
+  const c=document.createElement('canvas');c.width=r.width*scale;c.height=r.height*scale;const x=c.getContext('2d');
+  x.fillStyle=getComputedStyle(stage).backgroundColor;x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);
+  download(c,fileBase()+(state.focus?'-'+state.focus:'')+'.png');
+}
+// A share card is 1200×630: what was traced, in words, over the drawing with the trace lit. The
+// whole drawing stays as context unless that would shrink the trace past reading.
+async function shareCard(){
+  const h=highlight();if(!state.focus||!state.mode||!h||h.none||!h.nodes.length)return null;
+  const W=1200,H=630,S=2,cs=getComputedStyle(root),ink=cs.getPropertyValue('--ink').trim(),muted=cs.getPropertyValue('--muted').trim();
+  const area={x:48,y:168,w:W-96,h:H-168-56};
+  const traced=boxOf([state.focus,...h.nodes]);
+  const box=Math.min(area.w/home.w,area.h/home.h)>=0.42?home:traced;
+  const k=Math.max(box.w/area.w,box.h/area.h),vb={x:box.x+box.w/2-area.w*k/2,y:box.y+box.h/2-area.h*k/2,w:area.w*k,h:area.h*k};
+  const img=await pictureImage(vb,area.w,area.h);
+  const c=document.createElement('canvas');c.width=W*S;c.height=H*S;const x=c.getContext('2d');x.scale(S,S);
+  x.fillStyle=getComputedStyle(stage).backgroundColor;x.fillRect(0,0,W,H);
+  x.drawImage(img,area.x,area.y,area.w,area.h);
+  const font=getComputedStyle(document.body).fontFamily;
+  const kind=state.mode==='route'?'Route':state.mode==='down'?'Downstream reach':'Upstream reach';
+  const f=label(state.focus);
+  const head=state.mode==='route'?h.nodes.map(label).join(' → '):state.mode==='down'?`${f} reaches ${plural(h.nodes.length,'card')}`:`${plural(h.nodes.length,'card')} reach ${f}`;
+  const sub=`${plural(h.wires.length,'wire')} · authored relationships in ${D.source||D.id}`;
+  x.fillStyle=muted;x.font=`600 13px ${font}`;x.fillText((kind+'  ·  '+D.title).toUpperCase().slice(0,110),48,56);
+  x.fillStyle=ink;x.font=`600 32px ${font}`;
+  let line=head;while(x.measureText(line).width>W-96&&line.length>4)line=line.slice(0,-2);if(line!==head)line=line.replace(/.$/,'…');
+  x.fillText(line,48,100);
+  x.fillStyle=muted;x.font=`400 16px ${font}`;x.fillText(sub,48,130);
+  x.font=`600 13px ${font}`;x.textAlign='right';x.fillText('Schematically',W-48,H-24);
+  download(c,`${fileBase()}-${state.mode==='route'?'route':'reach'}-card.png`);
+  return c;
+}
+
+// ---- menus
+const MENUS={bStyle:'menuStyle',bShare:'menuShare',bLens:'menuLens',bHelp:'menuHelp'};
+function closeMenus(except){for(const [b,m] of Object.entries(MENUS))if(m!==except){$(m).hidden=true;$(b).setAttribute('aria-expanded','false')}}
+function toggleMenu(b){
+  const m=$(MENUS[b]),open=m.hidden;closeMenus();if(!open)return;
+  m.hidden=false;$(b).setAttribute('aria-expanded','true');
+  const r=$(b).getBoundingClientRect(),mw=m.offsetWidth,mh=m.offsetHeight;
+  const left=Math.min(Math.max(8,r.right-mw),innerWidth-mw-8),below=r.bottom+6+mh<innerHeight;
+  m.style.left=left+'px';m.style.top=(below?r.bottom+6:r.top-6-mh)+'px';
 }
 
 // ---- wiring
 let drag=null;
-stage.addEventListener('pointerdown',e=>{if(e.button!==0)return;drag={x:e.clientX,y:e.clientY,v:{...view},moved:false};stage.setPointerCapture(e.pointerId)});
+stage.addEventListener('pointerdown',e=>{if(e.button!==0)return;closeMenus();cancelAnimationFrame(anim);drag={x:e.clientX,y:e.clientY,v:{...view},moved:false};stage.setPointerCapture(e.pointerId)});
 stage.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
   if(!drag.moved&&Math.hypot(dx,dy)<4)return;drag.moved=true;stage.classList.add('panning');
   const r=stage.getBoundingClientRect(),s=Math.max(drag.v.w/r.width,drag.v.h/r.height);setView({...drag.v,x:drag.v.x-dx*s,y:drag.v.y-dy*s})});
 stage.addEventListener('pointerup',e=>{const d=drag;drag=null;stage.classList.remove('panning');if(!d||d.moved)return;
-  const el=document.elementFromPoint(e.clientX,e.clientY),g=el&&el.closest('g.node[data-id]');if(g)select(g.dataset.id);else if(!state.picking)clear()});
-stage.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,Math.exp(e.deltaY*0.0015))},{passive:false});
+  const el=document.elementFromPoint(e.clientX,e.clientY),g=el&&el.closest('g.node[data-id]');if(g)select(g.dataset.id);else if(!state.picking&&!state.present)clear()});
+stage.addEventListener('wheel',e=>{e.preventDefault();cancelAnimationFrame(anim);zoomAt(e.clientX,e.clientY,Math.exp(e.deltaY*0.0015))},{passive:false});
 stage.addEventListener('keydown',e=>{const g=e.target.closest&&e.target.closest('g.node[data-id]');if(g&&(e.key==='Enter'||e.key===' ')){e.preventDefault();select(g.dataset.id)}});
+let mapDrag=false;
+const mapTo=e=>{const r=mapEl.getBoundingClientRect(),sc=Math.min(r.width/home.w,r.height/home.h),ox=(r.width-home.w*sc)/2,oy=(r.height-home.h*sc)/2;
+  const px=home.x+(e.clientX-r.left-ox)/sc,py=home.y+(e.clientY-r.top-oy)/sc;setView({...view,x:px-view.w/2,y:py-view.h/2})};
+mapEl.addEventListener('pointerdown',e=>{mapDrag=true;mapEl.setPointerCapture(e.pointerId);cancelAnimationFrame(anim);mapTo(e)});
+mapEl.addEventListener('pointermove',e=>{if(mapDrag)mapTo(e)});
+mapEl.addEventListener('pointerup',()=>{mapDrag=false});
 panel.addEventListener('click',e=>{const a=e.target.closest('[data-go]');if(a){select(a.dataset.go);centerOn(a.dataset.go);return}
   const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
   if(act==='clear')clear();else if(act==='center')centerOn(state.focus);else setMode(act)});
 $('bDown').onclick=()=>setMode('down');$('bUp').onclick=()=>setMode('up');$('bRoute').onclick=()=>setMode('route');
-$('bFit').onclick=()=>setView({...home});
+$('bFit').onclick=fit;
+$('bIn').onclick=()=>{const r=stage.getBoundingClientRect();zoomAt(r.left+r.width/2,r.top+r.height/2,0.8)};
+$('bOut').onclick=()=>{const r=stage.getBoundingClientRect();zoomAt(r.left+r.width/2,r.top+r.height/2,1.25)};
 $('bTheme').onclick=()=>setTheme({system:'light',light:'dark',dark:'system'}[state.theme]);
-$('bPng').onclick=savePng;$('bPrint').onclick=()=>print();
-$('bLink').onclick=()=>{const u=location.href;(navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>{statusEl.textContent='Link copied.'},()=>prompt('Link to this view',u))};
+for(const b of Object.keys(MENUS))$(b).onclick=e=>{e.stopPropagation();toggleMenu(b)};
+$('menuStyle').onclick=e=>{const b=e.target.closest('[data-style]');if(b){setStyle(b.dataset.style);closeMenus()}};
+$('lensChips').onclick=e=>{const b=e.target.closest('[data-type]');if(b){if(state.focus)clear();toggleLensType(b.dataset.type)}};
+$('bMap').onclick=()=>setMap(!state.map);
+$('bPresent').onclick=()=>present(true);$('bExit').onclick=()=>present(false);
+$('bPrev').onclick=()=>goStep(state.step-1);$('bNext').onclick=()=>goStep(state.step+1);
+$('bPng').onclick=()=>{closeMenus();savePng()};$('bPrint').onclick=()=>{closeMenus();print()};
+$('bCardRoute').onclick=$('bCardReach').onclick=()=>{closeMenus();shareCard()};
+$('bLink').onclick=()=>{closeMenus();const u=location.href;(navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>{statusEl.textContent='Link copied.'},()=>prompt('Link to this view',u))};
+document.addEventListener('click',e=>{if(!e.target.closest('.menu'))closeMenus()});
 search.addEventListener('keydown',e=>{if(e.key==='Enter'){const id=find(search.value);if(id){select(id);centerOn(id);search.blur()}else statusEl.textContent=`No card matches “${search.value}”.`}
   if(e.key==='Escape'){search.value='';search.blur()}});
 document.addEventListener('keydown',e=>{
   if(e.target===search||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key;
+  if(state.present){
+    if(k==='Escape')present(false);
+    else if(k==='ArrowRight'||k==='PageDown'||k===' '){e.preventDefault();goStep(state.step+1)}
+    else if(k==='ArrowLeft'||k==='PageUp'){e.preventDefault();goStep(state.step-1)}
+    else if(k==='Home')goStep(0);else if(k==='End'&&tourIds)goStep(tourIds.length);
+    return;
+  }
   if(k==='/'){e.preventDefault();search.focus();search.select()}
-  else if(k==='Escape')clear();
+  else if(k==='Escape'){if(document.querySelector('.menu:not([hidden])'))closeMenus();else if(state.focus)clear();else if(state.lens.length)setLens([])}
   else if(k==='d')setMode('down');else if(k==='u')setMode('up');else if(k==='r')setMode('route');
-  else if(k==='t')$('bTheme').click();else if(k==='f'||k==='0')setView({...home});
-  else if(k==='+'||k==='=')zoomAt(innerWidth/2,innerHeight/2,0.8);else if(k==='-')zoomAt(innerWidth/2,innerHeight/2,1.25);
+  else if(k==='t')$('bTheme').click();else if(k==='f'||k==='0')fit();
+  else if(k==='s'){const ks=Object.keys(STYLES);setStyle(ks[(ks.indexOf(state.style)+1)%ks.length])}
+  else if(k==='l')toggleMenu('bLens');else if(k==='m')setMap(!state.map);else if(k==='p')present(true);
+  else if(k==='+'||k==='=')$('bIn').click();else if(k==='-')$('bOut').click();
 });
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&enteredFullscreen&&state.present){enteredFullscreen=false;present(false)}});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(state.theme==='system')mount()});
-addEventListener('hashchange',()=>{readHash();mount()});
+addEventListener('hashchange',()=>{const p=readHash();mount();if(p!==state.present)present(p)});
+addEventListener('resize',()=>{if(!svg)return;placeStatus();const old=size;size=stageSize();
+  const k=view.w/old.w,cx=view.x+view.w/2,cy=view.y+view.h/2;setView({x:cx-size.w*k/2,y:cy-size.h*k/2,w:size.w*k,h:size.h*k})});
 
 document.title=D.title;$('title').textContent=D.title;$('title').title=D.title;
 $('cards').innerHTML=D.nodes.map(n=>`<option value="${esc(n.label)}">${esc(n.id)}</option>`).join('');
-readHash();mount();
-window.SovViewer={data:D,state,downstream,upstream,route,select,setMode,clear,setTheme,find};
+const presentAtOpen=readHash();mount();
+if(presentAtOpen)present(true);
+window.SovViewer={data:D,state,downstream,upstream,route,select,setMode,clear,setTheme,setStyle,setLens,setMap,find,fit,present,goStep,tour,shareCard,lensSet};
 }
 })();
 </script>

@@ -1,6 +1,6 @@
 ---
 name: schematically
-description: Turn a description, a plan or a codebase into an interactive diagram that opens in any browser. Cards and wires are checked against a semantic model (boundaries, ports, direction, read/write access), laid out automatically and delivered as one HTML file with search, downstream/upstream tracing, routes, light/dark and PNG. Use when asked to diagram, map, draw, chart or visualise a system, service, request flow, architecture, pipeline or plan.
+description: Turn a description, a plan or a codebase into an interactive diagram that opens in any browser. Cards and wires are checked against a semantic model (boundaries, ports, direction, read/write access), laid out automatically and delivered as one HTML file with search, downstream/upstream tracing, routes, a type lens, an overview map, four styles, light/dark, a presentation mode, PNG and share cards. Use when asked to diagram, map, draw, chart or visualise a system, service, request flow, architecture, pipeline or plan.
 ---
 
 # Schematically
@@ -118,7 +118,10 @@ the card's centre, in canvas units; a card is about 112 by 84, so leave about 20
 
 One `.html` file, about 500 KB, that works offline and asks the network for nothing. Readers can:
 search with `/`; click a card to see its note and links; trace downstream (`d`) or upstream (`u`);
-find the shortest route between two cards (`r`); zoom and pan; switch light/dark (`t`); save a
-PNG or print to PDF; and copy a link that restores the current view. The same `.sov` opens in
+find the shortest route between two cards (`r`); pick out one or two card types with the lens
+(`l`); move around a large drawing with the overview map (`m`); switch style (`s`: Clean, Notes,
+Glass, Circuit) and light/dark (`t`); present the diagram card by card (`p`); save a PNG, a
+1200×630 share card of a traced route or reach, or print to PDF; and copy a link that restores the
+current view (`#style=glass&theme=dark&present=1`, `#focus=api&mode=down`, `#lens=act~hold`). The same `.sov` opens in
 the full Schematically editor (https://github.com/bdf1992/schematically) for direct editing and
 simulation.
