@@ -4,11 +4,13 @@ A compact, AI-native schematic editor. A document is a semantic model — Compon
 
 ## Start here
 
-Describe a system to your coding agent and get an interactive diagram you can open in any browser. You need Node 18 or newer.
+Describe a system to your coding agent and get an interactive diagram you can open in any browser. You need Node 18 or newer and git. Run this in the folder you want the skill in:
 
 ```bash
-npx skills add bdf1992/schematically --skill schematically
+npx skills add bdf1992/schematically#dev --skill schematically
 ```
+
+The `#dev` matters: the installable skill lives on the `dev` branch until the next release reaches `main`, and without it the command reports "No skills found". There is no skills.sh listing and no hosted site for this project; the install comes straight from this GitHub repository.
 
 Then tell your agent, for example:
 
@@ -17,7 +19,15 @@ Use Schematically to diagram a web request: Browser calls the API, the API check
 and a cache miss queries PostgreSQL and fills the cache.
 ```
 
-The agent writes a `.sov` document and runs `node bin/schematically.mjs deliver file.sov --open`, which checks it against the model below, lays it out, and writes one `.html` file that works offline: search, downstream and upstream tracing, routes between cards, light and dark, PNG and print, and links that restore a view. Keep going in chat ("add authentication", "put the database in a private network"); a failed run keeps the last good file. Without an agent, `node bin/schematically.mjs demo --open` from a checkout writes and opens an example.
+The skill installs under `.agents/skills/schematically/` in that folder. The agent writes a `.sov` document and runs `node .agents/skills/schematically/bin/schematically.mjs deliver file.sov --open`, which checks it against the model below, lays it out, and writes one `.html` file that works offline: search, downstream and upstream tracing, routes between cards, light and dark, PNG and print, and links that restore a view. Keep going in chat ("add authentication", "put the database in a private network"); a failed run keeps the last good file. Without an agent, clone the `dev` branch and run the demo, which writes and opens an example:
+
+```bash
+git clone -b dev https://github.com/bdf1992/schematically.git
+cd schematically
+node bin/schematically.mjs demo --open
+```
+
+The example is written to `schematically-demo/web-request.html` inside the clone.
 
 The same `.sov` opens in the full editor (`index.html`) for direct editing and simulation.
 
