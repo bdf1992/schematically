@@ -1,145 +1,239 @@
-"""Node-only delivery QA (bin/schematically.mjs).
+"""Check-and-deliver QA (scripts/validate_sov.mjs --json, scripts/deliver_sov.py, schematic.deliver).
 
-Delivers documents with nothing but Node into a temporary directory, opens each result from disk
-in headless Chromium with every non-file request refused, and checks:
-
-- `demo` writes a document with no coordinates, lays it out, and delivers it;
-- every delivered page draws itself in the reader's browser with no error and no network request,
-  removes its drawing frame, and shows one card per component of the document;
-- the delivered page holds the same cards, wires and arcs as scripts/export_html.py makes for the
-  same document (both read the editor through sovExtract in the template);
-- a document that fails its check exits 1 with JSON diagnostics and leaves the last good file
-  byte for byte, and no candidate file behind;
-- a usage error exits 2;
-- the installable skill (skills/schematically) carries every file the command reads, byte-equal to
-  its source (build.py writes the copy), and its own copy delivers the document SKILL.md teaches.
+(a) the rule table: codes are unique SOVnnn, every pattern compiles, and docs/RULE-CODES.md lists
+    exactly the table's codes;
+(b) validate --json: every example passes with no findings; each broken variant of one example
+    reports the code its breakage belongs to, names the element, and carries a filled repair; no
+    variant falls through to SOV999;
+(c) deliver: a good document is delivered; a failing candidate (refused at validate, and refused
+    at render with the renderer made to fail) leaves the previous good viewer byte for byte and
+    with its modification time, and nothing else beside it; a good document then replaces it; a
+    target that cannot be written (a folder of that name) is a coded report at stage write;
+(d) schematic.deliver over MCP: listed in tools/list with an input schema; one example round-trips
+    to <name>.html beside its file; out outside the folder (by name, or through a junction), or not
+    a string, is refused, and a name starting with two dots is not; a server holding an invalid file
+    refuses and keeps the viewer already there.
 """
 from __future__ import annotations
-import ast
+import copy
 import json
+import os
 import re
+import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
+from urllib import request
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 sys.path.insert(0, str(ROOT / 'tests'))
-from export_html import export_documents  # noqa: E402
-from browser_runtime import chromium_launch_kwargs  # noqa: E402
+import deliver_sov  # noqa: E402
+import export_html  # noqa: E402
 
-CLI = ROOT / 'bin' / 'schematically.mjs'
-SKILL = ROOT / 'skills' / 'schematically'
-BUNDLE = ast.literal_eval(re.search(r'SKILL_BUNDLE=(\[.*?\])', (ROOT / 'build.py').read_text(encoding='utf-8'), re.S).group(1))
-# Kept small: the parity half runs the headless export, which opens the editor once per file.
-EXAMPLES = ['04-boundary-port.sov', '08-gated-service.sov', '13-half-adder.sov']
-SHAPE_JS = """() => {
-  const D = window.SovViewer.data;
-  return {nodes: D.nodes.map(n => n.id).sort(), wires: D.wires.map(w => w.id).sort(),
-          arcs: D.arcs.map(a => [a.wire, a.from, a.to, a.control].join('|')).sort(),
-          drawn: [...document.querySelectorAll('#stage g.node[data-id]')].map(g => g.dataset.id).sort(),
-          frames: document.querySelectorAll('iframe').length, title: document.title};
-}"""
+os.environ.setdefault('SOV_RENDER_PYTHON', sys.executable)
+EXAMPLE = ROOT / 'examples' / '04-boundary-port.sov'
+RULES = json.loads((ROOT / 'scripts' / 'sov_rules.json').read_text(encoding='utf-8'))['rules']
 
 
-def cli(*args: str, entry: Path = CLI) -> subprocess.CompletedProcess:
-    return subprocess.run(['node', str(entry), *args], capture_output=True, text=True, timeout=120)
+def validate(*paths: Path) -> tuple[int, dict]:
+    proc = subprocess.run(['node', str(ROOT / 'scripts' / 'validate_sov.mjs'), '--json', *map(str, paths)],
+                          capture_output=True, text=True, encoding='utf-8', cwd=ROOT)
+    return proc.returncode, json.loads(proc.stdout)
 
 
-def check(condition: bool, message: str, failures: list[str]) -> None:
-    if not condition:
-        failures.append(message)
+def stamp(path: Path) -> tuple[bytes, int]:
+    return path.read_bytes(), path.stat().st_mtime_ns
 
 
-def open_delivered(browser, path: Path) -> tuple[dict, list[str], list[str]]:
-    page = browser.new_page(viewport={'width': 1280, 'height': 800})
-    errors: list[str] = []
-    requests: list[str] = []
-    page.on('pageerror', lambda exc: errors.append(str(exc)))
-    page.on('request', lambda req: requests.append(req.url)
-            if not req.url.startswith(('file:', 'data:', 'blob:', 'about:')) else None)
-    page.route('**/*', lambda route: route.continue_() if route.request.url.startswith(('file:', 'data:', 'blob:', 'about:')) else route.abort())
-    page.goto(path.resolve().as_uri())
-    page.wait_for_function('() => !!window.SovViewer', timeout=60_000)
-    shape = page.evaluate(SHAPE_JS)
-    page.close()
-    return shape, errors, requests
+# (a) the rule table and its document
+codes = [r['code'] for r in RULES]
+assert len(codes) == len(set(codes)), 'duplicate rule code'
+assert all(re.fullmatch(r'SOV\d{3}', c) for c in codes), codes
+for r in RULES:
+    if r['match']:
+        re.compile(r['match'])
+    assert r['severity'] in ('error', 'warning') and r['repair'] and r['title'], r['code']
+documented = set(re.findall(r'\bSOV\d{3}\b', (ROOT / 'docs' / 'RULE-CODES.md').read_text(encoding='utf-8')))
+assert documented == set(codes), ('docs/RULE-CODES.md differs from scripts/sov_rules.json', sorted(documented ^ set(codes)))
+print(f'(a) {len(codes)} rule codes, unique, all listed in docs/RULE-CODES.md')
+
+# (b) validate --json
+examples = sorted((ROOT / 'examples').glob('*.sov'))
+rc, report = validate(*examples)
+assert rc == 0 and report['ok'] and all(f['ok'] and not f['findings'] for f in report['files']), report
+base = json.loads(EXAMPLE.read_text(encoding='utf-8'))
 
 
-def main() -> int:
-    from playwright.sync_api import sync_playwright
-    failures: list[str] = []
-    with tempfile.TemporaryDirectory() as tmp:
-        out = Path(tmp)
-
-        demo = cli('demo', str(out / 'demo'), '--json')
-        check(demo.returncode == 0, f'demo exited {demo.returncode}: {demo.stdout}{demo.stderr}', failures)
-        record = json.loads(demo.stdout or '{}')
-        check(record.get('ok') is True and record.get('laidOut') is True, f'demo did not lay out and deliver: {record}', failures)
-
-        delivered = {}
-        for name in EXAMPLES:
-            target = out / 'node' / name.replace('.sov', '.html')
-            run = cli('deliver', str(ROOT / 'examples' / name), str(target), '--json')
-            check(run.returncode == 0 and json.loads(run.stdout).get('ok'), f'{name}: deliver failed: {run.stdout}{run.stderr}', failures)
-            delivered[name] = target
-
-        exported = {Path(r['source']).name: r['target'] for r in
-                    export_documents([ROOT / 'examples' / n for n in EXAMPLES], out / 'python')}
-
-        with sync_playwright() as p:
-            browser = p.chromium.launch(**chromium_launch_kwargs(disable_gpu=True))
-            shape, errors, requests = open_delivered(browser, out / 'demo' / 'web-request.html')
-            check(not errors and not requests, f'demo page: errors {errors}, requests {requests}', failures)
-            check(shape['drawn'] == ['api', 'browser', 'cache', 'db'], f'demo page drew {shape["drawn"]}', failures)
-            for name, target in delivered.items():
-                doc = json.loads((ROOT / 'examples' / name).read_text(encoding='utf-8'))
-                ids = sorted(c['id'] for c in doc['components'])
-                shape, errors, requests = open_delivered(browser, target)
-                check(not errors, f'{name}: page errors {errors}', failures)
-                check(not requests, f'{name}: network requests {requests}', failures)
-                check(shape['frames'] == 0, f'{name}: the drawing frame was left in the page', failures)
-                check(shape['nodes'] == ids, f'{name}: cards {shape["nodes"]} != components {ids}', failures)
-                check(set(shape['drawn']) <= set(ids) and shape['drawn'], f'{name}: drawn cards {shape["drawn"]}', failures)
-                reference, _, _ = open_delivered(browser, exported[name])
-                for key in ('nodes', 'wires', 'arcs', 'drawn', 'title'):
-                    check(shape[key] == reference[key], f'{name}: {key} differs from export_html: {shape[key]} != {reference[key]}', failures)
-            browser.close()
-
-        good = delivered[EXAMPLES[0]]
-        before = good.read_bytes()
-        broken = out / 'broken.sov'
-        broken.write_text(json.dumps({'schema': 'soveraeign.schematic/document@0.1', 'id': 'broken', 'revision': 0,
-                                      'components': [{'id': 'a', 'symbolId': 'act'}],
-                                      'wires': [{'id': 'w', 'a': 'a', 'aSide': 'out', 'b': 'missing', 'bSide': 'in'}],
-                                      'references': []}), encoding='utf-8')
-        bad = cli('deliver', str(broken), str(good), '--json')
-        result = json.loads(bad.stdout or '{}')
-        check(bad.returncode == 1, f'a broken document exited {bad.returncode}', failures)
-        check(result.get('ok') is False and result.get('diagnostics') and all({'code', 'subject', 'message'} <= set(d) for d in result['diagnostics']),
-              f'a broken document gave no diagnostics: {result}', failures)
-        check(good.read_bytes() == before, 'a failed deliver changed the last good file', failures)
-        check(not list(good.parent.glob('*.tmp')), 'a candidate file was left behind', failures)
-
-        for rel in BUNDLE:
-            copy = SKILL / rel
-            check(copy.exists() and copy.read_bytes() == (ROOT / rel).read_bytes(), f'skill bundle {rel} is missing or stale; run python build.py', failures)
-        taught = re.search(r'```json\n(.*?)```', (SKILL / 'SKILL.md').read_text(encoding='utf-8'), re.S).group(1)
-        (out / 'taught.sov').write_text(taught, encoding='utf-8')
-        run = cli('deliver', str(out / 'taught.sov'), '--json', entry=SKILL / 'bin' / 'schematically.mjs')
-        check(run.returncode == 0 and json.loads(run.stdout).get('laidOut') is True, f'the SKILL.md document did not deliver: {run.stdout}{run.stderr}', failures)
-
-        usage = cli('deliver')
-        check(usage.returncode == 2, f'a usage error exited {usage.returncode}', failures)
-        flag = cli('validate', str(ROOT / 'examples' / EXAMPLES[0]), '--nope')
-        check(flag.returncode == 2, f'an unknown flag exited {flag.returncode}', failures)
-
-    for f in failures:
-        print('FAIL', f)
-    print('deliver QA:', 'FAIL' if failures else 'PASS', f'({len(EXAMPLES)} examples + demo)')
-    return 1 if failures else 0
+def variant(mutate):
+    d = copy.deepcopy(base)
+    mutate(d)
+    return d
 
 
-if __name__ == '__main__':
-    raise SystemExit(main())
+VARIANTS = {
+    'SOV204': ('c1', variant(lambda d: d['components'].append(copy.deepcopy(d['components'][0])))),
+    'SOV301': ('k1', variant(lambda d: d['wires'][0].update(a='no-such-card'))),
+    'SOV205': (base['id'], variant(lambda d: d.update(narration=[{'at': 1}]))),
+    'SOV206': (base['id'], variant(lambda d: d['meta'].update(timeScale=-1))),
+    'SOV207': (base['id'], variant(lambda d: d['meta'].update(palette='neon'))),
+    'SOV404': ('c1', variant(lambda d: d['components'][0].setdefault('config', {}).update(status='done'))),
+    'SOV304': ('k1', variant(lambda d: d['wires'][0].update(canvasId='canvas:component:c2'))),
+    'SOV104': (base['id'], variant(lambda d: d.update(schema='something/else@9'))),
+    'SOV213': (base['id'], variant(lambda d: d.update(virtual=5))),
+    'SOV203': (None, variant(lambda d: d['components'][0].pop('id'))),
+}
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    paths = {}
+    for code, (_, doc) in VARIANTS.items():
+        paths[code] = td / f'{code}.sov'
+        paths[code].write_text(json.dumps(doc), encoding='utf-8')
+    (td / 'SOV102.sov').write_text('{"schema": ', encoding='utf-8')
+    rc, report = validate(*paths.values(), td / 'SOV102.sov', td / 'SOV101.sov')
+    assert rc == 1 and not report['ok']
+    by_file = {Path(f['file']).stem: f for f in report['files']}
+    for code in [*VARIANTS, 'SOV102', 'SOV101']:
+        got = by_file[code]
+        assert not got['ok'], code
+        found = [f['code'] for f in got['findings']]
+        assert code in found, (code, got['findings'])
+        assert 'SOV999' not in found, (code, got['findings'])
+        hit = next(f for f in got['findings'] if f['code'] == code)
+        if code in VARIANTS:
+            assert hit['id'] == VARIANTS[code][0], (code, hit)
+        assert hit['repair'] and '{id}' not in hit['repair'] and '{detail}' not in hit['repair'], hit
+print(f'(b) {len(examples)} examples pass with no findings; {len(VARIANTS) + 2} broken variants report their codes with an id and a repair')
+
+# (c) deliver keeps the last good viewer
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    good, bad, target = td / 'good.sov', td / 'bad.sov', td / 'site' / 'viewer.html'
+    shutil.copy(EXAMPLE, good)
+    bad.write_text(json.dumps(VARIANTS['SOV301'][1]), encoding='utf-8')
+    first = deliver_sov.deliver(good, target)
+    assert first['delivered'] and first['previous'] == 'none' and first['stage'] == 'write', first
+    assert base['id'] in target.read_text(encoding='utf-8')
+    before = stamp(target)
+    time.sleep(0.05)
+    refused = deliver_sov.deliver(bad, target)
+    assert not refused['delivered'] and refused['stage'] == 'validate' and refused['previous'] == 'kept', refused
+    assert 'SOV301' in [f['code'] for f in refused['findings']]
+    assert stamp(target) == before, 'a candidate refused at validate changed the last good viewer'
+    assert sorted(p.name for p in target.parent.iterdir()) == ['viewer.html'], list(target.parent.iterdir())
+    # The renderer fails: refused at render, viewer untouched, no temporary file left behind.
+    real = export_html.export_documents
+    export_html.export_documents = lambda paths, out_dir=None, pad=48: (_ for _ in ()).throw(RuntimeError('Error: drawing failed'))
+    try:
+        refused = deliver_sov.deliver(good, target)
+    finally:
+        export_html.export_documents = real
+    assert not refused['delivered'] and refused['stage'] == 'render' and refused['previous'] == 'kept', refused
+    assert [f['code'] for f in refused['findings']] == ['SOV601'], refused['findings']
+    assert stamp(target) == before, 'a candidate refused at render changed the last good viewer'
+    # The viewer draws another document than the one checked: refused (SOV603) by the render checks.
+    record = {'errors': [], 'svg_bytes': {'light': 9000, 'dark': 9000}, 'id': 'other', 'nodes': 1, 'blocked': []}
+    assert [f['code'] for f in deliver_sov.render_checks(record, {'components': 3}, base['id'])] == ['SOV603']
+    record.update(svg_bytes={'light': 0, 'dark': 9000}, id=base['id'], nodes=3)
+    assert [f['code'] for f in deliver_sov.render_checks(record, {'components': 3}, base['id'])] == ['SOV602']
+    assert sorted(p.name for p in target.parent.iterdir()) == ['viewer.html'], list(target.parent.iterdir())
+    proc = subprocess.run([sys.executable, str(ROOT / 'scripts' / 'deliver_sov.py'), str(bad), '--out', str(target), '--json'],
+                          capture_output=True, text=True, encoding='utf-8', cwd=ROOT)
+    assert proc.returncode == 1 and json.loads(proc.stdout)['previous'] == 'kept' and stamp(target) == before, proc.stdout
+    again = deliver_sov.deliver(good, target)
+    assert again['delivered'] and again['previous'] == 'replaced', again
+    assert sorted(p.name for p in target.parent.iterdir()) == ['viewer.html'], list(target.parent.iterdir())
+    # A folder where the viewer should go: refused at write with SOV701, as a report, nothing left over.
+    blocked = td / 'site' / 'folder.html'
+    blocked.mkdir()
+    proc = subprocess.run([sys.executable, str(ROOT / 'scripts' / 'deliver_sov.py'), str(good), '--out', str(blocked), '--json'],
+                          capture_output=True, text=True, encoding='utf-8', cwd=ROOT)
+    report = json.loads(proc.stdout)
+    assert proc.returncode == 1 and report['stage'] == 'write' and [f['code'] for f in report['findings']] == ['SOV701'], proc.stdout
+    assert blocked.is_dir() and sorted(p.name for p in target.parent.iterdir()) == ['folder.html', 'viewer.html']
+print('(c) a failing candidate (validate or render) leaves the last good viewer untouched; a good one replaces it')
+
+
+# (d) schematic.deliver over MCP
+def free_port() -> int:
+    s = socket.socket()
+    s.bind(('127.0.0.1', 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+def start(file: Path):
+    port = free_port()
+    proc = subprocess.Popen(['node', str(ROOT / 'mcp' / 'server.mjs'), '--port', str(port), '--file', str(file)],
+                            cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    base_url = f'http://127.0.0.1:{port}'
+    for _ in range(100):
+        try:
+            request.urlopen(base_url + '/api/v1/formats', timeout=1)
+            return proc, base_url
+        except Exception:  # noqa: BLE001
+            time.sleep(0.05)
+    proc.kill()
+    raise AssertionError('server did not start')
+
+
+def rpc(base_url: str, method: str, params: dict) -> dict:
+    body = json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': params}).encode()
+    req = request.Request(base_url + '/mcp', data=body, headers={'content-type': 'application/json'})
+    return json.loads(request.urlopen(req, timeout=170).read())['result']
+
+
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    doc = td / 'boundary.sov'
+    shutil.copy(EXAMPLE, doc)
+    proc, url = start(doc)
+    try:
+        tools = {t['name']: t for t in rpc(url, 'tools/list', {})['tools']}
+        assert 'schematic.deliver' in tools and tools['schematic.deliver']['inputSchema']['type'] == 'object'
+        r = rpc(url, 'tools/call', {'name': 'schematic.deliver', 'arguments': {}})
+        report = r['structuredContent']
+        assert not r['isError'] and report['delivered'] and Path(report['target']) == td / 'boundary.html', report
+        assert Path(report['source']) == doc, report
+        assert base['id'] in (td / 'boundary.html').read_text(encoding='utf-8')
+        r = rpc(url, 'tools/call', {'name': 'schematic.deliver', 'arguments': {'out': '../escape.html'}})
+        assert r['isError'] and r['structuredContent']['code'] == 'DELIVER_TARGET_REFUSED', r
+        assert not (td.parent / 'escape.html').exists()
+        r = rpc(url, 'tools/call', {'name': 'schematic.deliver', 'arguments': {'out': 5}})
+        assert r['isError'] and r['structuredContent']['code'] == 'DELIVER_TARGET_REFUSED', r
+        r = rpc(url, 'tools/call', {'name': 'schematic.deliver', 'arguments': {'out': '..dots.html'}})
+        assert not r['isError'] and (td / '..dots.html').is_file(), r['structuredContent']
+        # A junction (or directory link) inside the folder that points outside it is refused.
+        outside = Path(tempfile.mkdtemp(prefix='sov-outside-'))
+        try:
+            link = td / 'jn'
+            if sys.platform == 'win32':
+                import _winapi
+                _winapi.CreateJunction(str(outside), str(link))
+            else:
+                os.symlink(outside, link, target_is_directory=True)
+            r = rpc(url, 'tools/call', {'name': 'schematic.deliver', 'arguments': {'out': 'jn/escaped.html'}})
+            assert r['isError'] and r['structuredContent']['code'] == 'DELIVER_TARGET_REFUSED', r
+            assert not any(outside.iterdir()), list(outside.iterdir())
+            os.rmdir(link) if sys.platform == 'win32' else os.unlink(link)
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
+    finally:
+        proc.kill()
+    before = stamp(td / 'boundary.html')
+    doc.write_text(json.dumps(VARIANTS['SOV301'][1]), encoding='utf-8')
+    proc, url = start(doc)
+    try:
+        r = rpc(url, 'tools/call', {'name': 'schematic.deliver', 'arguments': {}})
+        report = r['structuredContent']
+        assert r['isError'] and not report['delivered'] and report['previous'] == 'kept', report
+        assert 'SOV301' in [f['code'] for f in report['findings']], report['findings']
+        assert stamp(td / 'boundary.html') == before, 'MCP deliver of an invalid document changed the viewer'
+    finally:
+        proc.kill()
+print('(d) schematic.deliver round-trips one example over MCP; an invalid document is refused and the viewer kept')
+print('PASS deliver QA')

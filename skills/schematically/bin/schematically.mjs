@@ -10,7 +10,9 @@
 // document and the editor build travel inside it, and the reader's browser draws the picture once
 // at open (scripts/viewer_template.html, sovExtract). The file is written beside its target and
 // renamed over it only when everything passed, so a failed run leaves the last good file in place.
-// --json prints one object: {ok, ...} or {ok: false, diagnostics: [{code, subject, message}]}.
+// --json prints one object: {ok, ...}, with `findings` from scripts/sov_check.mjs: each
+// {code, family, severity, id, rule, detail, message, repair}, code a stable SOVnnn
+// (docs/RULE-CODES.md). A warning never fails a document.
 // Exit 0 when it delivered or validated, 1 on diagnostics, 2 on a usage error.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,7 +28,7 @@ require(path.join(ROOT, 'src/03-notation-core.js'));
 require(path.join(ROOT, 'src/06-attachment-core.js'));
 const Data = require(path.join(ROOT, 'src/05-data-core.js'));
 const Layout = require(path.join(ROOT, 'src/08-layout-core.js'));
-const {checkText} = await import(new URL('../scripts/sov_check.mjs', import.meta.url));
+const {checkFile} = await import(new URL('../scripts/sov_check.mjs', import.meta.url));
 
 const EDITOR = path.join(ROOT, 'index.html');
 const TEMPLATE = path.join(ROOT, 'scripts/viewer_template.html');
@@ -67,13 +69,14 @@ function needsLayout(text) {
   } catch { return false; }
 }
 
+// A refusal the command itself makes, in the shape the rule table gives every finding.
+const refusal = (code, message, repair) => ({code, family: 'deliver', severity: 'error', id: null, rule: null, detail: null, message, repair});
+
 function validate(file) {
-  let text;
-  try { text = fs.readFileSync(file, 'utf8'); }
-  catch (error) { return {ok: false, file, diagnostics: [{code: 'FILE_UNREADABLE', subject: file, message: error.message}]}; }
-  const {doc, diagnostics} = checkText(Data, text);
-  if (diagnostics.length) return {ok: false, file, diagnostics};
-  return {ok: true, file, text, doc, components: doc.components.length, wires: doc.wires.length};
+  const report = checkFile(Data, file);
+  const {doc, ...shown} = report;
+  if (!report.ok) return {...shown, ok: false};
+  return {...shown, ok: true, text: fs.readFileSync(file, 'utf8'), doc};
 }
 
 function deliver(file, target, {layout = true} = {}) {
@@ -82,13 +85,13 @@ function deliver(file, target, {layout = true} = {}) {
   let text = checked.text, laidOut = false;
   if (layout && needsLayout(text)) {
     const result = Layout.execute(checked.doc, 'apply', {engine: 'layered'});
-    if (!result.ok) return {ok: false, file, diagnostics: [{code: result.code || 'LAYOUT_REFUSED', subject: 'document', message: result.message}]};
+    if (!result.ok) return {ok: false, file, findings: [refusal('LAYOUT_REFUSED', `${result.code}: ${result.message}`, 'write x and y for every card, or remove what the layout engine refuses')]};
     text = JSON.stringify(Data.compactDocument(checked.doc));
     laidOut = true;
   }
   const template = fs.readFileSync(TEMPLATE, 'utf8');
   if (template.split(DATA_PLACEHOLDER).length !== 2 || template.split(EDITOR_PLACEHOLDER).length !== 2) {
-    return {ok: false, file, diagnostics: [{code: 'TEMPLATE_INVALID', subject: TEMPLATE, message: 'the viewer template must hold each placeholder exactly once'}]};
+    return {ok: false, file, findings: [refusal('TEMPLATE_INVALID', 'the viewer template must hold each placeholder exactly once', 'reinstall the skill')]};
   }
   const editor = zlib.gzipSync(fs.readFileSync(EDITOR), {level: 9}).toString('base64');
   const html = template
@@ -99,7 +102,7 @@ function deliver(file, target, {layout = true} = {}) {
   const candidate = `${out}.${process.pid}.tmp`;
   fs.writeFileSync(candidate, html, 'utf8');
   fs.renameSync(candidate, out);
-  return {ok: true, file, target: out, bytes: Buffer.byteLength(html), components: checked.components, wires: checked.wires, laidOut};
+  return {ok: true, file, target: out, bytes: Buffer.byteLength(html), components: checked.components, wires: checked.wires, laidOut, findings: checked.findings};
 }
 
 function openFile(file) {
@@ -114,7 +117,7 @@ function report(result, json) {
   if (json) { console.log(JSON.stringify(shown)); return; }
   if (!result.ok) {
     console.log(`FAIL ${result.file}`);
-    for (const d of result.diagnostics) console.log(`  ${d.code} ${d.subject}: ${d.message}`);
+    for (const f of result.findings) console.log(`  ${f.code} ${f.id ?? '-'}: ${f.message}\n    repair: ${f.repair}`);
     return;
   }
   const counts = `${result.components} components, ${result.wires} wires`;

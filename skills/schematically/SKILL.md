@@ -26,8 +26,8 @@ node <skill>/bin/schematically.mjs deliver diagram.sov --open --json
    The `.html` is written beside the `.sov` unless you name another path after it. On
    `{"ok": true}` tell the user the `target` path (it opens from disk in any browser) and what
    the diagram shows; `laidOut` says the layout engine placed the cards.
-4. On `{"ok": false}` read each diagnostic's `code`, `subject` (the record id) and `message`,
-   repair that record, and run again. After two failed rounds, stop and show the user the
+4. On `{"ok": false}` read each finding's `code` (a stable `SOVnnn`), `id` (the card or wire it
+   names), `message` and `repair`, apply the repair to that record, and run again. After two failed rounds, stop and show the user the
    diagnostics rather than guessing further.
 5. For a change ("add auth", "the cache is optional"), edit the same `.sov` and deliver again. A
    failed run leaves the last good `.html` in place.

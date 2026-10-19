@@ -38,7 +38,7 @@ print(ROOT/'index.html')
 # own copy of everything bin/schematically.mjs reads, at the same relative paths, because an
 # installer copies the skill's folder and nothing else. SKILL.md there is hand-written; the rest is
 # this copy, which tests/deliver_qa.py holds byte-equal to its sources.
-SKILL_BUNDLE=['LICENSE','bin/schematically.mjs','scripts/sov_check.mjs','scripts/viewer_template.html','index.html',
+SKILL_BUNDLE=['LICENSE','bin/schematically.mjs','scripts/sov_check.mjs','scripts/sov_rules.json','scripts/viewer_template.html','index.html',
               'src/03-canonical.js','src/03-notation-core.js','src/06-attachment-core.js','src/05-data-core.js',
               'src/08-layout-core.js']
 # A partial copy of the tree with no skill folder (tests/qa_scheduler_qa.py builds one) has no
