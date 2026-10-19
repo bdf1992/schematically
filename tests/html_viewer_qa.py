@@ -166,6 +166,42 @@ def check_reader_polish(page, html: Path) -> None:
     assert cards['route'] is False and cards['reach'] is True, f'the route card is offered only on a route: {cards}'
     assert cards['sizes'] == [[2400, 1260], [2400, 1260]], f'share cards are not 1200x630 at 2x: {cards}'
     assert cards['none'] is None, 'a share card was made with nothing traced'
+
+    # The card's pixels: a picture under the words, and a different one in each style.
+    pixels = page.evaluate('''async () => { const V = window.SovViewer, out = {};
+      V.select('grant'); V.setMode('down');
+      for (const s of ['clean', 'circuit']) { V.setStyle(s); const c = await V.shareCard(), x = c.getContext('2d');
+        const d = x.getImageData(96, 336, 2208, 840).data, seen = new Set();
+        for (let i = 0; i < d.length; i += 4 * 97) seen.add(d[i] << 16 | d[i + 1] << 8 | d[i + 2]);
+        out[s] = {colours: seen.size, url: c.toDataURL().length, sum: [...d.filter((_, i) => i % 4097 === 0)].reduce((a, b) => a + b, 0)}; }
+      V.setStyle('clean'); V.clear(); return out; }''')
+    assert all(v['colours'] > 8 for v in pixels.values()), f'a share card holds no drawing: {pixels}'
+    assert pixels['clean']['sum'] != pixels['circuit']['sum'], f'the share card does not carry the style: {pixels}'
+
+    errors += open_viewer(page, html, '#style=constructor')
+    assert page.evaluate('() => window.SovViewer.state.style') == 'clean', 'an inherited name was taken as a style'
+
+    # Presenting gives the reader's state back, and a resize mid-move still ends in the window's shape.
+    errors += open_viewer(page, html, '#lens=act')
+    back = page.evaluate('''async () => { const V = window.SovViewer, wait = ms => new Promise(r => setTimeout(r, ms));
+      V.present(true); V.goStep(2); await wait(60); return true; }''')
+    page.set_viewport_size({'width': 1600, 'height': 700})
+    page.wait_for_timeout(700)
+    shape = page.evaluate('''() => { const vb = document.querySelector('#stage svg').viewBox.baseVal, r = document.getElementById('stage').getBoundingClientRect();
+      return [vb.width / vb.height, r.width / r.height]; }''')
+    assert abs(shape[0] - shape[1]) < 0.01, f'a resize during a camera move left the view the wrong shape: {shape}'
+    restored = page.evaluate('''() => { const V = window.SovViewer; V.present(false);
+      return {lens: V.state.lens, focus: V.state.focus, active: document.activeElement.id}; }''')
+    assert restored == {'lens': ['act'], 'focus': None, 'active': 'bPresent'}, f'presenting lost the reader state: {restored}'
+    page.set_viewport_size({'width': 1280, 'height': 800})
+
+    # Space on a focused card while presenting lands on that card, not the one after.
+    errors += open_viewer(page, html, '#present=1')
+    target = page.evaluate('() => window.SovViewer.tour()[2]')
+    page.focus(f'#stage g.node[data-id="{target}"]')
+    page.keyboard.press(' ')
+    assert page.evaluate('() => window.SovViewer.state.focus') == target, 'Space on a card moved past it'
+    page.keyboard.press('Escape')
     assert not errors, errors
 
 

@@ -355,7 +355,7 @@ function lensSet(){
 }
 
 const state={focus:null,mode:null,to:null,picking:false,theme:'system',style:'clean',lens:[],map:null,present:false,step:0};
-let svg=null,mapSvg=null,view=null,home=null,size=null,tourIds=null,enteredFullscreen=false;
+let svg=null,mapSvg=null,view=null,home=null,size=null,tourIds=null,enteredFullscreen=false,saved=null;
 
 function resolvedTheme(){return state.theme==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):state.theme}
 // The pen's wobble. Its region is absolute: a straight wire's box has no height, and a region
@@ -448,19 +448,22 @@ function boxOf(ids){
   const p=Math.max(x1-x0,y1-y0)*0.12+24;return {x:x0-p,y:y0-p,w:x1-x0+2*p,h:y1-y0+2*p};
 }
 let anim=0;
-function animateTo(t,ms=480){
+// A camera move takes its target as a function of the stage as it is now, read every frame, so a
+// resize mid-move (entering fullscreen does one) still ends on a view of the window's shape.
+function animateTo(target,ms=480){
   cancelAnimationFrame(anim);
-  if(matchMedia('(prefers-reduced-motion: reduce)').matches){setView(t);return}
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){setView(target());return}
   const f={...view},t0=performance.now();
-  const tick=now=>{const k=Math.min(1,(now-t0)/ms),e=1-Math.pow(1-k,3);
-    setView({x:f.x+(t.x-f.x)*e,y:f.y+(t.y-f.y)*e,w:f.w+(t.w-f.w)*e,h:f.h+(t.h-f.h)*e});if(k<1)anim=requestAnimationFrame(tick)};
+  const tick=now=>{const k=Math.min(1,(now-t0)/ms),e=1-Math.pow(1-k,3),t=target();
+    setView({x:f.x+(t.x-f.x)*e,y:f.y+(t.y-f.y)*e,w:f.w+(t.w-f.w)*e,h:f.h+(t.h-f.h)*e});if(k<1)anim=requestAnimationFrame(tick);else anim=0};
   anim=requestAnimationFrame(tick);
 }
-function fit(){animateTo(fitBox(home))}
+const framing=(box,maxUp)=>()=>fitBox(box,maxUp);
+function fit(){animateTo(framing(home))}
 function centerOn(id){
   const g=nodeEl(id);if(!g)return;
-  const r=g.getBoundingClientRect(),c=toSvg(r.left+r.width/2,r.top+r.height/2);
-  animateTo({...view,x:c.x-view.w/2,y:c.y-view.h/2},320);
+  const r=g.getBoundingClientRect(),c=toSvg(r.left+r.width/2,r.top+r.height/2),k=view.w/size.w;
+  animateTo(()=>({x:c.x-size.w*k/2,y:c.y-size.h*k/2,w:size.w*k,h:size.h*k}),320);
 }
 
 function highlight(){
@@ -555,7 +558,8 @@ function setMode(m){
 }
 function clear(){state.focus=null;state.mode=null;state.to=null;state.picking=false;paint()}
 function setTheme(t){state.theme=t;mount()}
-function setStyle(s){if(!STYLES[s])return;state.style=s;mount()}
+const isStyle=s=>Object.hasOwn(STYLES,s);
+function setStyle(s){if(!isStyle(s))return;state.style=s;mount()}
 function setLens(list){state.lens=[...new Set(list)].filter(t=>types.some(x=>x[0]===t)).slice(-2);paint()}
 function toggleLensType(t){const i=state.lens.indexOf(t);setLens(i>=0?state.lens.filter(x=>x!==t):[...state.lens,t])}
 function setMap(on){state.map=on;mapEl.hidden=!on;$('bMap').setAttribute('aria-pressed',String(on));drawMapViewport()}
@@ -577,13 +581,18 @@ function present(on){
   state.present=on;root.classList.toggle('presenting',on);
   closeMenus();
   if(on){
+    saved={focus:state.focus,mode:state.mode,to:state.to,lens:[...state.lens],active:document.activeElement};
     tourIds=state.focus&&state.mode?null:tour();
     if(root.requestFullscreen&&!document.fullscreenElement)root.requestFullscreen().then(()=>{enteredFullscreen=true},()=>{});
-    if(tourIds){state.step=0;state.lens=[];goStep(0)}else{paint();requestAnimationFrame(()=>animateTo(fitBox(boxOf([state.focus,...highlight().nodes]),2.2)))}
+    if(tourIds){state.step=0;state.lens=[];goStep(0)}else{paint();requestAnimationFrame(()=>animateTo(framing(boxOf([state.focus,...highlight().nodes]),2.2)))}
   }else{
     tourIds=null;
     if(enteredFullscreen&&document.fullscreenElement)document.exitFullscreen().catch(()=>{});
-    enteredFullscreen=false;paint();requestAnimationFrame(fit);
+    enteredFullscreen=false;
+    const back=saved||{focus:null,mode:null,to:null,lens:[]};saved=null;
+    Object.assign(state,{focus:back.focus,mode:back.mode,to:back.to,lens:back.lens,picking:false});
+    paint();requestAnimationFrame(fit);
+    const el=back.active&&back.active.isConnected&&back.active!==document.body?back.active:$('bPresent');el.focus&&el.focus();
   }
 }
 function goStep(i){
@@ -593,9 +602,9 @@ function goStep(i){
   state.focus=id;state.mode=null;state.to=null;state.picking=false;
   paint();
   requestAnimationFrame(()=>{
-    if(!id){animateTo(fitBox(home));return}
+    if(!id){fit();return}
     const near=[id,...(out.get(id)||[]).map(a=>a.to),...(inc.get(id)||[]).map(a=>a.from)];
-    animateTo(fitBox(boxOf(near),2.2));
+    animateTo(framing(boxOf(near),2.2));
   });
 }
 function renderDeck(h){
@@ -626,7 +635,7 @@ function writeHash(){
 function readHash(){
   const p=new URLSearchParams(location.hash.slice(1));
   const theme=p.get('theme');state.theme=['light','dark'].includes(theme)?theme:'system';
-  const style=p.get('style');state.style=STYLES[style]?style:'clean';
+  const style=p.get('style');state.style=isStyle(style)?style:'clean';
   const f=p.get('focus');state.focus=nodes.has(f)?f:null;
   const m=p.get('mode');state.mode=state.focus&&['down','up','route'].includes(m)?m:null;
   const t=p.get('to');state.to=state.mode==='route'&&nodes.has(t)?t:null;
@@ -697,7 +706,18 @@ function toggleMenu(b){
   const r=$(b).getBoundingClientRect(),mw=m.offsetWidth,mh=m.offsetHeight;
   const left=Math.min(Math.max(8,r.right-mw),innerWidth-mw-8),below=r.bottom+6+mh<innerHeight;
   m.style.left=left+'px';m.style.top=(below?r.bottom+6:r.top-6-mh)+'px';
+  const first=m.querySelector('button:not(:disabled)');if(first)first.focus();
 }
+// A menu follows the menu-button pattern: arrows move between its items, Esc closes it and gives
+// focus back to its button, Tab or a click elsewhere closes it.
+for(const [b,id] of Object.entries(MENUS))$(id).addEventListener('keydown',e=>{
+  const items=[...$(id).querySelectorAll('button:not(:disabled)')],i=items.indexOf(document.activeElement);
+  if(e.key==='ArrowDown'||e.key==='ArrowRight'){e.preventDefault();items[(i+1)%items.length]?.focus()}
+  else if(e.key==='ArrowUp'||e.key==='ArrowLeft'){e.preventDefault();items[(i-1+items.length)%items.length]?.focus()}
+  else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeMenus();$(b).focus()}
+  else if(e.key==='Tab'){closeMenus();$(b).focus()}
+  e.stopPropagation();
+});
 
 // ---- wiring
 let drag=null;
@@ -708,7 +728,7 @@ stage.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag
 stage.addEventListener('pointerup',e=>{const d=drag;drag=null;stage.classList.remove('panning');if(!d||d.moved)return;
   const el=document.elementFromPoint(e.clientX,e.clientY),g=el&&el.closest('g.node[data-id]');if(g)select(g.dataset.id);else if(!state.picking&&!state.present)clear()});
 stage.addEventListener('wheel',e=>{e.preventDefault();cancelAnimationFrame(anim);zoomAt(e.clientX,e.clientY,Math.exp(e.deltaY*0.0015))},{passive:false});
-stage.addEventListener('keydown',e=>{const g=e.target.closest&&e.target.closest('g.node[data-id]');if(g&&(e.key==='Enter'||e.key===' ')){e.preventDefault();select(g.dataset.id)}});
+stage.addEventListener('keydown',e=>{const g=e.target.closest&&e.target.closest('g.node[data-id]');if(g&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.stopPropagation();select(g.dataset.id)}});
 let mapDrag=false;
 const mapTo=e=>{const r=mapEl.getBoundingClientRect(),sc=Math.min(r.width/home.w,r.height/home.h),ox=(r.width-home.w*sc)/2,oy=(r.height-home.h*sc)/2;
   const px=home.x+(e.clientX-r.left-ox)/sc,py=home.y+(e.clientY-r.top-oy)/sc;setView({...view,x:px-view.w/2,y:py-view.h/2})};
@@ -755,7 +775,7 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&enteredFullscreen&&state.present){enteredFullscreen=false;present(false)}});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(state.theme==='system')mount()});
-addEventListener('hashchange',()=>{const p=readHash();mount();if(p!==state.present)present(p)});
+addEventListener('hashchange',()=>{const p=readHash();mount();if(p!==state.present)present(p);else if(state.present&&tourIds)goStep(state.step)});
 addEventListener('resize',()=>{if(!svg)return;placeStatus();const old=size;size=stageSize();
   const k=view.w/old.w,cx=view.x+view.w/2,cy=view.y+view.h/2;setView({x:cx-size.w*k/2,y:cy-size.h*k/2,w:size.w*k,h:size.h*k})});
 
