@@ -274,7 +274,7 @@ function savePng(){
   const clone=svg.cloneNode(true),r=stage.getBoundingClientRect(),scale=2;
   const bg=getComputedStyle(document.body).backgroundColor;
   const css=[...document.styleSheets[0].cssRules].map(r=>r.cssText).filter(t=>t.includes('svg.dim')||t.includes('.sel')).join('\n').replace(/#stage /g,'');
-  const st=document.createElementNS('http://www.w3.org/2000/svg','style');st.textContent=css.replace(/var\(--accent\)/g,getComputedStyle(document.documentElement).getPropertyValue('--accent'));
+  const st=document.createElementNS('http://www.w3.org/2000/svg','style');const root=getComputedStyle(document.documentElement);st.textContent=css.replace(/var\(--(accent|up|route)\)/g,(_,name)=>root.getPropertyValue('--'+name));
   clone.insertBefore(st,clone.firstChild);
   clone.setAttribute('width',r.width);clone.setAttribute('height',r.height);
   const img=new Image(),url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));

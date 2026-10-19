@@ -11,3 +11,6 @@ review/
 .ci-browsers/
 .ci-pip-cache/
 .ci-cargo/
+
+# Viewers written by scripts/export_html.py with no --out.
+examples/*.html

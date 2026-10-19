@@ -51,8 +51,10 @@ PLACEHOLDER = '/*__VIEWER_DATA__*/null'
 
 
 def script_safe(value) -> str:
-    """JSON that cannot close the <script> element it sits in."""
-    return json.dumps(value, ensure_ascii=False, sort_keys=True).replace('</', '<\\/')
+    """JSON the HTML parser reads as plain script data: no <, > or & survives, so neither </script>
+    nor <!--<script> can end or swallow the element (the escaping Django's json_script uses)."""
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return text.replace('&', '\\u0026').replace('<', '\\u003c').replace('>', '\\u003e')
 
 
 def export_documents(paths: list[Path], out_dir: Path | None = None, pad: int = 48) -> list[dict]:

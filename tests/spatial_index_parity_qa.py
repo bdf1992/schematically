@@ -5,7 +5,7 @@ the placed segments and boxes near a candidate, on the argument that everything 
 0 to its score or count. This suite draws each document twice, once as built and once with
 window.SOV_QA_NO_SPATIAL_INDEX set (the plain scans), and requires the two pictures to be the same
 bytes. The documents are the ones large enough for the routing grid to switch on (64 placed segments).
-examples/state/bench.sov (164 cards, 234 wires) drew the same on 2026-10-19, unlabelled and with every
+examples/state/bench.sov (164 cards, 234 wires) drew the same on 2026-10-18, unlabelled and with every
 wire labelled (86 labels crowded), but the plain scans take two minutes on it, so it is left out of
 the gate; add it to DOCUMENTS (and LABELLED) for a deep run. A picture
 alone would hide a label-grid fault, because the second drawing pass settles the labels again, so
@@ -31,6 +31,9 @@ DOCUMENTS = [
     'examples/09-print-ai-proof-run.sov',
 ]
 LABELLED: set[str] = set()  # add a document here to draw it with every wire labelled
+# Drawn once, every wire labelled, with every label overlap count cross-checked (no plain drawing):
+# the dense case for the label grid at a fraction of the plain scan's cost.
+CROSS_CHECKED = ['examples/state/bench.sov']
 SCORE_JS = """() => {
   let seed = 20261019;
   const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
@@ -112,6 +115,16 @@ def main() -> int:
                 i = next((k for k in range(min(len(grid), len(plain))) if grid[k] != plain[k]), min(len(grid), len(plain)))
                 raise AssertionError(f'{rel}: the grids change the drawing at byte {i}: {grid[max(0, i - 60):i + 40]!r} vs {plain[max(0, i - 60):i + 40]!r}')
             print(f'same {rel} ({len(grid)} bytes, {time.time() - started:.1f}s)')
+        browser.close()
+    with sync_playwright() as p:
+        browser = p.chromium.launch(**chromium_launch_kwargs(disable_gpu=True))
+        for rel in CROSS_CHECKED:
+            LABELLED.add(rel)
+            started = time.time()
+            _, mismatches = draw(browser, html, ROOT / rel, False)
+            LABELLED.discard(rel)
+            assert not mismatches, f'{rel}: the label grid miscounts {len(mismatches)} places, first {mismatches[0]}'
+            print(f'counts agree on {rel}, every wire labelled ({time.time() - started:.1f}s)')
         browser.close()
     print(f'spatial index parity QA passed: {len(DOCUMENTS)} documents drawn the same with and without the grids')
     return 0

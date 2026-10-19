@@ -68,7 +68,7 @@ def check_document(app, viewer_page, src: Path, html: Path) -> int:
     errors = open_viewer(viewer_page, html)
     v = viewer_page.evaluate(VIEWER_JS)
     assert not errors, f'{html.name}: page errors {errors}'
-    themes = viewer_page.evaluate('() => [window.SovViewer.data.svg.light, window.SovViewer.data.svg.dark].map(s => /background-color:\s*([^;"]+)/.exec(s)[1])')
+    themes = viewer_page.evaluate(r'() => [window.SovViewer.data.svg.light, window.SovViewer.data.svg.dark].map(s => /background-color:\s*([^;"]+)/.exec(s)[1])')
     assert themes[0] != themes[1], f'{html.name}: light and dark pictures share the background {themes[0]}'
     assert sorted(v['ids']) == sorted(core['ids']), f'{html.name}: viewer cards differ from the document'
     assert set(v['drawn']) <= set(v['ids']), f'{html.name}: drawn cards the viewer does not know: {set(v["drawn"]) - set(v["ids"])}'
@@ -113,6 +113,8 @@ def hostile_label(tmp: Path) -> Path:
     doc = json.loads((ROOT / 'examples' / '08-gated-service.sov').read_text(encoding='utf-8'))
     doc['meta']['title'] = 'Hostile </script><script>window.PWNED=1</script>'
     doc['components'][0]['config']['label'] = '</script><img src=x onerror="window.PWNED=2">'
+    # <!--<script> puts the parser in script-data-escaped mode, where a data block swallows the page.
+    doc['components'][1]['config']['label'] = '<!--<script>a & b'
     path = tmp / 'hostile.sov'
     path.write_text(json.dumps(doc), encoding='utf-8')
     return path
@@ -145,6 +147,7 @@ def main() -> int:
             assert not errors, errors
             assert page.evaluate('() => window.PWNED') is None, 'a label ran as script'
             assert page.title().startswith('Hostile </script>'), page.title()
+            assert page.evaluate('() => window.SovViewer.data.nodes[1].label') == '<!--<script>a & b'
             page.close()
             browser.close()
     print(f'html viewer QA passed: {len(results)} documents, {cards} cards traced against the graph core')
