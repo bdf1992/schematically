@@ -58,7 +58,9 @@ def script_safe(value) -> str:
 
 
 def export_documents(paths: list[Path], out_dir: Path | None = None, pad: int = 48) -> list[dict]:
-    """Write one .html per .sov. Returns one record per input: {source, target, bytes, errors}."""
+    """Write one .html per .sov. Returns one record per input: {source, target, bytes, errors, id,
+    nodes, svg_bytes, blocked}. This writes over an existing target; scripts/deliver_sov.py is the
+    step that checks first and keeps the last good file."""
     from playwright.sync_api import sync_playwright
     if not HTML.exists():
         raise SystemExit('index.html is missing; run python build.py first')
@@ -87,8 +89,12 @@ def export_documents(paths: list[Path], out_dir: Path | None = None, pad: int = 
             target = (out_dir / f'{src.stem}.html') if out_dir else src.with_suffix('.html')
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(html, encoding='utf-8', newline='\n')
+            # id, cards, picture sizes and blocked wires let scripts/deliver_sov.py check that the
+            # viewer shows the document it was given.
             results.append({'source': src, 'target': target, 'bytes': len(html.encode('utf-8')),
-                            'errors': errors[before:]})
+                            'errors': errors[before:], 'id': data['id'], 'nodes': len(data['nodes']),
+                            'svg_bytes': {k: len(v or '') for k, v in data['svg'].items()},
+                            'blocked': data['blocked']})
         browser.close()
     return results
 

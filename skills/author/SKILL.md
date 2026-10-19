@@ -8,7 +8,7 @@ Create or edit `.sov` schematics without bypassing the schematic model.
 
 Prefer the browser API, REST API, or MCP tools over direct mutation of runtime arrays. A diagram is not merely SVG: Components, Wires, Forms, Ports, containment, editor states, and history have semantic meaning.
 
-The tools an author writes and checks with: `schematic.guide`, `schematic.read`, `schematic.apply`, `schematic.concerns`, `schematic.concerns.answer`, `schematic.markers`, `schematic.render`, `schematic.layout.metrics`. In the browser: `SovSchematicAPI.apply`, `read`, `concerns.list`, `concerns.answer`, `markers`, `render.svg`.
+The tools an author writes and checks with: `schematic.guide`, `schematic.read`, `schematic.apply`, `schematic.concerns`, `schematic.concerns.answer`, `schematic.markers`, `schematic.render`, `schematic.layout.metrics`, and `schematic.deliver` to hand the result over. In the browser: `SovSchematicAPI.apply`, `read`, `concerns.list`, `concerns.answer`, `markers`, `render.svg`.
 
 ## Concerns
 
@@ -50,6 +50,20 @@ A child may connect to siblings and Ports exposed to its containing surface. To 
 7. After writing, read the open rows again. Answer each one the request or the drawing settles, leave the rest open, and name the rows left open in the reply to the person.
 8. Save a checkpoint at meaningful milestones.
 9. Validate, inspect the normal editor and exported SVG in both appearances, then save and reopen. Structural validation alone is not visual QA.
+10. Deliver (below): the person receives one HTML file, never a .sov they must open in the editor.
+
+## Deliver
+
+Delivery checks the document and writes it as one self-contained interactive HTML viewer (search, details, trace, route, both themes; `scripts/export_html.py`). Over MCP call `schematic.deliver` (`{out?}`: a `.html` name in the document's folder, default `<name>.html` beside it). Offline run `node scripts/validate_sov.mjs --json file.sov` to check, then `python scripts/deliver_sov.py file.sov [--out f.html] [--json] [--open]`.
+
+Every finding carries a stable code (`SOVnnn`, listed in `docs/RULE-CODES.md`), the element `id` it names, and a `repair`. Any `error` refuses the delivery and leaves the previous viewer exactly as it was (`previous: kept`); a `warning` (SOV605, a wire tracing does not follow) is reported and delivered.
+
+When a delivery is refused:
+1. Apply each finding's repair to the element its `id` names, in one `schematic.apply` batch, and call `schematic.deliver` again.
+2. At most two correction rounds. If the second retry still fails, stop and report to the person the codes and ids that remain, and that the last good viewer is unchanged. Do not loosen the document (delete a wire, drop a status) to make a finding go away unless the request allows that change.
+3. A render finding (SOV601-SOV604) is not fixed by editing the drawing blindly: SOV604 is a missing renderer (install Playwright Chromium, build `index.html`); SOV601 and SOV603 mean the editor refused the file, so open it in the editor and read the error.
+
+Report the delivered path and the codes of any warnings. A delivered viewer is still checked by looking at it in both themes before calling it done.
 
 ## Layout and review
 
