@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Schematically scripts/export_html.py">
+<title>Schematic</title>
+<!-- Written by scripts/export_html.py from scripts/viewer_template.html. The picture is the
+     editor's own render.svg; the arcs are SovSchematicGraph.build's. Nothing here is fetched. -->
+<style>
+:root{
+  --bg:#f6f6f3;--panel:rgba(255,255,255,.86);--ink:#171715;--muted:#5d5d57;--line:rgba(23,23,21,.12);
+  --accent:#2f6fde;--accent-ink:#fff;--up:#a1531b;--route:#1d7f55;--shadow:0 8px 28px rgba(0,0,0,.10);
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#111214;--panel:rgba(28,29,33,.82);--ink:#ececea;--muted:#a3a39d;--line:rgba(236,236,234,.12);
+  --accent:#7aa5ff;--accent-ink:#0d1222;--up:#f0a36b;--route:#5fd3a0;--shadow:0 8px 28px rgba(0,0,0,.45);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+  font:14px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{display:grid;grid-template-rows:auto 1fr auto;overflow:hidden}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);
+  background:var(--panel);backdrop-filter:blur(10px);z-index:2}
+h1{font-size:15px;font-weight:600;margin:0 12px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40ch}
+.grow{flex:1}
+input[type=search]{width:min(260px,100%);padding:6px 10px;border:1px solid var(--line);border-radius:8px;
+  background:transparent;color:var(--ink);font:inherit}
+button{font:inherit;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:8px;
+  padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:disabled{opacity:.4;cursor:default}
+main{position:relative;overflow:hidden;min-height:0}
+#stage{position:absolute;inset:0;touch-action:none;cursor:grab}
+#stage.panning{cursor:grabbing}
+#stage>svg{width:100%;height:100%;display:block}
+#stage g.node{cursor:pointer}
+#stage g.node:focus{outline:none}
+#stage g.node:focus-visible>*:first-child{outline:2px solid var(--accent)}
+#stage svg.dim g.node:not(.hit):not(.ctx),#stage svg.dim g.wire-group:not(.hit){opacity:.12!important}
+#stage svg.dim g.node.ctx{opacity:.45!important}
+#stage g.node.sel{filter:drop-shadow(0 0 6px var(--accent))}
+#stage svg.mode-up g.node.sel{filter:drop-shadow(0 0 6px var(--up))}
+#stage svg.mode-route g.node.hit{filter:drop-shadow(0 0 4px var(--route))}
+@media (prefers-reduced-motion:no-preference){#stage g.node,#stage g.wire-group{transition:opacity .18s}}
+aside{position:absolute;top:12px;right:12px;width:min(320px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;
+  background:var(--panel);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);
+  padding:14px 16px;z-index:1}
+aside[hidden]{display:none}
+aside h2{font-size:16px;margin:0 0 2px}
+aside .id{color:var(--muted);font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
+aside h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:14px 0 4px}
+aside ul{list-style:none;margin:0;padding:0}
+aside li{padding:2px 0}
+aside a{color:var(--accent);text-decoration:none;cursor:pointer}
+aside a:hover{text-decoration:underline}
+aside .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+aside .row button{flex:1 1 auto}
+aside .close{position:absolute;top:8px;right:8px;border:none;font-size:18px;line-height:1;padding:4px 8px}
+aside p.note{margin:8px 0 0;color:var(--muted)}
+footer{display:flex;gap:12px;align-items:center;padding:6px 16px;border-top:1px solid var(--line);color:var(--muted);
+  font-size:12px;background:var(--panel)}
+footer kbd{font:11px ui-monospace,Consolas,monospace;border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.sep{width:1px;height:20px;background:var(--line)}
+@media (max-width:640px){
+  header{padding:8px 16px}
+  h1{max-width:100%;flex-basis:100%}
+  aside{top:auto;bottom:12px;max-height:45%}
+  footer .keys{display:none}
+}
+@media print{
+  header,footer,aside{display:none!important}
+  body{display:block;height:auto;background:#fff}
+  main{position:static;height:100vh}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <input id="search" type="search" placeholder="Find a card  ( / )" list="cards" aria-label="Find a card" autocomplete="off">
+  <datalist id="cards"></datalist>
+  <span class="sep" aria-hidden="true"></span>
+  <button id="bDown" title="What this card reaches (d)" aria-pressed="false" disabled>Downstream</button>
+  <button id="bUp" title="What reaches this card (u)" aria-pressed="false" disabled>Upstream</button>
+  <button id="bRoute" title="Route from this card to another (r)" aria-pressed="false" disabled>Route to…</button>
+  <span class="grow"></span>
+  <button id="bFit" title="Fit the drawing (f)">Fit</button>
+  <button id="bTheme" title="Light, dark or system (t)">Theme: system</button>
+  <button id="bPng" title="Save the current view as PNG">PNG</button>
+  <button id="bPrint" title="Print or save as PDF">Print</button>
+  <button id="bLink" title="Copy a link to this view">Copy link</button>
+</header>
+<main>
+  <div id="stage" aria-label="Schematic drawing"></div>
+  <aside id="panel" hidden aria-live="polite"></aside>
+</main>
+<footer>
+  <span id="status" role="status"></span>
+  <span class="grow"></span>
+  <span class="keys"><kbd>/</kbd> find · <kbd>d</kbd> <kbd>u</kbd> <kbd>r</kbd> trace · <kbd>Esc</kbd> clear · scroll to zoom, drag to pan</span>
+</footer>
+<script id="viewer-data" type="application/json">/*__VIEWER_DATA__*/null</script>
+<script>
+(function(){
+'use strict';
+const D=JSON.parse(document.getElementById('viewer-data').textContent);
+const $=id=>document.getElementById(id);
+const stage=$('stage'),panel=$('panel'),statusEl=$('status'),search=$('search');
+const nodes=new Map(D.nodes.map(n=>[n.id,n]));
+const wires=new Map(D.wires.map(w=>[w.id,w]));
+const out=new Map(),inc=new Map();
+for(const id of nodes.keys()){out.set(id,[]);inc.set(id,[])}
+for(const a of D.arcs){if(out.has(a.from))out.get(a.from).push(a);if(inc.has(a.to))inc.get(a.to).push(a)}
+const children=new Map();
+for(const n of D.nodes)if(n.parentId){if(!children.has(n.parentId))children.set(n.parentId,[]);children.get(n.parentId).push(n.id)}
+const label=id=>(nodes.get(id)||{}).label||id;
+
+// Downstream is the graph core's reach (src/07-graph-core.js): breadth first along arcs, never
+// through a control arc. Upstream is the same walk against the arcs' direction.
+function walk(from,step,next){
+  const seen=new Set([from]),queue=[from],via=new Set();
+  while(queue.length){const id=queue.shift();for(const a of step.get(id)||[]){if(a.control)continue;via.add(a.wire);const n=next(a);if(!seen.has(n)){seen.add(n);queue.push(n)}}}
+  seen.delete(from);return {nodes:[...seen],wires:[...via]};
+}
+const downstream=id=>walk(id,out,a=>a.to);
+const upstream=id=>walk(id,inc,a=>a.from);
+// The shortest directed route, counted in wires, along any arc the graph core admits (as its
+// paths query does). Null when there is none.
+function route(a,b){
+  if(!nodes.has(a)||!nodes.has(b)||a===b)return null;
+  const prev=new Map([[a,null]]),queue=[a];
+  while(queue.length&&!prev.has(b)){const id=queue.shift();for(const arc of out.get(id)||[])if(!prev.has(arc.to)){prev.set(arc.to,arc);queue.push(arc.to)}}
+  if(!prev.has(b))return null;
+  const ns=[b],ws=[];for(let arc=prev.get(b);arc;arc=prev.get(arc.from)){ws.unshift(arc.wire);ns.unshift(arc.from)}
+  return {nodes:ns,wires:ws};
+}
+
+const state={focus:null,mode:null,to:null,picking:false,theme:'system'};
+let svg=null,view=null,home=null;
+
+function resolvedTheme(){return state.theme==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):state.theme}
+function mount(){
+  const theme=resolvedTheme();
+  document.documentElement.dataset.theme=theme;
+  stage.innerHTML=D.svg[theme];
+  svg=stage.querySelector('svg');
+  svg.removeAttribute('id');
+  document.documentElement.style.setProperty('--bg',svg.style.backgroundColor||'');
+  const vb=svg.viewBox.baseVal;home={x:vb.x,y:vb.y,w:vb.width,h:vb.height};
+  if(!view)view={...home};
+  setView(view);
+  for(const g of svg.querySelectorAll('g.node[data-id]')){
+    g.setAttribute('tabindex','0');g.setAttribute('role','button');g.setAttribute('aria-label',label(g.dataset.id));
+  }
+  $('bTheme').textContent='Theme: '+state.theme;
+  paint();
+}
+function setView(v){view=v;svg.setAttribute('viewBox',`${v.x} ${v.y} ${v.w} ${v.h}`)}
+function toSvg(cx,cy){const r=stage.getBoundingClientRect(),s=Math.max(view.w/r.width,view.h/r.height);
+  return {x:view.x+(cx-r.left-(r.width-view.w/s)/2)*s,y:view.y+(cy-r.top-(r.height-view.h/s)/2)*s,s}}
+function zoomAt(cx,cy,f){const p=toSvg(cx,cy),w=Math.min(Math.max(view.w*f,home.w/40),home.w*8),k=w/view.w;
+  setView({x:p.x-(p.x-view.x)*k,y:p.y-(p.y-view.y)*k,w,h:view.h*k})}
+function centerOn(id){
+  const g=svg.querySelector(`g.node[data-id="${CSS.escape(id)}"]`);if(!g)return;
+  const r=g.getBoundingClientRect(),c=toSvg(r.left+r.width/2,r.top+r.height/2);
+  setView({...view,x:c.x-view.w/2,y:c.y-view.h/2});
+}
+
+function highlight(){
+  if(!state.focus)return null;
+  if(state.mode==='down')return downstream(state.focus);
+  if(state.mode==='up')return upstream(state.focus);
+  if(state.mode==='route'&&state.to)return route(state.focus,state.to)||{nodes:[],wires:[],none:true};
+  return {nodes:[],wires:[...(out.get(state.focus)||[]),...(inc.get(state.focus)||[])].map(a=>a.wire)};
+}
+function paint(){
+  if(!svg)return;
+  const h=highlight();
+  for(const el of svg.querySelectorAll('.hit,.ctx,.sel'))el.classList.remove('hit','ctx','sel');
+  svg.classList.toggle('dim',!!h);
+  svg.classList.remove('mode-down','mode-up','mode-route');
+  if(state.mode)svg.classList.add('mode-'+state.mode);
+  if(h){
+    const hitNodes=new Set([state.focus,...h.nodes]),ctx=new Set();
+    for(const id of hitNodes)for(let p=(nodes.get(id)||{}).parentId;p;p=(nodes.get(p)||{}).parentId)if(!hitNodes.has(p))ctx.add(p);
+    for(const g of svg.querySelectorAll('g.node[data-id]')){const id=g.dataset.id;
+      if(hitNodes.has(id))g.classList.add('hit');else if(ctx.has(id))g.classList.add('ctx');if(id===state.focus)g.classList.add('sel')}
+    const hw=new Set(h.wires);
+    for(const g of svg.querySelectorAll('g.wire-group[data-wire-id]'))if(hw.has(g.dataset.wireId))g.classList.add('hit');
+  }
+  for(const [b,m] of [['bDown','down'],['bUp','up'],['bRoute','route']]){$(b).disabled=!state.focus;$(b).setAttribute('aria-pressed',String(state.mode===m))}
+  statusEl.textContent=describe(h);
+  renderPanel(h);
+  writeHash();
+}
+function describe(h){
+  const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
+  if(!state.focus)return `${plural(D.nodes.length,'card')}, ${plural(D.wires.length,'wire')}${D.blocked.length?`, ${plural(D.blocked.length,'blocked wire leg')}`:''}. Click a card to trace it.`;
+  const f=label(state.focus);
+  if(state.mode==='down')return `${f} reaches ${plural(h.nodes.length,'card')} over ${plural(h.wires.length,'wire')}.`;
+  if(state.mode==='up')return `${plural(h.nodes.length,'card')} reach ${f} over ${plural(h.wires.length,'wire')}.`;
+  if(state.mode==='route'){
+    if(state.picking)return `Pick the card to route ${f} to.`;
+    if(h.none)return `No directed route from ${f} to ${label(state.to)}.`+(route(state.to,state.focus)?' There is one the other way.':'');
+    return `Route from ${f} to ${label(state.to)}: ${h.nodes.map(label).join(' → ')} (${plural(h.wires.length,'wire')}).`;
+  }
+  return `${f}: ${plural((out.get(state.focus)||[]).length,'outgoing arc')}, ${plural((inc.get(state.focus)||[]).length,'incoming arc')}.`;
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c])}
+const link=id=>`<a data-go="${esc(id)}">${esc(label(id))}</a>`;
+function arcLine(a,dir){const w=wires.get(a.wire),name=w&&w.label?` <span class="id">${esc(w.label)}</span>`:'';
+  return `<li>${dir==='out'?'→ '+link(a.to):'← '+link(a.from)}${name}${a.control?' <span class="id">(control)</span>':''}</li>`}
+function renderPanel(h){
+  if(!state.focus){panel.hidden=true;panel.innerHTML='';return}
+  const n=nodes.get(state.focus),o=out.get(n.id)||[],i=inc.get(n.id)||[],kids=children.get(n.id)||[];
+  const blocked=D.blocked.filter(b=>{const w=wires.get(b.wire);return w&&(w.a===n.id||w.b===n.id)});
+  let html=`<button class="close" data-act="clear" aria-label="Close">×</button><h2>${esc(n.label)}</h2><div class="id">${esc(n.id)}${n.symbolId?' · '+esc(n.symbolId):''}</div>`;
+  if(n.note)html+=`<p class="note">${esc(n.note)}</p>`;
+  if(n.parentId)html+=`<h3>Inside</h3><ul><li>${link(n.parentId)}</li></ul>`;
+  if(kids.length)html+=`<h3>Contains</h3><ul>${kids.map(k=>`<li>${link(k)}</li>`).join('')}</ul>`;
+  if(o.length)html+=`<h3>Out</h3><ul>${o.map(a=>arcLine(a,'out')).join('')}</ul>`;
+  if(i.length)html+=`<h3>In</h3><ul>${i.map(a=>arcLine(a,'in')).join('')}</ul>`;
+  if(blocked.length)html+=`<h3>Blocked</h3><ul>${blocked.map(b=>`<li><span class="id">${esc(b.wire)}</span> ${esc(b.reason)}</li>`).join('')}</ul>`;
+  if(state.mode&&h&&!h.none&&h.nodes.length)html+=`<h3>${state.mode==='route'?'Route':state.mode==='down'?'Reaches':'Reached from'}</h3><ul>${h.nodes.filter(id=>id!==state.focus).map(id=>`<li>${link(id)}</li>`).join('')}</ul>`;
+  html+=`<div class="row"><button data-act="down">Downstream</button><button data-act="up">Upstream</button><button data-act="route">Route to…</button><button data-act="center">Center</button></div>`;
+  panel.innerHTML=html;panel.hidden=false;
+}
+
+function select(id){
+  if(!nodes.has(id))return false;
+  if(state.picking&&state.focus&&id!==state.focus){state.to=id;state.picking=false;paint();return true}
+  if(state.focus!==id){state.focus=id;state.to=null;state.picking=false;if(state.mode==='route')state.mode=null}
+  paint();return true;
+}
+function setMode(m){
+  if(!state.focus)return;
+  if(state.mode===m&&!state.picking){state.mode=null;state.to=null}
+  else{state.mode=m;state.picking=m==='route';if(m!=='route')state.to=null}
+  paint();
+}
+function clear(){state.focus=null;state.mode=null;state.to=null;state.picking=false;paint()}
+function setTheme(t){state.theme=t;mount()}
+
+function writeHash(){
+  const p=new URLSearchParams();
+  if(state.focus)p.set('focus',state.focus);
+  if(state.mode&&!state.picking)p.set('mode',state.mode);
+  if(state.to)p.set('to',state.to);
+  if(state.theme!=='system')p.set('theme',state.theme);
+  const h=p.toString();
+  if(location.hash.slice(1)!==h)history.replaceState(null,'',h?'#'+h:location.pathname+location.search);
+}
+function readHash(){
+  const p=new URLSearchParams(location.hash.slice(1));
+  const theme=p.get('theme');state.theme=['light','dark'].includes(theme)?theme:'system';
+  const f=p.get('focus');state.focus=nodes.has(f)?f:null;
+  const m=p.get('mode');state.mode=state.focus&&['down','up','route'].includes(m)?m:null;
+  const t=p.get('to');state.to=state.mode==='route'&&nodes.has(t)?t:null;
+  if(state.mode==='route'&&!state.to)state.mode=null;
+  state.picking=false;
+}
+
+function find(q){
+  q=q.trim().toLowerCase();if(!q)return null;
+  const all=D.nodes;
+  return (all.find(n=>n.label.toLowerCase()===q||n.id.toLowerCase()===q)||all.find(n=>n.label.toLowerCase().startsWith(q))||all.find(n=>n.label.toLowerCase().includes(q)||n.id.toLowerCase().includes(q))||{}).id||null;
+}
+
+function savePng(){
+  const clone=svg.cloneNode(true),r=stage.getBoundingClientRect(),scale=2;
+  const bg=getComputedStyle(document.body).backgroundColor;
+  const css=[...document.styleSheets[0].cssRules].map(r=>r.cssText).filter(t=>t.includes('svg.dim')||t.includes('.sel')).join('\n').replace(/#stage /g,'');
+  const st=document.createElementNS('http://www.w3.org/2000/svg','style');const root=getComputedStyle(document.documentElement);st.textContent=css.replace(/var\(--(accent|up|route)\)/g,(_,name)=>root.getPropertyValue('--'+name));
+  clone.insertBefore(st,clone.firstChild);
+  clone.setAttribute('width',r.width);clone.setAttribute('height',r.height);
+  const img=new Image(),url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));
+  img.onload=()=>{const c=document.createElement('canvas');c.width=r.width*scale;c.height=r.height*scale;const x=c.getContext('2d');
+    x.fillStyle=bg;x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);
+    c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(D.source||'schematic').replace(/\.sov$/,'')+(state.focus?'-'+state.focus:'')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)},'image/png')};
+  img.src=url;
+}
+
+// ---- wiring
+let drag=null;
+stage.addEventListener('pointerdown',e=>{if(e.button!==0)return;drag={x:e.clientX,y:e.clientY,v:{...view},moved:false};stage.setPointerCapture(e.pointerId)});
+stage.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+  if(!drag.moved&&Math.hypot(dx,dy)<4)return;drag.moved=true;stage.classList.add('panning');
+  const r=stage.getBoundingClientRect(),s=Math.max(drag.v.w/r.width,drag.v.h/r.height);setView({...drag.v,x:drag.v.x-dx*s,y:drag.v.y-dy*s})});
+stage.addEventListener('pointerup',e=>{const d=drag;drag=null;stage.classList.remove('panning');if(!d||d.moved)return;
+  const el=document.elementFromPoint(e.clientX,e.clientY),g=el&&el.closest('g.node[data-id]');if(g)select(g.dataset.id);else if(!state.picking)clear()});
+stage.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,Math.exp(e.deltaY*0.0015))},{passive:false});
+stage.addEventListener('keydown',e=>{const g=e.target.closest&&e.target.closest('g.node[data-id]');if(g&&(e.key==='Enter'||e.key===' ')){e.preventDefault();select(g.dataset.id)}});
+panel.addEventListener('click',e=>{const a=e.target.closest('[data-go]');if(a){select(a.dataset.go);centerOn(a.dataset.go);return}
+  const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
+  if(act==='clear')clear();else if(act==='center')centerOn(state.focus);else setMode(act)});
+$('bDown').onclick=()=>setMode('down');$('bUp').onclick=()=>setMode('up');$('bRoute').onclick=()=>setMode('route');
+$('bFit').onclick=()=>setView({...home});
+$('bTheme').onclick=()=>setTheme({system:'light',light:'dark',dark:'system'}[state.theme]);
+$('bPng').onclick=savePng;$('bPrint').onclick=()=>print();
+$('bLink').onclick=()=>{const u=location.href;(navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>{statusEl.textContent='Link copied.'},()=>prompt('Link to this view',u))};
+search.addEventListener('keydown',e=>{if(e.key==='Enter'){const id=find(search.value);if(id){select(id);centerOn(id);search.blur()}else statusEl.textContent=`No card matches “${search.value}”.`}
+  if(e.key==='Escape'){search.value='';search.blur()}});
+document.addEventListener('keydown',e=>{
+  if(e.target===search||e.ctrlKey||e.metaKey||e.altKey)return;
+  const k=e.key;
+  if(k==='/'){e.preventDefault();search.focus();search.select()}
+  else if(k==='Escape')clear();
+  else if(k==='d')setMode('down');else if(k==='u')setMode('up');else if(k==='r')setMode('route');
+  else if(k==='t')$('bTheme').click();else if(k==='f'||k==='0')setView({...home});
+  else if(k==='+'||k==='=')zoomAt(innerWidth/2,innerHeight/2,0.8);else if(k==='-')zoomAt(innerWidth/2,innerHeight/2,1.25);
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(state.theme==='system')mount()});
+addEventListener('hashchange',()=>{readHash();mount()});
+
+document.title=D.title;$('title').textContent=D.title;$('title').title=D.title;
+$('cards').innerHTML=D.nodes.map(n=>`<option value="${esc(n.label)}">${esc(n.id)}</option>`).join('');
+readHash();mount();
+window.SovViewer={data:D,state,downstream,upstream,route,select,setMode,clear,setTheme,find};
+})();
+</script>
+</body>
+</html>
