@@ -19,13 +19,15 @@ Use Schematically to diagram a web request: Browser calls the API, the API check
 and a cache miss queries PostgreSQL and fills the cache.
 ```
 
-The agent writes a `.sov` document and runs `node bin/schematically.mjs deliver file.sov --open`, which checks it against the model below, lays it out, and writes one `.html` file that works offline: search, downstream and upstream tracing, routes between cards, light and dark, PNG and print, and links that restore a view. Keep going in chat ("add authentication", "put the database in a private network"); a failed run keeps the last good file. Without an agent, clone the `dev` branch and run the demo, which writes and opens an example:
+The skill installs under `.agents/skills/schematically/` in that folder. The agent writes a `.sov` document and runs `node .agents/skills/schematically/bin/schematically.mjs deliver file.sov --open`, which checks it against the model below, lays it out, and writes one `.html` file that works offline: search, downstream and upstream tracing, routes between cards, light and dark, PNG and print, and links that restore a view. Keep going in chat ("add authentication", "put the database in a private network"); a failed run keeps the last good file. Without an agent, clone the `dev` branch and run the demo, which writes and opens an example:
 
 ```bash
 git clone -b dev https://github.com/bdf1992/schematically.git
 cd schematically
 node bin/schematically.mjs demo --open
 ```
+
+The example is written to `schematically-demo/web-request.html` inside the clone.
 
 The same `.sov` opens in the full editor (`index.html`) for direct editing and simulation.
 
