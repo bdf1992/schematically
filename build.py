@@ -41,7 +41,10 @@ print(ROOT/'index.html')
 SKILL_BUNDLE=['LICENSE','bin/schematically.mjs','scripts/sov_check.mjs','scripts/viewer_template.html','index.html',
               'src/03-canonical.js','src/03-notation-core.js','src/06-attachment-core.js','src/05-data-core.js',
               'src/08-layout-core.js']
-for rel in SKILL_BUNDLE:
-    target=ROOT/'skills/schematically'/rel
-    target.parent.mkdir(parents=True,exist_ok=True)
-    target.write_bytes((ROOT/rel).read_bytes())
+# A partial copy of the tree with no skill folder (tests/qa_scheduler_qa.py builds one) has no
+# bundle to write.
+if (ROOT/'skills/schematically/SKILL.md').exists():
+    for rel in SKILL_BUNDLE:
+        target=ROOT/'skills/schematically'/rel
+        target.parent.mkdir(parents=True,exist_ok=True)
+        target.write_bytes((ROOT/rel).read_bytes())
