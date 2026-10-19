@@ -9,6 +9,14 @@ assert {key:qa[key] for key in expected}==expected, 'no authoritative check was 
 assert not qa['parallel_safe']('tests/performance_regression_qa.py')
 assert not qa['parallel_safe']('tests/served_editor_qa.py')
 assert qa['parallel_safe']('tests/ports_panel_qa.py')
+# Every reviewed-independent suite is in the queue, writes only into a temporary directory or a
+# snapshot mode, and no measured-timing suite can be declared independent.
+queue_all=[*expected['STATIC'],*expected['BROWSER'],*expected['TAIL']]
+for path in qa['REVIEWED_INDEPENDENT']:
+    assert path in queue_all and qa['parallel_safe'](path), path
+    source=(ROOT/path).read_text(encoding='utf-8')
+    assert 'TemporaryDirectory' in source or 'snapshot_mode' in source, path
+assert not qa['parallel_safe']('tests/map_render_time_qa.py') and not qa['parallel_safe']('tests/state_space_perf_qa.py')
 
 run_browser=qa['run_browser']
 lock=threading.Lock()
