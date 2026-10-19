@@ -10,7 +10,7 @@ Describe a system to your coding agent and get an interactive diagram you can op
 npx skills add bdf1992/schematically#dev --skill schematically
 ```
 
-The `#dev` matters: the installable skill lives on the `dev` branch until the next release reaches `main`, and without it the command reports "No skills found". There is no skills.sh listing and no hosted site for this project; the install comes straight from this GitHub repository.
+The `#dev` matters: the installable skill lives on the `dev` branch until the next release reaches `main`, and without it the command reports "No valid skills found". There is no skills.sh listing and no hosted site for this project; the install comes straight from this GitHub repository.
 
 Then tell your agent, for example:
 
