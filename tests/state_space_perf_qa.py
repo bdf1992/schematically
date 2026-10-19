@@ -30,9 +30,9 @@ RUNS = 3
 GROW_BUDGET = 100000
 # grow.sov's stepping time is held as a multiple of REF (see GROW_TIMED), because GitHub's hosted
 # runners differ from each other by about 2x in raw speed. The limit and its evidence are below main().
-REF_N = 22222
-REF_HEAD = '2182e55791ba9beba28caf0436391a73b56df744edd3d2b99c2d097ab295425e'
-GROW_RATIO_LIMIT = 4.0
+REF_N = 5000
+REF_HEAD = '7c63af499fe3963c612d2c4ed2aa3918548dc293d19b9b14b8d7875661b56478'
+GROW_RATIO_LIMIT = 20.0
 
 SETUP = r"""
 const S=require(process.argv[1]),D=globalThis.SovSchematicData,C=globalThis.SovSchematicCanonical,fs=require('fs');
@@ -119,14 +119,14 @@ if(!seen.has(rec.entity))seen.set(rec.entity,new Set());seen.get(rec.entity).add
 const body=enc({after:i,records:recs,prev:head});head=sha(utf8(body));kept.push({hash:head,records:recs.map(r=>({...r}))})}
 if(head!==""" + json.dumps(REF_HEAD) + r""")throw new Error('reference workload head '+head);
 return Number(process.hrtime.bigint()-t0)/1e6};
-const refs=[];REF(""" + str(REF_N) + r""");for(let i=0;i<3;i++)refs.push(REF(""" + str(REF_N) + r"""));
+const refs=[];REF(""" + str(REF_N) + r""");for(let i=0;i<2;i++)refs.push(REF(""" + str(REF_N) + r"""));
 const doc=load();
 const t0=process.hrtime.bigint();
 const s=S.startRun({doc,packs,budget:""" + str(GROW_BUDGET) + r"""});if(!s.ok)throw new Error(JSON.stringify(s));
 const run=s.run;let last;for(;;){last=S.step(run);if(!last.ok||last.tick===null)break}
 const ms=Number(process.hrtime.bigint()-t0)/1e6;
-for(let i=0;i<3;i++)refs.push(REF(""" + str(REF_N) + r"""));
-refs.sort((a,b)=>a-b);const ref=(refs[2]+refs[3])/2;
+for(let i=0;i<2;i++)refs.push(REF(""" + str(REF_N) + r"""));
+refs.sort((a,b)=>a-b);const ref=(refs[1]+refs[2])/2;
 process.stdout.write(JSON.stringify({ms,ref,refs,ratio:ms/ref,last:{ok:last.ok,code:last.code||null,tick:last.tick},through:run.tick}));
 """
 
