@@ -1,0 +1,205 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "release-pipeline",
+  "revision": 0,
+  "meta": {
+    "title": "A release from merge to production with a canary"
+  },
+  "components": [
+    {
+      "id": "merge",
+      "symbolId": "act",
+      "config": {
+        "label": "Merge to main",
+        "note": "A reviewed pull request lands.",
+        "signalMode": "source"
+      }
+    },
+    {
+      "id": "build",
+      "symbolId": "act",
+      "config": {
+        "label": "Build",
+        "note": "Reproducible container image."
+      }
+    },
+    {
+      "id": "tests",
+      "symbolId": "gate",
+      "config": {
+        "label": "Test suite",
+        "note": "Unit, integration and contract tests."
+      }
+    },
+    {
+      "id": "registry",
+      "symbolId": "hold",
+      "config": {
+        "label": "Image registry",
+        "note": "Signed image, tagged by commit."
+      }
+    },
+    {
+      "id": "staging",
+      "symbolId": "act",
+      "config": {
+        "label": "Staging deploy",
+        "note": "Same manifests as production."
+      }
+    },
+    {
+      "id": "approve",
+      "symbolId": "authority",
+      "config": {
+        "label": "Release approval",
+        "note": "An on-call engineer signs off."
+      }
+    },
+    {
+      "id": "canary",
+      "symbolId": "gate",
+      "config": {
+        "label": "Canary 5%",
+        "note": "Error rate and latency against the baseline."
+      }
+    },
+    {
+      "id": "prod",
+      "symbolId": "act",
+      "config": {
+        "label": "Production",
+        "note": "Rolled out to every region."
+      }
+    },
+    {
+      "id": "rollback",
+      "symbolId": "act",
+      "config": {
+        "label": "Rollback",
+        "note": "Previous image restored automatically."
+      }
+    },
+    {
+      "id": "monitor",
+      "symbolId": "observe",
+      "config": {
+        "label": "Monitoring",
+        "note": "Dashboards and alerts."
+      }
+    },
+    {
+      "id": "notes",
+      "symbolId": "receipt",
+      "config": {
+        "label": "Release notes",
+        "note": "Commit range, approver, outcome."
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "merge",
+      "aSide": "out",
+      "b": "build",
+      "bSide": "in",
+      "config": {
+        "label": "trigger"
+      }
+    },
+    {
+      "id": "w2",
+      "a": "build",
+      "aSide": "out",
+      "b": "tests",
+      "bSide": "in",
+      "config": {
+        "label": "image"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "tests",
+      "aSide": "out",
+      "b": "registry",
+      "bSide": "in",
+      "config": {
+        "label": "pass",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "registry",
+      "aSide": "out",
+      "b": "staging",
+      "bSide": "in",
+      "config": {
+        "label": "deploy",
+        "forwardOperation": "read"
+      }
+    },
+    {
+      "id": "w5",
+      "a": "staging",
+      "aSide": "out",
+      "b": "canary",
+      "bSide": "in",
+      "config": {
+        "label": "promote"
+      }
+    },
+    {
+      "id": "w6",
+      "a": "approve",
+      "aSide": "out",
+      "b": "canary",
+      "bSide": "control",
+      "config": {
+        "label": "go"
+      }
+    },
+    {
+      "id": "w7",
+      "a": "canary",
+      "aSide": "out",
+      "b": "prod",
+      "bSide": "in",
+      "config": {
+        "label": "healthy"
+      }
+    },
+    {
+      "id": "w8",
+      "a": "canary",
+      "aSide": "out",
+      "b": "rollback",
+      "bSide": "in",
+      "config": {
+        "label": "regressed"
+      }
+    },
+    {
+      "id": "w9",
+      "a": "prod",
+      "aSide": "out",
+      "b": "monitor",
+      "bSide": "in",
+      "config": {
+        "label": "signals"
+      }
+    },
+    {
+      "id": "w10",
+      "a": "prod",
+      "aSide": "out",
+      "b": "notes",
+      "bSide": "in",
+      "config": {
+        "label": "record",
+        "forwardOperation": "write"
+      }
+    }
+  ],
+  "references": []
+}

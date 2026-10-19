@@ -1,0 +1,207 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "agent-tool-call",
+  "revision": 0,
+  "meta": {
+    "title": "An agent calls a tool under a policy"
+  },
+  "components": [
+    {
+      "id": "user",
+      "symbolId": "act",
+      "config": {
+        "label": "User",
+        "note": "Asks the agent to clean up old branches.",
+        "signalMode": "source"
+      }
+    },
+    {
+      "id": "agent",
+      "symbolId": "act",
+      "config": {
+        "label": "Agent loop",
+        "note": "Plans, calls tools, reads results."
+      }
+    },
+    {
+      "id": "model",
+      "symbolId": "act",
+      "config": {
+        "label": "Model API",
+        "note": "Returns the next step as a tool call."
+      }
+    },
+    {
+      "id": "policy",
+      "symbolId": "gate",
+      "config": {
+        "label": "Policy check",
+        "note": "Is this tool allowed with these arguments?"
+      }
+    },
+    {
+      "id": "grant",
+      "symbolId": "authority",
+      "config": {
+        "label": "Permission set",
+        "note": "What the user allowed for this session."
+      }
+    },
+    {
+      "id": "ask",
+      "symbolId": "gate",
+      "config": {
+        "label": "Ask the user",
+        "note": "Destructive calls wait for a yes."
+      }
+    },
+    {
+      "id": "sandbox",
+      "symbolId": "act",
+      "config": {
+        "label": "Tool sandbox",
+        "note": "Runs the command in an isolated checkout."
+      }
+    },
+    {
+      "id": "result",
+      "symbolId": "hold",
+      "config": {
+        "label": "Tool result",
+        "note": "Output handed back to the loop."
+      }
+    },
+    {
+      "id": "audit",
+      "symbolId": "receipt",
+      "config": {
+        "label": "Audit log",
+        "note": "Every call, its arguments and its outcome."
+      }
+    },
+    {
+      "id": "refused",
+      "symbolId": "refuse",
+      "config": {
+        "label": "Refused",
+        "note": "The agent is told why and replans."
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "user",
+      "aSide": "out",
+      "b": "agent",
+      "bSide": "in",
+      "config": {
+        "label": "request"
+      }
+    },
+    {
+      "id": "w2",
+      "a": "agent",
+      "aSide": "out",
+      "b": "model",
+      "bSide": "in",
+      "config": {
+        "label": "context",
+        "forwardOperation": "read"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "model",
+      "aSide": "out",
+      "b": "policy",
+      "bSide": "in",
+      "config": {
+        "label": "tool call"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "grant",
+      "aSide": "out",
+      "b": "policy",
+      "bSide": "control",
+      "config": {
+        "label": "allows"
+      }
+    },
+    {
+      "id": "w5",
+      "a": "policy",
+      "aSide": "out",
+      "b": "sandbox",
+      "bSide": "in",
+      "config": {
+        "label": "allowed"
+      }
+    },
+    {
+      "id": "w6",
+      "a": "policy",
+      "aSide": "out",
+      "b": "ask",
+      "bSide": "in",
+      "config": {
+        "label": "needs approval"
+      }
+    },
+    {
+      "id": "w7",
+      "a": "ask",
+      "aSide": "out",
+      "b": "sandbox",
+      "bSide": "in",
+      "config": {
+        "label": "yes"
+      }
+    },
+    {
+      "id": "w8",
+      "a": "ask",
+      "aSide": "out",
+      "b": "refused",
+      "bSide": "in",
+      "config": {
+        "label": "no"
+      }
+    },
+    {
+      "id": "w9",
+      "a": "sandbox",
+      "aSide": "out",
+      "b": "result",
+      "bSide": "in",
+      "config": {
+        "label": "output",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w10",
+      "a": "result",
+      "aSide": "out",
+      "b": "agent",
+      "bSide": "in",
+      "config": {
+        "label": "next turn"
+      }
+    },
+    {
+      "id": "w11",
+      "a": "sandbox",
+      "aSide": "out",
+      "b": "audit",
+      "bSide": "in",
+      "config": {
+        "label": "record",
+        "forwardOperation": "write"
+      }
+    }
+  ],
+  "references": []
+}

@@ -1,0 +1,52 @@
+{
+  "examples": [
+    {
+      "id": "web-request",
+      "kind": "Request path",
+      "prompt": "Use Schematically to diagram a web request: the browser goes through the CDN and a rate limit to the product API, which checks Redis and falls back to PostgreSQL on a miss.",
+      "blurb": "A rate limit, a session that feeds the API, and a cache lookup that splits into hit and miss."
+    },
+    {
+      "id": "agent-tool-call",
+      "kind": "Agent loop",
+      "prompt": "Use Schematically to show how our agent calls a tool: the model proposes a call, a policy check decides, destructive calls ask the user, and every call lands in an audit log.",
+      "blurb": "Permission feeds the policy check; a refused call goes back to the agent with a reason."
+    },
+    {
+      "id": "release-pipeline",
+      "kind": "Pipeline",
+      "prompt": "Use Schematically to draw our release: merge, build, tests, registry, staging, a 5% canary with a sign-off, then production or an automatic rollback.",
+      "blurb": "Gates with named outcomes, an approval wired into the canary, and a receipt for every release."
+    },
+    {
+      "id": "rag-answer",
+      "kind": "Data flow",
+      "prompt": "Use Schematically to explain how our assistant answers from the team docs: indexing at night, then retrieve, rerank and answer with citations.",
+      "blurb": "Two paths that meet at the vector index: the nightly indexer writes it, a question reads it."
+    },
+    {
+      "id": "order-events",
+      "kind": "Event-driven",
+      "prompt": "Use Schematically to map what happens after checkout: a fraud check, the orders table, and an event queue that fans out to payments, inventory and email.",
+      "blurb": "A queue that fans out to three consumers, with suspicious orders held for a person."
+    },
+    {
+      "id": "sign-in",
+      "kind": "Security flow",
+      "prompt": "Use Schematically to diagram sign in with GitHub: redirect, consent, the callback that swaps the code for a token, and where the token and session are stored.",
+      "blurb": "The client secret feeds the callback as a control; declined consent is an explicit dead end."
+    },
+    {
+      "id": "support-ticket",
+      "kind": "Process",
+      "prompt": "Use Schematically to show how a support ticket moves from the inbox through triage to a reply, including the path through engineering when it is a bug.",
+      "blurb": "Not code at all: a team's process, with triage as the decision that routes each ticket."
+    },
+    {
+      "id": "job-search",
+      "kind": "Plan",
+      "prompt": "Use Schematically to map my job search: find a role, check the fit, tailor the resume from my claims bank, apply, log it, then screens, interviews and an offer.",
+      "blurb": "A personal plan drawn the same way as a system: decisions, a store you read from, a log you write to."
+    }
+  ]
+}

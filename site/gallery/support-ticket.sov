@@ -1,0 +1,187 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "support-ticket",
+  "revision": 0,
+  "meta": {
+    "title": "A support ticket from inbox to resolution"
+  },
+  "components": [
+    {
+      "id": "customer",
+      "symbolId": "act",
+      "config": {
+        "label": "Customer",
+        "note": "Writes in: the export button does nothing.",
+        "signalMode": "source"
+      }
+    },
+    {
+      "id": "inbox",
+      "symbolId": "buffer",
+      "config": {
+        "label": "Support inbox",
+        "note": "Email, chat and the help form."
+      }
+    },
+    {
+      "id": "triage",
+      "symbolId": "gate",
+      "config": {
+        "label": "Triage",
+        "note": "Known issue, bug, or question?"
+      }
+    },
+    {
+      "id": "kb",
+      "symbolId": "hold",
+      "config": {
+        "label": "Help articles",
+        "note": "Answers to common questions."
+      }
+    },
+    {
+      "id": "agent",
+      "symbolId": "act",
+      "config": {
+        "label": "Support agent",
+        "note": "Replies within one business day."
+      }
+    },
+    {
+      "id": "bug",
+      "symbolId": "act",
+      "config": {
+        "label": "Bug report",
+        "note": "Filed with steps to reproduce."
+      }
+    },
+    {
+      "id": "eng",
+      "symbolId": "act",
+      "config": {
+        "label": "Engineering",
+        "note": "Fixes it in the next sprint."
+      }
+    },
+    {
+      "id": "reply",
+      "symbolId": "act",
+      "config": {
+        "label": "Reply sent",
+        "note": "Closes the loop with the customer."
+      }
+    },
+    {
+      "id": "csat",
+      "symbolId": "observe",
+      "config": {
+        "label": "Satisfaction survey",
+        "note": "One question after close."
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "customer",
+      "aSide": "out",
+      "b": "inbox",
+      "bSide": "in",
+      "config": {
+        "label": "message"
+      }
+    },
+    {
+      "id": "w2",
+      "a": "inbox",
+      "aSide": "out",
+      "b": "triage",
+      "bSide": "in",
+      "config": {
+        "label": "next ticket"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "triage",
+      "aSide": "out",
+      "b": "kb",
+      "bSide": "in",
+      "config": {
+        "label": "question",
+        "forwardOperation": "read"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "kb",
+      "aSide": "out",
+      "b": "reply",
+      "bSide": "in",
+      "config": {
+        "label": "article link"
+      }
+    },
+    {
+      "id": "w5",
+      "a": "triage",
+      "aSide": "out",
+      "b": "agent",
+      "bSide": "in",
+      "config": {
+        "label": "needs a person"
+      }
+    },
+    {
+      "id": "w6",
+      "a": "triage",
+      "aSide": "out",
+      "b": "bug",
+      "bSide": "in",
+      "config": {
+        "label": "bug"
+      }
+    },
+    {
+      "id": "w7",
+      "a": "bug",
+      "aSide": "out",
+      "b": "eng",
+      "bSide": "in",
+      "config": {
+        "label": "assign"
+      }
+    },
+    {
+      "id": "w8",
+      "a": "eng",
+      "aSide": "out",
+      "b": "agent",
+      "bSide": "in",
+      "config": {
+        "label": "fixed"
+      }
+    },
+    {
+      "id": "w9",
+      "a": "agent",
+      "aSide": "out",
+      "b": "reply",
+      "bSide": "in",
+      "config": {
+        "label": "answer"
+      }
+    },
+    {
+      "id": "w10",
+      "a": "reply",
+      "aSide": "out",
+      "b": "csat",
+      "bSide": "in",
+      "config": {
+        "label": "survey"
+      }
+    }
+  ],
+  "references": []
+}

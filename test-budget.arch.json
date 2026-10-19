@@ -126,6 +126,36 @@
       "maximumSeconds": 300,
       "minimumExecutableLineCoverage": 75,
       "coverageAuthority": "Reuse passing full-qa receipt only when all affected JS and static build hashes match. Rust source is unchanged in this cut; launch checks retain its existing behavioral contract."
+    },
+    "newcomer-deliver": {
+      "maximumCases": 25,
+      "maximumSeconds": 180,
+      "minimumExecutableLineCoverage": 75,
+      "sourceScope": [
+        "bin/schematically.mjs",
+        "scripts/sov_check.mjs"
+      ],
+      "suiteQueue": [
+        "deliver_qa.py",
+        "html_viewer_qa.py",
+        "author_offline_qa.py"
+      ],
+      "testNamePattern": "newcomer-deliver has no node cases",
+      "queue": "Node-only delivery: the CLI and shared check are line-measured through the suites' node subprocesses. scripts/viewer_template.html runs in Chromium outside src/ and is held by deliver_qa's parity with export_html and its bite check, not by line coverage; scripts/export_html.py and build.py are Python and held by html_viewer_qa and deliver_qa's bundle check."
+    },
+    "front-door": {
+      "maximumCases": 25,
+      "maximumSeconds": 180,
+      "minimumExecutableLineCoverage": 75,
+      "sourceScope": [
+        "site/build.mjs"
+      ],
+      "suiteQueue": [
+        "site_qa.py",
+        "qa_scheduler_qa.py"
+      ],
+      "testNamePattern": "front-door has no node cases",
+      "queue": "The front door: site/build.mjs is line-measured through site_qa's node subprocesses, which also run bin/schematically.mjs for every gallery example. site/static and site/capture are a stylesheet, a page script and a maintainer's capture tool, held by site_qa's link and install-command checks and by eye, not by line coverage."
     }
   },
   "maximumWorkers": 8,

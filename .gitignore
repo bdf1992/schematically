@@ -14,3 +14,6 @@ review/
 
 # Viewers written by scripts/export_html.py with no --out.
 examples/*.html
+
+# The front door built by site/build.mjs.
+site/_build/

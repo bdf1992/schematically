@@ -1,0 +1,168 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "sign-in",
+  "revision": 0,
+  "meta": {
+    "title": "Signing in with a third-party account"
+  },
+  "components": [
+    {
+      "id": "user",
+      "symbolId": "act",
+      "config": {
+        "label": "User",
+        "note": "Clicks Continue with GitHub.",
+        "signalMode": "source"
+      }
+    },
+    {
+      "id": "app",
+      "symbolId": "act",
+      "config": {
+        "label": "Web app",
+        "note": "Redirects to the provider with a state value."
+      }
+    },
+    {
+      "id": "provider",
+      "symbolId": "act",
+      "config": {
+        "label": "Identity provider",
+        "note": "GitHub sign-in page."
+      }
+    },
+    {
+      "id": "consent",
+      "symbolId": "gate",
+      "config": {
+        "label": "Consent",
+        "note": "The user approves the requested scopes."
+      }
+    },
+    {
+      "id": "callback",
+      "symbolId": "act",
+      "config": {
+        "label": "Callback",
+        "note": "Checks state, swaps the code for a token."
+      }
+    },
+    {
+      "id": "secret",
+      "symbolId": "authority",
+      "config": {
+        "label": "Client secret",
+        "note": "Proves the app to the provider."
+      }
+    },
+    {
+      "id": "tokens",
+      "symbolId": "hold",
+      "config": {
+        "label": "Token store",
+        "note": "Access token, encrypted at rest."
+      }
+    },
+    {
+      "id": "session",
+      "symbolId": "hold",
+      "config": {
+        "label": "Session",
+        "note": "Cookie that keeps the user signed in."
+      }
+    },
+    {
+      "id": "denied",
+      "symbolId": "refuse",
+      "config": {
+        "label": "Sign-in cancelled",
+        "note": "Back to the start page."
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "user",
+      "aSide": "out",
+      "b": "app",
+      "bSide": "in",
+      "config": {
+        "label": "continue"
+      }
+    },
+    {
+      "id": "w2",
+      "a": "app",
+      "aSide": "out",
+      "b": "provider",
+      "bSide": "in",
+      "config": {
+        "label": "redirect"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "provider",
+      "aSide": "out",
+      "b": "consent",
+      "bSide": "in",
+      "config": {
+        "label": "scopes"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "consent",
+      "aSide": "out",
+      "b": "callback",
+      "bSide": "in",
+      "config": {
+        "label": "approved"
+      }
+    },
+    {
+      "id": "w5",
+      "a": "consent",
+      "aSide": "out",
+      "b": "denied",
+      "bSide": "in",
+      "config": {
+        "label": "declined"
+      }
+    },
+    {
+      "id": "w6",
+      "a": "secret",
+      "aSide": "out",
+      "b": "callback",
+      "bSide": "control",
+      "config": {
+        "label": "authenticates"
+      }
+    },
+    {
+      "id": "w7",
+      "a": "callback",
+      "aSide": "out",
+      "b": "tokens",
+      "bSide": "in",
+      "config": {
+        "label": "save token",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w8",
+      "a": "callback",
+      "aSide": "out",
+      "b": "session",
+      "bSide": "in",
+      "config": {
+        "label": "set cookie",
+        "forwardOperation": "write"
+      }
+    }
+  ],
+  "references": []
+}

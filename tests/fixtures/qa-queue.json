@@ -5,6 +5,7 @@
     "tests/graph_core_qa.py",
     "tests/pre_repo_hardening_qa.py",
     "tests/author_offline_qa.py",
+    "tests/site_qa.py",
     "tests/graph_to_sov_qa.py",
     "tests/graph_to_sov_communities_qa.py",
     "tests/file_load_presets_qa.py",
@@ -34,6 +35,7 @@
   "BROWSER": [
     "tests/desktop_launch_page_qa.py",
     "tests/html_viewer_qa.py",
+    "tests/deliver_qa.py",
     "tests/spatial_index_parity_qa.py",
     "tests/attachment_point_refactor_qa.py",
     "tests/configurable_attachment_defaults_qa.py",

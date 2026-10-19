@@ -104,10 +104,55 @@ footer kbd{font:11px ui-monospace,Consolas,monospace;border:1px solid var(--line
   <span class="keys"><kbd>/</kbd> find · <kbd>d</kbd> <kbd>u</kbd> <kbd>r</kbd> trace · <kbd>Esc</kbd> clear · scroll to zoom, drag to pan</span>
 </footer>
 <script id="viewer-data" type="application/json">/*__VIEWER_DATA__*/null</script>
+<script id="viewer-editor" type="application/octet-stream">/*__VIEWER_EDITOR__*/</script>
 <script>
+// What a viewer shows, read out of a running editor `win` with the document already open: one
+// card per component, one arc per passable wire leg exactly as the graph core builds them (a
+// control arc is carried with its flag; reach does not follow it, src/07-graph-core.js), and the
+// picture in both appearances inside one withPictureLabels (src/75-persistence.js), so the
+// drawing at label zoom 1 happens once and the dark picture is the one redraw.
+// scripts/export_html.py runs this same function in headless Chromium; a file delivered by
+// bin/schematically.mjs runs it here, in the reader's browser. Keep it self-contained.
+/*SOV-EXTRACT-BEGIN*/
+function sovExtract(win,opts){
+  const api=win.SovSchematicAPI,doc=api.file.document(),g=win.SovSchematicGraph.build(doc);
+  const nodes=doc.components.map(c=>({id:c.id,label:(c.config&&c.config.label)||c.id,symbolId:c.symbolId||null,
+    parentId:c.parentId||null,note:(c.config&&(c.config.note||c.config.description))||null}));
+  const wires=doc.wires.map(w=>({id:w.id,a:w.a||null,b:w.b||null,label:(w.config&&w.config.label)||null}));
+  const arcs=g.arcs.map(a=>({wire:a.wireId,from:a.from,to:a.to,control:!!a.control}));
+  const svg=win.withPictureLabels(()=>{const out={};for(const appearance of ['light','dark']){api.view.setAppearance(appearance);out[appearance]=api.render.svg(opts)}return out});
+  return {title:(doc.meta&&doc.meta.title)||doc.id,id:doc.id,nodes,wires,arcs,
+    blocked:g.blocked.map(b=>({wire:b.wireId,reason:b.reason})),svg};
+}
+/*SOV-EXTRACT-END*/
 (function(){
 'use strict';
-const D=JSON.parse(document.getElementById('viewer-data').textContent);
+const RAW=JSON.parse(document.getElementById('viewer-data').textContent);
+const statusEl0=document.getElementById('status');
+// A file from export_html.py carries its pictures. One from bin/schematically.mjs carries the
+// document and the editor build (gzip, base64), and draws them once here: the editor opens in a
+// hidden frame of real size (text measurement needs layout), sovExtract reads it, the frame goes.
+async function drawHere(raw){
+  statusEl0.textContent='Drawing…';
+  const b64=document.getElementById('viewer-editor').textContent.trim();
+  const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+  const html=await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+  const frame=document.createElement('iframe');
+  frame.setAttribute('aria-hidden','true');frame.tabIndex=-1;
+  frame.style.cssText='position:fixed;left:-20000px;top:0;width:1600px;height:1000px;border:0;opacity:0;pointer-events:none';
+  const loaded=new Promise(r=>frame.addEventListener('load',r,{once:true}));
+  frame.srcdoc=html;document.body.appendChild(frame);await loaded;
+  const win=frame.contentWindow,settle=ms=>new Promise(r=>setTimeout(r,ms));
+  await settle(250);
+  await win.SovSchematicAPI.file.open(raw.document,raw.source);
+  await settle(300);
+  const data=sovExtract(win,raw.render||{pad:48,packets:false,legend:false});
+  frame.remove();statusEl0.textContent='';
+  return Object.assign(data,{source:raw.source});
+}
+if(RAW&&RAW.svg)start(RAW);
+else drawHere(RAW).then(start,err=>{statusEl0.textContent='This diagram could not be drawn: '+(err&&err.message||err);console.error(err)});
+function start(D){
 const $=id=>document.getElementById(id);
 const stage=$('stage'),panel=$('panel'),statusEl=$('status'),search=$('search');
 const nodes=new Map(D.nodes.map(n=>[n.id,n]));
@@ -320,6 +365,7 @@ document.title=D.title;$('title').textContent=D.title;$('title').title=D.title;
 $('cards').innerHTML=D.nodes.map(n=>`<option value="${esc(n.label)}">${esc(n.id)}</option>`).join('');
 readHash();mount();
 window.SovViewer={data:D,state,downstream,upstream,route,select,setMode,clear,setTheme,find};
+}
 })();
 </script>
 </body>

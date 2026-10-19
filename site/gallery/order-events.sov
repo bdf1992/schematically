@@ -1,0 +1,204 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "order-events",
+  "revision": 0,
+  "meta": {
+    "title": "An order fans out through an event queue"
+  },
+  "components": [
+    {
+      "id": "checkout",
+      "symbolId": "act",
+      "config": {
+        "label": "Checkout",
+        "note": "Customer pays.",
+        "signalMode": "source"
+      }
+    },
+    {
+      "id": "orders",
+      "symbolId": "act",
+      "config": {
+        "label": "Orders API",
+        "note": "Writes the order, then publishes an event."
+      }
+    },
+    {
+      "id": "fraud",
+      "symbolId": "gate",
+      "config": {
+        "label": "Fraud check",
+        "note": "Score above 0.8 holds the order."
+      }
+    },
+    {
+      "id": "ordersdb",
+      "symbolId": "hold",
+      "config": {
+        "label": "Orders DB",
+        "note": "One row per order."
+      }
+    },
+    {
+      "id": "queue",
+      "symbolId": "buffer",
+      "config": {
+        "label": "Event queue",
+        "note": "order.placed, at least once."
+      }
+    },
+    {
+      "id": "payments",
+      "symbolId": "act",
+      "config": {
+        "label": "Payments",
+        "note": "Captures the card."
+      }
+    },
+    {
+      "id": "inventory",
+      "symbolId": "act",
+      "config": {
+        "label": "Inventory",
+        "note": "Reserves stock."
+      }
+    },
+    {
+      "id": "shipping",
+      "symbolId": "act",
+      "config": {
+        "label": "Shipping",
+        "note": "Books a courier."
+      }
+    },
+    {
+      "id": "email",
+      "symbolId": "act",
+      "config": {
+        "label": "Email",
+        "note": "Order confirmation."
+      }
+    },
+    {
+      "id": "ledger",
+      "symbolId": "receipt",
+      "config": {
+        "label": "Ledger entry",
+        "note": "Money in, per order."
+      }
+    },
+    {
+      "id": "review",
+      "symbolId": "refuse",
+      "config": {
+        "label": "Manual review",
+        "note": "A person looks before it ships."
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "checkout",
+      "aSide": "out",
+      "b": "fraud",
+      "bSide": "in",
+      "config": {
+        "label": "place order"
+      }
+    },
+    {
+      "id": "w2",
+      "a": "fraud",
+      "aSide": "out",
+      "b": "orders",
+      "bSide": "in",
+      "config": {
+        "label": "clear"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "fraud",
+      "aSide": "out",
+      "b": "review",
+      "bSide": "in",
+      "config": {
+        "label": "suspicious"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "orders",
+      "aSide": "out",
+      "b": "ordersdb",
+      "bSide": "in",
+      "config": {
+        "label": "insert",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w5",
+      "a": "ordersdb",
+      "aSide": "out",
+      "b": "queue",
+      "bSide": "in",
+      "config": {
+        "label": "order.placed"
+      }
+    },
+    {
+      "id": "w6",
+      "a": "queue",
+      "aSide": "out",
+      "b": "payments",
+      "bSide": "in",
+      "config": {
+        "label": "consume"
+      }
+    },
+    {
+      "id": "w7",
+      "a": "queue",
+      "aSide": "out",
+      "b": "inventory",
+      "bSide": "in",
+      "config": {
+        "label": "consume"
+      }
+    },
+    {
+      "id": "w8",
+      "a": "queue",
+      "aSide": "out",
+      "b": "email",
+      "bSide": "in",
+      "config": {
+        "label": "consume"
+      }
+    },
+    {
+      "id": "w9",
+      "a": "inventory",
+      "aSide": "out",
+      "b": "shipping",
+      "bSide": "in",
+      "config": {
+        "label": "reserved"
+      }
+    },
+    {
+      "id": "w10",
+      "a": "payments",
+      "aSide": "out",
+      "b": "ledger",
+      "bSide": "in",
+      "config": {
+        "label": "captured",
+        "forwardOperation": "write"
+      }
+    }
+  ],
+  "references": []
+}
