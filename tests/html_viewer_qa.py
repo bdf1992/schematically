@@ -11,6 +11,11 @@ from disk in headless Chromium with every non-file request refused, and checks:
 - a route exists exactly when the graph core's paths finds one, and is never longer than the
   shortest path it lists;
 - a deep link restores focus, mode, route and theme, and a click on a card opens its details;
+- the first screen fills the window: the view has the stage's shape and the drawing spans most of
+  the room the floating controls leave it;
+- a deep link restores style, lens and presentation; each style restyles the picture; the lens
+  picks out exactly the cards of its types; the presentation visits every card that holds none;
+  a share card is 1200x630 and only offered for a trace;
 - a label holding </script> neither breaks the page nor runs.
 """
 from __future__ import annotations
@@ -109,6 +114,97 @@ def check_interaction(page, html: Path) -> None:
     assert page.evaluate('() => window.SovViewer.state.focus') == 'svc', 'search finds a card by a part of its label'
 
 
+def check_reader_polish(page, html: Path) -> None:
+    """Fill, styles, lens, presentation and share cards on 08-gated-service."""
+    errors = open_viewer(page, html)
+    fill = page.evaluate('''() => {
+      const stage = document.getElementById('stage').getBoundingClientRect(), svg = document.querySelector('#stage svg');
+      const vb = svg.viewBox.baseVal, g = svg.querySelector('g.node[data-id]').parentNode;
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const n of svg.querySelectorAll('g.node[data-id]')) { const r = n.getBoundingClientRect();
+        x0 = Math.min(x0, r.left); y0 = Math.min(y0, r.top); x1 = Math.max(x1, r.right); y1 = Math.max(y1, r.bottom); }
+      const top = document.getElementById('top').getBoundingClientRect().bottom, tools = document.getElementById('tools').getBoundingClientRect().top;
+      return {aspect: [vb.width / vb.height, stage.width / stage.height], span: [(x1 - x0) / stage.width, (y1 - y0) / (tools - top)], clear: [y0 >= top, y1 <= tools]};
+    }''')
+    assert abs(fill['aspect'][0] - fill['aspect'][1]) < 0.01, f'the view does not have the stage shape: {fill}'
+    assert max(fill['span']) > 0.6, f'the first screen leaves the drawing small: {fill}'
+    assert all(fill['clear']), f'the drawing sits under the floating controls: {fill}'
+
+    looks = page.evaluate('''() => ['clean', 'notes', 'glass', 'circuit'].map(s => { window.SovViewer.setStyle(s);
+      const svg = document.querySelector('#stage svg'), body = svg.querySelector('g.node[data-id] > rect.body'), text = svg.querySelector('text');
+      return [s, svg.getAttribute('class'), document.documentElement.dataset.style, getComputedStyle(body).fill, getComputedStyle(text).fontFamily]; })''')
+    assert [l[2] for l in looks] == ['clean', 'notes', 'glass', 'circuit'], looks
+    assert all(f's-{l[0]}' in l[1].split() for l in looks), looks
+    assert len({(l[3], l[4]) for l in looks}) == 4, f'two styles draw the same cards: {looks}'
+    page.evaluate("() => window.SovViewer.setStyle('clean')")
+
+    errors += open_viewer(page, html, '#lens=act~hold&style=circuit&theme=light')
+    lens = page.evaluate('''() => { const V = window.SovViewer, want = V.data.nodes.filter(n => ['act', 'hold'].includes(n.symbolId)).map(n => n.id).sort();
+      return {state: [V.state.lens, V.state.style, V.state.theme], want, lit: [...document.querySelectorAll('#stage g.node.lens-a, #stage g.node.lens-b')].map(g => g.dataset.id).sort(),
+        status: document.getElementById('status').textContent, hash: location.hash}; }''')
+    assert lens['state'] == [['act', 'hold'], 'circuit', 'light'], lens
+    assert lens['want'] and lens['lit'] == lens['want'], f'the lens lit {lens["lit"]}, the act and hold cards are {lens["want"]}'
+    assert lens['status'].startswith('Lens: Act'), lens['status']
+    assert 'lens=act~hold' in lens['hash'], lens['hash']
+
+    errors += open_viewer(page, html, '#present=1')
+    deck = page.evaluate('''async () => { const V = window.SovViewer, leaves = V.data.nodes.filter(n => !V.data.nodes.some(m => m.parentId === n.id)).map(n => n.id);
+      const tour = V.tour(), seen = [];
+      for (let i = 1; i <= tour.length; i++) { V.goStep(i); seen.push([V.state.focus, document.getElementById('deckTitle').textContent]); }
+      const shown = getComputedStyle(document.getElementById('deck')).display, chrome = getComputedStyle(document.getElementById('tools')).display;
+      V.present(false);
+      return {leaves: leaves.sort(), tour: [...tour].sort(), unique: new Set(tour).size === tour.length, seen, shown, chrome, after: [V.state.present, location.hash]}; }''')
+    assert deck['tour'] == deck['leaves'] and deck['unique'], f'the presentation visits {deck["tour"]}, the cards are {deck["leaves"]}'
+    assert deck['shown'] == 'flex' and deck['chrome'] == 'none', deck
+    assert all(focus for focus, _ in deck['seen']) and all(title for _, title in deck['seen']), deck['seen']
+    assert deck['after'][0] is False and 'present' not in deck['after'][1], deck['after']
+
+    errors += open_viewer(page, html, '#focus=grant&mode=route&to=store')
+    cards = page.evaluate('''async () => { const V = window.SovViewer, route = document.getElementById('bCardRoute').disabled, reach = document.getElementById('bCardReach').disabled;
+      const c = await V.shareCard(); V.setMode('down'); const d = await V.shareCard(); V.clear(); const none = await V.shareCard();
+      return {route, reach, sizes: [c && [c.width, c.height], d && [d.width, d.height]], none}; }''')
+    assert cards['route'] is False and cards['reach'] is True, f'the route card is offered only on a route: {cards}'
+    assert cards['sizes'] == [[2400, 1260], [2400, 1260]], f'share cards are not 1200x630 at 2x: {cards}'
+    assert cards['none'] is None, 'a share card was made with nothing traced'
+
+    # The card's pixels: a picture under the words, and a different one in each style.
+    pixels = page.evaluate('''async () => { const V = window.SovViewer, out = {};
+      V.select('grant'); V.setMode('down');
+      for (const s of ['clean', 'circuit']) { V.setStyle(s); const c = await V.shareCard(), x = c.getContext('2d');
+        const d = x.getImageData(96, 336, 2208, 840).data, seen = new Set();
+        for (let i = 0; i < d.length; i += 4 * 97) seen.add(d[i] << 16 | d[i + 1] << 8 | d[i + 2]);
+        out[s] = {colours: seen.size, url: c.toDataURL().length, sum: [...d.filter((_, i) => i % 4097 === 0)].reduce((a, b) => a + b, 0)}; }
+      V.setStyle('clean'); V.clear(); return out; }''')
+    assert all(v['colours'] > 8 for v in pixels.values()), f'a share card holds no drawing: {pixels}'
+    assert pixels['clean']['sum'] != pixels['circuit']['sum'], f'the share card does not carry the style: {pixels}'
+
+    errors += open_viewer(page, html, '#style=constructor')
+    assert page.evaluate('() => window.SovViewer.state.style') == 'clean', 'an inherited name was taken as a style'
+
+    # Presenting gives the reader's state back, and a resize mid-move still ends in the window's shape.
+    errors += open_viewer(page, html, '#lens=act')
+    back = page.evaluate('''async () => { const V = window.SovViewer, wait = ms => new Promise(r => setTimeout(r, ms));
+      V.present(true); V.goStep(2); await wait(60); return true; }''')
+    page.set_viewport_size({'width': 1600, 'height': 700})
+    page.wait_for_timeout(700)
+    shape = page.evaluate('''() => { const vb = document.querySelector('#stage svg').viewBox.baseVal, r = document.getElementById('stage').getBoundingClientRect();
+      return [vb.width / vb.height, r.width / r.height]; }''')
+    assert abs(shape[0] - shape[1]) < 0.01, f'a resize during a camera move left the view the wrong shape: {shape}'
+    restored = page.evaluate('''() => { const V = window.SovViewer; V.present(false);
+      return {lens: V.state.lens, focus: V.state.focus, active: document.activeElement.id}; }''')
+    assert restored == {'lens': ['act'], 'focus': None, 'active': 'bPresent'}, f'presenting lost the reader state: {restored}'
+    page.set_viewport_size({'width': 1280, 'height': 800})
+
+    # Space on a focused card while presenting lands on that card, not the one after.
+    errors += open_viewer(page, html, '#present=1')
+    target = page.evaluate('() => window.SovViewer.tour()[2]')
+    page.focus(f'#stage g.node[data-id="{target}"]')
+    page.keyboard.press(' ')
+    assert page.evaluate('() => window.SovViewer.state.focus') == target, 'Space on a card moved past it'
+    page.keyboard.press('Escape')
+    assert not errors, errors
+
+
 def hostile_label(tmp: Path) -> Path:
     doc = json.loads((ROOT / 'examples' / '08-gated-service.sov').read_text(encoding='utf-8'))
     doc['meta']['title'] = 'Hostile </script><script>window.PWNED=1</script>'
@@ -141,6 +237,9 @@ def main() -> int:
                 page.close()
             page = browser.new_page(viewport={'width': 1280, 'height': 800})
             check_interaction(page, tmp / 'out' / '08-gated-service.html')
+            page.close()
+            page = browser.new_page(viewport={'width': 1280, 'height': 800}, accept_downloads=True)
+            check_reader_polish(page, tmp / 'out' / '08-gated-service.html')
             page.close()
             page = browser.new_page()
             errors = open_viewer(page, tmp / 'out' / 'hostile.html')
