@@ -68,6 +68,8 @@ def check_document(app, viewer_page, src: Path, html: Path) -> int:
     errors = open_viewer(viewer_page, html)
     v = viewer_page.evaluate(VIEWER_JS)
     assert not errors, f'{html.name}: page errors {errors}'
+    themes = viewer_page.evaluate('() => [window.SovViewer.data.svg.light, window.SovViewer.data.svg.dark].map(s => /background-color:\s*([^;"]+)/.exec(s)[1])')
+    assert themes[0] != themes[1], f'{html.name}: light and dark pictures share the background {themes[0]}'
     assert sorted(v['ids']) == sorted(core['ids']), f'{html.name}: viewer cards differ from the document'
     assert set(v['drawn']) <= set(v['ids']), f'{html.name}: drawn cards the viewer does not know: {set(v["drawn"]) - set(v["ids"])}'
     for a in core['ids']:

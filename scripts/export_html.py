@@ -39,7 +39,14 @@ GRAPH_JS = """() => {
   return {title: (doc.meta && doc.meta.title) || doc.id, id: doc.id, nodes, wires, arcs,
           blocked: g.blocked.map(b => ({wire: b.wireId, reason: b.reason}))};
 }"""
-SVG_JS = "(opts) => window.SovSchematicAPI.render.svg(opts)"
+# Both pictures inside one withPictureLabels (src/75-persistence.js): the picture is drawn at label
+# zoom 1, and render.svg from any other zoom (opening a document fits the camera) draws the whole
+# picture twice. Here the drawing at zoom 1 happens once, and the dark picture is the one redraw.
+SVGS_JS = """(opts) => withPictureLabels(() => {
+  const api = window.SovSchematicAPI, svg = {};
+  for (const appearance of ['light', 'dark']) { api.view.setAppearance(appearance); svg[appearance] = api.render.svg(opts); }
+  return svg;
+})"""
 PLACEHOLDER = '/*__VIEWER_DATA__*/null'
 
 
@@ -61,6 +68,7 @@ def export_documents(paths: list[Path], out_dir: Path | None = None, pad: int = 
     with sync_playwright() as p:
         browser = p.chromium.launch(**chromium_launch_kwargs(disable_gpu=True))
         page = browser.new_page(viewport={'width': 1600, 'height': 1000})
+        page.set_default_timeout(600_000)
         errors: list[str] = []
         page.on('pageerror', lambda exc: errors.append(str(exc)))
         page.set_content(app, wait_until='load')
@@ -69,15 +77,9 @@ def export_documents(paths: list[Path], out_dir: Path | None = None, pad: int = 
             src = Path(src)
             before = len(errors)
             page.evaluate('([t,n])=>window.SovSchematicAPI.file.open(t,n)', [src.read_text(encoding='utf-8'), src.name])
-            # No camera fit: render.svg draws at label zoom 1 whatever the camera, and from any other
-            # zoom it redraws the whole picture twice (withPictureLabels, src/75-persistence.js).
             page.wait_for_timeout(300)
             data = page.evaluate(GRAPH_JS)
-            data['svg'] = {}
-            for appearance in ('light', 'dark'):
-                page.evaluate('(m)=>window.SovSchematicAPI.view.setAppearance(m)', appearance)
-                page.wait_for_timeout(120)
-                data['svg'][appearance] = page.evaluate(SVG_JS, {'pad': pad, 'packets': False, 'legend': False})
+            data['svg'] = page.evaluate(SVGS_JS, {'pad': pad, 'packets': False, 'legend': False})
             data['source'] = src.name
             html = template.replace(PLACEHOLDER, script_safe(data))
             target = (out_dir / f'{src.stem}.html') if out_dir else src.with_suffix('.html')
