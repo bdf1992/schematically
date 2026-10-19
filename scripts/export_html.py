@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 import argparse
 import json
+import re
 import sys
 import webbrowser
 from pathlib import Path
@@ -25,29 +26,12 @@ TEMPLATE = ROOT / 'scripts' / 'viewer_template.html'
 sys.path.insert(0, str(ROOT / 'tests'))
 from browser_runtime import chromium_launch_kwargs  # noqa: E402
 
-# One card per component, one arc per passable wire leg, exactly as the graph core builds them.
-# A control arc is carried with its flag: reach does not follow it (src/07-graph-core.js reach).
-GRAPH_JS = """() => {
-  const doc = window.SovSchematicAPI.file.document();
-  const g = window.SovSchematicGraph.build(doc);
-  const nodes = doc.components.map(c => ({
-    id: c.id, label: (c.config && c.config.label) || c.id, symbolId: c.symbolId || null,
-    parentId: c.parentId || null, note: (c.config && (c.config.note || c.config.description)) || null}));
-  const wires = doc.wires.map(w => ({id: w.id, a: w.a || null, b: w.b || null,
-    label: (w.config && w.config.label) || null}));
-  const arcs = g.arcs.map(a => ({wire: a.wireId, from: a.from, to: a.to, control: !!a.control}));
-  return {title: (doc.meta && doc.meta.title) || doc.id, id: doc.id, nodes, wires, arcs,
-          blocked: g.blocked.map(b => ({wire: b.wireId, reason: b.reason}))};
-}"""
-# Both pictures inside one withPictureLabels (src/75-persistence.js): the picture is drawn at label
-# zoom 1, and render.svg from any other zoom (opening a document fits the camera) draws the whole
-# picture twice. Here the drawing at zoom 1 happens once, and the dark picture is the one redraw.
-SVGS_JS = """(opts) => withPictureLabels(() => {
-  const api = window.SovSchematicAPI, svg = {};
-  for (const appearance of ['light', 'dark']) { api.view.setAppearance(appearance); svg[appearance] = api.render.svg(opts); }
-  return svg;
-})"""
+# What the viewer shows is read out of the editor by sovExtract, which lives in the template (between
+# the SOV-EXTRACT markers) so this script and bin/schematically.mjs, which runs it in the reader's
+# browser, draw the same file from one function.
+EXTRACT_RE = re.compile(r'/\*SOV-EXTRACT-BEGIN\*/(.*?)/\*SOV-EXTRACT-END\*/', re.S)
 PLACEHOLDER = '/*__VIEWER_DATA__*/null'
+EDITOR_PLACEHOLDER = '/*__VIEWER_EDITOR__*/'
 
 
 def script_safe(value) -> str:
@@ -68,6 +52,11 @@ def export_documents(paths: list[Path], out_dir: Path | None = None, pad: int = 
     template = TEMPLATE.read_text(encoding='utf-8')
     if template.count(PLACEHOLDER) != 1:
         raise SystemExit(f'{TEMPLATE.name} must hold {PLACEHOLDER} exactly once')
+    extract = EXTRACT_RE.search(template)
+    if not extract or template.count(EDITOR_PLACEHOLDER) != 1:
+        raise SystemExit(f'{TEMPLATE.name} must hold sovExtract and {EDITOR_PLACEHOLDER} exactly once')
+    extract_js = f'(opts) => {{ {extract.group(1)}; return sovExtract(window, opts); }}'
+    template = template.replace(EDITOR_PLACEHOLDER, '')
     results = []
     with sync_playwright() as p:
         browser = p.chromium.launch(**chromium_launch_kwargs(disable_gpu=True))
@@ -82,8 +71,7 @@ def export_documents(paths: list[Path], out_dir: Path | None = None, pad: int = 
             before = len(errors)
             page.evaluate('([t,n])=>window.SovSchematicAPI.file.open(t,n)', [src.read_text(encoding='utf-8'), src.name])
             page.wait_for_timeout(300)
-            data = page.evaluate(GRAPH_JS)
-            data['svg'] = page.evaluate(SVGS_JS, {'pad': pad, 'packets': False, 'legend': False})
+            data = page.evaluate(extract_js, {'pad': pad, 'packets': False, 'legend': False})
             data['source'] = src.name
             html = template.replace(PLACEHOLDER, script_safe(data))
             target = (out_dir / f'{src.stem}.html') if out_dir else src.with_suffix('.html')

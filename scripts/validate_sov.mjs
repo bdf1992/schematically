@@ -31,10 +31,7 @@ import {fileURLToPath} from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const Data = require(path.join(HERE, '../src/05-data-core.js'));
-const RULES = JSON.parse(fs.readFileSync(path.join(HERE, 'sov_rules.json'), 'utf8')).rules;
-const RULE = Object.fromEntries(RULES.map(r => [r.code, r]));
-const MATCHERS = RULES.filter(r => r.match).map(r => ({code: r.code, re: new RegExp(r.match)}));
-
+const {checkFile, RULES} = await import(new URL('./sov_check.mjs', import.meta.url));
 const args = process.argv.slice(2);
 const compact = args.includes('--compact');
 const concerns = args.includes('--concerns');
@@ -49,65 +46,10 @@ if (!files.length) {
   process.exit(2);
 }
 
-// The element a message names, the way the marker list names it (src/05-data-core.js markerElementId).
-function elementId(docId, message) {
-  if (/^(?:wire|component|reference) missing id$/.test(message)) return null;
-  const named = message.match(/^(?:wire|component|reference) ([^\s:]+)/);
-  if (named) return named[1];
-  const duplicate = message.match(/^duplicate (?:component|wire|reference) id: (.+)$/);
-  if (duplicate) return duplicate[1];
-  return docId ?? null;
-}
-function finding(code, message, id) {
-  const rule = RULE[code];
-  const detail = (message.match(/\b([A-Z][A-Z]+(?:_[A-Z]+)+)\b/) || [])[1] || null;
-  const repair = rule.repair.replaceAll('{id}', id ?? '?').replaceAll('{detail}', detail ?? '-');
-  return {code, family: rule.family, severity: rule.severity, id: id ?? null, rule: null, detail, message, repair};
-}
-function classify(message, docId) {
-  const hit = MATCHERS.find(m => m.re.test(message));
-  return finding(hit ? hit.code : 'SOV999', message, elementId(docId, message));
-}
-
-function check(file) {
-  let text, payload, doc;
-  try { text = fs.readFileSync(file, 'utf8'); }
-  catch (error) { return {file, ok: false, findings: [finding('SOV101', error.message, null)]}; }
-  try { payload = JSON.parse(text); }
-  catch (error) { return {file, ok: false, findings: [finding('SOV102', error.message, null)]}; }
-  try { doc = Data.documentFromFilePayload(payload); }
-  catch (error) {
-    // A package's own check joins its document's errors; any other throw is the loader refusing a
-    // plain document, classified by the table when its message carries a known code.
-    if (payload?.schema === Data.PACKAGE_SCHEMA) return {file, ok: false, findings: [finding('SOV105', error.message, payload?.id ?? null)]};
-    const hit = MATCHERS.find(m => m.re.test(error.message));
-    return {file, ok: false, findings: [finding(hit ? hit.code : 'SOV106', error.message, elementId(payload?.id ?? null, error.message))]};
-  }
-  const errors = [...Data.validateDocument(doc).errors];
-  // The browser refuses the document at load time if any bound wire has no shared surface;
-  // carrierCanvasId raises the same refusal here so the file cannot pass validation and
-  // still fail to open.
-  for (const wire of doc.wires) {
-    let surface;
-    try { surface = Data.carrierCanvasId(doc, wire, wire.canvasId || null); }
-    catch (error) { if (!errors.some(e => e.startsWith(`wire ${wire.id}`))) errors.push(`wire ${wire.id}: ${error.message}`); continue; }
-    // The loader derives a missing wire.canvasId from the ends; one that is written but names a
-    // different surface is kept as written and routes there, so report the disagreement.
-    const stored = wire.canvasId || null;
-    if (surface !== Data.GLOBAL_CANVAS_ID && stored !== surface) {
-      errors.push(`wire ${wire.id}: canvasId ${stored ? `is ${stored}` : 'missing'}; both ends are on ${surface}, set "canvasId": "${surface}"`);
-    }
-  }
-  // The marker rule for each message is the one schematic.markers reports (src/05-data-core.js markerRule).
-  const markers = Data.markersFor(doc), ruleOf = new Map(markers.map(m => [m.message, m.rule]));
-  const findings = errors.map(message => ({...classify(message, doc.id), rule: ruleOf.get(message) ?? 'boundary-legality'}));
-  return {file, ok: !findings.some(f => f.severity === 'error'), components: doc.components.length, wires: doc.wires.length, findings, doc};
-}
-
 let failed = 0;
 const reports = [];
 for (const file of files) {
-  const report = check(file);
+  const report = checkFile(Data, file);
   if (!report.ok) failed += 1;
   const {doc, ...rest} = report;
   reports.push(rest);

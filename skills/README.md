@@ -1,5 +1,6 @@
 # Agent skills
 
+- `schematically/SKILL.md` — the installable skill (`npx skills add bdf1992/schematically --skill schematically`): describe a system, get one interactive `.html` file, with Node alone. Everything else in its folder is a copy `build.py` writes.
 - `author/SKILL.md` — author valid semantic schematics.
 - `author-offline/SKILL.md` — write a `.sov` by hand with no editor or API; validate with `scripts/validate_sov.mjs`, render with `scripts/export_svg.py`.
 - `operator/SKILL.md` — operate `.sov` / `.sovpak`, Browser API, HTTP, and MCP.
