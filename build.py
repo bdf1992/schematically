@@ -34,3 +34,14 @@ if revision:
     dist_source=dist_source.replace('</head>',f'{meta}\n</head>')
 (dist_dir/'index.html').write_text(dist_source,encoding='utf-8',newline='\n')
 print(ROOT/'index.html')
+# The installable skill (skills/schematically, `npx skills add bdf1992/schematically`) carries its
+# own copy of everything bin/schematically.mjs reads, at the same relative paths, because an
+# installer copies the skill's folder and nothing else. SKILL.md there is hand-written; the rest is
+# this copy, which tests/deliver_qa.py holds byte-equal to its sources.
+SKILL_BUNDLE=['bin/schematically.mjs','scripts/sov_check.mjs','scripts/viewer_template.html','index.html',
+              'src/03-canonical.js','src/03-notation-core.js','src/06-attachment-core.js','src/05-data-core.js',
+              'src/08-layout-core.js']
+for rel in SKILL_BUNDLE:
+    target=ROOT/'skills/schematically'/rel
+    target.parent.mkdir(parents=True,exist_ok=True)
+    target.write_bytes((ROOT/rel).read_bytes())

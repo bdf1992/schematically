@@ -21,6 +21,7 @@ import {fileURLToPath} from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const Data = require(path.join(HERE, '../src/05-data-core.js'));
+const {checkText} = await import(new URL('./sov_check.mjs', import.meta.url));
 
 const args = process.argv.slice(2);
 const compact = args.includes('--compact');
@@ -33,36 +34,11 @@ if (!files.length) {
 
 let failed = 0;
 for (const file of files) {
-  let doc;
-  try {
-    const payload = JSON.parse(fs.readFileSync(file, 'utf8'));
-    doc = Data.documentFromFilePayload(payload);
-  } catch (error) {
+  const {doc, diagnostics} = checkText(Data, fs.readFileSync(file, 'utf8'));
+  if (diagnostics.length) {
     failed += 1;
     console.log(`FAIL ${file}`);
-    console.log(`  ${error.message}`);
-    continue;
-  }
-  const check = Data.validateDocument(doc);
-  // The browser refuses the document at load time if any bound wire has no shared surface;
-  // carrierCanvasId raises the same refusal here so the file cannot pass validation and
-  // still fail to open.
-  const errors = [...check.errors];
-  for (const wire of doc.wires) {
-    let surface;
-    try { surface = Data.carrierCanvasId(doc, wire, wire.canvasId || null); }
-    catch (error) { if (!errors.some(e => e.startsWith(`wire ${wire.id}`))) errors.push(`wire ${wire.id}: ${error.message}`); continue; }
-    // The loader derives a missing wire.canvasId from the ends; one that is written but names a
-    // different surface is kept as written and routes there, so report the disagreement.
-    const stored = wire.canvasId || null;
-    if (surface !== Data.GLOBAL_CANVAS_ID && stored !== surface) {
-      errors.push(`wire ${wire.id}: canvasId ${stored ? `is ${stored}` : 'missing'}; both ends are on ${surface}, set "canvasId": "${surface}"`);
-    }
-  }
-  if (errors.length) {
-    failed += 1;
-    console.log(`FAIL ${file}`);
-    for (const e of errors) console.log(`  ${e}`);
+    for (const d of diagnostics) console.log(`  ${d.message}`);
     continue;
   }
   console.log(`ok   ${file}  (${doc.components.length} components, ${doc.wires.length} wires)`);
