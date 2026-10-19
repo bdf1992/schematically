@@ -2,6 +2,25 @@
 
 A compact, AI-native schematic editor. A document is a semantic model — Components, Parts, Wires, Form, boundaries, signals, containment — projected to SVG, not a drawing that pretends to be one. People edit it in the browser; agents edit it through the same data core over a Browser API, HTTP, and MCP.
 
+## Start here
+
+Describe a system to your coding agent and get an interactive diagram you can open in any browser. You need Node 18 or newer.
+
+```bash
+npx skills add bdf1992/schematically --skill schematically
+```
+
+Then tell your agent, for example:
+
+```text
+Use Schematically to diagram a web request: Browser calls the API, the API checks Redis,
+and a cache miss queries PostgreSQL and fills the cache.
+```
+
+The agent writes a `.sov` document and runs `node bin/schematically.mjs deliver file.sov --open`, which checks it against the model below, lays it out, and writes one `.html` file that works offline: search, downstream and upstream tracing, routes between cards, light and dark, PNG and print, and links that restore a view. Keep going in chat ("add authentication", "put the database in a private network"); a failed run keeps the last good file. Without an agent, `node bin/schematically.mjs demo --open` from a checkout writes and opens an example.
+
+The same `.sov` opens in the full editor (`index.html`) for direct editing and simulation.
+
 ## The model
 
 - **Point / Path / Plane** — the dimensional basis, and the first three entries in the palette. A 0D Point is an attachment. A 1D Path carries between its two ends. A 2D Plane bounds a region that hosts Points on its boundary and Components in its interior. Each has a minimal default record; the preset lives in `05-data-core.js`.
