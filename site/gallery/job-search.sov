@@ -1,0 +1,186 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "job-search",
+  "revision": 0,
+  "meta": {
+    "title": "A job search, one application at a time"
+  },
+  "components": [
+    {
+      "id": "find",
+      "symbolId": "act",
+      "config": {
+        "label": "Find a role",
+        "note": "Boards, referrals, company pages.",
+        "signalMode": "source"
+      }
+    },
+    {
+      "id": "fit",
+      "symbolId": "gate",
+      "config": {
+        "label": "Fit check",
+        "note": "Remote, salary floor, stack."
+      }
+    },
+    {
+      "id": "skip",
+      "symbolId": "refuse",
+      "config": {
+        "label": "Skip",
+        "note": "Not a match; note why."
+      }
+    },
+    {
+      "id": "tailor",
+      "symbolId": "act",
+      "config": {
+        "label": "Tailor resume",
+        "note": "One page, matched to the posting."
+      }
+    },
+    {
+      "id": "bank",
+      "symbolId": "hold",
+      "config": {
+        "label": "Claims bank",
+        "note": "Every achievement with its evidence."
+      }
+    },
+    {
+      "id": "apply",
+      "symbolId": "act",
+      "config": {
+        "label": "Apply",
+        "note": "Resume and cover letter sent."
+      }
+    },
+    {
+      "id": "tracker",
+      "symbolId": "receipt",
+      "config": {
+        "label": "Tracker row",
+        "note": "Company, date, stage, contact."
+      }
+    },
+    {
+      "id": "screen",
+      "symbolId": "gate",
+      "config": {
+        "label": "Recruiter screen",
+        "note": "Passed or not."
+      }
+    },
+    {
+      "id": "interviews",
+      "symbolId": "act",
+      "config": {
+        "label": "Interviews",
+        "note": "Technical and team rounds."
+      }
+    },
+    {
+      "id": "offer",
+      "symbolId": "act",
+      "config": {
+        "label": "Offer",
+        "note": "Compare, negotiate, decide."
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "find",
+      "aSide": "out",
+      "b": "fit",
+      "bSide": "in",
+      "config": {
+        "label": "posting"
+      }
+    },
+    {
+      "id": "w2",
+      "a": "fit",
+      "aSide": "out",
+      "b": "skip",
+      "bSide": "in",
+      "config": {
+        "label": "no"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "fit",
+      "aSide": "out",
+      "b": "tailor",
+      "bSide": "in",
+      "config": {
+        "label": "yes"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "tailor",
+      "aSide": "out",
+      "b": "bank",
+      "bSide": "in",
+      "config": {
+        "label": "pick claims",
+        "forwardOperation": "read"
+      }
+    },
+    {
+      "id": "w5",
+      "a": "tailor",
+      "aSide": "out",
+      "b": "apply",
+      "bSide": "in",
+      "config": {
+        "label": "tailored"
+      }
+    },
+    {
+      "id": "w6",
+      "a": "apply",
+      "aSide": "out",
+      "b": "tracker",
+      "bSide": "in",
+      "config": {
+        "label": "log",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w7",
+      "a": "apply",
+      "aSide": "out",
+      "b": "screen",
+      "bSide": "in",
+      "config": {
+        "label": "reply"
+      }
+    },
+    {
+      "id": "w8",
+      "a": "screen",
+      "aSide": "out",
+      "b": "interviews",
+      "bSide": "in",
+      "config": {
+        "label": "passed"
+      }
+    },
+    {
+      "id": "w9",
+      "a": "interviews",
+      "aSide": "out",
+      "b": "offer",
+      "bSide": "in",
+      "config": {
+        "label": "offer"
+      }
+    }
+  ],
+  "references": []
+}

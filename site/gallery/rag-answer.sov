@@ -1,0 +1,206 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "rag-answer",
+  "revision": 0,
+  "meta": {
+    "title": "Answering a question from your own documents"
+  },
+  "components": [
+    {
+      "id": "docs",
+      "symbolId": "hold",
+      "config": {
+        "label": "Team docs",
+        "note": "Wiki pages, PDFs and tickets."
+      }
+    },
+    {
+      "id": "chunk",
+      "symbolId": "act",
+      "config": {
+        "label": "Chunker",
+        "note": "Splits documents into passages."
+      }
+    },
+    {
+      "id": "embed",
+      "symbolId": "act",
+      "config": {
+        "label": "Embedder",
+        "note": "One vector per passage."
+      }
+    },
+    {
+      "id": "vectors",
+      "symbolId": "hold",
+      "config": {
+        "label": "Vector index",
+        "note": "Passages and their vectors."
+      }
+    },
+    {
+      "id": "question",
+      "symbolId": "act",
+      "config": {
+        "label": "Question",
+        "note": "How do I rotate the API key?",
+        "signalMode": "source"
+      }
+    },
+    {
+      "id": "retrieve",
+      "symbolId": "act",
+      "config": {
+        "label": "Retriever",
+        "note": "Top 20 passages by similarity."
+      }
+    },
+    {
+      "id": "rerank",
+      "symbolId": "gate",
+      "config": {
+        "label": "Reranker",
+        "note": "Keeps the 5 that answer the question."
+      }
+    },
+    {
+      "id": "llm",
+      "symbolId": "act",
+      "config": {
+        "label": "Language model",
+        "note": "Writes the answer from the passages only."
+      }
+    },
+    {
+      "id": "answer",
+      "symbolId": "act",
+      "config": {
+        "label": "Answer",
+        "note": "Shown with numbered sources."
+      }
+    },
+    {
+      "id": "cites",
+      "symbolId": "receipt",
+      "config": {
+        "label": "Citations",
+        "note": "Which passage backs which sentence."
+      }
+    },
+    {
+      "id": "nothing",
+      "symbolId": "refuse",
+      "config": {
+        "label": "No good match",
+        "note": "Says it does not know."
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "docs",
+      "aSide": "out",
+      "b": "chunk",
+      "bSide": "in",
+      "config": {
+        "label": "nightly",
+        "forwardOperation": "read"
+      }
+    },
+    {
+      "id": "w2",
+      "a": "chunk",
+      "aSide": "out",
+      "b": "embed",
+      "bSide": "in",
+      "config": {
+        "label": "passages"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "embed",
+      "aSide": "out",
+      "b": "vectors",
+      "bSide": "in",
+      "config": {
+        "label": "index",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "question",
+      "aSide": "out",
+      "b": "retrieve",
+      "bSide": "in",
+      "config": {
+        "label": "query"
+      }
+    },
+    {
+      "id": "w5",
+      "a": "retrieve",
+      "aSide": "out",
+      "b": "vectors",
+      "bSide": "in",
+      "config": {
+        "label": "search",
+        "forwardOperation": "read"
+      }
+    },
+    {
+      "id": "w6",
+      "a": "vectors",
+      "aSide": "out",
+      "b": "rerank",
+      "bSide": "in",
+      "config": {
+        "label": "candidates"
+      }
+    },
+    {
+      "id": "w7",
+      "a": "rerank",
+      "aSide": "out",
+      "b": "llm",
+      "bSide": "in",
+      "config": {
+        "label": "relevant"
+      }
+    },
+    {
+      "id": "w8",
+      "a": "rerank",
+      "aSide": "out",
+      "b": "nothing",
+      "bSide": "in",
+      "config": {
+        "label": "none relevant"
+      }
+    },
+    {
+      "id": "w9",
+      "a": "llm",
+      "aSide": "out",
+      "b": "answer",
+      "bSide": "in",
+      "config": {
+        "label": "draft"
+      }
+    },
+    {
+      "id": "w10",
+      "a": "answer",
+      "aSide": "out",
+      "b": "cites",
+      "bSide": "in",
+      "config": {
+        "label": "sources",
+        "forwardOperation": "write"
+      }
+    }
+  ],
+  "references": []
+}

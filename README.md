@@ -1,10 +1,23 @@
-# SOV Schematic
+<h1 align="center">Schematically</h1>
+<h3 align="center">Describe a system. Get an interactive diagram.</h3>
 
-A compact, AI-native schematic editor. A document is a semantic model — Components, Parts, Wires, Form, boundaries, signals, containment — projected to SVG, not a drawing that pretends to be one. People edit it in the browser; agents edit it through the same data core over a Browser API, HTTP, and MCP.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme-hero.dark.png">
+    <img src="docs/assets/readme-hero.light.png" alt="A delivered Schematically diagram of a web request: the Product API is selected and everything it reaches downstream is lit, with the card's note and links in a side panel" width="960">
+  </picture>
+</p>
+
+<p align="center">One sentence to your coding agent becomes one HTML file you can search, trace and share.<br>It opens from disk, offline, in any browser. Works with Claude Code, Codex, Cursor and OpenCode; needs Node 18 or newer.</p>
+
+<p align="center">
+  <a href="#start-here"><strong>Get started</strong></a> ·
+  <a href="#gallery"><strong>Gallery</strong></a> ·
+  <a href="#see-it-in-35-seconds"><strong>35-second walkthrough</strong></a> ·
+  <a href="site/"><strong>The site's source</strong></a>
+</p>
 
 ## Start here
-
-Describe a system to your coding agent and get an interactive diagram you can open in any browser. You need Node 18 or newer.
 
 ```bash
 npx skills add bdf1992/schematically --skill schematically
@@ -19,7 +32,34 @@ and a cache miss queries PostgreSQL and fills the cache.
 
 The agent writes a `.sov` document and runs `node bin/schematically.mjs deliver file.sov --open`, which checks it against the model below, lays it out, and writes one `.html` file that works offline: search, downstream and upstream tracing, routes between cards, light and dark, PNG and print, and links that restore a view. Keep going in chat ("add authentication", "put the database in a private network"); a failed run keeps the last good file. Without an agent, `node bin/schematically.mjs demo --open` from a checkout writes and opens an example.
 
+| Agent | Install for every project | Skill folder |
+| --- | --- | --- |
+| Claude Code | `npx skills add bdf1992/schematically --skill schematically --agent claude-code -g -y` | `~/.claude/skills/schematically` |
+| Codex | `npx skills add bdf1992/schematically --skill schematically --agent codex -g -y` | `~/.agents/skills/schematically` |
+| Cursor | `npx skills add bdf1992/schematically --skill schematically --agent cursor -g -y` | `~/.agents/skills/schematically` |
+| OpenCode | `npx skills add bdf1992/schematically --skill schematically --agent opencode -g -y` | `~/.agents/skills/schematically` |
+
+Leave out `-g` to install into the current project instead. Each agent has a getting-started page in the site (`site/build.mjs` writes `start/<agent>.html`).
+
 The same `.sov` opens in the full editor (`index.html`) for direct editing and simulation.
+
+## See it in 35 seconds
+
+<p align="center"><img src="docs/assets/walkthrough.gif" alt="Walkthrough: a sentence typed to an agent, the .sov it writes, the deliver command, then the diagram explored: a card's note, downstream, upstream, a route and the light theme" width="880"></p>
+
+## Gallery
+
+Every example below was delivered by `bin/schematically.mjs deliver` from the `.sov` beside it. Each `.sov` is what an agent writes from the sentence in [`site/gallery.json`](site/gallery.json); `node site/build.mjs` delivers them all into the site.
+
+| | |
+| --- | --- |
+| <img src="site/static/assets/thumbs/agent-tool-call.light.png" alt="An agent calls a tool under a policy" width="420"><br>**An agent calls a tool under a policy** · [`agent-tool-call.sov`](site/gallery/agent-tool-call.sov) | <img src="site/static/assets/thumbs/release-pipeline.light.png" alt="A release from merge to production with a canary" width="420"><br>**A release from merge to production** · [`release-pipeline.sov`](site/gallery/release-pipeline.sov) |
+| <img src="site/static/assets/thumbs/rag-answer.light.png" alt="Answering a question from your own documents" width="420"><br>**Answering from your own documents** · [`rag-answer.sov`](site/gallery/rag-answer.sov) | <img src="site/static/assets/thumbs/order-events.light.png" alt="An order fans out through an event queue" width="420"><br>**An order fans out through an event queue** · [`order-events.sov`](site/gallery/order-events.sov) |
+| <img src="site/static/assets/thumbs/sign-in.light.png" alt="Signing in with a third-party account" width="420"><br>**Signing in with a third-party account** · [`sign-in.sov`](site/gallery/sign-in.sov) | <img src="site/static/assets/thumbs/support-ticket.light.png" alt="A support ticket from inbox to resolution" width="420"><br>**A support ticket, inbox to resolution** · [`support-ticket.sov`](site/gallery/support-ticket.sov) |
+
+## What it is underneath
+
+SOV Schematic is a compact, AI-native schematic editor. A document is a semantic model — Components, Parts, Wires, Form, boundaries, signals, containment — projected to SVG, not a drawing that pretends to be one. People edit it in the browser; agents edit it through the same data core over a Browser API, HTTP, and MCP. The skill above is the shortest path into it.
 
 ## The model
 

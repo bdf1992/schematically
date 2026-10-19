@@ -1,0 +1,183 @@
+<!doctype html>
+<!-- The walkthrough's stage. site/capture/capture.py serves it beside a built site, calls
+     seek(t) for every frame and screenshots it, so the film is deterministic: nothing here
+     depends on wall-clock time. The diagram is the real delivered examples/web-request.html. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Walkthrough stage</title>
+<style>
+  :root { --accent: #e8833a; --ink: #eceae4; --muted: #8a877f; --line: rgba(255,255,255,.1); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1440px; height: 810px; overflow: hidden; background: #0d0f12; color: var(--ink);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  body { background-image: radial-gradient(900px 500px at 80% -10%, rgba(232,131,58,.16), transparent 60%); }
+  .scene { position: absolute; inset: 0; }
+  #term { display: grid; place-items: center; }
+  .win { width: 1080px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255,255,255,.045);
+    box-shadow: 0 30px 80px rgba(0,0,0,.5); overflow: hidden; }
+  .win .bar { display: flex; gap: 8px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+  .win .bar i { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,.14); display: inline-block; }
+  .win .bar span { margin-left: 8px; }
+  .win .body { padding: 22px 26px; min-height: 380px; font: 15px/1.6 ui-monospace, "Cascadia Code", Consolas, monospace; }
+  .you { color: var(--ink); white-space: pre-wrap; }
+  .you::before { content: "you  "; color: var(--accent); font-weight: 700; }
+  .agent { color: #b4b1a8; margin-top: 14px; white-space: pre-wrap; }
+  .agent::before { content: "agent  "; color: #7fb0e0; font-weight: 700; }
+  .cmd { margin-top: 10px; color: var(--ink); white-space: pre-wrap; }
+  .cmd::before { content: "$ "; color: var(--muted); }
+  .ok { color: #8fd18f; white-space: pre-wrap; }
+  .sov { margin-top: 10px; padding: 10px 14px; border-radius: 8px; background: rgba(0,0,0,.35); border: 1px solid var(--line);
+    color: #b4b1a8; font-size: 13px; line-height: 1.5; height: 120px; overflow: hidden; white-space: pre; }
+  .caret { display: inline-block; width: 8px; height: 17px; background: var(--accent); vertical-align: -3px; margin-left: 1px; }
+  #view iframe { position: absolute; inset: 0; width: 1440px; height: 810px; border: 0; }
+  #cursor { position: absolute; width: 22px; height: 22px; margin: -3px 0 0 -3px; z-index: 20; pointer-events: none; }
+  #ripple { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; border: 2px solid var(--accent); z-index: 19; pointer-events: none; }
+  #key { position: absolute; right: 36px; bottom: 96px; z-index: 21; min-width: 64px; height: 64px; padding: 0 18px; border-radius: 12px;
+    display: grid; place-items: center; font: 700 30px ui-monospace, Consolas, monospace; color: #1a1007; background: var(--accent);
+    box-shadow: 0 10px 30px rgba(0,0,0,.45), inset 0 -4px 0 rgba(0,0,0,.18); }
+  #caption { position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 22; padding: 11px 20px; border-radius: 12px;
+    background: rgba(13,15,18,.86); border: 1px solid rgba(255,255,255,.12); backdrop-filter: blur(10px); font-size: 19px; font-weight: 560;
+    white-space: nowrap; box-shadow: 0 12px 34px rgba(0,0,0,.4); }
+  #caption b { color: var(--accent); margin-right: 8px; }
+  #end { display: grid; place-items: center; text-align: center; background: rgba(13,15,18,.94); z-index: 30; }
+  #end h1 { font-size: 46px; margin: 0 0 10px; letter-spacing: -0.02em; }
+  #end h1 span { color: var(--accent); }
+  #end code { display: inline-block; margin-top: 18px; padding: 14px 22px; border-radius: 12px; border: 1px solid var(--line);
+    background: rgba(255,255,255,.05); font: 20px ui-monospace, Consolas, monospace; }
+  #end p { color: var(--muted); font-size: 18px; margin: 14px 0 0; }
+</style>
+</head>
+<body>
+<div class="scene" id="term">
+  <div class="win">
+    <div class="bar"><i></i><i></i><i></i><span>your coding agent</span></div>
+    <div class="body">
+      <div class="you" id="you"></div>
+      <div class="agent" id="a1">I'll draw it with Schematically: ten cards, ten wires, no coordinates.</div>
+      <div class="sov" id="sov"></div>
+      <div class="cmd" id="cmd">node schematically.mjs deliver web-request.sov --open --json</div>
+      <div class="ok" id="ok">{"ok":true,"target":"web-request.html","components":10,"wires":10,"laidOut":true}</div>
+      <div class="agent" id="a2">Opened web-request.html. It is one file and works offline.</div>
+    </div>
+  </div>
+</div>
+<div class="scene" id="view"><iframe id="frame" src="../examples/web-request.html#theme=dark" title="web-request.html"></iframe></div>
+<svg id="cursor" viewBox="0 0 22 22"><path d="M3 2 L3 18 L7.5 14 L10.5 20.5 L13 19.4 L10.1 13.1 L16 13 Z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>
+<div id="ripple"></div>
+<div id="key"></div>
+<div id="caption"></div>
+<div class="scene" id="end">
+  <div>
+    <h1>Describe a system. <span>Get an interactive diagram.</span></h1>
+    <p>Claude Code · Codex · Cursor · OpenCode · Node 18+</p>
+    <code>npx skills add bdf1992/schematically --skill schematically</code>
+  </div>
+</div>
+<script>
+const PROMPT = 'Use Schematically to diagram a web request: the browser goes through the CDN and a rate limit to the product API, which checks Redis and falls back to PostgreSQL on a miss.';
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const ease = x => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+const span = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
+
+// Captions, keys, cursor and viewer states, each keyed by the second it starts.
+const CAPTIONS = [
+  [0.4, 8.6, '1', 'Describe the system to your agent in one sentence'],
+  [8.6, 14.6, '2', 'It writes a small model; deliver checks it and lays it out'],
+  [15.2, 18.6, '3', 'You get one HTML file: offline, any browser'],
+  [18.6, 21.2, '', 'Click a card to read it'],
+  [21.2, 24.2, 'd', 'Everything the API reaches'],
+  [24.2, 27.0, 'u', 'Everything that reaches the API'],
+  [27.0, 32.4, 'r', 'The route from the browser to PostgreSQL'],
+  [32.4, 35.0, 't', 'Light or dark, PNG, print, and a link that keeps the view'],
+];
+const KEYS = [[21.0, 22.4, 'd'], [24.0, 25.4, 'u'], [28.4, 29.8, 'r'], [32.2, 33.6, 't']];
+const MOVES = [[15.6, null, 720, 470], [17.0, 'api'], [25.6, null], [26.6, 'browser'], [29.6, 'db'], [32.0, null, 1330, 640]];
+const CLICKS = [[18.4, 'api'], [27.0, 'browser'], [30.6, 'db']];
+const STATES = [
+  [0, {focus: null, mode: null, to: null, theme: 'dark'}],
+  [18.4, {focus: 'api', mode: null, to: null, theme: 'dark'}],
+  [21.2, {focus: 'api', mode: 'down', to: null, theme: 'dark'}],
+  [24.2, {focus: 'api', mode: 'up', to: null, theme: 'dark'}],
+  [27.0, {focus: 'browser', mode: null, to: null, theme: 'dark'}],
+  [28.6, {focus: 'browser', mode: 'route', to: null, theme: 'dark'}],
+  [30.6, {focus: 'browser', mode: 'route', to: 'db', theme: 'dark'}],
+  [32.4, {focus: 'browser', mode: 'route', to: 'db', theme: 'light'}],
+];
+const END = 34.6, DURATION = 37.5;
+window.DURATION = DURATION;
+
+let sovText = '';
+const frame = $('frame');
+const viewer = () => frame.contentWindow && frame.contentWindow.SovViewer;
+function cardCentre(id) {
+  const doc = frame.contentDocument; if (!doc) return [720, 405];
+  const g = doc.querySelector(`#stage g.node[data-id="${id}"]`); if (!g) return [720, 405];
+  const r = g.getBoundingClientRect();
+  return [r.left + r.width / 2, r.top + r.height / 2];
+}
+function cursorAt(t) {
+  // A move with no card and no point holds where the cursor already is.
+  const points = []; let prev = [720, 470];
+  for (const [at, id, x, y] of MOVES) { const p = id ? cardCentre(id) : x != null ? [x, y] : prev; points.push([at, p]); prev = p; }
+  if (t <= points[0][0]) return points[0][1];
+  for (let i = 1; i < points.length; i++) {
+    const [t0, p0] = points[i - 1], [t1, p1] = points[i];
+    if (t < t1) { const k = ease(span(t, Math.max(t0, t1 - 1.0), t1)); return [p0[0] + (p1[0] - p0[0]) * k, p0[1] + (p1[1] - p0[1]) * k]; }
+  }
+  return points[points.length - 1][1];
+}
+let applied = '';
+function applyViewer(t) {
+  const V = viewer(); if (!V) return;
+  let s = STATES[0][1]; for (const [at, st] of STATES) if (at <= t) s = st;
+  const key = JSON.stringify(s); if (key === applied) return; applied = key;
+  if (V.state.theme !== s.theme) V.setTheme(s.theme);
+  V.clear();
+  if (s.focus) V.select(s.focus);
+  if (s.mode) V.setMode(s.mode);
+  if (s.to) V.select(s.to);
+}
+window.seek = function (t) {
+  // Terminal scene.
+  const typed = Math.round(PROMPT.length * span(t, 0.6, 6.4));
+  $('you').innerHTML = PROMPT.slice(0, typed).replace(/&/g, '&amp;').replace(/</g, '&lt;') + (t < 7.0 ? '<span class="caret"></span>' : '');
+  $('a1').style.opacity = span(t, 7.2, 7.6);
+  $('sov').style.opacity = span(t, 7.8, 8.2);
+  const lines = sovText.split('\n'); const shown = Math.round(lines.length * span(t, 7.8, 10.6));
+  const first = Math.max(0, shown - 7);
+  $('sov').textContent = lines.slice(first, shown).join('\n');
+  $('cmd').style.opacity = span(t, 11.0, 11.3);
+  $('ok').style.opacity = span(t, 12.2, 12.5);
+  $('a2').style.opacity = span(t, 13.0, 13.4);
+  $('term').style.opacity = 1 - span(t, 14.4, 15.2);
+  $('view').style.opacity = span(t, 14.6, 15.2);
+  // Viewer, cursor, keys, captions.
+  applyViewer(t);
+  const [cx, cy] = cursorAt(t);
+  const cur = $('cursor'); cur.style.left = cx + 'px'; cur.style.top = cy + 'px';
+  cur.style.opacity = t >= 15.4 && t < END ? 1 : 0;
+  const click = CLICKS.find(([at]) => t >= at && t < at + 0.6);
+  const rip = $('ripple');
+  if (click) { const k = (t - click[0]) / 0.6; rip.style.left = cx + 'px'; rip.style.top = cy + 'px'; rip.style.opacity = 1 - k; rip.style.transform = `scale(${0.4 + k})`; }
+  else rip.style.opacity = 0;
+  const key = KEYS.find(([a, b]) => t >= a && t < b);
+  $('key').style.opacity = key ? 1 : 0; $('key').textContent = key ? key[2] : '';
+  const cap = CAPTIONS.find(([a, b]) => t >= a && t < b);
+  $('caption').style.opacity = cap && t < END ? 1 : 0;
+  $('caption').innerHTML = cap ? (cap[2] ? `<b>${cap[2]}</b>` : '') + cap[3] : '';
+  $('end').style.opacity = span(t, END, END + 0.6);
+};
+window.ready = (async () => {
+  sovText = await (await fetch('../examples/web-request.sov')).text();
+  await new Promise(r => { const check = () => viewer() && viewer().data ? r() : setTimeout(check, 50); check(); });
+  // Zoom out once around the left edge, so the card panel that opens on the right covers no card.
+  const stage = frame.contentDocument.getElementById('stage');
+  stage.dispatchEvent(new frame.contentWindow.WheelEvent('wheel', {deltaY: 210, clientX: 40, clientY: 430, bubbles: true, cancelable: true}));
+  seek(0);
+  return true;
+})();
+</script>
+</body>
+</html>

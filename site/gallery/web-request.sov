@@ -1,0 +1,197 @@
+{
+  "schema": "soveraeign.schematic/document@0.1",
+  "id": "web-request",
+  "revision": 0,
+  "meta": {
+    "title": "A web request with a cache in front of the database"
+  },
+  "components": [
+    {
+      "id": "browser",
+      "symbolId": "act",
+      "config": {
+        "label": "Browser",
+        "note": "The user opens a product page.",
+        "signalMode": "source"
+      }
+    },
+    {
+      "id": "cdn",
+      "symbolId": "act",
+      "config": {
+        "label": "CDN edge",
+        "note": "Serves static assets; forwards API calls."
+      }
+    },
+    {
+      "id": "ratelimit",
+      "symbolId": "gate",
+      "config": {
+        "label": "Rate limit",
+        "note": "Refuses a client over 100 requests a minute."
+      }
+    },
+    {
+      "id": "session",
+      "symbolId": "authority",
+      "config": {
+        "label": "Session cookie",
+        "note": "Signed session; the API reads the user from it."
+      }
+    },
+    {
+      "id": "api",
+      "symbolId": "act",
+      "config": {
+        "label": "Product API",
+        "note": "Builds the product response."
+      }
+    },
+    {
+      "id": "cache",
+      "symbolId": "gate",
+      "config": {
+        "label": "Cache lookup",
+        "note": "Hit returns at once; miss goes to the database."
+      }
+    },
+    {
+      "id": "redis",
+      "symbolId": "hold",
+      "config": {
+        "label": "Redis",
+        "note": "Product JSON, 5 minute TTL."
+      }
+    },
+    {
+      "id": "db",
+      "symbolId": "hold",
+      "config": {
+        "label": "PostgreSQL",
+        "note": "Products, prices and stock."
+      }
+    },
+    {
+      "id": "tooMany",
+      "symbolId": "refuse",
+      "config": {
+        "label": "429 Too Many",
+        "note": "The client waits and retries."
+      }
+    },
+    {
+      "id": "metrics",
+      "symbolId": "observe",
+      "config": {
+        "label": "Metrics",
+        "note": "Latency and hit rate per route."
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "a": "browser",
+      "aSide": "out",
+      "b": "cdn",
+      "bSide": "in",
+      "config": {
+        "label": "GET /product/42"
+      }
+    },
+    {
+      "id": "w2",
+      "a": "cdn",
+      "aSide": "out",
+      "b": "ratelimit",
+      "bSide": "in",
+      "config": {
+        "label": "forward"
+      }
+    },
+    {
+      "id": "w3",
+      "a": "ratelimit",
+      "aSide": "out",
+      "b": "api",
+      "bSide": "in",
+      "config": {
+        "label": "within limit"
+      }
+    },
+    {
+      "id": "w4",
+      "a": "ratelimit",
+      "aSide": "out",
+      "b": "tooMany",
+      "bSide": "in",
+      "config": {
+        "label": "over limit"
+      }
+    },
+    {
+      "id": "w5",
+      "a": "session",
+      "aSide": "out",
+      "b": "api",
+      "bSide": "control",
+      "config": {
+        "label": "identifies user"
+      }
+    },
+    {
+      "id": "w6",
+      "a": "api",
+      "aSide": "out",
+      "b": "cache",
+      "bSide": "in",
+      "config": {
+        "label": "look up"
+      }
+    },
+    {
+      "id": "w7",
+      "a": "cache",
+      "aSide": "out",
+      "b": "redis",
+      "bSide": "in",
+      "config": {
+        "label": "hit",
+        "forwardOperation": "read"
+      }
+    },
+    {
+      "id": "w8",
+      "a": "cache",
+      "aSide": "out",
+      "b": "db",
+      "bSide": "in",
+      "config": {
+        "label": "miss",
+        "forwardOperation": "read"
+      }
+    },
+    {
+      "id": "w9",
+      "a": "db",
+      "aSide": "out",
+      "b": "redis",
+      "bSide": "in",
+      "config": {
+        "label": "fill cache",
+        "forwardOperation": "write"
+      }
+    },
+    {
+      "id": "w10",
+      "a": "api",
+      "aSide": "out",
+      "b": "metrics",
+      "bSide": "in",
+      "config": {
+        "label": "timings"
+      }
+    }
+  ],
+  "references": []
+}
