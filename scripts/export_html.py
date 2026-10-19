@@ -69,7 +69,8 @@ def export_documents(paths: list[Path], out_dir: Path | None = None, pad: int = 
             src = Path(src)
             before = len(errors)
             page.evaluate('([t,n])=>window.SovSchematicAPI.file.open(t,n)', [src.read_text(encoding='utf-8'), src.name])
-            page.evaluate('()=>{ if (typeof fitDiagram === "function") fitDiagram(); }')
+            # No camera fit: render.svg draws at label zoom 1 whatever the camera, and from any other
+            # zoom it redraws the whole picture twice (withPictureLabels, src/75-persistence.js).
             page.wait_for_timeout(300)
             data = page.evaluate(GRAPH_JS)
             data['svg'] = {}

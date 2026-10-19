@@ -10809,13 +10809,52 @@ function directionPenalty(points,A,B){
   }
   return p;
 }
+// ---- Occupied index ----------------------------------------------------------------------------
+// On a large drawing the routes already placed grow to thousands of segments, and every candidate
+// segment was scored against each one: 387 wires on 108 cards never finished opening. A placed
+// segment whose box lies farther than OCCUPIED_REACH from a candidate segment's box adds nothing to
+// any term (segmentsCross needs the boxes to meet, sharedLength an offset under 1, onOneTrack under 3
+// with an end gap under 14, runsBeside under 16), so a uniform grid over the placed segments hands
+// back only the near ones, in the order they were placed, and the score is the same number to the
+// bit (the skipped terms are all exactly 0). An occupied array only grows by push, and its segments
+// are fresh points from routeSegments that never move, so the index is built once per array and
+// extended as it grows. Below OCCUPIED_INDEX_FROM segments the plain scan is cheaper.
+const OCCUPIED_REACH=16,OCCUPIED_CELL=128,OCCUPIED_INDEX_FROM=64;
+const occupiedIndexes=new WeakMap();
+// Visits the cells a box covers and returns true, or returns false without visiting when the box
+// is not finite or covers more than OCCUPIED_SPAN cells (a far-flung segment is kept loose instead).
+const OCCUPIED_SPAN=64;
+function occupiedCells(x1,y1,x2,y2,visit){
+  if(![x1,y1,x2,y2].every(Number.isFinite))return false;
+  const cx1=Math.floor(Math.min(x1,x2)/OCCUPIED_CELL),cx2=Math.floor(Math.max(x1,x2)/OCCUPIED_CELL);
+  const cy1=Math.floor(Math.min(y1,y2)/OCCUPIED_CELL),cy2=Math.floor(Math.max(y1,y2)/OCCUPIED_CELL);
+  if((cx2-cx1+1)*(cy2-cy1+1)>OCCUPIED_SPAN)return false;
+  for(let cx=cx1;cx<=cx2;cx++)for(let cy=cy1;cy<=cy2;cy++)visit(cx+','+cy);
+  return true;
+}
+function occupiedNear(occupied,P,Q){
+  // SOV_QA_NO_SPATIAL_INDEX: the plain scan, for tests/spatial_index_parity_qa.py.
+  if(occupied.length<OCCUPIED_INDEX_FROM||(typeof window!=='undefined'&&window.SOV_QA_NO_SPATIAL_INDEX))return occupied;
+  let ix=occupiedIndexes.get(occupied);
+  if(!ix||ix.n>occupied.length){ix={n:0,cells:new Map(),loose:[]};occupiedIndexes.set(occupied,ix)}
+  for(;ix.n<occupied.length;ix.n++){
+    const s=occupied[ix.n],i=ix.n;
+    // A segment that fits no cell range is loose: it is scored with every candidate.
+    if(!occupiedCells(s.a.x,s.a.y,s.b.x,s.b.y,k=>{let c=ix.cells.get(k);if(!c)ix.cells.set(k,c=[]);c.push(i)}))ix.loose.push(i);
+  }
+  const r=OCCUPIED_REACH,found=[...ix.loose];
+  if(!occupiedCells(Math.min(P.x,Q.x)-r,Math.min(P.y,Q.y)-r,Math.max(P.x,Q.x)+r,Math.max(P.y,Q.y)+r,k=>{const c=ix.cells.get(k);if(c)for(const i of c)found.push(i)}))return occupied;
+  found.sort((a,b)=>a-b);
+  const near=[];for(let j=0;j<found.length;j++)if(j===0||found[j]!==found[j-1])near.push(occupied[found[j]]);
+  return near;
+}
 function pathScore(points,A,B,obstacles=[],occupied=[],ends=null){
   const pts=normalizePoints(points);
   let length=0, bends=Math.max(0,pts.length-2), crossings=0, shared=0, hugging=0, tracks=0, crowded=0;
   for(let i=0;i<pts.length-1;i++){
     const P=pts[i], Q=pts[i+1];
     length += segmentLength(P,Q);
-    for(const seg of occupied){
+    for(const seg of occupiedNear(occupied,P,Q)){
       crossings += segmentsCross(P,Q,seg.a,seg.b) ? 1 : 0;
       shared += sharedLength(P,Q,seg.a,seg.b);
       if(ends&&seg.ends&&!seg.ends.some(e=>ends.includes(e))){if(onOneTrack(P,Q,seg.a,seg.b))tracks++;else if(runsBeside(P,Q,seg.a,seg.b))crowded++}
@@ -11041,7 +11080,7 @@ function routeClear(points,obstacles,leads=[]){
 // terms of pathScore.
 function occupiedCost(P,Q,occupied,ends){
   let c=0;
-  for(const seg of occupied){
+  for(const seg of occupiedNear(occupied,P,Q)){
     if(segmentsCross(P,Q,seg.a,seg.b))c+=90;
     c+=sharedLength(P,Q,seg.a,seg.b)*5;
     if(ends&&seg.ends&&!seg.ends.some(e=>ends.includes(e))){if(onOneTrack(P,Q,seg.a,seg.b))c+=260;else if(runsBeside(P,Q,seg.a,seg.b))c+=70}
@@ -13333,6 +13372,32 @@ function placeWireLabels(){
   // A container is no obstacle, but its border is: a label lies wholly inside it or wholly outside.
   const frames=[...workspace.querySelectorAll('.node.is-container>.body')].filter(visible).map(rect);
   const entries=[...wireLabelPaths].filter(([path])=>path.isConnected&&visible(path)).map(([path,points])=>({path,points:points.map(screen)}));
+  // A place is checked against what lies near it, not against everything in its wire's zone: on a
+  // large drawing a long wire's zone holds most of the picture, and each of its slid places met
+  // every box and segment there (108 cards and 387 wires never finished). A grid by screen box hands
+  // back each item once; one that cannot reach the place's box adds nothing to a count, so every
+  // count is the same. Obstacles join the grid as labels are placed; wire segments stand still.
+  const boxGrid=(cell=64,most=1024)=>{
+    const cells=new Map(),loose=[];let size=0;
+    const span=(b,visit)=>{
+      if(![b.l,b.r,b.t,b.b].every(Number.isFinite))return false;
+      const x1=Math.floor(b.l/cell),x2=Math.floor(b.r/cell),y1=Math.floor(b.t/cell),y2=Math.floor(b.b/cell);
+      if((x2-x1+1)*(y2-y1+1)>most)return false;
+      for(let x=x1;x<=x2;x++)for(let y=y1;y<=y2;y++)visit(x+','+y);
+      return true;
+    };
+    return {
+      add(b){const i=size++;if(!span(b,k=>{let c=cells.get(k);if(!c)cells.set(k,c=[]);c.push(i)}))loose.push(i)},
+      // every: the plain scan, every item (window.SOV_QA_NO_SPATIAL_INDEX, or the QA cross-check).
+      near(b,every=false){const found=new Set(loose);if(every||window.SOV_QA_NO_SPATIAL_INDEX||!span(b,k=>{for(const i of cells.get(k)||[])found.add(i)}))for(let i=0;i<size;i++)found.add(i);return found}
+    };
+  };
+  const obstacleGrid=boxGrid();for(const o of obstacles)obstacleGrid.add(o);
+  const segments=[],segmentGrid=boxGrid();
+  for(const e of entries)for(let i=1;i<e.points.length;i++){
+    const a=e.points[i-1],b=e.points[i];segments.push({entry:e,a,b});
+    segmentGrid.add({l:Math.min(a.x,b.x),r:Math.max(a.x,b.x),t:Math.min(a.y,b.y),b:Math.max(a.y,b.y)});
+  }
   // A slab intersection also handles diagonal carrier segments without sampling.
   const crosses=(box,a,b)=>{
     let lo=0,hi=1;
@@ -13399,21 +13464,15 @@ function placeWireLabels(){
     // Only what lies within reach of this wire can meet a label beside it.
     const reach=Math.max(width,height)+3*clearance,xs=points.map(p=>p.x),ys=points.map(p=>p.y);
     const zone={l:Math.min(...xs)-reach,r:Math.max(...xs)+reach,t:Math.min(...ys)-reach,b:Math.max(...ys)+reach};
-    const solid=obstacles.filter(box=>intersects(zone,box)),borders=frames.filter(box=>intersects(zone,box)),lines=[];
-    for(const other of entries){
-      if(other===entry)continue;
-      for(let i=1;i<other.points.length;i++){
-        const a=other.points[i-1],b=other.points[i];
-        if(Math.max(a.x,b.x)>=zone.l&&Math.min(a.x,b.x)<=zone.r&&Math.max(a.y,b.y)>=zone.t&&Math.min(a.y,b.y)<=zone.b)lines.push([a,b]);
-      }
-    }
+    const borders=frames.filter(box=>intersects(zone,box));
+    const inZone=(a,b)=>Math.max(a.x,b.x)>=zone.l&&Math.min(a.x,b.x)<=zone.r&&Math.max(a.y,b.y)>=zone.t&&Math.min(a.y,b.y)<=zone.b;
     // How many things a label at this place, padded by pad, would meet; counted no further than the limit.
-    const overlaps=(place,pad,limit)=>{
+    const count=(place,pad,limit,every)=>{
       const box={l:place.l-pad,r:place.l+width+pad,t:place.t-pad,b:place.t+height+pad};
       let n=0;
-      for(const o of solid)if(intersects(box,o)&&++n>=limit)return n;
+      for(const i of obstacleGrid.near(box,every)){const o=obstacles[i];if(intersects(zone,o)&&intersects(box,o)&&++n>=limit)return n}
       for(const o of borders)if(intersects(box,o)&&!(box.l>o.l&&box.r<o.r&&box.t>o.t&&box.b<o.b)&&++n>=limit)return n;
-      for(const [a,b] of lines)if(crosses(box,a,b)&&++n>=limit)return n;
+      for(const i of segmentGrid.near(box,every)){const {entry:other,a,b}=segments[i];if(other!==entry&&inZone(a,b)&&crosses(box,a,b)&&++n>=limit)return n}
       // The label's own wire, all but the run this place stands beside: a leg counts where it enters
       // the box, taken .01 px inside its edges, so one that only touches a corner or an edge does not.
       // A label kept where it is (a place with no run named) counts none.
@@ -13421,6 +13480,13 @@ function placeWireLabels(){
         const inner={l:box.l+.01,r:box.r-.01,t:box.t+.01,b:box.b-.01};
         for(const leg of legs)if(leg.run!==place.run&&crosses(inner,leg.a,leg.b)&&++n>=limit)return n;
       }
+      return n;
+    };
+    // SOV_QA_CHECK_SPATIAL_INDEX: every count is taken both ways and a disagreement is recorded, for
+    // tests/spatial_index_parity_qa.py (a drawn picture hides one: a second pass settles it again).
+    const overlaps=(place,pad,limit)=>{
+      const n=count(place,pad,limit,false);
+      if(window.SOV_QA_CHECK_SPATIAL_INDEX){const m=count(place,pad,limit,true);if(m!==n)(window.SOV_QA_SPATIAL_MISMATCHES||=[]).push({place,pad,limit,grid:n,plain:m})}
       return n;
     };
     // Today's places first, then the slid ones; in each, nearest the wire's midpoint first. The first
@@ -13467,7 +13533,7 @@ function placeWireLabels(){
     // Crowded: the label truly overlaps a card, a border, other text or a wire at the place it has.
     if(bare>0)label.dataset.labelCrowded='true';else delete label.dataset.labelCrowded;
     // Later labels keep clear of this one; the finite candidate list bounds the work.
-    obstacles.push(rect(label));
+    const placed=rect(label);obstacles.push(placed);obstacleGrid.add(placed);
   }
 }
 // The signal state reads configuration, wires and placement, never x or y: one value stands from the

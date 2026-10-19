@@ -116,13 +116,52 @@ function directionPenalty(points,A,B){
   }
   return p;
 }
+// ---- Occupied index ----------------------------------------------------------------------------
+// On a large drawing the routes already placed grow to thousands of segments, and every candidate
+// segment was scored against each one: 387 wires on 108 cards never finished opening. A placed
+// segment whose box lies farther than OCCUPIED_REACH from a candidate segment's box adds nothing to
+// any term (segmentsCross needs the boxes to meet, sharedLength an offset under 1, onOneTrack under 3
+// with an end gap under 14, runsBeside under 16), so a uniform grid over the placed segments hands
+// back only the near ones, in the order they were placed, and the score is the same number to the
+// bit (the skipped terms are all exactly 0). An occupied array only grows by push, and its segments
+// are fresh points from routeSegments that never move, so the index is built once per array and
+// extended as it grows. Below OCCUPIED_INDEX_FROM segments the plain scan is cheaper.
+const OCCUPIED_REACH=16,OCCUPIED_CELL=128,OCCUPIED_INDEX_FROM=64;
+const occupiedIndexes=new WeakMap();
+// Visits the cells a box covers and returns true, or returns false without visiting when the box
+// is not finite or covers more than OCCUPIED_SPAN cells (a far-flung segment is kept loose instead).
+const OCCUPIED_SPAN=64;
+function occupiedCells(x1,y1,x2,y2,visit){
+  if(![x1,y1,x2,y2].every(Number.isFinite))return false;
+  const cx1=Math.floor(Math.min(x1,x2)/OCCUPIED_CELL),cx2=Math.floor(Math.max(x1,x2)/OCCUPIED_CELL);
+  const cy1=Math.floor(Math.min(y1,y2)/OCCUPIED_CELL),cy2=Math.floor(Math.max(y1,y2)/OCCUPIED_CELL);
+  if((cx2-cx1+1)*(cy2-cy1+1)>OCCUPIED_SPAN)return false;
+  for(let cx=cx1;cx<=cx2;cx++)for(let cy=cy1;cy<=cy2;cy++)visit(cx+','+cy);
+  return true;
+}
+function occupiedNear(occupied,P,Q){
+  // SOV_QA_NO_SPATIAL_INDEX: the plain scan, for tests/spatial_index_parity_qa.py.
+  if(occupied.length<OCCUPIED_INDEX_FROM||(typeof window!=='undefined'&&window.SOV_QA_NO_SPATIAL_INDEX))return occupied;
+  let ix=occupiedIndexes.get(occupied);
+  if(!ix||ix.n>occupied.length){ix={n:0,cells:new Map(),loose:[]};occupiedIndexes.set(occupied,ix)}
+  for(;ix.n<occupied.length;ix.n++){
+    const s=occupied[ix.n],i=ix.n;
+    // A segment that fits no cell range is loose: it is scored with every candidate.
+    if(!occupiedCells(s.a.x,s.a.y,s.b.x,s.b.y,k=>{let c=ix.cells.get(k);if(!c)ix.cells.set(k,c=[]);c.push(i)}))ix.loose.push(i);
+  }
+  const r=OCCUPIED_REACH,found=[...ix.loose];
+  if(!occupiedCells(Math.min(P.x,Q.x)-r,Math.min(P.y,Q.y)-r,Math.max(P.x,Q.x)+r,Math.max(P.y,Q.y)+r,k=>{const c=ix.cells.get(k);if(c)for(const i of c)found.push(i)}))return occupied;
+  found.sort((a,b)=>a-b);
+  const near=[];for(let j=0;j<found.length;j++)if(j===0||found[j]!==found[j-1])near.push(occupied[found[j]]);
+  return near;
+}
 function pathScore(points,A,B,obstacles=[],occupied=[],ends=null){
   const pts=normalizePoints(points);
   let length=0, bends=Math.max(0,pts.length-2), crossings=0, shared=0, hugging=0, tracks=0, crowded=0;
   for(let i=0;i<pts.length-1;i++){
     const P=pts[i], Q=pts[i+1];
     length += segmentLength(P,Q);
-    for(const seg of occupied){
+    for(const seg of occupiedNear(occupied,P,Q)){
       crossings += segmentsCross(P,Q,seg.a,seg.b) ? 1 : 0;
       shared += sharedLength(P,Q,seg.a,seg.b);
       if(ends&&seg.ends&&!seg.ends.some(e=>ends.includes(e))){if(onOneTrack(P,Q,seg.a,seg.b))tracks++;else if(runsBeside(P,Q,seg.a,seg.b))crowded++}
@@ -348,7 +387,7 @@ function routeClear(points,obstacles,leads=[]){
 // terms of pathScore.
 function occupiedCost(P,Q,occupied,ends){
   let c=0;
-  for(const seg of occupied){
+  for(const seg of occupiedNear(occupied,P,Q)){
     if(segmentsCross(P,Q,seg.a,seg.b))c+=90;
     c+=sharedLength(P,Q,seg.a,seg.b)*5;
     if(ends&&seg.ends&&!seg.ends.some(e=>ends.includes(e))){if(onOneTrack(P,Q,seg.a,seg.b))c+=260;else if(runsBeside(P,Q,seg.a,seg.b))c+=70}
