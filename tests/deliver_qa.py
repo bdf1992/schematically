@@ -7,10 +7,12 @@
     variant falls through to SOV999;
 (c) deliver: a good document is delivered; a failing candidate (refused at validate, and refused
     at render with the renderer made to fail) leaves the previous good viewer byte for byte and
-    with its modification time; a good document then replaces it;
+    with its modification time, and nothing else beside it; a good document then replaces it; a
+    target that cannot be written (a folder of that name) is a coded report at stage write;
 (d) schematic.deliver over MCP: listed in tools/list with an input schema; one example round-trips
-    to <name>.html beside its file; out outside the folder is refused; a server holding an invalid
-    file refuses and keeps the viewer already there.
+    to <name>.html beside its file; out outside the folder (by name, or through a junction), or not
+    a string, is refused, and a name starting with two dots is not; a server holding an invalid file
+    refuses and keeps the viewer already there.
 """
 from __future__ import annotations
 import copy
@@ -81,6 +83,8 @@ VARIANTS = {
     'SOV404': ('c1', variant(lambda d: d['components'][0].setdefault('config', {}).update(status='done'))),
     'SOV304': ('k1', variant(lambda d: d['wires'][0].update(canvasId='canvas:component:c2'))),
     'SOV104': (base['id'], variant(lambda d: d.update(schema='something/else@9'))),
+    'SOV213': (base['id'], variant(lambda d: d.update(virtual=5))),
+    'SOV203': (None, variant(lambda d: d['components'][0].pop('id'))),
 }
 with tempfile.TemporaryDirectory() as td:
     td = Path(td)
@@ -119,6 +123,7 @@ with tempfile.TemporaryDirectory() as td:
     assert not refused['delivered'] and refused['stage'] == 'validate' and refused['previous'] == 'kept', refused
     assert 'SOV301' in [f['code'] for f in refused['findings']]
     assert stamp(target) == before, 'a candidate refused at validate changed the last good viewer'
+    assert sorted(p.name for p in target.parent.iterdir()) == ['viewer.html'], list(target.parent.iterdir())
     # The renderer fails: refused at render, viewer untouched, no temporary file left behind.
     real = export_html.export_documents
     export_html.export_documents = lambda paths, out_dir=None, pad=48: (_ for _ in ()).throw(RuntimeError('Error: drawing failed'))
@@ -140,6 +145,15 @@ with tempfile.TemporaryDirectory() as td:
     assert proc.returncode == 1 and json.loads(proc.stdout)['previous'] == 'kept' and stamp(target) == before, proc.stdout
     again = deliver_sov.deliver(good, target)
     assert again['delivered'] and again['previous'] == 'replaced', again
+    assert sorted(p.name for p in target.parent.iterdir()) == ['viewer.html'], list(target.parent.iterdir())
+    # A folder where the viewer should go: refused at write with SOV701, as a report, nothing left over.
+    blocked = td / 'site' / 'folder.html'
+    blocked.mkdir()
+    proc = subprocess.run([sys.executable, str(ROOT / 'scripts' / 'deliver_sov.py'), str(good), '--out', str(blocked), '--json'],
+                          capture_output=True, text=True, encoding='utf-8', cwd=ROOT)
+    report = json.loads(proc.stdout)
+    assert proc.returncode == 1 and report['stage'] == 'write' and [f['code'] for f in report['findings']] == ['SOV701'], proc.stdout
+    assert blocked.is_dir() and sorted(p.name for p in target.parent.iterdir()) == ['folder.html', 'viewer.html']
 print('(c) a failing candidate (validate or render) leaves the last good viewer untouched; a good one replaces it')
 
 
@@ -189,6 +203,25 @@ with tempfile.TemporaryDirectory() as td:
         r = rpc(url, 'tools/call', {'name': 'schematic.deliver', 'arguments': {'out': '../escape.html'}})
         assert r['isError'] and r['structuredContent']['code'] == 'DELIVER_TARGET_REFUSED', r
         assert not (td.parent / 'escape.html').exists()
+        r = rpc(url, 'tools/call', {'name': 'schematic.deliver', 'arguments': {'out': 5}})
+        assert r['isError'] and r['structuredContent']['code'] == 'DELIVER_TARGET_REFUSED', r
+        r = rpc(url, 'tools/call', {'name': 'schematic.deliver', 'arguments': {'out': '..dots.html'}})
+        assert not r['isError'] and (td / '..dots.html').is_file(), r['structuredContent']
+        # A junction (or directory link) inside the folder that points outside it is refused.
+        outside = Path(tempfile.mkdtemp(prefix='sov-outside-'))
+        try:
+            link = td / 'jn'
+            if sys.platform == 'win32':
+                import _winapi
+                _winapi.CreateJunction(str(outside), str(link))
+            else:
+                os.symlink(outside, link, target_is_directory=True)
+            r = rpc(url, 'tools/call', {'name': 'schematic.deliver', 'arguments': {'out': 'jn/escaped.html'}})
+            assert r['isError'] and r['structuredContent']['code'] == 'DELIVER_TARGET_REFUSED', r
+            assert not any(outside.iterdir()), list(outside.iterdir())
+            os.rmdir(link) if sys.platform == 'win32' else os.unlink(link)
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
     finally:
         proc.kill()
     before = stamp(td / 'boundary.html')

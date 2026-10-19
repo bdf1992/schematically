@@ -51,6 +51,7 @@ if (!files.length) {
 
 // The element a message names, the way the marker list names it (src/05-data-core.js markerElementId).
 function elementId(docId, message) {
+  if (/^(?:wire|component|reference) missing id$/.test(message)) return null;
   const named = message.match(/^(?:wire|component|reference) ([^\s:]+)/);
   if (named) return named[1];
   const duplicate = message.match(/^duplicate (?:component|wire|reference) id: (.+)$/);
@@ -76,8 +77,11 @@ function check(file) {
   catch (error) { return {file, ok: false, findings: [finding('SOV102', error.message, null)]}; }
   try { doc = Data.documentFromFilePayload(payload); }
   catch (error) {
-    const hit = MATCHERS.find(m => (m.code === 'SOV103' || m.code === 'SOV104') && m.re.test(error.message));
-    return {file, ok: false, findings: [finding(hit ? hit.code : 'SOV105', error.message, payload?.id ?? null)]};
+    // A package's own check joins its document's errors; any other throw is the loader refusing a
+    // plain document, classified by the table when its message carries a known code.
+    if (payload?.schema === Data.PACKAGE_SCHEMA) return {file, ok: false, findings: [finding('SOV105', error.message, payload?.id ?? null)]};
+    const hit = MATCHERS.find(m => m.re.test(error.message));
+    return {file, ok: false, findings: [finding(hit ? hit.code : 'SOV106', error.message, elementId(payload?.id ?? null, error.message))]};
   }
   const errors = [...Data.validateDocument(doc).errors];
   // The browser refuses the document at load time if any bound wire has no shared surface;

@@ -21,6 +21,7 @@ An `error` refuses delivery and leaves the previous viewer untouched; a `warning
 | SOV103 | error | payload is not an object | Wrap the document in one JSON object with "schema", "components", "wires" and "references". |
 | SOV104 | error | file schema unsupported | Set "schema" to the document schema (see GET /api/v1/formats, field document). |
 | SOV105 | error | package refused | The package's inner document failed; fix the errors listed in the message, which are the document's own. |
+| SOV106 | error | document refused at load | The loader refused the document before validation; fix what the message names (the same refusal the editor gives on open). |
 
 ## Schema: the document's own fields.
 
@@ -51,7 +52,7 @@ An `error` refuses delivery and leaves the previous viewer untouched; a `warning
 | SOV305 | error | wire end has no surface | On wire {id}, attach the end to a component port or attachment point that exists on a reachable surface. |
 | SOV306 | error | wire operation invalid | On wire {id}, set forwardOperation and reverseOperation to none, read or write. |
 | SOV307 | error | wire kind not declared | On wire {id}, use a wire kind the notation declares, or declare it in the notation. |
-| SOV308 | error | path delay invalid | On {id}, set the delay to a finite number >= 0, or remove it. |
+| SOV308 | error | path delay invalid | On {id}, set the delay to a whole number of ticks >= 0, or remove it. |
 
 ## Notation: the notation, its statuses and its concerns.
 
@@ -79,6 +80,12 @@ An `error` refuses delivery and leaves the previous viewer untouched; a `warning
 | SOV603 | error | viewer shows another document | The viewer's id or card count differs from the checked file; the editor refused the file and kept another. Open it in the editor to see why. |
 | SOV604 | error | renderer unavailable | Install Playwright Chromium (python -m playwright install chromium) and build index.html (python build.py). |
 | SOV605 | warning | wire blocked for tracing | Wire {id} is drawn but tracing does not follow it ({detail}); expected for an access-blocked wire, otherwise open its direction or access. |
+
+## Write: the checked viewer replaces the target.
+
+| Code | Severity | Finding | Repair |
+| --- | --- | --- | --- |
+| SOV701 | error | viewer could not be written | The checked viewer could not replace the target (the message names why: read-only, in use, or a folder of that name); free the target path or choose another --out. |
 
 ## Unclassified.
 

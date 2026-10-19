@@ -3,10 +3,11 @@
 Three stages, each of which can refuse:
   validate  node scripts/validate_sov.mjs --json: schema and marker findings, each with a stable
             rule code (scripts/sov_rules.json, docs/RULE-CODES.md) and a repair hint;
-  render    scripts/export_html.py draws the viewer into a temporary file beside the target, then
-            the render checks: the editor raised nothing (SOV601), both pictures are drawn (SOV602),
-            the viewer holds the checked document's id and card count (SOV603);
-  write     the temporary file replaces the target in one rename.
+  render    scripts/export_html.py draws the viewer into the system temp folder, then the render
+            checks: the editor raised nothing (SOV601), both pictures are drawn (SOV602), the viewer
+            holds the checked document's id and card count (SOV603);
+  write     the viewer is copied beside the target and renamed over it in one step; a failure
+            here (a read-only target, a folder of that name) is SOV701.
 A refusal at any stage leaves an existing target exactly as it was. Warnings (SOV605) never refuse.
 
 Usage:
@@ -84,8 +85,11 @@ def deliver(src: Path, target: Path | None = None) -> dict:
     except (OSError, json.JSONDecodeError, AttributeError) as e:
         report['findings'].append(finding('SOV999', f'could not read the checked file again: {e}'))
         return report
-    target.parent.mkdir(parents=True, exist_ok=True)
-    scratch = Path(tempfile.mkdtemp(prefix='.deliver-', dir=target.parent))
+    # The viewer is drawn in the system temp folder, so a run killed while drawing leaves nothing
+    # beside the target. The write copies it to one fixed sibling name and renames that over the
+    # target; a sibling left by a killed copy is overwritten by the next run, never accumulated.
+    scratch = Path(tempfile.mkdtemp(prefix='sov-deliver-'))
+    sibling = target.with_name(f'.{target.name}.deliver-tmp')
     try:
         try:
             sys.path.insert(0, str(ROOT / 'scripts'))
@@ -105,7 +109,17 @@ def deliver(src: Path, target: Path | None = None) -> dict:
         if any(f['severity'] == 'error' for f in rendered):
             return report
         report['stage'] = 'write'
-        os.replace(record['target'], target)
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(record['target'], sibling)
+            os.replace(sibling, target)
+        except OSError as e:
+            try:
+                sibling.unlink(missing_ok=True)
+            except OSError:
+                pass
+            report['findings'].append(finding('SOV701', str(e)))
+            return report
         report.update(ok=True, delivered=True, bytes=record['bytes'],
                       previous='replaced' if previous_exists else 'none')
         return report

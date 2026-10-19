@@ -105,20 +105,28 @@ const DELIVER_TIMEOUT_MS=600000;
 function delivererFor(file){
   return (document,{out}={})=>new Promise(resolve=>{
     const folder=path.dirname(file),name=path.basename(file,path.extname(file));
+    const refuse=(message,target=null)=>resolve({ok:false,delivered:false,code:'DELIVER_TARGET_REFUSED',message,target});
+    if(out!=null&&typeof out!=='string'){refuse('out must be a string naming a .html file');return}
     const target=path.resolve(folder,out||`${name}.html`);
-    const inside=path.relative(folder,target);
-    if(path.extname(target).toLowerCase()!=='.html'||!inside||inside.startsWith('..')||path.isAbsolute(inside)){
-      resolve({ok:false,delivered:false,code:'DELIVER_TARGET_REFUSED',message:'out must be a .html file inside the document\'s folder',target});return;
+    // Inside the folder by name and, once the parent folders exist, by their real paths, so a
+    // junction or link inside the folder cannot carry the write out of it.
+    const within=(base,p)=>{const r=path.relative(base,p);return !!r&&r!=='..'&&!r.startsWith('..'+path.sep)&&!path.isAbsolute(r)};
+    let existing=path.dirname(target);while(!fs.existsSync(existing)&&path.dirname(existing)!==existing)existing=path.dirname(existing);
+    const realParent=fs.realpathSync(existing),realFolder=fs.realpathSync(folder);
+    if(path.extname(target).toLowerCase()!=='.html'||!within(folder,target)||(realParent!==realFolder&&!within(realFolder,realParent))){
+      refuse('out must be a .html file inside the document\'s folder',target);return;
     }
     const scratch=fs.mkdtempSync(path.join(os.tmpdir(),'sov-deliver-')),source=path.join(scratch,`${name}.sov`);
     fs.writeFileSync(source,JSON.stringify(document,null,2));
     const done=report=>{fs.rmSync(scratch,{recursive:true,force:true});resolve(report.source===source?{...report,source:file}:report)};
-    let stdout='',stderr='';
+    let stdout='',stderr='',timedOut=false;
     const child=spawn(RENDER_PYTHON,[path.join(HERE,'../scripts/deliver_sov.py'),source,'--out',target,'--json'],{cwd:path.join(HERE,'..')});
-    const timer=setTimeout(()=>{child.kill();done({ok:false,delivered:false,code:'DELIVER_TIMEOUT',message:`deliver took longer than ${DELIVER_TIMEOUT_MS/1000}s`,target})},DELIVER_TIMEOUT_MS);
+    // A timeout kills the child and reports only once it has exited, and a report the child had
+    // already printed (the rename done) wins over the timeout.
+    const timer=setTimeout(()=>{timedOut=true;child.kill()},DELIVER_TIMEOUT_MS);
     child.stdout.on('data',d=>stdout+=d);child.stderr.on('data',d=>stderr+=d);
     child.on('error',e=>{clearTimeout(timer);done({ok:false,delivered:false,code:'DELIVER_UNAVAILABLE',message:`cannot start ${RENDER_PYTHON}: ${e.message}`,target})});
-    child.on('close',()=>{clearTimeout(timer);try{done(JSON.parse(stdout))}catch(_){done({ok:false,delivered:false,code:'DELIVER_FAILED',message:(stderr||stdout).trim().split('\n').pop()||'no output',target})}});
+    child.on('close',()=>{clearTimeout(timer);try{done(JSON.parse(stdout))}catch(_){done(timedOut?{ok:false,delivered:false,code:'DELIVER_TIMEOUT',message:`deliver took longer than ${DELIVER_TIMEOUT_MS/1000}s`,target}:{ok:false,delivered:false,code:'DELIVER_FAILED',message:(stderr||stdout).trim().split('\n').pop()||'no output',target})}});
   });
 }
 

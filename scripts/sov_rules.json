@@ -12,6 +12,8 @@
      "repair": "Set \"schema\" to the document schema (see GET /api/v1/formats, field document)."},
     {"code": "SOV105", "family": "load", "title": "package refused", "severity": "error", "match": null,
      "repair": "The package's inner document failed; fix the errors listed in the message, which are the document's own."},
+    {"code": "SOV106", "family": "load", "title": "document refused at load", "severity": "error", "match": null,
+     "repair": "The loader refused the document before validation; fix what the message names (the same refusal the editor gives on open)."},
     {"code": "SOV201", "family": "schema", "title": "document schema mismatch", "severity": "error", "match": "^schema must equal",
      "repair": "Set \"schema\" to the value the message names."},
     {"code": "SOV202", "family": "schema", "title": "document shape", "severity": "error", "match": "^(?:components|wires|references) must be an array$",
@@ -53,7 +55,7 @@
     {"code": "SOV307", "family": "wire", "title": "wire kind not declared", "severity": "error", "match": "^wire [^:]+: KIND_(?:UNDECLARED|UNKNOWN):",
      "repair": "On wire {id}, use a wire kind the notation declares, or declare it in the notation."},
     {"code": "SOV308", "family": "wire", "title": "path delay invalid", "severity": "error", "match": "PATH_DELAY_INVALID:",
-     "repair": "On {id}, set the delay to a finite number >= 0, or remove it."},
+     "repair": "On {id}, set the delay to a whole number of ticks >= 0, or remove it."},
     {"code": "SOV401", "family": "notation", "title": "notation does not resolve", "severity": "error", "match": "^notation: .*\\((?:UNKNOWN_NOTATION|SCALE_INVALID|GLYPH_SIZE_INVALID)\\)$",
      "repair": "Name a notation that exists, or correct the scale or glyph size the message names."},
     {"code": "SOV402", "family": "notation", "title": "notation kind rule broken", "severity": "error", "match": "KIND_INVALID:",
@@ -78,6 +80,8 @@
      "repair": "Install Playwright Chromium (python -m playwright install chromium) and build index.html (python build.py)."},
     {"code": "SOV605", "family": "render", "title": "wire blocked for tracing", "severity": "warning", "match": null,
      "repair": "Wire {id} is drawn but tracing does not follow it ({detail}); expected for an access-blocked wire, otherwise open its direction or access."},
+    {"code": "SOV701", "family": "write", "title": "viewer could not be written", "severity": "error", "match": null,
+     "repair": "The checked viewer could not replace the target (the message names why: read-only, in use, or a folder of that name); free the target path or choose another --out."},
     {"code": "SOV999", "family": "unclassified", "title": "unclassified finding", "severity": "error", "match": null,
      "repair": "The validator reported a message no rule code covers yet; fix what it says and file the message so a code can be added."}
   ]
