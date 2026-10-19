@@ -28,10 +28,17 @@ STATE = ROOT / 'examples/state'
 LIMIT_S = 2.0
 RUNS = 3
 GROW_BUDGET = 100000
-# grow.sov's stepping time is held as a multiple of REF (see GROW_TIMED), because GitHub's hosted
-# runners differ from each other by about 2x in raw speed. The limit and its evidence are below main().
-REF_N = 5000
-REF_HEAD = '7c63af499fe3963c612d2c4ed2aa3918548dc293d19b9b14b8d7875661b56478'
+# grow.sov's stepping time is held as a multiple of tests/reference_workload.js timed in the same
+# process (GROW_TIMED), because GitHub's hosted runners differ by about 2x in raw speed and the CI
+# container is slower again: the absolute 3.0 s it replaced passed at 2.3 s and failed at 3.5 s on
+# the same engine. The multiple measured on 2026-10-19 (median of three processes):
+#   this host (node 24)                       12.6 to 13.8
+#   hosted, AMD EPYC 9V74 (node 22)           13.6 to 13.7   (grow.sov 0.99 s)
+#   hosted, AMD EPYC 7763 (node 22)           14.9 to 15.7   (grow.sov 1.45 to 1.53 s)
+#   hosted CI container, full QA (node 22)    15.75          (grow.sov 3.08 s)
+# 20 is the worst of those times 1.27. With a busy-wait in step() adding about 50% to stepping here,
+# the multiple measured 21.5 and the test failed; at about +33% it measured 17.5 and passed.
+REF = ROOT / 'tests/reference_workload.js'
 GROW_RATIO_LIMIT = 20.0
 
 SETUP = r"""
@@ -94,38 +101,17 @@ process.stdout.write(JSON.stringify({same:bytes===storedGrow,length:bytes.length
 """
 
 # Linear: stepping alone (no traceOf, no canonicalize) to a budget the queue keeps growing under.
-# REF is a fixed piece of plain JavaScript shaped like stepping grow.sov, and it never calls the
-# engine: per tick a few small records, a Map of Sets, a canonical (sorted-key) encoding, a SHA-256
-# chained on the previous hash, and everything kept, so the heap grows as a run's does. It is timed in the same
-# process three times before and three times after stepping, after one untimed warm-up, and its
-# median is the yardstick: grow_ms / ref_ms measures the engine, not the machine it runs on.
+# tests/reference_workload.js (REF) is timed in the same process, once untimed, twice before and twice
+# after stepping; the middle two of the four are averaged, and grow_ms / ref_ms is what the test holds:
+# it measures the engine, not the runner or the load beside it.
 GROW_TIMED = GROW_SETUP + r"""
-const REF=n=>{
-const K=new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
-const W=new Uint32Array(64);
-const sha=b=>{const l=b.length,m=new Uint8Array(((l+9+63)>>6)<<6);m.set(b);m[l]=0x80;const bits=l*8;m[m.length-4]=bits>>>24;m[m.length-3]=bits>>>16;m[m.length-2]=bits>>>8;m[m.length-1]=bits;
-let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
-for(let o=0;o<m.length;o+=64){for(let i=0;i<16;i++)W[i]=m[o+4*i]<<24|m[o+4*i+1]<<16|m[o+4*i+2]<<8|m[o+4*i+3];
-for(let i=16;i<64;i++){const a=W[i-15],c=W[i-2];W[i]=((a>>>7|a<<25)^(a>>>18|a<<14)^a>>>3)+W[i-7]+((c>>>17|c<<15)^(c>>>19|c<<13)^c>>>10)+W[i-16]}
-let a=h0,b2=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
-for(let i=0;i<64;i++){const t1=h+((e>>>6|e<<26)^(e>>>11|e<<21)^(e>>>25|e<<7))+(e&f^~e&g)+K[i]+W[i]|0,t2=((a>>>2|a<<30)^(a>>>13|a<<19)^(a>>>22|a<<10))+(a&b2^a&c^b2&c)|0;h=g;g=f;f=e;e=d+t1|0;d=c;c=b2;b2=a;a=t1+t2|0}
-h0=h0+a|0;h1=h1+b2|0;h2=h2+c|0;h3=h3+d|0;h4=h4+e|0;h5=h5+f|0;h6=h6+g|0;h7=h7+h|0}
-return [h0,h1,h2,h3,h4,h5,h6,h7].map(x=>(x>>>0).toString(16).padStart(8,'0')).join('')};
-const enc=v=>v===null||typeof v!=='object'?JSON.stringify(v):Array.isArray(v)?'['+v.map(enc).join(',')+']':'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+enc(v[k])).join(',')+'}';
-const utf8=s=>{const b=new Uint8Array(s.length);for(let i=0;i<s.length;i++)b[i]=s.charCodeAt(i)&127;return b};
-let t0=process.hrtime.bigint();const kept=[];let head='',seen=new Map();
-for(let i=0;i<n;i++){const recs=[];for(let j=0;j<3+(i&1);j++){const rec={tick:i,entity:'e'+((i*31+j)%977),point:'p'+j,kind:'signal',value:{n:(i^j)&255,at:[i,j]}};
-if(!seen.has(rec.entity))seen.set(rec.entity,new Set());seen.get(rec.entity).add(rec.point);recs.push(rec)}
-const body=enc({after:i,records:recs,prev:head});head=sha(utf8(body));kept.push({hash:head,records:recs.map(r=>({...r}))})}
-if(head!==""" + json.dumps(REF_HEAD) + r""")throw new Error('reference workload head '+head);
-return Number(process.hrtime.bigint()-t0)/1e6};
-const refs=[];REF(""" + str(REF_N) + r""");for(let i=0;i<2;i++)refs.push(REF(""" + str(REF_N) + r"""));
+const R=require(process.argv[4]),refs=[];R.time();for(let i=0;i<2;i++)refs.push(R.time());
 const doc=load();
 const t0=process.hrtime.bigint();
 const s=S.startRun({doc,packs,budget:""" + str(GROW_BUDGET) + r"""});if(!s.ok)throw new Error(JSON.stringify(s));
 const run=s.run;let last;for(;;){last=S.step(run);if(!last.ok||last.tick===null)break}
 const ms=Number(process.hrtime.bigint()-t0)/1e6;
-for(let i=0;i<2;i++)refs.push(REF(""" + str(REF_N) + r"""));
+for(let i=0;i<2;i++)refs.push(R.time());
 refs.sort((a,b)=>a-b);const ref=(refs[1]+refs[2])/2;
 process.stdout.write(JSON.stringify({ms,ref,refs,ratio:ms/ref,last:{ok:last.ok,code:last.code||null,tick:last.tick},through:run.tick}));
 """
@@ -190,7 +176,7 @@ def main() -> None:
     gt = node(GROW_TRACE)
     assert gt['same'], f"the grow trace differs from examples/state/grow.sovtrace ({gt['length']} bytes)"
     assert gt['last'] == {'ok': False, 'code': 'BUDGET_SPENT'}, gt
-    grow_runs = [node(GROW_TIMED) for _ in range(RUNS)]
+    grow_runs = [node(GROW_TIMED, str(REF)) for _ in range(RUNS)]
     for r in grow_runs:
         assert r['last']['ok'] is False and r['last']['code'] == 'BUDGET_SPENT', r
     grow_median_s = statistics.median(r['ms'] for r in grow_runs) / 1000
