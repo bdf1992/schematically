@@ -47,6 +47,7 @@ STATIC=[
 BROWSER=[
     'tests/desktop_launch_page_qa.py',
     'tests/html_viewer_qa.py',
+    'tests/deliver_qa.py',
     'tests/spatial_index_parity_qa.py',
     'tests/attachment_point_refactor_qa.py',
     'tests/configurable_attachment_defaults_qa.py',
@@ -192,33 +193,46 @@ def run(path:str)->float:
     done.check_returncode()
     return elapsed
 
+# Suites the source markers below would hold exclusive, read on 2026-10-19 and found independent: in a
+# QA run each writes only inside its own tempfile.TemporaryDirectory (or only in a snapshot mode that
+# a command-line argument selects), and a subprocess it starts is node scripts/layout_sov.mjs writing
+# into that directory. Re-read a suite before adding it; a write to a shared path keeps it exclusive.
+REVIEWED_INDEPENDENT=(
+    'tests/wire_label_wrap_qa.py',
+    'tests/size_scale_qa.py',
+    'tests/unplaced_render_qa.py',
+    'tests/channel_buses_qa.py',
+    'tests/group_rows_qa.py',
+    'tests/bus_lane_sharing_qa.py',
+)
+
 def parallel_safe(path:str)->bool:
     """Only independent page checks overlap; effects and measured timing stay exclusive."""
     if any(word in path for word in ('performance','_perf','stress','_time_','desktop_launch','sim_parity','run_repaint','wave_view','wire_travel','map_keyboard_move')):
         return False
+    if path in REVIEWED_INDEPENDENT:return True
     source=(ROOT/path).read_text(encoding='utf-8')
     return not any(marker in source for marker in ('subprocess','Popen','write_text','write_bytes','.unlink(','.mkdir(','.save('))
 
 def run_browser(queue:list[str],workers:int)->float:
+    """With more than one worker, every independent page check runs first in one pool, then each
+    exclusive check runs alone in queue order. Flushing the pool at every exclusive check, as this
+    did before, left the workers mostly idle: the queue interleaves the two kinds, so batches were
+    a handful of suites long. Run 39202819591 spent 737 s in exclusive checks and 1151 s in pooled
+    ones, and stopped at the 1200 s full-qa limit with no suite failing."""
     if not 1<=workers<=8:raise ValueError('QA workers must be between one and eight')
+    pooled=[path for path in queue if workers>1 and parallel_safe(path)]
+    exclusive=[path for path in queue if path not in pooled]
     total=0.0
-    batch=[]
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        def flush():
-            nonlocal total
-            futures=[pool.submit(run,path) for path in batch]
-            batch.clear()
+    if pooled:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures=[pool.submit(run,path) for path in pooled]
             failures=[]
             for future in futures:
                 try:total+=future.result()
                 except Exception as error:failures.append(error)
             if failures:raise failures[0]
-        for path in queue:
-            if workers>1 and parallel_safe(path):batch.append(path)
-            else:
-                flush()
-                total+=run(path)
-        flush()
+    for path in exclusive:total+=run(path)
     return total
 
 def main()->int:

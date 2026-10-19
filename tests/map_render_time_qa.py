@@ -35,6 +35,14 @@ suites that night, so there the budgets leave about 1.4 times, not 3. What the f
 - src/57-layout-metrics.js: the crossing count tests a route's sample segment only against the other
   route's segments in the grid cells it touches (layoutCrossIndex), not against all of them.
 
+Every figure held against a budget is in this host's milliseconds. tests/reference_workload.js, a fixed
+piece of plain JavaScript that never calls Schematically, is timed in the page just before each timed
+call, and the call is counted as call_ms * HOST_REF_MS / ref_ms, HOST_REF_MS being the reference's
+time in this page on this host. GitHub's hosted runners differ by about 2x in raw speed and the
+container QA runs in is slower again, so an unscaled 300 ms passed at 281 ms and failed at 378 ms
+with no change to the code (runs 39188755370 and 39196782561, 2026-10-19); a reference taken next to
+each call also follows load that comes and goes on the host during the test.
+
 A budget that fails here means one of those came back, or a new cost of that size arrived: measure
 (the Chromium profiler through a CDP session shows it in one run) before raising a number.
 
@@ -76,6 +84,8 @@ from browser_runtime import chromium_launch_kwargs  # noqa: E402
 from drag_redraw_parity_qa import DRAG_STEP, press_most_wired  # noqa: E402
 
 MAP = ROOT / 'docs' / 'workengine' / 'map.sov'
+REF = ROOT / 'tests' / 'reference_workload.js'
+HOST_REF_MS = 43.7  # medians of 41.7, 43.7 and 44.9 ms in three sessions on this host, 2026-10-19
 RUNS = 5
 RENDER_BUDGET_MS = 3000
 METRICS_BUDGET_MS = 7350
@@ -84,6 +94,7 @@ DRAG_STEP_BUDGET_MS = 1000  # measured 319 ms on this host on 2026-10-04 with th
 DRAG_STEP_RATIO = 1.55  # measured 0.76 (594 ms beside a 777 ms renderWires()), times two, up to the next 0.05
 # A step created 13 to 16 of the map's 80 wire groups; every step must create fewer than half of them.
 
+TIME_REF = "()=>SovReferenceWorkload.time()"
 TIME_RENDER = "()=>{const s=performance.now();render();return performance.now()-s}"
 TIME_METRICS = "()=>{const s=performance.now();SovSchematicAPI.layout.metrics({static:true});return performance.now()-s}"
 TIME_FIT = "()=>{const s=performance.now();fitDiagram();return performance.now()-s}"
@@ -101,12 +112,22 @@ PICTURE = r"""()=>({
 })"""
 
 
-def timed(page, expression: str, budget: float) -> list[float]:
-    """Up to RUNS timings. It stops once more than half of RUNS are over the budget: the median of
-    all RUNS would be over it too, and a cost that has come back is not paid five times."""
+def host_ms(page, expression: str, *args) -> tuple[float, float]:
+    """One timed call in this host's milliseconds (see the docstring), and the reference beside it."""
+    ref = page.evaluate(TIME_REF)
+    ms = page.evaluate(expression, *args)
+    return ms * HOST_REF_MS / ref, ref
+
+
+def timed(page, expression: str, budget: float, refs: list[float]) -> list[float]:
+    """Up to RUNS timings in host milliseconds. It stops once more than half of RUNS are over the
+    budget: the median of all RUNS would be over it too, and a cost that has come back is not paid
+    five times. Each reference time is added to refs."""
     runs: list[float] = []
     for _ in range(RUNS):
-        runs.append(page.evaluate(expression))
+        ms, ref = host_ms(page, expression)
+        runs.append(ms)
+        refs.append(ref)
         if sum(r >= budget for r in runs) > RUNS // 2:
             break
     return runs
@@ -124,15 +145,18 @@ def main() -> None:
         page.evaluate('([t,n])=>SovSchematicAPI.file.open(t,n)', [MAP.read_text(encoding='utf-8'), MAP.name])
         page.evaluate('()=>fitDiagram()')
         page.wait_for_timeout(300)
+        page.add_script_tag(path=str(REF))
+        page.evaluate(TIME_REF)
+        refs: list[float] = []
 
         page.evaluate('()=>render()')
         first = page.evaluate(PICTURE)
         page.evaluate('()=>render()')
         second = page.evaluate(PICTURE)
 
-        renders = timed(page, TIME_RENDER, RENDER_BUDGET_MS)
-        metrics = timed(page, TIME_METRICS, METRICS_BUDGET_MS)
-        fits = timed(page, TIME_FIT, FIT_BUDGET_MS)
+        renders = timed(page, TIME_RENDER, RENDER_BUDGET_MS, refs)
+        metrics = timed(page, TIME_METRICS, METRICS_BUDGET_MS, refs)
+        fits = timed(page, TIME_FIT, FIT_BUDGET_MS, refs)
         bounds_first = page.evaluate(BOUNDS)
         bounds_second = page.evaluate(BOUNDS)
 
@@ -143,15 +167,18 @@ def main() -> None:
         steps, created = [], []
         for k in range(1, RUNS + 1):
             page.evaluate(MARK_GROUPS)
-            steps.append(page.evaluate(DRAG_STEP, [x, y + 20 * k]))
+            ms, ref = host_ms(page, DRAG_STEP, [x, y + 20 * k])
+            steps.append(ms)
+            refs.append(ref)
             created.append(page.evaluate(NEW_GROUPS))
         page.mouse.up()
         page.wait_for_timeout(300)
-        wire_passes = [page.evaluate(TIME_WIRES) for _ in range(RUNS)]
+        wire_passes = [host_ms(page, TIME_WIRES)[0] for _ in range(RUNS)]
         browser.close()
 
     render_ms, metrics_ms, fit_ms = statistics.median(renders), statistics.median(metrics), statistics.median(fits)
     print(f"map.sov: {len(first['wires'])} wire paths, {len(first['labels'])} connection labels")
+    print(f"reference workload: median {statistics.median(refs):.1f} ms of {len(refs)} against {HOST_REF_MS} ms on the host; figures below are in host ms")
     print(f"render() median of {len(renders)}: {render_ms:.0f} ms (budget {RENDER_BUDGET_MS}); runs {[round(r) for r in renders]}")
     print(f"layout.metrics({{static: true}}) median of {len(metrics)}: {metrics_ms:.0f} ms (budget {METRICS_BUDGET_MS}); runs {[round(r) for r in metrics]}")
     print(f"fitDiagram() median of {len(fits)}: {fit_ms:.0f} ms (budget {FIT_BUDGET_MS}); runs {[round(r) for r in fits]}")

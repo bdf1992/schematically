@@ -17,6 +17,7 @@ offset of 0, 2, 3, 14, 16 or 17 units, ends a gap of up to 20 apart) and require
 """
 from __future__ import annotations
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -31,9 +32,11 @@ DOCUMENTS = [
     'examples/09-print-ai-proof-run.sov',
 ]
 LABELLED: set[str] = set()  # add a document here to draw it with every wire labelled
-# Drawn once, every wire labelled, with every label overlap count cross-checked (no plain drawing):
-# the dense case for the label grid at a fraction of the plain scan's cost.
-CROSS_CHECKED = ['examples/state/bench.sov']
+# Drawn once, every wire labelled, with every label overlap count cross-checked: the dense case for
+# the label grid. It took 161 s of CI's full-QA run (2026-10-18, the slowest suite there), so it runs
+# only when SOV_QA_DEEP=1; the gate keeps task-lifecycle's labels, which fail on a grid that drops
+# half its hits (38 miscounted places).
+CROSS_CHECKED = ['examples/state/bench.sov'] if os.environ.get('SOV_QA_DEEP') == '1' else []
 SCORE_JS = """() => {
   let seed = 20261019;
   const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;

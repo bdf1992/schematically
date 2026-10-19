@@ -43,6 +43,7 @@
     "schematic.sim.scenario",
     "schematic.sim.scenarios",
     "schematic.render",
+    "schematic.deliver",
     "schematic.layout.metrics",
     "schematic.layout",
     "schematic.markers",

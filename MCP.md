@@ -151,6 +151,16 @@ refused with `RENDERER_UNAVAILABLE`: over MCP as an error result, over HTTP as a
 HTTP: `GET /api/v1/render.svg`, `GET /api/v1/render.png?appearance=dark&scale=2`,
 `GET /api/v1/layout/metrics`.
 
+Delivering (`skills/author/SKILL.md` "Deliver"). Same Python and Chromium requirement.
+
+- `schematic.deliver` (`out?`) checks the held document and writes it as one interactive HTML viewer
+  (`scripts/deliver_sov.py` over `scripts/export_html.py`), by default `<name>.html` beside the document
+  file; `out` is a `.html` name inside that folder, anything else is refused with `DELIVER_TARGET_REFUSED`.
+  It returns `{delivered, stage, target, previous, bytes, findings}`. Every finding has a stable code
+  (`docs/RULE-CODES.md`), the element id and a repair. Any error is an error result, and the previous
+  viewer is left untouched (`previous: kept`). A surface with no deliver adapter (a database
+  document) answers `DELIVER_UNAVAILABLE`.
+
 Resources: `component`, `wire`, `reference`.
 
 `schematic.markers` returns `{id, severity, message, rule}` for each current validation finding, delegating to the same `Data.markersFor` the browser API uses — the tool invents no legality of its own.
