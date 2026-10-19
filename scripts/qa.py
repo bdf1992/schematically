@@ -201,25 +201,24 @@ def parallel_safe(path:str)->bool:
     return not any(marker in source for marker in ('subprocess','Popen','write_text','write_bytes','.unlink(','.mkdir(','.save('))
 
 def run_browser(queue:list[str],workers:int)->float:
+    """With more than one worker, every independent page check runs first in one pool, then each
+    exclusive check runs alone in queue order. Flushing the pool at every exclusive check, as this
+    did before, left the workers mostly idle: the queue interleaves the two kinds, so batches were
+    a handful of suites long. Run 39202819591 spent 737 s in exclusive checks and 1151 s in pooled
+    ones, and stopped at the 1200 s full-qa limit with no suite failing."""
     if not 1<=workers<=8:raise ValueError('QA workers must be between one and eight')
+    pooled=[path for path in queue if workers>1 and parallel_safe(path)]
+    exclusive=[path for path in queue if path not in pooled]
     total=0.0
-    batch=[]
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        def flush():
-            nonlocal total
-            futures=[pool.submit(run,path) for path in batch]
-            batch.clear()
+    if pooled:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures=[pool.submit(run,path) for path in pooled]
             failures=[]
             for future in futures:
                 try:total+=future.result()
                 except Exception as error:failures.append(error)
             if failures:raise failures[0]
-        for path in queue:
-            if workers>1 and parallel_safe(path):batch.append(path)
-            else:
-                flush()
-                total+=run(path)
-        flush()
+    for path in exclusive:total+=run(path)
     return total
 
 def main()->int:

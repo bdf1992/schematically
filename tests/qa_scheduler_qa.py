@@ -18,7 +18,7 @@ seen=[]
 def check(path):
     global active,maximum
     with lock:
-        if path=='exclusive':assert active==0
+        if path.startswith('exclusive'):assert active==0
         active+=1;maximum=max(maximum,active);seen.append(path)
     time.sleep(.02)
     with lock:active-=1
@@ -28,6 +28,15 @@ run_browser.__globals__['parallel_safe']=lambda path:path!='exclusive'
 queue=['a','b','exclusive','c','d','e']
 run_browser(queue,2)
 assert sorted(seen)==sorted(queue) and maximum==2 and active==0
+# Independent checks interleaved with exclusive ones still share one pool: three workers overlap
+# three of them, and every exclusive check starts with nothing else running (asserted in check).
+seen.clear();maximum=0
+run_browser.__globals__['parallel_safe']=lambda path:not path.startswith('exclusive')
+interleaved=['a','exclusive-1','b','exclusive-2','c']
+run_browser(interleaved,3)
+assert sorted(seen)==sorted(interleaved) and maximum==3 and active==0, ('pool not shared across exclusive checks', maximum)
+assert seen[-2:]==['exclusive-1','exclusive-2'], seen
+run_browser.__globals__['parallel_safe']=lambda path:path!='exclusive'
 try:run_browser(queue,9)
 except ValueError:pass
 else:raise AssertionError('worker ceiling bypassed')
