@@ -18,3 +18,6 @@ Before changing behavior, identify the owning concern in `MODULES.md`. Do not du
 - Browser API, HTTP, and MCP should delegate to shared data semantics rather than inventing parallel CRUD rules.
 
 Run the QA scripts in `tests/` before claiming a change is settled.
+
+Pull requests run `python scripts/pr_tests.py`: only the suites the change touches, stopped at 60 s.
+Releases run `python scripts/release.py vX.Y.Z`: the whole suite on this PC, then the tag.
