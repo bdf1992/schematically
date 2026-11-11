@@ -1,0 +1,558 @@
+{
+  "*": [
+    "tests/canonical_qa.py",
+    "tests/graph_core_qa.py",
+    "tests/markers_qa.py",
+    "tests/editor_kernel_qa.py"
+  ],
+  ".github/workflows/*": [
+    "tests/release_path_qa.py"
+  ],
+  "API.md": [
+    "tests/concerns_surface_qa.py"
+  ],
+  "ATTACHMENT-POINT-MODEL.md": [
+    "tests/boundary_channels_qa.py"
+  ],
+  "DATA-FORMATS.md": [
+    "tests/status_waits_on_qa.py",
+    "tests/concerns_qa.py",
+    "tests/concerns_surface_qa.py"
+  ],
+  "GRAPH-MODEL.md": [
+    "tests/state_space_acl_qa.py"
+  ],
+  "LAYOUT-MODEL.md": [
+    "tests/layout_label_gutters_qa.py",
+    "tests/layouts_qa.py"
+  ],
+  "MCP.md": [
+    "tests/concerns_surface_qa.py"
+  ],
+  "MODULES.md": [
+    "tests/work_engine_map_run_qa.py"
+  ],
+  "NOTATION-MODEL.md": [
+    "tests/status_waits_on_qa.py",
+    "tests/concerns_qa.py",
+    "tests/notation_qa.py"
+  ],
+  "SECTION-MODEL.md": [
+    "tests/group_region_qa.py",
+    "tests/section_exposure_qa.py",
+    "tests/sections_qa.py"
+  ],
+  "STATE-SPACE.md": [
+    "tests/state_space_acl_qa.py",
+    "tests/run_spectrum_qa.py",
+    "tests/state_space_dev_parity_qa.py"
+  ],
+  "bin/schematically.mjs": [
+    "tests/deliver_node_qa.py"
+  ],
+  "build.py": [
+    "tests/release_path_qa.py",
+    "tests/canonical_qa.py",
+    "tests/editor_kernel_qa.py"
+  ],
+  "data/*.pack.json": [
+    "tests/sim_parity_qa.py"
+  ],
+  "data/core.flow.pack.json": [
+    "tests/state_space_flow_qa.py",
+    "tests/state_space_effects_qa.py",
+    "tests/state_space_dev_parity_qa.py"
+  ],
+  "data/core.logic.pack.json": [
+    "tests/state_space_acl_qa.py",
+    "tests/state_space_flow_qa.py",
+    "tests/state_space_effects_qa.py"
+  ],
+  "data/schematic.sov": [
+    "tests/live_link_qa.py"
+  ],
+  "data/work-engine.notation.json": [
+    "tests/work_engine_notation_qa.py",
+    "tests/wire_mark_min_size_qa.py",
+    "tests/work_engine_wire_kinds_qa.py"
+  ],
+  "desktop/src-tauri/src/main.rs": [
+    "tests/desktop_shell_qa.py"
+  ],
+  "desktop/src-tauri/tauri.conf.json": [
+    "tests/desktop_shell_qa.py"
+  ],
+  "docs/RULE-CODES.md": [
+    "tests/deliver_qa.py"
+  ],
+  "docs/reviews/2026-09-25-examples.md": [
+    "tests/layout_quality_qa.py"
+  ],
+  "docs/workengine/GAPS.md": [
+    "tests/work_engine_map_run_qa.py"
+  ],
+  "docs/workengine/board-sample.sov": [
+    "tests/work_engine_notation_qa.py",
+    "tests/work_engine_wire_kinds_qa.py"
+  ],
+  "docs/workengine/build_map.py": [
+    "tests/work_engine_map_lanes_qa.py"
+  ],
+  "docs/workengine/map.sov": [
+    "tests/work_engine_map_run_qa.py",
+    "tests/work_engine_notation_qa.py",
+    "tests/work_engine_wire_kinds_qa.py"
+  ],
+  "docs/workengine/run_map.py": [
+    "tests/work_engine_map_run_qa.py"
+  ],
+  "docs/workengine/sample.sov": [
+    "tests/work_engine_notation_qa.py",
+    "tests/export_picture_fit_qa.py",
+    "tests/work_engine_wire_kinds_qa.py"
+  ],
+  "docs/workengine/source/gapmap.json": [
+    "tests/work_engine_map_run_qa.py"
+  ],
+  "examples/01-source-hold.sov": [
+    "tests/mcp_surface_qa.py",
+    "tests/document_reload_qa.py",
+    "tests/multi_document_qa.py"
+  ],
+  "examples/02-duplex-buffer.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/select_menu_contrast_qa.py"
+  ],
+  "examples/03-contained-stage.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/document_compaction_qa.py"
+  ],
+  "examples/04-boundary-port.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/deliver_node_qa.py"
+  ],
+  "examples/05-rate-chain.sov": [
+    "tests/declared_ports_qa.py"
+  ],
+  "examples/06-read-write-evidence.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/timescale_policy_qa.py",
+    "tests/document_palette_qa.py"
+  ],
+  "examples/07-plane-with-points.sov": [
+    "tests/declared_ports_qa.py"
+  ],
+  "examples/08-gated-service.sov": [
+    "tests/author_offline_qa.py",
+    "tests/state_space_flow_qa.py",
+    "tests/declared_ports_qa.py"
+  ],
+  "examples/09-print-ai-proof-run.sov": [
+    "tests/state_space_acl_qa.py",
+    "tests/declared_ports_qa.py",
+    "tests/state_space_effects_qa.py"
+  ],
+  "examples/09-proposed-service-review.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/authoring_review_qa.py"
+  ],
+  "examples/09-typed-captions.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/golden_rendered_text_qa.py"
+  ],
+  "examples/10-clocked-signals.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/state_space_dev_parity_qa.py",
+    "tests/graph_core_qa.py"
+  ],
+  "examples/11-sections.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/sections_qa.py"
+  ],
+  "examples/12-membrane.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/state_space_message_qa.py",
+    "tests/section_exposure_qa.py"
+  ],
+  "examples/13-half-adder.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/state_space_message_qa.py",
+    "tests/notation_qa.py"
+  ],
+  "examples/blank.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/database_store_qa.py"
+  ],
+  "examples/state/and.00.sovtrace": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/and.01.sovtrace": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/and.10.sovtrace": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/and.11.sovtrace": [
+    "tests/state_space_surfaces_qa.py",
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/and.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/state_space_surfaces_qa.py"
+  ],
+  "examples/state/bench.inputs.json": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/bench.sov": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/bench.sovtrace": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/grow.sov": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/grow.sovtrace": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/merge.declared.sovtrace": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/merge.or.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/state_space_message_qa.py",
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/merge.or.sovtrace": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/merge.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/state_space_contracts_qa.py",
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/merge.stochastic.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/state_space_message_qa.py",
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/merge.stochastic.sovtrace": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/not-loop.sov": [
+    "tests/declared_ports_qa.py",
+    "tests/state_space_surfaces_qa.py",
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/not-loop.sovtrace": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/not.0.sovtrace": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/not.1.sovtrace": [
+    "tests/state_space_run_qa.py"
+  ],
+  "examples/state/not.sov": [
+    "tests/declared_ports_qa.py"
+  ],
+  "examples/swarm/01-platform.sov": [
+    "tests/timescale_policy_qa.py",
+    "tests/document_palette_qa.py"
+  ],
+  "examples/swarm/02-service-circuit.sov": [
+    "tests/wire_label_clearance_qa.py"
+  ],
+  "examples/swarm/03-collaboration.sov": [
+    "tests/wire_label_clearance_qa.py"
+  ],
+  "examples/work-engine/groups.sov": [
+    "tests/group_region_qa.py",
+    "tests/wire_click_reach_qa.py"
+  ],
+  "examples/work-engine/notation.sov": [
+    "tests/status_waits_on_qa.py",
+    "tests/work_engine_notation_qa.py",
+    "tests/work_engine_wire_kinds_qa.py"
+  ],
+  "examples/work-engine/status.sov": [
+    "tests/status_waits_on_qa.py",
+    "tests/work_engine_notation_qa.py",
+    "tests/card_badges_qa.py"
+  ],
+  "formats/schematic.document.schema.json": [
+    "tests/badge_label_trim_qa.py"
+  ],
+  "formats/schematic.run-receipt.schema.json": [
+    "tests/state_space_run_qa.py"
+  ],
+  "formats/schematic.trace.schema.json": [
+    "tests/state_space_run_qa.py"
+  ],
+  "index.html": [
+    "tests/release_path_qa.py",
+    "tests/layout_review_qa.py",
+    "tests/state_space_contracts_qa.py"
+  ],
+  "index.source.html": [
+    "tests/editor_kernel_qa.py",
+    "tests/markers_qa.py"
+  ],
+  "mcp/server.mjs": [
+    "tests/revision_guard_qa.py",
+    "tests/mcp_surface_qa.py",
+    "tests/document_reload_qa.py"
+  ],
+  "mcp/store-memory.mjs": [
+    "tests/mcp_surface_qa.py"
+  ],
+  "no_tests": [
+    "*.md",
+    "*.png",
+    "*.jpg",
+    "*.jpeg",
+    "*.gif",
+    "*.webp",
+    "*.ico",
+    "*.pdf",
+    "docs/*",
+    "LICENSE"
+  ],
+  "release_only": [
+    "tests/arch_observation.test.cjs",
+    "tests/bus_lane_hold_qa.py",
+    "tests/bus_lane_sharing_qa.py",
+    "tests/card_text_fit_qa.py",
+    "tests/channel_buses_qa.py",
+    "tests/desktop_launch_qa.py",
+    "tests/drag_lifecycle_stress_qa.py",
+    "tests/drag_redraw_parity_qa.py",
+    "tests/glyph_fixed_size_qa.py",
+    "tests/group_rows_qa.py",
+    "tests/label_contrast_floor_qa.py",
+    "tests/map_render_time_qa.py",
+    "tests/mutation_watch.py",
+    "tests/performance_regression_qa.py",
+    "tests/ports_panel_qa.py",
+    "tests/qa_scheduler_qa.py",
+    "tests/region_inset_qa.py",
+    "tests/size_scale_qa.py",
+    "tests/state_space_perf_qa.py",
+    "tests/track_gap_qa.py",
+    "tests/unplaced_render_qa.py",
+    "tests/wire_label_placement_qa.py",
+    "tests/wire_label_wrap_qa.py"
+  ],
+  "requirements-dev.txt": [
+    "tests/qa_linux_qa.py",
+    "tests/release_path_qa.py"
+  ],
+  "scripts/deliver_sov.py": [
+    "tests/deliver_qa.py"
+  ],
+  "scripts/export_html.py": [
+    "tests/deliver_node_qa.py"
+  ],
+  "scripts/export_svg.py": [
+    "tests/export_picture_fit_qa.py",
+    "tests/authoring_review_qa.py"
+  ],
+  "scripts/graph_to_sov.py": [
+    "tests/graph_to_sov_communities_qa.py"
+  ],
+  "scripts/layout_audit.py": [
+    "tests/layered_groups_qa.py"
+  ],
+  "scripts/layout_sov.mjs": [
+    "tests/layout_label_gutters_qa.py"
+  ],
+  "scripts/qa.py": [
+    "tests/qa_linux_qa.py",
+    "tests/release_path_qa.py",
+    "tests/desktop_launch_page_qa.py"
+  ],
+  "scripts/sov_check.mjs": [
+    "tests/deliver_node_qa.py"
+  ],
+  "scripts/sov_rules.json": [
+    "tests/deliver_qa.py"
+  ],
+  "scripts/stage_site.py": [
+    "tests/release_path_qa.py"
+  ],
+  "scripts/validate_sov.mjs": [
+    "tests/author_offline_qa.py",
+    "tests/graph_to_sov_qa.py",
+    "tests/graph_to_sov_communities_qa.py"
+  ],
+  "scripts/wave_board.py": [
+    "tests/wave_view_qa.py"
+  ],
+  "skills/author-offline/SKILL.md": [
+    "tests/author_offline_qa.py",
+    "tests/deliver_node_qa.py"
+  ],
+  "skills/author/SKILL.md": [
+    "tests/author_offline_qa.py",
+    "tests/deliver_node_qa.py"
+  ],
+  "skills/layout-review/SKILL.md": [
+    "tests/author_offline_qa.py",
+    "tests/deliver_node_qa.py"
+  ],
+  "skills/operator/SKILL.md": [
+    "tests/author_offline_qa.py",
+    "tests/deliver_node_qa.py"
+  ],
+  "skills/reviewer/SKILL.md": [
+    "tests/author_offline_qa.py",
+    "tests/deliver_node_qa.py"
+  ],
+  "skills/schematically/*": [
+    "tests/deliver_qa.py"
+  ],
+  "spikes/glsp-projection/client/index.html": [
+    "tests/release_path_qa.py",
+    "tests/layout_review_qa.py",
+    "tests/state_space_contracts_qa.py"
+  ],
+  "spikes/glsp-projection/server.mjs": [
+    "tests/revision_guard_qa.py",
+    "tests/mcp_surface_qa.py",
+    "tests/document_reload_qa.py"
+  ],
+  "src/00-state.js": [
+    "tests/author_offline_qa.py",
+    "tests/declared_ports_qa.py",
+    "tests/pre_repo_hardening_qa.py"
+  ],
+  "src/03-canonical.js": [
+    "tests/state_space_flow_qa.py",
+    "tests/run_spectrum_qa.py",
+    "tests/state_space_effects_qa.py"
+  ],
+  "src/03-notation-core.js": [
+    "tests/state_space_flow_qa.py",
+    "tests/state_space_effects_qa.py",
+    "tests/state_space_dev_parity_qa.py"
+  ],
+  "src/04-signal-model.js": [
+    "tests/state_space_acl_qa.py"
+  ],
+  "src/05-data-core.js": [
+    "tests/file_load_presets_qa.py",
+    "tests/file_load_wire_canvas_qa.py",
+    "tests/boundary_channels_qa.py"
+  ],
+  "src/06-attachment-core.js": [
+    "tests/boundary_channels_qa.py",
+    "tests/state_space_acl_qa.py",
+    "tests/revision_guard_qa.py"
+  ],
+  "src/07-graph-core.js": [
+    "tests/boundary_channels_qa.py",
+    "tests/state_space_acl_qa.py",
+    "tests/state_space_flow_qa.py"
+  ],
+  "src/07-state-space.js": [
+    "tests/state_space_acl_qa.py",
+    "tests/state_space_flow_qa.py",
+    "tests/state_space_effects_qa.py"
+  ],
+  "src/07-state-surface.js": [
+    "tests/run_spectrum_qa.py",
+    "tests/sim_parity_qa.py"
+  ],
+  "src/08-layout-core.js": [
+    "tests/layout_label_gutters_qa.py",
+    "tests/layout_sov_qa.py"
+  ],
+  "src/09-colour-core.js": [
+    "tests/palette_system_qa.py",
+    "tests/contrast_qa.py"
+  ],
+  "src/10-model.js": [
+    "tests/dimensional_form_qa.py"
+  ],
+  "src/15-editor-kernel.js": [
+    "tests/state_space_contracts_qa.py"
+  ],
+  "src/20-ui.js": [
+    "tests/pre_repo_hardening_qa.py"
+  ],
+  "src/30-canvas.js": [
+    "tests/dimensional_form_qa.py",
+    "tests/drop_on_wire_redraw_qa.py"
+  ],
+  "src/40-routing.js": [
+    "tests/wire_travel_qa.py"
+  ],
+  "src/41-buses.js": [
+    "tests/bus_select_move_qa.py"
+  ],
+  "src/55-render.js": [
+    "tests/dimensional_form_qa.py",
+    "tests/label_floor_source_qa.py",
+    "tests/wire_travel_qa.py"
+  ],
+  "src/60-interactions.js": [
+    "tests/pre_repo_hardening_qa.py",
+    "tests/state_space_contracts_qa.py"
+  ],
+  "src/75-persistence.js": [
+    "tests/desktop_shell_qa.py",
+    "tests/export_picture_fit_qa.py"
+  ],
+  "src/85-api.js": [
+    "tests/state_space_contracts_qa.py"
+  ],
+  "styles/*.css": [
+    "tests/contrast_qa.py",
+    "tests/markers_qa.py"
+  ],
+  "styles/app.css": [
+    "tests/pre_repo_hardening_qa.py",
+    "tests/wire_travel_qa.py"
+  ],
+  "tests/fixtures/booth-record-graphify.sov": [
+    "tests/layered_groups_qa.py"
+  ],
+  "tests/fixtures/mixed-waves-12s.sov": [
+    "tests/wave_view_qa.py"
+  ],
+  "tests/fixtures/mixed-waves.sov": [
+    "tests/track_gap_drag_qa.py"
+  ],
+  "tests/fixtures/swarm-originals/01-platform.sov": [
+    "tests/timescale_policy_qa.py",
+    "tests/document_palette_qa.py"
+  ],
+  "tests/fixtures/swarm-originals/02-service-circuit.sov": [
+    "tests/wire_label_clearance_qa.py"
+  ],
+  "tests/fixtures/swarm-originals/03-collaboration.sov": [
+    "tests/wire_label_clearance_qa.py"
+  ],
+  "tests/fixtures/task-lifecycle.sov": [
+    "tests/picture_bounds_bus_labels_qa.py"
+  ],
+  "tests/fixtures/work-engine-sample.sov": [
+    "tests/export_picture_fit_qa.py",
+    "tests/arrow_spacing_qa.py"
+  ],
+  "tests/golden-rendered-text.json": [
+    "tests/golden_rendered_text_qa.py"
+  ],
+  "tests/golden/logic.and@1.contract.json": [
+    "tests/state_space_contracts_qa.py"
+  ],
+  "tests/mcp_surface_check.mjs": [
+    "tests/mcp_surface_qa.py"
+  ],
+  "tests/routing_buses_qa.py": [
+    "tests/work_engine_map_lanes_qa.py"
+  ],
+  "tests/sim_surface_shim.js": [
+    "tests/sim_parity_qa.py"
+  ]
+}
