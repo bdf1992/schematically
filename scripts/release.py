@@ -12,9 +12,14 @@ deployment and the desktop installers and creates the GitHub release with them a
 --publish this command pushes the tag and leaves the release to that workflow instead of creating a
 second, empty one with gh release create.
 
-The suite is scripts/qa.py, every suite in it (no --quick), with test-budget.arch.json's full-qa
-worker count and its seconds as the limit. The result is written to
-<temp>/release-receipts/<version>.json.
+The whole suite is two runs, both needed for the tag:
+  1. python scripts/qa.py --workers N: every suite in its queue (no --quick), on this PC.
+  2. node scripts/test-arch-container.cjs --profile full-qa: the harness suites qa.py does not hold
+     (tests/arch_observation.test.cjs, which runs tests/qa_scheduler_qa.py) with the qa queue under
+     coverage, in the pinned Linux image. Its receipt is admitted only from Linux, so it runs in
+     Docker here; the image is built first when missing, outside the test clock, as CI built it.
+N and the limit are test-budget.arch.json's maximumWorkers and full-qa maximumSeconds. Both results
+are written to <temp>/release-receipts/<version>.json.
 
 Exit 0 released (or tagged, or dry run), 1 suite failed or over its limit, 2 refused.
 """
@@ -24,6 +29,8 @@ import argparse
 import json
 import os
 import re
+import runpy
+import shutil
 import signal
 import subprocess
 import sys
@@ -99,6 +106,41 @@ def preconditions(version: str) -> list[tuple[str, bool, str]]:
     return checks
 
 
+def docker_ready() -> tuple[bool, str]:
+    try:
+        done = subprocess.run(['docker', 'version', '--format', '{{.Server.Version}}'], capture_output=True,
+                              text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return False, f'docker unreachable: {error}'
+    if done.returncode != 0:
+        return False, 'Docker engine is not running (start Docker Desktop)'
+    return True, f'engine {done.stdout.strip()}'
+
+
+def qa_image() -> tuple[str, str]:
+    qa_linux = runpy.run_path(str(ROOT / 'scripts' / 'qa_linux.py'), run_name='release')
+    pin = qa_linux['playwright_pin'](ROOT)
+    if not pin:
+        raise RuntimeError('requirements-dev.txt pins no playwright==X.Y.Z')
+    return f"{qa_linux['IMAGE']}:{qa_linux['image_tag'](ROOT)}", pin
+
+
+def prepare_image() -> str | None:
+    """Builds the pinned QA image when missing, as ci.yml's image step did before D-0136."""
+    image, pin = qa_image()
+    if subprocess.run(['docker', 'image', 'inspect', image], capture_output=True).returncode == 0:
+        return None
+    with tempfile.TemporaryDirectory() as context:
+        shutil.copyfile(ROOT / 'scripts' / 'qa_linux.Dockerfile', Path(context) / 'Dockerfile')
+        shutil.copyfile(ROOT / 'requirements-dev.txt', Path(context) / 'requirements-dev.txt')
+        try:
+            built = subprocess.run(['docker', 'build', '--build-arg', f'PLAYWRIGHT_VERSION={pin}', '-t', image,
+                                    context], cwd=ROOT, timeout=900)
+        except subprocess.TimeoutExpired:
+            return f'docker build of {image} passed 900 s'
+    return None if built.returncode == 0 else f'docker build of {image} failed'
+
+
 def kill_tree(process: subprocess.Popen) -> None:
     if os.name == 'nt':
         subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)], capture_output=True)
@@ -117,6 +159,7 @@ def run_suite(command: list[str], limit: int) -> dict:
                              errors='replace', **extra)
     counts = {'passed': 0, 'failed': 0}
     summary: list[str] = []
+    last: list[str] = []
 
     def pump() -> None:
         assert child.stdout is not None
@@ -128,6 +171,8 @@ def run_suite(command: list[str], limit: int) -> dict:
                 counts['failed'] += 1
             elif line.startswith('RC QA PASS'):
                 summary.append(line.strip())
+            if line.strip():
+                last[:] = [line.strip()]
 
     reader = threading.Thread(target=pump, daemon=True)
     reader.start()
@@ -140,7 +185,18 @@ def run_suite(command: list[str], limit: int) -> dict:
     reader.join(timeout=10)
     return {'command': command, 'limit_seconds': limit, 'seconds': round(time.monotonic() - started, 1),
             'exit_code': child.returncode, 'timed_out': timed_out, 'summary': summary[-1] if summary else None,
-            **counts}
+            'last_line': last[0] if last else None, **counts}
+
+
+def harness_result(result: dict) -> dict:
+    """test-arch-container.cjs ends with one JSON line: its evidence file, passed, elapsedSeconds."""
+    try:
+        verdict = json.loads(result['last_line'] or '')
+    except ValueError:
+        verdict = {}
+    passed = result['exit_code'] == 0 and not result['timed_out'] and verdict.get('passed') is True
+    return {**result, 'evidence': verdict.get('evidence'), 'elapsed_seconds': verdict.get('elapsedSeconds'),
+            'passed_suite': passed}
 
 
 def write_receipt(version: str, receipt: dict) -> Path:
@@ -166,6 +222,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f'release: refused: {error}')
         return 2
     command = [sys.executable, str(ROOT / 'scripts' / 'qa.py'), '--workers', str(workers)]
+    harness = ['node', str(ROOT / 'scripts' / 'test-arch-container.cjs'), '--profile', 'full-qa']
+    # The container bounds its own run at the full-qa limit; the margin covers the bundle and copy-out.
+    harness_limit = limit + 300
     version = args.version
     if not args.dry_run:
         fetched = subprocess.run(['git', 'fetch', 'origin', 'main', '--tags'], cwd=ROOT, capture_output=True, text=True)
@@ -177,6 +236,8 @@ def main(argv: list[str] | None = None) -> int:
     except RuntimeError as error:
         print(f'release: refused: {error}')
         return 2
+    ready, detail = docker_ready()
+    checks.append(('Docker runs the pinned Linux QA image', ready, detail))
     holds = all(ok for _, ok, _ in checks)
     tag_message = f'{version}: whole suite passed on this PC'
     if args.dry_run:
@@ -185,8 +246,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f'  {"holds" if ok else "FAILS"}  {name}: {detail}')
         print(f'  suite  {" ".join(["python", "scripts/qa.py", "--workers", str(workers)])} '
               f'(every suite, release-only ones included; limit {limit} s from test-budget.arch.json full-qa)')
-        print('  note   not in scripts/qa.py: tests/arch_observation.test.cjs and tests/qa_scheduler_qa.py run under '
-              'node scripts/test-arch-container.cjs --profile full-qa; tests/desktop_launch_qa.py runs in release.yml')
+        print(f'  suite  node scripts/test-arch-container.cjs --profile full-qa (tests/arch_observation.test.cjs, '
+              f'tests/qa_scheduler_qa.py and the qa queue under coverage in the Linux image; limit {limit} s, '
+              f'outer bound {harness_limit} s; builds the image first when missing)')
+        print('  note   tests/desktop_launch_qa.py needs the built installer and runs in release.yml')
         print(f'  step   write <temp>/release-receipts/{version}.json')
         print(f'  step   git tag -a {version} -m "{tag_message}"')
         if PUBLIC:
@@ -208,14 +271,28 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     revision = git('rev-parse', 'HEAD')
     result = run_suite(command, limit)
+    result['passed_suite'] = result['exit_code'] == 0 and not result['timed_out'] and result['failed'] == 0
     receipt = {'version': version, 'revision': revision, 'cwd': str(ROOT), 'workers': workers, **result,
-               'passed_suite': result['exit_code'] == 0 and not result['timed_out'] and result['failed'] == 0}
+               'harness': None}
+    if result['passed_suite']:
+        problem = prepare_image()
+        if problem:
+            receipt['harness'] = {'command': harness, 'passed_suite': False, 'error': problem}
+        else:
+            receipt['harness'] = harness_result(run_suite(harness, harness_limit))
+    receipt['passed_all'] = result['passed_suite'] and bool(receipt['harness']) and receipt['harness']['passed_suite']
     receipt_path = write_receipt(version, receipt)
     print(f'release: receipt {receipt_path}')
-    if not receipt['passed_suite']:
+    if not result['passed_suite']:
         why = f'over its {limit} s limit' if result['timed_out'] else f'exit {result["exit_code"]}'
-        print(f'release: suite failed ({why}, {result["passed"]} passed, {result["failed"]} failed '
-              f'in {result["seconds"]} s); no tag')
+        print(f'release: scripts/qa.py failed ({why}, {result["passed"]} passed, {result["failed"]} failed '
+              f'in {result["seconds"]} s); harness not run; no tag')
+        return 1
+    if not receipt['passed_all']:
+        harness_run = receipt['harness']
+        why = harness_run.get('error') or (
+            'over its bound' if harness_run.get('timed_out') else f'exit {harness_run.get("exit_code")}')
+        print(f'release: test-arch-container.cjs full-qa failed ({why}; evidence {harness_run.get("evidence")}); no tag')
         return 1
     git('tag', '-a', version, '-m', tag_message)
     print(f'release: tagged {version} at {revision[:12]} ({result["passed"]} suites passed in {result["seconds"]} s)')

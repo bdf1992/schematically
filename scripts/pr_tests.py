@@ -130,9 +130,12 @@ def select(changed: list[str], table: dict[str, list[str]], queue: dict[str, lis
         if not (ROOT / suite).is_file():
             dropped.setdefault(suite, f'{why}: no such file')
         elif suite in release_only:
-            in_queue = any(suite in suites for suites in queue.values())
-            runner = 'python scripts/release.py runs it' if in_queue else (
-                'it runs under node scripts/test-arch-container.cjs --profile full-qa or release.yml, not scripts/qa.py')
+            if suite == 'tests/desktop_launch_qa.py':
+                runner = 'release.yml runs it on the built installer'
+            elif any(suite in suites for suites in queue.values()):
+                runner = 'python scripts/release.py runs it (scripts/qa.py)'
+            else:
+                runner = 'python scripts/release.py runs it (test-arch-container.cjs full-qa)'
             left.setdefault(suite, f'{why}: release-only, {runner}')
         else:
             reasons.setdefault(suite, why)
